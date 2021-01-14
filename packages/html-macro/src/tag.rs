@@ -120,7 +120,7 @@ fn parse_open_tag(input: &mut ParseStream, open_bracket_span: Span) -> Result<Ta
         attrs,
         open_bracket_span,
         closing_bracket_span,
-        is_self_closing
+        is_self_closing,
     })
 }
 

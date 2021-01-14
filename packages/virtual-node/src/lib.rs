@@ -454,19 +454,19 @@ impl From<Vec<VirtualNode>> for IterableNodes {
 
 impl<V: View> From<Vec<V>> for IterableNodes {
     fn from(other: Vec<V>) -> Self {
-      IterableNodes(other.into_iter().map(|it| it.render()).collect())
+        IterableNodes(other.into_iter().map(|it| it.render()).collect())
     }
 }
 
 impl<V: View> From<&Vec<V>> for IterableNodes {
     fn from(other: &Vec<V>) -> Self {
-      IterableNodes(other.iter().map(|it| it.render()).collect())
+        IterableNodes(other.iter().map(|it| it.render()).collect())
     }
 }
 
 impl<V: View> From<&[V]> for IterableNodes {
     fn from(other: &[V]) -> Self {
-      IterableNodes(other.iter().map(|it| it.render()).collect())
+        IterableNodes(other.iter().map(|it| it.render()).collect())
     }
 }
 
