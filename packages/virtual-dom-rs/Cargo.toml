@@ -1,0 +1,47 @@
+[package]
+name = "virtual-dom-rs"
+version = "0.6.14"
+authors = ["Chinedu Francis Nwafili <frankie.nwafili@gmail.com>"]
+description = "A standalone Virtual DOM creation, diffing and patching implementation"
+keywords = ["virtual", "dom", "wasm", "assembly", "webassembly"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/chinedufn/percy"
+documentation = "https://chinedufn.github.io/percy/api/virtual_dom_rs/"
+edition = "2018"
+
+[dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2.33"
+virtual-node = { path = "../virtual-node", version = "0.2.7" }
+html-macro = { path = "../html-macro", version = "0.1.8"}
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "Comment",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "EventTarget",
+    "HtmlCollection",
+    "Node",
+    "NodeList",
+    "Text",
+    "CharacterData",
+    "Window",
+]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2.33"
+console_error_panic_hook = "0.1.5"
+
+[dev-dependencies.web-sys]
+version = "0.3"
+features = [
+    "DomTokenList",
+    "HtmlInputElement",
+    "Event",
+    "MouseEvent",
+    "InputEvent",
+    "console",
+]

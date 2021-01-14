@@ -1,0 +1,5 @@
+error: Wrong closing tag. Try changing "strong" into "div"
+ --> $DIR/wrong_closing_tag.rs:9:17
+  |
+9 |         <div> </strong>
+  |                 ^^^^^^

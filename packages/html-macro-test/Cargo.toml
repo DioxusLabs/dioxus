@@ -1,0 +1,11 @@
+[package]
+name = "html-macro-test"
+version = "0.1.0"
+authors = ["Chinedu Francis Nwafili <frankie.nwafili@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+html-macro = {path = "../html-macro"}
+virtual-dom-rs = { path = "../virtual-dom-rs" }
+virtual-node = {path = "../virtual-node"}
+trybuild = "1.0"

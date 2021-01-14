@@ -1,0 +1,35 @@
+[package]
+name = "virtual-node"
+version = "0.2.7"
+description = "A standalone Virtual DOM"
+authors = ["Chinedu Francis Nwafili <frankie.nwafili@gmail.com>"]
+keywords = ["virtual", "dom", "wasm", "assembly", "webassembly"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/chinedufn/percy"
+documentation = "https://chinedufn.github.io/percy/api/virtual_node/"
+edition = "2018"
+
+[dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2.33"
+html-validation = {path = "../html-validation", version = "0.1.1"}
+lazy_static = "1.0"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "Comment",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "EventTarget",
+    "HtmlCollection",
+    "Node",
+    "NodeList",
+    "Text",
+    "Window",
+    "Event",
+    "MouseEvent",
+    "InputEvent",
+]
+

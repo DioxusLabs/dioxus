@@ -1,0 +1,19 @@
+[package]
+name = "html-macro"
+version = "0.1.9"
+description = "html macro"
+authors = ["Chinedu Francis Nwafili <frankie.nwafili@gmail.com>"]
+keywords = ["virtual", "dom", "wasm", "assembly", "webassembly"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/chinedufn/percy"
+documentation = "https://chinedufn.github.io/percy/api/html_macro/"
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { version = "0.4", features = ["span-locations"] }
+quote = "0.6.11"
+syn = { version = "0.15", features = ["full", "extra-traits"] }
+html-validation = {path = "../html-validation", version = "0.1.2"}

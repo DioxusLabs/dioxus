@@ -1,0 +1,14 @@
+[workspace]
+members = [
+    # Built-n
+    "packages/core",
+    "packages/macro",
+    "packages/hooks",
+    "packages/recoil",
+    "packages/redux",
+    # Pulled from percy
+    "packages/html-macro",
+    "packages/html-macro-test",
+    "packages/virtual-dom-rs",
+    "packages/virtual-node",
+]
