@@ -3,13 +3,17 @@ use std::future::Future;
 use dioxus_core::{component::AnyContext, prelude::*};
 use virtual_dom_rs::Closure;
 
+// Stop-gap while developing
+// Need to update the macro
+type VirtualNode = VNode;
+
 pub fn main() {
     let dom = VirtualDom::new(root);
     let mut renderer = TextRenderer::new(dom);
     let output = renderer.render();
 }
 
-fn root(ctx: &mut AnyContext) -> VirtualNode {
+fn root(ctx: &mut AnyContext) -> VNode {
     // the regular html syntax
 
     // html! {
@@ -22,10 +26,10 @@ fn root(ctx: &mut AnyContext) -> VirtualNode {
 
     // or a manually crated vnode
     {
-        let mut node_0 = VirtualNode::element("div");
+        let mut node_0 = VNode::element("div");
         let mut node_1: IterableNodes = ("Hello world!").into();
         node_1.first().insert_space_before_text();
-        let mut node_2 = VirtualNode::element("button");
+        let mut node_2 = VNode::element("button");
         {
             // let closure = Closure::wrap(Box::new(|_| {}) as Box<FnMut(_)>);
             // let closure_rc = std::rc::Rc::new(closure);
@@ -44,13 +48,11 @@ fn root(ctx: &mut AnyContext) -> VirtualNode {
             element_node.children.extend(node_2.into_iter());
         }
 
-        VirtualNode
-
         node_0
     }
 }
 
-fn Head(ctx: &mut AnyContext) -> VirtualNode {
+fn Head(ctx: &mut AnyContext) -> VNode {
     html! {
         <head>
             {"Head Section"}
@@ -58,7 +60,7 @@ fn Head(ctx: &mut AnyContext) -> VirtualNode {
     }
 }
 
-fn Body(ctx: &mut AnyContext) -> VirtualNode {
+fn Body(ctx: &mut AnyContext) -> VNode {
     html! {
         <body>
             {"Footer Section"}
@@ -66,7 +68,7 @@ fn Body(ctx: &mut AnyContext) -> VirtualNode {
     }
 }
 
-fn Footer(ctx: &mut AnyContext) -> VirtualNode {
+fn Footer(ctx: &mut AnyContext) -> VNode {
     html! {
         <div>
             {"Footer Section"}
