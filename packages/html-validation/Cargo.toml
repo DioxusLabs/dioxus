@@ -9,4 +9,4 @@ repository = "https://github.com/chinedufn/percy"
 edition = "2018"
 
 [dependencies]
-lazy_static = "1.0"
+lazy_static = "1.4.0"

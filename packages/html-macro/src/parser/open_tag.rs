@@ -111,6 +111,7 @@ custom components: https://chinedufn.github.io/percy/html-macro/custom-component
                 })
                 .collect();
 
+            // TODO @Jon - this is where we need to start injecting new logic about props/children etc
             let node = quote! {
                 let mut #var_name_component = #component_ident { #(#component_props),* };
                 let mut #var_name_node = #var_name_component.render();

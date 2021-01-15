@@ -1,11 +1,15 @@
 [workspace]
 members = [
-    # Built-n
+    # Built-in
     "packages/core",
     "packages/macro",
     "packages/hooks",
     "packages/recoil",
     "packages/redux",
+    "packages/web",
+    #
+    #
+    #
     # Pulled from percy
     "packages/html-macro",
     "packages/html-macro-test",

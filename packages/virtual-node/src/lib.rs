@@ -57,16 +57,22 @@ pub enum VirtualNode {
     /// order to enable custom methods like `create_text_node()` on the
     /// wrapped type.
     Text(VText),
+
+    /// A User-defined componen node (node type COMPONENT_NODE)
+    Component(VComponent),
 }
 
 #[derive(PartialEq)]
 pub struct VElement {
     /// The HTML tag, such as "div"
     pub tag: String,
+
     /// HTML attributes such as id, class, style, etc
     pub attrs: HashMap<String, String>,
+
     /// Events that will get added to your real DOM element via `.addEventListener`
     pub events: Events,
+
     /// The children of this `VirtualNode`. So a <div> <em></em> </div> structure would
     /// have a parent div and one child, em.
     pub children: Vec<VirtualNode>,
@@ -76,6 +82,9 @@ pub struct VElement {
 pub struct VText {
     pub text: String,
 }
+
+#[derive(PartialEq)]
+pub struct VComponent {}
 
 impl VirtualNode {
     /// Create a new virtual element node with a given tag.
@@ -162,6 +171,7 @@ impl VirtualNode {
                 CreatedNode::without_closures(text_node.create_text_node())
             }
             VirtualNode::Element(element_node) => element_node.create_element_node().into(),
+            VirtualNode::Component(_) => todo!("WIP on Component Syntax"),
         }
     }
 
@@ -301,6 +311,9 @@ impl VElement {
                     closures.extend(child.closures);
 
                     element.append_child(&child_elem).unwrap();
+                }
+                VirtualNode::Component(_) => {
+                    todo!("WIP on Component Syntax")
                 }
             }
         });
@@ -529,6 +542,7 @@ impl fmt::Debug for VirtualNode {
         match self {
             VirtualNode::Element(e) => write!(f, "Node::{:?}", e),
             VirtualNode::Text(t) => write!(f, "Node::{:?}", t),
+            VirtualNode::Component(c) => write!(f, "Node::{:?}", c),
         }
     }
 }
