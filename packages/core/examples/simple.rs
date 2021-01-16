@@ -9,8 +9,8 @@ type VirtualNode = VNode;
 
 pub fn main() {
     let dom = VirtualDom::new(root);
-    let mut renderer = TextRenderer::new(dom);
-    let output = renderer.render();
+    // let mut renderer = TextRenderer::new(dom);
+    // let output = renderer.render();
 }
 
 fn root(ctx: &mut AnyContext) -> VNode {

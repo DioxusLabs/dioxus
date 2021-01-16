@@ -13,8 +13,8 @@ members = [
     #
     # Pulled from percy
     "packages/html-macro",
-    "packages/html-macro-test",
-    "packages/virtual-dom-rs",
-    "packages/virtual-node",
+    # "packages/html-macro-test",
+    # "packages/virtual-dom-rs",
+    # "packages/virtual-node",
     "examples",
 ]

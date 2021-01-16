@@ -1,25 +1,15 @@
 //! Dioxus: a concurrent, functional, virtual dom for any renderer in Rust
 //!
 //!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
 
 /// Re-export common types for ease of development use.
 /// Essential when working with the html! macro
+///
+///
+///
 pub mod prelude {
     pub use crate::component::Context;
     use crate::nodes;
-    pub use crate::renderer::TextRenderer;
     pub use crate::types::FC;
     pub use crate::virtual_dom::VirtualDom;
     pub use nodes::iterables::IterableNodes;
@@ -33,6 +23,9 @@ pub mod prelude {
 }
 
 /// The Dioxus Virtual Dom integrates an event system and virtual nodes to create reactive user interfaces.
+///
+///
+///
 pub mod virtual_dom {
     use super::*;
 
@@ -48,6 +41,9 @@ pub mod virtual_dom {
 }
 
 /// Virtual Node Support
+///
+///
+///
 pub mod nodes {
     pub use vcomponent::VComponent;
     pub use velement::VElement;
@@ -513,34 +509,55 @@ pub mod nodes {
         //     }
         // }
     }
-}
 
-pub mod diff {
-    pub enum Patch {}
-}
+    #[cfg(test)]
+    mod tests {
+        use super::*;
 
-/// Example on how to craft a renderer that interacts with the VirtualDom
-pub mod renderer {
-    use crate::virtual_dom::VirtualDom;
+        #[test]
+        fn self_closing_tag_to_string() {
+            let node = VNode::element("br");
 
-    use super::*;
-
-    /// Renders a full Dioxus app to a String
-    ///
-    pub struct TextRenderer {}
-
-    impl TextRenderer {
-        /// Create a new Text Renderer which renders the VirtualDom to a string
-        pub fn new(dom: VirtualDom) -> Self {
-            Self {}
+            // No </br> since self closing tag
+            assert_eq!(&node.to_string(), "<br>");
         }
 
-        pub fn render(&mut self) -> String {
-            todo!()
+        #[test]
+        fn to_string() {
+            let mut node = VNode::Element(VElement::new("div"));
+            node.as_velement_mut()
+                .unwrap()
+                .attrs
+                .insert("id".into(), "some-id".into());
+
+            let mut child = VNode::Element(VElement::new("span"));
+
+            let mut text = VNode::Text(VText::new("Hello world"));
+
+            child.as_velement_mut().unwrap().children.push(text);
+
+            node.as_velement_mut().unwrap().children.push(child);
+
+            let expected = r#"<div id="some-id"><span>Hello world</span></div>"#;
+
+            assert_eq!(node.to_string(), expected);
         }
     }
 }
 
+///
+///
+///
+///
+pub mod diff {
+    pub enum Patch {}
+}
+
+///
+///
+///
+///
+///
 pub mod component {
 
     /// A wrapper around component contexts that hides component property types
@@ -556,6 +573,9 @@ pub mod component {
 }
 
 /// Utility types that wrap internals
+///
+///
+///
 pub mod types {
     use super::*;
     use component::{AnyContext, Context};
@@ -567,6 +587,9 @@ pub mod types {
 /// TODO @Jon
 /// Figure out if validation should be its own crate, or embedded directly into dioxus
 /// Should we even be bothered with validation?
+///
+///
+///
 mod validation {
     use once_cell::sync::Lazy;
     use std::collections::HashSet;
@@ -587,29 +610,13 @@ mod validation {
 
     /// Whether or not this tag is self closing
     ///
-    /// ```
-    /// use html_validation::is_self_closing;
-    ///
+    /// ```ignore
+    /// use dioxus_core::validation::is_self_closing;
     /// assert_eq!(is_self_closing("br"), true);
-    ///
     /// assert_eq!(is_self_closing("div"), false);
     /// ```
     pub fn is_self_closing(tag: &str) -> bool {
         SELF_CLOSING_TAGS.contains(tag)
         // SELF_CLOSING_TAGS.contains(tag) || is_self_closing_svg_tag(tag)
-    }
-}
-
-#[cfg(test)]
-mod integration_tests {
-    use crate::prelude::*;
-    type VirtualNode = VNode;
-
-    /// Test a basic usage of a virtual dom + text renderer combo
-    #[test]
-    fn simple_integration() {
-        let dom = VirtualDom::new(|_| html! { <div>Hello World!</div> });
-        let mut renderer = TextRenderer::new(dom);
-        let output = renderer.render();
     }
 }
