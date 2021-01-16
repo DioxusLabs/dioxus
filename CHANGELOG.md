@@ -1,4 +1,4 @@
-# Project: Live-View
+# Project: Live-View 🤲 🍨
 
 
 # Project: Sanitization (TBD)
@@ -7,6 +7,9 @@
 
 # Project: Examples
 > Get *all* the examples
+- [ ] (Examples) Tide example with templating
+- [ ] (Examples) Tide example with templating
+- [ ] (Examples) Tide example with templating
 - [ ] (Examples) Tide example with templating
 
 # Project: State management 
