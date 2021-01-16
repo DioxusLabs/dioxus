@@ -1,4 +1,11 @@
-# Dioxus: A concurrent, functional, virtual DOM for Rust
+<div align="center">
+  <h1>🌗🚀 Dioxus</h1>
+  <p>
+    <strong>A concurrent, functional, virtual DOM for Rust</strong>
+  </p>
+</div>
+
+# About
 
 Dioxus is a new approach for creating performant cross platform user experiences in Rust. In Dioxus, the UI is represented as a tree of Virtual Nodes not bound to any specific renderer. Instead, external renderers can leverage Dioxus' virtual DOM and event system as a source of truth for rendering to a medium of their choice. Developers used to crafting react-based experiences should feel comfortable with Dioxus.
 
@@ -14,15 +21,16 @@ Dioxus Core supports:
 - [ ] State management integrations
 
 On top of these, we have several projects you can find in the `packages` folder.
-- [x] Testing, development, and packaging tools for Dioxus apps
-- [ ] Redux-style global state management
-- [ ] Recoil-style global state management
-- [ ] Hybrid apps (SSR + Web)
-- [ ] Live view
-- [ ] Desktop Applications
-- [ ] iOS apps
-- [ ] Android apps
-- [ ] AR/VR Apps
+- [x] `Diopack`: Testing, development, and packaging tools for Dioxus apps
+- [ ] `Dioxus-vscode`: Syntax highlighting, code formatting, and hints for Dioxus html! blocks
+- [ ] `Redux-rs`: Redux-style global state management
+- [ ] `Recoil-rs`: Recoil-style global state management
+- [ ] `Dioxus-iso`: Hybrid apps (SSR + Web)
+- [ ] `Dioxus-live`: Live view
+- [ ] `Dioxus-desktop`: Desktop Applications
+- [ ] `Dioxus-ios`: iOS apps
+- [ ] `Dioxus-android`: Android apps
+- [ ] `Dioxus-magic`: AR/VR Apps
 
 ## Hello World
 Dioxus should look and feel just like writing functional React components. In Dioxus, there are no class components with lifecycles. All state management is done via hooks. This encourages logic reusability and lessens the burden on Dioxus to maintain a non-breaking lifecycle API.
