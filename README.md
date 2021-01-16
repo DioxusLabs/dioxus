@@ -59,9 +59,12 @@ async fn user_data(ctx: &Context<()>) -> VNode {
 Asynchronous components are powerful but can also be easy to misuse as they pause rendering for the component and its children. Refer to the concurrent guide for information on how to best use async components. 
 
 ## Examples
-We use `diopack` to build and test apps. This can run examples, tests, build web workers, launch development servers, bundle, and more. It's general purpose, but currently very tailored to Dioxus for liveview and bundling. Alternatively, `Trunk` works but can't run examples.
+We use `diopack` to build and test webapps. This can run examples, tests, build web workers, launch development servers, bundle, and more. It's general purpose, but currently very tailored to Dioxus for liveview and bundling. If you've not used it before, `cargo install --path pacakages/diopack` will get it installed. 
 
-- tide_ssr: Handle an HTTP request and return an html body using the html! macro.
+Alternatively, `Trunk` works but can't run examples.
+
+- tide_ssr: Handle an HTTP request and return an html body using the html! macro. `cargo run --example tide_ssr`
+- simple_wasm: Simple WASM app that says hello. `diopack develop --example simple`
 
 ## Documentation
 We have a pretty robust 
