@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use dioxus_core::{component::AnyContext, prelude::*};
-use virtual_dom_rs::Closure;
+// use virtual_dom_rs::Closure;
 
 // Stop-gap while developing
 // Need to update the macro
@@ -27,9 +27,18 @@ fn root(ctx: &mut AnyContext) -> VNode {
     // or a manually crated vnode
     {
         let mut node_0 = VNode::element("div");
+        {
+            if let Some(ref mut element_node) = node_0.as_velement_mut() {
+                // element_node.attrs.insert("blah", "blah");
+                // element_node.children.extend(node_0.into_iter());
+            }
+        }
+
         let mut node_1: IterableNodes = ("Hello world!").into();
         node_1.first().insert_space_before_text();
         let mut node_2 = VNode::element("button");
+
+        let node_3 = VNode::Component(VComponent {});
         {
             // let closure = Closure::wrap(Box::new(|_| {}) as Box<FnMut(_)>);
             // let closure_rc = std::rc::Rc::new(closure);

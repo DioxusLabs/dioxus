@@ -8,10 +8,12 @@ edition = "2018"
 
 [dependencies]
 generational-arena = "0.2.8"
-typed-arena = "2.0.1"
-virtual-dom-rs = { path = "../virtual-dom-rs" }
-virtual-node = { path = "../virtual-node" }
 html-macro = { path = "../html-macro" }
 once_cell = "1.5.2"
+
+
 # web-sys = "0.3.46"
 # js-sys = "0.3.46"
+# typed-arena = "2.0.1"
+# virtual-dom-rs = { path = "../virtual-dom-rs" }
+# virtual-node = { path = "../virtual-node" }

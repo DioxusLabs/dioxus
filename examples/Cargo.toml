@@ -1,0 +1,30 @@
+[package]
+name = "dioxus-examples"
+version = "0.0.0"
+authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fern = { vesion = "0.6.0", features = ["colored"] }
+log = "0.4.13"
+dioxus-core = { path = "../packages/core" }
+rand = "0.8.2"
+
+
+[dev-dependencies]
+async-std = { version = "1.9.0", features = ["attributes"] }
+tide = { version = "0.15.0" }
+
+
+[lib]
+path = "common.rs"
+
+[[example]]
+path = "hello.rs"
+name = "hello"
+
+[[example]]
+path = "tide_ssr.rs"
+name = "tide_ssr"

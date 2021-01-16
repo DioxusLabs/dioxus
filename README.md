@@ -30,7 +30,7 @@ fn Example(ctx: &Context<{ name: String }>) -> VNode {
 static Example: FC<{ name: String }> = |ctx| html! { <div> "Hello {:?name}!" </div> }; 
 ```
 
-The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, dsl, or templating engine. Work is being done on a terra template processor for existing templates.
+The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, or templating engine. Work is being done on a terra template processor for existing templates.
 
 ## Features
 
@@ -58,32 +58,11 @@ async fn user_data(ctx: &Context<()>) -> VNode {
 
 Asynchronous components are powerful but can also be easy to misuse as they pause rendering for the component and its children. Refer to the concurrent guide for information on how to best use async components. 
 
-## Example
-- Isomorphic: serve a server-rendered webapp using Tide 
+## Examples
+We use `diopack` to build and test apps. This can run examples, tests, build web workers, launch development servers, bundle, and more. It's general purpose, but currently very tailored to Dioxus for liveview and bundling. Alternatively, `Trunk` works but can't run examples.
+
+- tide_ssr: Handle an HTTP request and return an html body using the html! macro.
 
 ## Documentation
-| Chapter        | Description                                |
-| -------------- | ------------------------------------------ |
-| 1-hello-world  | Intro to Dioxus                            |
-| 2-utilities    | Tools to make writing apps easier          |
-| 3-hello-world  | Html + functional_component macro          |
-| 4-hello-world  | Renderer + event integration using web_sys |
-| 5-hello-world  | Virtual DOM, patching/diffing              |
-| 6-hello-world  | Standard bundle of useful hooks            |
-| 7-hello-world  | Html + functional_component macro          |
-| 8-hello-world  | Renderer + event integration using web_sys |
-| 9-hello-world  | Renderer + event integration using web_sys |
-| 10-hello-world | Renderer + event integration using web_sys |
-
-## Packages
-| Package   | Use                                        |
-| --------- | ------------------------------------------ |
-| core      | Virtual DOM, patching/diffing              |
-| hooks     | Standard bundle of useful hooks            |
-| macro     | Html + functional_component macro          |
-| web       | Renderer + event integration using web_sys |
-| live-view | Dedicated isomorphic framework             |
-| recoil    | Data-flow-graph state management           |
-| redux     | Reducer-style state management             |
-| bearly    | Simple and idiomatic state management      |
+We have a pretty robust 
 

@@ -25,6 +25,9 @@ pub mod prelude {
     pub use nodes::iterables::IterableNodes;
     pub use nodes::*;
 
+    // hack "virtualnode"
+    pub type VirtualNode = VNode;
+
     // Re-export from the macro crate
     pub use html_macro::html;
 }
@@ -262,6 +265,8 @@ pub mod nodes {
 
             /// HTML attributes such as id, class, style, etc
             pub attrs: HashMap<String, String>,
+            // TODO: @JON Get this to not heap allocate, but rather borrow
+            // pub attrs: HashMap<&'static str, &'static str>,
 
             // TODO @Jon, re-enable "events"
             //

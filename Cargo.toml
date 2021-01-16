@@ -15,4 +15,5 @@ members = [
     "packages/html-macro-test",
     "packages/virtual-dom-rs",
     "packages/virtual-node",
+    "examples",
 ]
