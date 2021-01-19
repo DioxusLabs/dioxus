@@ -11,7 +11,7 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 
 [dependencies]
 generational-arena = "0.2.8"
-dioxus-html-macro = { path = "../html-macro" }
+dioxus-html-macro = { path = "../html-macro", version = "0.1.0" }
 once_cell = "1.5.2"
 
 
