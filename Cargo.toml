@@ -5,15 +5,16 @@ members = [
     "packages/hooks",
     "packages/recoil",
     "packages/redux",
-    "packages/web",
+    # TODO @Jon, share the validation code
+    # "packages/web",
     "packages/cli",
+    "examples",
+    "packages/html-macro",
     #
     #
     #
     # Pulled from percy
-    "packages/html-macro",
     # "packages/html-macro-test",
     # "packages/virtual-dom-rs",
     # "packages/virtual-node",
-    "examples",
 ]

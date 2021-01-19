@@ -18,4 +18,5 @@ proc-macro = true
 proc-macro2 = { version = "0.4", features = ["span-locations"] }
 quote = "0.6.11"
 syn = { version = "0.15", features = ["full", "extra-traits"] }
-html-validation = { path = "../html-validation", version = "0.1.2" }
+lazy_static = "1.4.0"
+# html-validation = { path = "../html-validation", version = "0.1.2" }

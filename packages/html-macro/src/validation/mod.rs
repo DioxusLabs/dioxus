@@ -31,12 +31,6 @@
 //!
 //! Over time as our validation permitted more cases people could use html! more and more instead of html_loose!
 
-#![deny(missing_docs)]
-
-pub use self_closing::is_self_closing;
-pub use svg_namespace::is_svg_namespace;
-pub use valid_tags::is_valid_tag;
-
-mod self_closing;
-mod svg_namespace;
-mod valid_tags;
+pub mod self_closing;
+pub mod svg_namespace;
+pub mod valid_tags;

@@ -7,6 +7,7 @@ use syn::parse_macro_input;
 
 mod parser;
 mod tag;
+pub(crate) mod validation;
 
 /// Used to generate VirtualNode's from a TokenStream.
 ///

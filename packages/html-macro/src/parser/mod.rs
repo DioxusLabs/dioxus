@@ -262,9 +262,9 @@ struct RecentSpanLocations {
 }
 
 fn is_self_closing(tag: &str) -> bool {
-    html_validation::is_self_closing(tag)
+    crate::validation::self_closing::is_self_closing(tag)
 }
 
 fn is_valid_tag(tag: &str) -> bool {
-    html_validation::is_valid_tag(tag)
+    crate::validation::valid_tags::is_valid_tag(tag)
 }
