@@ -2,7 +2,6 @@
 members = [
     # Built-in
     "packages/core",
-    "packages/macro",
     "packages/hooks",
     "packages/recoil",
     "packages/redux",
