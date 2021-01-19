@@ -18,7 +18,7 @@ pub mod prelude {
     pub type VirtualNode = VNode;
 
     // Re-export from the macro crate
-    pub use html_macro::html;
+    pub use dioxus_html_macro::html;
 }
 
 /// The Dioxus Virtual Dom integrates an event system and virtual nodes to create reactive user interfaces.
