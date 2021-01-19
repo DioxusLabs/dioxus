@@ -1,9 +1,10 @@
 [package]
-name = "html-macro"
-version = "0.1.9"
-description = "html macro"
+name = "dioxus-html-macro"
+version = "0.1.0"
+description = "HTML-compliant macro for creating Dioxus VNodes"
 authors = [
     "Jonathan Kelley",
+    # Originally pulled from Percy - check it out!
     "Chinedu Francis Nwafili <frankie.nwafili@gmail.com>",
 ]
 keywords = ["virtual", "dom", "wasm", "assembly", "webassembly"]
