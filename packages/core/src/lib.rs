@@ -8,9 +8,8 @@
 ///
 ///
 pub mod prelude {
-    pub use crate::component::Context;
     use crate::nodes;
-    pub use crate::types::FC;
+    pub use crate::virtual_dom::Context;
     pub use crate::virtual_dom::VirtualDom;
     pub use nodes::iterables::IterableNodes;
     pub use nodes::*;
@@ -24,20 +23,76 @@ pub mod prelude {
 
 /// The Dioxus Virtual Dom integrates an event system and virtual nodes to create reactive user interfaces.
 ///
-///
+/// This module includes all life-cycle related mechanics, including the virtual dom, scopes, properties, and lifecycles.
 ///
 pub mod virtual_dom {
     use super::*;
+    use crate::nodes::VNode;
+    use generational_arena::Arena;
 
     /// An integrated virtual node system that progresses events and diffs UI trees.
     /// Differences are converted into patches which a renderer can use to draw the UI.
-    pub struct VirtualDom {}
+    pub struct VirtualDom {
+        arena: Arena<Scope>,
+    }
 
     impl VirtualDom {
-        pub fn new(root: types::FC) -> Self {
+        /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
+        ///
+        /// This means that the root component must either consumes its own context, or statics are used to generate the page.
+        /// The root component can access things like routing in its context.
+        pub fn new(root: FC<()>) -> Self {
+            Self::new_with_props(root)
+        }
+
+        /// Start a new VirtualDom instance with a dependent props.
+        /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
+        ///
+        /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
+        /// to toss out the entire tree.
+        pub fn new_with_props<T>(root: FC<T>) -> Self {
+            Self {
+                arena: Arena::new(),
+            }
+        }
+    }
+
+    /// Functional Components leverage the type FC to
+    pub type FC<T> = fn(&mut Context<T>) -> VNode;
+
+    /// The Scope that wraps a functional component
+    /// Scope's hold subscription, context, and hook information, however, it is allocated on the heap.
+    pub struct Scope {}
+
+    impl Scope {
+        fn new<T>() -> Self {
             Self {}
         }
     }
+
+    /// Components in Dioxus use the "Context" object to interact with their lifecycle.
+    /// This lets components schedule updates, integrate hooks, and expose their context via the context api.
+    ///
+    /// Properties passed down from the parent component are also directly accessible via the exposed "props" field.
+    ///
+    /// ```ignore
+    /// #[derive(Properties)]
+    /// struct Props {
+    ///     name: String
+    /// }
+    ///
+    /// fn example(ctx: &Context<Props>) -> VNode {
+    ///     html! {
+    ///         <div> "Hello, {ctx.props.name}" </div>
+    ///     }
+    /// }
+    /// ```
+    pub struct Context<'source, T> {
+        _props: std::marker::PhantomData<&'source T>,
+    }
+
+    pub trait Properties {}
+    impl Properties for () {}
 }
 
 /// Virtual Node Support
@@ -628,7 +683,7 @@ pub mod diff {
 
     /// Given two VNode's generate Patch's that would turn the old virtual node's
     /// real DOM node equivalent into the new VNode's real DOM node equivalent.
-    pub fn diff<'a>(old: &'a VNode, new: &'a VNode) -> Vec<Patch<'a>> {
+    pub fn diff_vnodes<'a>(old: &'a VNode, new: &'a VNode) -> Vec<Patch<'a>> {
         diff_recursive(&old, &new, &mut 0)
     }
 
@@ -641,6 +696,8 @@ pub mod diff {
         let mut replace = false;
 
         // Different enum variants, replace!
+        // VNodes are of different types, and therefore will cause a re-render.
+        // TODO: Handle previously-mounted children so they don't get re-mounted
         if mem::discriminant(old) != mem::discriminant(new) {
             replace = true;
         }
@@ -794,7 +851,7 @@ pub mod diff {
         impl<'a> DiffTestCase<'a> {
             pub fn test(&self) {
                 // ex: vec![Patch::Replace(0, &html! { <strong></strong> })],
-                let patches = diff(&self.old, &self.new);
+                let patches = diff_vnodes(&self.old, &self.new);
 
                 assert_eq!(patches, self.expected, "{}", self.description);
             }
@@ -990,37 +1047,6 @@ pub mod diff {
         //        })
         //    }
     }
-}
-
-///
-///
-///
-///
-///
-pub mod component {
-
-    /// A wrapper around component contexts that hides component property types
-    pub struct AnyContext {}
-    pub struct Context<T> {
-        _props: std::marker::PhantomData<T>,
-    }
-
-    pub trait Properties {}
-    impl Properties for () {}
-
-    fn test() {}
-}
-
-/// Utility types that wrap internals
-///
-///
-///
-pub mod types {
-    use super::*;
-    use component::{AnyContext, Context};
-    use nodes::VNode;
-
-    pub type FC = fn(&mut AnyContext) -> VNode;
 }
 
 /// TODO @Jon

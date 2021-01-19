@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use dioxus_core::{component::AnyContext, prelude::*};
+use dioxus_core::prelude::*;
 // use virtual_dom_rs::Closure;
 
 // Stop-gap while developing
@@ -8,12 +8,16 @@ use dioxus_core::{component::AnyContext, prelude::*};
 type VirtualNode = VNode;
 
 pub fn main() {
-    let dom = VirtualDom::new(root);
+    let dom = VirtualDom::new_with_props(root);
     // let mut renderer = TextRenderer::new(dom);
     // let output = renderer.render();
 }
 
-fn root(ctx: &mut AnyContext) -> VNode {
+struct Props {
+    name: String,
+}
+
+fn root(ctx: &mut Context<Props>) -> VNode {
     // the regular html syntax
 
     // html! {
@@ -61,15 +65,15 @@ fn root(ctx: &mut AnyContext) -> VNode {
     }
 }
 
-fn Head(ctx: &mut AnyContext) -> VNode {
+fn Head(ctx: &mut Context<Props>) -> VNode {
     html! {
         <head>
-            {"Head Section"}
+            "Head Section"
         </head>
     }
 }
 
-fn Body(ctx: &mut AnyContext) -> VNode {
+fn Body(ctx: &mut Context<Props>) -> VNode {
     html! {
         <body>
             {"Footer Section"}
@@ -77,10 +81,18 @@ fn Body(ctx: &mut AnyContext) -> VNode {
     }
 }
 
-fn Footer(ctx: &mut AnyContext) -> VNode {
+fn Footer(ctx: &mut Context<Props>) -> VNode {
+    let mut v = 10_i32;
+    format!("Is this the real life, or is this fantasy, caught in a landslide");
+
     html! {
         <div>
-            {"Footer Section"}
+            "Footer Section"
+            "Footer Section"
+            "Footer Section"
+            "Footer Section"
+            "Footer Section"
+            "Footer Section"
         </div>
     }
 }
