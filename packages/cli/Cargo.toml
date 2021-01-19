@@ -1,5 +1,5 @@
 [package]
-name = "diopack"
+name = "dioxus-cli"
 version = "0.0.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"

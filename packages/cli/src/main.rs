@@ -1,4 +1,5 @@
 use diopack::cli::{LaunchCommand, LaunchOptions};
+use dioxus_cli as diopack;
 
 #[async_std::main]
 async fn main() -> diopack::error::Result<()> {

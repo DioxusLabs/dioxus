@@ -7,7 +7,7 @@ members = [
     "packages/recoil",
     "packages/redux",
     "packages/web",
-    "packages/diopack",
+    "packages/cli",
     #
     #
     #
