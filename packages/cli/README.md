@@ -1,13 +1,13 @@
 <div align="center">
-  <h1>📦✨  yew-pack</h1>
+  <h1>📦✨  dioxus-cli</h1>
   <p>
-    <strong>Tooling to supercharge yew projects</strong>
+    <strong>Tooling to supercharge dioxus projects</strong>
   </p>
 </div>
 
 # About
 ---
-yewpack (inspired by wasm-pack and webpack) is a tool to help get Yew projects off the ground. It handles all the build, development, bundling, and publishing to make web development just a simple two commands: `cargo init` and `yewpack publish`.
+dioxus-cli (inspired by wasm-pack and webpack) is a tool to help get dioxus projects off the ground. It handles all the build, development, bundling, and publishing to make web development just a simple two commands: `cargo init` and `dioxus-cli publish`.
 
 Best thing: 
 - No NPM. 
@@ -18,31 +18,31 @@ Best thing:
 - No rollup
 - No ESLint
 
-Just install Rust, yewpack, and you're good to go.
-`cargo install --git github.com/jkelleyrtp/yewpack`
+Just install Rust, dioxus-cli, and you're good to go.
+`cargo install --git github.com/jkelleyrtp/dioxus-cli`
 
 Need a development server?
-`yewpack develop`
+`dioxus develop`
 
 Need to run an example?
-`yewpack develop --example textbox`
+`dioxus develop --example textbox`
 
 Need to benchmark a component?
-`yewpack bench`
+`dioxus bench`
 
 Need to test your code?
-`yewpack test`
+`dioxus test`
 
 Need to build your code into a bundle?
-`yewpack build --outdir public`
+`dioxus build --outdir public`
 
 Need to publish your code to GitHub pages, Netlify, etc?
-`yewpack publish --ghpages myrepo.git`
+`dioxus publish --ghpages myrepo.git`
 
 # Use in your project
 ---
-Sometimes you'll want to include static assets without bundling them into your .wasm content. yewpack provides a few ways of doing this:
+Sometimes you'll want to include static assets without bundling them into your .wasm content. dioxus-cli provides a few ways of doing this:
 
-- Load in dynamic content using `yewpack::asset("./static/images/blah.svg")`
-- Live-reload HTML templates without rebuilding your .wasm with `yewpack::template("./templates/blah.html")`
-- Use a CSS library like tailwind in your yewpack configuration with
+- Load in dynamic content using `dioxus::asset("./static/images/blah.svg")`
+- Live-reload HTML templates without rebuilding your .wasm with `dioxus::template("./templates/blah.html")`
+- Use a CSS library like tailwind in your dioxus configuration with
