@@ -9,23 +9,23 @@ description = "CLI tool for developing, testing, and publishing Dioxus apps"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-thiserror = "1.0.22"
-log = "0.4"
+thiserror = "1.0.23"
+log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }
 wasm-bindgen-cli-support = "0.2.69"
-anyhow = "1.0.34"
+anyhow = "1.0.38"
 argh = "0.1.4"
-serde = "1"
-serde_json = "1"
-async-std = { version = "1.7.0", features = ["attributes"] }
+serde = "1.0.120"
+serde_json = "1.0.61"
+async-std = { version = "1.9.0", features = ["attributes"] }
 tide = "0.15.0"
 cargo_toml = "0.8.1"
 fs_extra = "1.2.0"
 
-notify = "5.0.0-pre.3"
-futures = "0.3.8"
+notify = "5.0.0-pre.4"
+futures = "0.3.12"
 rjdebounce = "0.2.1"
-tempfile = "3.1.0"
+tempfile = "3.2.0"
 
 [[bin]]
 path = "src/main.rs"
