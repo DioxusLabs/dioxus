@@ -21,7 +21,8 @@ Dioxus Core supports:
 - [ ] State management integrations
 
 On top of these, we have several projects you can find in the `packages` folder.
-- [x] `Diopack`: Testing, development, and packaging tools for Dioxus apps
+- [x] `dioxuscli`: Testing, development, and packaging tools for Dioxus apps
+- [ ] `dioxus-router`: A hook-based router implementation for Dioxus web apps
 - [ ] `Dioxus-vscode`: Syntax highlighting, code formatting, and hints for Dioxus html! blocks
 - [ ] `Redux-rs`: Redux-style global state management
 - [ ] `Recoil-rs`: Recoil-style global state management

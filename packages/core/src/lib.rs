@@ -149,7 +149,7 @@ pub mod virtual_dom {
     /// }
     /// ```
     pub struct Context<'source, T> {
-        _props: std::marker::PhantomData<&'source T>,
+        pub props: &'source T,
     }
 
     pub trait Properties {}
