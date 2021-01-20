@@ -4,7 +4,7 @@
 //! Server-side-renderered webpages are a great use of Rust's async story, where servers can handle
 //! thousands of simultaneous clients on minimal hardware.
 
-use dioxus_core::prelude::*;
+use dioxus::prelude::*;
 use tide::{Request, Response};
 
 #[async_std::main]

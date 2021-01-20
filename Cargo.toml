@@ -1,10 +1,12 @@
 [workspace]
 members = [
     # Built-in
+    "packages/dioxus",
     "packages/core",
     "packages/hooks",
     "packages/recoil",
     "packages/redux",
+    "packages/core-macro",
     # TODO @Jon, share the validation code
     # "packages/web",
     "packages/cli",

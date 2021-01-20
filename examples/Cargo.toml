@@ -9,13 +9,20 @@ edition = "2018"
 [dependencies]
 fern = { version = "0.6.0", features = ["colored"] }
 log = "0.4.1"
-dioxus-core = { path = "../packages/core" }
+dioxus = { path = "../packages/dioxus" }
 rand = "0.8.2"
 
 
 [dev-dependencies]
+# For the tide ssr examples
 async-std = { version = "1.9.0", features = ["attributes"] }
 tide = { version = "0.15.0" }
+
+# For the doc generator
+pulldown-cmark = { version = "0.8.0", default-features = false }
+
+
+anyhow = "*"
 
 
 [lib]
@@ -28,3 +35,11 @@ name = "hello"
 [[example]]
 path = "tide_ssr.rs"
 name = "tide_ssr"
+
+[[example]]
+path = "doc_generator.rs"
+name = "doc_generator"
+
+[[example]]
+path = "router.rs"
+name = "router"

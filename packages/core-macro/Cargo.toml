@@ -1,0 +1,20 @@
+[package]
+name = "dioxus-core-macro"
+version = "0.0.0"
+authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.6"
+quote = "1.0"
+syn = { version = "1.0.11", features = ["full"] }
+
+# testing
+[dev-dependencies]
+rustversion = "1.0"
+trybuild = "1.0"

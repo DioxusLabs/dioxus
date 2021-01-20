@@ -1,5 +1,46 @@
-//! Dioxus: a concurrent, functional, virtual dom for any renderer in Rust
+//! <div align="center">
+//!   <h1>🌗🚀 📦 Dioxus</h1>
+//!   <p>
+//!     <strong>A concurrent, functional, virtual DOM for Rust</strong>
+//!   </p>
+//! </div>
+//! Dioxus: a concurrent, functional, reactive virtual dom for any renderer in Rust.
 //!
+//!
+//! Dioxus is an efficient virtual dom implementation for building interactive user interfaces in Rust.
+//! This crate aims to maintain a uniform hook-based, renderer-agnostic UI framework for cross-platform development.
+//!
+//! ## Components
+//! The base unit of Dioxus is the `component`. Components can be easily created from just a function - no traits required:
+//! ```
+//! use dioxus_core::prelude::*;
+//!
+//! fn Example(ctx: Context<()>) -> VNode {
+//!     html! { <div> "Hello world!" </div> }
+//! }
+//! ```
+//! Components need to take a "Context" parameter which is generic over some properties. This defines how the component can be used
+//! and what properties can be used to specify it in the VNode output. All components in Dioxus are hook-based, which might be more
+//! complex than other approaches that use traits + lifecycle events. Alternatively, we provide a "lifecycle hook" if you want more
+//! granualar control with behavior similar to other UI frameworks.
+//!
+//! ## Hooks
+//! Dioxus uses hooks for state management. Hooks are a form of state persisted between calls of the function component. Instead of
+//! using a single struct to store data, hooks use the "use_hook" building block which allows the persistence of data between
+//! function component renders.
+//!
+//! This allows functions to reuse stateful logic between components, simplify large complex components, and adopt more clear context
+//! subscription patterns to make components easier to read.
+//!
+//! ## Supported Renderers
+//! Instead of being tightly coupled to a platform, browser, or toolkit, Dioxus implements a VirtualDOM object which
+//! can be consumed to draw the UI. The Dioxus VDOM is reactive and easily consumable by 3rd-party renderers via
+//! the `Patch` object. See [Implementing a Renderer](docs/8-custom-renderer.md) and the `StringRenderer` classes for information
+//! on how to implement your own custom renderer. We provide 1st-class support for these renderers:
+//! - dioxus-desktop (via WebView)
+//! - dioxus-web (via WebSys)
+//! - dioxus-ssr (via StringRenderer)
+//! - dioxus-liveview (SSR + StringRenderer)
 //!
 
 /// Re-export common types for ease of development use.
@@ -9,12 +50,12 @@
 ///
 pub mod prelude {
     use crate::nodes;
-    pub use crate::virtual_dom::Context;
-    pub use crate::virtual_dom::VirtualDom;
+    pub use crate::virtual_dom::{Context, VirtualDom, FC};
     pub use nodes::iterables::IterableNodes;
     pub use nodes::*;
 
-    // hack "VNode"
+    // TODO @Jon, fix this
+    // hack the VNode type until VirtualNode is fixed in the macro crate
     pub type VirtualNode = VNode;
 
     // Re-export from the macro crate
@@ -24,7 +65,6 @@ pub mod prelude {
 /// The Dioxus Virtual Dom integrates an event system and virtual nodes to create reactive user interfaces.
 ///
 /// This module includes all life-cycle related mechanics, including the virtual dom, scopes, properties, and lifecycles.
-///
 pub mod virtual_dom {
     use super::*;
     use crate::nodes::VNode;
@@ -33,7 +73,12 @@ pub mod virtual_dom {
     /// An integrated virtual node system that progresses events and diffs UI trees.
     /// Differences are converted into patches which a renderer can use to draw the UI.
     pub struct VirtualDom {
-        arena: Arena<Scope>,
+        /// All mounted components are arena allocated to make additions, removals, and references easy to work with
+        /// A generational arean is used to re-use slots of deleted scopes without having to resize the underlying arena.
+        components: Arena<Scope>,
+
+        /// Components generate lifecycle events
+        event_queue: Vec<LifecycleEvent>,
     }
 
     impl VirtualDom {
@@ -51,10 +96,18 @@ pub mod virtual_dom {
         /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
         /// to toss out the entire tree.
         pub fn new_with_props<T>(root: FC<T>) -> Self {
+            // Set a first lifecycle event to add the component
+            let first_event = LifecycleEvent::Add;
+
             Self {
-                arena: Arena::new(),
+                components: Arena::new(),
+                event_queue: vec![first_event],
             }
         }
+    }
+
+    enum LifecycleEvent {
+        Add,
     }
 
     /// Functional Components leverage the type FC to
@@ -62,13 +115,21 @@ pub mod virtual_dom {
 
     /// The Scope that wraps a functional component
     /// Scope's hold subscription, context, and hook information, however, it is allocated on the heap.
-    pub struct Scope {}
+    pub struct Scope {
+        hook_idx: i32,
+        hooks: Vec<()>,
+    }
 
     impl Scope {
         fn new<T>() -> Self {
-            Self {}
+            Self {
+                hook_idx: 0,
+                hooks: vec![],
+            }
         }
     }
+
+    pub struct HookState {}
 
     /// Components in Dioxus use the "Context" object to interact with their lifecycle.
     /// This lets components schedule updates, integrate hooks, and expose their context via the context api.
@@ -92,7 +153,12 @@ pub mod virtual_dom {
     }
 
     pub trait Properties {}
+
+    // Auto derive for pure components
     impl Properties for () {}
+
+    // Set up a derive macro
+    // #[derive(Macro)]
 }
 
 /// Virtual Node Support
@@ -600,9 +666,8 @@ pub mod nodes {
     }
 }
 
-///
-///
-///
+/// The diffing algorithm to compare two VNode trees and generate a list of patches to update the VDom.
+/// Currently, using an index-based patching algorithm
 ///
 pub mod diff {
     use super::*;

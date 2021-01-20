@@ -1,22 +1,11 @@
 [package]
-name = "dioxus-core"
+name = "dioxus"
 version = "0.1.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 "license" = "MIT/Apache-2.0"
-
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-generational-arena = "0.2.8"
-once_cell = "1.5.2"
-dioxus-html-macro = { path = "../html-macro", version = "0.1.0" }
-
-
-# web-sys = "0.3.46"
-# js-sys = "0.3.46"
-# typed-arena = "2.0.1"
-# virtual-dom-rs = { path = "../virtual-dom-rs" }
-# virtual-node = { path = "../virtual-node" }
+dioxus-core = { path = "../core", version = "0.1.0" }
