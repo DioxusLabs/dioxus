@@ -76,8 +76,9 @@ async fn fibsum(req: Request<()>) -> tide::Result<tide::Response> {
                             <div class="font-medium text-6xl">
                                 {format!("{}",fib_n)}
                             </div>
-
                         </div>
+
+                        // Try another
                         <div class="flex flex-row justify-between mt-6">
                             <a href=format!("http://localhost:8080/fib/{}", other_fib_to_try) class="underline">
                                 {"Click to try another number"}

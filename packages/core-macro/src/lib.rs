@@ -46,8 +46,6 @@ fn function_component_impl(
     // }
 
     let ret_type = quote_spanned!(return_type.span()=> VNode);
-    // let ret_type = quote_spanned!(return_type.span()=> ::VNode);
-    // let ret_type = quote_spanned!(return_type.span()=> ::yew::html::Html);
 
     let quoted = quote! {
         #[doc(hidden)]
@@ -69,22 +67,6 @@ fn function_component_impl(
         }
         #[allow(non_snake_case)]
         pub use __component_blah::component as #function_name;
-
-
-
-
-        // #vis struct #function_name;
-
-        // impl ::yew_functional::FunctionProvider for #function_name {
-        //     type TProps = #props_type;
-
-        //     fn run(#arg) -> #ret_type {
-        //         #block
-        //     }
-        // }
-
-        // #(#attrs)*
-        // #vis type #component_name = ::yew_functional::FunctionComponent<#function_name>;
     };
     // let quoted = quote! {
     //     #[doc(hidden)]
@@ -148,6 +130,31 @@ impl Parse for FunctionComponent {
 
         // Extract the "context" object
         let props_type = validate_context_arg(&first_arg)?;
+
+        /*
+        Extract the rest of the function arguments into a struct body
+        We require all inputs are strongly typed with names so we can destructure into the function body when expanded
+
+
+        */
+        // let rest = inputs
+        //     .map(|f| {
+        //         //
+        //         match f {
+        //             FnArg::Typed(pat) => {
+        //                 match *pat.pat {
+        //                     syn::Pat::Type(asd) => {}
+        //                     _ => {}
+        //                 };
+        //                 //
+        //             }
+        //             FnArg::Receiver(_) => {}
+        //         }
+        //         // let name = f
+        //         let stream = f.into_token_stream();
+        //         (stream)
+        //     })
+        //     .collect::<Vec<_>>();
 
         // Collect the rest of the args into a list of definitions to be used by the inline struct
 

@@ -149,7 +149,27 @@ pub mod virtual_dom {
     /// }
     /// ```
     pub struct Context<'source, T> {
+        /// Direct access to the properties used to create this component.
         pub props: &'source T,
+    }
+
+    impl<'a, T> Context<'a, T> {
+        /// Access a parent context
+        pub fn parent_context<C>(&self) -> C {
+            todo!("Context API is not ready yet")
+        }
+
+        /// Create a subscription that schedules a future render for the reference component
+        pub fn subscribe(&self) -> impl FnOnce() -> () {
+            todo!("Subscription API is not ready yet");
+            || {}
+        }
+
+        /// The `Enter` API is an internal way of tracking the location in the Dioxus Virtual DOM
+        /// The Context object consumes itself, producing a new lifetime without reallocating
+        fn enter(self) -> Self {
+            todo!("Entrance API for reusing Context object not ready yet")
+        }
     }
 
     pub trait Properties {}
