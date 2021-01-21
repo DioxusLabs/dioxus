@@ -12,6 +12,7 @@ log = "0.4.1"
 dioxus = { path = "../packages/dioxus" }
 dioxus-ssr = { path = "../packages/ssr" }
 rand = "0.8.2"
+anyhow = "*"
 
 
 [dev-dependencies]
@@ -22,9 +23,7 @@ tide = { version = "0.15.0" }
 # For the doc generator
 pulldown-cmark = { version = "0.8.0", default-features = false }
 
-
-anyhow = "*"
-
+dioxus-webview = { path = "../packages/webview", version = "0.0.0" }
 
 [lib]
 path = "common.rs"
@@ -48,3 +47,7 @@ name = "router"
 [[example]]
 path = "fc_macro.rs"
 name = "fc_macro"
+
+[[example]]
+path = "webview.rs"
+name = "webview"

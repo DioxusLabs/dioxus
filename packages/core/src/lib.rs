@@ -154,6 +154,11 @@ pub mod virtual_dom {
     }
 
     impl<'a, T> Context<'a, T> {
+        /// Access the children elements passed into the component
+        pub fn children(&self) -> Vec<VNode> {
+            todo!("Children API not yet implemented for component Context")
+        }
+
         /// Access a parent context
         pub fn parent_context<C>(&self) -> C {
             todo!("Context API is not ready yet")
