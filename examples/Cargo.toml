@@ -10,6 +10,7 @@ edition = "2018"
 fern = { version = "0.6.0", features = ["colored"] }
 log = "0.4.1"
 dioxus = { path = "../packages/dioxus" }
+dioxus-ssr = { path = "../packages/ssr" }
 rand = "0.8.2"
 
 
@@ -43,3 +44,7 @@ name = "doc_generator"
 [[example]]
 path = "router.rs"
 name = "router"
+
+[[example]]
+path = "fc_macro.rs"
+name = "fc_macro"

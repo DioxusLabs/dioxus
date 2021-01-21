@@ -8,6 +8,7 @@ members = [
     "packages/redux",
     "packages/core-macro",
     "packages/router",
+    "packages/ssr",
     # "packages/macro",
     # TODO @Jon, share the validation code
     # "packages/web",

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-core-macro"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"
 

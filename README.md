@@ -7,12 +7,12 @@
 
 # About
 
-Dioxus is a new approach for creating performant cross platform user experiences in Rust. In Dioxus, the UI is represented as a tree of Virtual Nodes not bound to any specific renderer. Instead, external renderers can leverage Dioxus' virtual DOM and event system as a source of truth for rendering to a medium of their choice. Developers used to crafting react-based experiences should feel comfortable with Dioxus.
+Dioxus is a new approach for creating performant cross platform user experiences in Rust. In Dioxus, the UI is represented as a tree of Virtual Nodes not bound to any specific renderer. Instead, external renderers can leverage Dioxus' virtual DOM and event system as a source of truth for rendering to a medium of their choice. Developers experienced with building react-based experiences should feel comfortable with Dioxus.
 
 Dioxus is unique in the space of UI for Rust. Dioxus supports a renderer approach called "broadcasting" where two VDoms with separate renderers can sync their UI states remotely. Our goal as a framework is to work towards "Dioxus Liveview" where a server and client work in tandem, eliminating the need for frontend-specific APIs altogether.
 
 ## Features
-Dioxus' goal is to be the most advanced UI system for Rust, targeting isomorphism and hybrid approaches. Our goal is to never be burdened with context switching between various programming languages, build tools, and environment idiosyncrasies. 
+Dioxus' goal is to be the most advanced UI system for Rust, targeting isomorphism and hybrid approaches. Our goal is to eliminate context-switching for cross-platform development - both in UI patterns and programming language. Hooks and components should work *everywhere* without compromise.
 
 Dioxus Core supports:
 - [ ] Hooks
@@ -21,7 +21,7 @@ Dioxus Core supports:
 - [ ] State management integrations
 
 On top of these, we have several projects you can find in the `packages` folder.
-- [x] `dioxuscli`: Testing, development, and packaging tools for Dioxus apps
+- [x] `dioxus-cli`: Testing, development, and packaging tools for Dioxus apps
 - [ ] `dioxus-router`: A hook-based router implementation for Dioxus web apps
 - [ ] `Dioxus-vscode`: Syntax highlighting, code formatting, and hints for Dioxus html! blocks
 - [ ] `Redux-rs`: Redux-style global state management
@@ -47,19 +47,19 @@ fn Example(ctx: &Context<MyProps>) -> VNode {
 }
 ```
 
-Here, the `Context` object is used to access hook state, create subscriptions, and interact with the built-in context API. Props, children, and component APIs are accessible via the `Context` object. If using the functional component macro, it's possible to inline props into the function definition itself.
+Here, the `Context` object is used to access hook state, create subscriptions, and interact with the built-in context API. Props, children, and component APIs are accessible via the `Context` object. The functional component macro makes life more productive by inlining props directly as function arguments, similar to how Rocket parses URIs.
 
 ```rust
 // A very terse component!
-#[functional_component]
-fn Example(ctx: &Context<{ name: String }>) -> VNode {
+#[fc]
+fn Example(ctx: &Context, name: String) -> VNode {
     html! { <div> "Hello {name}!" </div> }
 }
 
 // or
 
 #[functional_component]
-static Example: FC<{ name: String }> = |ctx| html! { <div> "Hello {:?name}!" </div> }; 
+static Example: FC = |ctx, name: String| html! { <div> "Hello {:?name}!" </div> }; 
 ```
 
 The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, or templating engine. Work is being done on a terra template processor for existing templates.
@@ -83,7 +83,7 @@ async fn user_data(ctx: &Context<()>) -> VNode {
 Asynchronous components are powerful but can also be easy to misuse as they pause rendering for the component and its children. Refer to the concurrent guide for information on how to best use async components. 
 
 ## Examples
-We use `diopack` to build and test webapps. This can run examples, tests, build web workers, launch development servers, bundle, and more. It's general purpose, but currently very tailored to Dioxus for liveview and bundling. If you've not used it before, `cargo install --path pacakages/diopack` will get it installed. 
+We use the dedicated `dioxus-cli` to build and test dioxus web-apps. This can run examples, tests, build web workers, launch development servers, bundle, and more. It's general purpose, but currently very tailored to Dioxus for liveview and bundling. If you've not used it before, `cargo install --path pacakages/dioxus-cli` will get it installed. This CLI tool should feel like using `cargo` but with 1st party support for assets, bundling, and other important dioxus-specific features.
 
 Alternatively, `trunk` works but can't run examples.
 

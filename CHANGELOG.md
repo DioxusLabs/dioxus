@@ -31,9 +31,10 @@
 - [ ] (SSR) Implement stateful 3rd party string renderer
 - [ ] (Macro) Make VText nodes automatically capture and format IE allow "Text is {blah}" in place of {format!("Text is {}",blah)}
 
-# Project: Initial Release (TBD)
+# Project: Initial VDOM support (TBD)
 > Get the initial VDom + Event System + Patching + Diffing + Component framework up and running
 - [x] (Core) Migrate virtual node into new VNode type
+- [ ] (Macro) Allow components to specify their props as function args
 - [ ] (Core) Arena allocate VNodes
 - [ ] (Core) Allow VNodes to borrow arena contents
 - [ ] (Macro) Tweak event syntax to not be dependent on wasm32 target (just return regular closures)
