@@ -37,7 +37,7 @@ impl<T> WebviewRenderer<T> {
         todo!()
     }
 
-    pub async fn launch(self, props: T) {
+    pub fn launch(self, props: T) {
         let mut ctx = Context { props: &props };
         let WebviewRenderer { root } = self;
         let content = root(&mut ctx);

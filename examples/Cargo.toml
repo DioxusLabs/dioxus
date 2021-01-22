@@ -24,13 +24,14 @@ tide = { version = "0.15.0" }
 pulldown-cmark = { version = "0.8.0", default-features = false }
 
 dioxus-webview = { path = "../packages/webview", version = "0.0.0" }
+dioxus-hooks = { path = "../packages/hooks", version = "0.0.0" }
 
 [lib]
 path = "common.rs"
 
 [[example]]
-path = "hello.rs"
-name = "hello"
+path = "hello_web.rs"
+name = "hello_web"
 
 [[example]]
 path = "tide_ssr.rs"

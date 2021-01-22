@@ -23,15 +23,15 @@ Dioxus Core supports:
 On top of these, we have several projects you can find in the `packages` folder.
 - [x] `dioxus-cli`: Testing, development, and packaging tools for Dioxus apps
 - [ ] `dioxus-router`: A hook-based router implementation for Dioxus web apps
-- [ ] `Dioxus-vscode`: Syntax highlighting, code formatting, and hints for Dioxus html! blocks
-- [ ] `Redux-rs`: Redux-style global state management
-- [ ] `Recoil-rs`: Recoil-style global state management
-- [ ] `Dioxus-iso`: Hybrid apps (SSR + Web)
-- [ ] `Dioxus-live`: Live view
-- [ ] `Dioxus-desktop`: Desktop Applications
-- [ ] `Dioxus-ios`: iOS apps
-- [ ] `Dioxus-android`: Android apps
-- [ ] `Dioxus-magic`: AR/VR Apps
+- [ ] `dioxus-vscode`: Syntax highlighting, code formatting, and hints for Dioxus html! blocks
+- [ ] `redux-rs`: Redux-style global state management
+- [ ] `recoil-rs`: Recoil-style global state management
+- [ ] `dioxus-iso`: Hybrid apps (SSR + Web)
+- [ ] `dioxus-live`: Live view
+- [ ] `dioxus-webview`: Desktop Applications
+- [ ] `dioxus-ios`: iOS apps
+- [ ] `dioxus-android`: Android apps
+- [ ] `dioxus-magic`: AR/VR Apps
 
 ## Hello World
 Dioxus should look and feel just like writing functional React components. In Dioxus, there are no class components with lifecycles. All state management is done via hooks. This encourages logic reusability and lessens the burden on Dioxus to maintain a non-breaking lifecycle API.
@@ -62,7 +62,7 @@ fn Example(ctx: &Context, name: String) -> VNode {
 static Example: FC = |ctx, name: String| html! { <div> "Hello {:?name}!" </div> }; 
 ```
 
-The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, or templating engine. Work is being done on a terra template processor for existing templates.
+The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, templating engine, or the constructors directly. 
 
 ## Concurrency
 
@@ -88,7 +88,13 @@ We use the dedicated `dioxus-cli` to build and test dioxus web-apps. This can ru
 Alternatively, `trunk` works but can't run examples.
 
 - tide_ssr: Handle an HTTP request and return an html body using the html! macro. `cargo run --example tide_ssr`
-- simple_wasm: Simple WASM app that says hello. `diopack develop --example simple`
+- doc_generator: Use dioxus ssr to generate the website and docs. `cargo run --example doc_generator`
+- fc_macro: Use the functional component macro to build terse components. `cargo run --example fc_macro`
+- hello_web: Start a simple wasm app. Requires a webpacker like dioxus-cli or trunk `cargo run --example hello`
+- router: `cargo run --example router`
+- tide_ssr: `cargo run --example tide_ssr`
+- webview: Use liveview to bridge into a webview context for a simple desktop application. `cargo run --example webview`
+- twitter-clone: A full-featured Twitter clone showcasing dioxus-liveview, state management patterns, and hooks. `cargo run --example twitter`
 
 ## Documentation
 We have a pretty robust 
