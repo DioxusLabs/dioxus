@@ -10,6 +10,8 @@ members = [
     "packages/router",
     "packages/ssr",
     "packages/webview",
+    # Not a rust package, :(. One day, maybe
+    "packages/vscode-ext",
     # "packages/macro",
     # TODO @Jon, share the validation code
     # "packages/web",

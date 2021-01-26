@@ -46,7 +46,5 @@ pub mod logger {
             .chain(std::io::stdout())
             .apply()
             .unwrap();
-
-        debug!("finished setting up logging! yay!");
     }
 }

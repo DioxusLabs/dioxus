@@ -17,7 +17,6 @@ fn main() {
 
             <head>
             </head>
-
             <body>
             </body>
 

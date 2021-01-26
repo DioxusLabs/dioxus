@@ -1,4 +1,5 @@
 //! Example: Webview Renderer
+//! -------------------------
 //!
 //! This example shows how to use the dioxus_webview crate to build a basic desktop application.
 //!
