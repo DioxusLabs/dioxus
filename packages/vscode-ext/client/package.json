@@ -14,7 +14,8 @@
 	},
 	"dependencies": {
 		"vscode-html-languageservice": "^3.0.3",
-		"vscode-languageclient": "^6.1.3"
+		"vscode-languageclient": "^6.1.3",
+		"vscode-languageserver-textdocument": "^1.0.1"
 	},
 	"devDependencies": {
 		"@types/vscode": "^1.43.0"

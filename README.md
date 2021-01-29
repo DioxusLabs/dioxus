@@ -9,13 +9,15 @@
 
 Dioxus is a new approach for creating performant cross platform user experiences in Rust. In Dioxus, the UI is represented as a tree of Virtual Nodes not bound to any specific renderer. Instead, external renderers can leverage Dioxus' virtual DOM and event system as a source of truth for rendering to a medium of their choice. Developers experienced with building react-based experiences should feel comfortable with Dioxus.
 
-Dioxus is unique in the space of UI for Rust. Dioxus supports a renderer approach called "broadcasting" where two VDoms with separate renderers can sync their UI states remotely. Our goal as a framework is to work towards "Dioxus Liveview" where a server and client work in tandem, eliminating the need for frontend-specific APIs altogether.
+Dioxus was built in a way to facilitate powerful external renderers - especially designed for the web, servers, desktop, and hybrid approaches like Dioxus Liveview.
+
+Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms.
 
 ## Features
 Dioxus' goal is to be the most advanced UI system for Rust, targeting isomorphism and hybrid approaches. Our goal is to eliminate context-switching for cross-platform development - both in UI patterns and programming language. Hooks and components should work *everywhere* without compromise.
 
 Dioxus Core supports:
-- [ ] Hooks
+- [ ] Hooks for component state
 - [ ] Concurrent rendering
 - [ ] Context subscriptions
 - [ ] State management integrations
@@ -33,7 +35,7 @@ On top of these, we have several projects you can find in the `packages` folder.
 - [ ] `dioxus-android`: Android apps
 - [ ] `dioxus-magic`: AR/VR Apps
 
-## Hello World
+## Components
 Dioxus should look and feel just like writing functional React components. In Dioxus, there are no class components with lifecycles. All state management is done via hooks. This encourages logic reusability and lessens the burden on Dioxus to maintain a non-breaking lifecycle API.
 
 ```rust
@@ -42,7 +44,7 @@ struct MyProps {
     name: String
 }
 
-fn Example(ctx: &Context<MyProps>) -> VNode {
+async fn Example(ctx: &Context<MyProps>) -> VNode {
     html! { <div> "Hello {ctx.props.name}!" </div> }
 }
 ```
@@ -52,35 +54,66 @@ Here, the `Context` object is used to access hook state, create subscriptions, a
 ```rust
 // A very terse component!
 #[fc]
-fn Example(ctx: &Context, name: String) -> VNode {
+async fn Example(ctx: &Context, name: String) -> VNode {
     html! { <div> "Hello {name}!" </div> }
 }
 
 // or
 
 #[functional_component]
-static Example: FC = |ctx, name: String| html! { <div> "Hello {:?name}!" </div> }; 
+static Example: FC = |ctx, name: String| async html! { <div> "Hello {name}!" </div> }; 
 ```
 
 The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, templating engine, or the constructors directly. 
 
 ## Concurrency
-
-Dioxus, using React as a reference, provides the ability to have asynchronous components. With Dioxus, this is a valid component:
+In Dioxus, components are asynchronous and can their rendering can be paused at any time by awaiting a future. Hooks can combine this functionality with the Context and Subscription APIs to craft dynamic and efficient user experiences. 
 
 ```rust
 async fn user_data(ctx: &Context<()>) -> VNode {
-    let Profile { name, birthday, .. } = use_context::<UserContext>(ctx).fetch_data().await;
+    let Profile { name, birthday, .. } = fetch_data().await;
     html! {
         <div>
-            {"Hello, {:?name}!"}
+            {"Hello, {name}!"}
             {if birthday === std::Instant::now() {html! {"Happy birthday!"}}}
         </div>
     }
 }
 ```
-
 Asynchronous components are powerful but can also be easy to misuse as they pause rendering for the component and its children. Refer to the concurrent guide for information on how to best use async components. 
+
+## Liveview
+With the Context, Subscription, and Asynchronous APIs, we've built Dioxus Liveview: a coupling of frontend and backend to deliver user experiences that do not require dedicated API development. Instead of building and maintaining frontend-specific API endpoints, components can directly access databases, server caches, and other services directly from the component.
+
+These set of features are still experimental. Currently, we're still working on making these components more ergonomic
+
+```rust
+async fn live_component(ctx: &Context<()>) -> VNode {
+    use_live_component(
+        ctx,
+        // Rendered via the client
+        #[cfg(target_arch = "wasm32")]
+        || html! { <div> {"Loading data from server..."} </div> },
+
+        // Renderered on the server
+        #[cfg(not(target_arch = "wasm32"))]
+        || html! { <div> {"Server Data Loaded!"} </div> },
+    )
+}
+```
+
+## Dioxus LiveHost
+Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whether they be server-rendered, wasm-only, or a liveview. LiveHost enables a wide set of features:
+
+- Versioned fronted/backend with unique links
+- Builtin CI/CD for all supported Dioxus platforms (mac, windows, server, wasm, etc)
+- Managed and pluggable storage database backends
+- Serverless support for minimal latency
+- Analytics
+- Lighthouse optimization
+- On-premise support (see license terms)
+
+For small teams, LiveHost is free. Check out the pricing page to see if Dioxus LiveHost is good your team.
 
 ## Examples
 We use the dedicated `dioxus-cli` to build and test dioxus web-apps. This can run examples, tests, build web workers, launch development servers, bundle, and more. It's general purpose, but currently very tailored to Dioxus for liveview and bundling. If you've not used it before, `cargo install --path pacakages/dioxus-cli` will get it installed. This CLI tool should feel like using `cargo` but with 1st party support for assets, bundling, and other important dioxus-specific features.
@@ -97,5 +130,5 @@ Alternatively, `trunk` works but can't run examples.
 - twitter-clone: A full-featured Twitter clone showcasing dioxus-liveview, state management patterns, and hooks. `cargo run --example twitter`
 
 ## Documentation
-We have a pretty robust 
+
 

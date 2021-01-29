@@ -20,14 +20,26 @@ anyhow = "*"
 async-std = { version = "1.9.0", features = ["attributes"] }
 tide = { version = "0.15.0" }
 
+# For the livewview example
+tide-websockets = "0.1.0"
+serde_millis = "0.1"
+serde_json = "1"
+serde = { version = "1", features = ['derive'] }
+
 # For the doc generator
 pulldown-cmark = { version = "0.8.0", default-features = false }
 
 dioxus-webview = { path = "../packages/webview", version = "0.0.0" }
 dioxus-hooks = { path = "../packages/hooks", version = "0.0.0" }
 
+
+# Shared functionality is done as a lib
 [lib]
 path = "common.rs"
+
+# ================================
+# Examples are manually keyed in
+# ================================
 
 [[example]]
 path = "hello_web.rs"
@@ -52,3 +64,11 @@ name = "fc_macro"
 [[example]]
 path = "webview.rs"
 name = "webview"
+
+[[example]]
+path = "blah.rs"
+name = "blah"
+
+[[example]]
+path = "live.rs"
+name = "live"

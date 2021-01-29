@@ -16,26 +16,9 @@
     "node": "*"
   },
   "activationEvents": [
-    "onLanguage:html1"
+    "onLanguage:rust"
   ],
   "main": "./client/out/extension",
-  "contributes": {
-    "languages": [
-      {
-        "id": "rsx",
-        "extensions": [
-          ".rs"
-        ]
-      }
-    ],
-    "grammars": [
-      {
-        "language": "rsx",
-        "scopeName": "text.rsx.basic",
-        "path": "./syntaxes/rsx.tmLanguage.json"
-      }
-    ]
-  },
   "scripts": {
     "vscode:prepublish": "cd client && npm install && cd .. && npm run compile",
     "compile": "tsc -b",

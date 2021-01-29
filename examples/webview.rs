@@ -26,5 +26,7 @@ fn main() {
         }
     });
 
+    let f = 10_i32;
+    println!("hello {}", f);
     app.launch(());
 }

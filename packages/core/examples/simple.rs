@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use dioxus_core::prelude::*;
+use dioxus_core::{prelude::*, virtual_dom::Properties};
 // use virtual_dom_rs::Closure;
 
 // Stop-gap while developing
@@ -13,9 +13,11 @@ pub fn main() {
     // let output = renderer.render();
 }
 
+#[derive(PartialEq)]
 struct Props {
     name: String,
 }
+impl Properties for Props {}
 
 fn root(ctx: &mut Context<Props>) -> VNode {
     // the regular html syntax
@@ -39,10 +41,17 @@ fn root(ctx: &mut Context<Props>) -> VNode {
         }
 
         let mut node_1: IterableNodes = ("Hello world!").into();
+
         node_1.first().insert_space_before_text();
         let mut node_2 = VNode::element("button");
 
-        let node_3 = VNode::Component(VComponent {});
+        let node_3 = VNode::Component(VComponent::from_fn(
+            Head,
+            Props {
+                name: "".to_string(),
+            },
+        ));
+
         {
             // let closure = Closure::wrap(Box::new(|_| {}) as Box<FnMut(_)>);
             // let closure_rc = std::rc::Rc::new(closure);
@@ -67,17 +76,13 @@ fn root(ctx: &mut Context<Props>) -> VNode {
 
 fn Head(ctx: &mut Context<Props>) -> VNode {
     html! {
-        <head>
-            "Head Section"
-        </head>
+        <head> "Head Section" </head>
     }
 }
 
 fn Body(ctx: &mut Context<Props>) -> VNode {
     html! {
-        <body>
-            {"Footer Section"}
-        </body>
+        <body> {"Footer Section"}</body>
     }
 }
 

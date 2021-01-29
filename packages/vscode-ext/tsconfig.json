@@ -1,9 +1,9 @@
 {
     "compilerOptions": {
         "module": "commonjs",
-        "target": "es2019",
+        "target": "ESNext",
         "lib": [
-            "ES2019"
+            "ESNext"
         ],
         "outDir": "out",
         "rootDir": "src",

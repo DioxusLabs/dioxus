@@ -6,8 +6,6 @@
 //! </div>
 //! Dioxus: a concurrent, functional, reactive virtual dom for any renderer in Rust.
 //!
-//!
-//! Dioxus is an efficient virtual dom implementation for building interactive user interfaces in Rust.
 //! This crate aims to maintain a uniform hook-based, renderer-agnostic UI framework for cross-platform development.
 //!
 //! ## Components
@@ -15,14 +13,38 @@
 //! ```
 //! use dioxus_core::prelude::*;
 //!
-//! fn Example(ctx: Context<()>) -> VNode {
-//!     html! { <div> "Hello world!" </div> }
+//! #[derive(Properties)]
+//! struct Props { name: String }
+//!
+//! fn Example(ctx: &mut Context<Props>) -> VNode {
+//!     html! { <div> "Hello {ctx.props.name}!" </div> }
 //! }
 //! ```
 //! Components need to take a "Context" parameter which is generic over some properties. This defines how the component can be used
-//! and what properties can be used to specify it in the VNode output. All components in Dioxus are hook-based, which might be more
-//! complex than other approaches that use traits + lifecycle events. Alternatively, we provide a "lifecycle hook" if you want more
-//! granualar control with behavior similar to other UI frameworks.
+//! and what properties can be used to specify it in the VNode output. Component state in Dioxus is managed by hooks - if you're new
+//! to hooks, check out the hook guide in the official guide.
+//!
+//! Components can also be crafted as static closures, enabling type inference without all the type signature noise:
+//! ```
+//! use dioxus_core::prelude::*;
+//!
+//! #[derive(Properties)]
+//! struct Props { name: String }
+//!
+//! static Example: FC<Props> = |ctx| {
+//!     html! { <div> "Hello {ctx.props.name}!" </div> }
+//! }
+//! ```
+//!
+//! If the properties struct is too noisy for you, we also provide a macro that converts variadic functions into components automatically.
+//! ```
+//! use dioxus_core::prelude::*;
+//!
+//! #[functional_component]
+//! static Example: FC = |ctx, name: String| {
+//!     html! { <div> "Hello {name}!" </div> }
+//! }
+//! ```
 //!
 //! ## Hooks
 //! Dioxus uses hooks for state management. Hooks are a form of state persisted between calls of the function component. Instead of
@@ -177,7 +199,12 @@ pub mod virtual_dom {
         }
     }
 
-    pub trait Properties {}
+    pub trait Properties: PartialEq + 'static {
+        /*
+        Props cannot contain references (as of today) :(
+        Use a smart pointer
+        */
+    }
 
     // Auto derive for pure components
     impl Properties for () {}
@@ -187,8 +214,9 @@ pub mod virtual_dom {
 }
 
 /// Virtual Node Support
+/// VNodes represent lazily-constructed VDom trees that support diffing and event handlers.
 ///
-///
+/// These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 ///
 pub mod nodes {
     pub use vcomponent::VComponent;
@@ -528,13 +556,52 @@ pub mod nodes {
     /// Virtual Components for custom user-defined components
     /// Only supports the functional syntax
     mod vcomponent {
+        use crate::{
+            prelude::{Context, FC},
+            virtual_dom::Properties,
+        };
+        use std::{any::TypeId, fmt, future::Future};
+
+        use super::VNode;
         #[derive(PartialEq)]
-        pub struct VComponent {}
+        pub struct VComponent {
+            props_id: TypeId,
+            // callerIDs are unsafely coerced to function pointers
+            // This is okay because #1, we store the props_id and verify and 2# the html! macro rejects components not made this way
+            //
+            // Manually constructing the VComponent is not possible from 3rd party crates
+        }
+
+        impl VComponent {
+            /// Construct a VComponent directly from a function component
+            /// This should be *very* fast - we store the function pointer and props type ID. It should also be small on the stack
+            pub fn from_fn<P: Properties>(f: FC<P>, props: P) -> Self {
+                // Props needs to be static
+                let props_id = std::any::TypeId::of::<P>();
+
+                // Cast the caller down
+
+                Self { props_id }
+            }
+
+            /// Construct  a VComponent directly from a concurrent component
+            pub fn from_asyncfn<P: Properties, F>(f: fn(&mut Context<P>) -> F, props: P) -> Self
+            where
+                F: Future<Output = VNode>,
+            {
+                // Props needs to be static
+                let props_id = std::any::TypeId::of::<P>();
+
+                // Cast the caller down
+
+                Self { props_id }
+            }
+        }
 
         // -----------------------------------------------
         //  Allow debug/display adherent to the HTML spec
         // -----------------------------------------------
-        use std::fmt;
+
         impl fmt::Debug for VComponent {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 // TODO: @JON Implement how components should be formatted when spit out to html
