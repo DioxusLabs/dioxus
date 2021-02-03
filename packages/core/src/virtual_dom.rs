@@ -71,7 +71,7 @@ impl VirtualDom {
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
     /// The root component can access things like routing in its context.
-    pub fn new<F: DomTree>(root: FC<(), F>) -> Self {
+    pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root)
     }
 
@@ -80,7 +80,7 @@ impl VirtualDom {
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
-    pub fn new_with_props<P: Properties, F: DomTree>(root: FC<P, F>) -> Self {
+    pub fn new_with_props<P: Properties>(root: FC<P>) -> Self {
         Self {
             components: Arena::new(),
             event_queue: vec![],
@@ -116,19 +116,6 @@ where
     }
 }
 
-/// This type alias is an internal way of abstracting over the static functions that represent components.
-pub type FC<P: Properties, F: DomTree> = fn(&Context<P>) -> F;
-
-/// A gross AF helper that connects the dots for lifetimes
-/// sigh.. todo: move this into the html macro or core crates
-/// https://github.com/rust-lang/rust/issues/41078
-#[inline]
-pub fn __domtree_helper(
-    arg: impl for<'a> FnOnce(&'a Bump) -> VNode<'a>,
-) -> impl for<'a> FnOnce(&'a Bump) -> VNode<'a> {
-    arg
-}
-
 /// The `Component` trait refers to any struct or funciton that can be used as a component
 /// We automatically implement Component for FC<T>
 pub trait Component {
@@ -138,7 +125,7 @@ pub trait Component {
 
 // Auto implement component for a FC
 // Calling the FC is the same as "rendering" it
-impl<'a, P: Properties, F: DomTree> Component for FC<P, F> {
+impl<P: Properties> Component for FC<P> {
     type Props = P;
 
     fn builder(&self) -> Self::Props {
@@ -235,14 +222,14 @@ pub struct HookState {}
 ///     }
 /// }
 /// ```
-pub struct Context<T> {
-    // pub struct Context<'source, T> {
+// todo: force lifetime of source into T as a valid lifetime too
+// it's definitely possible, just needs some more messing around
+pub struct Context<'source, T> {
     /// Direct access to the properties used to create this component.
-    pub props: T,
-    // pub props: &'source T,
+    pub props: &'source T,
 }
 
-impl<'a, T> Context<T> {
+impl<'a, T> Context<'a, T> {
     // impl<'a, T> Context<'a, T> {
     /// Access the children elements passed into the component
     pub fn children(&self) -> Vec<VNode> {
@@ -260,9 +247,18 @@ impl<'a, T> Context<T> {
         || {}
     }
 
-    /// Create VNodes from macros that use efficient allcators
-    /// The VDOM is configured to use a special allocator for VNodes
-    pub fn view(&self, v: impl Fn(&'a Bump) -> VNode<'a>) -> VNode<'a> {
+    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
+    ///
+    /// ```ignore
+    /// fn Component(ctx: Context<Props>) -> VNode {
+    ///     // Lazy assemble the VNode tree
+    ///     let lazy_tree = html! {<div>"Hello World"</div>};
+    ///     
+    ///     // Actually build the tree and allocate it
+    ///     ctx.view(lazy_tree)
+    /// }
+    ///```
+    pub fn view(&self, v: impl FnOnce(&'a Bump) -> VNode<'a>) -> VNode<'a> {
         todo!()
     }
 

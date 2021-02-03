@@ -38,38 +38,39 @@ impl<T> WebviewRenderer<T> {
     }
 
     pub fn launch(self, props: T) {
-        let mut ctx = Context { props: &props };
-        let WebviewRenderer { root } = self;
-        let content = root(&mut ctx);
-        let html_content = content.to_string();
-        /*
-        TODO: @Jon
-        Launch the webview with a premade VDom app
-        */
+        todo!()
+        // let mut ctx = Context { props: &props };
+        // let WebviewRenderer { root } = self;
+        // let content = root(&mut ctx);
+        // let html_content = content.to_string();
+        // /*
+        // TODO: @Jon
+        // Launch the webview with a premade VDom app
+        // */
 
-        web_view::builder()
-            .title("My Project")
-            .content(web_view::Content::Html(html_content))
-            .size(320, 480)
-            .resizable(true)
-            .debug(true)
-            .user_data(())
-            .invoke_handler(|_webview, _arg| Ok(()))
-            .run()
-            .unwrap();
+        // web_view::builder()
+        //     .title("My Project")
+        //     .content(web_view::Content::Html(html_content))
+        //     .size(320, 480)
+        //     .resizable(true)
+        //     .debug(true)
+        //     .user_data(())
+        //     .invoke_handler(|_webview, _arg| Ok(()))
+        //     .run()
+        //     .unwrap();
     }
 }
 
-mod receiver {
-    use dioxus_core::prelude::*;
+// mod receiver {
+//     use dioxus_core::prelude::*;
 
-    /// The receiver app is a container that builds a connection to the host process that shuttles events and patches.  
-    pub(crate) static ReceiverApp: FC<()> = |ctx| {
-        //
-        html! {
-            <div>
-                {}
-            </div>
-        }
-    };
-}
+//     /// The receiver app is a container that builds a connection to the host process that shuttles events and patches.
+//     pub(crate) static ReceiverApp: FC<()> = |ctx| {
+//         //
+//         html! {
+//             <div>
+//                 {}
+//             </div>
+//         }
+//     };
+// }

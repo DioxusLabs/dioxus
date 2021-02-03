@@ -81,11 +81,8 @@ pub mod prelude {
     pub use nodes::*;
     // pub use nodes::iterables::IterableNodes;
 
-    // FC is a shorthand for statics to easily declare a function that takes a context and produces a dom tree
-    // The DomTree is lazy and needs to be evaluated with an arena for any allocation to take place
-    // Hmmm, maybe get statics to work again?
-    // pub type FC<'a, T> = fn(&'a Context<T>) -> VNode<'a>;
-    pub use crate::virtual_dom::{__domtree_helper, FC};
+    /// This type alias is an internal way of abstracting over the static functions that represent components.
+    pub type FC<P> = for<'a> fn(&'a Context<P>) -> VNode<'a>;
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate
@@ -93,4 +90,7 @@ pub mod prelude {
 
     // Re-export from the macro crate
     pub use dioxus_html_macro::html;
+
+    // Re-export the FC macro
+    pub use dioxus_core_macro::fc;
 }

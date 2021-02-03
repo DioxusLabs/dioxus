@@ -2,7 +2,6 @@
 
 use crate::nodes::{Attribute, Listener, NodeKey, VNode};
 type Node<'g> = VNode<'g>;
-// use crate::{node::NodeKey, Attribute, Listener, Node, RootRender, VdomWeak};
 use bumpalo::Bump;
 
 /// A virtual DOM element builder.

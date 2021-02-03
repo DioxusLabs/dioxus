@@ -41,34 +41,34 @@ path = "common.rs"
 # Examples are manually keyed in
 # ================================
 
-[[example]]
-path = "hello_web.rs"
-name = "hello_web"
+# [[example]]
+# path = "hello_web.rs"
+# name = "hello_web"
 
-[[example]]
-path = "tide_ssr.rs"
-name = "tide_ssr"
+# [[example]]
+# path = "tide_ssr.rs"
+# name = "tide_ssr"
 
-[[example]]
-path = "doc_generator.rs"
-name = "doc_generator"
+# [[example]]
+# path = "doc_generator.rs"
+# name = "doc_generator"
 
-[[example]]
-path = "router.rs"
-name = "router"
+# [[example]]
+# path = "router.rs"
+# name = "router"
 
-[[example]]
-path = "fc_macro.rs"
-name = "fc_macro"
+# [[example]]
+# path = "fc_macro.rs"
+# name = "fc_macro"
 
-[[example]]
-path = "webview.rs"
-name = "webview"
+# [[example]]
+# path = "webview.rs"
+# name = "webview"
 
-[[example]]
-path = "blah.rs"
-name = "blah"
+# [[example]]
+# path = "blah.rs"
+# name = "blah"
 
-[[example]]
-path = "live.rs"
-name = "live"
+# [[example]]
+# path = "live.rs"
+# name = "live"

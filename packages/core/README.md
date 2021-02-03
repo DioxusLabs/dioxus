@@ -6,8 +6,8 @@ This is the core crate for the Dioxus Virtual DOM. This README will focus on the
 Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus borrows these concepts:
 
 - React: hooks, concurrency, suspense
-- Dodrio: bump allocation / custom faster allocators, stack machine for fast changes
-- Percy: html! macro implementation and agnostic edit list
+- Dodrio: bump allocation, double buffering
+- Percy: html! macro architecture, platform-agnostic edits
 - Yew: passion and inspiration ❤️
 
 ## Goals
@@ -15,6 +15,7 @@ Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus 
 We have big goals for Dioxus. The final implementation must:
 
 - Be **fast**. Allocators are typically slow in WASM/Rust, so we should have a smart way of allocating.
+- Be extremely memory efficient. Servers should handle tens of thousands of simultaneous VDoms with no problem.
 - Be concurrent. Components should be able to pause rendering using a threading mechanism.
 - Support "broadcasting". Edit lists should be separate from the Renderer implementation.
 - Support SSR. VNodes should render to a string that can be served via a web server.
@@ -30,10 +31,37 @@ We have big goals for Dioxus. The final implementation must:
 ## Design Quirks
 
 - Use of "Context" as a way of mitigating threading issues and the borrow checker. (JS relies on globals)
-- html! is lazy - needs to be used with a partner function to actually allocate the html.
+- html! is lazy - needs to be used with a partner function to actually allocate the html. (Good be a good thing or a bad thing)
 
 ```rust
 let text = TextRenderer::render(html! {<div>"hello world"</div>});
 // <div>hello world</div>
 ```
 
+```rust
+
+fn main() {
+    tide::new()
+        .get("blah", serve_app("../"))
+        .get("blah", ws_handler(serve_app))
+}
+
+
+fn serve_app(ctx: &Context<()>) -> VNode {
+    let livecontext = LiveContext::new()
+        .with_handler("graph", graph_component)
+        .with_handler("graph", graph_component)
+        .with_handler("graph", graph_component)
+        .with_handler("graph", graph_component)
+        .with_handler("graph", graph_component)
+        .with_handler("graph", graph_component)
+        .build();
+
+    ctx.view(html! {
+        <LiveContext ctx={livecontext}>
+            <App />
+        </ LiveContext>
+    })
+}
+
+```

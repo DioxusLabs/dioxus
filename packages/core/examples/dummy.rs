@@ -1,10 +1,63 @@
-// #![allow(unused, non_upper_case_globals)]
-// use bumpalo::Bump;
-// use dioxus_core::nodebuilder::*;
-// use dioxus_core::{nodes::DomTree, prelude::*};
-// use std::{collections::HashMap, future::Future, marker::PhantomData};
+#![allow(unused, non_upper_case_globals)]
+use bumpalo::Bump;
+use dioxus_core::prelude::VNode;
+use dioxus_core::prelude::*;
+use dioxus_core::{nodebuilder::*, virtual_dom::Properties};
+use once_cell::sync::{Lazy, OnceCell};
+use std::{collections::HashMap, future::Future, marker::PhantomData};
 
 fn main() {}
+
+// struct VC<P, F = fn(Context<P>) -> VNode> {
+//     f: F,
+//     _a: std::marker::PhantomData<(P, F)>, // cell: OnceCell<T>,
+//                                           // init: Cell<Option<F>>
+// }
+// impl<P, F> VC<P, F> {
+//     const fn new(init: F) -> VC<P, F> {
+//         Self {
+//             _a: std::marker::PhantomData {},
+//             f: init,
+//         }
+//     }
+//     fn builder() -> P {
+//         // P::new()
+//     }
+// }
+
+// // Build a new functional component
+// static SomeComp: VC<()> = VC::new(|ctx| {
+//     // This is a component, apparently
+//     // still not useful because we can't have bounds
+
+//     ctx.view(html! {
+//         <div>
+
+//         </div>
+//     })
+// });
+
+/*
+
+
+
+
+
+
+
+
+
+
+
+*/
+static BILL: Lazy<fn(Context<()>) -> String> = Lazy::new(|| {
+    //
+    |c| "BLAH".to_string()
+});
+
+// struct FUNC<F = fn() -> T> {}
+
+struct SomeBuilder {}
 
 // struct DummyRenderer {
 //     alloc: Bump,

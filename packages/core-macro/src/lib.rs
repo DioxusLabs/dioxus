@@ -45,8 +45,6 @@ fn function_component_impl(
     //     ));
     // }
 
-    let ret_type = quote_spanned!(return_type.span()=> VNode);
-
     let quoted = quote! {
         #[doc(hidden)]
         #[allow(non_camel_case_types)]
@@ -54,14 +52,17 @@ fn function_component_impl(
             use super::*;
 
             #[derive(PartialEq)]
-            pub struct Props {
-                name: String
+            pub struct Props<'a> {
+                name: &'a str
             }
 
-            pub fn component(ctx: &mut Context<Props>) -> #ret_type {
+            pub fn component<'a>(ctx: &'a Context<'a, Props>) -> VNode<'a> {
+                // Destructure the props into the parent scope
+                // todo: handle expansion of lifetimes
                 let Props {
                     name
                 } = ctx.props;
+
                 #block
             }
         }
