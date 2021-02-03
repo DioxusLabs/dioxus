@@ -19,7 +19,7 @@
 //! The `TextRenderer` is particularly useful when needing to cache a Virtual DOM in between requests
 //!
 
-use dioxus_core::prelude::FC;
+use dioxus_core::prelude::{VNode, FC};
 
 /// The `TextRenderer` provides a way of rendering a Dioxus Virtual DOM to a String.
 ///
@@ -53,6 +53,11 @@ impl<T> TextRenderer<T> {
 
     /// Modify the root function in place, forcing a re-render regardless if the props changed
     pub fn update_mut(&mut self, modifier: impl Fn(&mut T)) {
+        todo!()
+    }
+
+    /// Immediately render a DomTree to string
+    pub fn to_text(root: VNode) -> String {
         todo!()
     }
 

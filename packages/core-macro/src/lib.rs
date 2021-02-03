@@ -186,6 +186,48 @@ impl Parse for FunctionComponent {
 fn ensure_fn_block(item: Item) -> syn::Result<ItemFn> {
     match item {
         Item::Fn(it) => Ok(it),
+        Item::Static(it) => {
+            let syn::ItemStatic {
+                attrs,
+                vis,
+                static_token,
+                mutability,
+                ident,
+                colon_token,
+                ty,
+                eq_token,
+                expr,
+                semi_token,
+            } = &it;
+            match ty.as_ref() {
+                Type::BareFn(bare) => {}
+                // Type::Array(_)
+                // | Type::Group(_)
+                // | Type::ImplTrait(_)
+                // | Type::Infer(_)
+                // | Type::Macro(_)
+                // | Type::Never(_)
+                // | Type::Paren(_)
+                // | Type::Path(_)
+                // | Type::Ptr(_)
+                // | Type::Reference(_)
+                // | Type::Slice(_)
+                // | Type::TraitObject(_)
+                // | Type::Tuple(_)
+                // | Type::Verbatim(_)
+                _ => {}
+            };
+
+            // TODO: Add support for static block
+            // Ensure that the contents of the static block can be extracted to a function
+            // TODO: @Jon
+            // Decide if statics should be converted to functions (under the hood) or stay as statics
+            // They _do_ get promoted, but also have a &'static ref
+            Err(syn::Error::new_spanned(
+                it,
+                "`function_component` attribute not ready for statics",
+            ))
+        }
         other => Err(syn::Error::new_spanned(
             other,
             "`function_component` attribute can only be applied to functions",

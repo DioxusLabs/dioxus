@@ -8,6 +8,7 @@
 //! thousands of simultaneous clients on minimal hardware.
 
 use dioxus::prelude::*;
+use dioxus_ssr::TextRenderer;
 use rand::Rng;
 use tide::{Request, Response};
 
@@ -50,20 +51,17 @@ async fn fibsum(req: Request<()>) -> tide::Result<tide::Response> {
     // Generate another random number to try
     let other_fib_to_try = rand::thread_rng().gen_range(1..42);
 
-    let g = html! {
-        <div>
-        </div>
-    };
-
-    let nodes = html! {
+    let text = TextRenderer::<()>::to_text(html! {
         <html>
 
+        // Header
         <head>
             <meta content="text/html;charset=utf-8" />
             <meta charset="UTF-8" />
             <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet" />
         </head>
 
+        // Body
         <body>
             <div class="flex items-center justify-center flex-col">
                 <div class="flex items-center justify-center">
@@ -97,11 +95,10 @@ async fn fibsum(req: Request<()>) -> tide::Result<tide::Response> {
         </body>
 
         </html>
-    };
+    });
 
     Ok(Response::builder(203)
-        .body(nodes.to_string())
-        .header("custom-header", "value")
+        .body(text)
         .content_type(tide::http::mime::HTML)
         .build())
 }

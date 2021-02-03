@@ -10,13 +10,13 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-generational-arena = "0.2.8"
-once_cell = "1.5.2"
 dioxus-html-macro = { path = "../html-macro", version = "0.1.0" }
 
+# Backs some static data
+once_cell = "1.5.2"
 
-# web-sys = "0.3.46"
-# js-sys = "0.3.46"
-# typed-arena = "2.0.1"
-# virtual-dom-rs = { path = "../virtual-dom-rs" }
-# virtual-node = { path = "../virtual-node" }
+# Backs the scope creation and reutilization
+generational-arena = "0.2.8"
+
+# Bumpalo backs the VNode creation
+bumpalo = { version = "3.6.0", features = ["collections"] }

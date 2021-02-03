@@ -147,9 +147,12 @@ impl HtmlParser {
         // Create a virtual node tree
         let node = quote! {
             {
-                #(#tokens)*
-                // Root node is always named node_0
-                node_0
+                move |bump| {
+                // __domtree_helper(move |bump| {
+                    #(#tokens)*
+                    // Root node is always named node_0
+                    node_0
+                }
             }
         };
         node

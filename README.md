@@ -54,30 +54,34 @@ Here, the `Context` object is used to access hook state, create subscriptions, a
 ```rust
 // A very terse component!
 #[fc]
-async fn Example(ctx: &Context, name: String) -> VNode {
+fn Example(ctx: &Context, name: String) -> VNode {
     html! { <div> "Hello {name}!" </div> }
 }
 
 // or
 
 #[functional_component]
-static Example: FC = |ctx, name: String| async html! { <div> "Hello {name}!" </div> }; 
+static Example: FC = |ctx, name: String| html! { <div> "Hello {name}!" </div> }; 
 ```
 
 The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, templating engine, or the constructors directly. 
 
 ## Concurrency
-In Dioxus, components are asynchronous and can their rendering can be paused at any time by awaiting a future. Hooks can combine this functionality with the Context and Subscription APIs to craft dynamic and efficient user experiences. 
+In Dioxus, VNodes are asynchronous and can their rendering can be paused at any time by awaiting a future. Hooks can combine this functionality with the Context and Subscription APIs to craft dynamic and efficient user experiences. 
 
 ```rust
-async fn user_data(ctx: &Context<()>) -> VNode {
-    let Profile { name, birthday, .. } = fetch_data().await;
-    html! {
-        <div>
-            {"Hello, {name}!"}
-            {if birthday === std::Instant::now() {html! {"Happy birthday!"}}}
-        </div>
-    }
+fn user_data(ctx: &Context<()>) -> VNode {
+    // Register this future as a task
+    use_suspense(ctx, async {
+        // Continue on with the component as usual, waiting for data to arrive
+        let Profile { name, birthday, .. } = fetch_data().await;
+        html! {
+            <div>
+                {"Hello, {name}!"}
+                {if birthday === std::Instant::now() {html! {"Happy birthday!"}}}
+            </div>
+        }
+    })
 }
 ```
 Asynchronous components are powerful but can also be easy to misuse as they pause rendering for the component and its children. Refer to the concurrent guide for information on how to best use async components. 
@@ -112,6 +116,7 @@ Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whethe
 - Analytics
 - Lighthouse optimization
 - On-premise support (see license terms)
+- Cloudfare/DDoS protection integrations
 
 For small teams, LiveHost is free. Check out the pricing page to see if Dioxus LiveHost is good your team.
 
@@ -121,9 +126,9 @@ We use the dedicated `dioxus-cli` to build and test dioxus web-apps. This can ru
 Alternatively, `trunk` works but can't run examples.
 
 - tide_ssr: Handle an HTTP request and return an html body using the html! macro. `cargo run --example tide_ssr`
-- doc_generator: Use dioxus ssr to generate the website and docs. `cargo run --example doc_generator`
+- doc_generator: Use dioxus SSR to generate the website and docs. `cargo run --example doc_generator`
 - fc_macro: Use the functional component macro to build terse components. `cargo run --example fc_macro`
-- hello_web: Start a simple wasm app. Requires a webpacker like dioxus-cli or trunk `cargo run --example hello`
+- hello_web: Start a simple wasm app. Requires a web packer like dioxus-cli or trunk `cargo run --example hello`
 - router: `cargo run --example router`
 - tide_ssr: `cargo run --example tide_ssr`
 - webview: Use liveview to bridge into a webview context for a simple desktop application. `cargo run --example webview`
