@@ -49,10 +49,11 @@ A Context
 */
 use crate::nodes::VNode;
 use crate::prelude::*;
+use any::Any;
 use bumpalo::Bump;
 use generational_arena::{Arena, Index};
 use std::{
-    any::TypeId,
+    any::{self, TypeId},
     cell::{RefCell, UnsafeCell},
     future::Future,
     marker::PhantomData,
@@ -279,6 +280,7 @@ pub struct Scope {
     arena: typed_arena::Arena<Hook>,
     hooks: RefCell<Vec<*mut Hook>>,
     props_type: TypeId,
+    caller: *const (),
 }
 
 impl Scope {
@@ -289,10 +291,13 @@ impl Scope {
         let arena = typed_arena::Arena::new();
         let hooks = RefCell::new(Vec::new());
 
+        let caller = f as *const ();
+
         Self {
             arena,
             hooks,
             props_type,
+            caller,
         }
     }
 
@@ -308,7 +313,26 @@ impl Scope {
 
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
-    fn run() {}
+    fn run<T: 'static>(&self, f: FC<T>) {}
+
+    fn call<T: Properties + 'static>(&mut self, val: T) {
+        if self.props_type == TypeId::of::<T>() {
+            /*
+            SAFETY ALERT
+
+            This particular usage of transmute is outlined in its docs https://doc.rust-lang.org/std/mem/fn.transmute.html
+            We hide the generic bound on the function item by casting it to raw pointer. When the function is actually called,
+            we transmute the function back using the props as reference.
+
+            This is safe because we check that the generic type matches before casting.
+            */
+            let caller = unsafe { std::mem::transmute::<*const (), FC<T>>(self.caller) };
+            let ctx = self.create_context::<T>();
+            let nodes = caller(ctx);
+        } else {
+            panic!("Do not try to use `call` on Scopes with the wrong props type")
+        }
+    }
 }
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.

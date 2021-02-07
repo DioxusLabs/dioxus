@@ -1,6 +1,7 @@
 use bumpalo::Bump;
+use dioxus_core as dioxus;
 use dioxus_core::{
-    prelude::{Context, VElement, VNode, FC},
+    prelude::{html, Context, VElement, VNode, FC},
     virtual_dom::{Properties, Scope},
 };
 use std::{
@@ -135,26 +136,50 @@ fn test_use_state(ctx: Context<()>) -> VNode {
     // whenever a listener wakes up, we take the reference directly from the bump arena and, with a small bit
     // of unsafe code, execute the associated closure / listener function
     // Those vnodes are then tossed out and new ones are installed, meaning and old references (potentially bad)
-    // are removed and UB is prevented from affecting the program
+    // are removed and UB is prevented from /affecting/ the program
     {
         VNode::Element(VElement::new("button"))
     }
 }
 
-fn test_use_state_2(ctx: Context<()>) -> VNode {
+#[allow(unused, non_upper_case_globals)]
+static UseStateBorrowedFc: FC<()> = |ctx| {
     let (val, set_val) = use_state(&ctx, || 0);
 
     let incr = || set_val(val + 1);
     let decr = || set_val(val - 1);
 
-    todo!()
-    // html! {
-    //     <div>
-    //         <nav class="menu">
-    //             <button onclick=incr> { "Increment" } </button>
-    //             <button onclick=decr> { "Decrement" } </button>
-    //         </nav>
-    //         <p> <b>{ "Current value: {val}" }</b> </p>
-    //     </div>
-    // }
+    ctx.view(html! {
+        <div>
+            <nav class="menu">
+                <button> "Increment" </button>
+                <button> "Decrement" </button>
+            </nav>
+            <p> "Current value: {val}" </p>
+        </div>
+    })
+};
+
+/// A useful component
+/// With some great documentation
+/// it practically speaks for itself.
+/// It's also only a server component :o
+fn use_state_borrowed(ctx: Context<()>) -> VNode {
+    let (val, set_val) = use_state(&ctx, || 0);
+
+    let incr = || set_val(val + 1);
+    let decr = || set_val(val - 1);
+
+    ctx.view(html! {
+        <div>
+            <nav class="menu">
+                <button> "Increment" </button>
+                <button> "Decrement" </button>
+            </nav>
+            <p> "Current value: {val}" </p>
+        </div>
+    })
 }
+
+// <button onclick=incr> { "Increment" } </button>
+// <button onclick=decr> { "Decrement" } </button>
