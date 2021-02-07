@@ -70,6 +70,10 @@ pub mod nodes;
 pub mod validation;
 pub mod virtual_dom;
 
+pub mod builder {
+    pub use super::nodebuilder::*;
+}
+
 /// Re-export common types for ease of development use.
 /// Essential when working with the html! macro
 ///
@@ -89,8 +93,16 @@ pub mod prelude {
     pub type VirtualNode<'a> = VNode<'a>;
 
     // Re-export from the macro crate
-    pub use dioxus_html_macro::html;
+    // pub use dodrio_derive::html;
+
+    pub use bumpalo;
+    // pub use dioxus_html_macro::html;
 
     // Re-export the FC macro
     pub use dioxus_core_macro::fc;
+    pub use dioxus_html_macro::html;
+
+    pub use crate as dioxus;
+
+    pub use crate::nodebuilder as builder;
 }

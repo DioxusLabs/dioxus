@@ -1,0 +1,17 @@
+[package]
+name = "dodrio-derive"
+version = "0.1.0"
+authors = ["Richard Dodd <richard.o.dodd@gmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+syn = "1.0.18"
+quote = "1.0.3"
+proc-macro-hack = "0.5.15"
+proc-macro2 = "1.0.10"
+style-shared = { git = "https://github.com/derekdreery/style" }

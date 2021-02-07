@@ -1,41 +1,84 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 use bumpalo::Bump;
 use dioxus_core::prelude::*;
-use dioxus_core::{nodebuilder::*, virtual_dom::DomTree};
+use dioxus_core::{nodebuilder::*, virtual_dom::Properties};
 use std::{collections::HashMap, future::Future, marker::PhantomData};
 
-fn main() {}
+fn main() {
+    let mut vdom = VirtualDom::new_with_props(
+        component,
+        Props {
+            blah: false,
+            text: "blah",
+        },
+    );
+
+    vdom.progress();
+
+    let somet = String::from("asd");
+    let text = somet.as_str();
+
+    /*
+    this could be auto-generated via the macro
+    this props is allocated in this
+    but the component and props would like need to be cached
+    we could box this fn, abstracting away the props requirement and just keep the entrance and allocator requirement
+    How do we keep cached things around?
+    Need some sort of caching mechanism
+
+    how do we enter into a childscope from a parent scope?
+
+    Problems:
+    1: Comp props need to be stored somewhere so we can re-evalute components when they receive updates
+    2: Trees are not evaluated
+
+    */
+    let example_caller = move |ctx: &Bump| {
+        todo!()
+        // let p = Props { blah: true, text };
+        // let c = Context { props: &p };
+        // let r = component(&c);
+    };
+
+    // check the edit list
+}
 
 // ~~~ Text shared between components via props can be done with lifetimes! ~~~
 // Super duper efficient :)
-struct Props {
+struct Props<'src> {
     blah: bool,
-    text: String,
+    text: &'src str,
+}
+impl<'src> Properties for Props<'src> {
+    fn new() -> Self {
+        todo!()
+    }
 }
 
-fn Component<'a>(ctx: &'a Context<Props>) -> VNode<'a> {
+fn component<'a>(ctx: &'a Context<Props>) -> VNode<'a> {
     // Write asynchronous rendering code that immediately returns a "suspended" VNode
     // The concurrent API will then progress this component when the future finishes
     // You can suspend the entire component, or just parts of it
     let product_list = ctx.suspend(async {
         // Suspend the rendering that completes when the future is done
         match fetch_data().await {
-            Ok(data) => html! {<div> </div>},
-            Err(_) => html! {<div> </div>},
+            Ok(data) => html! { <div> </div>},
+            Err(_) => html! { <div> </div>},
         }
     });
 
-    ctx.view(html! {
-        <div>
-            // <h1> "Products" </h1>
-            // // Subnodes can even be suspended
-            // // When completely rendered, they won't cause the component itself to re-render, just their slot
-            // <p> { product_list } </p>
-        </div>
-    })
+    todo!()
+    // ctx.view(html! {
+    //     <div>
+    //         // <h1> "Products" </h1>
+    //         // // Subnodes can even be suspended
+    //         // // When completely rendered, they won't cause the component itself to re-render, just their slot
+    //         // <p> { product_list } </p>
+    //     </div>
+    // })
 }
 
-fn BuilderComp(ctx: Context<Props>) -> VNode {
+fn BuilderComp<'a>(ctx: &'a Context<'a, Props>) -> VNode<'a> {
     // VNodes can be constructed via a builder or the html! macro
     // However, both of these are "lazy" - they need to be evaluated (aka, "viewed")
     // We can "view" them with Context for ultimate speed while inside components
@@ -43,7 +86,7 @@ fn BuilderComp(ctx: Context<Props>) -> VNode {
         div(bump)
             .attr("class", "edit")
             .child(text("Hello"))
-            .child(text(ctx.props.text.as_str()))
+            .child(text(ctx.props.text))
             .finish()
     })
 }
@@ -79,7 +122,7 @@ fn EffcComp(ctx: &Context, name: &str) -> VNode {
     })
 }
 
-fn FullySuspended(ctx: Context<Props>) -> VNode {
+fn FullySuspended<'a>(ctx: &'a Context<Props>) -> VNode<'a> {
     ctx.suspend(async {
         let i: i32 = 0;
 
