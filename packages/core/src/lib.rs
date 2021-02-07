@@ -76,9 +76,6 @@ pub mod builder {
 
 /// Re-export common types for ease of development use.
 /// Essential when working with the html! macro
-///
-///
-///
 pub mod prelude {
     use crate::nodes;
     pub use crate::virtual_dom::{Context, VirtualDom};
@@ -86,7 +83,8 @@ pub mod prelude {
     // pub use nodes::iterables::IterableNodes;
 
     /// This type alias is an internal way of abstracting over the static functions that represent components.
-    pub type FC<P> = for<'a> fn(&'a Context<P>) -> VNode<'a>;
+    pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
+    // pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate
@@ -100,7 +98,7 @@ pub mod prelude {
 
     // Re-export the FC macro
     pub use dioxus_core_macro::fc;
-    pub use dioxus_html_macro::html;
+    pub use dioxus_html_2::html;
 
     pub use crate as dioxus;
 

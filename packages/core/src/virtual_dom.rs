@@ -55,6 +55,7 @@ use std::{
     any::TypeId,
     cell::{RefCell, UnsafeCell},
     future::Future,
+    marker::PhantomData,
     sync::atomic::AtomicUsize,
 };
 
@@ -245,15 +246,18 @@ mod fc_test {
         // g
     }
 
-    fn test_component<'a>(ctx: &'a Context<()>) -> VNode<'a> {
+    fn test_component(ctx: Context<()>) -> VNode {
         // todo: helper should be part of html! macro
         todo!()
         // ctx.view(|bump| html! {bump,  <div> </div> })
     }
 
-    fn test_component2<'a>(ctx: &'a Context<()>) -> VNode<'a> {
+    fn test_component2(ctx: Context<()>) -> VNode {
         ctx.view(|bump: &Bump| VNode::text("blah"))
     }
+    // fn test_component2<'a>(ctx: &'a Context<()>) -> VNode<'a> {
+    //     ctx.view(|bump: &Bump| VNode::text("blah"))
+    // }
 
     #[test]
     fn ensure_types_work() {
@@ -272,22 +276,33 @@ mod fc_test {
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components
 /// The actualy contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
 pub struct Scope {
-    hook_idx: i32,
-    hooks: Vec<OLDHookState>,
+    arena: typed_arena::Arena<Hook>,
+    hooks: RefCell<Vec<*mut Hook>>,
     props_type: TypeId,
 }
 
 impl Scope {
     // create a new scope from a function
-    fn new<T: 'static>(f: FC<T>) -> Self {
+    pub fn new<T: 'static>(f: FC<T>) -> Self {
         // Capture the props type
         let props_type = TypeId::of::<T>();
+        let arena = typed_arena::Arena::new();
+        let hooks = RefCell::new(Vec::new());
 
-        // Obscure the function
         Self {
-            hook_idx: 0,
-            hooks: vec![],
+            arena,
+            hooks,
             props_type,
+        }
+    }
+
+    pub fn create_context<T: Properties>(&mut self) -> Context<T> {
+        Context {
+            _p: PhantomData {},
+            arena: &self.arena,
+            hooks: &self.hooks,
+            idx: 0.into(),
+            props: T::new(),
         }
     }
 
@@ -295,8 +310,6 @@ impl Scope {
     /// This function downcasts the function pointer based on the stored props_type
     fn run() {}
 }
-
-pub struct OLDHookState {}
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
 /// This lets components schedule updates, integrate hooks, and expose their context via the context api.
@@ -322,8 +335,13 @@ pub struct Context<'src, T> {
     /// Direct access to the properties used to create this component.
     pub props: T,
     pub idx: AtomicUsize,
-    pub arena: &'src typed_arena::Arena<Hook>,
-    pub hooks: RefCell<Vec<*mut Hook>>,
+
+    // Borrowed from scope
+    arena: &'src typed_arena::Arena<Hook>,
+    hooks: &'src RefCell<Vec<*mut Hook>>,
+
+    // holder for the src lifetime
+    // todo @jon remove this
     pub _p: std::marker::PhantomData<&'src ()>,
 }
 
@@ -370,16 +388,16 @@ impl<'a, T> Context<'a, T> {
     }
 
     /// use_hook provides a way to store data between renders for functional components.
-    pub fn use_hook<'comp, InternalHookState: 'static, Output: 'static>(
+    pub fn use_hook<'comp, InternalHookState: 'static, Output: 'comp>(
         &'comp self,
         // The closure that builds the hook state
         initializer: impl FnOnce() -> InternalHookState,
         // The closure that takes the hookstate and returns some value
-        runner: impl for<'b> FnOnce(&'comp mut InternalHookState) -> &'comp Output,
+        runner: impl FnOnce(&'comp mut InternalHookState, ()) -> Output,
         // The closure that cleans up whatever mess is left when the component gets torn down
         // TODO: add this to the "clean up" group for when the component is dropped
-        tear_down: impl FnOnce(InternalHookState),
-    ) -> &'comp Output {
+        cleanup: impl FnOnce(InternalHookState),
+    ) -> Output {
         let raw_hook = {
             let idx = self.idx.load(std::sync::atomic::Ordering::Relaxed);
 
@@ -408,7 +426,7 @@ impl<'a, T> Context<'a, T> {
         Here, we dereference a raw pointer. Normally, we aren't guaranteed that this is okay.
 
         However, typed-arena gives a mutable reference to the stored data which is stable for any inserts
-        into the arena. During the first call of the function, we need to add the mutable reference given to use by
+        into the arena. During the first call of the function, we need to add the mutable reference given to us by
         the arena into our list of hooks. The arena provides stability of the &mut references and is only deallocated
         when the component itself is deallocated.
 
@@ -417,6 +435,7 @@ impl<'a, T> Context<'a, T> {
         - Usage of the raw hooks is tied behind the Vec refcell
         - Output is static, meaning it can't take a reference to the data
         - We don't expose the raw hook pointer outside of the scope of use_hook
+        - The reference is tied to context, meaning it can only be used while ctx is around to free it
         */
         let borrowed_hook: &'comp mut _ = unsafe { raw_hook.as_mut().unwrap() };
 
@@ -425,7 +444,10 @@ impl<'a, T> Context<'a, T> {
             .downcast_mut::<InternalHookState>()
             .unwrap();
 
-        runner(internal_state)
+        // todo: set up an updater with the subscription API
+        let updater = ();
+
+        runner(internal_state, updater)
     }
 }
 

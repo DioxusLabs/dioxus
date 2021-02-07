@@ -21,14 +21,14 @@ pub fn html(s: TokenStream) -> TokenStream {
 }
 
 struct HtmlRender {
-    ctx: Ident,
+    // ctx: Ident,
     kind: NodeOrList,
 }
 
 impl Parse for HtmlRender {
     fn parse(s: ParseStream) -> Result<Self> {
-        let ctx: Ident = s.parse()?;
-        s.parse::<Token![,]>()?;
+        // let ctx: Ident = s.parse()?;
+        // s.parse::<Token![,]>()?;
         // if elements are in an array, return a bumpalo::collections::Vec rather than a Node.
         let kind = if s.peek(token::Bracket) {
             let nodes_toks;
@@ -42,13 +42,20 @@ impl Parse for HtmlRender {
         } else {
             NodeOrList::Node(s.parse()?)
         };
-        Ok(HtmlRender { ctx, kind })
+        Ok(HtmlRender { kind })
     }
 }
 
 impl ToTokens for HtmlRender {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        ToToksCtx::new(&self.ctx, &self.kind).to_tokens(tokens)
+    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
+        let new_toks = ToToksCtx::new(&self.kind).to_token_stream();
+
+        // create a lazy tree that accepts a bump allocator
+        let final_tokens = quote! {
+            move |bump| { #new_toks }
+        };
+
+        final_tokens.to_tokens(out_tokens);
     }
 }
 
@@ -57,7 +64,7 @@ enum NodeOrList {
     List(NodeList),
 }
 
-impl ToTokens for ToToksCtx<'_, &NodeOrList> {
+impl ToTokens for ToToksCtx<&NodeOrList> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self.inner {
             NodeOrList::Node(node) => self.recurse(node).to_tokens(tokens),
@@ -68,12 +75,12 @@ impl ToTokens for ToToksCtx<'_, &NodeOrList> {
 
 struct NodeList(Vec<MaybeExpr<Node>>);
 
-impl ToTokens for ToToksCtx<'_, &NodeList> {
+impl ToTokens for ToToksCtx<&NodeList> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ctx = &self.ctx;
+        // let ctx = &self.ctx;
         let nodes = self.inner.0.iter().map(|node| self.recurse(node));
         tokens.append_all(quote! {
-            dioxus::bumpalo::vec![in #ctx.bump;
+            dioxus::bumpalo::vec![in bump;
                 #(#nodes),*
             ]
         });
@@ -85,7 +92,7 @@ enum Node {
     Text(TextNode),
 }
 
-impl ToTokens for ToToksCtx<'_, &Node> {
+impl ToTokens for ToToksCtx<&Node> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self.inner {
             Node::Element(el) => self.recurse(el).to_tokens(tokens),
@@ -116,12 +123,12 @@ struct Element {
     children: MaybeExpr<Vec<Node>>,
 }
 
-impl ToTokens for ToToksCtx<'_, &Element> {
+impl ToTokens for ToToksCtx<&Element> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ctx = self.ctx;
+        // let ctx = self.ctx;
         let name = &self.inner.name;
         tokens.append_all(quote! {
-            dioxus::builder::#name(&#ctx)
+            dioxus::builder::#name(bump)
         });
         for attr in self.inner.attrs.iter() {
             self.recurse(attr).to_tokens(tokens);
@@ -249,7 +256,7 @@ impl Parse for Attr {
     }
 }
 
-impl ToTokens for ToToksCtx<'_, &Attr> {
+impl ToTokens for ToToksCtx<&Attr> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = self.inner.name.to_string();
         let mut attr_stream = TokenStream2::new();
@@ -283,7 +290,7 @@ impl Parse for TextNode {
     }
 }
 
-impl ToTokens for ToToksCtx<'_, &TextNode> {
+impl ToTokens for ToToksCtx<&TextNode> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let mut token_stream = TokenStream2::new();
         self.recurse(&self.inner.0).to_tokens(&mut token_stream);
@@ -310,10 +317,10 @@ impl<T: Parse> Parse for MaybeExpr<T> {
     }
 }
 
-impl<'a, T> ToTokens for ToToksCtx<'a, &'a MaybeExpr<T>>
+impl<'a, T> ToTokens for ToToksCtx<&'a MaybeExpr<T>>
 where
     T: 'a,
-    ToToksCtx<'a, &'a T>: ToTokens,
+    ToToksCtx<&'a T>: ToTokens,
 {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self.inner {
@@ -324,25 +331,28 @@ where
 }
 
 /// ToTokens context
-struct ToToksCtx<'a, T> {
+struct ToToksCtx<T> {
+    // struct ToToksCtx<'a, T> {
     inner: T,
-    ctx: &'a Ident,
+    // ctx: &'a Ident,
 }
 
-impl<'a, T> ToToksCtx<'a, T> {
-    fn new(ctx: &'a Ident, inner: T) -> Self {
-        ToToksCtx { ctx, inner }
+impl<'a, T> ToToksCtx<T> {
+    fn new(inner: T) -> Self {
+        // fn new(ctx: &'a Ident, inner: T) -> Self {
+        ToToksCtx { inner }
     }
 
-    fn recurse<U>(&self, inner: U) -> ToToksCtx<'a, U> {
+    fn recurse<U>(&self, inner: U) -> ToToksCtx<U> {
+        // fn recurse<U>(&self, inner: U) -> ToToksCtx<'a, U> {
         ToToksCtx {
-            ctx: &self.ctx,
+            // ctx: &self.ctx,
             inner,
         }
     }
 }
 
-impl ToTokens for ToToksCtx<'_, &LitStr> {
+impl ToTokens for ToToksCtx<&LitStr> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         self.inner.to_tokens(tokens)
     }

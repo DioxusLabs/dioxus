@@ -55,27 +55,29 @@ impl<'src> Properties for Props<'src> {
     }
 }
 
-fn component<'a>(ctx: &'a Context<Props>) -> VNode<'a> {
+fn component<'a>(ctx: Context<'a, Props>) -> VNode<'a> {
     // Write asynchronous rendering code that immediately returns a "suspended" VNode
     // The concurrent API will then progress this component when the future finishes
     // You can suspend the entire component, or just parts of it
     let product_list = ctx.suspend(async {
         // Suspend the rendering that completes when the future is done
         match fetch_data().await {
-            Ok(data) => html! { <div> </div>},
-            Err(_) => html! { <div> </div>},
+            Ok(data) => html! { <div> "success!" </div>},
+            Err(_) => html! { <div> "failure :(" </div>},
         }
     });
 
-    todo!()
-    // ctx.view(html! {
-    //     <div>
-    //         // <h1> "Products" </h1>
-    //         // // Subnodes can even be suspended
-    //         // // When completely rendered, they won't cause the component itself to re-render, just their slot
-    //         // <p> { product_list } </p>
-    //     </div>
-    // })
+    // todo!()
+    ctx.view(html! {
+        <div>
+            <h1> "Products" </h1>
+            <button> "hello!" </button>
+            // Subnodes can even be suspended
+            // When completely rendered, they won't cause the component itself to re-render, just their slot
+
+            // <p> { product_list } </p>
+        </div>
+    })
 }
 
 fn BuilderComp<'a>(ctx: &'a Context<'a, Props>) -> VNode<'a> {

@@ -11,7 +11,8 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 
 [dependencies]
 # dodrio-derive = { path = "../html-macro-2", version = "0.1.0" }
-dioxus-html-macro = { path = "../html-macro", version = "0.1.0" }
+# dioxus-html-macro = { path = "../html-macro", version = "0.1.0" }
+dioxus-html-2 = { path = "../html-macro-2", version = "0.1.0" }
 dioxus-core-macro = { path = "../core-macro" }
 # Backs some static data
 once_cell = "1.5.2"
