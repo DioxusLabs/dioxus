@@ -5,17 +5,15 @@
 //!     render it again
 //!     consume the diffs and write that to a renderer
 
-use dioxus_core::{
-    prelude::*,
-    virtual_dom::{Properties, Scope},
-};
+use dioxus_core::{prelude::*, scope::Scope};
 
-fn main() {
-    let mut scope = Scope::new(Example);
-    let ctx = scope.create_context::<Props>();
+fn main() -> Result<(), ()> {
     let p1 = Props { name: "bob".into() };
 
-    let p2 = Props { name: "bob".into() };
+    let mut vdom = VirtualDom::new_with_props(Example, p1);
+    vdom.progress()?;
+
+    Ok(())
 }
 
 struct Props {

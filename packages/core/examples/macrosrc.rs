@@ -1,7 +1,7 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 use bumpalo::Bump;
+use dioxus_core::nodebuilder::*;
 use dioxus_core::prelude::*;
-use dioxus_core::{nodebuilder::*, virtual_dom::Properties};
 use std::{collections::HashMap, future::Future, marker::PhantomData};
 
 fn main() {
@@ -9,7 +9,7 @@ fn main() {
         component,
         Props {
             blah: false,
-            text: "blah",
+            text: "blah".into(),
         },
     );
 
@@ -45,11 +45,12 @@ fn main() {
 
 // ~~~ Text shared between components via props can be done with lifetimes! ~~~
 // Super duper efficient :)
-struct Props<'src> {
+struct Props {
     blah: bool,
-    text: &'src str,
+    text: String,
+    // text: &'src str,
 }
-impl<'src> Properties for Props<'src> {
+impl Properties for Props {
     fn new() -> Self {
         todo!()
     }
@@ -88,7 +89,7 @@ fn BuilderComp<'a>(ctx: &'a Context<'a, Props>) -> VNode<'a> {
         div(bump)
             .attr("class", "edit")
             .child(text("Hello"))
-            .child(text(ctx.props.text))
+            .child(text(ctx.props.text.as_ref()))
             .finish()
     })
 }
@@ -99,23 +100,7 @@ fn EffcComp(ctx: &Context, name: &str) -> VNode {
     // However, both of these are "lazy" - they need to be evaluated (aka, "viewed")
     // We can "view" them with Context for ultimate speed while inside components
     // use "phase" style allocation;
-    /*
-    nodes...
-    text...
-    attrs...
-    <div> // node0
-        <div> </div> // node1
-        {// support some expression} // node 2
-    </div>
-    let node0;
-    let node1;
-    let node2 = evaluate{}.into();
-    let g= |bump| {1};
-    g(bump).into()
 
-    */
-
-    // should we automatically view the output or leave it?
     ctx.view(html! {
         <div>
             // your template goes here
@@ -129,6 +114,8 @@ fn FullySuspended<'a>(ctx: &'a Context<Props>) -> VNode<'a> {
         let i: i32 = 0;
 
         // full suspended works great with just returning VNodes!
+        // Feel free to capture the html! macro directly
+        // Anything returned here is automatically viewed
         let tex = match i {
             1 => html! { <div> </div> },
             2 => html! { <div> </div> },

@@ -65,8 +65,13 @@
 //! - dioxus-liveview (SSR + StringRenderer)
 //!
 
+pub mod component;
+pub mod context;
+pub mod debug_renderer;
+pub mod events;
 pub mod nodebuilder;
 pub mod nodes;
+pub mod scope;
 pub mod validation;
 pub mod virtual_dom;
 
@@ -74,33 +79,52 @@ pub mod builder {
     pub use super::nodebuilder::*;
 }
 
-/// Re-export common types for ease of development use.
-/// Essential when working with the html! macro
-pub mod prelude {
+// types used internally that are important
+pub(crate) mod inner {
+    pub use crate::component::{Component, Properties};
     use crate::nodes;
-    pub use crate::virtual_dom::{Context, VirtualDom};
+    pub use crate::scope::{Context, Hook, Scope};
+    pub use crate::virtual_dom::VirtualDom;
     pub use nodes::*;
-    // pub use nodes::iterables::IterableNodes;
 
+    // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
     pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
-    // pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate
     pub type VirtualNode<'a> = VNode<'a>;
 
-    // Re-export from the macro crate
-    // pub use dodrio_derive::html;
-
-    pub use bumpalo;
-    // pub use dioxus_html_macro::html;
-
     // Re-export the FC macro
+    pub use crate as dioxus;
+    pub use crate::nodebuilder as builder;
     pub use dioxus_core_macro::fc;
     pub use dioxus_html_2::html;
+}
 
+/// Re-export common types for ease of development use.
+/// Essential when working with the html! macro
+pub mod prelude {
+    pub use crate::component::{Component, Properties};
+    use crate::nodes;
+    pub use crate::scope::Context;
+    pub use crate::virtual_dom::VirtualDom;
+    pub use nodes::*;
+
+    // pub use nodes::iterables::IterableNodes;
+    /// This type alias is an internal way of abstracting over the static functions that represent components.
+    pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
+
+    // TODO @Jon, fix this
+    // hack the VNode type until VirtualNode is fixed in the macro crate
+    pub type VirtualNode<'a> = VNode<'a>;
+
+    // expose our bumpalo type
+    pub use bumpalo;
+
+    // Re-export the FC macro
     pub use crate as dioxus;
-
     pub use crate::nodebuilder as builder;
+    pub use dioxus_core_macro::fc;
+    pub use dioxus_html_2::html;
 }

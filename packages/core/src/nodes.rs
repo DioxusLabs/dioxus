@@ -330,7 +330,7 @@ mod vtext {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 mod vcomponent {
-    use crate::virtual_dom::Properties;
+    use crate::prelude::Properties;
     use std::{any::TypeId, fmt, future::Future};
 
     use super::VNode;

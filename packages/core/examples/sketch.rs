@@ -1,8 +1,8 @@
 use bumpalo::Bump;
 use dioxus_core as dioxus;
 use dioxus_core::{
-    prelude::{html, Context, VElement, VNode, FC},
-    virtual_dom::{Properties, Scope},
+    prelude::{html, Context, Properties, VElement, VNode, FC},
+    scope::Scope,
 };
 use std::{
     any::Any,

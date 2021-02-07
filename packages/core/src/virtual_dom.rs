@@ -21,34 +21,9 @@ static Component: FC = |ctx| {
     ctx.view(html! {<div> "hello world" </div>})
 }
 ```
-
-
-This module includes all life-cycle related mechanics, including the virtual dom, scopes, properties, and lifecycles.
----
-The VirtualDom is designed as so:
-
-VDOM contains:
-    - An arena of component scopes.
-        - A scope contains
-            - lifecycle data
-            - hook data
-    - Event queue
-        - An event
-
-A VDOM is
-    - constructed from anything that implements "component"
-
-A "Component" is anything (normally functions) that can be ran with a context to produce VNodes
-    - Must implement properties-builder trait which produces a properties builder
-
-A Context
-    - Is a consumable struct
-        - Made of references to properties
-        - Holds a reference (lockable) to the underlying scope
-        - Is partially threadsafe
 */
+use crate::inner::*;
 use crate::nodes::VNode;
-use crate::prelude::*;
 use any::Any;
 use bumpalo::Bump;
 use generational_arena::{Arena, Index};
@@ -67,14 +42,11 @@ pub struct VirtualDom<P: Properties> {
     /// A generational arean is used to re-use slots of deleted scopes without having to resize the underlying arena.
     components: Arena<Scope>,
 
+    /// The index of the root component.
     base_scope: Index,
 
     /// Components generate lifecycle events
     event_queue: Vec<LifecycleEvent>,
-
-    buffers: [Bump; 2],
-
-    selected_buf: u8,
 
     root_props: P,
 }
@@ -98,12 +70,10 @@ impl<P: Properties + 'static> VirtualDom<P> {
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
     pub fn new_with_props(root: FC<P>, root_props: P) -> Self {
-        // 1. Create the buffers
-        // 2. Create the component arena
-        // 3. Create the base scope (can never be removed)
-        // 4. Create the lifecycle queue
-        // 5. Create the event queue
-        let buffers = [Bump::new(), Bump::new()];
+        // 1. Create the component arena
+        // 2. Create the base scope (can never be removed)
+        // 3. Create the lifecycle queue
+        // 4. Create the event queue
 
         // Arena allocate all the components
         // This should make it *really* easy to store references in events and such
@@ -112,16 +82,17 @@ impl<P: Properties + 'static> VirtualDom<P> {
         // Create a reference to the component in the arena
         let base_scope = components.insert(Scope::new(root));
 
+        // Create a new mount event with no root container
+        let first_event = LifecycleEvent::mount(base_scope, None, 0);
+
         // Create an event queue with a mount for the base scope
-        let event_queue = vec![];
+        let event_queue = vec![first_event];
 
         Self {
             components,
             base_scope,
             event_queue,
-            buffers,
             root_props,
-            selected_buf: 0,
         }
     }
 
@@ -133,9 +104,15 @@ impl<P: Properties + 'static> VirtualDom<P> {
 
         match event_type {
             // Component needs to be mounted to the virtual dom
-            LifecycleType::Mount {} => {
+            LifecycleType::Mount { to, under } => {
                 // todo! run the FC with the bump allocator
                 // Run it with its properties
+                if let Some(other) = to {
+                    // mount to another component
+                    let p = ();
+                } else {
+                    // mount to the root
+                }
             }
 
             // The parent for this component generated new props and the component needs update
@@ -149,10 +126,6 @@ impl<P: Properties + 'static> VirtualDom<P> {
             LifecycleType::Removed {} => {
                 let f = self.components.remove(index);
             }
-
-            // Component was moved around in the DomTree
-            // Doesn't generate any event but interesting to keep track of
-            LifecycleType::Moved {} => {}
 
             // Component was messaged via the internal subscription service
             LifecycleType::Messaged => {}
@@ -183,309 +156,18 @@ pub struct LifecycleEvent {
     pub event_type: LifecycleType,
 }
 impl LifecycleEvent {
-    fn mount(index: Index) -> Self {
+    fn mount(which: Index, to: Option<Index>, under: usize) -> Self {
         Self {
-            index,
-            event_type: LifecycleType::Mount,
+            index: which,
+            event_type: LifecycleType::Mount { to, under },
         }
     }
 }
 /// The internal lifecycle event system is managed by these
 pub enum LifecycleType {
-    Mount,
+    Mount { to: Option<Index>, under: usize },
     PropsChanged,
     Mounted,
     Removed,
-    Moved,
     Messaged,
 }
-
-/// The `Component` trait refers to any struct or funciton that can be used as a component
-/// We automatically implement Component for FC<T>
-pub trait Component {
-    type Props: Properties;
-    fn builder(&'static self) -> Self::Props;
-}
-
-// Auto implement component for a FC
-// Calling the FC is the same as "rendering" it
-impl<P: Properties> Component for FC<P> {
-    type Props = P;
-
-    fn builder(&self) -> Self::Props {
-        todo!()
-    }
-}
-
-/// The `Properties` trait defines any struct that can be constructed using a combination of default / optional fields.
-/// Components take a "properties" object
-pub trait Properties {
-    fn new() -> Self;
-}
-
-// Auto implement for no-prop components
-impl Properties for () {
-    fn new() -> Self {
-        ()
-    }
-}
-
-// ============================================
-// Compile Tests for FC/Component/Properties
-// ============================================
-#[cfg(test)]
-mod fc_test {
-    use super::*;
-    use crate::prelude::*;
-
-    // Make sure this function builds properly.
-    fn test_static_fn<'a, P: Properties>(b: &'a Bump, r: FC<P>) -> VNode<'a> {
-        todo!()
-        // let p = P::new(); // new props
-        // let c = Context { props: &p }; // new context with props
-        // let g = r(&c); // calling function with context
-        // g
-    }
-
-    fn test_component(ctx: Context<()>) -> VNode {
-        // todo: helper should be part of html! macro
-        todo!()
-        // ctx.view(|bump| html! {bump,  <div> </div> })
-    }
-
-    fn test_component2(ctx: Context<()>) -> VNode {
-        ctx.view(|bump: &Bump| VNode::text("blah"))
-    }
-    // fn test_component2<'a>(ctx: &'a Context<()>) -> VNode<'a> {
-    //     ctx.view(|bump: &Bump| VNode::text("blah"))
-    // }
-
-    #[test]
-    fn ensure_types_work() {
-        // TODO: Get the whole casting thing to work properly.
-        // For whatever reason, FC is not auto-implemented, depsite it being a static type
-        let b = Bump::new();
-
-        // Happiness! The VNodes are now allocated onto the bump vdom
-        let nodes0 = test_static_fn(&b, test_component);
-
-        let nodes1 = test_static_fn(&b, test_component2);
-    }
-}
-
-/// The Scope that wraps a functional component
-/// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components
-/// The actualy contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
-pub struct Scope {
-    arena: typed_arena::Arena<Hook>,
-    hooks: RefCell<Vec<*mut Hook>>,
-    props_type: TypeId,
-    caller: *const (),
-}
-
-impl Scope {
-    // create a new scope from a function
-    pub fn new<T: 'static>(f: FC<T>) -> Self {
-        // Capture the props type
-        let props_type = TypeId::of::<T>();
-        let arena = typed_arena::Arena::new();
-        let hooks = RefCell::new(Vec::new());
-
-        let caller = f as *const ();
-
-        Self {
-            arena,
-            hooks,
-            props_type,
-            caller,
-        }
-    }
-
-    pub fn create_context<T: Properties>(&mut self) -> Context<T> {
-        Context {
-            _p: PhantomData {},
-            arena: &self.arena,
-            hooks: &self.hooks,
-            idx: 0.into(),
-            props: T::new(),
-        }
-    }
-
-    /// Create a new context and run the component with references from the Virtual Dom
-    /// This function downcasts the function pointer based on the stored props_type
-    fn run<T: 'static>(&self, f: FC<T>) {}
-
-    fn call<T: Properties + 'static>(&mut self, val: T) {
-        if self.props_type == TypeId::of::<T>() {
-            /*
-            SAFETY ALERT
-
-            This particular usage of transmute is outlined in its docs https://doc.rust-lang.org/std/mem/fn.transmute.html
-            We hide the generic bound on the function item by casting it to raw pointer. When the function is actually called,
-            we transmute the function back using the props as reference.
-
-            This is safe because we check that the generic type matches before casting.
-            */
-            let caller = unsafe { std::mem::transmute::<*const (), FC<T>>(self.caller) };
-            let ctx = self.create_context::<T>();
-            let nodes = caller(ctx);
-        } else {
-            panic!("Do not try to use `call` on Scopes with the wrong props type")
-        }
-    }
-}
-
-/// Components in Dioxus use the "Context" object to interact with their lifecycle.
-/// This lets components schedule updates, integrate hooks, and expose their context via the context api.
-///
-/// Properties passed down from the parent component are also directly accessible via the exposed "props" field.
-///
-/// ```ignore
-/// #[derive(Properties)]
-/// struct Props {
-///     name: String
-///
-/// }
-///
-/// fn example(ctx: &Context<Props>) -> VNode {
-///     html! {
-///         <div> "Hello, {ctx.props.name}" </div>
-///     }
-/// }
-/// ```
-// todo: force lifetime of source into T as a valid lifetime too
-// it's definitely possible, just needs some more messing around
-pub struct Context<'src, T> {
-    /// Direct access to the properties used to create this component.
-    pub props: T,
-    pub idx: AtomicUsize,
-
-    // Borrowed from scope
-    arena: &'src typed_arena::Arena<Hook>,
-    hooks: &'src RefCell<Vec<*mut Hook>>,
-
-    // holder for the src lifetime
-    // todo @jon remove this
-    pub _p: std::marker::PhantomData<&'src ()>,
-}
-
-impl<'a, T> Context<'a, T> {
-    /// Access the children elements passed into the component
-    pub fn children(&self) -> Vec<VNode> {
-        todo!("Children API not yet implemented for component Context")
-    }
-
-    /// Access a parent context
-    pub fn parent_context<C>(&self) -> C {
-        todo!("Context API is not ready yet")
-    }
-
-    /// Create a subscription that schedules a future render for the reference component
-    pub fn subscribe(&self) -> impl FnOnce() -> () {
-        todo!("Subscription API is not ready yet");
-        || {}
-    }
-
-    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
-    ///
-    /// ```ignore
-    /// fn Component(ctx: Context<Props>) -> VNode {
-    ///     // Lazy assemble the VNode tree
-    ///     let lazy_tree = html! {<div>"Hello World"</div>};
-    ///     
-    ///     // Actually build the tree and allocate it
-    ///     ctx.view(lazy_tree)
-    /// }
-    ///```
-    pub fn view(&self, v: impl FnOnce(&'a Bump) -> VNode<'a>) -> VNode<'a> {
-        todo!()
-    }
-
-    /// Create a suspended component from a future.
-    ///
-    /// When the future completes, the component will be renderered
-    pub fn suspend(
-        &self,
-        fut: impl Future<Output = impl FnOnce(&'a Bump) -> VNode<'a>>,
-    ) -> VNode<'a> {
-        todo!()
-    }
-
-    /// use_hook provides a way to store data between renders for functional components.
-    pub fn use_hook<'comp, InternalHookState: 'static, Output: 'comp>(
-        &'comp self,
-        // The closure that builds the hook state
-        initializer: impl FnOnce() -> InternalHookState,
-        // The closure that takes the hookstate and returns some value
-        runner: impl FnOnce(&'comp mut InternalHookState, ()) -> Output,
-        // The closure that cleans up whatever mess is left when the component gets torn down
-        // TODO: add this to the "clean up" group for when the component is dropped
-        cleanup: impl FnOnce(InternalHookState),
-    ) -> Output {
-        let raw_hook = {
-            let idx = self.idx.load(std::sync::atomic::Ordering::Relaxed);
-
-            // Mutate hook list if necessary
-            let mut hooks = self.hooks.borrow_mut();
-
-            // Initialize the hook by allocating it in the typed arena.
-            // We get a reference from the arena which is owned by the component scope
-            // This is valid because "Context" is only valid while the scope is borrowed
-            if idx >= hooks.len() {
-                let new_state = initializer();
-                let boxed_state: Box<dyn std::any::Any> = Box::new(new_state);
-                let hook = self.arena.alloc(Hook::new(boxed_state));
-
-                // Push the raw pointer instead of the &mut
-                // A "poor man's OwningRef"
-                hooks.push(hook);
-            }
-            self.idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-            *hooks.get(idx).unwrap()
-        };
-
-        /*
-        ** UNSAFETY ALERT **
-        Here, we dereference a raw pointer. Normally, we aren't guaranteed that this is okay.
-
-        However, typed-arena gives a mutable reference to the stored data which is stable for any inserts
-        into the arena. During the first call of the function, we need to add the mutable reference given to us by
-        the arena into our list of hooks. The arena provides stability of the &mut references and is only deallocated
-        when the component itself is deallocated.
-
-        This is okay because:
-        - The lifetime of the component arena is tied to the lifetime of these raw hooks
-        - Usage of the raw hooks is tied behind the Vec refcell
-        - Output is static, meaning it can't take a reference to the data
-        - We don't expose the raw hook pointer outside of the scope of use_hook
-        - The reference is tied to context, meaning it can only be used while ctx is around to free it
-        */
-        let borrowed_hook: &'comp mut _ = unsafe { raw_hook.as_mut().unwrap() };
-
-        let internal_state = borrowed_hook
-            .state
-            .downcast_mut::<InternalHookState>()
-            .unwrap();
-
-        // todo: set up an updater with the subscription API
-        let updater = ();
-
-        runner(internal_state, updater)
-    }
-}
-
-pub struct Hook {
-    state: Box<dyn std::any::Any>,
-}
-
-impl Hook {
-    fn new(state: Box<dyn std::any::Any>) -> Self {
-        Self { state }
-    }
-}
-
-/// A CallbackEvent wraps any event returned from the renderer's event system.
-pub struct CallbackEvent {}
-
-pub struct EventListener {}
