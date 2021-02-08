@@ -7,11 +7,26 @@
 
 # About
 
-Dioxus is a new approach for creating performant cross platform user experiences in Rust. In Dioxus, the UI is represented as a tree of Virtual Nodes not bound to any specific renderer. Instead, external renderers can leverage Dioxus' virtual DOM and event system as a source of truth for rendering to a medium of their choice. Developers experienced with building react-based experiences should feel comfortable with Dioxus.
+Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
-Dioxus was built in a way to facilitate powerful external renderers - especially designed for the web, servers, desktop, and hybrid approaches like Dioxus Liveview.
+```rust
+static Example: FC<()> = |ctx| {
+    let (val1, set_val1) = use_state(&ctx, || "___?");
 
-Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms.
+    ctx.view(html! {
+        <div>
+            <button onclick={move |_| set_val1("world")}> "world" </button>
+            <button onclick={move |_| set_val1("dioxus")}> "dioxus" </button>
+            <div>
+                <p> "Hello, {val1}" </p>
+            </div>
+        </div>
+    })
+};
+```
+The primary Dioxus crate is agnostic to platform and is meant to be configured with external renderers for getting content to the screen. We have built renderers for Dioxus to serve WebApps, Desktop Apps, static pages, liveview, Android, and iOS.
+
+Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms, designed especially for your next startup. 
 
 ## Features
 Dioxus' goal is to be the most advanced UI system for Rust, targeting isomorphism and hybrid approaches. Our goal is to eliminate context-switching for cross-platform development - both in UI patterns and programming language. Hooks and components should work *everywhere* without compromise.

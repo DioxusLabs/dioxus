@@ -80,7 +80,7 @@ impl<P: Properties + 'static> VirtualDom<P> {
         let mut components = Arena::new();
 
         // Create a reference to the component in the arena
-        let base_scope = components.insert(Scope::new(root));
+        let base_scope = components.insert(Scope::new(root, None));
 
         // Create a new mount event with no root container
         let first_event = LifecycleEvent::mount(base_scope, None, 0);

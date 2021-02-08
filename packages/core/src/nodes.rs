@@ -178,7 +178,7 @@ mod velement {
         /// The type of event to listen for.
         pub(crate) event: &'a str,
         /// The callback to invoke when the event happens.
-        pub(crate) callback: &'a (dyn Fn()),
+        pub(crate) callback: &'a (dyn Fn(())),
     }
 
     /// The key for keyed children.

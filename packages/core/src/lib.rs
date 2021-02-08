@@ -67,6 +67,7 @@
 
 pub mod component;
 pub mod context;
+pub mod contextapi;
 pub mod debug_renderer;
 pub mod events;
 pub mod nodebuilder;

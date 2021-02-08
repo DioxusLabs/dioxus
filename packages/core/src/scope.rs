@@ -1,6 +1,7 @@
 use crate::nodes::VNode;
 use crate::prelude::*;
 use bumpalo::Bump;
+use generational_arena::Index;
 use std::{
     any::TypeId, cell::RefCell, future::Future, marker::PhantomData, sync::atomic::AtomicUsize,
 };
@@ -18,35 +19,43 @@ pub struct Scope {
     hooks: RefCell<Vec<*mut Hook>>,
     hook_arena: typed_arena::Arena<Hook>,
 
+    // Map to the parent
+    parent: Option<Index>,
+
     props_type: TypeId,
     caller: *const i32,
 }
 
 impl Scope {
     // create a new scope from a function
-    pub fn new<T: 'static>(f: FC<T>) -> Self {
+    pub fn new<T: 'static>(f: FC<T>, parent: Option<Index>) -> Self {
         // Capture the props type
         let props_type = TypeId::of::<T>();
-        let arena = typed_arena::Arena::new();
+        let hook_arena = typed_arena::Arena::new();
         let hooks = RefCell::new(Vec::new());
 
         let caller = f as *const i32;
 
         Self {
-            hook_arena: arena,
+            hook_arena,
             hooks,
             props_type,
             caller,
+            parent,
         }
     }
 
-    pub fn create_context<T: Properties>(&mut self) -> Context<T> {
+    pub fn create_context<'runner, T: Properties>(
+        &'runner mut self,
+        components: &'runner generational_arena::Arena<Scope>,
+    ) -> Context<T> {
         Context {
             _p: PhantomData {},
             arena: &self.hook_arena,
             hooks: &self.hooks,
             idx: 0.into(),
             props: T::new(),
+            components,
         }
     }
 
@@ -54,7 +63,7 @@ impl Scope {
     /// This function downcasts the function pointer based on the stored props_type
     fn run<T: 'static>(&self, f: FC<T>) {}
 
-    fn call<T: Properties + 'static>(&mut self, val: T) {
+    fn call<'a, T: Properties + 'static>(&'a mut self, val: T) {
         if self.props_type == TypeId::of::<T>() {
             /*
             SAFETY ALERT
@@ -66,9 +75,9 @@ impl Scope {
             This is safe because we check that the generic type matches before casting.
             */
             let caller = unsafe { std::mem::transmute::<*const i32, FC<T>>(self.caller) };
-            let ctx = self.create_context::<T>();
-            // TODO: do something with these nodes
-            let nodes = caller(ctx);
+        // let ctx = self.create_context::<T>();
+        // // TODO: do something with these nodes
+        // let nodes = caller(ctx);
         } else {
             panic!("Do not try to use `call` on Scopes with the wrong props type")
         }

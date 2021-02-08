@@ -1,6 +1,6 @@
 # Hello, World!
 
-Dioxus should look and feel just like writing functional React components. In Dioxus, there are no class components with lifecycles. All state management is done via hooks. This encourages logic resusability and lessens the burden on Dioxus to maintain a non-breaking lifecycle API.
+Dioxus should look and feel just like writing functional React components. In Dioxus, there are no class components with lifecycles. All state management is done via hooks. This encourages logic reusability and lessens the burden on Dioxus to maintain a non-breaking lifecycle API.
 
 ```rust
 #[derive(Properties, PartialEq)]
@@ -9,7 +9,9 @@ struct MyProps {
 }
 
 fn Example(ctx: Context<MyProps>) -> VNode {
-    html! { <div> "Hello {ctx.props().name}!" </div> }
+    ctx.view(html! { 
+        <div> "Hello {ctx.props().name}!" </div> 
+    })
 }
 ```
 

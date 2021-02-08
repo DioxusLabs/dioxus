@@ -336,7 +336,7 @@ where
     #[inline]
     pub fn on<F>(mut self, event: &'a str, callback: F) -> Self
     where
-        F: 'static + Fn(),
+        F: Fn(()) + 'a,
     {
         self.listeners.push(Listener {
             event,
@@ -1052,28 +1052,28 @@ pub fn attr<'a>(name: &'a str, value: &'a str) -> Attribute<'a> {
     Attribute { name, value }
 }
 
-// /// Create an event listener.
-// ///
-// /// `event` is the type of event to listen for, e.g. `"click"`. The `callback`
-// /// is the function that will be invoked when the event occurs.
-// ///
-// /// # Example
-// ///
-// /// ```no_run
-// /// use dodrio::{builder::*, bumpalo::Bump};
-// ///
-// /// let b = Bump::new();
-// ///
-// /// let listener = on(&b, "click", |root, vdom, event| {
-// ///     // do something when a click happens...
-// /// });
-// /// ```
-// pub fn on<'a, F>(bump: &'a Bump, event: &'a str, callback: F) -> Listener<'a>
-// where
-//     F: Fn(&mut dyn RootRender, VdomWeak, web_sys::Event) + 'static,
-// {
-//     Listener {
-//         event,
-//         callback: bump.alloc(callback),
-//     }
-// }
+/// Create an event listener.
+///
+/// `event` is the type of event to listen for, e.g. `"click"`. The `callback`
+/// is the function that will be invoked when the event occurs.
+///
+/// # Example
+///
+/// ```no_run
+/// use dodrio::{builder::*, bumpalo::Bump};
+///
+/// let b = Bump::new();
+///
+/// let listener = on(&b, "click", |root, vdom, event| {
+///     // do something when a click happens...
+/// });
+/// ```
+pub fn on<'a, F>(bump: &'a Bump, event: &'a str, callback: F) -> Listener<'a>
+where
+    F: Fn(()) + 'a,
+{
+    Listener {
+        event,
+        callback: bump.alloc(callback),
+    }
+}

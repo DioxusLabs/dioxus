@@ -1,6 +1,6 @@
-use crate::nodes::VNode;
 use crate::prelude::*;
 use crate::scope::Hook;
+use crate::{inner::Scope, nodes::VNode};
 use bumpalo::Bump;
 use std::{
     any::TypeId, cell::RefCell, future::Future, marker::PhantomData, sync::atomic::AtomicUsize,
@@ -26,21 +26,22 @@ use std::{
 /// ```
 // todo: force lifetime of source into T as a valid lifetime too
 // it's definitely possible, just needs some more messing around
-pub struct Context<'src, T> {
+pub struct Context<'src, PropType> {
     /// Direct access to the properties used to create this component.
-    pub props: T,
+    pub props: PropType,
     pub idx: AtomicUsize,
 
     // Borrowed from scope
     pub(crate) arena: &'src typed_arena::Arena<Hook>,
     pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
+    pub(crate) components: &'src generational_arena::Arena<Scope>,
 
     // holder for the src lifetime
     // todo @jon remove this
     pub _p: std::marker::PhantomData<&'src ()>,
 }
 
-impl<'a, T> Context<'a, T> {
+impl<'a, PropType> Context<'a, PropType> {
     /// Access the children elements passed into the component
     pub fn children(&self) -> Vec<VNode> {
         todo!("Children API not yet implemented for component Context")
@@ -52,12 +53,16 @@ impl<'a, T> Context<'a, T> {
     }
 
     /// Create a subscription that schedules a future render for the reference component
-    pub fn subscribe(&self) -> impl FnOnce() -> () {
+    pub fn schedule_update(&self) -> impl Fn() -> () {
         todo!("Subscription API is not ready yet");
         || {}
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
+    ///
+    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
+    ///
+    /// ## Example
     ///
     /// ```ignore
     /// fn Component(ctx: Context<Props>) -> VNode {
@@ -68,7 +73,7 @@ impl<'a, T> Context<'a, T> {
     ///     ctx.view(lazy_tree)
     /// }
     ///```
-    pub fn view(&self, v: impl FnOnce(&'a Bump) -> VNode<'a>) -> VNode<'a> {
+    pub fn view(self, v: impl FnOnce(&'a Bump) -> VNode<'a>) -> VNode<'a> {
         todo!()
     }
 
@@ -83,12 +88,13 @@ impl<'a, T> Context<'a, T> {
     }
 
     /// use_hook provides a way to store data between renders for functional components.
-    pub fn use_hook<'comp, InternalHookState: 'static, Output: 'comp>(
-        &'comp self,
+    /// todo @jon: ensure the hook arena is stable with pin or is stable by default
+    pub fn use_hook<'internal, 'scope, InternalHookState: 'static, Output: 'internal>(
+        &'scope self,
         // The closure that builds the hook state
         initializer: impl FnOnce() -> InternalHookState,
         // The closure that takes the hookstate and returns some value
-        runner: impl FnOnce(&'comp mut InternalHookState, ()) -> Output,
+        runner: impl FnOnce(&'internal mut InternalHookState) -> Output,
         // The closure that cleans up whatever mess is left when the component gets torn down
         // TODO: add this to the "clean up" group for when the component is dropped
         cleanup: impl FnOnce(InternalHookState),
@@ -132,13 +138,10 @@ impl<'a, T> Context<'a, T> {
         - We don't expose the raw hook pointer outside of the scope of use_hook
         - The reference is tied to context, meaning it can only be used while ctx is around to free it
         */
-        let borrowed_hook: &'comp mut _ = unsafe { raw_hook.as_mut().unwrap() };
+        let borrowed_hook: &'internal mut _ = unsafe { raw_hook.as_mut().unwrap() };
 
         let internal_state = borrowed_hook.0.downcast_mut::<InternalHookState>().unwrap();
 
-        // todo: set up an updater with the subscription API
-        let updater = ();
-
-        runner(internal_state, updater)
+        runner(internal_state)
     }
 }
