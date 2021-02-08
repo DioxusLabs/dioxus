@@ -22,7 +22,7 @@ mod vnode {
 
     pub enum VNode<'src> {
         /// An element node (node type `ELEMENT_NODE`).
-        Element(VElement<'src>),
+        Element(&'src VElement<'src>),
 
         /// A text node (node type `TEXT_NODE`).
         ///
@@ -40,147 +40,54 @@ mod vnode {
         Component(VComponent),
     }
 
-    impl<'src> VNode<'src> {
-        /// Create a new virtual element node with a given tag.
+    impl<'a> VNode<'a> {
+        /// Low-level constructor for making a new `Node` of type element with given
+        /// parts.
         ///
-        /// These get patched into the DOM using `document.createElement`
-        ///
-        /// ```ignore
-        /// let div = VNode::element("div");
-        /// ```
-        pub fn element(tag: &'static str) -> Self {
-            VNode::Element(VElement::new(tag))
+        /// This is primarily intended for JSX and templating proc-macros to compile
+        /// down into. If you are building nodes by-hand, prefer using the
+        /// `dodrio::builder::*` APIs.
+        #[inline]
+        pub fn element(
+            bump: &'a Bump,
+            key: NodeKey,
+            tag_name: &'a str,
+            listeners: &'a [Listener<'a>],
+            attributes: &'a [Attribute<'a>],
+            children: &'a [VNode<'a>],
+            namespace: Option<&'a str>,
+        ) -> VNode<'a> {
+            let element = bump.alloc_with(|| VElement {
+                key,
+                tag_name,
+                listeners,
+                attributes,
+                children,
+                namespace,
+            });
+            VNode::Element(element)
         }
 
         /// Construct a new text node with the given text.
         #[inline]
-        pub(crate) fn text(text: &'src str) -> VNode<'src> {
+        pub fn text(text: &'a str) -> VNode<'a> {
             VNode::Text(VText { text })
         }
-        // /// Create a new virtual text node with the given text.
-        // ///
-        // /// These get patched into the DOM using `document.createTextNode`
-        // ///
-        // /// ```ignore
-        // /// let div = VNode::text("div");
-        // /// ```
-        // pub fn text<S>(text: S) -> Self
-        // where
-        //     S: Into<String>,
-        // {
-        //     /*
-        //     TODO
 
-        //     This is an opportunity to be extremely efficient when allocating/creating strings
-        //     To assemble a formatted string, we can, using the macro, borrow all the contents without allocating.
-
-        //     String contents are therefore bump allocated automatically
-
-        //     html!{
-        //         <>"Hello {world}"</>
-        //     }
-
-        //     Should be
-
-        //     ```
-        //     let mut root = VNode::text(["Hello", world]);
-
-        //     ```
-
-        //     */
-        //     VNode::Text(VText::new(text.into()))
-        // }
-
-        // /// Return a [`VElement`] reference, if this is an [`Element`] variant.
-        // ///
-        // /// [`VElement`]: struct.VElement.html
-        // /// [`Element`]: enum.VNode.html#variant.Element
-        // pub fn as_velement_ref(&self) -> Option<&VElement> {
-        //     match self {
-        //         VNode::Element(ref element_node) => Some(element_node),
-        //         _ => None,
-        //     }
-        // }
-
-        // /// Return a mutable [`VElement`] reference, if this is an [`Element`] variant.
-        // ///
-        // /// [`VElement`]: struct.VElement.html
-        // /// [`Element`]: enum.VNode.html#variant.Element
-        // pub fn as_velement_mut(&mut self) -> Option<&mut VElement> {
-        //     match self {
-        //         VNode::Element(ref mut element_node) => Some(element_node),
-        //         _ => None,
-        //     }
-        // }
-
-        // /// Return a [`VText`] reference, if this is an [`Text`] variant.
-        // ///
-        // /// [`VText`]: struct.VText.html
-        // /// [`Text`]: enum.VNode.html#variant.Text
-        // pub fn as_vtext_ref(&self) -> Option<&VText> {
-        //     match self {
-        //         VNode::Text(ref text_node) => Some(text_node),
-        //         _ => None,
-        //     }
-        // }
-
-        // /// Return a mutable [`VText`] reference, if this is an [`Text`] variant.
-        // ///
-        // /// [`VText`]: struct.VText.html
-        // /// [`Text`]: enum.VNode.html#variant.Text
-        // pub fn as_vtext_mut(&mut self) -> Option<&mut VText> {
-        //     match self {
-        //         VNode::Text(ref mut text_node) => Some(text_node),
-        //         _ => None,
-        //     }
-        // }
-
-        // /// Used by html-macro to insert space before text that is inside of a block that came after
-        // /// an open tag.
-        // ///
-        // /// html! { <div> {world}</div> }
-        // ///
-        // /// So that we end up with <div> world</div> when we're finished parsing.
-        // pub fn insert_space_before_text(&mut self) {
-        //     match self {
-        //         VNode::Text(text_node) => {
-        //             text_node.text = " ".to_string() + &text_node.text;
-        //         }
-        //         _ => {}
-        //     }
-        // }
-
-        // /// Used by html-macro to insert space after braced text if we know that the next block is
-        // /// another block or a closing tag.
-        // ///
-        // /// html! { <div>{Hello} {world}</div> } -> <div>Hello world</div>
-        // /// html! { <div>{Hello} </div> } -> <div>Hello </div>
-        // ///
-        // /// So that we end up with <div>Hello world</div> when we're finished parsing.
-        // pub fn insert_space_after_text(&mut self) {
-        //     match self {
-        //         VNode::Text(text_node) => {
-        //             text_node.text += " ";
-        //         }
-        //         _ => {}
-        //     }
-        // }
+        #[inline]
+        pub(crate) fn key(&self) -> NodeKey {
+            match &self {
+                VNode::Text(_) => NodeKey::NONE,
+                VNode::Element(e) => e.key,
+                VNode::Suspended => {
+                    todo!()
+                }
+                VNode::Component(_) => {
+                    todo!()
+                }
+            }
+        }
     }
-
-    // -----------------------------------------------
-    //  Convert from DOM elements to the primary enum
-    // -----------------------------------------------
-    // impl From<VText> for VNode {
-    //     fn from(other: VText) -> Self {
-    //         VNode::Text(other)
-    //     }
-    // }
-
-    // impl From<VElement> for VNode {
-    //     fn from(other: VElement) -> Self {
-    //         VNode::Element(other)
-    //     }
-    // }
 }
 
 mod velement {
@@ -188,11 +95,18 @@ mod velement {
     use std::collections::HashMap;
 
     pub struct VElement<'a> {
-        /// The HTML tag, such as "div"
-        pub tag: &'a str,
-
+        /// Elements have a tag name, zero or more attributes, and zero or more
+        pub key: NodeKey,
         pub tag_name: &'a str,
+        pub listeners: &'a [Listener<'a>],
         pub attributes: &'a [Attribute<'a>],
+        pub children: &'a [VNode<'a>],
+        pub namespace: Option<&'a str>,
+        // The HTML tag, such as "div"
+        // pub tag: &'a str,
+
+        // pub tag_name: &'a str,
+        // pub attributes: &'a [Attribute<'a>],
         // todo: hook up listeners
         // pub listeners: &'a [Listener<'a>],
         // / HTML attributes such as id, class, style, etc

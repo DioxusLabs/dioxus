@@ -82,8 +82,9 @@ pub mod builder {
 // types used internally that are important
 pub(crate) mod inner {
     pub use crate::component::{Component, Properties};
+    pub use crate::context::Context;
     use crate::nodes;
-    pub use crate::scope::{Context, Hook, Scope};
+    pub use crate::scope::{Hook, Scope};
     pub use crate::virtual_dom::VirtualDom;
     pub use nodes::*;
 
@@ -106,8 +107,8 @@ pub(crate) mod inner {
 /// Essential when working with the html! macro
 pub mod prelude {
     pub use crate::component::{Component, Properties};
+    pub use crate::context::Context;
     use crate::nodes;
-    pub use crate::scope::Context;
     pub use crate::virtual_dom::VirtualDom;
     pub use nodes::*;
 

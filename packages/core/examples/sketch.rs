@@ -138,7 +138,7 @@ fn test_use_state(ctx: Context<()>) -> VNode {
     // Those vnodes are then tossed out and new ones are installed, meaning and old references (potentially bad)
     // are removed and UB is prevented from /affecting/ the program
     {
-        VNode::Element(VElement::new("button"))
+        VNode::text("blah")
     }
 }
 

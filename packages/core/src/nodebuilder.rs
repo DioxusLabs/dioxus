@@ -1,7 +1,10 @@
-//! Helpers for building virtual DOM nodes.
+//! Helpers for building virtual DOM VNodes.
 
-use crate::nodes::{Attribute, Listener, NodeKey, VNode};
-type Node<'g> = VNode<'g>;
+use crate::{
+    nodes::{Attribute, Listener, NodeKey, VNode},
+    prelude::VElement,
+};
+
 use bumpalo::Bump;
 
 /// A virtual DOM element builder.
@@ -14,7 +17,7 @@ pub struct ElementBuilder<'a, Listeners, Attributes, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
-    Children: 'a + AsRef<[Node<'a>]>,
+    Children: 'a + AsRef<[VNode<'a>]>,
 {
     bump: &'a Bump,
     key: NodeKey,
@@ -30,7 +33,7 @@ impl<'a>
         'a,
         bumpalo::collections::Vec<'a, Listener<'a>>,
         bumpalo::collections::Vec<'a, Attribute<'a>>,
-        bumpalo::collections::Vec<'a, Node<'a>>,
+        bumpalo::collections::Vec<'a, VNode<'a>>,
     >
 {
     /// Create a new `ElementBuilder` for an element with the given tag name.
@@ -77,7 +80,7 @@ impl<'a, Listeners, Attributes, Children> ElementBuilder<'a, Listeners, Attribut
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
-    Children: 'a + AsRef<[Node<'a>]>,
+    Children: 'a + AsRef<[VNode<'a>]>,
 {
     /// Set the listeners for this element.
     ///
@@ -187,7 +190,7 @@ where
     #[inline]
     pub fn children<C>(self, children: C) -> ElementBuilder<'a, Listeners, Attributes, C>
     where
-        C: 'a + AsRef<[Node<'a>]>,
+        C: 'a + AsRef<[VNode<'a>]>,
     {
         ElementBuilder {
             bump: self.bump,
@@ -230,7 +233,7 @@ where
     /// Set this element's key.
     ///
     /// When diffing sets of siblings, if an old sibling and new sibling share a
-    /// key, then they will always reuse the same physical DOM node. This is
+    /// key, then they will always reuse the same physical DOM VNode. This is
     /// important when using CSS animations, web components, third party JS, or
     /// anything else that makes the diffing implementation observable.
     ///
@@ -244,7 +247,7 @@ where
     ///
     /// Keys must be unique among siblings.
     ///
-    /// All sibling nodes must be keyed, or they must all not be keyed. You may
+    /// All sibling VNodes must be keyed, or they must all not be keyed. You may
     /// not mix keyed and unkeyed siblings.
     ///
     /// # Example
@@ -266,25 +269,25 @@ where
         self
     }
 
-    /// Create the virtual DOM node described by this builder.
+    /// Create the virtual DOM VNode described by this builder.
     ///
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump, Node};
+    /// use dodrio::{builder::*, bumpalo::Bump, VNode};
     ///
     /// let b = Bump::new();
     ///
     /// // Start with a builder...
     /// let builder: ElementBuilder<_, _, _> = div(&b);
     ///
-    /// // ...and finish it to create a virtual DOM node!
-    /// let my_div: Node = builder.finish();
+    /// // ...and finish it to create a virtual DOM VNode!
+    /// let my_div: VNode = builder.finish();
     /// ```
     #[inline]
-    pub fn finish(self) -> Node<'a> {
+    pub fn finish(self) -> VNode<'a> {
         let children: &'a Children = self.bump.alloc(self.children);
-        let children: &'a [Node<'a>] = children.as_ref();
+        let children: &'a [VNode<'a>] = children.as_ref();
 
         let listeners: &'a Listeners = self.bump.alloc(self.listeners);
         let listeners: &'a [Listener<'a>] = listeners.as_ref();
@@ -292,63 +295,62 @@ where
         let attributes: &'a Attributes = self.bump.alloc(self.attributes);
         let attributes: &'a [Attribute<'a>] = attributes.as_ref();
 
-        todo!()
-        // Node::element(
-        //     self.bump,
-        //     self.key,
-        //     self.tag_name,
-        //     listeners,
-        //     attributes,
-        //     children,
-        //     self.namespace,
-        // )
+        VNode::element(
+            self.bump,
+            self.key,
+            self.tag_name,
+            listeners,
+            attributes,
+            children,
+            self.namespace,
+        )
     }
 }
 
-// impl<'a, Attributes, Children>
-//     ElementBuilder<'a, bumpalo::collections::Vec<'a, Listener<'a>>, Attributes, Children>
-// where
-//     Attributes: 'a + AsRef<[Attribute<'a>]>,
-//     Children: 'a + AsRef<[Node<'a>]>,
-// {
-//     /// Add a new event listener to this element.
-//     ///
-//     /// The `event` string specifies which event will be listened for. The
-//     /// `callback` function is the function that will be invoked if the
-//     /// specified event occurs.
-//     ///
-//     /// # Example
-//     ///
-//     /// ```no_run
-//     /// use dodrio::{builder::*, bumpalo::Bump};
-//     ///
-//     /// let b = Bump::new();
-//     ///
-//     /// // A button that does something when clicked!
-//     /// let my_button = button(&b)
-//     ///     .on("click", |root, vdom, event| {
-//     ///         // ...
-//     ///     })
-//     ///     .finish();
-//     /// ```
-//     #[inline]
-//     pub fn on<F>(mut self, event: &'a str, callback: F) -> Self
-//     where
-//         F: 'static + Fn(&mut dyn RootRender, VdomWeak, web_sys::Event),
-//     {
-//         self.listeners.push(Listener {
-//             event,
-//             callback: self.bump.alloc(callback),
-//         });
-//         self
-//     }
-// }
+impl<'a, Attributes, Children>
+    ElementBuilder<'a, bumpalo::collections::Vec<'a, Listener<'a>>, Attributes, Children>
+where
+    Attributes: 'a + AsRef<[Attribute<'a>]>,
+    Children: 'a + AsRef<[VNode<'a>]>,
+{
+    /// Add a new event listener to this element.
+    ///
+    /// The `event` string specifies which event will be listened for. The
+    /// `callback` function is the function that will be invoked if the
+    /// specified event occurs.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use dodrio::{builder::*, bumpalo::Bump};
+    ///
+    /// let b = Bump::new();
+    ///
+    /// // A button that does something when clicked!
+    /// let my_button = button(&b)
+    ///     .on("click", |root, vdom, event| {
+    ///         // ...
+    ///     })
+    ///     .finish();
+    /// ```
+    #[inline]
+    pub fn on<F>(mut self, event: &'a str, callback: F) -> Self
+    where
+        F: 'static + Fn(),
+    {
+        self.listeners.push(Listener {
+            event,
+            callback: self.bump.alloc(callback),
+        });
+        self
+    }
+}
 
 impl<'a, Listeners, Children>
     ElementBuilder<'a, Listeners, bumpalo::collections::Vec<'a, Attribute<'a>>, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
-    Children: 'a + AsRef<[Node<'a>]>,
+    Children: 'a + AsRef<[VNode<'a>]>,
 {
     /// Add a new attribute to this element.
     ///
@@ -404,7 +406,7 @@ where
 }
 
 impl<'a, Listeners, Attributes>
-    ElementBuilder<'a, Listeners, Attributes, bumpalo::collections::Vec<'a, Node<'a>>>
+    ElementBuilder<'a, Listeners, Attributes, bumpalo::collections::Vec<'a, VNode<'a>>>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
@@ -425,7 +427,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn child(mut self, child: Node<'a>) -> Self {
+    pub fn child(mut self, child: VNode<'a>) -> Self {
         self.children.push(child);
         self
     }
@@ -445,7 +447,7 @@ macro_rules! builder_constructors {
                 'a,
                 bumpalo::collections::Vec<'a, Listener<'a>>,
                 bumpalo::collections::Vec<'a, Attribute<'a>>,
-                bumpalo::collections::Vec<'a, Node<'a>>,
+                bumpalo::collections::Vec<'a, VNode<'a>>,
             >
             where
                 B: Into<&'a Bump>
@@ -467,7 +469,7 @@ macro_rules! builder_constructors {
                 'a,
                 bumpalo::collections::Vec<'a, Listener<'a>>,
                 bumpalo::collections::Vec<'a, Attribute<'a>>,
-                bumpalo::collections::Vec<'a, Node<'a>>,
+                bumpalo::collections::Vec<'a, VNode<'a>>,
             > {
                 let builder = ElementBuilder::new(bump, stringify!($name));
                 builder.namespace(Some($namespace))
@@ -1018,9 +1020,9 @@ builder_constructors! {
     image <> "http://www.w3.org/2000/svg";
 }
 
-/// Construct a text node.
+/// Construct a text VNode.
 ///
-/// This is `dodrio`'s virtual DOM equivalent of `document.createTextNode`.
+/// This is `dodrio`'s virtual DOM equivalent of `document.createTextVNode`.
 ///
 /// # Example
 ///
@@ -1030,8 +1032,8 @@ builder_constructors! {
 /// let my_text = text("hello, dodrio!");
 /// ```
 #[inline]
-pub fn text<'a>(contents: &'a str) -> Node<'a> {
-    Node::text(contents)
+pub fn text<'a>(contents: &'a str) -> VNode<'a> {
+    VNode::text(contents)
 }
 
 /// Construct an attribute for an element.

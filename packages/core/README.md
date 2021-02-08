@@ -6,7 +6,7 @@ This is the core crate for the Dioxus Virtual DOM. This README will focus on the
 Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus borrows these concepts:
 
 - React: hooks, concurrency, suspense
-- Dodrio: bump allocation, double buffering
+- Dodrio: bump allocation, double buffering, and source code for nodes + NodeBuilder
 - Percy: html! macro architecture, platform-agnostic edits
 - Yew: passion and inspiration ❤️
 
@@ -17,7 +17,7 @@ We have big goals for Dioxus. The final implementation must:
 - Be **fast**. Allocators are typically slow in WASM/Rust, so we should have a smart way of allocating.
 - Be extremely memory efficient. Servers should handle tens of thousands of simultaneous VDoms with no problem.
 - Be concurrent. Components should be able to pause rendering using a threading mechanism.
-- Support "broadcasting". Edit lists should be separate from the Renderer implementation.
+- Be "remote". Edit lists should be separate from the Renderer implementation.
 - Support SSR. VNodes should render to a string that can be served via a web server.
 - Be "live". Components should be able to be both server rendered and client rendered without needing frontend APIs.
 - Be modular. Components and hooks should be work anywhere without worrying about target platform.
@@ -25,8 +25,8 @@ We have big goals for Dioxus. The final implementation must:
 ## Optimizations
 
 - Support a pluggable allocation strategy that makes VNode creation **very** fast
-- Support lazy DomTrees (ie DomTrees that are not actually created when the view fn is ran)
-- Support advanced diffing strategies
+- Support lazy DomTrees (ie DomTrees that are not actually created when the html! macro is used)
+- Support advanced diffing strategies (patience, Myers, etc)
 
 ## Design Quirks
 
