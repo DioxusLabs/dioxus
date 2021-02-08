@@ -29,14 +29,14 @@ The primary Dioxus crate is agnostic to platform and is meant to be configured w
 Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms, designed especially for your next startup. 
 
 # Get Started with...
-<table style="width:100%">
-    <tr>
-        <th><p><a href="http://github.com/jkelleyrtp/dioxus">WebApps</a></th>
+<table style="width:100%" align="center">
+    <tr >
+        <th><a href="http://github.com/jkelleyrtp/dioxus">WebApps</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Desktop</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Mobile</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">State Management</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Docs</a></th>
-        <th><a href="http://github.com/jkelleyrtp/dioxus">Tools</a></p></th>
+        <th><a href="http://github.com/jkelleyrtp/dioxus">Tools</a></th>
     <tr>
 </table>
 
