@@ -15,8 +15,8 @@ static Example: FC<()> = |ctx| {
 
     ctx.view(html! {
         <div>
-            <button onclick={move |_| set_val1("world")}> "world" </button>
-            <button onclick={move |_| set_val1("dioxus")}> "dioxus" </button>
+            <button onclick={move |_| set_val1("world!")}> "world" </button>
+            <button onclick={move |_| set_val1("dioxus 🎉")}> "dioxus" </button>
             <div>
                 <p> "Hello, {val1}" </p>
             </div>
@@ -28,6 +28,21 @@ The primary Dioxus crate is agnostic to platform and is meant to be configured w
 
 Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms, designed especially for your next startup. 
 
+# Get Started with...
+-----
+<table style="width:100%">
+    <tr>
+        <th>[WebApps](#)</th>
+        <th>[Desktop](#)</th>
+        <th>[Mobile](#)</th>
+        <th>[State Management](#)</th>
+        <th>[Docs](#)</th>
+        <th>[Tools](#)</th>
+    <tr>
+</table>
+-----
+
+
 ## Features
 Dioxus' goal is to be the most advanced UI system for Rust, targeting isomorphism and hybrid approaches. Our goal is to eliminate context-switching for cross-platform development - both in UI patterns and programming language. Hooks and components should work *everywhere* without compromise.
 
@@ -37,14 +52,6 @@ Dioxus Core supports:
 - [ ] Context subscriptions
 - [ ] State management integrations
 
-On top of these, we have several projects you can find in the `packages` folder.
-- [x] `dioxus-cli`: Testing, development, and packaging tools for Dioxus apps
-- [ ] `dioxus-vscode`: Syntax highlighting, code formatting, and hints for Dioxus html! blocks
-- [ ] `dioxus-live`: Live view
-- [ ] `dioxus-webview`: Desktop Applications
-- [ ] `dioxus-ios`: iOS apps
-- [ ] `dioxus-android`: Android apps
-- [ ] `dioxus-magic`: AR/VR Apps
 
 Separately, we maintain a collection of high quality, cross-platform hooks and services in the dioxus-hooks repo:
 - [ ] `dioxus-router`: A hook-based router implementation for Dioxus web apps
