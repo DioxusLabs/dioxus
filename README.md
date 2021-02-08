@@ -31,12 +31,12 @@ Dioxus is supported by Dioxus Labs, a company providing end-to-end services for 
 # Get Started with...
 <table style="width:100%">
     <tr>
-        <th>[WebApps](http://github.com/jkelleyrtp/dioxus)</th>
-        <th>[Desktop](http://github.com/jkelleyrtp/dioxus)</th>
-        <th>[Mobile](http://github.com/jkelleyrtp/dioxus)</th>
-        <th>[State Management](http://github.com/jkelleyrtp/dioxus)</th>
-        <th>[Docs](http://github.com/jkelleyrtp/dioxus)</th>
-        <th>[Tools](http://github.com/jkelleyrtp/dioxus)</th>
+        <th><p><a href="http://github.com/jkelleyrtp/dioxus">WebApps</a></th>
+        <th><a href="http://github.com/jkelleyrtp/dioxus">Desktop</a></th>
+        <th><a href="http://github.com/jkelleyrtp/dioxus">Mobile</a></th>
+        <th><a href="http://github.com/jkelleyrtp/dioxus">State Management</a></th>
+        <th><a href="http://github.com/jkelleyrtp/dioxus">Docs</a></th>
+        <th><a href="http://github.com/jkelleyrtp/dioxus">Tools</a></p></th>
     <tr>
 </table>
 
