@@ -17,23 +17,28 @@ Dioxus is supported by Dioxus Labs, a company providing end-to-end services for 
 Dioxus' goal is to be the most advanced UI system for Rust, targeting isomorphism and hybrid approaches. Our goal is to eliminate context-switching for cross-platform development - both in UI patterns and programming language. Hooks and components should work *everywhere* without compromise.
 
 Dioxus Core supports:
-- [ ] Hooks for component state
+- [x] Hooks for component state
 - [ ] Concurrent rendering
 - [ ] Context subscriptions
 - [ ] State management integrations
 
 On top of these, we have several projects you can find in the `packages` folder.
 - [x] `dioxus-cli`: Testing, development, and packaging tools for Dioxus apps
-- [ ] `dioxus-router`: A hook-based router implementation for Dioxus web apps
 - [ ] `dioxus-vscode`: Syntax highlighting, code formatting, and hints for Dioxus html! blocks
-- [ ] `redux-rs`: Redux-style global state management
-- [ ] `recoil-rs`: Recoil-style global state management
-- [ ] `dioxus-iso`: Hybrid apps (SSR + Web)
 - [ ] `dioxus-live`: Live view
 - [ ] `dioxus-webview`: Desktop Applications
 - [ ] `dioxus-ios`: iOS apps
 - [ ] `dioxus-android`: Android apps
 - [ ] `dioxus-magic`: AR/VR Apps
+
+Separately, we maintain a collection of high quality, cross-platform hooks and services in the dioxus-hooks repo:
+- [ ] `dioxus-router`: A hook-based router implementation for Dioxus web apps
+
+We also maintain two state management options that integrate cleanly with Dioxus apps:
+- [ ] `dioxus-reducer`: ReduxJs-style global state management
+- [ ] `dioxus-dataflow`: RecoilJs-style global state management
+
+
 
 ## Components
 Dioxus should look and feel just like writing functional React components. In Dioxus, there are no class components with lifecycles. All state management is done via hooks. This encourages logic reusability and lessens the burden on Dioxus to maintain a non-breaking lifecycle API.
@@ -44,7 +49,7 @@ struct MyProps {
     name: String
 }
 
-async fn Example(ctx: &Context<MyProps>) -> VNode {
+fn Example(ctx: Context<MyProps>) -> VNode {
     html! { <div> "Hello {ctx.props.name}!" </div> }
 }
 ```
@@ -54,7 +59,7 @@ Here, the `Context` object is used to access hook state, create subscriptions, a
 ```rust
 // A very terse component!
 #[fc]
-fn Example(ctx: &Context, name: String) -> VNode {
+fn Example(ctx: Context, name: String) -> VNode {
     html! { <div> "Hello {name}!" </div> }
 }
 
@@ -70,7 +75,7 @@ The final output of components must be a tree of VNodes. We provide an html macr
 In Dioxus, VNodes are asynchronous and can their rendering can be paused at any time by awaiting a future. Hooks can combine this functionality with the Context and Subscription APIs to craft dynamic and efficient user experiences. 
 
 ```rust
-fn user_data(ctx: &Context<()>) -> VNode {
+fn user_data(ctx: Context<()>) -> VNode {
     // Register this future as a task
     use_suspense(ctx, async {
         // Continue on with the component as usual, waiting for data to arrive
@@ -92,7 +97,7 @@ With the Context, Subscription, and Asynchronous APIs, we've built Dioxus Livevi
 These set of features are still experimental. Currently, we're still working on making these components more ergonomic
 
 ```rust
-async fn live_component(ctx: &Context<()>) -> VNode {
+fn live_component(ctx: &Context<()>) -> VNode {
     use_live_component(
         ctx,
         // Rendered via the client
@@ -109,16 +114,18 @@ async fn live_component(ctx: &Context<()>) -> VNode {
 ## Dioxus LiveHost
 Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whether they be server-rendered, wasm-only, or a liveview. LiveHost enables a wide set of features:
 
-- Versioned fronted/backend with unique links
-- Builtin CI/CD for all supported Dioxus platforms (mac, windows, server, wasm, etc)
-- Managed and pluggable storage database backends
+- Versioned combined frontend and backend with unique access links
+- Builtin CI/CD for all supported Dioxus platforms (macOS, Windows, Android, iOS, server, WASM, etc)
+- Managed and pluggable storage database backends (PostgresSQL, Redis)
 - Serverless support for minimal latency
 - Analytics
 - Lighthouse optimization
 - On-premise support (see license terms)
 - Cloudfare/DDoS protection integrations
+- Web-based simulators for iOS, Android, Desktop
+- Team + company management
 
-For small teams, LiveHost is free. Check out the pricing page to see if Dioxus LiveHost is good your team.
+For small teams, LiveHost is free 🎉. Check out the pricing page to see if Dioxus LiveHost is good fit for your team.
 
 ## Examples
 We use the dedicated `dioxus-cli` to build and test dioxus web-apps. This can run examples, tests, build web workers, launch development servers, bundle, and more. It's general purpose, but currently very tailored to Dioxus for liveview and bundling. If you've not used it before, `cargo install --path pacakages/dioxus-cli` will get it installed. This CLI tool should feel like using `cargo` but with 1st party support for assets, bundling, and other important dioxus-specific features.

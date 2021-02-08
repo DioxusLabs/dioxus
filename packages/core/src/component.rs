@@ -1,5 +1,8 @@
+//! This file handles the supporting infrastructure for the `Component` trait and `Properties` which makes it possible
+//! for components to be used within Nodes.
+//!
+
 use crate::inner::*;
-use crate::prelude::bumpalo::Bump;
 
 /// The `Component` trait refers to any struct or funciton that can be used as a component
 /// We automatically implement Component for FC<T>
@@ -34,6 +37,7 @@ impl Properties for () {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::bumpalo::Bump;
 
     fn test_static_fn<'a, P: Properties>(b: &'a Bump, r: FC<P>) -> VNode<'a> {
         todo!()

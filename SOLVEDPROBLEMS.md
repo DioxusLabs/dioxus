@@ -157,3 +157,17 @@ static Example: FC<()> = |ctx| {
 ```
 At runtime, the new closure is created that captures references to `ctx`. Therefore, this closure can only be evaluated while `ctx` is borrowed and in scope. However, this closure can only be evaluated with an `allocator`. Currently, the global and Bumpalo allocators are available, though in the future we will add support for creating a VDom with any allocator or arena system (IE Jemalloc, wee-alloc, etc). The intention here is to allow arena allocation of VNodes (no need to box nested VNodes). Between diffing phases, the arena will be overwritten as old nodes are replaced with new nodes. This saves allocation time and enables bump allocators.
 
+
+
+## Context and lifetimes
+> SAFETY hole
+
+We want components to be able to fearlessly "use_context" for use in state management solutions.
+
+However, we cannot provide these guarantees without compromising the references. If a context mutates, it cannot lend out references.
+
+Functionally, this can be solved with UnsafeCell and runtime dynamics. Essentially, if a context mutates, then any affected components would need
+to be updated, even if they themselves aren't updated. Otherwise, a handler would be pointing to 
+
+This can be enforced by us or by implementers.
+
