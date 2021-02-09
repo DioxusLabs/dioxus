@@ -11,12 +11,12 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 static Example: FC<()> = |ctx| {
-    let (val1, set_val1) = use_state(&ctx, || "___?");
+    let (value, set_value) = use_state(&ctx, || "...?");
 
     ctx.view(html! {
         <div>
-            <button onclick={move |_| set_val1("world!")}> "world" </button>
-            <button onclick={move |_| set_val1("dioxus 🎉")}> "dioxus" </button>
+            <button onclick={move |_| set_value("world!")}> "world" </button>
+            <button onclick={move |_| set_value("dioxus 🎉")}> "dioxus" </button>
             <div>
                 <p> "Hello, {val1}" </p>
             </div>
@@ -24,7 +24,8 @@ static Example: FC<()> = |ctx| {
     })
 };
 ```
-The primary Dioxus crate is agnostic to platform and is meant to be configured with external renderers for getting content to the screen. We have built renderers for Dioxus to serve WebApps, Desktop Apps, static pages, liveview, Android, and iOS.
+Dioxus can be used to serve webapps, desktop apps, static pages, LiveView apps, Android apps, iOS Apps, and more. At its core,
+Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
 
 Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms, designed especially for your next startup. 
 

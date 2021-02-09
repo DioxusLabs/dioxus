@@ -41,6 +41,10 @@ path = "common.rs"
 # Examples are manually keyed in
 # ================================
 
+[[example]]
+path = "example_app.rs"
+name = "example_app"
+
 # [[example]]
 # path = "hello_web.rs"
 # name = "hello_web"
