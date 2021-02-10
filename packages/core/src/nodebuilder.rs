@@ -46,7 +46,7 @@ impl<'a>
     /// # Example
     ///
     /// ```
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     ///
     /// let b = Bump::new();
     ///
@@ -93,7 +93,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     ///
     /// let b = Bump::new();
     ///
@@ -136,7 +136,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump, Attribute};
+    /// use dioxus::{builder::*, bumpalo::Bump, Attribute};
     ///
     /// let b = Bump::new();
     ///
@@ -175,7 +175,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     ///
     /// let b = Bump::new();
     ///
@@ -208,7 +208,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     ///
     /// let b = Bump::new();
     ///
@@ -253,7 +253,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     ///
     /// let b = Bump::new();
     ///
@@ -274,7 +274,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump, VNode};
+    /// use dioxus::{builder::*, bumpalo::Bump, VNode};
     ///
     /// let b = Bump::new();
     ///
@@ -322,7 +322,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     ///
     /// let b = Bump::new();
     ///
@@ -357,7 +357,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     ///
     /// let b = Bump::new();
     ///
@@ -387,7 +387,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     /// use js_sys::Math;
     ///
     /// let b = Bump::new();
@@ -416,7 +416,7 @@ where
     /// # Example
     ///
     /// ```no_run
-    /// use dodrio::{builder::*, bumpalo::Bump};
+    /// use dioxus::{builder::*, bumpalo::Bump};
     /// use js_sys::Math;
     ///
     /// let b = Bump::new();
@@ -1022,14 +1022,14 @@ builder_constructors! {
 
 /// Construct a text VNode.
 ///
-/// This is `dodrio`'s virtual DOM equivalent of `document.createTextVNode`.
+/// This is `dioxus`'s virtual DOM equivalent of `document.createTextVNode`.
 ///
 /// # Example
 ///
 /// ```no_run
-/// use dodrio::builder::*;
+/// use dioxus::builder::*;
 ///
-/// let my_text = text("hello, dodrio!");
+/// let my_text = text("hello, dioxus!");
 /// ```
 #[inline]
 pub fn text<'a>(contents: &'a str) -> VNode<'a> {
@@ -1044,7 +1044,7 @@ pub fn text<'a>(contents: &'a str) -> VNode<'a> {
 /// id="my-id"/>`.
 ///
 /// ```no_run
-/// use dodrio::builder::*;
+/// use dioxus::builder::*;
 ///
 /// let my_id_attr = attr("id", "my-id");
 /// ```
@@ -1060,7 +1060,7 @@ pub fn attr<'a>(name: &'a str, value: &'a str) -> Attribute<'a> {
 /// # Example
 ///
 /// ```no_run
-/// use dodrio::{builder::*, bumpalo::Bump};
+/// use dioxus::{builder::*, bumpalo::Bump};
 ///
 /// let b = Bump::new();
 ///

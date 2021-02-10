@@ -19,14 +19,14 @@ cannot drag the refs into the closure w
 */
 
 static Example: FC<()> = |ctx| {
-    let value = use_context(&ctx, |ctx: &SomeContext| ctx.items.last().unwrap());
+    // let value = use_context(&ctx, |ctx: &SomeContext| ctx.items.last().unwrap());
 
     // let b = *value;
     // let v2 = *value;
     let cb = move |e| {
         // let g = b.as_str();
         // let g = (v2).as_str();
-        let g = (value).as_str();
+        // let g = (value).as_str();
         // let g = b.as_str();
     };
     // let r = *value;
