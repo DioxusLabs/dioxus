@@ -174,7 +174,11 @@ mod velement {
     }
 
     /// An event listener.
-    pub struct Listener<'a> {
+    pub struct Listener<'a>
+// pub struct Listener<'a, 'b>
+    // where
+    //     'b: 'a + 'static,
+    {
         /// The type of event to listen for.
         pub(crate) event: &'a str,
         /// The callback to invoke when the event happens.

@@ -1,5 +1,16 @@
 # Solved problems while building Dioxus
 
+focuses:
+- ergonomics
+- render agnostic
+- remote coupling
+- memory efficient
+- concurrent 
+- global context
+- scheduled updates
+- 
+
+
 ## FC Macro for more elegant components
 Originally the syntax of the FC macro was meant to look like:
 
@@ -160,14 +171,77 @@ At runtime, the new closure is created that captures references to `ctx`. Theref
 
 
 ## Context and lifetimes
-> SAFETY hole
 
 We want components to be able to fearlessly "use_context" for use in state management solutions.
 
 However, we cannot provide these guarantees without compromising the references. If a context mutates, it cannot lend out references.
 
-Functionally, this can be solved with UnsafeCell and runtime dynamics. Essentially, if a context mutates, then any affected components would need
-to be updated, even if they themselves aren't updated. Otherwise, a handler would be pointing to 
+Functionally, this can be solved with UnsafeCell and runtime dynamics. Essentially, if a context mutates, then any affected components would need to be updated, even if they themselves aren't updated. Otherwise, a reference would be pointing at data that could have potentially been moved. 
 
-This can be enforced by us or by implementers.
+To do this safely is a pretty big challenge. We need to provide a method of sharing data that is safe, ergonomic, and that fits the abstraction model.
 
+Enter, the "ContextGuard".
+
+The "ContextGuard" is very similar to a Ref/RefMut from the RefCell implementation, but one that derefs into actual underlying value. 
+
+However, derefs of the ContextGuard are a bit more sophisticated than the Ref model. 
+
+For RefCell, when a Ref is taken, the RefCell is now "locked." This means you cannot take another `borrow_mut` instance while the Ref is still active. For our purposes, our modification phase is very limited, so we can make more assumptions about what is safe.
+
+1. We can pass out ContextGuards from any use of use_context. These don't actually lock the value until used.
+2. The ContextGuards only lock the data while the component is executing and when a callback is running.
+3. Modifications of the underlying context occur after a component is rendered and after the event has been run.
+   
+With the knowledge that usage of ContextGuard can only be achieved in a component context and the above assumptions, we can design a guard that prevents any poor usage but also is ergonomic.
+
+As such, the design of the ContextGuard must:
+- be /copy/ for easy moves into closures
+- never point to invalid data (no dereferencing of raw pointers after movable data has been changed (IE a vec has been resized))
+- not allow references of underlying data to leak into closures
+
+To solve this, we can be clever with lifetimes to ensure that any data is protected, but context is still ergonomic.
+
+1. As such, deref context guard returns an element with a lifetime bound to the borrow of the guard. 
+2. Because we cannot return locally borrowed data AND we consume context, this borrow cannot be moved into a closure. 
+3. ContextGuard is *copy* so the guard itself can be moved into closures
+4. ContextGuard derefs with its unique lifetime *inside* closures
+5. Derefing a ContextGuard evaluates the underlying selector to ensure safe temporary access to underlying data
+
+```rust
+struct ExampleContext {
+    // unpinnable objects with dynamic sizing
+    items: Vec<String>
+}
+
+fn Example<'src>(ctx: Context<'src, ()>) -> VNode<'src> {
+    let val: &'b ContextGuard<ExampleContext> = (&'b ctx).use_context(|context: &'other ExampleContext| {
+        // always select the last element
+        context.items.last()
+    });
+
+    let handler1 = move |_| println!("Value is {}", val); // deref coercion performed here for printing
+    let handler2 = move |_| println!("Value is {}", val); // deref coercion performed here for printing
+
+    ctx.view(html! {
+        <div>
+            <button onclick={handler1}> "Echo value with h1" </button>
+            <button onclick={handler2}> "Echo value with h2" </button>
+            <div>
+                <p> "Value is: {val}" </p>
+            </div>
+        </div>
+    })
+}
+```
+
+A few notes:
+- this does *not* protect you from data races!!!
+- this does *not* force rendering of components
+- this *does* protect you from invalid + UB use of data
+- this approach leaves lots of room for fancy state management libraries
+- this approach is fairly quick, especially if borrows can be cached during usage phases
+
+
+## Concurrency
+
+I don't even know yet

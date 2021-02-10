@@ -1068,9 +1068,10 @@ pub fn attr<'a>(name: &'a str, value: &'a str) -> Attribute<'a> {
 ///     // do something when a click happens...
 /// });
 /// ```
-pub fn on<'a, F>(bump: &'a Bump, event: &'a str, callback: F) -> Listener<'a>
+pub fn on<'a, 'b, F: 'b>(bump: &'a Bump, event: &'a str, callback: F) -> Listener<'a>
 where
-    F: Fn(()) + 'a,
+    'b: 'a + 'static,
+    F: Fn(()) + 'b,
 {
     Listener {
         event,
