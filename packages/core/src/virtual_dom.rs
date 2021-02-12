@@ -1,29 +1,5 @@
-/*
-The Dioxus Virtual Dom integrates an event system and virtual nodes to create reactive user interfaces.
-
-The Dioxus VDom uses the same underlying mechanics as Dodrio (double buffering, bump dom, etc).
-Instead of making the allocator very obvious, we choose to parametrize over the DomTree trait. For our purposes,
-the DomTree trait is simply an abstraction over a lazy dom builder, much like the iterator trait.
-
-This means we can accept DomTree anywhere as well as return it. All components therefore look like this:
-```ignore
-function Component(ctx: Context<()>) -> VNode {
-    ctx.view(html! {<div> "hello world" </div>})
-}
-```
-It's not quite as sexy as statics, but there's only so much you can do. The goal is to get statics working with the FC macro,
-so types don't get in the way of you and your component writing. Fortunately, this is all generic enough to be split out
-into its own lib (IE, lazy loading wasm chunks by function (exciting stuff!))
-
-```ignore
-#[fc] // gets translated into a function.
-static Component: FC = |ctx| {
-    ctx.view(html! {<div> "hello world" </div>})
-}
-```
-*/
-use crate::inner::*;
 use crate::nodes::VNode;
+use crate::{events::EventTrigger, innerlude::*};
 use any::Any;
 use bumpalo::Bump;
 use generational_arena::{Arena, Index};
@@ -46,13 +22,12 @@ pub struct VirtualDom<P: Properties> {
     base_scope: Index,
 
     /// Components generate lifecycle events
-    event_queue: Vec<LifecycleEvent>,
+    event_queue: Vec<LifecycleEvent>, // wrap in a lock or something so
 
     // mark the root props with P, even though they're held by the root component
     _p: PhantomData<P>,
 }
 
-/// Implement VirtualDom with no props for components that initialize their state internal to the VDom rather than externally.
 impl VirtualDom<()> {
     /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
     ///
@@ -63,7 +38,6 @@ impl VirtualDom<()> {
     }
 }
 
-/// Implement the VirtualDom for any Properties
 impl<P: Properties + 'static> VirtualDom<P> {
     /// Start a new VirtualDom instance with a dependent props.
     /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
@@ -97,15 +71,69 @@ impl<P: Properties + 'static> VirtualDom<P> {
         }
     }
 
+    /// With access to the virtual dom, schedule an update to the Root component's props
+    pub fn update_props(&mut self, new_props: P) {
+        self.event_queue.push(LifecycleEvent {
+            event_type: LifecycleType::PropsChanged {
+                props: Box::new(new_props),
+            },
+            index: self.base_scope,
+        });
+    }
+
     /// Pop an event off the event queue and process it
+    /// Update the root props, and progress
+    /// Takes a bump arena to allocate into, making the diff phase as fast as possible
+    ///
     pub fn progress(&mut self) -> Result<()> {
         let event = self.event_queue.pop().ok_or(Error::NoEvent)?;
-
         process_event(self, event)
     }
 
-    /// Update the root props, causing a full event cycle
-    pub fn update_props(&mut self, new_props: P) {}
+    /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
+    ///  
+    /// Given a synthetic event, the component that triggered the event, and the index of the callback, this runs the virtual
+    /// dom to completion, tagging components that need updates, compressing events together, and finally emitting a single
+    /// change list.
+    ///
+    /// If implementing an external renderer, this is the perfect method to combine with an async event loop that waits on
+    /// listeners.
+    ///
+    /// ```ignore
+    ///
+    ///
+    ///
+    ///
+    /// ```
+    pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<()> {
+        let EventTrigger {
+            component_id,
+            listener_id,
+            event,
+        } = evt;
+
+        let component = self
+            .components
+            .get(component_id)
+            // todo: update this with a dedicated error type so implementors know what went wrong
+            .expect("Component should exist if an event was triggered");
+
+        let listener = component
+            .listeners
+            .get(listener_id as usize)
+            .expect("Listener should exist if it was triggered")
+            .as_ref();
+
+        // Run the callback
+        // Theoretically, this should
+        listener();
+
+        Ok(())
+    }
+
+    pub async fn progress_completely(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Using mutable access to the Virtual Dom, progress a given lifecycle event
@@ -159,6 +187,9 @@ fn process_event<P: Properties>(
         // Event from renderer was fired with a given listener ID
         //
         LifecycleType::Callback { listener_id } => {}
+
+        // Run any post-render callbacks on a component
+        LifecycleType::Rendered => {}
     }
 
     Ok(())
@@ -182,6 +213,7 @@ pub enum LifecycleType {
     PropsChanged {
         props: Box<dyn Properties>,
     },
+    Rendered,
     Mounted,
     Removed,
     Messaged,

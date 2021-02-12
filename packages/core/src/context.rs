@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::{inner::Scope, nodes::VNode};
+use crate::{innerlude::Scope, nodes::VNode};
 use bumpalo::Bump;
 use hooks::Hook;
 use std::{

@@ -1,4 +1,4 @@
-use crate::inner::*;
+use crate::innerlude::*;
 use crate::nodes::VNode;
 use crate::{context::hooks::Hook, diff::diff};
 use bumpalo::Bump;
@@ -19,26 +19,26 @@ pub struct Scope {
     // These hooks are actually references into the hook arena
     // These two could be combined with "OwningRef" to remove unsafe usage
     // could also use ourborous
-    hooks: RefCell<Vec<*mut Hook>>,
-    hook_arena: typed_arena::Arena<Hook>,
+    pub hooks: RefCell<Vec<*mut Hook>>,
+    pub hook_arena: typed_arena::Arena<Hook>,
 
     // Map to the parent
-    parent: Option<Index>,
+    pub parent: Option<Index>,
 
     // todo, do better with the active frame stuff
-    frames: [Bump; 2],
+    pub frames: [Bump; 2],
 
     // somehow build this vnode with a lifetime tied to self
-    cur_node: *mut VNode<'static>,
+    pub cur_node: *mut VNode<'static>,
 
-    active_frame: u8,
+    pub active_frame: u8,
 
     // IE Which listeners need to be woken up?
-    listeners: Vec<Box<dyn Fn()>>,
+    pub listeners: Vec<Box<dyn Fn()>>,
 
     //
-    props_type: TypeId,
-    caller: *const i32,
+    pub props_type: TypeId,
+    pub caller: *const i32,
 }
 
 impl Scope {
@@ -76,7 +76,7 @@ impl Scope {
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
-    /// Props is ?Sized because we borrow the props
+    /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
     pub(crate) fn run<'a, P: Properties + ?Sized>(&self, props: &'a P) {
         let bump = &self.frames[0];
 
@@ -96,7 +96,7 @@ impl Scope {
         We hide the generic bound on the function item by casting it to raw pointer. When the function is actually called,
         we transmute the function back using the props as reference.
 
-        we could do a better check to make sure that the TypeID is correct
+        we could do a better check to make sure that the TypeID is correct before casting
         --
         This is safe because we check that the generic type matches before casting.
         */
@@ -104,7 +104,11 @@ impl Scope {
         let new_nodes = caller(ctx, props);
         let old_nodes: &mut VNode<'static> = unsafe { &mut *self.cur_node };
 
-        // perform the diff, dumping into the change list
+        // TODO: Iterate through the new nodes
+        // move any listeners into ourself
+
+        // perform the diff, dumping into the mutable change list
+        // this doesnt perform any "diff compression" where an event and a re-render
         crate::diff::diff(old_nodes, &new_nodes);
     }
 }

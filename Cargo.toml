@@ -3,14 +3,15 @@ members = [
     # Built-in
     "packages/dioxus",
     "packages/core",
-    "packages/recoil",
-    "packages/redux",
     "packages/core-macro",
     "packages/router",
     "packages/ssr",
     "packages/webview",
+    "packages/web",
     "packages/livehost",
     "packages/vscode-ext",
+    # "packages/recoil",
+    # "packages/redux",
     # "packages/macro",
     # TODO @Jon, share the validation code
     # "packages/web",

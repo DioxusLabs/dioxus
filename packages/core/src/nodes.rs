@@ -174,11 +174,11 @@ mod velement {
     }
 
     /// An event listener.
-    pub struct Listener<'a> {
+    pub struct Listener<'bump> {
         /// The type of event to listen for.
-        pub(crate) event: &'a str,
+        pub(crate) event: &'static str,
         /// The callback to invoke when the event happens.
-        pub(crate) callback: &'a (dyn Fn(())),
+        pub(crate) callback: &'bump (dyn Fn(())),
     }
 
     /// The key for keyed children.
@@ -226,8 +226,8 @@ mod velement {
 
 mod vtext {
     #[derive(PartialEq)]
-    pub struct VText<'a> {
-        pub text: &'a str,
+    pub struct VText<'bump> {
+        pub text: &'bump str,
     }
 
     impl<'a> VText<'a> {
@@ -245,7 +245,7 @@ mod vtext {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 mod vcomponent {
-    use crate::inner::{Properties, FC};
+    use crate::innerlude::{Properties, FC};
     use std::{any::TypeId, fmt, future::Future, marker::PhantomData};
 
     use super::VNode;

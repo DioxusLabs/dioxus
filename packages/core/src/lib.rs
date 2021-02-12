@@ -83,7 +83,7 @@ pub mod builder {
 }
 
 // types used internally that are important
-pub(crate) mod inner {
+pub(crate) mod innerlude {
     pub use crate::component::{Component, Properties};
     use crate::context::hooks::Hook;
     pub use crate::context::Context;
@@ -121,7 +121,7 @@ pub mod prelude {
 
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
-    pub use crate::inner::FC;
+    pub use crate::innerlude::FC;
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate

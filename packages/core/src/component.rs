@@ -2,7 +2,7 @@
 //! for components to be used within Nodes.
 //!
 
-use crate::inner::*;
+use crate::innerlude::*;
 
 /// The `Component` trait refers to any struct or funciton that can be used as a component
 /// We automatically implement Component for FC<T>

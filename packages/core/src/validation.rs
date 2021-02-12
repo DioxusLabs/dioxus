@@ -13,6 +13,9 @@ mod validation {
     // look them up by their unique id.
     // When the DomUpdater sees that the element no longer exists it will drop all of it's
     // Rc'd Closures for those events.
+    // It doesn't quite make sense to keep this here, perhaps just in the html crate?
+    // Dioxus itself shouldn't be concerned with the attribute names
+    // a ftk!
     static SELF_CLOSING_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         [
             "area", "base", "br", "col", "hr", "img", "input", "link", "meta", "param", "command",

@@ -1,15 +1,4 @@
-use crate::prelude::VNode;
-
-// use crate::{
-//     cached_set::{CacheId, CachedSet},
-//     change_list::ChangeListBuilder,
-//     events::EventsRegistry,
-//     node::{Attribute, ElementNode, Listener, Node, NodeKind, TextNode},
-// };
-// use fxhash::{FxHashMap, FxHashSet};
-// use std::cmp::Ordering;
-// use std::u32;
-// use wasm_bindgen::UnwrapThrowExt;
+use crate::innerlude::{VNode, VText};
 
 // Diff the `old` node with the `new` node. Emits instructions to modify a
 // physical DOM node that reflects `old` into something that reflects `new`.
@@ -28,6 +17,38 @@ pub(crate) fn diff(
     new: &VNode,
     // cached_roots: &mut FxHashSet<CacheId>,
 ) {
+    match (old, new) {
+        // This case occurs when we generate two text nodes that are the sa
+        (VNode::Text(VText { text: old_text }), VNode::Text(VText { text: new_text })) => {
+            //
+            if old_text != new_text {}
+        }
+
+        // compare elements
+        // if different, schedule different types of update
+        (VNode::Element(_), VNode::Element(_)) => {}
+        (VNode::Element(_), VNode::Text(_)) => {}
+        (VNode::Element(_), VNode::Component(_)) => {}
+        (VNode::Text(_), VNode::Element(_)) => {}
+        (VNode::Text(_), VNode::Component(_)) => {}
+
+        (VNode::Component(_), VNode::Element(_)) => {}
+        (VNode::Component(_), VNode::Text(_)) => {}
+
+        // No immediate change to dom. If props changed though, queue a "props changed" update
+        // However, mark these for a
+        (VNode::Component(_), VNode::Component(_)) => {}
+        //
+        (VNode::Suspended, _) | (_, VNode::Suspended) => {
+            todo!("Suspended components not currently available")
+        } // (VNode::Element(_), VNode::Suspended) => {}
+          // (VNode::Text(_), VNode::Suspended) => {}
+          // (VNode::Component(_), VNode::Suspended) => {}
+          // (VNode::Suspended, VNode::Element(_)) => {}
+          // (VNode::Suspended, VNode::Text(_)) => {}
+          // (VNode::Suspended, VNode::Suspended) => {}
+          // (VNode::Suspended, VNode::Component(_)) => {}
+    }
     todo!()
     // match (&new.kind, &old.kind) {
     //     (

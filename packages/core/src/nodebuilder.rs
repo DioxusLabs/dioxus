@@ -1071,11 +1071,9 @@ pub fn attr<'a>(name: &'a str, value: &'a str) -> Attribute<'a> {
 /// ```
 pub fn on<'a, 'b, F: 'static>(
     bump: &'a Bump,
-    event: &'a str,
-    callback: impl Fn(()) + 'static,
-) -> Listener<'a>
-// F: Fn(()) + 'b,
-{
+    event: &'static str,
+    callback: impl Fn(()) + 'a,
+) -> Listener<'a> {
     Listener {
         event,
         callback: bump.alloc(callback),

@@ -9,7 +9,7 @@ pub use use_ref_def::use_ref;
 pub use use_state_def::use_state;
 
 mod use_state_def {
-    use crate::inner::*;
+    use crate::innerlude::*;
     use std::{cell::RefCell, ops::DerefMut, rc::Rc};
 
     struct UseState<T: 'static> {
@@ -80,7 +80,7 @@ mod use_state_def {
 }
 
 mod use_ref_def {
-    use crate::inner::*;
+    use crate::innerlude::*;
     use std::{cell::RefCell, ops::DerefMut};
 
     pub struct UseRef<T: 'static> {

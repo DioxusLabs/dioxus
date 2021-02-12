@@ -9,9 +9,11 @@ edition = "2018"
 [dependencies]
 dioxus-core = { path = "../core" }
 js-sys = "0.3"
-wasm-bindgen = "0.2.69"
-html-validation = { path = "../html-validation", version = "0.1.1" }
+wasm-bindgen = "0.2.70"
 lazy_static = "1.4.0"
+wasm-bindgen-futures = "0.4.20"
+futures = "0.3.12"
+# html-validation = { path = "../html-validation", version = "0.1.1" }
 
 [dependencies.web-sys]
 version = "0.3"
