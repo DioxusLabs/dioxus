@@ -33,7 +33,7 @@ mod tests {
             ctx.view(html! { <div>"hello world" </div> })
         });
 
-        dom.progress()?;
+        // dom.progress()?;
         Ok(())
     }
 }

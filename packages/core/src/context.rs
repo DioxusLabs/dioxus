@@ -3,7 +3,8 @@ use crate::{inner::Scope, nodes::VNode};
 use bumpalo::Bump;
 use hooks::Hook;
 use std::{
-    any::TypeId, cell::RefCell, future::Future, marker::PhantomData, sync::atomic::AtomicUsize,
+    any::TypeId, borrow::Borrow, cell::RefCell, future::Future, marker::PhantomData,
+    sync::atomic::AtomicUsize,
 };
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
@@ -27,15 +28,17 @@ use std::{
 // todo: force lifetime of source into T as a valid lifetime too
 // it's definitely possible, just needs some more messing around
 pub struct Context<'src> {
+    pub idx: AtomicUsize,
+
     pub(crate) scope: &'src Scope,
     /// Direct access to the properties used to create this component.
     // pub props: &'src PropType,
-    pub idx: AtomicUsize,
 
     // Borrowed from scope
     pub(crate) arena: &'src typed_arena::Arena<Hook>,
     pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
-    pub(crate) components: &'src generational_arena::Arena<Scope>,
+    pub(crate) bump: &'src Bump,
+    // pub(crate) components: &'src generational_arena::Arena<Scope>,
 
     // holder for the src lifetime
     // todo @jon remove this
@@ -47,11 +50,6 @@ impl<'a> Context<'a> {
     /// Access the children elements passed into the component
     pub fn children(&self) -> Vec<VNode> {
         todo!("Children API not yet implemented for component Context")
-    }
-
-    /// Access a parent context
-    pub fn parent_context<C>(&self) -> C {
-        todo!("Context API is not ready yet")
     }
 
     /// Create a subscription that schedules a future render for the reference component
@@ -75,8 +73,8 @@ impl<'a> Context<'a> {
     ///     ctx.view(lazy_tree)
     /// }
     ///```
-    pub fn view(self, v: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> VNode<'a> {
-        todo!()
+    pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> VNode<'a> {
+        lazy_nodes(self.bump.borrow())
     }
 
     pub fn callback(&self, f: impl Fn(()) + 'static) {}

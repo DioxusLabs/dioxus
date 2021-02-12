@@ -23,7 +23,9 @@ impl<P: Properties> Component for FC<P> {
 
 /// The `Properties` trait defines any struct that can be constructed using a combination of default / optional fields.
 /// Components take a "properties" object
-pub trait Properties {
+pub trait Properties // where
+//     Self: Sized,
+{
     fn call(&self, ptr: *const ()) {}
 }
 

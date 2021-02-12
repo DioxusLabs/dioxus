@@ -1,14 +1,16 @@
 //! Useful, foundational hooks that 3rd parties can implement.
 //! Currently implemented:
-//! - use_ref
-//! - use_state
+//! - [x] use_ref
+//! - [x] use_state
+//! - [ ] use_reducer
+//! - [ ] use_effect
 
 pub use use_ref_def::use_ref;
 pub use use_state_def::use_state;
 
 mod use_state_def {
     use crate::inner::*;
-    use std::{borrow::BorrowMut, cell::RefCell, ops::DerefMut, rc::Rc};
+    use std::{cell::RefCell, ops::DerefMut, rc::Rc};
 
     struct UseState<T: 'static> {
         new_val: Rc<RefCell<Option<T>>>,
@@ -79,7 +81,7 @@ mod use_state_def {
 
 mod use_ref_def {
     use crate::inner::*;
-    use std::{borrow::BorrowMut, cell::RefCell, ops::DerefMut, rc::Rc};
+    use std::{cell::RefCell, ops::DerefMut};
 
     pub struct UseRef<T: 'static> {
         _current: RefCell<T>,

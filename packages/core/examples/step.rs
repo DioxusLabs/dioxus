@@ -11,7 +11,7 @@ fn main() -> Result<(), ()> {
     let p1 = Props { name: "bob".into() };
 
     let mut vdom = VirtualDom::new_with_props(Example, p1);
-    vdom.progress()?;
+    // vdom.progress()?;
 
     Ok(())
 }

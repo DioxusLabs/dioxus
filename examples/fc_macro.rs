@@ -55,28 +55,11 @@ impl<T: Properties> Comp for FC<T> {
     }
 }
 
-// impl<T: Properties, F: Fn(&Context<T>) -> VNode> Comp for F {
-//     type Props = T;
-
-//     fn render(&self, ctx: &mut Context<T>) -> VNode {
-//         let g = self(ctx);
-//         g
-//     }
-
-//     fn builder(&self) -> T {
-//         T::new()
-//     }
-// }
-
-impl Properties for () {
-    fn new() -> Self {
-        ()
-    }
-}
 #[allow(unused, non_upper_case_globals)]
 static MyComp: FC<()> = |ctx| {
     html! {
         <div>
+            <p> "hello world" </p>
         </div>
     }
 };
@@ -89,7 +72,4 @@ fn test() {
     let mut ctx = Context { props: &() };
     let f = MyComp.render(&mut ctx);
     let props = MyComp.builder();
-
-    // let f = my_comp.render(&mut ctx);
-    // let props = my_comp.builder();
 }

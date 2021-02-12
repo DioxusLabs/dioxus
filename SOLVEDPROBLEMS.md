@@ -245,3 +245,15 @@ A few notes:
 ## Concurrency
 
 I don't even know yet
+
+
+## Execution Model
+
+
+
+
+
+
+
+
+

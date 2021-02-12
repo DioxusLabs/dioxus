@@ -68,6 +68,8 @@
 pub mod component;
 pub mod context;
 pub mod debug_renderer;
+pub mod diff;
+pub mod error;
 pub mod events;
 pub mod hooks;
 pub mod nodebuilder;
@@ -85,6 +87,7 @@ pub(crate) mod inner {
     pub use crate::component::{Component, Properties};
     use crate::context::hooks::Hook;
     pub use crate::context::Context;
+    pub use crate::error::{Error, Result};
     use crate::nodes;
     pub use crate::scope::Scope;
     pub use crate::virtual_dom::VirtualDom;

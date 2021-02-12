@@ -232,56 +232,41 @@ mod vtext {
 
     impl<'a> VText<'a> {
         // / Create an new `VText` instance with the specified text.
-        // pub fn new<S>(text: S) -> Self
+        pub fn new(text: &'a str) -> Self
+// pub fn new<S>(text: S) -> Self
         // where
-        //     S: Into<String>,
-        // {
-        //     VText { text: text.into() }
-        // }
+        //     S: Into<str>,
+        {
+            VText { text: text.into() }
+        }
     }
 }
 
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 mod vcomponent {
-    use crate::prelude::Properties;
+    use crate::inner::{Properties, FC};
     use std::{any::TypeId, fmt, future::Future, marker::PhantomData};
 
     use super::VNode;
 
     pub struct VComponent<'src> {
         _p: PhantomData<&'src ()>,
-        runner: Box<dyn Properties + 'src>,
+        props: Box<dyn Properties>,
+        // props: Box<dyn Properties + 'src>,
         caller: *const (),
-        props_type: TypeId,
     }
 
-    // impl<'src> PartialEq for CallerSource<'src> {
-    //     fn eq(&self, other: &Self) -> bool {
-    //         todo!()
-    //     }
-    // }
-    // caller: Box<dyn Fn
-    // should we box the caller?
-    // probably, so we can call it again
-    //
-    // props_id: TypeId,
-    // callerIDs are unsafely coerced to function pointers
-    // This is okay because #1, we store the props_id and verify and 2# the html! macro rejects components not made this way
-    //
-    // Manually constructing the VComponent is not possible from 3rd party crates
-
     impl<'a> VComponent<'a> {
-        // /// Construct a VComponent directly from a function component
-        // /// This should be *very* fast - we store the function pointer and props type ID. It should also be small on the stack
-        // pub fn from_fn<P: Properties>(f: FC<P>, props: P) -> Self {
-        //     // // Props needs to be static
-        //     // let props_id = std::any::TypeId::of::<P>();
+        pub fn new<P: Properties + 'static>(caller: FC<P>, props: P) -> Self {
+            let caller = caller as *const ();
+            let props = Box::new(props);
 
-        //     // // Cast the caller down
-
-        //     // Self { props_id }
-        //     Self {}
-        // }
+            Self {
+                _p: PhantomData {},
+                props,
+                caller,
+            }
+        }
     }
 }
