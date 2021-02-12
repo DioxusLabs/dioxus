@@ -69,6 +69,7 @@ pub mod component;
 pub mod context;
 pub mod debug_renderer;
 pub mod events;
+pub mod hooks;
 pub mod nodebuilder;
 pub mod nodes;
 pub mod scope;
@@ -131,4 +132,6 @@ pub mod prelude {
     pub use crate::nodebuilder as builder;
     pub use dioxus_core_macro::fc;
     pub use dioxus_html_2::html;
+
+    pub use crate::hooks::*;
 }

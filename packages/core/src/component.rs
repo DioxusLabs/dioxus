@@ -23,15 +23,13 @@ impl<P: Properties> Component for FC<P> {
 
 /// The `Properties` trait defines any struct that can be constructed using a combination of default / optional fields.
 /// Components take a "properties" object
-pub trait Properties: 'static {
-    fn new() -> Self;
+pub trait Properties {
+    fn call(&self, ptr: *const ()) {}
 }
 
 // Auto implement for no-prop components
 impl Properties for () {
-    fn new() -> Self {
-        ()
-    }
+    fn call(&self, ptr: *const ()) {}
 }
 
 #[cfg(test)]

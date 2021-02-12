@@ -19,12 +19,10 @@ static Example: FC<Props> = |ctx, props| {
     ctx.view(move |bump| {
         button(bump)
             .on("click", move |_| {
-                // //
                 println!("Value is {}", props.name);
                 println!("Value is {}", value.as_str());
                 println!("Value is {}", *value);
             })
-            //
             .on("click", move |_| {
                 println!("Value is {}", props.name);
             })

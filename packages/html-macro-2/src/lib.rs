@@ -1,7 +1,6 @@
 use ::{
     proc_macro::TokenStream,
     proc_macro2::{Span, TokenStream as TokenStream2},
-    proc_macro_hack::proc_macro_hack,
     quote::{quote, ToTokens, TokenStreamExt},
     style_shared::Styles,
     syn::{
@@ -77,7 +76,6 @@ struct NodeList(Vec<MaybeExpr<Node>>);
 
 impl ToTokens for ToToksCtx<&NodeList> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // let ctx = &self.ctx;
         let nodes = self.inner.0.iter().map(|node| self.recurse(node));
         tokens.append_all(quote! {
             dioxus::bumpalo::vec![in bump;
@@ -226,12 +224,17 @@ impl Parse for Attr {
         let mut name = Ident::parse_any(s)?;
         let name_str = name.to_string();
         s.parse::<Token![=]>()?;
+
+        // Check if this is an event handler
+        // If so, parse into literal tokens
         let ty = if name_str.starts_with("on") {
             // remove the "on" bit
             name = Ident::new(&name_str.trim_start_matches("on"), name.span());
             let content;
             syn::braced!(content in s);
+            // AttrType::Value(content.parse()?)
             AttrType::Event(content.parse()?)
+        // AttrType::Event(content.parse()?)
         } else {
             let lit_str = if name_str == "style" && s.peek(token::Brace) {
                 // special-case to deal with literal styles.
@@ -332,23 +335,16 @@ where
 
 /// ToTokens context
 struct ToToksCtx<T> {
-    // struct ToToksCtx<'a, T> {
     inner: T,
-    // ctx: &'a Ident,
 }
 
 impl<'a, T> ToToksCtx<T> {
     fn new(inner: T) -> Self {
-        // fn new(ctx: &'a Ident, inner: T) -> Self {
         ToToksCtx { inner }
     }
 
     fn recurse<U>(&self, inner: U) -> ToToksCtx<U> {
-        // fn recurse<U>(&self, inner: U) -> ToToksCtx<'a, U> {
-        ToToksCtx {
-            // ctx: &self.ctx,
-            inner,
-        }
+        ToToksCtx { inner }
     }
 }
 

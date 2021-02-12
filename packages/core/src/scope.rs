@@ -47,18 +47,19 @@ impl Scope {
         }
     }
 
-    pub fn create_context<'runner, T: Properties>(
-        &'runner mut self,
-        components: &'runner generational_arena::Arena<Scope>,
-        props: &'runner T,
+    pub fn create_context<'a, T: Properties>(
+        &'a mut self,
+        components: &'a generational_arena::Arena<Scope>,
+        props: &'a T,
     ) -> Context {
-        // ) -> Context<T> {
+        
+        //
         Context {
+            scope: &*self,
             _p: PhantomData {},
             arena: &self.hook_arena,
             hooks: &self.hooks,
             idx: 0.into(),
-            // props,
             components,
         }
     }

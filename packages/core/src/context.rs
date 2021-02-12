@@ -27,7 +27,7 @@ use std::{
 // todo: force lifetime of source into T as a valid lifetime too
 // it's definitely possible, just needs some more messing around
 pub struct Context<'src> {
-    // pub struct Context<'src, PropType> {
+    pub(crate) scope: &'src Scope,
     /// Direct access to the properties used to create this component.
     // pub props: &'src PropType,
     pub idx: AtomicUsize,

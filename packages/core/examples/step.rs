@@ -20,15 +20,20 @@ struct Props {
     name: String,
 }
 impl Properties for Props {
-    fn new() -> Self {
-        todo!()
-    }
+    fn call(&self, ptr: *const ()) {}
+
+    // fn new() -> Self {
+    //     todo!()
+    // }
 }
 
 static Example: FC<Props> = |ctx, props| {
     ctx.view(html! {
         <div>
-            <h1> </h1>
+            <h1> "hello world!" </h1>
+            <h1> "hello world!" </h1>
+            <h1> "hello world!" </h1>
+            <h1> "hello world!" </h1>
         </div>
     })
 };

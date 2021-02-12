@@ -28,8 +28,8 @@
 # Project: Hooks + Context + Subscriptions (TBD)
 > Implement the foundations for state management
 - [x] Implement context object
-- [ ] Implement use_state
-- [ ] Implement use_ref
+- [x] Implement use_state
+- [x] Implement use_ref
 - [ ] Implement use_reducer
 - [ ] Implement use_context
 
@@ -41,6 +41,7 @@
 
 # Project: Initial VDOM support (TBD)
 > Get the initial VDom + Event System + Patching + Diffing + Component framework up and running
+> Get a demo working using just the web
 - [x] (Core) Migrate virtual node into new VNode type
 - [x] (Core) Arena allocate VNodes
 - [x] (Core) Allow VNodes to borrow arena contents

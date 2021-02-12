@@ -3,7 +3,6 @@ members = [
     # Built-in
     "packages/dioxus",
     "packages/core",
-    "packages/hooks",
     "packages/recoil",
     "packages/redux",
     "packages/core-macro",
@@ -15,6 +14,7 @@ members = [
     # "packages/macro",
     # TODO @Jon, share the validation code
     # "packages/web",
+    # "packages/hooks",
     "packages/cli",
     "examples",
     "packages/html-macro",
