@@ -142,7 +142,8 @@ impl<P: Properties + 'static> VirtualDom<P> {
     pub async fn progess_completely() {}
 
     /// Create a new context object for a given component and scope
-    fn new_context<T: Properties>(&self) -> Context<T> {
+    fn new_context<T: Properties>(&self) -> Context {
+        // fn new_context<T: Properties>(&self) -> Context<T> {
         todo!()
     }
 

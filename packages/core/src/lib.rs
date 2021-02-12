@@ -31,8 +31,8 @@
 //! #[derive(Properties)]
 //! struct Props { name: String }
 //!
-//! static Example: FC<Props> = |ctx| {
-//!     html! { <div> "Hello {ctx.props.name}!" </div> }
+//! static Example: FC<Props> = |ctx, props| {
+//!     html! { <div> "Hello {props.name}!" </div> }
 //! }
 //! ```
 //!
@@ -40,7 +40,7 @@
 //! ```
 //! use dioxus_core::prelude::*;
 //!
-//! #[functional_component]
+//! #[fc]
 //! static Example: FC = |ctx, name: String| {
 //!     html! { <div> "Hello {name}!" </div> }
 //! }
@@ -67,7 +67,6 @@
 
 pub mod component;
 pub mod context;
-pub mod contextapi;
 pub mod debug_renderer;
 pub mod events;
 pub mod nodebuilder;
@@ -83,15 +82,18 @@ pub mod builder {
 // types used internally that are important
 pub(crate) mod inner {
     pub use crate::component::{Component, Properties};
+    use crate::context::hooks::Hook;
     pub use crate::context::Context;
     use crate::nodes;
-    pub use crate::scope::{Hook, Scope};
+    pub use crate::scope::Scope;
     pub use crate::virtual_dom::VirtualDom;
     pub use nodes::*;
 
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
-    pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
+
+    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> VNode<'a>;
+    // pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate
@@ -115,7 +117,7 @@ pub mod prelude {
 
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
-    pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
+    pub use crate::inner::FC;
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate

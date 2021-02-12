@@ -25,7 +25,7 @@ impl Properties for Props {
     }
 }
 
-static Example: FC<Props> = |ctx| {
+static Example: FC<Props> = |ctx, props| {
     ctx.view(html! {
         <div>
             <h1> </h1>

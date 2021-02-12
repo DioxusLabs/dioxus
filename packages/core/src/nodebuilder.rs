@@ -334,14 +334,15 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn on<F>(mut self, event: &'a str, callback: F) -> Self
-    where
-        F: Fn(()) + 'a,
+    pub fn on(mut self, event: &'a str, callback: impl Fn(()) + 'a) -> Self
+// pub fn on<F>(mut self, event: &'a str, callback: impl Fn(()) -> () + 'static) -> Self
+// F: Fn(()) + 'static,
+        // F: Fn(()) + 'a,
     {
-        self.listeners.push(Listener {
-            event,
-            callback: self.bump.alloc(callback),
-        });
+        // self.listeners.push(Listener {
+        //     event,
+        //     callback: self.bump.alloc(callback),
+        // });
         self
     }
 }
@@ -1068,10 +1069,12 @@ pub fn attr<'a>(name: &'a str, value: &'a str) -> Attribute<'a> {
 ///     // do something when a click happens...
 /// });
 /// ```
-pub fn on<'a, 'b, F: 'b>(bump: &'a Bump, event: &'a str, callback: F) -> Listener<'a>
-where
-    'b: 'a + 'static,
-    F: Fn(()) + 'b,
+pub fn on<'a, 'b, F: 'static>(
+    bump: &'a Bump,
+    event: &'a str,
+    callback: impl Fn(()) + 'static,
+) -> Listener<'a>
+// F: Fn(()) + 'b,
 {
     Listener {
         event,

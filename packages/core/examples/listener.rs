@@ -4,19 +4,28 @@ use dioxus_core::prelude::*;
 
 fn main() {}
 
-static Example: FC<()> = |ctx| {
-    let (val1, set_val1) = use_state(&ctx, || "b1");
+static Example: FC<()> = |ctx, props| {
+    todo!()
+    // let (val1, set_val1) = use_state(&ctx, || "b1");
 
-    ctx.view(html! {
-        <div>
-            <button onclick={move |_| set_val1("b1")}> "Set value to b1" </button>
-            <button onclick={move |_| set_val1("b2")}> "Set value to b2" </button>
-            <button onclick={move |_| set_val1("b3")}> "Set value to b3" </button>
-            <div>
-                <p> "Value is: {val1}" </p>
-            </div>
-        </div>
-    })
+    // ctx.view(|bump| {
+    //     builder::button(bump)
+    //         .on("click", move |c| {
+    //             //
+    //             println!("Value is {}", val1);
+    //         })
+    //         .finish()
+    // })
+    // ctx.view(html! {
+    //     <div>
+    //         <button onclick={move |_| set_val1("b1")}> "Set value to b1" </button>
+    //         <button onclick={move |_| set_val1("b2")}> "Set value to b2" </button>
+    //         <button onclick={move |_| set_val1("b3")}> "Set value to b3" </button>
+    //         <div>
+    //             <p> "Value is: {val1}" </p>
+    //         </div>
+    //     </div>
+    // })
 };
 
 use use_state_def::use_state;
@@ -52,8 +61,8 @@ mod use_state_def {
     ///     }
     /// }
     /// ```
-    pub fn use_state<'b, 'a, P: Properties + 'static, T: 'static, F: FnOnce() -> T + 'static>(
-        ctx: &'b Context<'a, P>,
+    pub fn use_state<'b, 'a, T: 'static, F: FnOnce() -> T + 'static>(
+        ctx: &'b Context<'a>,
         initial_state_fn: F,
     ) -> (&'a T, &'a impl Fn(T)) {
         ctx.use_hook(
@@ -116,8 +125,8 @@ mod use_ref_def {
     /// To read the value, borrow the ref.
     /// To change it, use modify.
     /// Modifications to this value do not cause updates to the component
-    pub fn use_ref<'a, P, T: 'static>(
-        ctx: &'a Context<'a, P>,
+    pub fn use_ref<'a, T: 'static>(
+        ctx: &'a Context<'a>,
         initial_state_fn: impl FnOnce() -> T + 'static,
     ) -> &'a UseRef<T> {
         ctx.use_hook(|| UseRef::new(initial_state_fn()), |state| &*state, |_| {})

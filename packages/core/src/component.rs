@@ -43,20 +43,25 @@ mod tests {
         todo!()
     }
 
-    fn test_component(ctx: Context<()>) -> VNode {
-        ctx.view(html! {<div> </div> })
-    }
+    static TestComponent: FC<()> = |ctx, props| {
+        //
+        ctx.view(html! {
+            <div>
+            </div>
+        })
+    };
 
-    fn test_component2(ctx: Context<()>) -> VNode {
+    static TestComponent2: FC<()> = |ctx, props| {
+        //
         ctx.view(|bump: &Bump| VNode::text("blah"))
-    }
+    };
 
     #[test]
     fn ensure_types_work() {
         let bump = Bump::new();
 
         // Happiness! The VNodes are now allocated onto the bump vdom
-        let _ = test_static_fn(&bump, test_component);
-        let _ = test_static_fn(&bump, test_component2);
+        let _ = test_static_fn(&bump, TestComponent);
+        let _ = test_static_fn(&bump, TestComponent2);
     }
 }
