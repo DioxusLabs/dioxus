@@ -19,7 +19,7 @@
 //!
 //!
 
-use crate::innerlude::Listener;
+use crate::innerlude::{Listener, VirtualDom};
 
 /// Renderers need to implement the interpreter trait
 ///
@@ -60,6 +60,7 @@ pub struct ChangeList<'src> {
     next_temporary: u32,
     forcing_new_listeners: bool,
     emitter: &'src mut dyn Inrerpreter,
+    domlock: &'src VirtualDom,
 }
 
 /// Traversal methods.
@@ -158,19 +159,19 @@ impl ChangeList<'_> {
         temp_base
     }
 
-    pub fn push_temporary(&self, temp: u32) {
+    pub fn push_temporary(&mut self, temp: u32) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: push_temporary({})", temp);
         self.emitter.push_temporary(temp);
     }
 
-    pub fn remove_child(&self, child: usize) {
+    pub fn remove_child(&mut self, child: usize) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: remove_child({})", child);
         self.emitter.remove_child(child as u32);
     }
 
-    pub fn insert_before(&self) {
+    pub fn insert_before(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: insert_before()");
         self.emitter.insert_before();
@@ -181,20 +182,20 @@ impl ChangeList<'_> {
         // self.strings.ensure_string(string, &self.emitter)
     }
 
-    pub fn set_text(&self, text: &str) {
+    pub fn set_text(&mut self, text: &str) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: set_text({:?})", text);
         self.emitter.set_text(text);
         // .set_text(text.as_ptr() as u32, text.len() as u32);
     }
 
-    pub fn remove_self_and_next_siblings(&self) {
+    pub fn remove_self_and_next_siblings(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: remove_self_and_next_siblings()");
         self.emitter.remove_self_and_next_siblings();
     }
 
-    pub fn replace_with(&self) {
+    pub fn replace_with(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: replace_with()");
         self.emitter.replace_with();
@@ -218,38 +219,42 @@ impl ChangeList<'_> {
     }
 
     pub fn remove_attribute(&mut self, name: &str) {
-        debug_assert!(self.traversal_is_committed());
-        // debug!("emit: remove_attribute({:?})", name);
-        let name_id = self.ensure_string(name);
-        self.emitter.remove_attribute(name_id.into());
+        // todo!("figure out how to get this working with ensure string");
+        self.emitter.remove_attribute(name);
+        // debug_assert!(self.traversal_is_committed());
+        // // debug!("emit: remove_attribute({:?})", name);
+        // let name_id = self.ensure_string(name);
+        // self.emitter.remove_attribute(name_id.into());
     }
 
-    pub fn append_child(&self) {
+    pub fn append_child(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: append_child()");
         self.emitter.append_child();
     }
 
-    pub fn create_text_node(&self, text: &str) {
+    pub fn create_text_node(&mut self, text: &str) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: create_text_node({:?})", text);
         self.emitter.create_text_node(text);
     }
 
     pub fn create_element(&mut self, tag_name: &str) {
-        debug_assert!(self.traversal_is_committed());
+        // debug_assert!(self.traversal_is_committed());
         // debug!("emit: create_element({:?})", tag_name);
-        let tag_name_id = self.ensure_string(tag_name);
-        self.emitter.create_element(tag_name_id.into());
+        // let tag_name_id = self.ensure_string(tag_name);
+        self.emitter.create_element(tag_name);
+        // self.emitter.create_element(tag_name_id.into());
     }
 
     pub fn create_element_ns(&mut self, tag_name: &str, ns: &str) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: create_element_ns({:?}, {:?})", tag_name, ns);
-        let tag_name_id = self.ensure_string(tag_name);
-        let ns_id = self.ensure_string(ns);
-        self.emitter
-            .create_element_ns(tag_name_id.into(), ns_id.into());
+        // let tag_name_id = self.ensure_string(tag_name);
+        // let ns_id = self.ensure_string(ns);
+        self.emitter.create_element_ns(tag_name, ns);
+        // self.emitter
+        //     .create_element_ns(tag_name_id.into(), ns_id.into());
     }
 
     pub fn push_force_new_listeners(&mut self) -> bool {
@@ -265,11 +270,12 @@ impl ChangeList<'_> {
 
     pub fn new_event_listener(&mut self, listener: &Listener) {
         debug_assert!(self.traversal_is_committed());
+        todo!("Event listener not wired up yet");
         // debug!("emit: new_event_listener({:?})", listener);
-        let (a, b) = listener.get_callback_parts();
-        debug_assert!(a != 0);
-        let event_id = self.ensure_string(listener.event);
-        self.emitter.new_event_listener(event_id.into(), a, b);
+        // let (a, b) = listener.get_callback_parts();
+        // debug_assert!(a != 0);
+        // let event_id = self.ensure_string(listener.event);
+        // self.emitter.new_event_listener(event_id.into(), a, b);
     }
 
     pub fn update_event_listener(&mut self, listener: &Listener) {
@@ -281,17 +287,19 @@ impl ChangeList<'_> {
         }
 
         // debug!("emit: update_event_listener({:?})", listener);
-        let (a, b) = listener.get_callback_parts();
-        debug_assert!(a != 0);
+        todo!("Event listener not wired up yet");
+        // let (a, b) = listener.get_callback_parts();
+        // debug_assert!(a != 0);
         let event_id = self.ensure_string(listener.event);
-        self.emitter.update_event_listener(event_id.into(), a, b);
+        // self.emitter.update_event_listener(event_id.into(), a, b);
     }
 
     pub fn remove_event_listener(&mut self, event: &str) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: remove_event_listener({:?})", event);
         let event_id = self.ensure_string(event);
-        self.emitter.remove_event_listener(event_id.into());
+        todo!("Event listener not wired up yet");
+        // self.emitter.remove_event_listener(event_id.into());
     }
 
     // #[inline]

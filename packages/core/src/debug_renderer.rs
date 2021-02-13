@@ -5,12 +5,12 @@
 
 use crate::prelude::{Properties, VirtualDom};
 
-pub struct DebugRenderer<'a, P: Properties> {
-    vdom: &'a mut VirtualDom<P>,
+pub struct DebugRenderer {
+    vdom: VirtualDom,
 }
 
-impl<'a, P: Properties> DebugRenderer<'a, P> {
-    pub fn new(vdom: &'a mut VirtualDom<P>) -> Self {
+impl DebugRenderer {
+    pub fn new(vdom: VirtualDom) -> Self {
         Self { vdom }
     }
 

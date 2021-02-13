@@ -29,12 +29,12 @@ pub mod interpreter;
 /// Under the hood, we leverage WebSys and interact directly with the DOM
 
 ///
-pub struct WebsysRenderer<T: Properties> {
-    internal_dom: VirtualDom<T>,
+pub struct WebsysRenderer {
+    internal_dom: VirtualDom,
 }
 
 /// Implement VirtualDom with no props for components that initialize their state internal to the VDom rather than externally.
-impl WebsysRenderer<()> {
+impl WebsysRenderer {
     /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
@@ -44,18 +44,18 @@ impl WebsysRenderer<()> {
     }
 }
 
-impl<T: Properties + 'static> WebsysRenderer<T> {
+impl WebsysRenderer {
     /// Create a new text-renderer instance from a functional component root.
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
     /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new_with_props(root: FC<T>, root_props: T) -> Self {
+    pub fn new_with_props<T: Properties + 'static>(root: FC<T>, root_props: T) -> Self {
         Self::from_vdom(VirtualDom::new_with_props(root, root_props))
     }
 
     /// Create a new text renderer from an existing Virtual DOM.
     /// This will progress the existing VDom's events to completion.
-    pub fn from_vdom(dom: VirtualDom<T>) -> Self {
+    pub fn from_vdom(dom: VirtualDom) -> Self {
         Self { internal_dom: dom }
     }
 
@@ -76,7 +76,7 @@ impl<T: Properties + 'static> WebsysRenderer<T> {
         // Iterate through the nodes, attaching the closure and sender to the listener
         {
             let mut remote_sender = sender.clone();
-            let f = move || {
+            let listener = move || {
                 let event = EventTrigger::new();
                 wasm_bindgen_futures::spawn_local(async move {
                     remote_sender
@@ -108,6 +108,6 @@ impl<T: Properties + 'static> WebsysRenderer<T> {
 
 /// For any listeners in the tree, attach the sender closure.
 /// When a event is triggered, we convert it into the synthetic event type and dump it back in the Virtual Dom's queu
-fn attach_listeners<P: Properties>(sender: &UnboundedSender<EventTrigger>, dom: &VirtualDom<P>) {}
+fn attach_listeners(sender: &UnboundedSender<EventTrigger>, dom: &VirtualDom) {}
 
 fn render_diffs() {}

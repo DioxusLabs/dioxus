@@ -1,4 +1,4 @@
-use crate::nodes::VNode;
+use crate::{changelist::ChangeList, nodes::VNode};
 use crate::{events::EventTrigger, innerlude::*};
 use any::Any;
 use bumpalo::Bump;
@@ -14,7 +14,8 @@ use std::{
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
-pub struct VirtualDom<P: Properties> {
+pub struct VirtualDom {
+    // pub struct VirtualDom<P: Properties> {
     /// All mounted components are arena allocated to make additions, removals, and references easy to work with
     /// A generational arean is used to re-use slots of deleted scopes without having to resize the underlying arena.
     pub(crate) components: Arena<Scope>,
@@ -28,11 +29,15 @@ pub struct VirtualDom<P: Properties> {
     ///
     event_queue: Rc<RefCell<Vec<LifecycleEvent>>>,
 
-    #[doc(hidden)] // mark the root props with P, even though they're held by the root component
-    _root_props: PhantomData<P>,
+    // Mark the root props with P, even though they're held by the root component
+    // This is done so we don't have a "generic" vdom, making it easier to hold references to it, especially when the holders
+    // don't care about the generic props type
+    // Most implementations that use the VirtualDom won't care about the root props anyways.
+    #[doc(hidden)]
+    _root_prop_type: std::any::TypeId,
 }
 
-impl VirtualDom<()> {
+impl VirtualDom {
     /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
@@ -42,13 +47,14 @@ impl VirtualDom<()> {
     }
 }
 
-impl<P: Properties + 'static> VirtualDom<P> {
+impl VirtualDom {
+    // impl<P: Properties + 'static> VirtualDom<P> {
     /// Start a new VirtualDom instance with a dependent props.
     /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
-    pub fn new_with_props(root: FC<P>, root_props: P) -> Self {
+    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         // 1. Create the component arena
         // 2. Create the base scope (can never be removed)
         // 3. Create the lifecycle queue
@@ -67,28 +73,41 @@ impl<P: Properties + 'static> VirtualDom<P> {
         // Create an event queue with a mount for the base scope
         let event_queue = Rc::new(RefCell::new(vec![first_event]));
 
+        let _root_prop_type = TypeId::of::<P>();
+
         Self {
             components,
             base_scope,
             event_queue,
-            _root_props: PhantomData {},
+            _root_prop_type,
         }
     }
 
     /// With access to the virtual dom, schedule an update to the Root component's props
-    pub fn update_props(&mut self, new_props: P) {
+    pub fn update_props<P: Properties + 'static>(&mut self, new_props: P) -> Result<()> {
+        // Ensure the props match
+        if TypeId::of::<P>() != self._root_prop_type {
+            return Err(Error::WrongProps);
+        }
+
         self.event_queue.borrow_mut().push(LifecycleEvent {
             event_type: LifecycleType::PropsChanged {
                 props: Box::new(new_props),
             },
             index: self.base_scope,
         });
+
+        Ok(())
     }
+
+    /// Schedule a future update for a component from outside the vdom!
+    ///
+    /// This lets services external to the virtual dom interact directly with the component and event system.
+    pub fn queue_update() {}
 
     /// Pop an event off the event queue and process it
     /// Update the root props, and progress
     /// Takes a bump arena to allocate into, making the diff phase as fast as possible
-    ///
     pub fn progress(&mut self) -> Result<()> {
         let event = self.event_queue.borrow_mut().pop().ok_or(Error::NoEvent)?;
         process_event(&mut self.components, event)
@@ -109,7 +128,7 @@ impl<P: Properties + 'static> VirtualDom<P> {
     ///
     ///
     /// ```
-    pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<()> {
+    pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<ChangeList<'_>> {
         let EventTrigger {
             component_id,
             listener_id,
@@ -144,7 +163,8 @@ impl<P: Properties + 'static> VirtualDom<P> {
             process_event(&mut self.components, event)?;
         }
 
-        Ok(())
+        todo!()
+        // Ok(())
     }
 
     pub async fn progress_completely(&mut self) -> Result<()> {

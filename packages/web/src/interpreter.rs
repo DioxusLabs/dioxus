@@ -1,9 +1,12 @@
-use crate::cached_set::CacheId;
-use crate::{Element, EventsTrampoline};
+// use crate::cached_set::CacheId;
+// use crate::{Element, EventsTrampoline};
 use fxhash::FxHashMap;
 use log::{debug, info, log};
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{window, Document, Event, Node};
+use web_sys::{window, Document, Element, Event, Node};
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub(crate) struct CacheId(u32);
 
 #[derive(Debug)]
 pub(crate) struct ChangeListInterpreter {
@@ -86,27 +89,29 @@ impl ChangeListInterpreter {
         self.templates.get(&id)
     }
 
-    pub fn init_events_trampoline(&mut self, mut trampoline: EventsTrampoline) {
-        self.callback = Some(Closure::wrap(Box::new(move |event: &web_sys::Event| {
-            let target = event
-                .target()
-                .expect("missing target")
-                .dyn_into::<Element>()
-                .expect("not a valid element");
-            let typ = event.type_();
-            let a: u32 = target
-                .get_attribute(&format!("dodrio-a-{}", typ))
-                .and_then(|v| v.parse().ok())
-                .unwrap_or_default();
+    pub fn init_events_trampoline(&mut self, mut trampoline: ()) {
+        todo!("Event trampoline not a thing anymore")
+        // pub fn init_events_trampoline(&mut self, mut trampoline: EventsTrampoline) {
+        // self.callback = Some(Closure::wrap(Box::new(move |event: &web_sys::Event| {
+        //     let target = event
+        //         .target()
+        //         .expect("missing target")
+        //         .dyn_into::<Element>()
+        //         .expect("not a valid element");
+        //     let typ = event.type_();
+        //     let a: u32 = target
+        //         .get_attribute(&format!("dodrio-a-{}", typ))
+        //         .and_then(|v| v.parse().ok())
+        //         .unwrap_or_default();
 
-            let b: u32 = target
-                .get_attribute(&format!("dodrio-b-{}", typ))
-                .and_then(|v| v.parse().ok())
-                .unwrap_or_default();
+        //     let b: u32 = target
+        //         .get_attribute(&format!("dodrio-b-{}", typ))
+        //         .and_then(|v| v.parse().ok())
+        //         .unwrap_or_default();
 
-            // get a and b from the target
-            trampoline(event.clone(), a, b);
-        }) as Box<dyn FnMut(&Event)>));
+        //     // get a and b from the target
+        //     trampoline(event.clone(), a, b);
+        // }) as Box<dyn FnMut(&Event)>));
     }
 
     // 0

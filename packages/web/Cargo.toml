@@ -15,6 +15,7 @@ wasm-bindgen-futures = "0.4.20"
 futures = "0.3.12"
 wasm-logger = "0.2.0"
 log = "0.4.14"
+fxhash = "0.2.1"
 # html-validation = { path = "../html-validation", version = "0.1.1" }
 
 [dependencies.web-sys]
@@ -33,4 +34,5 @@ features = [
     "Event",
     "MouseEvent",
     "InputEvent",
+    "DocumentType",
 ]

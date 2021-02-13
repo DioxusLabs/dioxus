@@ -7,6 +7,9 @@ pub enum Error {
     #[error("No event to progress")]
     NoEvent,
 
+    #[error("Wrong Properties Type")]
+    WrongProps,
+
     // #[error("Out of compute credits")]
     // OutOfCredits,
 
