@@ -24,7 +24,7 @@ use dioxus_core::{
 };
 use futures::{channel::mpsc, future, SinkExt, StreamExt};
 use mpsc::UnboundedSender;
-
+pub mod interpreter;
 /// The `WebsysRenderer` provides a way of rendering a Dioxus Virtual DOM to the browser's DOM.
 /// Under the hood, we leverage WebSys and interact directly with the DOM
 

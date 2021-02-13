@@ -8,6 +8,7 @@ use std::{
     cell::{RefCell, UnsafeCell},
     future::Future,
     marker::PhantomData,
+    rc::Rc,
     sync::atomic::AtomicUsize,
 };
 
@@ -21,11 +22,14 @@ pub struct VirtualDom<P: Properties> {
     /// The index of the root component.
     base_scope: Index,
 
-    /// Components generate lifecycle events
-    event_queue: Vec<LifecycleEvent>, // wrap in a lock or something so
+    ///
+    ///
+    ///
+    ///
+    event_queue: Rc<RefCell<Vec<LifecycleEvent>>>,
 
-    // mark the root props with P, even though they're held by the root component
-    _p: PhantomData<P>,
+    #[doc(hidden)] // mark the root props with P, even though they're held by the root component
+    _root_props: PhantomData<P>,
 }
 
 impl VirtualDom<()> {
@@ -61,19 +65,19 @@ impl<P: Properties + 'static> VirtualDom<P> {
         let first_event = LifecycleEvent::mount(base_scope, None, 0, root_props);
 
         // Create an event queue with a mount for the base scope
-        let event_queue = vec![first_event];
+        let event_queue = Rc::new(RefCell::new(vec![first_event]));
 
         Self {
             components,
             base_scope,
             event_queue,
-            _p: PhantomData {},
+            _root_props: PhantomData {},
         }
     }
 
     /// With access to the virtual dom, schedule an update to the Root component's props
     pub fn update_props(&mut self, new_props: P) {
-        self.event_queue.push(LifecycleEvent {
+        self.event_queue.borrow_mut().push(LifecycleEvent {
             event_type: LifecycleType::PropsChanged {
                 props: Box::new(new_props),
             },
@@ -86,8 +90,8 @@ impl<P: Properties + 'static> VirtualDom<P> {
     /// Takes a bump arena to allocate into, making the diff phase as fast as possible
     ///
     pub fn progress(&mut self) -> Result<()> {
-        let event = self.event_queue.pop().ok_or(Error::NoEvent)?;
-        process_event(self, event)
+        let event = self.event_queue.borrow_mut().pop().ok_or(Error::NoEvent)?;
+        process_event(&mut self.components, event)
     }
 
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
@@ -125,8 +129,20 @@ impl<P: Properties + 'static> VirtualDom<P> {
             .as_ref();
 
         // Run the callback
-        // Theoretically, this should
+        // This should cause internal state to progress, dumping events into the event queue
+        // todo: integrate this with a tracing mechanism exposed to a dev tool
         listener();
+
+        // Run through our events, tagging which Indexes are receiving updates
+        // Prop updates take prescedence over subscription updates
+        // Run all prop updates *first* as they will cascade into children.
+        // *then* run the non-prop updates that were not already covered by props
+        let mut events = self.event_queue.borrow_mut();
+
+        // for now, just naively process each event in the queue
+        for event in events.drain(..) {
+            process_event(&mut self.components, event)?;
+        }
 
         Ok(())
     }
@@ -143,11 +159,12 @@ impl<P: Properties + 'static> VirtualDom<P> {
 ///
 ///
 ///
-fn process_event<P: Properties>(
-    dom: &mut VirtualDom<P>,
+fn process_event(
+    // dom: &mut VirtualDom<P>,
+    components: &mut Arena<Scope>,
     LifecycleEvent { index, event_type }: LifecycleEvent,
 ) -> Result<()> {
-    let scope = dom.components.get(index).ok_or(Error::NoEvent)?;
+    let scope = components.get(index).ok_or(Error::NoEvent)?;
 
     match event_type {
         // Component needs to be mounted to the virtual dom
@@ -176,7 +193,8 @@ fn process_event<P: Properties>(
         // Component was removed from the DOM
         // Run any destructors and cleanup for the hooks and the dump the component
         LifecycleType::Removed {} => {
-            let f = dom.components.remove(index);
+            let f = components.remove(index);
+            // let f = dom.components.remove(index);
         }
 
         // Component was messaged via the internal subscription service

@@ -65,6 +65,7 @@
 //! - dioxus-liveview (SSR + StringRenderer)
 //!
 
+pub mod changelist;
 pub mod component;
 pub mod context;
 pub mod debug_renderer;
