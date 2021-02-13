@@ -28,14 +28,14 @@
 # Project: Hooks + Context + Subscriptions (TBD)
 > Implement the foundations for state management
 - [x] Implement context object
-- [x] Implement use_state
+- [x] Implement use_state (rewrite to use the use_reducer api like rei)
 - [x] Implement use_ref
+- [x] Implement use_context (only the API, not the state management solution)
 - [ ] Implement use_reducer
-- [ ] Implement use_context
 
 # Project: QOL 
 > Make it easier to write components
-- [ ] (Macro) Tweak event syntax to not be dependent on wasm32 target (just return regular closures which get boxed)
+- [x] (Macro) Tweak event syntax to not be dependent on wasm32 target (just return regular closures which get boxed)
 - [ ] (Macro) Tweak component syntax to accept a new custom element 
 - [ ] (Macro) Allow components to specify their props as function args
 
