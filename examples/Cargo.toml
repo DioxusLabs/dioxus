@@ -45,6 +45,10 @@ path = "common.rs"
 path = "example_app.rs"
 name = "example_app"
 
+[[example]]
+path = "website.rs"
+name = "website"
+
 # [[example]]
 # path = "hello_web.rs"
 # name = "hello_web"

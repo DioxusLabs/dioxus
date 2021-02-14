@@ -15,19 +15,19 @@ static Example: FC<()> = |ctx| {
 
     ctx.view(html! {
         <div>
-            <button onclick={move |_| set_value("world!")}> "world" </button>
-            <button onclick={move |_| set_value("dioxus 🎉")}> "dioxus" </button>
+            <button onclick={move |_| set_value("world!")}> "?" </button>
+            <button onclick={move |_| set_value("Dioxus 🎉")}> "?" </button>
             <div>
-                <p> "Hello, {val1}" </p>
+                <h1> "Hello, {val1}" </h1>
             </div>
         </div>
     })
 };
 ```
-Dioxus can be used to serve webapps, desktop apps, static pages, LiveView apps, Android apps, iOS Apps, and more. At its core,
-Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
 
-Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms, designed especially for your next startup. 
+Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, Android apps, iOS Apps, and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
+
+Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms, designed especially for your next startup.
 
 ### Get Started with...
 <table style="width:100%" align="center">

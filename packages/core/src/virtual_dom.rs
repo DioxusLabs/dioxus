@@ -1,4 +1,4 @@
-use crate::{changelist::ChangeList, nodes::VNode};
+use crate::{changelist::EditList, nodes::VNode};
 use crate::{events::EventTrigger, innerlude::*};
 use any::Any;
 use bumpalo::Bump;
@@ -23,10 +23,6 @@ pub struct VirtualDom {
     /// The index of the root component.
     base_scope: Index,
 
-    ///
-    ///
-    ///
-    ///
     event_queue: Rc<RefCell<Vec<LifecycleEvent>>>,
 
     // Mark the root props with P, even though they're held by the root component
@@ -45,10 +41,7 @@ impl VirtualDom {
     pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
-}
 
-impl VirtualDom {
-    // impl<P: Properties + 'static> VirtualDom<P> {
     /// Start a new VirtualDom instance with a dependent props.
     /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
     ///
@@ -128,7 +121,7 @@ impl VirtualDom {
     ///
     ///
     /// ```
-    pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<ChangeList<'_>> {
+    pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<EditList<'_>> {
         let EventTrigger {
             component_id,
             listener_id,

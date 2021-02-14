@@ -2,7 +2,7 @@
 //!
 //! This crate implements a renderer of the Dioxus Virtual DOM for the web browser.
 //!
-//! While `VNode` supports "to_string" directly, it renders child components as the RSX! macro tokens. For custom components,
+//! While it is possible to render a single component directly, it is not possible to render component trees. For these,
 //! an external renderer is needed to progress the component lifecycles. The `WebsysRenderer` shows how to use the Virtual DOM
 //! API to progress these lifecycle events to generate a fully-mounted Virtual DOM instance which can be renderer in the
 //! `render` method.
@@ -16,7 +16,6 @@
 //! ```
 //!
 //! The `WebsysRenderer` is particularly useful when needing to cache a Virtual DOM in between requests
-//!
 
 use dioxus_core::{
     events::EventTrigger,
@@ -33,7 +32,6 @@ pub struct WebsysRenderer {
     internal_dom: VirtualDom,
 }
 
-/// Implement VirtualDom with no props for components that initialize their state internal to the VDom rather than externally.
 impl WebsysRenderer {
     /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
     ///
@@ -42,9 +40,6 @@ impl WebsysRenderer {
     pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
-}
-
-impl WebsysRenderer {
     /// Create a new text-renderer instance from a functional component root.
     /// Automatically progresses the creation of the VNode tree to completion.
     ///

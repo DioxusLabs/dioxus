@@ -21,50 +21,50 @@
 
 use crate::innerlude::{Listener, VirtualDom};
 
-/// Renderers need to implement the interpreter trait
+/// The `Edit` represents a single modifcation of the renderer tree.
 ///
 ///
 ///
 ///
 ///
-trait Inrerpreter {
-    fn set_text(&mut self, text: &str);
-    fn remove_self_and_next_siblings(&mut self);
-    fn replace_with(&mut self);
-    fn set_attribute(&mut self, name: &str, value: &str);
-    fn remove_attribute(&mut self, name: &str);
-    fn push_reverse_child(&mut self, n: u32);
-    fn pop_push_child(&mut self, n: u32);
-    fn pop(&mut self);
-    fn append_child(&mut self);
-    fn create_text_node(&mut self, text: &str);
-    fn create_element(&mut self, tag_name: &str);
-    fn new_event_listener(&mut self, event_type: &str, a: u32, b: u32);
-    fn update_event_listener(&mut self, event_type: &str, a: u32, b: u32);
-    fn remove_event_listener(&mut self, event_type: &str);
-    fn create_element_ns(&mut self, tag_name: &str, ns: &str);
-    fn save_children_to_temporaries(&mut self, temp: u32, start: u32, end: u32);
-    // fn save_children_to_temporaries(&mut self, mut temp: u32, start: u32, end: u32);
-    fn push_child(&mut self, n: u32);
-    fn push_temporary(&mut self, temp: u32);
-    fn insert_before(&mut self);
-    fn pop_push_reverse_child(&mut self, n: u32);
-    fn remove_child(&mut self, n: u32);
-    fn set_class(&mut self, class_name: &str);
-    // fn save_template(&mut self, id: CacheId);
-    // fn push_template(&mut self, id: CacheId);
+///
+///
+///
+///
+pub enum Edit<'d> {
+    SetText { text: &'d str },
+    RemoveSelfAndNextSiblings {},
+    ReplaceWith,
+    SetAttribute { name: &'d str, value: &'d str },
+    RemoveAttribute { name: &'d str },
+    PushReverseChild { n: u32 },
+    PopPushChild { n: u32 },
+    Pop,
+    AppendChild,
+    CreateTextNode { text: &'d str },
+    CreateElement { tag_name: &'d str },
+    NewEventListener { event_type: &'d str, a: u32, b: u32 },
+    UpdateEventListener { event_type: &'d str, a: u32, b: u32 },
+    RemoveEventListener { event_type: &'d str },
+    CreateElementNs { tag_name: &'d str, ns: &'d str },
+    SaveChildrenToTemporaries { temp: u32, start: u32, end: u32 },
+    PushChild { n: u32 },
+    PushTemporary { temp: u32 },
+    InsertBefore,
+    PopPushReverseChild { n: u32 },
+    RemoveChild { n: u32 },
+    SetClass { class_name: &'d str },
 }
 
-pub struct ChangeList<'src> {
+pub struct EditList<'src> {
     traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
-    emitter: &'src mut dyn Inrerpreter,
-    domlock: &'src VirtualDom,
+    emitter: Vec<Edit<'src>>,
 }
 
 /// Traversal methods.
-impl ChangeList<'_> {
+impl EditList<'_> {
     pub fn go_down(&mut self) {
         self.traversal.down();
     }
@@ -102,32 +102,36 @@ impl ChangeList<'_> {
         }
 
         for mv in self.traversal.commit() {
-            // match mv {
-            //     MoveTo::Parent => {
-            //         // debug!("emit: pop");
-            //         self.emitter.pop();
-            //     }
-            //     MoveTo::Child(n) => {
-            //         // debug!("emit: push_child({})", n);
-            //         self.emitter.push_child(n);
-            //     }
-            //     MoveTo::ReverseChild(n) => {
-            //         // debug!("emit: push_reverse_child({})", n);
-            //         self.emitter.push_reverse_child(n);
-            //     }
-            //     MoveTo::Sibling(n) => {
-            //         // debug!("emit: pop_push_child({})", n);
-            //         self.emitter.pop_push_child(n);
-            //     }
-            //     MoveTo::ReverseSibling(n) => {
-            //         // debug!("emit: pop_push_reverse_child({})", n);
-            //         self.emitter.pop_push_reverse_child(n);
-            //     }
-            //     MoveTo::TempChild(temp) => {
-            //         // debug!("emit: push_temporary({})", temp);
-            //         self.emitter.push_temporary(temp);
-            //     }
-            // }
+            match mv {
+                MoveTo::Parent => {
+                    // debug!("emit: pop");
+                    self.emitter.push(Edit::Pop {});
+                    // self.emitter.pop();
+                }
+                MoveTo::Child(n) => {
+                    // debug!("emit: push_child({})", n);
+                    self.emitter.push(Edit::PushChild { n });
+                }
+                MoveTo::ReverseChild(n) => {
+                    // debug!("emit: push_reverse_child({})", n);
+                    self.emitter.push(Edit::PushReverseChild { n });
+                    // self.emitter.push_reverse_child(n);
+                }
+                MoveTo::Sibling(n) => {
+                    // debug!("emit: pop_push_child({})", n);
+                    self.emitter.push(Edit::PopPushChild { n });
+                    // self.emitter.pop_push_child(n);
+                }
+                MoveTo::ReverseSibling(n) => {
+                    // debug!("emit: pop_push_reverse_child({})", n);
+                    self.emitter.push(Edit::PopPushReverseChild { n });
+                }
+                MoveTo::TempChild(temp) => {
+                    // debug!("emit: push_temporary({})", temp);
+                    self.emitter.push(Edit::PushTemporary { temp });
+                    // self.emitter.push_temporary(temp);
+                }
+            }
         }
     }
 
@@ -136,7 +140,7 @@ impl ChangeList<'_> {
     }
 }
 
-impl ChangeList<'_> {
+impl<'a> EditList<'a> {
     pub fn next_temporary(&self) -> u32 {
         self.next_temporary
     }
@@ -154,27 +158,33 @@ impl ChangeList<'_> {
         //     temp_base, start, end
         // );
         self.next_temporary = temp_base + (end - start) as u32;
-        self.emitter
-            .save_children_to_temporaries(temp_base, start as u32, end as u32);
+        self.emitter.push(Edit::SaveChildrenToTemporaries {
+            temp: temp_base,
+            start: start as u32,
+            end: end as u32,
+        });
         temp_base
     }
 
     pub fn push_temporary(&mut self, temp: u32) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: push_temporary({})", temp);
-        self.emitter.push_temporary(temp);
+        self.emitter.push(Edit::PushTemporary { temp });
+        // self.emitter.push_temporary(temp);
     }
 
     pub fn remove_child(&mut self, child: usize) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: remove_child({})", child);
-        self.emitter.remove_child(child as u32);
+        // self.emitter.remove_child(child as u32);
+        self.emitter.push(Edit::RemoveChild { n: child as u32 })
     }
 
     pub fn insert_before(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: insert_before()");
-        self.emitter.insert_before();
+        // self.emitter.insert_before();
+        self.emitter.push(Edit::InsertBefore {})
     }
 
     pub fn ensure_string(&mut self, string: &str) -> StringKey {
@@ -182,45 +192,52 @@ impl ChangeList<'_> {
         // self.strings.ensure_string(string, &self.emitter)
     }
 
-    pub fn set_text(&mut self, text: &str) {
+    pub fn set_text(&mut self, text: &'a str) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: set_text({:?})", text);
-        self.emitter.set_text(text);
+        // self.emitter.set_text(text);
+        self.emitter.push(Edit::SetText { text });
         // .set_text(text.as_ptr() as u32, text.len() as u32);
     }
 
     pub fn remove_self_and_next_siblings(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: remove_self_and_next_siblings()");
-        self.emitter.remove_self_and_next_siblings();
+        self.emitter.push(Edit::RemoveSelfAndNextSiblings {});
+        // self.emitter.remove_self_and_next_siblings();
     }
 
     pub fn replace_with(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: replace_with()");
-        self.emitter.replace_with();
+        self.emitter.push(Edit::ReplaceWith {});
+        // self.emitter.replace_with();
     }
 
-    pub fn set_attribute(&mut self, name: &str, value: &str, is_namespaced: bool) {
+    pub fn set_attribute(&mut self, name: &'a str, value: &'a str, is_namespaced: bool) {
         debug_assert!(self.traversal_is_committed());
-        todo!()
-        // if name == "class" && !is_namespaced {
-        //     let class_id = self.ensure_string(value);
-        //     // debug!("emit: set_class({:?})", value);
-        //     self.emitter.set_class(class_id.into());
-        // } else {
-        //     let name_id = self.ensure_string(name);
-        //     let value_id = self.ensure_string(value);
-        //     // debug!("emit: set_attribute({:?}, {:?})", name, value);
-        //     self.state
-        //         .emitter
-        //         .set_attribute(name_id.into(), value_id.into());
-        // }
+        // todo!()
+        if name == "class" && !is_namespaced {
+            // let class_id = self.ensure_string(value);
+            // let class_id = self.ensure_string(value);
+            // debug!("emit: set_class({:?})", value);
+            // self.emitter.set_class(class_id.into());
+            self.emitter.push(Edit::SetClass { class_name: value });
+        } else {
+            self.emitter.push(Edit::SetAttribute { name, value });
+            // let name_id = self.ensure_string(name);
+            // let value_id = self.ensure_string(value);
+            // debug!("emit: set_attribute({:?}, {:?})", name, value);
+            // self.state
+            //     .emitter
+            //     .set_attribute(name_id.into(), value_id.into());
+        }
     }
 
-    pub fn remove_attribute(&mut self, name: &str) {
+    pub fn remove_attribute(&mut self, name: &'a str) {
         // todo!("figure out how to get this working with ensure string");
-        self.emitter.remove_attribute(name);
+        self.emitter.push(Edit::RemoveAttribute { name });
+        // self.emitter.remove_attribute(name);
         // debug_assert!(self.traversal_is_committed());
         // // debug!("emit: remove_attribute({:?})", name);
         // let name_id = self.ensure_string(name);
@@ -230,29 +247,33 @@ impl ChangeList<'_> {
     pub fn append_child(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: append_child()");
-        self.emitter.append_child();
+        self.emitter.push(Edit::AppendChild {});
+        // self.emitter.append_child();
     }
 
-    pub fn create_text_node(&mut self, text: &str) {
+    pub fn create_text_node(&mut self, text: &'a str) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: create_text_node({:?})", text);
-        self.emitter.create_text_node(text);
+        // self.emitter.create_text_node(text);
+        self.emitter.push(Edit::CreateTextNode { text });
     }
 
-    pub fn create_element(&mut self, tag_name: &str) {
+    pub fn create_element(&mut self, tag_name: &'a str) {
         // debug_assert!(self.traversal_is_committed());
         // debug!("emit: create_element({:?})", tag_name);
         // let tag_name_id = self.ensure_string(tag_name);
-        self.emitter.create_element(tag_name);
+        self.emitter.push(Edit::CreateElement { tag_name });
+        // self.emitter.create_element(tag_name);
         // self.emitter.create_element(tag_name_id.into());
     }
 
-    pub fn create_element_ns(&mut self, tag_name: &str, ns: &str) {
+    pub fn create_element_ns(&mut self, tag_name: &'a str, ns: &'a str) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: create_element_ns({:?}, {:?})", tag_name, ns);
         // let tag_name_id = self.ensure_string(tag_name);
         // let ns_id = self.ensure_string(ns);
-        self.emitter.create_element_ns(tag_name, ns);
+        // self.emitter.create_element_ns(tag_name, ns);
+        self.emitter.push(Edit::CreateElementNs { tag_name, ns });
         // self.emitter
         //     .create_element_ns(tag_name_id.into(), ns_id.into());
     }
@@ -455,7 +476,9 @@ impl Traversal {
     /// that have *not* been committed yet?
     #[inline]
     pub fn is_committed(&self) -> bool {
-        self.uncommitted.is_empty()
+        // is_empty is not inlined?
+        // self.uncommitted.is_empty()
+        self.uncommitted.len() == 0
     }
 
     /// Commit this traversals moves and return the optimized path from the last

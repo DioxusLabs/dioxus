@@ -65,19 +65,19 @@
 //! - dioxus-liveview (SSR + StringRenderer)
 //!
 
-pub mod changelist;
-pub mod component;
-pub mod context;
-pub mod debug_renderer;
-pub mod diff;
-pub mod error;
-pub mod events;
-pub mod hooks;
-pub mod nodebuilder;
-pub mod nodes;
-pub mod scope;
-pub mod validation;
-pub mod virtual_dom;
+pub mod changelist; // An "edit phase" described by transitions and edit operations
+pub mod component; // Logic for extending FC
+pub mod context; // Logic for providing hook + context functionality to user components
+pub mod debug_renderer; // Test harness for validating that lifecycles and diffs work appropriately
+pub mod diff; // The diffing algorithm that builds the ChangeList
+pub mod error; // Error type we expose to the renderers
+pub mod events; // Manages the synthetic event API
+pub mod hooks; // Built-in hooks
+pub mod nodebuilder; // Logic for building VNodes with a direct syntax
+pub mod nodes; // Logic for the VNodes
+pub mod scope; // Logic for single components
+pub mod validation; //  Logic for validating trees
+pub mod virtual_dom; // Most fun logic starts here, manages the lifecycle and suspense
 
 pub mod builder {
     pub use super::nodebuilder::*;
