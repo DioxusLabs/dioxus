@@ -31,4 +31,5 @@ id-arena = "2.2.1"
 thiserror = "1.0.23"
 fxhash = "0.2.1"
 longest-increasing-subsequence = "0.1.0"
+serde = "1.0.123"
 # hashbrown = { version = "0.9.1", features = ["bumpalo"] }

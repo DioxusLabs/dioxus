@@ -35,6 +35,7 @@ use crate::innerlude::{VNode, VText};
 ///
 /// The patching process is tested in a real browser in crates/virtual-dom-rs/tests/diff_patch.rs
 
+// #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Patch<'a> {
     /// Append a vector of child nodes to a parent node id.
     AppendChildren(NodeIdx, Vec<&'a VNode<'a>>),

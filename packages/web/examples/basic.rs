@@ -8,7 +8,7 @@ use dioxus_web::*;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    log::debug!("Hello world, from the app");
+    // log::debug!("Hello world, from the app");
     WebsysRenderer::simple_render(html! {
 
         // Body
@@ -18,28 +18,27 @@ fn main() {
                     // Title
                     <div class="font-bold text-xl">
                         // {format!("Fibonacci Calculator: n = {}",n)}
-                        "Fibonacci Calculator: n = {}"
+                        "Jon's awesome site!!11"
                     </div>
 
                     // Subtext / description
                     <div class="text-sm text-gray-500">
                         // {format!("Calculated in {} nanoseconds",duration)}
                         // {format!("Calculated in {} nanoseconds",duration)}
-                        "Calculated in {} nanoseconds"
+                        "He worked so hard on it :)"
                     </div>
 
                     <div class="flex flex-row items-center justify-center mt-6">
                         // Main number
                         <div class="font-medium text-6xl">
-                            // {format!("{}",fib_n)}
+                            "1337"
                         </div>
                     </div>
 
                     // Try another
                     <div class="flex flex-row justify-between mt-6">
                         // <a href=format!("http://localhost:8080/fib/{}", other_fib_to_try) class="underline">
-                            "Click to try another number"
-                            // {"Click to try another number"}
+                            "Legit made my own React"
                         // </a>
                     </div>
                 </div>

@@ -14,6 +14,7 @@ pub struct Config {
     pub static_dir: PathBuf,
     pub manifest: cargo_toml::Manifest<cargo_toml::Value>,
     pub executable: ExecutableType,
+    pub release: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +51,8 @@ impl Config {
             .expect("No lib found from cargo metadata");
         let executable = ExecutableType::Binary(output_filename);
 
+        let release = false;
+
         Ok(Self {
             out_dir,
             crate_dir,
@@ -58,6 +61,7 @@ impl Config {
             static_dir,
             manifest,
             executable,
+            release,
         })
     }
 

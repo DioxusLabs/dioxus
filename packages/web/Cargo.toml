@@ -37,3 +37,9 @@ features = [
     "InputEvent",
     "DocumentType",
 ]
+
+[profile.release]
+debug = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]

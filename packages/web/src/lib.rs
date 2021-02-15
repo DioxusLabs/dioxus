@@ -115,14 +115,14 @@ impl WebsysRenderer {
         let mut machine = DiffMachine::new();
 
         let patches = machine.diff(&old, &new);
-        log::info!("There are {:?} patches", patches.len());
+        // log::info!("There are {:?} patches", patches.len());
 
         let root2 = root_node.clone();
         patch(root_node, &patches).expect("Failed to simple render");
         let document = web_sys::window().unwrap().document().unwrap();
 
         document.body().unwrap().append_child(&root2);
-        log::info!("Succesfully patched the dom");
+        // log::info!("Succesfully patched the dom");
     }
 }
 
@@ -466,7 +466,7 @@ pub fn create_element_node(node: &dioxus_core::nodes::VElement) -> CreatedNode<E
     let mut previous_node_was_text = false;
 
     node.children.iter().for_each(|child| {
-        log::info!("Patching child");
+        // log::info!("Patching child");
         match child {
             VNode::Text(text_node) => {
                 let current_node = element.as_ref() as &web_sys::Node;
@@ -534,5 +534,4 @@ pub fn create_text_node(node: &VText) -> Text {
 // /// For any listeners in the tree, attach the sender closure.
 // /// When a event is triggered, we convert it into the synthetic event type and dump it back in the Virtual Dom's queu
 // fn attach_listeners(sender: &UnboundedSender<EventTrigger>, dom: &VirtualDom) {}
-
 // fn render_diffs() {}

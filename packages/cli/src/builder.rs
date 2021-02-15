@@ -44,11 +44,14 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&crate_dir)
         .arg("build")
-        .arg("--release")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+
+    if config.release {
+        cmd.arg("--release");
+    }
 
     match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
@@ -67,11 +70,13 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
 
     let input_path = match executable {
         ExecutableType::Binary(name) | ExecutableType::Lib(name) => target_dir
-            .join("wasm32-unknown-unknown/release")
+            // .join("wasm32-unknown-unknown/release")
+            .join("wasm32-unknown-unknown/debug")
             .join(format!("{}.wasm", name)),
 
         ExecutableType::Example(name) => target_dir
-            .join("wasm32-unknown-unknown/release/examples")
+            // .join("wasm32-unknown-unknown/release/examples")
+            .join("wasm32-unknown-unknown/debug/examples")
             .join(format!("{}.wasm", name)),
     };
 
@@ -81,8 +86,8 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
         .debug(true)
         .demangle(true)
         .keep_debug(true)
-        .remove_name_section(true)
-        .remove_producers_section(true)
+        .remove_name_section(false)
+        .remove_producers_section(false)
         .out_name("module")
         .generate(&bindgen_outdir)?;
 

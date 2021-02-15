@@ -9,3 +9,6 @@ edition = "2018"
 [dependencies]
 web-view = "0.7.2"
 dioxus-core = { path = "../core" }
+
+
+[build-dependencies]

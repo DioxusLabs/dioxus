@@ -18,7 +18,7 @@ static Example: FC<()> = |ctx| {
             <button onclick={move |_| set_value("world!")}> "?" </button>
             <button onclick={move |_| set_value("Dioxus 🎉")}> "?" </button>
             <div>
-                <h1> "Hello, {val1}" </h1>
+                <h1> "Hello, {value}" </h1>
             </div>
         </div>
     })

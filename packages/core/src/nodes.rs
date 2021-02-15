@@ -141,7 +141,7 @@ mod velement {
 
     /// An attribute on a DOM node, such as `id="my-thing"` or
     /// `href="https://example.com"`.
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
     pub struct Attribute<'a> {
         pub name: &'static str,
         pub value: &'a str,
@@ -177,7 +177,13 @@ mod velement {
     pub struct Listener<'bump> {
         /// The type of event to listen for.
         pub(crate) event: &'static str,
-        /// The callback to invoke when the event happens.
+
+        // ref to the real listener
+        // pub(crate) id: u32,
+
+        // pub(crate) _i: &'bump str,
+        // #[serde(skip_serializing, skip_deserializing, default="")]
+        // /// The callback to invoke when the event happens.
         pub(crate) callback: &'bump (dyn Fn(())),
     }
 
@@ -186,7 +192,7 @@ mod velement {
     /// Keys must be unique among siblings.
     ///
     /// If any sibling is keyed, then they all must be keyed.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
     pub struct NodeKey(pub(crate) u32);
 
     impl Default for NodeKey {
@@ -225,7 +231,7 @@ mod velement {
 }
 
 mod vtext {
-    #[derive(PartialEq)]
+    #[derive(PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct VText<'bump> {
         pub text: &'bump str,
     }
