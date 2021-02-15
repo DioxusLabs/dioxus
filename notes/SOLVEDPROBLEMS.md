@@ -244,16 +244,41 @@ A few notes:
 
 ## Concurrency
 
-I don't even know yet
-
+For Dioxus, concurrency is built directly into the VirtualDOM lifecycle and event system. Suspended components prove "no changes" while diffing, and will cause a lifecycle update later. This is considered a "trigger" and will cause targeted diffs and re-renders. Renderers will need to await the Dioxus suspense queue if they want to process these updates. This will typically involve joining the suspense queue and event listeners together like:
+```rust
+// wait for an even either from the suspense queue or our own custom listener system
+let (left, right) = join!(vdom.suspense_queue, self.custom_event_listener);
+```
+LiveView is built on this model, and updates from the WebSocket connection to the host server are treated as external updates. This means any renderer can feed targeted EditLists (the underlying message of this event) directly into the VirtualDOM.
 
 ## Execution Model
+<!-- todo -->
 
+## Diffing
 
+Diffing is an interesting story. Since we don't re-render the entire DOM, we need a way to patch up the DOM without visiting every component. To get this working, we need to think in cycles, queues, and stacks. Most of the original logic is pulled from Dodrio as Dioxus and Dodrio share much of the same DNA. 
 
+When an event is triggered, we find the callback that installed the listener and run it. We then record all components affected by the running of the "subscription" primitive. In practice, many hooks will initiate a subscription, so it is likely that many components throughout the entire tree will need to be re-rendered. For each component, we attach its index and the type of update it needs. 
 
+In practice, removals trump prop updates which trump subscription updates. Therefore, we only process updates where props are directly changed first, as this will likely flow into child components. 
 
+Roughly, the flow looks like:
+- Process the initiating event
+- Mark components affected by the subscription API (the only way of causing forward updates)
+- Descend from the root into children, ignoring those not affected by the subscription API. (walking the tree until we hit the first affected component, or choosing the highest component)
+- Run this component and then immediately diff its output, marking any children that also need to be updated and putting them into the immediate queue
+- Mark this component as already-ran and remove it from the need_to_diff list, instead moving it into the "already diffed list"
+- Run the marked children until the immediate queue is empty
 
+```rust
+struct DiffMachine {
+    immediate_queue: Vec<Index>,
+    diffed: HashSet<Index>,
+    need_to_diff: HashSet<Index>
+    marked_for_removal: Vec<Index>
+}
+```
 
+On the actual diffing level, we're using the diffing algorithm pulled from Dodrio, but plan to move to a dedicated crate that implements Meyers/Patience for us. During the diffing phase, we track our current position using a "Traversal" which implements the "MoveTo". When "MoveTo" is combined with "Edit", it is possible for renderers to fully interpret a series of Moves and Edits together to update their internal node structures for rendering.
 
 

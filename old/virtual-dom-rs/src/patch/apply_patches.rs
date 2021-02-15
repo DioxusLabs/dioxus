@@ -1,9 +1,9 @@
+use crate::dom_updater::ActiveClosures;
 use crate::patch::Patch;
+
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
-
-use crate::dom_updater::ActiveClosures;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use web_sys::{Element, Node, Text};

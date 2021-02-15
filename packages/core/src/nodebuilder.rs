@@ -366,7 +366,7 @@ where
     /// let my_div = div(&b).attr("id", "my-div").finish();
     /// ```
     #[inline]
-    pub fn attr(mut self, name: &'a str, value: &'a str) -> Self {
+    pub fn attr(mut self, name: &'static str, value: &'a str) -> Self {
         self.attributes.push(Attribute { name, value });
         self
     }
@@ -398,7 +398,7 @@ where
     ///     .bool_attr("hidden", Math::random() >= 0.5)
     ///     .finish();
     /// ```
-    pub fn bool_attr(mut self, name: &'a str, should_add: bool) -> Self {
+    pub fn bool_attr(mut self, name: &'static str, should_add: bool) -> Self {
         if should_add {
             self.attributes.push(Attribute { name, value: "" });
         }
@@ -1049,7 +1049,7 @@ pub fn text<'a>(contents: &'a str) -> VNode<'a> {
 ///
 /// let my_id_attr = attr("id", "my-id");
 /// ```
-pub fn attr<'a>(name: &'a str, value: &'a str) -> Attribute<'a> {
+pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
     Attribute { name, value }
 }
 

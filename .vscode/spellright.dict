@@ -23,3 +23,5 @@ deref
 derefs
 Derefing
 rei
+RefMut
+diffed

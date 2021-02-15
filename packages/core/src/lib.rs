@@ -65,11 +65,13 @@
 //! - dioxus-liveview (SSR + StringRenderer)
 //!
 
-pub mod changelist; // An "edit phase" described by transitions and edit operations
+// pub mod changelist; // An "edit phase" described by transitions and edit operations
 pub mod component; // Logic for extending FC
 pub mod context; // Logic for providing hook + context functionality to user components
 pub mod debug_renderer; // Test harness for validating that lifecycles and diffs work appropriately
-pub mod diff; // The diffing algorithm that builds the ChangeList
+pub mod diff;
+pub mod patch; // The diffing algorithm that builds the ChangeList
+               // pub mod dodriodiff; // The diffing algorithm that builds the ChangeList
 pub mod error; // Error type we expose to the renderers
 pub mod events; // Manages the synthetic event API
 pub mod hooks; // Built-in hooks
@@ -136,6 +138,8 @@ pub mod prelude {
     pub use crate::nodebuilder as builder;
     pub use dioxus_core_macro::fc;
     pub use dioxus_html_2::html;
+
+    pub use crate::diff::DiffMachine;
 
     pub use crate::hooks::*;
 }

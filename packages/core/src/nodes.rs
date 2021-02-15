@@ -143,8 +143,8 @@ mod velement {
     /// `href="https://example.com"`.
     #[derive(Clone, Debug)]
     pub struct Attribute<'a> {
-        pub(crate) name: &'a str,
-        pub(crate) value: &'a str,
+        pub name: &'static str,
+        pub value: &'a str,
     }
 
     impl<'a> Attribute<'a> {

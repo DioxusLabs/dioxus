@@ -1,4 +1,5 @@
-use crate::{changelist::EditList, nodes::VNode};
+// use crate::{changelist::EditList, nodes::VNode};
+use crate::nodes::VNode;
 use crate::{events::EventTrigger, innerlude::*};
 use any::Any;
 use bumpalo::Bump;
@@ -121,7 +122,8 @@ impl VirtualDom {
     ///
     ///
     /// ```
-    pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<EditList<'_>> {
+    pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<()> {
+        // pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<EditList<'_>> {
         let EventTrigger {
             component_id,
             listener_id,
@@ -156,8 +158,8 @@ impl VirtualDom {
             process_event(&mut self.components, event)?;
         }
 
-        todo!()
-        // Ok(())
+        // todo!()
+        Ok(())
     }
 
     pub async fn progress_completely(&mut self) -> Result<()> {

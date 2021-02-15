@@ -1,11 +1,6 @@
-//! Our Patch enum is intentionally kept in it's own file for easy inclusion into
-//! The Percy Book.
+use fxhash::FxHashMap;
 
-use crate::{VText, VirtualNode};
-use std::collections::HashMap;
-
-mod apply_patches;
-pub use apply_patches::patch;
+use crate::innerlude::{VNode, VText};
 
 /// A Patch encodes an operation that modifies a real DOM element.
 ///
@@ -39,21 +34,26 @@ pub use apply_patches::patch;
 /// ```
 ///
 /// The patching process is tested in a real browser in crates/virtual-dom-rs/tests/diff_patch.rs
-#[derive(Debug, PartialEq)]
+
 pub enum Patch<'a> {
     /// Append a vector of child nodes to a parent node id.
-    AppendChildren(NodeIdx, Vec<&'a VirtualNode>),
+    AppendChildren(NodeIdx, Vec<&'a VNode<'a>>),
+
     /// For a `node_i32`, remove all children besides the first `len`
     TruncateChildren(NodeIdx, usize),
+
     /// Replace a node with another node. This typically happens when a node's tag changes.
     /// ex: <div> becomes <span>
-    Replace(NodeIdx, &'a VirtualNode),
+    Replace(NodeIdx, &'a VNode<'a>),
+
     /// Add attributes that the new node has that the old node does not
-    AddAttributes(NodeIdx, HashMap<&'a str, &'a str>),
+    AddAttributes(NodeIdx, FxHashMap<&'a str, &'a str>),
+
     /// Remove attributes that the old node had that the new node doesn't
     RemoveAttributes(NodeIdx, Vec<&'a str>),
+
     /// Change the text of a Text node.
-    ChangeText(NodeIdx, &'a VText),
+    ChangeText(NodeIdx, &'a VText<'a>),
 }
 
 type NodeIdx = usize;
@@ -72,4 +72,8 @@ impl<'a> Patch<'a> {
             Patch::ChangeText(node_idx, _) => *node_idx,
         }
     }
+}
+
+pub struct PatchList<'a> {
+    patches: Vec<Patch<'a>>,
 }
