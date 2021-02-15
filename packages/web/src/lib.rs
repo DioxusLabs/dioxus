@@ -102,15 +102,27 @@ impl WebsysRenderer {
         Ok(())
     }
 
-    fn simple_render(tree: impl for<'a> Fn(&'a Bump) -> VNode<'a>) {
+    pub fn simple_render(tree: impl for<'a> Fn(&'a Bump) -> VNode<'a>) {
         let bump = Bump::new();
 
         let old = html! { <div> </div> }(&bump);
+
+        let created = create_dom_node(&old);
+        let root_node = created.node;
+
         let new = tree(&bump);
 
         let mut machine = DiffMachine::new();
 
         let patches = machine.diff(&old, &new);
+        log::info!("There are {:?} patches", patches.len());
+
+        let root2 = root_node.clone();
+        patch(root_node, &patches).expect("Failed to simple render");
+        let document = web_sys::window().unwrap().document().unwrap();
+
+        document.body().unwrap().append_child(&root2);
+        log::info!("Succesfully patched the dom");
     }
 }
 
@@ -454,6 +466,7 @@ pub fn create_element_node(node: &dioxus_core::nodes::VElement) -> CreatedNode<E
     let mut previous_node_was_text = false;
 
     node.children.iter().for_each(|child| {
+        log::info!("Patching child");
         match child {
             VNode::Text(text_node) => {
                 let current_node = element.as_ref() as &web_sys::Node;

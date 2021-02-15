@@ -9,7 +9,8 @@ edition = "2018"
 [dependencies]
 dioxus-core = { path = "../core" }
 js-sys = "0.3"
-wasm-bindgen = "0.2.70"
+wasm-bindgen = "0.2.69"
+# wasm-bindgen = "0.2.70"
 lazy_static = "1.4.0"
 wasm-bindgen-futures = "0.4.20"
 futures = "0.3.12"
