@@ -282,3 +282,8 @@ struct DiffMachine {
 On the actual diffing level, we're using the diffing algorithm pulled from Dodrio, but plan to move to a dedicated crate that implements Meyers/Patience for us. During the diffing phase, we track our current position using a "Traversal" which implements the "MoveTo". When "MoveTo" is combined with "Edit", it is possible for renderers to fully interpret a series of Moves and Edits together to update their internal node structures for rendering.
 
 
+
+
+## Patch Stream
+
+One of the most important parts of Dioxus is the ability to stream patches from server to client. However, this inherently has challenges where raw VNodes attach listeners to themselves, and are therefore not serializable. 
