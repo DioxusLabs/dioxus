@@ -61,13 +61,13 @@ We also maintain two state management options that integrate cleanly with Dioxus
 
 
 ## Explore
-- **Running the examples**: Explore the vast collection of samples, tutorials, and demos
-- **Building applications**: Use the Dioxus CLI to build and bundle apps for various platforms
-- **Liveview**: Build custom liveview components that simplify datafetching on all platforms
-- **State management**: Easily add powerful state management that comes integrated with Dioxus Core
-- **Concurrency**: Drop in async where it fits and suspend components until new data is ready
-- **1st party hooks**: router
-- **Community hooks**: 3D renderers
+- [**Running the examples**: Explore the vast collection of samples, tutorials, and demos](docs/guides/00-index.md)
+- [**Building applications**: Use the Dioxus CLI to build and bundle apps for various platforms](docs/guides/01-ssr.md)
+- [**Liveview**: Build custom liveview components that simplify datafetching on all platforms](docs/guides/01-ssr.md)
+- [**State management**: Easily add powerful state management that comes integrated with Dioxus Core](docs/guides/01-ssr.md)
+- [**Concurrency**: Drop in async where it fits and suspend components until new data is ready](docs/guides/01-ssr.md)
+- [**1st party hooks**: router](docs/guides/01-ssr.md)
+- [**Community hooks**: 3D renderers](docs/guides/01-ssr.md)
 
 ## Dioxus LiveHost
 Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whether they be server-rendered, wasm-only, or a liveview. LiveHost enables a wide set of features:
