@@ -1,3 +1,4 @@
+use bumpalo::Bump;
 /// Diff the `old` node with the `new` node. Emits instructions to modify a
 /// physical DOM node that reflects `old` into something that reflects `new`.
 ///
@@ -36,7 +37,7 @@ use fxhash::{FxHashMap, FxHashSet};
 use generational_arena::Index;
 
 use crate::{
-    changelist::EditList,
+    changelist::{Edit, EditList},
     innerlude::{Attribute, Listener, Scope, VElement, VNode, VText},
     virtual_dom::LifecycleEvent,
 };
@@ -55,8 +56,8 @@ use std::cmp::Ordering;
 /// The order of these re-entrances is stored in the DiffState itself. The DiffState comes pre-loaded with a set of components
 /// that were modified by the eventtrigger. This prevents doubly evaluating components if they wereboth updated via
 /// subscriptions and props changes.
-struct DiffingMachine<'a> {
-    change_list: &'a mut EditList<'a>,
+pub struct DiffMachine<'a> {
+    pub change_list: EditList<'a>,
     immediate_queue: Vec<Index>,
     diffed: FxHashSet<Index>,
     need_to_diff: FxHashSet<Index>,
@@ -67,8 +68,21 @@ enum NeedToDiff {
     Subscription,
 }
 
-impl<'a> DiffingMachine<'a> {
-    fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
+impl<'a> DiffMachine<'a> {
+    pub fn new(bump: &'a Bump) -> Self {
+        Self {
+            change_list: EditList::new(bump),
+            immediate_queue: Vec::new(),
+            diffed: FxHashSet::default(),
+            need_to_diff: FxHashSet::default(),
+        }
+    }
+
+    pub fn consume(self) -> Vec<Edit<'a>> {
+        self.change_list.emitter
+    }
+
+    pub fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
@@ -107,6 +121,7 @@ impl<'a> DiffingMachine<'a> {
             // compare elements
             // if different, schedule different types of update
             (VNode::Element(eold), VNode::Element(enew)) => {
+                log::debug!("elements are different");
                 // If the element type is completely different, the element needs to be re-rendered completely
                 if enew.tag_name != eold.tag_name || enew.namespace != eold.namespace {
                     self.change_list.commit_traversal();

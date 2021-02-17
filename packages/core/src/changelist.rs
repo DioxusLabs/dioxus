@@ -19,6 +19,8 @@
 //!
 //!
 
+use bumpalo::Bump;
+
 use crate::innerlude::{Listener, VirtualDom};
 
 /// The `Edit` represents a single modifcation of the renderer tree.
@@ -31,6 +33,7 @@ use crate::innerlude::{Listener, VirtualDom};
 ///
 ///
 ///
+#[derive(Debug)]
 pub enum Edit<'d> {
     SetText { text: &'d str },
     RemoveSelfAndNextSiblings {},
@@ -57,14 +60,23 @@ pub enum Edit<'d> {
 }
 
 pub struct EditList<'src> {
-    traversal: Traversal,
+    pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
-    emitter: Vec<Edit<'src>>,
+    pub emitter: Vec<Edit<'src>>,
 }
 
-/// Traversal methods.
-impl EditList<'_> {
+impl<'b> EditList<'b> {
+    pub fn new(bump: &'b Bump) -> Self {
+        Self {
+            traversal: Traversal::new(),
+            next_temporary: 0,
+            forcing_new_listeners: false,
+            emitter: Vec::new(),
+        }
+    }
+
+    /// Traversal methods.
     pub fn go_down(&mut self) {
         self.traversal.down();
     }
@@ -98,36 +110,37 @@ impl EditList<'_> {
 
     pub fn commit_traversal(&mut self) {
         if self.traversal.is_committed() {
+            log::debug!("Traversal already committed");
             return;
         }
 
         for mv in self.traversal.commit() {
             match mv {
                 MoveTo::Parent => {
-                    // debug!("emit: pop");
+                    log::debug!("emit: pop");
                     self.emitter.push(Edit::Pop {});
                     // self.emitter.pop();
                 }
                 MoveTo::Child(n) => {
-                    // debug!("emit: push_child({})", n);
+                    log::debug!("emit: push_child({})", n);
                     self.emitter.push(Edit::PushChild { n });
                 }
                 MoveTo::ReverseChild(n) => {
-                    // debug!("emit: push_reverse_child({})", n);
+                    log::debug!("emit: push_reverse_child({})", n);
                     self.emitter.push(Edit::PushReverseChild { n });
                     // self.emitter.push_reverse_child(n);
                 }
                 MoveTo::Sibling(n) => {
-                    // debug!("emit: pop_push_child({})", n);
+                    log::debug!("emit: pop_push_child({})", n);
                     self.emitter.push(Edit::PopPushChild { n });
                     // self.emitter.pop_push_child(n);
                 }
                 MoveTo::ReverseSibling(n) => {
-                    // debug!("emit: pop_push_reverse_child({})", n);
+                    log::debug!("emit: pop_push_reverse_child({})", n);
                     self.emitter.push(Edit::PopPushReverseChild { n });
                 }
                 MoveTo::TempChild(temp) => {
-                    // debug!("emit: push_temporary({})", temp);
+                    log::debug!("emit: push_temporary({})", temp);
                     self.emitter.push(Edit::PushTemporary { temp });
                     // self.emitter.push_temporary(temp);
                 }
@@ -477,8 +490,8 @@ impl Traversal {
     #[inline]
     pub fn is_committed(&self) -> bool {
         // is_empty is not inlined?
-        // self.uncommitted.is_empty()
-        self.uncommitted.len() == 0
+        self.uncommitted.is_empty()
+        // self.uncommitted.len() == 0
     }
 
     /// Commit this traversals moves and return the optimized path from the last

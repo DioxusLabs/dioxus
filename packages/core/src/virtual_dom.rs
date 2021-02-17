@@ -1,12 +1,14 @@
 // use crate::{changelist::EditList, nodes::VNode};
-use crate::nodes::VNode;
+use crate::{dodriodiff::DiffMachine, nodes::VNode};
 use crate::{events::EventTrigger, innerlude::*};
 use any::Any;
 use bumpalo::Bump;
 use generational_arena::{Arena, Index};
 use std::{
     any::{self, TypeId},
+    borrow::BorrowMut,
     cell::{RefCell, UnsafeCell},
+    collections::{vec_deque, VecDeque},
     future::Future,
     marker::PhantomData,
     rc::Rc,
@@ -24,7 +26,7 @@ pub struct VirtualDom {
     /// The index of the root component.
     base_scope: Index,
 
-    event_queue: Rc<RefCell<Vec<LifecycleEvent>>>,
+    event_queue: Rc<RefCell<VecDeque<LifecycleEvent>>>,
 
     // Mark the root props with P, even though they're held by the root component
     // This is done so we don't have a "generic" vdom, making it easier to hold references to it, especially when the holders
@@ -65,7 +67,7 @@ impl VirtualDom {
         let first_event = LifecycleEvent::mount(base_scope, None, 0, root_props);
 
         // Create an event queue with a mount for the base scope
-        let event_queue = Rc::new(RefCell::new(vec![first_event]));
+        let event_queue = Rc::new(RefCell::new(vec![first_event].into_iter().collect()));
 
         let _root_prop_type = TypeId::of::<P>();
 
@@ -84,12 +86,15 @@ impl VirtualDom {
             return Err(Error::WrongProps);
         }
 
-        self.event_queue.borrow_mut().push(LifecycleEvent {
-            event_type: LifecycleType::PropsChanged {
-                props: Box::new(new_props),
-            },
-            index: self.base_scope,
-        });
+        self.event_queue
+            .as_ref()
+            .borrow_mut()
+            .push_back(LifecycleEvent {
+                event_type: LifecycleType::PropsChanged {
+                    props: Box::new(new_props),
+                },
+                component_index: self.base_scope,
+            });
 
         Ok(())
     }
@@ -103,8 +108,13 @@ impl VirtualDom {
     /// Update the root props, and progress
     /// Takes a bump arena to allocate into, making the diff phase as fast as possible
     pub fn progress(&mut self) -> Result<()> {
-        let event = self.event_queue.borrow_mut().pop().ok_or(Error::NoEvent)?;
-        process_event(&mut self.components, event)
+        let event = self
+            .event_queue
+            .as_ref()
+            .borrow_mut()
+            .pop_front()
+            .ok_or(Error::NoEvent)?;
+        self.process_event(event)
     }
 
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
@@ -151,85 +161,93 @@ impl VirtualDom {
         // Prop updates take prescedence over subscription updates
         // Run all prop updates *first* as they will cascade into children.
         // *then* run the non-prop updates that were not already covered by props
-        let mut events = self.event_queue.borrow_mut();
 
-        // for now, just naively process each event in the queue
-        for event in events.drain(..) {
-            process_event(&mut self.components, event)?;
+        let mut affected_components = Vec::new();
+        // It's essentially draining the vec, but with some dancing to release the RefMut
+        // We also want to be able to push events into the queue from processing the event
+        while let Some(event) = {
+            let new_evt = self.event_queue.as_ref().borrow_mut().pop_front();
+            new_evt
+        } {
+            affected_components.push(event.component_index);
+            self.process_event(event)?;
         }
 
-        // todo!()
+        let diff_bump = Bump::new();
+        let diff_machine = DiffMachine::new(&diff_bump);
+
         Ok(())
     }
 
     pub async fn progress_completely(&mut self) -> Result<()> {
         Ok(())
     }
-}
+    /// Using mutable access to the Virtual Dom, progress a given lifecycle event
+    ///
+    ///
+    ///
+    ///
+    ///
+    ///
+    fn process_event(
+        &mut self,
+        LifecycleEvent {
+            component_index: index,
+            event_type,
+        }: LifecycleEvent,
+    ) -> Result<()> {
+        let scope = self.components.get_mut(index).ok_or(Error::NoEvent)?;
 
-/// Using mutable access to the Virtual Dom, progress a given lifecycle event
-///
-///
-///
-///
-///
-///
-fn process_event(
-    // dom: &mut VirtualDom<P>,
-    components: &mut Arena<Scope>,
-    LifecycleEvent { index, event_type }: LifecycleEvent,
-) -> Result<()> {
-    let scope = components.get(index).ok_or(Error::NoEvent)?;
+        match event_type {
+            // Component needs to be mounted to the virtual dom
+            LifecycleType::Mount { to, under, props } => {
+                if let Some(other) = to {
+                    // mount to another component
+                } else {
+                    // mount to the root
+                }
 
-    match event_type {
-        // Component needs to be mounted to the virtual dom
-        LifecycleType::Mount { to, under, props } => {
-            if let Some(other) = to {
-                // mount to another component
-            } else {
-                // mount to the root
+                let g = props.as_ref();
+                scope.run(g);
+                // scope.run(runner, props, dom);
             }
 
-            let g = props.as_ref();
-            scope.run(g);
-            // scope.run(runner, props, dom);
-        }
+            // The parent for this component generated new props and the component needs update
+            LifecycleType::PropsChanged { props } => {
+                //
+            }
 
-        // The parent for this component generated new props and the component needs update
-        LifecycleType::PropsChanged { props } => {
+            // Component was successfully mounted to the dom
+            LifecycleType::Mounted {} => {
+                //
+            }
+
+            // Component was removed from the DOM
+            // Run any destructors and cleanup for the hooks and the dump the component
+            LifecycleType::Removed {} => {
+                let f = self.components.remove(index);
+                // let f = dom.components.remove(index);
+            }
+
+            // Component was messaged via the internal subscription service
+            LifecycleType::Messaged => {
+                //
+            }
+
+            // Event from renderer was fired with a given listener ID
             //
+            LifecycleType::Callback { listener_id } => {}
+
+            // Run any post-render callbacks on a component
+            LifecycleType::Rendered => {}
         }
 
-        // Component was successfully mounted to the dom
-        LifecycleType::Mounted {} => {
-            //
-        }
-
-        // Component was removed from the DOM
-        // Run any destructors and cleanup for the hooks and the dump the component
-        LifecycleType::Removed {} => {
-            let f = components.remove(index);
-            // let f = dom.components.remove(index);
-        }
-
-        // Component was messaged via the internal subscription service
-        LifecycleType::Messaged => {
-            //
-        }
-
-        // Event from renderer was fired with a given listener ID
-        //
-        LifecycleType::Callback { listener_id } => {}
-
-        // Run any post-render callbacks on a component
-        LifecycleType::Rendered => {}
+        Ok(())
     }
-
-    Ok(())
 }
 
 pub struct LifecycleEvent {
-    pub index: Index,
+    pub component_index: Index,
     pub event_type: LifecycleType,
 }
 
@@ -265,7 +283,7 @@ impl LifecycleEvent {
         props: P,
     ) -> Self {
         Self {
-            index: which,
+            component_index: which,
             event_type: LifecycleType::Mount {
                 to,
                 under,

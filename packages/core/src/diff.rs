@@ -238,6 +238,8 @@ mod tests {
             .for_each(|f| assert_eq!(compare_patch(f.0, f.1), true, "{}", description));
     }
 
+    // todo: make this actually perform real comparisons
+    // by default, nothing is derived for vnodes or patches
     fn compare_patch(patch1: &Patch, patch2: &Patch) -> bool {
         match (patch1, patch2) {
             (Patch::AppendChildren(_, _), Patch::AppendChildren(_, _)) => true,

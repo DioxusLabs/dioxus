@@ -192,7 +192,7 @@ mod velement {
     /// Keys must be unique among siblings.
     ///
     /// If any sibling is keyed, then they all must be keyed.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct NodeKey(pub(crate) u32);
 
     impl Default for NodeKey {
