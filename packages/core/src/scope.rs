@@ -15,77 +15,13 @@ use std::{
     todo,
 };
 
-pub struct BumpContainer(pub UnsafeCell<Bump>);
-impl BumpContainer {
-    fn new() -> Self {
-        Self(UnsafeCell::new(Bump::new()))
-    }
-}
-
-impl Deref for BumpContainer {
-    type Target = Bump;
-
-    fn deref(&self) -> &Self::Target {
-        todo!()
-        // self.0.borrow()
-    }
-}
-impl DerefMut for BumpContainer {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        todo!()
-        // self.0.borrow_mut()
-    }
-}
-unsafe impl StableAddress for BumpContainer {}
-
-#[ouroboros::self_referencing]
-pub struct BumpFrame {
-    pub bump: BumpContainer,
-
-    #[covariant]
-    #[borrows(bump)]
-    pub head_node: &'this VNode<'this>,
-}
-
-pub struct ActiveFrame {
-    pub idx: AtomicUsize,
-    pub frames: [BumpFrame; 2],
-}
-
-impl ActiveFrame {
-    fn from_frames(a: BumpFrame, b: BumpFrame) -> Self {
-        Self {
-            idx: 0.into(),
-            frames: [a, b],
-        }
-    }
-
-    fn next(&self) -> &BumpFrame {
-        self.idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let cur = self.idx.borrow().load(std::sync::atomic::Ordering::Relaxed);
-        match cur % 1 {
-            1 => &self.frames[1],
-            0 => &self.frames[0],
-            _ => unreachable!("mod cannot by non-zero"),
-        }
-    }
-    // fn next(&self) -> &BumpFrame {
-    //     self.idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    //     let cur = self.idx.borrow().load(std::sync::atomic::Ordering::Relaxed);
-    //     match cur % 2_usize {
-    //         1 => &self.frames[1],
-    //         0 => &self.frames[0],
-    //     }
-    // }
-}
-
 /// Every component in Dioxus is represented by a `Scope`.
 ///
 /// Scopes contain the state for hooks, the component's props, and other lifecycle information.
 ///
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
-pub struct Scope {
+pub(crate) struct Scope {
     // TODO @Jon
     // These hooks are actually references into the hook arena
     // These two could be combined with "OwningRef" to remove unsafe usage
@@ -106,6 +42,8 @@ pub struct Scope {
 
     // IE Which listeners need to be woken up?
     pub listeners: Vec<Box<dyn Fn()>>,
+
+    pub props: Box<dyn std::any::Any>,
 
     //
     pub props_type: TypeId,
@@ -128,7 +66,11 @@ pub struct Scope {
 
 impl Scope {
     // create a new scope from a function
-    pub(crate) fn new<T: 'static>(f: FC<T>, parent: Option<Index>) -> Self {
+    pub(crate) fn new<T: 'static>(
+        f: FC<T>,
+        props: impl Properties + 'static,
+        parent: Option<Index>,
+    ) -> Self {
         // Capture the props type
         let props_type = TypeId::of::<T>();
         let hook_arena = typed_arena::Arena::new();
@@ -137,24 +79,20 @@ impl Scope {
         // Capture the caller
         let caller = f as *const i32;
 
-        // Create the two buffers the componetn will render into
-        // There will always be an "old" and "new"
-
         let listeners = Vec::new();
 
-        let new_frame = BumpFrameBuilder {
-            bump: BumpContainer::new(),
-            head_node_builder: |bump| bump.alloc(VNode::text("")),
-        }
-        .build();
+        let old_frame = BumpFrame {
+            bump: Bump::new(),
+            head_node: VNode::text(""),
+        };
 
-        let old_frame = BumpFrameBuilder {
-            bump: BumpContainer::new(),
-            head_node_builder: |bump| bump.alloc(VNode::text("")),
-        }
-        .build();
+        let new_frame = BumpFrame {
+            bump: Bump::new(),
+            head_node: VNode::text(""),
+        };
 
         let frames = ActiveFrame::from_frames(old_frame, new_frame);
+        let props = Box::new(props);
 
         Self {
             hook_arena,
@@ -164,64 +102,107 @@ impl Scope {
             frames,
             listeners,
             parent,
+            props,
         }
+    }
+
+    /// Update this component's props with a new set of props
+    ///
+    ///
+    pub(crate) fn update_props<P: Properties + Sized + 'static>(
+        &mut self,
+        new_props: Box<P>,
+    ) -> crate::error::Result<()> {
+        Ok(())
     }
 
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
-    pub(crate) fn run<'a, 'bump, P: Properties + ?Sized>(&'bump mut self, props: &'a P) {
-        // I really wanted to do this safely, but I don't think we can.
-        // We want to reset the bump before writing into it. This requires &mut to the bump
-        // Ouroborous lets us borrow with self, but the heads (IE the source) cannot be changed while the ref is live
+    pub(crate) fn run<'bump, P: Properties + Sized + 'static>(&'bump mut self) {
+        let frame = {
+            let frame = self.frames.next();
+            frame.bump.reset();
+            frame
+        };
 
-        // n.b, there might be a better way of doing this active frame stuff - perhaps swapping
-        let frame = self.frames.next();
+        let ctx: Context<'bump> = Context {
+            arena: &self.hook_arena,
+            hooks: &self.hooks,
+            bump: &frame.bump,
+            idx: 0.into(),
+            _p: PhantomData {},
+        };
 
-        frame.with_bump(|bump_container| {
-            let bump: &mut Bump = unsafe { &mut *bump_container.0.get() };
-            bump.reset();
+        /*
+        SAFETY ALERT
 
-            let bump = &*bump;
+        This particular usage of transmute is outlined in its docs https://doc.rust-lang.org/std/mem/fn.transmute.html
+        We hide the generic bound on the function item by casting it to raw pointer. When the function is actually called,
+        we transmute the function back using the props as reference.
 
-            let ctx: Context<'bump> = Context {
-                scope: &*self,
-                _p: PhantomData {},
-                arena: &self.hook_arena,
-                hooks: &self.hooks,
-                idx: 0.into(),
-                bump,
-            };
+        we could do a better check to make sure that the TypeID is correct before casting
+        --
+        This is safe because we check that the generic type matches before casting.
+        */
 
-            /*
-            SAFETY ALERT
+        let caller = unsafe { std::mem::transmute::<*const i32, FC<P>>(self.caller) };
+        let nodes: VNode<'bump> = caller(ctx, self.props.downcast_ref::<P>().unwrap());
 
-            This particular usage of transmute is outlined in its docs https://doc.rust-lang.org/std/mem/fn.transmute.html
-            We hide the generic bound on the function item by casting it to raw pointer. When the function is actually called,
-            we transmute the function back using the props as reference.
+        /*
+        SAFETY ALERT
 
-            we could do a better check to make sure that the TypeID is correct before casting
-            --
-            This is safe because we check that the generic type matches before casting.
-            */
-            let caller = unsafe { std::mem::transmute::<*const i32, FC<P>>(self.caller) };
-            let nodes: &'bump VNode  = caller(ctx, props);
-        });
+        DO NOT USE THIS VNODE WITHOUT THE APPOPRIATE ACCESSORS.
+        KEEPING THIS STATIC REFERENCE CAN LEAD TO UB.
 
-        // let new_nodes = caller(ctx, props);
-        // let r = new_nodes as *const _;
-        // self.old_root = self.new_root;
-        // self.new_root = new_nodes as *const _;
+        Some things to note:
+        - The VNode itself is bound to the lifetime, but it itself is owned by scope.
+        - The VNode has a private API and can only be used from accessors.
+        - Public API cannot drop or destructure VNode
+        */
 
-        // let old_nodes: &mut VNode<'static> = unsafe { &mut *self.root_node };
+        let unsafe_node = unsafe { std::mem::transmute::<VNode<'bump>, VNode<'static>>(nodes) };
+        frame.head_node = unsafe_node;
 
-        // TODO: Iterate through the new nodes
-        // move any listeners into ourself
-
-        // perform the diff, dumping into the mutable change list
-        // this doesnt perform any "diff compression" where an event and a re-render
-        // crate::diff::diff(old_nodes, &new_nodes);
         todo!()
+    }
+
+    /// Accessor to get the root node and its children (safely)\
+    /// Scope is self-referntial, so we are forced to use the 'static lifetime to cheat
+    pub fn current_root_node<'bump>(&'bump self) -> &'bump VNode<'bump> {
+        todo!()
+    }
+    pub fn prev_root_node<'bump>(&'bump self) -> &'bump VNode<'bump> {
+        todo!()
+    }
+}
+
+pub struct BumpFrame {
+    pub bump: Bump,
+    pub head_node: VNode<'static>,
+}
+
+pub struct ActiveFrame {
+    pub idx: AtomicUsize,
+    pub frames: [BumpFrame; 2],
+}
+
+impl ActiveFrame {
+    fn from_frames(a: BumpFrame, b: BumpFrame) -> Self {
+        Self {
+            idx: 0.into(),
+            frames: [a, b],
+        }
+    }
+
+    fn next(&mut self) -> &mut BumpFrame {
+        self.idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let cur = self.idx.borrow().load(std::sync::atomic::Ordering::Relaxed);
+        match cur % 1 {
+            1 => &mut self.frames[1],
+            0 => &mut self.frames[0],
+            _ => unreachable!("mod cannot by non-zero"),
+        }
     }
 }

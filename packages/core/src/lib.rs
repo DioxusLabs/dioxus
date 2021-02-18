@@ -87,19 +87,19 @@ pub mod builder {
 
 // types used internally that are important
 pub(crate) mod innerlude {
-    pub use crate::component::{Component, Properties};
+    pub(crate) use crate::component::{Component, Properties};
     use crate::context::hooks::Hook;
-    pub use crate::context::Context;
-    pub use crate::error::{Error, Result};
+    pub(crate) use crate::context::Context;
+    pub(crate) use crate::error::{Error, Result};
     use crate::nodes;
-    pub use crate::scope::Scope;
-    pub use crate::virtual_dom::VirtualDom;
-    pub use nodes::*;
+    pub(crate) use crate::scope::Scope;
+    pub(crate) use crate::virtual_dom::VirtualDom;
+    pub(crate) use nodes::*;
 
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
 
-    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> &'a VNode<'a>;
+    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> VNode<'a>;
     // pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
 
     // TODO @Jon, fix this

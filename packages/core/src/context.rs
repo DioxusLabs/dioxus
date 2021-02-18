@@ -30,15 +30,10 @@ use std::{
 pub struct Context<'src> {
     pub idx: AtomicUsize,
 
-    pub(crate) scope: &'src Scope,
-    /// Direct access to the properties used to create this component.
-    // pub props: &'src PropType,
-
     // Borrowed from scope
     pub(crate) arena: &'src typed_arena::Arena<Hook>,
     pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
     pub(crate) bump: &'src Bump,
-    // pub(crate) components: &'src generational_arena::Arena<Scope>,
 
     // holder for the src lifetime
     // todo @jon remove this
@@ -74,7 +69,7 @@ impl<'a> Context<'a> {
     /// }
     ///```
     pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> VNode<'a> {
-        lazy_nodes(self.bump.borrow())
+        lazy_nodes(self.bump)
     }
 
     pub fn callback(&self, f: impl Fn(()) + 'static) {}
@@ -105,8 +100,7 @@ pub mod hooks {
     }
 
     impl<'a> Context<'a> {
-        // impl<'a, P> Context<'a> {
-        // impl<'a, P> Context<'a, P> {
+        /// TODO: @jon, rework this so we dont have to use unsafe to make hooks and then return them
         /// use_hook provides a way to store data between renders for functional components.
         /// todo @jon: ensure the hook arena is stable with pin or is stable by default
         pub fn use_hook<'internal, 'scope, InternalHookState: 'static, Output: 'internal>(

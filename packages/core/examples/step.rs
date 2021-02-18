@@ -5,7 +5,7 @@
 //!     render it again
 //!     consume the diffs and write that to a renderer
 
-use dioxus_core::{prelude::*, scope::Scope};
+use dioxus_core::prelude::*;
 
 fn main() -> Result<(), ()> {
     let p1 = Props { name: "bob".into() };

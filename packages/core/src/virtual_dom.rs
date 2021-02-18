@@ -56,27 +56,28 @@ impl VirtualDom {
         // 3. Create the lifecycle queue
         // 4. Create the event queue
 
+        todo!();
         // Arena allocate all the components
         // This should make it *really* easy to store references in events and such
-        let mut components = Arena::new();
+        // let mut components = Arena::new();
 
         // Create a reference to the component in the arena
-        let base_scope = components.insert(Scope::new(root, None));
+        // let base_scope = components.insert(Scope::new(root, None));
 
-        // Create a new mount event with no root container
-        let first_event = LifecycleEvent::mount(base_scope, None, 0, root_props);
+        // // Create a new mount event with no root container
+        // let first_event = LifecycleEvent::mount(base_scope, None, 0, root_props);
 
-        // Create an event queue with a mount for the base scope
-        let event_queue = Rc::new(RefCell::new(vec![first_event].into_iter().collect()));
+        // // Create an event queue with a mount for the base scope
+        // let event_queue = Rc::new(RefCell::new(vec![first_event].into_iter().collect()));
 
-        let _root_prop_type = TypeId::of::<P>();
+        // let _root_prop_type = TypeId::of::<P>();
 
-        Self {
-            components,
-            base_scope,
-            event_queue,
-            _root_prop_type,
-        }
+        // Self {
+        //     components,
+        //     base_scope,
+        //     event_queue,
+        //     _root_prop_type,
+        // }
     }
 
     /// With access to the virtual dom, schedule an update to the Root component's props
@@ -207,8 +208,8 @@ impl VirtualDom {
                     // mount to the root
                 }
 
-                let g = props.as_ref();
-                scope.run(g);
+                // let g = props.as_ref();
+                // scope.run(g);
                 // scope.run(runner, props, dom);
             }
 
