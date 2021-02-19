@@ -21,7 +21,8 @@ use std::{
 ///
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
-pub(crate) struct Scope {
+pub struct Scope {
+    // pub(crate) struct Scope {
     // TODO @Jon
     // These hooks are actually references into the hook arena
     // These two could be combined with "OwningRef" to remove unsafe usage
@@ -50,23 +51,10 @@ pub(crate) struct Scope {
     pub caller: *const i32,
 }
 
-// pub enum ActiveFrame {
-//     First,
-//     Second,
-// }
-
-// impl ActiveFrame {
-//     fn next(&mut self) {
-//         match self {
-//             ActiveFrame::First => *self = ActiveFrame::Second,
-//             ActiveFrame::Second => *self = ActiveFrame::First,
-//         }
-//     }
-// }
-
 impl Scope {
     // create a new scope from a function
-    pub(crate) fn new<T: 'static>(
+    pub fn new<T: 'static>(
+        // pub(crate) fn new<T: 'static>(
         f: FC<T>,
         props: impl Properties + 'static,
         parent: Option<Index>,
@@ -120,7 +108,7 @@ impl Scope {
     /// This function downcasts the function pointer based on the stored props_type
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
-    pub(crate) fn run<'bump, P: Properties + Sized + 'static>(&'bump mut self) {
+    pub fn run<'bump, P: Properties + Sized + 'static>(&'bump mut self) {
         let frame = {
             let frame = self.frames.next();
             frame.bump.reset();
@@ -164,14 +152,12 @@ impl Scope {
 
         let unsafe_node = unsafe { std::mem::transmute::<VNode<'bump>, VNode<'static>>(nodes) };
         frame.head_node = unsafe_node;
-
-        todo!()
     }
 
     /// Accessor to get the root node and its children (safely)\
     /// Scope is self-referntial, so we are forced to use the 'static lifetime to cheat
     pub fn current_root_node<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        todo!()
+        self.frames.current_head_node()
     }
     pub fn prev_root_node<'bump>(&'bump self) -> &'bump VNode<'bump> {
         todo!()
@@ -193,6 +179,16 @@ impl ActiveFrame {
         Self {
             idx: 0.into(),
             frames: [a, b],
+        }
+    }
+
+    fn current_head_node<'b>(&'b self) -> &'b VNode<'b> {
+        let cur_idx = self.idx.borrow().load(std::sync::atomic::Ordering::Relaxed);
+        let raw_node = &self.frames[cur_idx];
+        unsafe {
+            let unsafe_head = &raw_node.head_node;
+            let safe_node = std::mem::transmute::<&VNode<'static>, &VNode<'b>>(unsafe_head);
+            safe_node
         }
     }
 

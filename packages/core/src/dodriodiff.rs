@@ -37,7 +37,7 @@ use fxhash::{FxHashMap, FxHashSet};
 use generational_arena::Index;
 
 use crate::{
-    changelist::{Edit, EditList},
+    changelist::{Edit, EditList, EditMachine},
     innerlude::{Attribute, Listener, Scope, VElement, VNode, VText},
     virtual_dom::LifecycleEvent,
 };
@@ -57,7 +57,7 @@ use std::cmp::Ordering;
 /// that were modified by the eventtrigger. This prevents doubly evaluating components if they wereboth updated via
 /// subscriptions and props changes.
 pub struct DiffMachine<'a> {
-    pub change_list: EditList<'a>,
+    pub change_list: EditMachine<'a>,
     immediate_queue: Vec<Index>,
     diffed: FxHashSet<Index>,
     need_to_diff: FxHashSet<Index>,
@@ -71,14 +71,14 @@ enum NeedToDiff {
 impl<'a> DiffMachine<'a> {
     pub fn new(bump: &'a Bump) -> Self {
         Self {
-            change_list: EditList::new(bump),
+            change_list: EditMachine::new(bump),
             immediate_queue: Vec::new(),
             diffed: FxHashSet::default(),
             need_to_diff: FxHashSet::default(),
         }
     }
 
-    pub fn consume(self) -> Vec<Edit<'a>> {
+    pub fn consume(self) -> EditList<'a> {
         self.change_list.emitter
     }
 

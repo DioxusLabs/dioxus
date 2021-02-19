@@ -1,8 +1,9 @@
 // use crate::{changelist::EditList, nodes::VNode};
-use crate::{dodriodiff::DiffMachine, nodes::VNode};
+use crate::{changelist::{self, EditList}, dodriodiff::DiffMachine, nodes::VNode};
 use crate::{events::EventTrigger, innerlude::*};
 use any::Any;
 use bumpalo::Bump;
+use changelist::EditMachine;
 use generational_arena::{Arena, Index};
 use std::{
     any::{self, TypeId},
@@ -105,6 +106,10 @@ impl VirtualDom {
     /// This lets services external to the virtual dom interact directly with the component and event system.
     pub fn queue_update() {}
 
+    pub fn start(&mut self) -> Result<EditList> {
+        todo!()
+    }
+
     /// Pop an event off the event queue and process it
     /// Update the root props, and progress
     /// Takes a bump arena to allocate into, making the diff phase as fast as possible
@@ -115,7 +120,7 @@ impl VirtualDom {
             .borrow_mut()
             .pop_front()
             .ok_or(Error::NoEvent)?;
-        self.process_event(event)
+        self.process_lifecycle(event)
     }
 
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
@@ -171,7 +176,7 @@ impl VirtualDom {
             new_evt
         } {
             affected_components.push(event.component_index);
-            self.process_event(event)?;
+            self.process_lifecycle(event)?;
         }
 
         let diff_bump = Bump::new();
@@ -180,9 +185,6 @@ impl VirtualDom {
         Ok(())
     }
 
-    pub async fn progress_completely(&mut self) -> Result<()> {
-        Ok(())
-    }
     /// Using mutable access to the Virtual Dom, progress a given lifecycle event
     ///
     ///
@@ -190,7 +192,7 @@ impl VirtualDom {
     ///
     ///
     ///
-    fn process_event(
+    fn process_lifecycle(
         &mut self,
         LifecycleEvent {
             component_index: index,

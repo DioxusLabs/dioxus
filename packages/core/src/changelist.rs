@@ -19,6 +19,8 @@
 //!
 //!
 
+use std::ops::{Deref, DerefMut};
+
 use bumpalo::Bump;
 
 use crate::innerlude::{Listener, VirtualDom};
@@ -32,8 +34,9 @@ use crate::innerlude::{Listener, VirtualDom};
 ///
 ///
 ///
-///
-#[derive(Debug)]
+/// todo@ jon: allow serde to be optional
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type")]
 pub enum Edit<'d> {
     SetText { text: &'d str },
     RemoveSelfAndNextSiblings {},
@@ -59,20 +62,23 @@ pub enum Edit<'d> {
     SetClass { class_name: &'d str },
 }
 
-pub struct EditList<'src> {
+pub type EditList<'src> = Vec<Edit<'src>>;
+
+pub struct EditMachine<'src> {
     pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
-    pub emitter: Vec<Edit<'src>>,
+
+    pub emitter: EditList<'src>,
 }
 
-impl<'b> EditList<'b> {
+impl<'b> EditMachine<'b> {
     pub fn new(bump: &'b Bump) -> Self {
         Self {
             traversal: Traversal::new(),
             next_temporary: 0,
             forcing_new_listeners: false,
-            emitter: Vec::new(),
+            emitter: EditList::default(),
         }
     }
 
@@ -153,7 +159,7 @@ impl<'b> EditList<'b> {
     }
 }
 
-impl<'a> EditList<'a> {
+impl<'a> EditMachine<'a> {
     pub fn next_temporary(&self) -> u32 {
         self.next_temporary
     }

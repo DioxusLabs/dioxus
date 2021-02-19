@@ -19,6 +19,11 @@ impl EventTrigger {
 }
 
 pub enum VirtualEvent {
+    // the event to drain the current lifecycle queue
+    // Used to initate the dom
+    InitiateEvent,
+
+    // Real events
     ClipboardEvent,
     CompositionEvent,
     KeyboardEvent,

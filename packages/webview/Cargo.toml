@@ -9,6 +9,13 @@ edition = "2018"
 [dependencies]
 web-view = "0.7.2"
 dioxus-core = { path = "../core" }
-
+anyhow = "1.0.38"
+argh = "0.1.4"
+serde = "1.0.120"
+serde_json = "1.0.61"
+async-std = { version = "1.9.0", features = ["attributes"] }
+thiserror = "1.0.23"
+log = "0.4.13"
+fern = { version = "0.6.0", features = ["colored"] }
 
 [build-dependencies]
