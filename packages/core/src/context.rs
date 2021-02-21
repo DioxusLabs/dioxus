@@ -41,6 +41,10 @@ pub struct Context<'src> {
 }
 
 impl<'a> Context<'a> {
+    pub fn props<P>() -> &'a P {
+        todo!()
+    }
+
     // impl<'a, PropType> Context<'a, PropType> {
     /// Access the children elements passed into the component
     pub fn children(&self) -> Vec<VNode> {
