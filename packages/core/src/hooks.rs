@@ -40,8 +40,8 @@ mod use_state_def {
     ///     }
     /// }
     /// ```
-    pub fn use_state<'a, T: 'static, F: FnOnce() -> T + 'static>(
-        ctx: &'_ Context<'a>,
+    pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
+        ctx: &'c Context<'a>,
         initial_state_fn: F,
     ) -> (&'a T, &'a impl Fn(T)) {
         ctx.use_hook(
@@ -93,7 +93,7 @@ mod use_ref_def {
             }
         }
 
-        fn modify(&self, modifier: impl FnOnce(&mut T)) {
+        pub fn modify(&self, modifier: impl FnOnce(&mut T)) {
             let mut val = self._current.borrow_mut();
             let val_as_ref = val.deref_mut();
             modifier(val_as_ref);

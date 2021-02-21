@@ -12,6 +12,10 @@ pub use velement::{Attribute, Listener, NodeKey};
 pub use vnode::VNode;
 pub use vtext::VText;
 
+/// A domtree represents the result of "Viewing" the context
+/// It's a placeholder over vnodes, to make working with lifetimes easier
+pub struct DomTree;
+
 /// Tools for the base unit of the virtual dom - the VNode
 /// VNodes are intended to be quickly-allocated, lightweight enum values.
 ///
@@ -20,6 +24,7 @@ pub use vtext::VText;
 mod vnode {
     use super::*;
 
+    #[derive(Debug)]
     pub enum VNode<'src> {
         /// An element node (node type `ELEMENT_NODE`).
         Element(&'src VElement<'src>),
@@ -92,8 +97,9 @@ mod vnode {
 
 mod velement {
     use super::*;
-    use std::collections::HashMap;
+    use std::{collections::HashMap, fmt::Debug};
 
+    #[derive(Debug)]
     pub struct VElement<'a> {
         /// Elements have a tag name, zero or more attributes, and zero or more
         pub key: NodeKey,
@@ -186,6 +192,13 @@ mod velement {
         // /// The callback to invoke when the event happens.
         pub(crate) callback: &'bump (dyn Fn(())),
     }
+    impl Debug for Listener<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("Listener")
+                .field("event", &self.event)
+                .finish()
+        }
+    }
 
     /// The key for keyed children.
     ///
@@ -231,7 +244,7 @@ mod velement {
 }
 
 mod vtext {
-    #[derive(PartialEq, serde::Serialize, serde::Deserialize)]
+    #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct VText<'bump> {
         pub text: &'bump str,
     }
@@ -251,28 +264,30 @@ mod vtext {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 mod vcomponent {
-    use crate::innerlude::{Properties, FC};
+    use crate::innerlude::FC;
     use std::{any::TypeId, fmt, future::Future, marker::PhantomData};
 
     use super::VNode;
 
+    #[derive(Debug)]
     pub struct VComponent<'src> {
         _p: PhantomData<&'src ()>,
-        props: Box<dyn Properties>,
+        props: Box<dyn std::any::Any>,
         // props: Box<dyn Properties + 'src>,
         caller: *const (),
     }
 
     impl<'a> VComponent<'a> {
-        pub fn new<P: Properties + 'static>(caller: FC<P>, props: P) -> Self {
+        pub fn new<P>(caller: FC<P>, props: P) -> Self {
             let caller = caller as *const ();
             let props = Box::new(props);
 
-            Self {
-                _p: PhantomData {},
-                props,
-                caller,
-            }
+            todo!()
+            // Self {
+            //     _p: PhantomData {},
+            //     props,
+            //     caller,
+            // }
         }
     }
 }

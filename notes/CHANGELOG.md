@@ -1,3 +1,8 @@
+# Project: Web-View 🤲 🍨
+> Proof of concept: stream render edits from server to client
+- [x] Prove that the diffing and patching framework can support patch streaming
+
+
 # Project: Live-View 🤲 🍨
 > Combine the server and client into a single file :) 
 

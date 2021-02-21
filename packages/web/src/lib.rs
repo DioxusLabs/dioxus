@@ -24,7 +24,7 @@ use dioxus::prelude::VElement;
 pub use dioxus_core as dioxus;
 use dioxus_core::{
     events::EventTrigger,
-    prelude::{bumpalo::Bump, html, DiffMachine, Properties, VNode, VirtualDom, FC},
+    prelude::{bumpalo::Bump, html, DiffMachine, VNode, VirtualDom, FC},
 };
 use futures::{channel::mpsc, future, SinkExt, StreamExt};
 use mpsc::UnboundedSender;
@@ -50,7 +50,7 @@ impl WebsysRenderer {
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
     /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new_with_props<T: Properties + 'static>(root: FC<T>, root_props: T) -> Self {
+    pub fn new_with_props<T: 'static>(root: FC<T>, root_props: T) -> Self {
         Self::from_vdom(VirtualDom::new_with_props(root, root_props))
     }
 

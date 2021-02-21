@@ -87,7 +87,7 @@ pub mod builder {
 
 // types used internally that are important
 pub(crate) mod innerlude {
-    pub(crate) use crate::component::{Component, Properties};
+    // pub(crate) use crate::component::Properties;
     use crate::context::hooks::Hook;
     pub(crate) use crate::context::Context;
     pub(crate) use crate::error::{Error, Result};
@@ -99,7 +99,15 @@ pub(crate) mod innerlude {
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
 
-    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> VNode<'a>;
+    pub type FC<P> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
+
+    mod fc2 {
+        use super::*;
+    }
+    // pub type FC<'a, P: 'a> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
+    // pub type FC<P> = for<'scope, 'r> fn(Context<'scope>, &'scope P) -> DomTree;
+    // pub type FC<P> = for<'scope, 'r> fn(Context<'scope>, &'r P) -> VNode<'scope>;
+    // pub type FC<P> = for<'scope, 'r> fn(Context<'scope>, &'r P) -> VNode<'scope>;
     // pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
 
     // TODO @Jon, fix this
@@ -116,7 +124,7 @@ pub(crate) mod innerlude {
 /// Re-export common types for ease of development use.
 /// Essential when working with the html! macro
 pub mod prelude {
-    pub use crate::component::{Component, Properties};
+    // pub use crate::component::Properties;
     pub use crate::context::Context;
     use crate::nodes;
     pub use crate::virtual_dom::VirtualDom;

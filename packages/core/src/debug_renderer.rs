@@ -3,7 +3,7 @@
 //!
 //! Renderers don't actually need to own the virtual dom (it's up to the implementer).
 
-use crate::prelude::{Properties, VirtualDom};
+use crate::prelude::VirtualDom;
 
 pub struct DebugRenderer {
     vdom: VirtualDom,

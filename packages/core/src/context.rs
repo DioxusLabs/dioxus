@@ -68,8 +68,12 @@ impl<'a> Context<'a> {
     ///     ctx.view(lazy_tree)
     /// }
     ///```
-    pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> VNode<'a> {
-        lazy_nodes(self.bump)
+    pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> DomTree {
+        // pub fn view(self, lazy_nodes: impl for<'b> FnOnce(&'b Bump) -> VNode<'b> + 'a + 'p) -> DomTree {
+        // pub fn view<'p>(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a + 'p) -> DomTree {
+        // pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> VNode<'a> {
+        let g = lazy_nodes(self.bump);
+        DomTree {}
     }
 
     pub fn callback(&self, f: impl Fn(()) + 'static) {}
@@ -103,12 +107,12 @@ pub mod hooks {
         /// TODO: @jon, rework this so we dont have to use unsafe to make hooks and then return them
         /// use_hook provides a way to store data between renders for functional components.
         /// todo @jon: ensure the hook arena is stable with pin or is stable by default
-        pub fn use_hook<'internal, 'scope, InternalHookState: 'static, Output: 'internal>(
+        pub fn use_hook<'scope, InternalHookState: 'static, Output: 'a>(
             &'scope self,
             // The closure that builds the hook state
             initializer: impl FnOnce() -> InternalHookState,
             // The closure that takes the hookstate and returns some value
-            runner: impl FnOnce(&'internal mut InternalHookState) -> Output,
+            runner: impl FnOnce(&'a mut InternalHookState) -> Output,
             // The closure that cleans up whatever mess is left when the component gets torn down
             // TODO: add this to the "clean up" group for when the component is dropped
             cleanup: impl FnOnce(InternalHookState),
@@ -152,7 +156,7 @@ pub mod hooks {
             - We don't expose the raw hook pointer outside of the scope of use_hook
             - The reference is tied to context, meaning it can only be used while ctx is around to free it
             */
-            let borrowed_hook: &'internal mut _ = unsafe { raw_hook.as_mut().unwrap() };
+            let borrowed_hook: &'a mut _ = unsafe { raw_hook.as_mut().unwrap() };
 
             let internal_state = borrowed_hook.0.downcast_mut::<InternalHookState>().unwrap();
 

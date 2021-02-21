@@ -1,5 +1,9 @@
 // use crate::{changelist::EditList, nodes::VNode};
-use crate::{changelist::{self, EditList}, dodriodiff::DiffMachine, nodes::VNode};
+use crate::{
+    changelist::{self, EditList},
+    dodriodiff::DiffMachine,
+    nodes::VNode,
+};
 use crate::{events::EventTrigger, innerlude::*};
 use any::Any;
 use bumpalo::Bump;
@@ -51,7 +55,7 @@ impl VirtualDom {
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
-    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
+    pub fn new_with_props<P: 'static>(root: FC<P>, root_props: P) -> Self {
         // 1. Create the component arena
         // 2. Create the base scope (can never be removed)
         // 3. Create the lifecycle queue
@@ -82,7 +86,7 @@ impl VirtualDom {
     }
 
     /// With access to the virtual dom, schedule an update to the Root component's props
-    pub fn update_props<P: Properties + 'static>(&mut self, new_props: P) -> Result<()> {
+    pub fn update_props<P: 'static>(&mut self, new_props: P) -> Result<()> {
         // Ensure the props match
         if TypeId::of::<P>() != self._root_prop_type {
             return Err(Error::WrongProps);
@@ -262,10 +266,10 @@ pub enum LifecycleType {
     Mount {
         to: Option<Index>,
         under: usize,
-        props: Box<dyn Properties>,
+        props: Box<dyn std::any::Any>,
     },
     PropsChanged {
-        props: Box<dyn Properties>,
+        props: Box<dyn std::any::Any>,
     },
     Rendered,
     Mounted,
@@ -279,12 +283,7 @@ pub enum LifecycleType {
 impl LifecycleEvent {
     // helper method for shortcutting to the enum type
     // probably not necessary
-    fn mount<P: Properties + 'static>(
-        which: Index,
-        to: Option<Index>,
-        under: usize,
-        props: P,
-    ) -> Self {
+    fn mount<P: 'static>(which: Index, to: Option<Index>, under: usize, props: P) -> Self {
         Self {
             component_index: which,
             event_type: LifecycleType::Mount {

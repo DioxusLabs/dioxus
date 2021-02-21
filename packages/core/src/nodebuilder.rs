@@ -1,6 +1,7 @@
 //! Helpers for building virtual DOM VNodes.
 
 use crate::{
+    innerlude::VComponent,
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::VElement,
 };
@@ -1078,4 +1079,9 @@ pub fn on<'a, 'b, F: 'static>(
         event,
         callback: bump.alloc(callback),
     }
+}
+
+pub fn virtual_child<'a, T>(bump: &'a Bump, props: T, f: crate::innerlude::FC<T>) -> VNode<'a> {
+    todo!()
+    // VNode::Component()
 }

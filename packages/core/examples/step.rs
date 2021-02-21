@@ -16,16 +16,18 @@ fn main() -> Result<(), ()> {
     Ok(())
 }
 
+#[derive(Debug)]
 struct Props {
     name: String,
 }
-impl Properties for Props {
-    fn call(&self, ptr: *const ()) {}
 
-    // fn new() -> Self {
-    //     todo!()
-    // }
-}
+// impl Properties for Props {
+//     fn call(&self, ptr: *const ()) {}
+
+//     // fn new() -> Self {
+//     //     todo!()
+//     // }
+// }
 
 static Example: FC<Props> = |ctx, props| {
     ctx.view(html! {

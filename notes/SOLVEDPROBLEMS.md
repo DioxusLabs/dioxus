@@ -287,3 +287,71 @@ On the actual diffing level, we're using the diffing algorithm pulled from Dodri
 ## Patch Stream
 
 One of the most important parts of Dioxus is the ability to stream patches from server to client. However, this inherently has challenges where raw VNodes attach listeners to themselves, and are therefore not serializable. 
+
+
+### How do properties work?
+
+How should properties passing work? Should we directly call the child? Should we box the props? Should we replace the pops inside the box?
+
+Here's (generally) my head is at:
+
+Components need to store their props on them if they want to be updated remotely. These props *can* be updated after the fact.
+
+Perf concerns:
+unnecessary function runs
+    - list-y components
+    - hook calls?
+    - making vnodes?
+  
+Does any of this matter?
+Should we just run any component we see, immediately and imperatively? That will cause checks throughout the whole tree, no matter where the update occurred 
+
+
+https://calendar.perfplanet.com/2013/diff/
+
+Here's how react does it:
+
+Any "dirty" node causes an entire subtree render. Calling "setState" at the very top will cascade all the way down. This is particularly bad for this component design:
+
+```rust
+static APP: FC<()> = |ctx, props| {
+    let title = use_context(Title);
+    ctx.view(html!{
+        <div>
+            <h1> "{title}"</h1>
+            <HeavyList /> // VComponent::new(|| (FC, PropsForFc)) -> needs a context to immediately update the component's props imperatively? store the props in a box on bump? store the props on the child?
+            // if props didnt change, then let the refernece stay invalid?.... no, cant do that, bump gets reset
+            // immediately update props on the child component if it can be found? -> interesting, feels wrong, but faster, at the very least.
+            // can box on bump for the time being (fast enough), and then move it over? during the comparison phase? props only need to matter 
+            // cant downcast (can with transmute, but yikes)
+            // how does chain borrowing work? a -> b -> c -> d
+            // if b gets marked as dirty, then c and d are invalidated (semantically, UB, but not *bad* UB, just data races)
+            // make props static? -> easy to move, gross to use
+            //
+            // treat like a context selector?
+            // use_props::<P>(2)
+            // child_props: Map<Scope, Box<dyn Props>>
+            // vs children: BTreeSet<Scope> -> to get nth 
+        </div>
+    })
+};
+static HEAVY_LIST: FC<()> = |ctx, props| {
+    ctx.view({
+        {0.100.map(i => <BigElement >)}
+    })
+};
+```
+
+An update to the use_context subscription will mark the node as dirty. The node then is forced to re-analyze HeavyList, even though HeavyList did not change. We should automatically implement this suppression knowing that props are immutable and can be partialeq.
+
+## FC Layout
+
+The FC layout was altered to make life easier for us inside the VirtualDom. The "view" function returns an unbounded DomTree object. Calling the "view" function is unsafe under the hood, but prevents lifetimes from leaking out of the function call. Plus, it's easier to write. Because there are no lifetimes on the output (occur purely under the hood), we can escape needing to annotate them.
+
+```rust
+fn component(ctx: Context, props: &Props) -> DomTree {
+
+}
+```
+
+The DomTree object purely represents a viewable "key". It also forces components to use the "view" function as there is no other way to generate the DomTree object. Because the DomTree is a required type of FC, we can guarantee the same usage and flow patterns for all components.
