@@ -1,5 +1,9 @@
 //! Demonstrate that borrowed data is possible as a property type
 //! Borrowing (rather than cloning) is very important for speed and ergonomics.
+//!
+//! It's slightly more advanced than just cloning, but well worth the investment.
+//!
+//! If you use the FC macro, we handle the lifetimes automatically, making it easy to write efficient & performant components.
 
 fn main() {}
 
