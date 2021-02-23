@@ -36,6 +36,7 @@ use interpreter::PatchMachine;
 ///
 pub struct WebsysRenderer {
     internal_dom: VirtualDom,
+    // Map of handlers
 }
 
 impl WebsysRenderer {

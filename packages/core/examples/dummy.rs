@@ -52,7 +52,7 @@ impl<'a> Context<'a> {
     fn use_context<'b, I, O: 'b>(&self, f: fn(&'b I) -> O) -> ContextGuard2<O> {
         todo!()
     }
-    fn add_listener(&self, f: impl Fn(()) + 'static) {
+    fn add_listener(&self, f: impl Fn(()) + 'a) {
         todo!()
     }
 
@@ -78,6 +78,8 @@ fn t<'a>(ctx: Context<'a>) {
     ctx.add_listener(move |_| {
         // let val = value.get().as_str();
         let val2 = r2.as_bytes();
+        println!("v2 is {}", r2);
+        // println!("refed is {}", refed);
     });
 
     // let refed = value.deref();

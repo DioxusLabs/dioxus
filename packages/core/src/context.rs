@@ -80,7 +80,7 @@ impl<'a> Context<'a> {
         DomTree {}
     }
 
-    pub fn callback(&self, f: impl Fn(()) + 'static) {}
+    pub fn callback(&self, f: impl Fn(()) + 'a) {}
 
     /// Create a suspended component from a future.
     ///
@@ -188,7 +188,7 @@ mod context_api {
     //!
     use super::*;
 
-    use std::{marker::PhantomPinned, ops::Deref};
+    use std::{marker::PhantomPinned, mem::swap, ops::Deref};
 
     pub struct RemoteState<T> {
         inner: *const T,
