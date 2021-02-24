@@ -78,7 +78,9 @@ impl VirtualDom {
         }
     }
 
-    //// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom
+    /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom.
+    ///
+    ///
     pub fn rebuild(&mut self) -> Result<EditList<'_>> {
         // Reset and then build a new diff machine
         // The previous edit list cannot be around while &mut is held

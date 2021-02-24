@@ -56,8 +56,8 @@ impl WebsysRenderer {
     }
 
     /// Create a new text renderer from an existing Virtual DOM.
-    /// This will progress the existing VDom's events to completion.
     pub fn from_vdom(dom: VirtualDom) -> Self {
+        // todo: initialize the event registry properly
         Self {
             internal_dom: dom,
             _event_map: FxHashMap::default(),
@@ -67,15 +67,17 @@ impl WebsysRenderer {
     pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
         let (sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
 
-        let body = prepare_websys_dom();
-        let mut patch_machine = interpreter::PatchMachine::new(body.clone());
-        let root_node = body.first_child().unwrap();
+        let body_element = prepare_websys_dom();
+        let mut patch_machine = interpreter::PatchMachine::new(body_element.clone());
+        let root_node = body_element.first_child().unwrap();
         patch_machine.stack.push(root_node);
+
+        // todo: initialize the event registry properly on the root element
 
         self.internal_dom
             .rebuild()?
-            .into_iter()
-            .for_each(|edit| patch_machine.handle_edit(&edit));
+            .iter()
+            .for_each(|edit| patch_machine.handle_edit(edit));
 
         // Event loop waits for the receiver to finish up
         // TODO! Connect the sender to the virtual dom's suspense system
@@ -83,9 +85,9 @@ impl WebsysRenderer {
         while let Some(event) = receiver.next().await {
             self.internal_dom
                 .progress_with_event(event)?
-                .into_iter()
+                .iter()
                 .for_each(|edit| {
-                    patch_machine.handle_edit(&edit);
+                    patch_machine.handle_edit(edit);
                 });
         }
 
