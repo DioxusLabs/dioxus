@@ -25,6 +25,15 @@ pub struct WebsysRenderer {
 }
 
 impl WebsysRenderer {
+    /// This method is the primary entrypoint for Websys Dioxus apps. Will panic if an error occurs while rendering.
+    /// See DioxusErrors for more information on how these errors could occour.
+    ///
+    /// ```ignore
+    /// fn main() {
+    ///     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
+    /// }
+    /// ```
+    ///
     /// Run the app to completion, panicing if any error occurs while rendering.
     /// Pairs well with the wasm_bindgen async handler
     pub async fn start(root: FC<()>) {
