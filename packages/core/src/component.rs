@@ -2,10 +2,6 @@
 //! for components to be used within Nodes.
 //!
 
-use std::fmt::Debug;
-
-use crate::innerlude::*;
-
 /// The `Component` trait refers to any struct or funciton that can be used as a component
 /// We automatically implement Component for FC<T>
 // pub trait Component {
@@ -39,8 +35,8 @@ use crate::innerlude::*;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::prelude::bumpalo::Bump;
+    use crate::prelude::*;
 
     fn test_static_fn<'a, P>(b: &'a Bump, r: FC<P>) -> VNode<'a> {
         todo!()

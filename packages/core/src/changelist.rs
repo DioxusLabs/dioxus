@@ -19,11 +19,11 @@
 //!
 //!
 
-use std::ops::{Deref, DerefMut};
+
 
 use bumpalo::Bump;
 
-use crate::innerlude::{Listener, VirtualDom};
+use crate::innerlude::{Listener};
 
 /// The `Edit` represents a single modifcation of the renderer tree.
 ///
@@ -73,7 +73,7 @@ pub struct EditMachine<'src> {
 }
 
 impl<'b> EditMachine<'b> {
-    pub fn new(bump: &'b Bump) -> Self {
+    pub fn new(_bump: &'b Bump) -> Self {
         Self {
             traversal: Traversal::new(),
             next_temporary: 0,
@@ -206,7 +206,7 @@ impl<'a> EditMachine<'a> {
         self.emitter.push(Edit::InsertBefore {})
     }
 
-    pub fn ensure_string(&mut self, string: &str) -> StringKey {
+    pub fn ensure_string(&mut self, _string: &str) -> StringKey {
         todo!()
         // self.strings.ensure_string(string, &self.emitter)
     }
@@ -308,7 +308,7 @@ impl<'a> EditMachine<'a> {
         self.forcing_new_listeners = previous;
     }
 
-    pub fn new_event_listener(&mut self, listener: &Listener) {
+    pub fn new_event_listener(&mut self, _listener: &Listener) {
         debug_assert!(self.traversal_is_committed());
         todo!("Event listener not wired up yet");
         // debug!("emit: new_event_listener({:?})", listener);
@@ -330,14 +330,14 @@ impl<'a> EditMachine<'a> {
         todo!("Event listener not wired up yet");
         // let (a, b) = listener.get_callback_parts();
         // debug_assert!(a != 0);
-        let event_id = self.ensure_string(listener.event);
+        let _event_id = self.ensure_string(listener.event);
         // self.emitter.update_event_listener(event_id.into(), a, b);
     }
 
     pub fn remove_event_listener(&mut self, event: &str) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: remove_event_listener({:?})", event);
-        let event_id = self.ensure_string(event);
+        let _event_id = self.ensure_string(event);
         todo!("Event listener not wired up yet");
         // self.emitter.remove_event_listener(event_id.into());
     }

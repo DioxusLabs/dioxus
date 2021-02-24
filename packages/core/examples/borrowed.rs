@@ -38,6 +38,6 @@ struct ChildProps<'a> {
     item: &'a ListItem,
 }
 
-fn child_item(ctx: Context, props: &ChildProps) -> DomTree {
+fn child_item(_ctx: Context, _props: &ChildProps) -> DomTree {
     todo!()
 }

@@ -3,7 +3,7 @@ use crate::innerlude::*;
 use crate::nodes::VNode;
 use bumpalo::Bump;
 use generational_arena::Index;
-use owning_ref::StableAddress;
+
 use std::{
     any::TypeId,
     borrow::{Borrow, BorrowMut},
@@ -105,7 +105,7 @@ impl Scope {
     /// Update this component's props with a new set of props, remotely
     ///
     ///
-    pub(crate) fn update_props<'a, P>(&self, new_props: P) -> crate::error::Result<()> {
+    pub(crate) fn update_props<'a, P>(&self, _new_props: P) -> crate::error::Result<()> {
         Ok(())
     }
 
@@ -133,7 +133,7 @@ impl Scope {
             // these lifetimes could be very broken, so we need to dynamically manage them
             let caller = std::mem::transmute::<*const (), FC<PLocked>>(self.caller);
             let props = self.props.downcast_ref::<PLocked>().unwrap();
-            let nodes: DomTree = caller(ctx, props);
+            let _nodes: DomTree = caller(ctx, props);
             todo!("absorb domtree into self")
             // let nodes: VNode<'bump> = caller(ctx, props);
 

@@ -3,7 +3,7 @@
 //!
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 
-use std::marker::PhantomData;
+
 
 use bumpalo::Bump;
 pub use vcomponent::VComponent;
@@ -97,7 +97,7 @@ mod vnode {
 
 mod velement {
     use super::*;
-    use std::{collections::HashMap, fmt::Debug};
+    use std::{fmt::Debug};
 
     #[derive(Debug)]
     pub struct VElement<'a> {
@@ -133,7 +133,7 @@ mod velement {
 
     impl<'a> VElement<'a> {
         // The tag of a component MUST be known at compile time
-        pub fn new(tag: &'a str) -> Self {
+        pub fn new(_tag: &'a str) -> Self {
             todo!()
             // VElement {
             //     tag,
@@ -265,9 +265,9 @@ mod vtext {
 /// Only supports the functional syntax
 mod vcomponent {
     use crate::innerlude::FC;
-    use std::{any::TypeId, fmt, future::Future, marker::PhantomData};
+    use std::{marker::PhantomData};
 
-    use super::VNode;
+    
 
     #[derive(Debug)]
     pub struct VComponent<'src> {
@@ -279,8 +279,8 @@ mod vcomponent {
 
     impl<'a> VComponent<'a> {
         pub fn new<P>(caller: FC<P>, props: P) -> Self {
-            let caller = caller as *const ();
-            let props = Box::new(props);
+            let _caller = caller as *const ();
+            let _props = Box::new(props);
 
             todo!()
             // Self {

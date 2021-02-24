@@ -2,12 +2,11 @@
 use crate::{
     changelist::{self, EditList},
     dodriodiff::DiffMachine,
-    nodes::VNode,
 };
 use crate::{events::EventTrigger, innerlude::*};
-use any::Any;
+
 use bumpalo::Bump;
-use changelist::EditMachine;
+
 use generational_arena::{Arena, Index};
 use std::{
     any::{self, TypeId},
@@ -107,7 +106,7 @@ impl VirtualDom {
         let EventTrigger {
             component_id,
             listener_id,
-            event,
+            event: _,
         } = evt;
 
         let component = self
@@ -159,13 +158,13 @@ impl VirtualDom {
     fn process_lifecycle(&mut self, LifecycleEvent { event_type }: LifecycleEvent) -> Result<()> {
         match event_type {
             // Component needs to be mounted to the virtual dom
-            LifecycleType::Mount { to, under, props } => {}
+            LifecycleType::Mount { to: _, under: _, props: _ } => {}
 
             // The parent for this component generated new props and the component needs update
-            LifecycleType::PropsChanged { props, component } => {}
+            LifecycleType::PropsChanged { props: _, component: _ } => {}
 
             // Component was messaged via the internal subscription service
-            LifecycleType::Callback { component } => {}
+            LifecycleType::Callback { component: _ } => {}
         }
 
         Ok(())
@@ -216,7 +215,7 @@ pub enum LifecycleType {
 impl LifecycleEvent {
     fn index(&self) -> Option<Index> {
         match &self.event_type {
-            LifecycleType::Mount { to, under, props } => None,
+            LifecycleType::Mount { to: _, under: _, props: _ } => None,
 
             LifecycleType::PropsChanged { component, .. }
             | LifecycleType::Callback { component } => Some(component.clone()),

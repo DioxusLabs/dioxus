@@ -335,7 +335,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn on(mut self, event: &'a str, callback: impl Fn(()) + 'a) -> Self
+    pub fn on(self, _event: &'a str, _callback: impl Fn(()) + 'a) -> Self
 // pub fn on<F>(mut self, event: &'a str, callback: impl Fn(()) -> () + 'static) -> Self
 // F: Fn(()) + 'static,
         // F: Fn(()) + 'a,
@@ -1081,7 +1081,7 @@ pub fn on<'a, 'b, F: 'static>(
     }
 }
 
-pub fn virtual_child<'a, T>(bump: &'a Bump, props: T, f: crate::innerlude::FC<T>) -> VNode<'a> {
+pub fn virtual_child<'a, T>(_bump: &'a Bump, _props: T, _f: crate::innerlude::FC<T>) -> VNode<'a> {
     todo!()
     // VNode::Component()
 }

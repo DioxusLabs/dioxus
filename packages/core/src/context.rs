@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::{innerlude::Scope, nodes::VNode};
+use crate::{nodes::VNode};
 use bumpalo::Bump;
 use hooks::Hook;
 use std::{
@@ -76,18 +76,18 @@ impl<'a> Context<'a> {
         // pub fn view(self, lazy_nodes: impl for<'b> FnOnce(&'b Bump) -> VNode<'b> + 'a + 'p) -> DomTree {
         // pub fn view<'p>(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a + 'p) -> DomTree {
         // pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> VNode<'a> {
-        let g = lazy_nodes(self.bump);
+        let _g = lazy_nodes(self.bump);
         DomTree {}
     }
 
-    pub fn callback(&self, f: impl Fn(()) + 'a) {}
+    pub fn callback(&self, _f: impl Fn(()) + 'a) {}
 
     /// Create a suspended component from a future.
     ///
     /// When the future completes, the component will be renderered
     pub fn suspend(
         &self,
-        fut: impl Future<Output = impl FnOnce(&'a Bump) -> VNode<'a>>,
+        _fut: impl Future<Output = impl FnOnce(&'a Bump) -> VNode<'a>>,
     ) -> VNode<'a> {
         todo!()
     }
@@ -119,7 +119,7 @@ pub mod hooks {
             runner: impl FnOnce(&'a mut InternalHookState) -> Output,
             // The closure that cleans up whatever mess is left when the component gets torn down
             // TODO: add this to the "clean up" group for when the component is dropped
-            cleanup: impl FnOnce(InternalHookState),
+            _cleanup: impl FnOnce(InternalHookState),
         ) -> Output {
             let raw_hook = {
                 let idx = self.idx.load(std::sync::atomic::Ordering::Relaxed);
@@ -186,9 +186,9 @@ mod context_api {
     //! a failure of implementation.
     //!
     //!
-    use super::*;
+    
 
-    use std::{marker::PhantomPinned, mem::swap, ops::Deref};
+    use std::{ops::Deref};
 
     pub struct RemoteState<T> {
         inner: *const T,
@@ -229,7 +229,7 @@ Context should *never* be dangling!. If a Context is torn down, so should anythi
 
     impl<'a> super::Context<'a> {
         // impl<'a, P> super::Context<'a, P> {
-        pub fn use_context<I, O>(&'a self, narrow: impl Fn(&'_ I) -> &'_ O) -> RemoteState<O> {
+        pub fn use_context<I, O>(&'a self, _narrow: impl Fn(&'_ I) -> &'_ O) -> RemoteState<O> {
             todo!()
         }
     }

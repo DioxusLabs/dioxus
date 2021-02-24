@@ -950,7 +950,7 @@ impl<'a> DiffMachine<'a> {
     // When this function returns, the change list stack is in the same state.
     pub fn remove_all_children(&mut self, old: &[VNode<'a>]) {
         debug_assert!(self.change_list.traversal_is_committed());
-        for child in old {
+        for _child in old {
             // registry.remove_subtree(child);
         }
         // Fast way to remove all children: set the node's textContent to an empty
@@ -984,7 +984,7 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     pub fn remove_self_and_next_siblings(&mut self, old: &[VNode<'a>]) {
         debug_assert!(self.change_list.traversal_is_committed());
-        for child in old {
+        for _child in old {
             // registry.remove_subtree(child);
         }
         self.change_list.remove_self_and_next_siblings();
@@ -1001,7 +1001,7 @@ enum KeyedPrefixResult {
 }
 
 mod support {
-    use super::*;
+    
 
     // // Get or create the template.
     // //

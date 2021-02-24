@@ -25,7 +25,7 @@ struct OutputNode<'a> {
 // everything is managed at runtime because that's how we make something ergonomc
 // lifetime management in dioxus is just cheating around the rules
 // our kind god manages lifetimes for us so we don't have to, thanks god
-fn something<'s>(props: &'s SomeProps<'s>) -> OutputNode<'s> {
+fn something<'s>(_props: &'s SomeProps<'s>) -> OutputNode<'s> {
     todo!()
 }
 

@@ -1,10 +1,10 @@
 //! An alternative function syntax
 //!
 
-use std::marker::PhantomData;
+
 
 use bumpalo::Bump;
-use dioxus_core::prelude::{DomTree, VNode};
+use dioxus_core::prelude::{VNode};
 
 fn main() {}
 
@@ -13,7 +13,7 @@ struct Context2<'a, P> {
     rops: &'a P,   // _p: PhantomData<&'a ()>,
 }
 impl<'a, P> Context2<'a, P> {
-    fn view(self, f: impl FnOnce(&'a Bump) -> VNode<'a>) -> DTree {
+    fn view(self, _f: impl FnOnce(&'a Bump) -> VNode<'a>) -> DTree {
         DTree {}
     }
 
@@ -23,9 +23,9 @@ impl<'a, P> Context2<'a, P> {
 
     pub fn use_hook<'scope, InternalHookState: 'static, Output: 'a>(
         &'scope self,
-        initializer: impl FnOnce() -> InternalHookState,
-        runner: impl FnOnce(&'a mut InternalHookState) -> Output,
-        cleanup: impl FnOnce(InternalHookState),
+        _initializer: impl FnOnce() -> InternalHookState,
+        _runner: impl FnOnce(&'a mut InternalHookState) -> Output,
+        _cleanup: impl FnOnce(InternalHookState),
     ) -> Output {
         todo!()
     }
@@ -35,7 +35,7 @@ trait Properties {}
 
 struct DTree;
 // type FC2<'a, T: 'a> = fn(Context2<T>) -> DTree;
-fn virtual_child<'a, T: 'a>(bump: &'a Bump, props: T, f: FC2<T>) -> VNode<'a> {
+fn virtual_child<'a, T: 'a>(_bump: &'a Bump, _props: T, _f: FC2<T>) -> VNode<'a> {
     todo!()
 }
 
@@ -56,7 +56,7 @@ fn Example(ctx: Context2<Props>) -> DTree {
 }
 
 // #[fc]
-fn Example2(ctx: Context2<()>, name: &str, blah: &str) -> DTree {
+fn Example2(ctx: Context2<()>, name: &str, _blah: &str) -> DTree {
     let val = use_state(&ctx, || String::from("asd"));
 
     ctx.view(move |b| {
@@ -67,10 +67,10 @@ fn Example2(ctx: Context2<()>, name: &str, blah: &str) -> DTree {
     })
 }
 
-type FC2<'a, T: 'a> = fn(Context2<T>) -> DTree;
+type FC2<'a, T> = fn(Context2<T>) -> DTree;
 
 // still works if you don't take any references in your props (ie, something copy or cloneable)
-static CHILD: FC2<Props2> = |ctx: Context2<Props2>| {
+static CHILD: FC2<Props2> = |_ctx: Context2<Props2>| {
     //
     todo!()
 };
@@ -81,15 +81,15 @@ struct Props2<'a> {
 impl Properties for Props2<'_> {}
 
 fn AltChild(ctx: Context2<Props2>) -> DTree {
-    ctx.view(|b| {
+    ctx.view(|_b| {
         //
         todo!()
     })
 }
 
 fn use_state<'a, 'c, P, T: 'static, F: FnOnce() -> T>(
-    ctx: &'_ Context2<'a, P>,
-    initial_state_fn: F,
-) -> (&'a T) {
+    _ctx: &'_ Context2<'a, P>,
+    _initial_state_fn: F,
+) -> &'a T {
     todo!()
 }

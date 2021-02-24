@@ -4,7 +4,7 @@
 // use dioxus_core::prelude::VNode;
 // use dioxus_core::prelude::*;
 // use once_cell::sync::{Lazy, OnceCell};
-use std::{collections::HashMap, future::Future, marker::PhantomData};
+
 
 use std::ops::Deref;
 
@@ -49,14 +49,14 @@ struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    fn use_context<'b, I, O: 'b>(&self, f: fn(&'b I) -> O) -> ContextGuard2<O> {
+    fn use_context<'b, I, O: 'b>(&self, _f: fn(&'b I) -> O) -> ContextGuard2<O> {
         todo!()
     }
-    fn add_listener(&self, f: impl Fn(()) + 'a) {
+    fn add_listener(&self, _f: impl Fn(()) + 'a) {
         todo!()
     }
 
-    fn view(self, f: impl FnOnce(&'a String) + 'a) {}
+    fn view(self, _f: impl FnOnce(&'a String) + 'a) {}
     // fn view(self, f: impl for<'b> FnOnce(&'a String) + 'a) {}
     // fn view(self, f: impl for<'b> FnOnce(&'b String) + 'a) {}
 }
@@ -77,7 +77,7 @@ fn t<'a>(ctx: Context<'a>) {
 
     ctx.add_listener(move |_| {
         // let val = value.get().as_str();
-        let val2 = r2.as_bytes();
+        let _val2 = r2.as_bytes();
         println!("v2 is {}", r2);
         // println!("refed is {}", refed);
     });
@@ -97,7 +97,7 @@ fn t<'a>(ctx: Context<'a>) {
         // let val2 = refed.as_bytes();
     });
 
-    ctx.view(move |b| {});
+    ctx.view(move |_b| {});
 }
 
 fn main() {}

@@ -10,7 +10,7 @@ use dioxus_core::prelude::*;
 fn main() -> Result<(), ()> {
     let p1 = Props { name: "bob".into() };
 
-    let mut vdom = VirtualDom::new_with_props(Example, p1);
+    let _vdom = VirtualDom::new_with_props(Example, p1);
     // vdom.progress()?;
 
     Ok(())
@@ -29,7 +29,7 @@ struct Props {
 //     // }
 // }
 
-static Example: FC<Props> = |ctx, props| {
+static Example: FC<Props> = |ctx, _props| {
     ctx.view(html! {
         <div>
             <h1> "hello world!" </h1>
