@@ -1,17 +1,14 @@
-//! basic example that renders a simple domtree to the page :)
+//! Basic example that renders a simple domtree to the browser.
 
 use dioxus_core::prelude::*;
 use dioxus_web::*;
 
 fn main() {
-    // Enable logging
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
+}
 
-    // Route panic as console_log
-    console_error_panic_hook::set_once();
-
-    // Render the app
-    WebsysRenderer::simple_render(html! {
+static App: FC<()> = |ctx, _| {
+    ctx.view(html! {
         <div>
             <div class="flex items-center justify-center flex-col">
                 <div class="font-bold text-xl"> "Count is {}" </div>
@@ -19,5 +16,5 @@ fn main() {
                 <button onclick={move |_| log::info!("button2 clicked!")}> "decrement" </button>
             </div>
         </div>
-    });
-}
+    })
+};

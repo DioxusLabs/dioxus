@@ -1,26 +1,12 @@
 //! Dioxus WebSys
 //! --------------
-//! This crate implements a renderer of the Dioxus Virtual DOM for the web browser.
-//!
-//! While it is possible to render a single component directly, it is not possible to render component trees. For these,
-//! an external renderer is needed to progress the component lifecycles. The `WebsysRenderer` shows how to use the Virtual DOM
-//! API to progress these lifecycle events to generate a fully-mounted Virtual DOM instance which can be renderer in the
-//! `render` method.
-//!
-//! ```ignore
-//! fn main() {
-//!     let renderer = WebsysRenderer::<()>::new(|_| html! {<div> "Hello world" </div>});
-//!     let output = renderer.render();
-//!     assert_eq!(output, "<div>Hello World</div>");
-//! }
-//! ```
-//!
-//! The `WebsysRenderer` is particularly useful when needing to cache a Virtual DOM in between requests
+//! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using Websys.
+
+use fxhash::FxHashMap;
 use web_sys::{window, Document, Element, Event, Node};
 
 use dioxus::prelude::VElement;
-// use dioxus::{patch::Patch, prelude::VText};
-// use dioxus::{patch::Patch, prelude::VText};
+
 pub use dioxus_core as dioxus;
 use dioxus_core::{
     events::EventTrigger,
@@ -33,15 +19,24 @@ use futures::{
 use mpsc::UnboundedSender;
 pub mod interpreter;
 use interpreter::PatchMachine;
+
 /// The `WebsysRenderer` provides a way of rendering a Dioxus Virtual DOM to the browser's DOM.
 /// Under the hood, we leverage WebSys and interact directly with the DOM
-
 ///
 pub struct WebsysRenderer {
     internal_dom: VirtualDom,
+
+    // this should be a component index
+    event_map: FxHashMap<(u32, u32), u32>,
 }
 
 impl WebsysRenderer {
+    /// Run the app to completion, panicing if any error occurs while rendering.
+    /// Pairs well with the wasm_bindgen async handler
+    pub async fn start(root: FC<()>) {
+        Self::new(root).run().await.expect("Virtual DOM failed");
+    }
+
     /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
@@ -60,109 +55,40 @@ impl WebsysRenderer {
     /// Create a new text renderer from an existing Virtual DOM.
     /// This will progress the existing VDom's events to completion.
     pub fn from_vdom(dom: VirtualDom) -> Self {
-        Self { internal_dom: dom }
+        Self {
+            internal_dom: dom,
+            event_map: FxHashMap::default(),
+        }
     }
 
-    /// Run the renderer, progressing any events that crop up
-    /// Yield on event handlers
     pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
-        // Connect the listeners to the event loop
         let (mut sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
 
-        // Send the start event
         sender
             .send(EventTrigger::start_event())
             .await
             .expect("Should not fail");
 
-        prepare_websys_dom();
+        let body = prepare_websys_dom();
+        let mut patch_machine = PatchMachine::new(body.clone());
+        let root_node = body.first_child().unwrap();
+        patch_machine.stack.push(root_node);
 
         // Event loop waits for the receiver to finish up
         // TODO! Connect the sender to the virtual dom's suspense system
         // Suspense is basically an external event that can force renders to specific nodes
         while let Some(event) = receiver.next().await {
-            // event is triggered
-            // relevant listeners are ran
-            // internal state is modified, components are tagged for changes
-
-            match self.internal_dom.progress_with_event(event) {
-                Err(_) => {}
-                Ok(_) => {} // Ok(_) => render_diffs(),
+            let diffs = self.internal_dom.progress_with_event(event)?;
+            for edit in &diffs {
+                patch_machine.handle_edit(edit);
             }
-            // waiting for next event to arrive from the external triggers
         }
 
-        Ok(())
-    }
-
-    pub fn simple_render(tree: impl for<'a> Fn(&'a Bump) -> VNode<'a>) {
-        let bump = Bump::new();
-
-        // Choose the body to render the app into
-        let window = web_sys::window().expect("should have access to the Window");
-        let document = window
-            .document()
-            .expect("should have access to the Document");
-        let body = document.body().unwrap();
-
-        // Build a dummy div
-        let container: &Element = body.as_ref();
-        container.set_inner_html("");
-        container
-            .append_child(
-                document
-                    .create_element("div")
-                    .expect("should create element OK")
-                    .as_ref(),
-            )
-            .expect("should append child OK");
-
-        // Create the old dom and the new dom
-        // The old is just an empty div, like the one we made above
-        let old = html! { <div> </div> }(&bump);
-        let new = tree(&bump);
-
-        // Build a machine that diffs doms
-        let mut diff_machine = DiffMachine::new(&bump);
-        diff_machine.diff_node(&old, &new);
-
-        // Build a machine that patches doms
-        // In practice, the diff machine might be on a different computer, sending us patches
-        let mut patch_machine = PatchMachine::new(body.clone().into());
-
-        // need to make sure we push the root node onto the stack before trying to run anything
-        // this provides an entrance for the diffing machine to do its work
-        // Here, we grab the div out of the container (the body) to connect with the dummy div we made above
-        // This is because we don't support fragments (yet)
-        let root_node = container.first_child().unwrap();
-        patch_machine.stack.push(root_node);
-
-        // Consume the diff machine, generating the patch list
-        for patch in diff_machine.consume() {
-            patch_machine.handle_edit(&patch);
-            log::info!("Patch is {:?}", patch);
-        }
-    }
-
-    pub fn complex_render(
-        tree1: impl for<'a> Fn(&'a Bump) -> VNode<'a>,
-        tree2: impl for<'a> Fn(&'a Bump) -> VNode<'a>,
-    ) {
-        let bump = Bump::new();
-
-        let old = tree1(&bump);
-        let new = tree2(&bump);
-
-        let mut machine = DiffMachine::new(&bump);
-        machine.diff_node(&old, &new);
-
-        for patch in machine.consume() {
-            println!("Patch is {:?}", patch);
-        }
+        Ok(()) // should actually never return from this, should be an error
     }
 }
 
-fn prepare_websys_dom() {
+fn prepare_websys_dom() -> Element {
     // Initialize the container on the dom
     // Hook up the body as the root component to render tinto
     let window = web_sys::window().expect("should have access to the Window");
@@ -182,6 +108,8 @@ fn prepare_websys_dom() {
                 .as_ref(),
         )
         .expect("should append child OK");
+
+    container.clone()
 }
 
 // Progress the mount of the root component
@@ -213,39 +141,15 @@ mod tests {
         env::set_var("RUST_LOG", "trace");
         pretty_env_logger::init();
         log::info!("Hello!");
-        let renderer = WebsysRenderer::simple_render(html! {
-            <div>
-                "Hello world"
-                <button onclick={move |_| log::info!("button1 clicked!")}> "click me" </button>
-                <button onclick={move |_| log::info!("button2 clicked!")}> "click me" </button>
-            </div>
-        });
-    }
 
-    #[test]
-    fn complex_patch() {
-        env::set_var("RUST_LOG", "trace");
-        pretty_env_logger::init();
-        log::info!("Hello!");
-        let renderer = WebsysRenderer::complex_render(
-            html! {
+        wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, _| {
+            ctx.view(html! {
                 <div>
                     "Hello world"
-                    <div>
-                        <h1> "Heading" </h1>
-                    </div>
+                    <button onclick={move |_| log::info!("button1 clicked!")}> "click me" </button>
+                    <button onclick={move |_| log::info!("button2 clicked!")}> "click me" </button>
                 </div>
-            },
-            html! {
-                <div>
-                    "Hello world"
-                    "Hello world"
-                    "Hello world"
-                    <div>
-                        <h1> "Heading" </h1>
-                    </div>
-                </div>
-            },
-        );
+            })
+        }))
     }
 }

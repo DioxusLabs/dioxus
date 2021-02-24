@@ -52,9 +52,8 @@ impl Stack {
         );
         match self.list.last() {
             Some(a) => a,
-            None => panic!("should not happen"),
+            None => panic!("Called 'top' of an empty stack, make sure to push the root first"),
         }
-        // &self.list[self.list.len() - 1]
     }
 }
 

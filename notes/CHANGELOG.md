@@ -51,6 +51,8 @@
 - [x] (Core) Arena allocate VNodes
 - [x] (Core) Allow VNodes to borrow arena contents
 - [x] (Core) Introduce the VDOM and patch API for 3rd party renderers
-- [ ] (Core) Implement lifecycle
-- [ ] (Core) Implement an event system 
+- [x] (Core) Implement lifecycle
+- [x] (Core) Implement an event system 
+- [ ] (Core) Implement child nodes, scope creation
+- [ ] (Core) Implement dirty tagging and compression
 
