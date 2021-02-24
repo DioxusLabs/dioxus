@@ -16,34 +16,45 @@ impl EventTrigger {
     pub fn new() -> Self {
         todo!()
     }
-
-    /// Create a new "start" event that boots up the virtual dom if it is paused
-    pub fn start_event() -> Self {
-        todo!()
-    }
 }
 
 pub enum VirtualEvent {
-    // the event to drain the current lifecycle queue
-    // Used to initate the dom
-    StartEvent,
-
     // Real events
-    ClipboardEvent,
-    CompositionEvent,
-    KeyboardEvent,
-    FocusEvent,
-    FormEvent,
-    GenericEvent,
-    MouseEvent,
-    PointerEvent,
-    SelectionEvent,
-    TouchEvent,
-    UIEvent,
-    WheelEvent,
-    MediaEvent,
-    ImageEvent,
-    AnimationEvent,
-    TransitionEvent,
+    ClipboardEvent(ClipboardEvent),
+    CompositionEvent(CompositionEvent),
+    KeyboardEvent(KeyboardEvent),
+    FocusEvent(FocusEvent),
+    FormEvent(FormEvent),
+    GenericEvent(GenericEvent),
+    MouseEvent(MouseEvent),
+    PointerEvent(PointerEvent),
+    SelectionEvent(SelectionEvent),
+    TouchEvent(TouchEvent),
+    UIEvent(UIEvent),
+    WheelEvent(WheelEvent),
+    MediaEvent(MediaEvent),
+    ImageEvent(ImageEvent),
+    AnimationEvent(AnimationEvent),
+    TransitionEvent(TransitionEvent),
+
     OtherEvent,
 }
+
+// these should reference the underlying event
+
+pub struct ClipboardEvent {}
+pub struct CompositionEvent {}
+pub struct KeyboardEvent {}
+pub struct FocusEvent {}
+pub struct FormEvent {}
+pub struct GenericEvent {}
+pub struct MouseEvent {}
+pub struct PointerEvent {}
+pub struct SelectionEvent {}
+pub struct TouchEvent {}
+pub struct UIEvent {}
+pub struct WheelEvent {}
+pub struct MediaEvent {}
+pub struct ImageEvent {}
+pub struct AnimationEvent {}
+pub struct TransitionEvent {}

@@ -1,10 +1,11 @@
+use crate::nodes::VNode;
 use crate::prelude::*;
-use crate::{nodes::VNode};
 use bumpalo::Bump;
 use hooks::Hook;
+use log::info;
 use std::{
-    any::TypeId, borrow::Borrow, cell::RefCell, future::Future, marker::PhantomData,
-    sync::atomic::AtomicUsize,
+    any::TypeId, borrow::Borrow, cell::RefCell, future::Future, marker::PhantomData, ops::Deref,
+    rc::Rc, sync::atomic::AtomicUsize,
 };
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
@@ -34,6 +35,8 @@ pub struct Context<'src> {
     pub(crate) arena: &'src typed_arena::Arena<Hook>,
     pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
     pub(crate) bump: &'src Bump,
+
+    pub(crate) final_nodes: Rc<RefCell<Option<VNode<'static>>>>,
 
     // holder for the src lifetime
     // todo @jon remove this
@@ -73,10 +76,10 @@ impl<'a> Context<'a> {
     /// }
     ///```
     pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> DomTree {
-        // pub fn view(self, lazy_nodes: impl for<'b> FnOnce(&'b Bump) -> VNode<'b> + 'a + 'p) -> DomTree {
-        // pub fn view<'p>(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a + 'p) -> DomTree {
-        // pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> VNode<'a> {
-        let _g = lazy_nodes(self.bump);
+        let safe_nodes = lazy_nodes(self.bump);
+        let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
+        self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
+        info!("lazy nodes have been generated");
         DomTree {}
     }
 
@@ -186,9 +189,8 @@ mod context_api {
     //! a failure of implementation.
     //!
     //!
-    
 
-    use std::{ops::Deref};
+    use std::ops::Deref;
 
     pub struct RemoteState<T> {
         inner: *const T,

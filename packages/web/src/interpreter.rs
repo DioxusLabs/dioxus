@@ -1,6 +1,6 @@
 use dioxus_core::changelist::Edit;
 use fxhash::FxHashMap;
-use log::{debug, info, log};
+use log::{debug};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{window, Document, Element, Event, Node};
 
@@ -95,7 +95,7 @@ impl PatchMachine {
         self.templates.get(&id)
     }
 
-    pub fn init_events_trampoline(&mut self, mut trampoline: ()) {
+    pub fn init_events_trampoline(&mut self, _trampoline: ()) {
         todo!("Event trampoline not a thing anymore")
         // pub fn init_events_trampoline(&mut self, mut trampoline: EventsTrampoline) {
         // self.callback = Some(Closure::wrap(Box::new(move |event: &web_sys::Event| {

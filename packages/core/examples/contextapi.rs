@@ -1,6 +1,4 @@
-
-
-use builder::{button};
+use builder::button;
 use dioxus_core::prelude::*;
 
 fn main() {}

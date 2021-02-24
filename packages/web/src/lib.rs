@@ -5,20 +5,14 @@
 use fxhash::FxHashMap;
 use web_sys::{window, Document, Element, Event, Node};
 
-use dioxus::prelude::VElement;
-
 pub use dioxus_core as dioxus;
 use dioxus_core::{
     events::EventTrigger,
-    prelude::{bumpalo::Bump, html, DiffMachine, VNode, VirtualDom, FC},
+    prelude::{VirtualDom, FC},
 };
-use futures::{
-    channel::mpsc::{self, Sender},
-    future, SinkExt, StreamExt,
-};
-use mpsc::UnboundedSender;
+use futures::{channel::mpsc, SinkExt, StreamExt};
+
 pub mod interpreter;
-use interpreter::PatchMachine;
 
 /// The `WebsysRenderer` provides a way of rendering a Dioxus Virtual DOM to the browser's DOM.
 /// Under the hood, we leverage WebSys and interact directly with the DOM
@@ -27,7 +21,7 @@ pub struct WebsysRenderer {
     internal_dom: VirtualDom,
 
     // this should be a component index
-    event_map: FxHashMap<(u32, u32), u32>,
+    _event_map: FxHashMap<(u32, u32), u32>,
 }
 
 impl WebsysRenderer {
@@ -57,34 +51,36 @@ impl WebsysRenderer {
     pub fn from_vdom(dom: VirtualDom) -> Self {
         Self {
             internal_dom: dom,
-            event_map: FxHashMap::default(),
+            _event_map: FxHashMap::default(),
         }
     }
 
     pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
-        let (mut sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
-
-        sender
-            .send(EventTrigger::start_event())
-            .await
-            .expect("Should not fail");
+        let (sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
 
         let body = prepare_websys_dom();
-        let mut patch_machine = PatchMachine::new(body.clone());
+        let mut patch_machine = interpreter::PatchMachine::new(body.clone());
         let root_node = body.first_child().unwrap();
         patch_machine.stack.push(root_node);
+
+        self.internal_dom
+            .rebuild()?
+            .into_iter()
+            .for_each(|edit| patch_machine.handle_edit(&edit));
 
         // Event loop waits for the receiver to finish up
         // TODO! Connect the sender to the virtual dom's suspense system
         // Suspense is basically an external event that can force renders to specific nodes
         while let Some(event) = receiver.next().await {
-            let diffs = self.internal_dom.progress_with_event(event)?;
-            for edit in &diffs {
-                patch_machine.handle_edit(edit);
-            }
+            self.internal_dom
+                .progress_with_event(event)?
+                .into_iter()
+                .for_each(|edit| {
+                    patch_machine.handle_edit(&edit);
+                });
         }
 
-        Ok(()) // should actually never return from this, should be an error
+        Ok(()) // should actually never return from this, should be an error, rustc just cant see it
     }
 }
 

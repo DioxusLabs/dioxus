@@ -78,6 +78,34 @@ impl VirtualDom {
         }
     }
 
+    //// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom
+    pub fn rebuild(&mut self) -> Result<EditList<'_>> {
+        // Reset and then build a new diff machine
+        // The previous edit list cannot be around while &mut is held
+        // Make sure variance doesnt break this
+        self.diff_bump.reset();
+        let mut diff_machine = DiffMachine::new(&self.diff_bump);
+
+        // this is still a WIP
+        // we'll need to re-fecth all the scopes that were changed and build the diff machine
+        // fetch the component again
+        let component = self
+            .components
+            .get_mut(self.base_scope)
+            .expect("Root should always exist");
+
+        component.run::<()>();
+
+        let old = component.old_frame();
+        let new = component.new_frame();
+        dbg!(old);
+        dbg!(new);
+
+        diff_machine.diff_node(old, new);
+
+        Ok(diff_machine.consume())
+    }
+
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
     ///  
     /// Given a synthetic event, the component that triggered the event, and the index of the callback, this runs the virtual
@@ -102,17 +130,16 @@ impl VirtualDom {
     /// }
     ///
     /// ```
-    pub fn progress_with_event(&mut self, evt: EventTrigger) -> Result<EditList<'_>> {
+    pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList<'_>> {
         let EventTrigger {
             component_id,
             listener_id,
             event: _,
-        } = evt;
+        } = event;
 
         let component = self
             .components
             .get(component_id)
-            // todo: update this with a dedicated error type so implementors know what went wrong
             .expect("Component should exist if an event was triggered");
 
         let listener = component
@@ -121,53 +148,48 @@ impl VirtualDom {
             .expect("Listener should exist if it was triggered")
             .as_ref();
 
-        // Run the callback
-        // This should cause internal state to progress, dumping events into the event queue
-        // todo: integrate this with a tracing mechanism exposed to a dev tool
+        // Run the callback with the user event
         listener();
 
-        // Run through our events, tagging which Indexes are receiving updates
-        // Prop updates take prescedence over subscription updates
-        // Run all prop updates *first* as they will cascade into children.
-        // *then* run the non-prop updates that were not already covered by props
-
+        // Mark dirty components. Descend from the highest node until all dirty nodes are updated.
         let mut affected_components = Vec::new();
 
-        // It's essentially draining the vec, but with some dancing to release the RefMut
-        // We also want to be able to push events into the queue from processing the event
-        while let Some(event) = {
-            let new_evt = self.event_queue.as_ref().borrow_mut().pop_front();
-            new_evt
-        } {
+        while let Some(event) = self.pop_event() {
             if let Some(component_idx) = event.index() {
                 affected_components.push(component_idx);
             }
             self.process_lifecycle(event)?;
         }
 
-        // Reset and then build a new diff machine
-        // The previous edit list cannot be around while &mut is held
-        // Make sure variance doesnt break this
-        self.diff_bump.reset();
-        let diff_machine = DiffMachine::new(&self.diff_bump);
-
-        Ok(diff_machine.consume())
+        todo!()
     }
 
     /// Using mutable access to the Virtual Dom, progress a given lifecycle event
     fn process_lifecycle(&mut self, LifecycleEvent { event_type }: LifecycleEvent) -> Result<()> {
         match event_type {
             // Component needs to be mounted to the virtual dom
-            LifecycleType::Mount { to: _, under: _, props: _ } => {}
+            LifecycleType::Mount {
+                to: _,
+                under: _,
+                props: _,
+            } => {}
 
             // The parent for this component generated new props and the component needs update
-            LifecycleType::PropsChanged { props: _, component: _ } => {}
+            LifecycleType::PropsChanged {
+                props: _,
+                component: _,
+            } => {}
 
             // Component was messaged via the internal subscription service
             LifecycleType::Callback { component: _ } => {}
         }
 
         Ok(())
+    }
+
+    /// Pop the top event of the internal lifecycle event queu
+    pub fn pop_event(&self) -> Option<LifecycleEvent> {
+        self.event_queue.as_ref().borrow_mut().pop_front()
     }
 
     /// With access to the virtual dom, schedule an update to the Root component's props.
@@ -215,10 +237,30 @@ pub enum LifecycleType {
 impl LifecycleEvent {
     fn index(&self) -> Option<Index> {
         match &self.event_type {
-            LifecycleType::Mount { to: _, under: _, props: _ } => None,
+            LifecycleType::Mount {
+                to: _,
+                under: _,
+                props: _,
+            } => None,
 
             LifecycleType::PropsChanged { component, .. }
             | LifecycleType::Callback { component } => Some(component.clone()),
         }
+    }
+}
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn start_dom() {
+        let mut dom = VirtualDom::new(|ctx, props| {
+            ctx.view(|bump| {
+                use crate::builder::*;
+                div(bump).child(text("hello,    world")).finish()
+            })
+        });
+        let edits = dom.rebuild().unwrap();
+        println!("{:#?}", edits);
     }
 }

@@ -88,7 +88,7 @@ pub mod builder {
 // types used internally that are important
 pub(crate) mod innerlude {
     // pub(crate) use crate::component::Properties;
-    
+
     pub(crate) use crate::context::Context;
     pub(crate) use crate::error::{Error, Result};
     use crate::nodes;
@@ -101,9 +101,7 @@ pub(crate) mod innerlude {
 
     pub type FC<P> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
 
-    mod fc2 {
-        
-    }
+    mod fc2 {}
     // pub type FC<'a, P: 'a> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
     // pub type FC<P> = for<'scope, 'r> fn(Context<'scope>, &'scope P) -> DomTree;
     // pub type FC<P> = for<'scope, 'r> fn(Context<'scope>, &'r P) -> VNode<'scope>;

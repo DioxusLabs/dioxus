@@ -9,7 +9,7 @@ fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
-    WebsysRenderer::new(|ctx, _| {
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, _| {
         ctx.view(html! {
             <div>
                 <div class="flex items-center justify-center flex-col">
@@ -43,5 +43,5 @@ fn main() {
                 </div>
             </div>
         })
-    });
+    }));
 }
