@@ -23,20 +23,19 @@ use std::{
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
 pub struct VirtualDom {
-    // pub struct VirtualDom<P: Properties> {
     /// All mounted components are arena allocated to make additions, removals, and references easy to work with
     /// A generational arean is used to re-use slots of deleted scopes without having to resize the underlying arena.
     pub(crate) components: Arena<Scope>,
 
     /// The index of the root component.
+    /// Will not be ready if the dom is fresh
     base_scope: Index,
 
     event_queue: Rc<RefCell<VecDeque<LifecycleEvent>>>,
 
-    // Mark the root props with P, even though they're held by the root component
-    // This is done so we don't have a "generic" vdom, making it easier to hold references to it, especially when the holders
-    // don't care about the generic props type
-    // Most implementations that use the VirtualDom won't care about the root props anyways.
+    // todo: encapsulate more state into this so we can better reuse it
+    diff_bump: Bump,
+
     #[doc(hidden)]
     _root_prop_type: std::any::TypeId,
 }
@@ -56,75 +55,28 @@ impl VirtualDom {
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
     pub fn new_with_props<P: 'static>(root: FC<P>, root_props: P) -> Self {
-        // 1. Create the component arena
-        // 2. Create the base scope (can never be removed)
-        // 3. Create the lifecycle queue
-        // 4. Create the event queue
+        let mut components = Arena::new();
 
-        todo!();
-        // Arena allocate all the components
-        // This should make it *really* easy to store references in events and such
-        // let mut components = Arena::new();
+        let event_queue = Rc::new(RefCell::new(VecDeque::new()));
 
         // Create a reference to the component in the arena
-        // let base_scope = components.insert(Scope::new(root, None));
+        // Note: we are essentially running the "Mount" lifecycle event manually while the vdom doesnt yet exist
+        // This puts the dom in a usable state on creation, rather than being potentially invalid
+        let base_scope = components.insert(Scope::new::<_, P>(root, root_props, None));
 
-        // // Create a new mount event with no root container
-        // let first_event = LifecycleEvent::mount(base_scope, None, 0, root_props);
+        // evaluate the component, pushing any updates its generates into the lifecycle queue
+        // todo!
 
-        // // Create an event queue with a mount for the base scope
-        // let event_queue = Rc::new(RefCell::new(vec![first_event].into_iter().collect()));
+        let _root_prop_type = TypeId::of::<P>();
+        let diff_bump = Bump::new();
 
-        // let _root_prop_type = TypeId::of::<P>();
-
-        // Self {
-        //     components,
-        //     base_scope,
-        //     event_queue,
-        //     _root_prop_type,
-        // }
-    }
-
-    /// With access to the virtual dom, schedule an update to the Root component's props
-    pub fn update_props<P: 'static>(&mut self, new_props: P) -> Result<()> {
-        // Ensure the props match
-        if TypeId::of::<P>() != self._root_prop_type {
-            return Err(Error::WrongProps);
+        Self {
+            components,
+            base_scope,
+            event_queue,
+            diff_bump,
+            _root_prop_type,
         }
-
-        self.event_queue
-            .as_ref()
-            .borrow_mut()
-            .push_back(LifecycleEvent {
-                event_type: LifecycleType::PropsChanged {
-                    props: Box::new(new_props),
-                },
-                component_index: self.base_scope,
-            });
-
-        Ok(())
-    }
-
-    /// Schedule a future update for a component from outside the vdom!
-    ///
-    /// This lets services external to the virtual dom interact directly with the component and event system.
-    pub fn queue_update() {}
-
-    pub fn start(&mut self) -> Result<EditList> {
-        todo!()
-    }
-
-    /// Pop an event off the event queue and process it
-    /// Update the root props, and progress
-    /// Takes a bump arena to allocate into, making the diff phase as fast as possible
-    pub fn progress(&mut self) -> Result<()> {
-        let event = self
-            .event_queue
-            .as_ref()
-            .borrow_mut()
-            .pop_front()
-            .ok_or(Error::NoEvent)?;
-        self.process_lifecycle(event)
     }
 
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
@@ -136,14 +88,22 @@ impl VirtualDom {
     /// If implementing an external renderer, this is the perfect method to combine with an async event loop that waits on
     /// listeners.
     ///
+    /// Note: this method is not async and does not provide suspense-like functionality. It is up to the renderer to provide the
+    /// executor and handlers for suspense as show in the example.
+    ///
     /// ```ignore
+    /// let (sender, receiver) = channel::new();
+    /// sender.send(EventTrigger::start());
     ///
+    /// let mut dom = VirtualDom::new();
+    /// dom.suspense_handler(|event| sender.send(event));
     ///
-    ///
+    /// while let Ok(diffs) = dom.progress_with_event(receiver.recv().await) {
+    ///     render(diffs);
+    /// }
     ///
     /// ```
-    pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<()> {
-        // pub async fn progress_with_event(&mut self, evt: EventTrigger) -> Result<EditList<'_>> {
+    pub fn progress_with_event(&mut self, evt: EventTrigger) -> Result<EditList<'_>> {
         let EventTrigger {
             component_id,
             listener_id,
@@ -173,124 +133,93 @@ impl VirtualDom {
         // *then* run the non-prop updates that were not already covered by props
 
         let mut affected_components = Vec::new();
+
         // It's essentially draining the vec, but with some dancing to release the RefMut
         // We also want to be able to push events into the queue from processing the event
         while let Some(event) = {
             let new_evt = self.event_queue.as_ref().borrow_mut().pop_front();
             new_evt
         } {
-            affected_components.push(event.component_index);
+            if let Some(component_idx) = event.index() {
+                affected_components.push(component_idx);
+            }
             self.process_lifecycle(event)?;
         }
 
-        let diff_bump = Bump::new();
-        let diff_machine = DiffMachine::new(&diff_bump);
+        // Reset and then build a new diff machine
+        // The previous edit list cannot be around while &mut is held
+        // Make sure variance doesnt break this
+        self.diff_bump.reset();
+        let diff_machine = DiffMachine::new(&self.diff_bump);
+
+        Ok(diff_machine.consume())
+    }
+
+    /// Using mutable access to the Virtual Dom, progress a given lifecycle event
+    fn process_lifecycle(&mut self, LifecycleEvent { event_type }: LifecycleEvent) -> Result<()> {
+        match event_type {
+            // Component needs to be mounted to the virtual dom
+            LifecycleType::Mount { to, under, props } => {}
+
+            // The parent for this component generated new props and the component needs update
+            LifecycleType::PropsChanged { props, component } => {}
+
+            // Component was messaged via the internal subscription service
+            LifecycleType::Callback { component } => {}
+        }
 
         Ok(())
     }
 
-    /// Using mutable access to the Virtual Dom, progress a given lifecycle event
-    ///
-    ///
-    ///
-    ///
-    ///
-    ///
-    fn process_lifecycle(
-        &mut self,
-        LifecycleEvent {
-            component_index: index,
-            event_type,
-        }: LifecycleEvent,
-    ) -> Result<()> {
-        let scope = self.components.get_mut(index).ok_or(Error::NoEvent)?;
-
-        match event_type {
-            // Component needs to be mounted to the virtual dom
-            LifecycleType::Mount { to, under, props } => {
-                if let Some(other) = to {
-                    // mount to another component
-                } else {
-                    // mount to the root
-                }
-
-                // let g = props.as_ref();
-                // scope.run(g);
-                // scope.run(runner, props, dom);
-            }
-
-            // The parent for this component generated new props and the component needs update
-            LifecycleType::PropsChanged { props } => {
-                //
-            }
-
-            // Component was successfully mounted to the dom
-            LifecycleType::Mounted {} => {
-                //
-            }
-
-            // Component was removed from the DOM
-            // Run any destructors and cleanup for the hooks and the dump the component
-            LifecycleType::Removed {} => {
-                let f = self.components.remove(index);
-                // let f = dom.components.remove(index);
-            }
-
-            // Component was messaged via the internal subscription service
-            LifecycleType::Messaged => {
-                //
-            }
-
-            // Event from renderer was fired with a given listener ID
-            //
-            LifecycleType::Callback { listener_id } => {}
-
-            // Run any post-render callbacks on a component
-            LifecycleType::Rendered => {}
+    /// With access to the virtual dom, schedule an update to the Root component's props.
+    /// This generates the appropriate Lifecycle even. It's up to the renderer to actually feed this lifecycle event
+    /// back into the event system to get an edit list.
+    pub fn update_props<P: 'static>(&mut self, new_props: P) -> Result<LifecycleEvent> {
+        // Ensure the props match
+        if TypeId::of::<P>() != self._root_prop_type {
+            return Err(Error::WrongProps);
         }
 
-        Ok(())
+        Ok(LifecycleEvent {
+            event_type: LifecycleType::PropsChanged {
+                props: Box::new(new_props),
+                component: self.base_scope,
+            },
+        })
     }
 }
 
 pub struct LifecycleEvent {
-    pub component_index: Index,
     pub event_type: LifecycleType,
 }
 
-/// The internal lifecycle event system is managed by these
-/// Right now, we box the properties and but them in the enum
-/// Later, we could directly call the chain of children without boxing
-/// We could try to reuse the boxes somehow
 pub enum LifecycleType {
+    // Component needs to be mounted, but its scope doesn't exist yet
     Mount {
-        to: Option<Index>,
+        to: Index,
         under: usize,
         props: Box<dyn std::any::Any>,
     },
+
+    // Parent was evalauted causing new props to generate
     PropsChanged {
         props: Box<dyn std::any::Any>,
+        component: Index,
     },
-    Rendered,
-    Mounted,
-    Removed,
-    Messaged,
+
+    // Hook for the subscription API
     Callback {
-        listener_id: i32,
+        component: Index,
     },
 }
 
 impl LifecycleEvent {
-    // helper method for shortcutting to the enum type
-    // probably not necessary
-    fn mount<P: 'static>(which: Index, to: Option<Index>, under: usize, props: P) -> Self {
-        Self {
-            component_index: which,
-            event_type: LifecycleType::Mount {
-                to,
-                under,
-                props: Box::new(props),
-            },
+    fn index(&self) -> Option<Index> {
+        match &self.event_type {
+            LifecycleType::Mount { to, under, props } => None,
+
+            LifecycleType::PropsChanged { component, .. }
+            | LifecycleType::Callback { component } => Some(component.clone()),
         }
     }
 }

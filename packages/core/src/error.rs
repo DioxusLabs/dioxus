@@ -10,6 +10,9 @@ pub enum Error {
     #[error("Wrong Properties Type")]
     WrongProps,
 
+    #[error("Base scope has not been mounted yet")]
+    NotMounted,
+
     // #[error("Out of compute credits")]
     // OutOfCredits,
 

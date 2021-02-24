@@ -26,7 +26,10 @@ use dioxus_core::{
     events::EventTrigger,
     prelude::{bumpalo::Bump, html, DiffMachine, VNode, VirtualDom, FC},
 };
-use futures::{channel::mpsc, future, SinkExt, StreamExt};
+use futures::{
+    channel::mpsc::{self, Sender},
+    future, SinkExt, StreamExt,
+};
 use mpsc::UnboundedSender;
 pub mod interpreter;
 use interpreter::PatchMachine;
@@ -36,7 +39,6 @@ use interpreter::PatchMachine;
 ///
 pub struct WebsysRenderer {
     internal_dom: VirtualDom,
-    // Map of handlers
 }
 
 impl WebsysRenderer {
@@ -63,31 +65,17 @@ impl WebsysRenderer {
 
     /// Run the renderer, progressing any events that crop up
     /// Yield on event handlers
-    /// If the dom errors out, self is consumed and the dom is torn down
-    pub async fn run(self) -> dioxus_core::error::Result<()> {
-        let WebsysRenderer { mut internal_dom } = self;
+    pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
+        // Connect the listeners to the event loop
+        let (mut sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
 
-        // Progress the mount of the root component
-        internal_dom
-            .progress()
-            .expect("Progressing the root failed :(");
+        // Send the start event
+        sender
+            .send(EventTrigger::start_event())
+            .await
+            .expect("Should not fail");
 
-        // set up the channels to connect listeners to the event loop
-        let (sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
-
-        // Iterate through the nodes, attaching the closure and sender to the listener
-        // {
-        //     let mut remote_sender = sender.clone();
-        //     let listener = move || {
-        //         let event = EventTrigger::new();
-        //         wasm_bindgen_futures::spawn_local(async move {
-        //             remote_sender
-        //                 .send(event)
-        //                 .await
-        //                 .expect("Updating receiver failed");
-        //         })
-        //     };
-        // }
+        prepare_websys_dom();
 
         // Event loop waits for the receiver to finish up
         // TODO! Connect the sender to the virtual dom's suspense system
@@ -97,7 +85,7 @@ impl WebsysRenderer {
             // relevant listeners are ran
             // internal state is modified, components are tagged for changes
 
-            match internal_dom.progress_with_event(event).await {
+            match self.internal_dom.progress_with_event(event) {
                 Err(_) => {}
                 Ok(_) => {} // Ok(_) => render_diffs(),
             }
@@ -173,6 +161,44 @@ impl WebsysRenderer {
         }
     }
 }
+
+fn prepare_websys_dom() {
+    // Initialize the container on the dom
+    // Hook up the body as the root component to render tinto
+    let window = web_sys::window().expect("should have access to the Window");
+    let document = window
+        .document()
+        .expect("should have access to the Document");
+    let body = document.body().unwrap();
+
+    // Build a dummy div
+    let container: &Element = body.as_ref();
+    container.set_inner_html("");
+    container
+        .append_child(
+            document
+                .create_element("div")
+                .expect("should create element OK")
+                .as_ref(),
+        )
+        .expect("should append child OK");
+}
+
+// Progress the mount of the root component
+
+// Iterate through the nodes, attaching the closure and sender to the listener
+// {
+//     let mut remote_sender = sender.clone();
+//     let listener = move || {
+//         let event = EventTrigger::new();
+//         wasm_bindgen_futures::spawn_local(async move {
+//             remote_sender
+//                 .send(event)
+//                 .await
+//                 .expect("Updating receiver failed");
+//         })
+//     };
+// }
 
 #[cfg(test)]
 mod tests {

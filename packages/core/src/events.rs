@@ -16,12 +16,17 @@ impl EventTrigger {
     pub fn new() -> Self {
         todo!()
     }
+
+    /// Create a new "start" event that boots up the virtual dom if it is paused
+    pub fn start_event() -> Self {
+        todo!()
+    }
 }
 
 pub enum VirtualEvent {
     // the event to drain the current lifecycle queue
     // Used to initate the dom
-    InitiateEvent,
+    StartEvent,
 
     // Real events
     ClipboardEvent,

@@ -2,13 +2,20 @@
 //!
 //!
 //!
-use dioxus_core::prelude::bumpalo::Bump;
 use dioxus_core::prelude::*;
 use dioxus_web::*;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
+    // todo: wire up the component macro macro
+    // div! { class = "asd" onclick = move |_| {}
+    //     div! { class = "asd" onclick = move |_| {} }
+    //     h1! { "123456" "123456" "123456" }
+    //     h2! { "123456" "123456" "123456" }
+    //     h3! { "123456" "123456" "123456" }
+    // };
+
     WebsysRenderer::simple_render(html! {
         <div>
             <div class="flex items-center justify-center flex-col">
