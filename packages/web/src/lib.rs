@@ -19,9 +19,6 @@ pub mod interpreter;
 ///
 pub struct WebsysRenderer {
     internal_dom: VirtualDom,
-
-    // this should be a component index
-    _event_map: FxHashMap<(u32, u32), u32>,
 }
 
 impl WebsysRenderer {
@@ -58,10 +55,7 @@ impl WebsysRenderer {
     /// Create a new text renderer from an existing Virtual DOM.
     pub fn from_vdom(dom: VirtualDom) -> Self {
         // todo: initialize the event registry properly
-        Self {
-            internal_dom: dom,
-            _event_map: FxHashMap::default(),
-        }
+        Self { internal_dom: dom }
     }
 
     pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
@@ -72,7 +66,7 @@ impl WebsysRenderer {
         let root_node = body_element.first_child().unwrap();
         patch_machine.stack.push(root_node);
 
-        // todo: initialize the event registry properly on the root element
+        // todo: initialize the event registry properly on the root
 
         self.internal_dom
             .rebuild()?

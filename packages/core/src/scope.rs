@@ -37,7 +37,7 @@ pub struct Scope {
     pub frames: ActiveFrame,
 
     // IE Which listeners need to be woken up?
-    pub listeners: Vec<Box<dyn Fn()>>,
+    pub listeners: Vec<Box<dyn Fn(crate::events::VirtualEvent)>>,
 
     // lying, cheating reference >:(
     pub props: Box<dyn std::any::Any>,
@@ -55,7 +55,7 @@ impl Scope {
         // Capture the caller
         let caller = f as *const ();
 
-        let listeners: Vec<Box<dyn Fn()>> = vec![Box::new(|| {
+        let listeners: Vec<Box<dyn Fn(crate::events::VirtualEvent)>> = vec![Box::new(|_| {
             log::info!("Base listener called");
         })];
 

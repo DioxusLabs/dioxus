@@ -10,6 +10,7 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
+
 static Example: FC<()> = |ctx| {
     let (value, set_value) = use_state(&ctx, || "...?");
 
@@ -23,6 +24,7 @@ static Example: FC<()> = |ctx| {
         </div>
     })
 };
+
 ```
 
 Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, Android apps, iOS Apps, and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
@@ -84,5 +86,12 @@ Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whethe
 - Team + company management
 
 For small teams, LiveHost is free 🎉. Check out the pricing page to see if Dioxus LiveHost is good fit for your team.
+
+
+
+
+
+
+
 
 

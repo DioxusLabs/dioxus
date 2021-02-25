@@ -12,34 +12,6 @@
     <div></div>
   </body>
   <script>
-    // #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    // pub enum Edit<'d> {
-    //     SetText { text: &'d str },
-    //     RemoveSelfAndNextSiblings {},
-    //     ReplaceWith,
-    //     SetAttribute { name: &'d str, value: &'d str },
-    //     RemoveAttribute { name: &'d str },
-    //     PushReverseChild { n: u32 },
-    //     PopPushChild { n: u32 },
-    //     Pop,
-    //     AppendChild,
-    //     CreateTextNode { text: &'d str },
-    //     CreateElement { tag_name: &'d str },
-    //     NewEventListener { event_type: &'d str, a: u32, b: u32 },
-    //     UpdateEventListener { event_type: &'d str, a: u32, b: u32 },
-    //     RemoveEventListener { event_type: &'d str },
-    //     CreateElementNs { tag_name: &'d str, ns: &'d str },
-    //     SaveChildrenToTemporaries { temp: u32, start: u32, end: u32 },
-    //     PushChild { n: u32 },
-    //     PushTemporary { temp: u32 },
-    //     InsertBefore,
-    //     PopPushReverseChild { n: u32 },
-    //     RemoveChild { n: u32 },
-    //     SetClass { class_name: &'d str },
-    // }
-
-    //   const interpreter = new Interpreter();
-
     class Interpreter {
       constructor(root) {
         this.stack = [root];
@@ -302,20 +274,13 @@
       }
     }
 
-    let op = new OPTABLE();
-    const c = window.document.body.firstChild;
-    console.log("First child");
-    console.log(c);
+    const op_table = new OPTABLE();
     const interpreter = new Interpreter(window.document.body);
+
     function EditListReceived(rawEditList) {
       let editList = JSON.parse(rawEditList);
-      console.log(editList);
       editList.forEach(function (edit, index) {
-        // console.log("processing edit");
-        const name = edit.type;
-        console.log(name);
-        const f = op[name];
-        f(edit, interpreter);
+        op_table[edit.type](edit, interpreter);
       });
     }
 

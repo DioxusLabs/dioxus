@@ -98,12 +98,7 @@ impl VirtualDom {
 
         component.run::<()>();
 
-        let old = component.old_frame();
-        let new = component.new_frame();
-        dbg!(old);
-        dbg!(new);
-
-        diff_machine.diff_node(old, new);
+        diff_machine.diff_node(component.old_frame(), component.new_frame());
 
         Ok(diff_machine.consume())
     }
@@ -136,7 +131,7 @@ impl VirtualDom {
         let EventTrigger {
             component_id,
             listener_id,
-            event: _,
+            event: source,
         } = event;
 
         let component = self
@@ -151,7 +146,7 @@ impl VirtualDom {
             .as_ref();
 
         // Run the callback with the user event
-        listener();
+        listener(source);
 
         // Mark dirty components. Descend from the highest node until all dirty nodes are updated.
         let mut affected_components = Vec::new();

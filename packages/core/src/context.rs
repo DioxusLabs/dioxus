@@ -79,7 +79,6 @@ impl<'a> Context<'a> {
         let safe_nodes = lazy_nodes(self.bump);
         let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
         self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
-        info!("lazy nodes have been generated");
         DomTree {}
     }
 
