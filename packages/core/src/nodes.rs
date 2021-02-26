@@ -3,8 +3,6 @@
 //!
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 
-
-
 use bumpalo::Bump;
 pub use vcomponent::VComponent;
 pub use velement::VElement;
@@ -97,7 +95,7 @@ mod vnode {
 
 mod velement {
     use super::*;
-    use std::{fmt::Debug};
+    use std::fmt::Debug;
 
     #[derive(Debug)]
     pub struct VElement<'a> {
@@ -199,6 +197,29 @@ mod velement {
                 .finish()
         }
     }
+    pub(crate) type ListenerCallback<'a> = &'a (dyn Fn(()));
+    union CallbackFatPtr<'a> {
+        callback: ListenerCallback<'a>,
+        parts: (u32, u32),
+    }
+    impl Listener<'_> {
+        #[inline]
+        pub(crate) fn get_callback_parts(&self) -> (u32, u32) {
+            assert_eq!(
+                std::mem::size_of::<ListenerCallback>(),
+                std::mem::size_of::<CallbackFatPtr>()
+            );
+
+            unsafe {
+                let fat = CallbackFatPtr {
+                    callback: self.callback,
+                };
+                let (a, b) = fat.parts;
+                debug_assert!(a != 0);
+                (a, b)
+            }
+        }
+    }
 
     /// The key for keyed children.
     ///
@@ -265,9 +286,7 @@ mod vtext {
 /// Only supports the functional syntax
 mod vcomponent {
     use crate::innerlude::FC;
-    use std::{marker::PhantomData};
-
-    
+    use std::marker::PhantomData;
 
     #[derive(Debug)]
     pub struct VComponent<'src> {

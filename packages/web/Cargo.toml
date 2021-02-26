@@ -28,6 +28,7 @@ features = [
     "Document",
     "Element",
     "HtmlElement",
+    "HtmlInputElement",
     "EventTarget",
     "HtmlCollection",
     "Node",
@@ -39,6 +40,7 @@ features = [
     "InputEvent",
     "DocumentType",
     "CharacterData",
+    "HtmlOptionElement",
 ]
 
 [profile.release]

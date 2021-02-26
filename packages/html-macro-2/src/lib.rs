@@ -1,3 +1,18 @@
+//!
+//! TODO:
+//! - [ ] Support for VComponents
+//! - [ ] Support for inline format in text
+//! - [ ] Support for expressions in attribute positions
+//! - [ ] Support for iterators
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+
 use ::{
     proc_macro::TokenStream,
     proc_macro2::{Span, TokenStream as TokenStream2},
@@ -10,6 +25,8 @@ use ::{
     },
 };
 
+/// The html! macro makes it easy for developers to write jsx-style markup in their components.
+/// We aim to keep functional parity with html templates.
 #[proc_macro]
 pub fn html(s: TokenStream) -> TokenStream {
     let html: HtmlRender = match syn::parse(s) {
@@ -19,8 +36,10 @@ pub fn html(s: TokenStream) -> TokenStream {
     html.to_token_stream().into()
 }
 
+// ==============================================
+// Parse any stream coming from the html! macro
+// ==============================================
 struct HtmlRender {
-    // ctx: Ident,
     kind: NodeOrList,
 }
 
@@ -58,6 +77,9 @@ impl ToTokens for HtmlRender {
     }
 }
 
+/// =============================================
+/// Parse any child as a node or list of nodes
+/// =============================================
 enum NodeOrList {
     Node(Node),
     List(NodeList),
@@ -115,6 +137,9 @@ impl Parse for Node {
     }
 }
 
+/// =======================================
+/// Parse the VNode::Element type
+/// =======================================
 struct Element {
     name: Ident,
     attrs: Vec<Attr>,
@@ -214,6 +239,9 @@ impl Parse for Element {
     }
 }
 
+/// =======================================
+/// Parse a VElement's Attributes
+/// =======================================
 struct Attr {
     name: Ident,
     ty: AttrType,
@@ -285,6 +313,10 @@ enum AttrType {
     // todo Bool(MaybeExpr<LitBool>)
 }
 
+/// =======================================
+/// Parse just plain text
+/// =======================================
+///
 struct TextNode(MaybeExpr<LitStr>);
 
 impl Parse for TextNode {

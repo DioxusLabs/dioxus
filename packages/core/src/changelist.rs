@@ -19,11 +19,9 @@
 //!
 //!
 
-
-
 use bumpalo::Bump;
 
-use crate::innerlude::{Listener};
+use crate::innerlude::Listener;
 
 /// The `Edit` represents a single modifcation of the renderer tree.
 ///
@@ -308,14 +306,19 @@ impl<'a> EditMachine<'a> {
         self.forcing_new_listeners = previous;
     }
 
-    pub fn new_event_listener(&mut self, _listener: &Listener) {
+    pub fn new_event_listener(&mut self, listener: &Listener) {
         debug_assert!(self.traversal_is_committed());
-        todo!("Event listener not wired up yet");
-        // debug!("emit: new_event_listener({:?})", listener);
-        // let (a, b) = listener.get_callback_parts();
-        // debug_assert!(a != 0);
+        // todo!("Event listener not wired up yet");
+        log::debug!("emit: new_event_listener({:?})", listener);
+        let (a, b) = listener.get_callback_parts();
+        debug_assert!(a != 0);
         // let event_id = self.ensure_string(listener.event);
-        // self.emitter.new_event_listener(event_id.into(), a, b);
+        self.emitter.push(Edit::NewEventListener {
+            event_type: listener.event.into(),
+            a,
+            b,
+        });
+        // self.emitter.new_event_listener(listener.event.into(), a, b);
     }
 
     pub fn update_event_listener(&mut self, listener: &Listener) {
@@ -326,19 +329,25 @@ impl<'a> EditMachine<'a> {
             return;
         }
 
-        // debug!("emit: update_event_listener({:?})", listener);
-        todo!("Event listener not wired up yet");
-        // let (a, b) = listener.get_callback_parts();
-        // debug_assert!(a != 0);
-        let _event_id = self.ensure_string(listener.event);
+        log::debug!("emit: update_event_listener({:?})", listener);
+        // todo!("Event listener not wired up yet");
+        let (a, b) = listener.get_callback_parts();
+        debug_assert!(a != 0);
+        self.emitter.push(Edit::UpdateEventListener {
+            event_type: listener.event.into(),
+            a,
+            b,
+        });
         // self.emitter.update_event_listener(event_id.into(), a, b);
     }
 
-    pub fn remove_event_listener(&mut self, event: &str) {
+    pub fn remove_event_listener(&mut self, event: &'a str) {
         debug_assert!(self.traversal_is_committed());
+        self.emitter
+            .push(Edit::RemoveEventListener { event_type: event });
         // debug!("emit: remove_event_listener({:?})", event);
-        let _event_id = self.ensure_string(event);
-        todo!("Event listener not wired up yet");
+        // let _event_id = self.ensure_string(event);
+        // todo!("Event listener not wired up yet");
         // self.emitter.remove_event_listener(event_id.into());
     }
 

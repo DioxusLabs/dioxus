@@ -1070,7 +1070,8 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 ///     // do something when a click happens...
 /// });
 /// ```
-pub fn on<'a, 'b, F: 'static>(
+pub fn on<'a, 'b>(
+    // pub fn on<'a, 'b, F: 'static>(
     bump: &'a Bump,
     event: &'static str,
     callback: impl Fn(()) + 'a,

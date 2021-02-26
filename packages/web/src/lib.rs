@@ -62,16 +62,16 @@ impl WebsysRenderer {
         let (sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
 
         let body_element = prepare_websys_dom();
-        let mut patch_machine = interpreter::PatchMachine::new(body_element.clone());
+        let mut patch_machine = interpreter::PatchMachine::new(body_element.clone(), |_| {});
         let root_node = body_element.first_child().unwrap();
         patch_machine.stack.push(root_node);
 
         // todo: initialize the event registry properly on the root
 
-        self.internal_dom
-            .rebuild()?
-            .iter()
-            .for_each(|edit| patch_machine.handle_edit(edit));
+        self.internal_dom.rebuild()?.iter().for_each(|edit| {
+            log::debug!("patching with  {:?}", edit);
+            patch_machine.handle_edit(edit);
+        });
 
         // Event loop waits for the receiver to finish up
         // TODO! Connect the sender to the virtual dom's suspense system

@@ -6,6 +6,7 @@
 //! The goal here is to provide a consistent event interface across all renderer types
 use generational_arena::Index;
 
+#[derive(Debug)]
 pub struct EventTrigger {
     pub component_id: Index,
     pub listener_id: u32,
@@ -18,6 +19,7 @@ impl EventTrigger {
     }
 }
 
+#[derive(Debug)]
 pub enum VirtualEvent {
     // Real events
     ClipboardEvent(ClipboardEvent),
@@ -42,19 +44,35 @@ pub enum VirtualEvent {
 
 // these should reference the underlying event
 
+#[derive(Debug)]
 pub struct ClipboardEvent {}
+#[derive(Debug)]
 pub struct CompositionEvent {}
+#[derive(Debug)]
 pub struct KeyboardEvent {}
+#[derive(Debug)]
 pub struct FocusEvent {}
+#[derive(Debug)]
 pub struct FormEvent {}
+#[derive(Debug)]
 pub struct GenericEvent {}
+#[derive(Debug)]
 pub struct MouseEvent {}
+#[derive(Debug)]
 pub struct PointerEvent {}
+#[derive(Debug)]
 pub struct SelectionEvent {}
+#[derive(Debug)]
 pub struct TouchEvent {}
+#[derive(Debug)]
 pub struct UIEvent {}
+#[derive(Debug)]
 pub struct WheelEvent {}
+#[derive(Debug)]
 pub struct MediaEvent {}
+#[derive(Debug)]
 pub struct ImageEvent {}
+#[derive(Debug)]
 pub struct AnimationEvent {}
+#[derive(Debug)]
 pub struct TransitionEvent {}

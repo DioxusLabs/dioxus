@@ -63,13 +63,9 @@ pub struct DiffMachine<'a> {
     need_to_diff: FxHashSet<Index>,
 }
 
-enum NeedToDiff {
-    PropsChanged,
-    Subscription,
-}
-
 impl<'a> DiffMachine<'a> {
     pub fn new(bump: &'a Bump) -> Self {
+        log::debug!("starsting diff machine");
         Self {
             change_list: EditMachine::new(bump),
             immediate_queue: Vec::new(),
@@ -83,6 +79,7 @@ impl<'a> DiffMachine<'a> {
     }
 
     pub fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
+        log::debug!("Diffing nodes");
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
@@ -876,6 +873,7 @@ impl<'a> DiffMachine<'a> {
                 children,
                 namespace,
             }) => {
+                log::info!("Creating {:#?}", node);
                 if let Some(namespace) = namespace {
                     self.change_list.create_element_ns(tag_name, namespace);
                 } else {
@@ -1001,7 +999,6 @@ enum KeyedPrefixResult {
 }
 
 mod support {
-    
 
     // // Get or create the template.
     // //

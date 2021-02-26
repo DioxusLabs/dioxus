@@ -219,9 +219,28 @@ impl ActiveFrame {
     }
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 mod tests {
     use super::*;
+
+    static ListenerTest: FC<()> = |ctx, props| {
+        ctx.view(html! {
+            <div onclick={|_| println!("Hell owlrld")}>
+                "hello"
+            </div>
+        })
+    };
+
+    #[test]
+    fn check_listeners() -> Result<()> {
+        let mut scope = Scope::new::<(), ()>(ListenerTest, (), None);
+        scope.run::<()>();
+
+        let nodes = scope.new_frame();
+        dbg!(nodes);
+
+        Ok(())
+    }
 
     #[test]
     fn test_scope() {

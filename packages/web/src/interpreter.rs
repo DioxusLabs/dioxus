@@ -1,21 +1,41 @@
-use dioxus_core::changelist::Edit;
+use std::fmt::Debug;
+
+use dioxus_core::{changelist::Edit, events::EventTrigger};
 use fxhash::FxHashMap;
 use log::debug;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{window, Document, Element, Event, Node};
+use web_sys::{window, Document, Element, Event, HtmlInputElement, HtmlOptionElement, Node};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CacheId(u32);
 
+struct RootCallback(Box<dyn Fn(EventTrigger)>);
+impl std::fmt::Debug for RootCallback {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PatchMachine {
-    container: Element,
     pub(crate) stack: Stack,
+
+    root: Element,
+
     temporaries: FxHashMap<u32, Node>,
-    callback: Option<Closure<dyn FnMut(&Event)>>,
+
+    // callback: RootCallback,
+    // callback: Option<Closure<dyn Fn(EventTrigger)>>,
     document: Document,
-    // templates: FxHashMap<CacheId, Node>,
+
+    // every callback gets a monotomically increasing callback ID
+    callback_id: usize,
+
+    // Map of callback_id to component index and listener id
+    callback_map: FxHashMap<usize, (usize, usize)>,
 }
+
+// templates: FxHashMap<CacheId, Node>,
 
 #[derive(Debug, Default)]
 pub struct Stack {
@@ -30,13 +50,13 @@ impl Stack {
     }
 
     pub fn push(&mut self, node: Node) {
-        debug!("stack-push: {:?}", node);
+        // debug!("stack-push: {:?}", node);
         self.list.push(node);
     }
 
     pub fn pop(&mut self) -> Node {
         let res = self.list.pop().unwrap();
-        debug!("stack-pop: {:?}", res);
+        // debug!("stack-pop: {:?}", res);
 
         res
     }
@@ -46,10 +66,10 @@ impl Stack {
     }
 
     pub fn top(&self) -> &Node {
-        log::info!(
-            "Called top of stack with {} items remaining",
-            self.list.len()
-        );
+        // log::info!(
+        //     "Called top of stack with {} items remaining",
+        //     self.list.len()
+        // );
         match self.list.last() {
             Some(a) => a,
             None => panic!("Called 'top' of an empty stack, make sure to push the root first"),
@@ -58,19 +78,23 @@ impl Stack {
 }
 
 impl PatchMachine {
-    pub fn new(container: Element) -> Self {
+    pub fn new(root: Element, event_callback: impl Fn(EventTrigger)) -> Self {
         let document = window()
             .expect("must have access to the window")
             .document()
             .expect("must have access to the Document");
 
+        // attach all listeners to the container element
+
+        // templates: Default::default(),
         Self {
-            // templates: Default::default(),
-            container,
+            root,
             stack: Stack::with_capacity(20),
             temporaries: Default::default(),
-            callback: None,
+            // callback: None,
             document,
+            callback_id: 0,
+            callback_map: FxHashMap::default(),
         }
     }
 
@@ -81,7 +105,7 @@ impl PatchMachine {
     }
 
     pub fn start(&mut self) {
-        if let Some(child) = self.container.first_child() {
+        if let Some(child) = self.root.first_child() {
             self.stack.push(child);
         }
     }
@@ -96,9 +120,9 @@ impl PatchMachine {
         // self.templates.get(&id)
     }
 
-    pub fn init_events_trampoline(&mut self, _trampoline: ()) {
-        todo!("Event trampoline not a thing anymore")
-        // pub fn init_events_trampoline(&mut self, mut trampoline: EventsTrampoline) {
+    /// On any listener wakeup, find the listener that generated the event from th e attribute
+    // pub fn init_events_trampoline(&mut self, _trampoline: ()) {
+    pub fn init_events_trampoline(&mut self, event_channel: impl Fn(EventTrigger)) {
         // self.callback = Some(Closure::wrap(Box::new(move |event: &web_sys::Event| {
         //     let target = event
         //         .target()
@@ -107,12 +131,12 @@ impl PatchMachine {
         //         .expect("not a valid element");
         //     let typ = event.type_();
         //     let a: u32 = target
-        //         .get_attribute(&format!("dodrio-a-{}", typ))
+        //         .get_attribute(&format!("dioxus-a-{}", typ))
         //         .and_then(|v| v.parse().ok())
         //         .unwrap_or_default();
 
         //     let b: u32 = target
-        //         .get_attribute(&format!("dodrio-b-{}", typ))
+        //         .get_attribute(&format!("dioxus-b-{}", typ))
         //         .and_then(|v| v.parse().ok())
         //         .unwrap_or_default();
 
@@ -180,40 +204,44 @@ impl PatchMachine {
             Edit::SetAttribute { name, value } => {
                 let node = self.stack.top();
 
-                if let Some(node) = node.dyn_ref::<Element>() {
+                if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
                     node.set_attribute(name, value).unwrap();
 
                     // Some attributes are "volatile" and don't work through `setAttribute`.
-                    // TODO:
-                    // if name == "value" {
-                    //     node.set_value(value);
-                    // }
-                    // if name == "checked" {
-                    //     node.set_checked(true);
-                    // }
-                    // if name == "selected" {
-                    //     node.set_selected(true);
-                    // }
+                    if name == "value" {
+                        node.set_value(value);
+                    }
+                    if name == "checked" {
+                        node.set_checked(true);
+                    }
+                }
+
+                if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
+                    if name == "selected" {
+                        node.set_selected(true);
+                    }
                 }
             }
 
             // 4
             Edit::RemoveAttribute { name } => {
                 let node = self.stack.top();
-                if let Some(node) = node.dyn_ref::<Element>() {
+                if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
                     node.remove_attribute(name).unwrap();
 
                     // Some attributes are "volatile" and don't work through `removeAttribute`.
-                    // TODO:
-                    // if name == "value" {
-                    //     node.set_value("");
-                    // }
-                    // if name == "checked" {
-                    //     node.set_checked(false);
-                    // }
-                    // if name == "selected" {
-                    //     node.set_selected(false);
-                    // }
+                    if name == "value" {
+                        node.set_value("");
+                    }
+                    if name == "checked" {
+                        node.set_checked(false);
+                    }
+                }
+
+                if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
+                    if name == "selected" {
+                        node.set_selected(true);
+                    }
                 }
             }
 
@@ -266,29 +294,36 @@ impl PatchMachine {
 
             // 11
             Edit::NewEventListener { event_type, a, b } => {
+                // attach the correct attributes to the element
+                // these will be used by accessing the event's target
+                // This ensures we only ever have one handler attached to the root, but decide
+                // dynamically when we want to call a listener.
+
                 let el = self.stack.top();
 
                 let el = el
                     .dyn_ref::<Element>()
                     .expect(&format!("not an element: {:?}", el));
-                el.add_event_listener_with_callback(
-                    event_type,
-                    self.callback.as_ref().unwrap().as_ref().unchecked_ref(),
-                )
-                .unwrap();
+                // el.add_event_listener_with_callback(
+                //     event_type,
+                //     self.callback.as_ref().unwrap().as_ref().unchecked_ref(),
+                // )
+                // .unwrap();
                 debug!("adding attributes: {}, {}", a, b);
-                el.set_attribute(&format!("dodrio-a-{}", event_type), &a.to_string())
+                el.set_attribute(&format!("dioxus-a-{}", event_type), &a.to_string())
                     .unwrap();
-                el.set_attribute(&format!("dodrio-b-{}", event_type), &b.to_string())
+                el.set_attribute(&format!("dioxus-b-{}", event_type), &b.to_string())
                     .unwrap();
             }
 
             // 12
             Edit::UpdateEventListener { event_type, a, b } => {
+                // update our internal mapping, and then modify the attribute
+
                 if let Some(el) = self.stack.top().dyn_ref::<Element>() {
-                    el.set_attribute(&format!("dodrio-a-{}", event_type), &a.to_string())
+                    el.set_attribute(&format!("dioxus-a-{}", event_type), &a.to_string())
                         .unwrap();
-                    el.set_attribute(&format!("dodrio-b-{}", event_type), &b.to_string())
+                    el.set_attribute(&format!("dioxus-b-{}", event_type), &b.to_string())
                         .unwrap();
                 }
             }
@@ -296,11 +331,11 @@ impl PatchMachine {
             // 13
             Edit::RemoveEventListener { event_type } => {
                 if let Some(el) = self.stack.top().dyn_ref::<Element>() {
-                    el.remove_event_listener_with_callback(
-                        event_type,
-                        self.callback.as_ref().unwrap().as_ref().unchecked_ref(),
-                    )
-                    .unwrap();
+                    // el.remove_event_listener_with_callback(
+                    //     event_type,
+                    //     self.callback.as_ref().unwrap().as_ref().unchecked_ref(),
+                    // )
+                    // .unwrap();
                 }
             }
 
