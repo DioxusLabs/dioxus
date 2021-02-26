@@ -7,8 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-web-view = { git = "https://github.com/Boscop/web-view" }
-# web-view = "0.7.2"
+# web-view = { git = "https://github.com/Boscop/web-view" }
+web-view = "0.7.3"
 dioxus-core = { path = "../core" }
 anyhow = "1.0.38"
 argh = "0.1.4"
