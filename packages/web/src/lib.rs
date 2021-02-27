@@ -134,6 +134,8 @@ mod tests {
     use std::env;
 
     use super::*;
+    use dioxus::prelude::bumpalo;
+    use dioxus::prelude::format_args_f;
     use dioxus_core as dioxus;
     use dioxus_core::prelude::html;
 

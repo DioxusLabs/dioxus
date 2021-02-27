@@ -34,5 +34,6 @@ longest-increasing-subsequence = "0.1.0"
 serde = { version = "1.0.123", features = ["derive"] }
 log = "0.4.14"
 pretty_env_logger = "0.4.0"
+fstrings = "0.2.3"
 # ouroboros = "0.8.0"
 # hashbrown = { version = "0.9.1", features = ["bumpalo"] }

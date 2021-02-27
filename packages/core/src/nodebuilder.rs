@@ -1,11 +1,14 @@
 //! Helpers for building virtual DOM VNodes.
 
+use std::ops::Deref;
+
 use crate::{
     innerlude::VComponent,
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::VElement,
 };
 
+use bumpalo::format;
 use bumpalo::Bump;
 
 /// A virtual DOM element builder.
@@ -335,15 +338,11 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn on(self, _event: &'a str, _callback: impl Fn(()) + 'a) -> Self
-// pub fn on<F>(mut self, event: &'a str, callback: impl Fn(()) -> () + 'static) -> Self
-// F: Fn(()) + 'static,
-        // F: Fn(()) + 'a,
-    {
-        // self.listeners.push(Listener {
-        //     event,
-        //     callback: self.bump.alloc(callback),
-        // });
+    pub fn on(mut self, event: &'static str, callback: impl Fn(()) + 'a) -> Self {
+        self.listeners.push(Listener {
+            event,
+            callback: self.bump.alloc(callback),
+        });
         self
     }
 }
@@ -1037,6 +1036,14 @@ builder_constructors! {
 pub fn text<'a>(contents: &'a str) -> VNode<'a> {
     VNode::text(contents)
 }
+
+pub fn text2<'a>(contents: bumpalo::collections::String<'a>) -> VNode<'a> {
+    let f: &'a str = contents.into_bump_str();
+    VNode::text(f)
+}
+// pub fn text<'a>(contents: &'a str) -> VNode<'a> {
+//     VNode::text(contents)
+// }
 
 /// Construct an attribute for an element.
 ///

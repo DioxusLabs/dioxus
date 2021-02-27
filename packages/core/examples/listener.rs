@@ -2,23 +2,22 @@
 
 use dioxus_core::prelude::*;
 
-fn main() {}
+fn main() {
+    Some(10)
+        .map(|f| f * 5)
+        .map(|f| f / 3)
+        .map(|f| f * 5)
+        .map(|f| f / 3);
+}
 
-/*
-Our flagship demo :)
-
-*/
 static Example: FC<()> = |ctx, props| {
-    let (val1, set_val1) = use_state(&ctx, || "b1");
+    let (name, set_name) = use_state(&ctx, || "...?");
 
     ctx.view(html! {
         <div>
-            <button onclick={move |_| set_val1("b1")}> "Set value to b1" </button>
-            <button onclick={move |_| set_val1("b2")}> "Set value to b2" </button>
-            <button onclick={move |_| set_val1("b3")}> "Set value to b3" </button>
-            <div>
-                <p> "Value is: {val1}" </p>
-            </div>
+            <h1> "Hello, {name}" </h1>
+            <button onclick={move |_| set_name("jack")}> "jack!" </button>
+            <button onclick={move |_| set_name("jill")}> "jill!" </button>
         </div>
     })
 };

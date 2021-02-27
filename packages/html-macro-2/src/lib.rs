@@ -4,7 +4,7 @@
 //! - [ ] Support for inline format in text
 //! - [ ] Support for expressions in attribute positions
 //! - [ ] Support for iterators
-//!
+//! - [ ] support for inline html!
 //!
 //!
 //!
@@ -80,6 +80,9 @@ impl ToTokens for HtmlRender {
 /// =============================================
 /// Parse any child as a node or list of nodes
 /// =============================================
+/// - [ ] Allow iterators
+///
+///
 enum NodeOrList {
     Node(Node),
     List(NodeList),
@@ -140,6 +143,9 @@ impl Parse for Node {
 /// =======================================
 /// Parse the VNode::Element type
 /// =======================================
+/// - [ ] Allow VComponent
+///
+///
 struct Element {
     name: Ident,
     attrs: Vec<Attr>,
@@ -242,6 +248,9 @@ impl Parse for Element {
 /// =======================================
 /// Parse a VElement's Attributes
 /// =======================================
+/// - [ ] Allow expressions as attribute
+///
+///
 struct Attr {
     name: Ident,
     ty: AttrType,
@@ -316,6 +325,8 @@ enum AttrType {
 /// =======================================
 /// Parse just plain text
 /// =======================================
+/// - [ ] Perform formatting automatically
+///
 ///
 struct TextNode(MaybeExpr<LitStr>);
 
@@ -330,7 +341,12 @@ impl ToTokens for ToToksCtx<&TextNode> {
         let mut token_stream = TokenStream2::new();
         self.recurse(&self.inner.0).to_tokens(&mut token_stream);
         tokens.append_all(quote! {
-            dioxus::builder::text(#token_stream)
+            {
+                use bumpalo::core_alloc::fmt::Write;
+                let mut s = bumpalo::collections::String::new_in(bump);
+                s.write_fmt(format_args_f!(#token_stream)).unwrap();
+                dioxus::builder::text2(s)
+            }
         });
     }
 }
