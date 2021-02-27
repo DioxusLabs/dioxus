@@ -16,11 +16,9 @@ static Example: FC<()> = |ctx| {
 
     ctx.view(html! {
         <div>
+            <h1> "Hello, {value}" </h1>
             <button onclick={move |_| set_value("world!")}> "?" </button>
             <button onclick={move |_| set_value("Dioxus 🎉")}> "?" </button>
-            <div>
-                <h1> "Hello, {value}" </h1>
-            </div>
         </div>
     })
 };

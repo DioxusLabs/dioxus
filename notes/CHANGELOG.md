@@ -1,6 +1,4 @@
-# Project: Web-View 🤲 🍨
-> Proof of concept: stream render edits from server to client
-- [x] Prove that the diffing and patching framework can support patch streaming
+
 
 
 # Project: Live-View 🤲 🍨
@@ -8,6 +6,7 @@
 
 
 # Project: Sanitization (TBD)
+> Improve code health
 - [ ] (Macro) Clippy sanity for html macro
 - [ ] (Macro) Error sanitization
 
@@ -22,13 +21,19 @@
 # Project: Concurrency (TBD)
 > Ensure the concurrency model works well, play with lifetimes to check if it can be multithreaded + halted
 
+
+# Project: Web-View 🤲 🍨
+> Proof of concept: stream render edits from server to client
+- [x] Prove that the diffing and patching framework can support patch streaming
+
 # Project: Web_sys renderer (TBD)
-- [ ] (Web) Web-sys renderer and web tests
+- [x] WebSys edit interpreter
+- [ ] Event system using async channels
 
 # Project: String Render (TBD)
 > Implement a light-weight string renderer with basic caching 
 - [ ] (SSR) Implement stateful 3rd party string renderer
-- [ ] (Macro) Make VText nodes automatically capture and format IE allow "Text is {blah}" in place of {format!("Text is {}",blah)}
+- [x] (Macro) Make VText nodes automatically capture and format IE allow "Text is {blah}"
 
 # Project: Hooks + Context + Subscriptions (TBD)
 > Implement the foundations for state management

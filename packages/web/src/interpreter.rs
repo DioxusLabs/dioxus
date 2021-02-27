@@ -20,22 +20,50 @@ impl std::fmt::Debug for RootCallback {
 pub(crate) struct PatchMachine {
     pub(crate) stack: Stack,
 
+    pub(crate) root: Element,
+
+    pub(crate) temporaries: FxHashMap<u32, Node>,
+
+    pub(crate) document: Document,
+
+    pub(crate) events: EventDelegater,
+}
+
+#[derive(Debug)]
+pub(crate) struct EventDelegater {
     root: Element,
-
-    temporaries: FxHashMap<u32, Node>,
-
-    // callback: RootCallback,
-    // callback: Option<Closure<dyn Fn(EventTrigger)>>,
-    document: Document,
 
     // every callback gets a monotomically increasing callback ID
     callback_id: usize,
+
+    // map of listener types to number of those listeners
+    listeners: FxHashMap<&'static str, (usize, Closure<dyn Fn()>)>,
 
     // Map of callback_id to component index and listener id
     callback_map: FxHashMap<usize, (usize, usize)>,
 }
 
-// templates: FxHashMap<CacheId, Node>,
+impl EventDelegater {
+    pub fn new(root: Element) -> Self {
+        Self {
+            root,
+            callback_id: 0,
+            listeners: FxHashMap::default(),
+            callback_map: FxHashMap::default(),
+        }
+    }
+
+    pub fn add_listener(
+        &mut self,
+        event: &'static str,
+        gi: generational_arena::Index,
+        listener_id: usize,
+    ) {
+    }
+}
+
+// callback: RootCallback,
+// callback: Option<Closure<dyn Fn(EventTrigger)>>,
 
 #[derive(Debug, Default)]
 pub struct Stack {
@@ -85,16 +113,14 @@ impl PatchMachine {
             .expect("must have access to the Document");
 
         // attach all listeners to the container element
+        let events = EventDelegater::new(root.clone());
 
-        // templates: Default::default(),
         Self {
             root,
+            events,
             stack: Stack::with_capacity(20),
             temporaries: Default::default(),
-            // callback: None,
             document,
-            callback_id: 0,
-            callback_map: FxHashMap::default(),
         }
     }
 
@@ -293,7 +319,11 @@ impl PatchMachine {
             }
 
             // 11
-            Edit::NewEventListener { event_type, a, b } => {
+            Edit::NewEventListener {
+                event_type,
+                idx: a,
+                b,
+            } => {
                 // attach the correct attributes to the element
                 // these will be used by accessing the event's target
                 // This ensures we only ever have one handler attached to the root, but decide
@@ -304,16 +334,20 @@ impl PatchMachine {
                 let el = el
                     .dyn_ref::<Element>()
                     .expect(&format!("not an element: {:?}", el));
+
                 // el.add_event_listener_with_callback(
                 //     event_type,
                 //     self.callback.as_ref().unwrap().as_ref().unchecked_ref(),
                 // )
                 // .unwrap();
+
                 debug!("adding attributes: {}, {}", a, b);
                 el.set_attribute(&format!("dioxus-a-{}", event_type), &a.to_string())
                     .unwrap();
                 el.set_attribute(&format!("dioxus-b-{}", event_type), &b.to_string())
                     .unwrap();
+
+                self.events.add_listener(event_type, gi, listener_id)
             }
 
             // 12

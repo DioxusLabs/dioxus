@@ -37,7 +37,7 @@ use fxhash::{FxHashMap, FxHashSet};
 use generational_arena::Index;
 
 use crate::{
-    changelist::{Edit, EditList, EditMachine},
+    changelist::{CbIdx, Edit, EditList, EditMachine},
     innerlude::{Attribute, Listener, Scope, VElement, VNode, VText},
     virtual_dom::LifecycleEvent,
 };
@@ -61,16 +61,20 @@ pub struct DiffMachine<'a> {
     immediate_queue: Vec<Index>,
     diffed: FxHashSet<Index>,
     need_to_diff: FxHashSet<Index>,
+
+    // Current scopes we're comparing
+    current_idx: Option<generational_arena::Index>,
 }
 
 impl<'a> DiffMachine<'a> {
     pub fn new(bump: &'a Bump) -> Self {
-        log::debug!("starsting diff machine");
+        log::debug!("starting diff machine");
         Self {
             change_list: EditMachine::new(bump),
             immediate_queue: Vec::new(),
             diffed: FxHashSet::default(),
             need_to_diff: FxHashSet::default(),
+            current_idx: None,
         }
     }
 
@@ -78,8 +82,17 @@ impl<'a> DiffMachine<'a> {
         self.change_list.emitter
     }
 
-    pub fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
+    pub fn diff_node(
+        &mut self,
+        old: &VNode<'a>,
+        new: &VNode<'a>,
+        scope: Option<generational_arena::Index>,
+    ) {
         log::debug!("Diffing nodes");
+
+        // Set it while diffing
+        // Reset it when finished diffing
+        self.current_idx = scope;
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
@@ -222,6 +235,7 @@ impl<'a> DiffMachine<'a> {
                 todo!("Suspended components not currently available")
             }
         }
+        self.current_idx = None;
     }
 
     // Diff event listeners between `old` and `new`.
@@ -237,16 +251,20 @@ impl<'a> DiffMachine<'a> {
         }
 
         'outer1: for new_l in new {
-            unsafe {
-                // Safety relies on removing `new_l` from the registry manually at
-                // the end of its lifetime. This happens below in the `'outer2`
-                // loop, and elsewhere in diffing when removing old dom trees.
-                // registry.add(new_l);
-            }
+            // unsafe {
+            // Safety relies on removing `new_l` from the registry manually at
+            // the end of its lifetime. This happens below in the `'outer2`
+            // loop, and elsewhere in diffing when removing old dom trees.
+            // registry.add(new_l);
+            // }
 
-            for old_l in old {
+            for (l_idx, old_l) in old.iter().enumerate() {
                 if new_l.event == old_l.event {
-                    self.change_list.update_event_listener(new_l);
+                    let event_type = new_l.event;
+                    if let Some(scope) = self.current_idx {
+                        let cb = CbIdx::from_gi_index(scope, l_idx);
+                        self.change_list.update_event_listener(event_type, cb);
+                    }
                     continue 'outer1;
                 }
             }
@@ -507,7 +525,7 @@ impl<'a> DiffMachine<'a> {
 
             self.change_list.go_to_sibling(i);
 
-            self.diff_node(old, new);
+            self.diff_node(old, new, self.current_idx);
 
             shared_prefix_count += 1;
         }
@@ -705,7 +723,7 @@ impl<'a> DiffMachine<'a> {
                 // [... parent]
                 self.change_list.go_down_to_temp_child(temp);
                 // [... parent last]
-                self.diff_node(&old[old_index], last);
+                self.diff_node(&old[old_index], last, self.current_idx);
 
                 if new_index_is_in_lis.contains(&last_index) {
                     // Don't move it, since it is already where it needs to be.
@@ -758,7 +776,7 @@ impl<'a> DiffMachine<'a> {
                     // [... parent new_child]
                 }
 
-                self.diff_node(&old[old_index], new_child);
+                self.diff_node(&old[old_index], new_child, self.current_idx);
             }
         }
 
@@ -789,8 +807,7 @@ impl<'a> DiffMachine<'a> {
 
         for (i, (old_child, new_child)) in old.iter().zip(new.iter()).enumerate() {
             self.change_list.go_to_sibling(new_shared_suffix_start + i);
-
-            self.diff_node(old_child, new_child);
+            self.diff_node(old_child, new_child, self.current_idx);
         }
 
         // [... parent]
@@ -818,7 +835,7 @@ impl<'a> DiffMachine<'a> {
             // [... parent prev_child]
             self.change_list.go_to_sibling(i);
             // [... parent this_child]
-            self.diff_node(old_child, new_child);
+            self.diff_node(old_child, new_child, self.current_idx);
         }
 
         match old.len().cmp(&new.len()) {
@@ -880,12 +897,21 @@ impl<'a> DiffMachine<'a> {
                     self.change_list.create_element(tag_name);
                 }
 
-                for l in listeners {
-                    // unsafe {
-                    //     registry.add(l);
-                    // }
-                    self.change_list.new_event_listener(l);
-                }
+                listeners.iter().enumerate().for_each(|(id, listener)| {
+                    if let Some(index) = self.current_idx {
+                        self.change_list
+                            .new_event_listener(listener.event, CbIdx::from_gi_index(index, id));
+                    } else {
+                        // Don't panic
+                        // Used for testing
+                        log::trace!("Failed to set listener, create was not called in the context of the virtual dom");
+                    }
+                });
+                // for l in listeners {
+                // unsafe {
+                //     registry.add(l);
+                // }
+                // }
 
                 for attr in attributes {
                     self.change_list

@@ -23,16 +23,3 @@ static Example: FC<()> = |ctx, props| {
         </div>
     })
 };
-
-struct ItemProps {
-    name: String,
-    birthdate: String,
-}
-static Item: FC<ItemProps> = |ctx, ItemProps { name, birthdate }| {
-    ctx.view(html! {
-        <div>
-            <p>"{name}"</p>
-            <p>"{birthdate}"</p>
-        </div>
-    })
-};

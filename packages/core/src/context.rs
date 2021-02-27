@@ -44,9 +44,9 @@ pub struct Context<'src> {
 }
 
 impl<'a> Context<'a> {
-    pub fn props<P>() -> &'a P {
-        todo!()
-    }
+    // pub fn props<P>() -> &'a P {
+    //     todo!()
+    // }
 
     // impl<'a, PropType> Context<'a, PropType> {
     /// Access the children elements passed into the component
@@ -56,7 +56,8 @@ impl<'a> Context<'a> {
 
     /// Create a subscription that schedules a future render for the reference component
     pub fn schedule_update(&self) -> impl Fn() -> () {
-        todo!("Subscription API is not ready yet");
+        // log::debug!()
+        // todo!("Subscription API is not ready yet");
         || {}
     }
 

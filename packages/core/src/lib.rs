@@ -96,6 +96,7 @@ pub(crate) mod innerlude {
     pub(crate) use crate::virtual_dom::VirtualDom;
     pub(crate) use nodes::*;
 
+    pub use crate::changelist::CbIdx;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
 
@@ -150,120 +151,4 @@ pub mod prelude {
     pub use crate::dodriodiff::DiffMachine;
 
     pub use crate::hooks::*;
-}
-
-// #[macro_use]
-// extern crate dioxus_core_macro;
-
-// #[macro_use]
-// extern crate fstrings;
-// pub use dioxus_core_macro::format_args_f;
-// macro_rules! mk_macros {( @with_dollar![$dol:tt]=>
-//     $(
-//         #[doc = $doc_string:literal]
-//         $printlnf:ident
-//             => $println:ident!($($stream:ident,)? ...)
-//         ,
-//     )*
-// ) => (
-//     $(
-//         #[doc = $doc_string]
-//         #[macro_export]
-//         macro_rules! $printlnf {(
-//             $($dol $stream : expr,)? $dol($dol args:tt)*
-//         ) => (
-//             $println!($($dol $stream,)? "{}", format_args_f!($dol($dol args)*))
-//         )}
-//     )*
-// )}
-
-// mk_macros! { @with_dollar![$]=>
-//     #[doc = "Like [`print!`](https://doc.rust-lang.org/std/macro.print.html), but with basic f-string interpolation."]
-//     print_f
-//         => print!(...)
-//     ,
-//     #[doc = "Like [`println!`](https://doc.rust-lang.org/std/macro.println.html), but with basic f-string interpolation."]
-//     println_f
-//         => println!(...)
-//     ,
-//     #[doc = "Like [`eprint!`](https://doc.rust-lang.org/std/macro.eprint.html), but with basic f-string interpolation."]
-//     eprint_f
-//         => eprint!(...)
-//     ,
-//     #[doc = "Like [`eprintln!`](https://doc.rust-lang.org/std/macro.eprintln.html), but with basic f-string interpolation."]
-//     eprintln_f
-//         => eprintln!(...)
-//     ,
-//     #[doc = "Like [`format!`](https://doc.rust-lang.org/std/macro.format.html), but with basic f-string interpolation."]
-//     format_f
-//         => format!(...)
-//     ,
-//     #[doc = "Shorthand for [`format_f`]."]
-//     f
-//         => format!(...)
-//     ,
-//     #[doc = "Like [`panic!`](https://doc.rust-lang.org/std/macro.panic.html), but with basic f-string interpolation."]
-//     panic_f
-//         => panic!(...)
-//     ,
-//     #[doc = "Like [`unreachable!`](https://doc.rust-lang.org/std/macro.unreachable.html), but with basic f-string interpolation."]
-//     unreachable_f
-//         => unreachable!(...)
-//     ,
-//     #[doc = "Like [`unimplemented!`](https://doc.rust-lang.org/std/macro.unimplemented.html), but with basic f-string interpolation."]
-//     unimplemented_f
-//         => unimplemented!(...)
-//     ,
-//     #[doc = "Like [`write!`](https://doc.rust-lang.org/std/macro.write.html), but with basic f-string interpolation."]
-//     write_f
-//         => write!(stream, ...)
-//     ,
-//     #[doc = "Like [`writeln!`](https://doc.rust-lang.org/std/macro.writeln.html), but with basic f-string interpolation."]
-//     writeln_f
-//         => writeln!(stream, ...)
-//     ,
-// }
-/// Like the `format!` macro for creating `std::string::String`s but for
-/// `bumpalo::collections::String`.
-///
-/// # Examples
-///
-/// ```
-/// use bumpalo::Bump;
-///
-/// let b = Bump::new();
-///
-/// let who = "World";
-/// let s = bumpalo::format!(in &b, "Hello, {}!", who);
-/// assert_eq!(s, "Hello, World!")
-/// ```
-#[macro_export]
-macro_rules! ifmt {
-    ( in $bump:expr; $fmt:literal;) => {{
-        use bumpalo::core_alloc::fmt::Write;
-        use $crate::prelude::bumpalo;
-        let bump = $bump;
-        let mut s = bumpalo::collections::String::new_in(bump);
-        let args = $crate::prelude::format_args_f!($fmt);
-        s.write_fmt(args);
-        s
-    }};
-}
-// ( in $bump:expr; $fmt:expr; ) => {
-// $println!("{}", format_args_f!($dol($dol args)*))
-
-// write!(&mut s, println!("{}", args));
-// let _ = $crate::write_f!(&mut s, $fmt);
-// s
-//     use fstrings::*;
-//     $crate::ifmt!(in $bump, $fmt)
-// };
-
-#[test]
-fn macro_test() {
-    let w = 123;
-    let world = &w;
-    // let g = format_args_f!("Hello {world}");
-
-    // dbg!(g);
 }

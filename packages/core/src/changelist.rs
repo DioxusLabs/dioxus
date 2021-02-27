@@ -22,7 +22,7 @@
 use bumpalo::Bump;
 
 use crate::innerlude::Listener;
-
+use serde::{Deserialize, Serialize};
 /// The `Edit` represents a single modifcation of the renderer tree.
 ///
 ///
@@ -33,7 +33,7 @@ use crate::innerlude::Listener;
 ///
 ///
 /// todo@ jon: allow serde to be optional
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Edit<'d> {
     SetText { text: &'d str },
@@ -47,8 +47,8 @@ pub enum Edit<'d> {
     AppendChild,
     CreateTextNode { text: &'d str },
     CreateElement { tag_name: &'d str },
-    NewEventListener { event_type: &'d str, a: u32, b: u32 },
-    UpdateEventListener { event_type: &'d str, a: u32, b: u32 },
+    NewEventListener { event_type: &'d str, idx: CbIdx },
+    UpdateEventListener { event_type: &'d str, idx: CbIdx },
     RemoveEventListener { event_type: &'d str },
     CreateElementNs { tag_name: &'d str, ns: &'d str },
     SaveChildrenToTemporaries { temp: u32, start: u32, end: u32 },
@@ -58,6 +58,26 @@ pub enum Edit<'d> {
     PopPushReverseChild { n: u32 },
     RemoveChild { n: u32 },
     SetClass { class_name: &'d str },
+}
+
+/// Re-export a cover over generational ID for libraries that don't need it
+/// We can go back and forth between the two via methods on GI
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct CbIdx {
+    gi_id: usize,
+    gi_gen: u64,
+    listener_idx: usize,
+}
+
+impl CbIdx {
+    pub fn from_gi_index(index: generational_arena::Index, listener_idx: usize) -> Self {
+        let (gi_id, gi_gen) = index.into_raw_parts();
+        Self {
+            gi_id,
+            gi_gen,
+            listener_idx,
+        }
+    }
 }
 
 pub type EditList<'src> = Vec<Edit<'src>>;
@@ -306,38 +326,41 @@ impl<'a> EditMachine<'a> {
         self.forcing_new_listeners = previous;
     }
 
-    pub fn new_event_listener(&mut self, listener: &Listener) {
+    pub fn new_event_listener(&mut self, event: &'a str, idx: CbIdx) {
         debug_assert!(self.traversal_is_committed());
-        // todo!("Event listener not wired up yet");
-        log::debug!("emit: new_event_listener({:?})", listener);
-        let (a, b) = listener.get_callback_parts();
-        debug_assert!(a != 0);
-        // let event_id = self.ensure_string(listener.event);
         self.emitter.push(Edit::NewEventListener {
-            event_type: listener.event.into(),
-            a,
-            b,
+            event_type: event,
+            idx,
         });
+        // todo!("Event listener not wired up yet");
+        // log::debug!("emit: new_event_listener({:?})", listener);
+        // let (a, b) = listener.get_callback_parts();
+        // debug_assert!(a != 0);
+        // // let event_id = self.ensure_string(listener.event);
         // self.emitter.new_event_listener(listener.event.into(), a, b);
     }
 
-    pub fn update_event_listener(&mut self, listener: &Listener) {
+    pub fn update_event_listener(&mut self, event: &'a str, idx: CbIdx) {
         debug_assert!(self.traversal_is_committed());
-
         if self.forcing_new_listeners {
-            self.new_event_listener(listener);
+            self.new_event_listener(event, idx);
             return;
         }
 
-        log::debug!("emit: update_event_listener({:?})", listener);
-        // todo!("Event listener not wired up yet");
-        let (a, b) = listener.get_callback_parts();
-        debug_assert!(a != 0);
-        self.emitter.push(Edit::UpdateEventListener {
-            event_type: listener.event.into(),
-            a,
-            b,
+        self.emitter.push(Edit::NewEventListener {
+            event_type: event,
+            idx,
         });
+
+        // log::debug!("emit: update_event_listener({:?})", listener);
+        // // todo!("Event listener not wired up yet");
+        // let (a, b) = listener.get_callback_parts();
+        // debug_assert!(a != 0);
+        // self.emitter.push(Edit::UpdateEventListener {
+        //     event_type: listener.event.into(),
+        //     a,
+        //     b,
+        // });
         // self.emitter.update_event_listener(event_id.into(), a, b);
     }
 
