@@ -3,6 +3,8 @@ name = "dioxus-webview"
 version = "0.0.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"
+description = "Dioxus VirtualDOM renderer for a remote webview instance"
+license = "MIT/Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
