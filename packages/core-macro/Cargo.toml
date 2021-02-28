@@ -3,6 +3,8 @@ name = "dioxus-core-macro"
 version = "0.1.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"
+description = "Core macro for Dioxus Virtual DOM"
+"license" = "MIT/Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
