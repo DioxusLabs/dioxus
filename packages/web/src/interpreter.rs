@@ -1,6 +1,9 @@
-use std::fmt::Debug;
+use std::{borrow::Borrow, fmt::Debug, sync::Arc};
 
-use dioxus_core::{changelist::Edit, events::EventTrigger};
+use dioxus_core::{
+    changelist::{CbIdx, Edit},
+    events::{EventTrigger, MouseEvent, VirtualEvent},
+};
 use fxhash::FxHashMap;
 use log::debug;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -9,10 +12,13 @@ use web_sys::{window, Document, Element, Event, HtmlInputElement, HtmlOptionElem
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CacheId(u32);
 
-struct RootCallback(Box<dyn Fn(EventTrigger)>);
+#[derive(Clone)]
+struct RootCallback(Arc<dyn Fn(EventTrigger)>);
 impl std::fmt::Debug for RootCallback {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        Ok(())
+        // a no-op for now
+        // todo!()
     }
 }
 
@@ -37,15 +43,18 @@ pub(crate) struct EventDelegater {
     callback_id: usize,
 
     // map of listener types to number of those listeners
-    listeners: FxHashMap<&'static str, (usize, Closure<dyn Fn()>)>,
+    listeners: FxHashMap<String, (usize, Closure<dyn FnMut(&Event)>)>,
 
     // Map of callback_id to component index and listener id
     callback_map: FxHashMap<usize, (usize, usize)>,
+
+    trigger: RootCallback,
 }
 
 impl EventDelegater {
-    pub fn new(root: Element) -> Self {
+    pub fn new(root: Element, trigger: impl Fn(EventTrigger) + 'static) -> Self {
         Self {
+            trigger: RootCallback(Arc::new(trigger)),
             root,
             callback_id: 0,
             listeners: FxHashMap::default(),
@@ -53,12 +62,55 @@ impl EventDelegater {
         }
     }
 
-    pub fn add_listener(
-        &mut self,
-        event: &'static str,
-        gi: generational_arena::Index,
-        listener_id: usize,
-    ) {
+    pub fn add_listener(&mut self, event: &str, cb: CbIdx) {
+        if let Some(entry) = self.listeners.get_mut(event) {
+            entry.0 += 1;
+        } else {
+            let trigger = self.trigger.clone();
+            let handler = Closure::wrap(Box::new(move |event: &web_sys::Event| {
+                log::debug!("Handling event!");
+
+                let target = event
+                    .target()
+                    .expect("missing target")
+                    .dyn_into::<Element>()
+                    .expect("not a valid element");
+
+                let typ = event.type_();
+
+                let gi_id: usize = target
+                    .get_attribute(&format!("dioxus-giid-{}", typ))
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_default();
+
+                let gi_gen: u64 = target
+                    .get_attribute(&format!("dioxus-gigen-{}", typ))
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_default();
+
+                let li_idx: usize = target
+                    .get_attribute(&format!("dioxus-lidx-{}", typ))
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_default();
+
+                // Call the trigger
+                trigger.0.as_ref()(EventTrigger::new(
+                    virtual_event_from_websys_event(event),
+                    CbIdx {
+                        gi_gen,
+                        gi_id,
+                        listener_idx: li_idx,
+                    },
+                ));
+            }) as Box<dyn FnMut(&Event)>);
+
+            self.root
+                .add_event_listener_with_callback(event, (&handler).as_ref().unchecked_ref())
+                .unwrap();
+
+            // Increment the listeners
+            self.listeners.insert(event.into(), (1, handler));
+        }
     }
 }
 
@@ -106,14 +158,14 @@ impl Stack {
 }
 
 impl PatchMachine {
-    pub fn new(root: Element, event_callback: impl Fn(EventTrigger)) -> Self {
+    pub fn new(root: Element, event_callback: impl Fn(EventTrigger) + 'static) -> Self {
         let document = window()
             .expect("must have access to the window")
             .document()
             .expect("must have access to the Document");
 
         // attach all listeners to the container element
-        let events = EventDelegater::new(root.clone());
+        let events = EventDelegater::new(root.clone(), event_callback);
 
         Self {
             root,
@@ -144,31 +196,6 @@ impl PatchMachine {
     pub fn get_template(&self, id: CacheId) -> Option<&Node> {
         todo!()
         // self.templates.get(&id)
-    }
-
-    /// On any listener wakeup, find the listener that generated the event from th e attribute
-    // pub fn init_events_trampoline(&mut self, _trampoline: ()) {
-    pub fn init_events_trampoline(&mut self, event_channel: impl Fn(EventTrigger)) {
-        // self.callback = Some(Closure::wrap(Box::new(move |event: &web_sys::Event| {
-        //     let target = event
-        //         .target()
-        //         .expect("missing target")
-        //         .dyn_into::<Element>()
-        //         .expect("not a valid element");
-        //     let typ = event.type_();
-        //     let a: u32 = target
-        //         .get_attribute(&format!("dioxus-a-{}", typ))
-        //         .and_then(|v| v.parse().ok())
-        //         .unwrap_or_default();
-
-        //     let b: u32 = target
-        //         .get_attribute(&format!("dioxus-b-{}", typ))
-        //         .and_then(|v| v.parse().ok())
-        //         .unwrap_or_default();
-
-        //     // get a and b from the target
-        //     trampoline(event.clone(), a, b);
-        // }) as Box<dyn FnMut(&Event)>));
     }
 
     pub fn handle_edit(&mut self, edit: &Edit) {
@@ -319,11 +346,7 @@ impl PatchMachine {
             }
 
             // 11
-            Edit::NewEventListener {
-                event_type,
-                idx: a,
-                b,
-            } => {
+            Edit::NewEventListener { event_type, idx } => {
                 // attach the correct attributes to the element
                 // these will be used by accessing the event's target
                 // This ensures we only ever have one handler attached to the root, but decide
@@ -341,24 +364,33 @@ impl PatchMachine {
                 // )
                 // .unwrap();
 
-                debug!("adding attributes: {}, {}", a, b);
-                el.set_attribute(&format!("dioxus-a-{}", event_type), &a.to_string())
+                // debug!("adding attributes: {}, {}", a, b);
+
+                let CbIdx {
+                    gi_id,
+                    gi_gen,
+                    listener_idx: lidx,
+                } = idx;
+
+                el.set_attribute(&format!("dioxus-giid-{}", event_type), &gi_id.to_string())
                     .unwrap();
-                el.set_attribute(&format!("dioxus-b-{}", event_type), &b.to_string())
+                el.set_attribute(&format!("dioxus-gigen-{}", event_type), &gi_gen.to_string())
+                    .unwrap();
+                el.set_attribute(&format!("dioxus-lidx-{}", event_type), &lidx.to_string())
                     .unwrap();
 
-                self.events.add_listener(event_type, gi, listener_id)
+                self.events.add_listener(event_type, idx);
             }
 
             // 12
-            Edit::UpdateEventListener { event_type, a, b } => {
+            Edit::UpdateEventListener { event_type, idx } => {
                 // update our internal mapping, and then modify the attribute
 
                 if let Some(el) = self.stack.top().dyn_ref::<Element>() {
-                    el.set_attribute(&format!("dioxus-a-{}", event_type), &a.to_string())
-                        .unwrap();
-                    el.set_attribute(&format!("dioxus-b-{}", event_type), &b.to_string())
-                        .unwrap();
+                    // el.set_attribute(&format!("dioxus-a-{}", event_type), &a.to_string())
+                    //     .unwrap();
+                    // el.set_attribute(&format!("dioxus-b-{}", event_type), &b.to_string())
+                    //     .unwrap();
                 }
             }
 
@@ -467,4 +499,11 @@ impl PatchMachine {
     //     todo!()
     //     // self.templates.contains_key(&id)
     // }
+}
+
+fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
+    match event.type_().as_str() {
+        "click" => VirtualEvent::MouseEvent(MouseEvent {}),
+        _ => VirtualEvent::OtherEvent,
+    }
 }

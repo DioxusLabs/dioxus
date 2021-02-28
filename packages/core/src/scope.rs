@@ -36,8 +36,10 @@ pub struct Scope {
 
     pub frames: ActiveFrame,
 
-    // IE Which listeners need to be woken up?
-    pub listeners: Vec<Box<dyn Fn(crate::events::VirtualEvent)>>,
+    // List of listeners generated when CTX is evaluated
+    pub listeners: Vec<*const dyn Fn(crate::events::VirtualEvent)>,
+    // pub listeners: Vec<*const dyn Fn(crate::events::VirtualEvent)>,
+    // pub listeners: Vec<Box<dyn Fn(crate::events::VirtualEvent)>>,
 
     // lying, cheating reference >:(
     pub props: Box<dyn std::any::Any>,
@@ -55,9 +57,8 @@ impl Scope {
         // Capture the caller
         let caller = f as *const ();
 
-        let listeners: Vec<Box<dyn Fn(crate::events::VirtualEvent)>> = vec![Box::new(|_| {
-            log::info!("Base listener called");
-        })];
+        let listeners = vec![];
+        // let listeners: Vec<Box<dyn Fn(crate::events::VirtualEvent)>> = vec![];
 
         let old_frame = BumpFrame {
             bump: Bump::new(),
@@ -95,6 +96,7 @@ impl Scope {
         let frame = {
             let frame = self.frames.next();
             frame.bump.reset();
+            log::debug!("Rednering into frame {:?}", frame as *const _);
             frame
         };
 
@@ -145,6 +147,20 @@ impl Scope {
                 .borrow_mut()
                 .take()
                 .expect("Viewing did not happen");
+
+            // todo:
+            // make this so we dont have to iterate through the vnodes to get its listener
+            let mut listeners = vec![];
+            retrieve_listeners(&frame.head_node, &mut listeners);
+            self.listeners = listeners
+                .into_iter()
+                .map(|f| {
+                    let g = f.callback;
+                    g as *const _
+                })
+                .collect();
+
+            // consume the listeners from the head_node into a list of boxed ref listeners
         }
     }
 
@@ -156,6 +172,18 @@ impl Scope {
 
     pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
         self.frames.prev_head_node()
+    }
+}
+
+fn retrieve_listeners(node: &VNode<'static>, listeners: &mut Vec<&Listener>) {
+    if let VNode::Element(el) = *node {
+        for listener in el.listeners {
+            // let g = listener as *const Listener;
+            listeners.push(listener);
+        }
+        for child in el.children {
+            retrieve_listeners(child, listeners);
+        }
     }
 }
 
@@ -184,7 +212,7 @@ impl ActiveFrame {
     }
 
     fn current_head_node<'b>(&'b self) -> &'b VNode<'b> {
-        let raw_node = match self.idx.borrow().load(Ordering::Relaxed) & 1 != 0 {
+        let raw_node = match self.idx.borrow().load(Ordering::Relaxed) & 1 == 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         };
@@ -196,7 +224,7 @@ impl ActiveFrame {
     }
 
     fn prev_head_node<'b>(&'b self) -> &'b VNode<'b> {
-        let raw_node = match self.idx.borrow().load(Ordering::Relaxed) & 1 == 0 {
+        let raw_node = match self.idx.borrow().load(Ordering::Relaxed) & 1 != 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         };
@@ -211,11 +239,22 @@ impl ActiveFrame {
     fn next(&mut self) -> &mut BumpFrame {
         self.idx.fetch_add(1, Ordering::Relaxed);
         let cur = self.idx.borrow().load(Ordering::Relaxed);
-        match cur % 1 {
-            1 => &mut self.frames[1],
-            0 => &mut self.frames[0],
-            _ => unreachable!("mod cannot by non-zero"),
+        log::debug!("Next frame! {}", cur);
+
+        if cur % 2 == 0 {
+            log::debug!("Chosing frame 0");
+            &mut self.frames[0]
+        } else {
+            log::debug!("Chosing frame 1");
+            &mut self.frames[1]
         }
+        // match cur % 1 {
+        //     0 => {
+        //     }
+        //     1 => {
+        //     }
+        //     _ => unreachable!("mod cannot by non-zero"),
+        // }
     }
 }
 

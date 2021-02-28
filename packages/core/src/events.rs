@@ -6,16 +6,29 @@
 //! The goal here is to provide a consistent event interface across all renderer types
 use generational_arena::Index;
 
+use crate::innerlude::CbIdx;
+
 #[derive(Debug)]
 pub struct EventTrigger {
     pub component_id: Index,
-    pub listener_id: u32,
+    pub listener_id: usize,
     pub event: VirtualEvent,
 }
 
 impl EventTrigger {
-    pub fn new() -> Self {
-        todo!()
+    pub fn new(event: VirtualEvent, cb: CbIdx) -> Self {
+        let CbIdx {
+            gi_id,
+            gi_gen,
+            listener_idx,
+        } = cb;
+
+        let component_id = Index::from_raw_parts(gi_id, gi_gen);
+        Self {
+            component_id,
+            listener_id: listener_idx,
+            event,
+        }
     }
 }
 

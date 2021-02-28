@@ -3,6 +3,7 @@
 use std::ops::Deref;
 
 use crate::{
+    events::VirtualEvent,
     innerlude::VComponent,
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::VElement,
@@ -338,7 +339,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn on(mut self, event: &'static str, callback: impl Fn(()) + 'a) -> Self {
+    pub fn on(mut self, event: &'static str, callback: impl Fn(VirtualEvent) + 'a) -> Self {
         self.listeners.push(Listener {
             event,
             callback: self.bump.alloc(callback),
@@ -1081,7 +1082,7 @@ pub fn on<'a, 'b>(
     // pub fn on<'a, 'b, F: 'static>(
     bump: &'a Bump,
     event: &'static str,
-    callback: impl Fn(()) + 'a,
+    callback: impl Fn(VirtualEvent) + 'a,
 ) -> Listener<'a> {
     Listener {
         event,

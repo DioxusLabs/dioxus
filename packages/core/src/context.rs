@@ -102,6 +102,7 @@ pub mod hooks {
 
     use super::*;
 
+    #[derive(Debug)]
     pub struct Hook(pub Box<dyn std::any::Any>);
 
     impl Hook {

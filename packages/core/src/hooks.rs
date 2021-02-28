@@ -51,6 +51,7 @@ mod use_state_def {
                 caller: Box::new(|_| println!("setter called!")),
             },
             move |hook| {
+                log::debug!("Use_state set called");
                 let inner = hook.new_val.clone();
                 let scheduled_update = ctx.schedule_update();
 

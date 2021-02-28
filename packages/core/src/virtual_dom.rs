@@ -140,29 +140,63 @@ impl VirtualDom {
 
         let component = self
             .components
-            .get(component_id)
+            .get_mut(component_id)
             .expect("Component should exist if an event was triggered");
 
-        let listener = component
-            .listeners
-            .get(listener_id as usize)
-            .expect("Listener should exist if it was triggered")
-            .as_ref();
+        log::debug!("list: {}", component.listeners.len());
+
+        let listener = unsafe {
+            component
+                .listeners
+                .get(listener_id as usize)
+                .expect("Listener should exist if it was triggered")
+                .as_ref()
+        }
+        .unwrap();
 
         // Run the callback with the user event
         listener(source);
 
+        // Reset and then build a new diff machine
+        // The previous edit list cannot be around while &mut is held
+        // Make sure variance doesnt break this
+        self.diff_bump.reset();
+        let mut diff_machine = DiffMachine::new(&self.diff_bump);
+
+        // this is still a WIP
+        // we'll need to re-fecth all the scopes that were changed and build the diff machine
+        // fetch the component again
+        // let component = self
+        //     .components
+        //     .get_mut(self.base_scope)
+        //     .expect("Root should always exist");
+
+        component.run::<()>();
+
+        diff_machine.diff_node(
+            component.old_frame(),
+            component.new_frame(),
+            Some(self.base_scope),
+        );
+        // diff_machine.diff_node(
+        //     component.old_frame(),
+        //     component.new_frame(),
+        //     Some(self.base_scope),
+        // );
+
+        Ok(diff_machine.consume())
+        // Err(crate::error::Error::NoEvent)
         // Mark dirty components. Descend from the highest node until all dirty nodes are updated.
-        let mut affected_components = Vec::new();
+        // let mut affected_components = Vec::new();
 
-        while let Some(event) = self.pop_event() {
-            if let Some(component_idx) = event.index() {
-                affected_components.push(component_idx);
-            }
-            self.process_lifecycle(event)?;
-        }
+        // while let Some(event) = self.pop_event() {
+        //     if let Some(component_idx) = event.index() {
+        //         affected_components.push(component_idx);
+        //     }
+        //     self.process_lifecycle(event)?;
+        // }
 
-        todo!()
+        // todo!()
     }
 
     /// Using mutable access to the Virtual Dom, progress a given lifecycle event

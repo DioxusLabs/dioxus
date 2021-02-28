@@ -64,9 +64,9 @@ pub enum Edit<'d> {
 /// We can go back and forth between the two via methods on GI
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct CbIdx {
-    gi_id: usize,
-    gi_gen: u64,
-    listener_idx: usize,
+    pub gi_id: usize,
+    pub gi_gen: u64,
+    pub listener_idx: usize,
 }
 
 impl CbIdx {

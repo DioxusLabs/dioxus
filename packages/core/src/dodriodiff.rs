@@ -68,7 +68,7 @@ pub struct DiffMachine<'a> {
 
 impl<'a> DiffMachine<'a> {
     pub fn new(bump: &'a Bump) -> Self {
-        log::debug!("starting diff machine");
+        // log::debug!("starting diff machine");
         Self {
             change_list: EditMachine::new(bump),
             immediate_queue: Vec::new(),
@@ -88,7 +88,8 @@ impl<'a> DiffMachine<'a> {
         new: &VNode<'a>,
         scope: Option<generational_arena::Index>,
     ) {
-        log::debug!("Diffing nodes");
+        log::debug!("old {:#?}", old);
+        log::debug!("new {:#?}", new);
 
         // Set it while diffing
         // Reset it when finished diffing
@@ -131,7 +132,7 @@ impl<'a> DiffMachine<'a> {
             // compare elements
             // if different, schedule different types of update
             (VNode::Element(eold), VNode::Element(enew)) => {
-                log::debug!("elements are different");
+                // log::debug!("elements are different");
                 // If the element type is completely different, the element needs to be re-rendered completely
                 if enew.tag_name != eold.tag_name || enew.namespace != eold.namespace {
                     self.change_list.commit_traversal();
@@ -894,7 +895,7 @@ impl<'a> DiffMachine<'a> {
                 children,
                 namespace,
             }) => {
-                log::info!("Creating {:#?}", node);
+                // log::info!("Creating {:#?}", node);
                 if let Some(namespace) = namespace {
                     self.change_list.create_element_ns(tag_name, namespace);
                 } else {

@@ -94,6 +94,8 @@ mod vnode {
 }
 
 mod velement {
+    use crate::events::VirtualEvent;
+
     use super::*;
     use std::fmt::Debug;
 
@@ -188,7 +190,7 @@ mod velement {
         // pub(crate) _i: &'bump str,
         // #[serde(skip_serializing, skip_deserializing, default="")]
         // /// The callback to invoke when the event happens.
-        pub(crate) callback: &'bump (dyn Fn(())),
+        pub(crate) callback: &'bump (dyn Fn(VirtualEvent)),
     }
     impl Debug for Listener<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -197,7 +199,7 @@ mod velement {
                 .finish()
         }
     }
-    pub(crate) type ListenerCallback<'a> = &'a (dyn Fn(()));
+    pub(crate) type ListenerCallback<'a> = &'a (dyn Fn(VirtualEvent));
     union CallbackFatPtr<'a> {
         callback: ListenerCallback<'a>,
         parts: (u32, u32),

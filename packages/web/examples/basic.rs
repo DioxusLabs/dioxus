@@ -6,10 +6,6 @@ use dioxus_web::*;
 fn main() {
     // Setup logging
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    // wasm_logger::init(wasm_logger::Config::with_prefix(
-    //     log::Level::Debug,
-    //     "dioxus_core",
-    // ));
     console_error_panic_hook::set_once();
 
     // Run the app
