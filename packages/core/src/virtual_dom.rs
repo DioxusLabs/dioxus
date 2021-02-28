@@ -98,7 +98,11 @@ impl VirtualDom {
 
         component.run::<()>();
 
-        diff_machine.diff_node(component.old_frame(), component.new_frame());
+        diff_machine.diff_node(
+            component.old_frame(),
+            component.new_frame(),
+            Some(self.base_scope),
+        );
 
         Ok(diff_machine.consume())
     }

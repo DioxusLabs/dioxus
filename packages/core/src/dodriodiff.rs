@@ -250,26 +250,30 @@ impl<'a> DiffMachine<'a> {
             self.change_list.commit_traversal();
         }
 
-        'outer1: for new_l in new {
+        'outer1: for (l_idx, new_l) in new.iter().enumerate() {
             // unsafe {
             // Safety relies on removing `new_l` from the registry manually at
             // the end of its lifetime. This happens below in the `'outer2`
             // loop, and elsewhere in diffing when removing old dom trees.
             // registry.add(new_l);
             // }
+            let event_type = new_l.event;
 
-            for (l_idx, old_l) in old.iter().enumerate() {
+            for old_l in old {
                 if new_l.event == old_l.event {
-                    let event_type = new_l.event;
                     if let Some(scope) = self.current_idx {
                         let cb = CbIdx::from_gi_index(scope, l_idx);
                         self.change_list.update_event_listener(event_type, cb);
                     }
+
                     continue 'outer1;
                 }
             }
 
-            self.change_list.new_event_listener(new_l);
+            if let Some(scope) = self.current_idx {
+                let cb = CbIdx::from_gi_index(scope, l_idx);
+                self.change_list.new_event_listener(event_type, cb);
+            }
         }
 
         'outer2: for old_l in old {
