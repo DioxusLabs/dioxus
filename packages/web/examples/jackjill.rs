@@ -39,14 +39,14 @@ static Example: FC<()> = |ctx, props| {
                         // Control buttons
                         <div>
                             <button
-                                class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-700 font-semibold rounded shadow"
+                                class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
                                 // onclick={move |_| log::debug!("set jack")}>
                                 onclick={move |_| set_name("jack")}>
                                 "Jack!"
                                 </button>
 
                                 <button
-                                class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-700 font-semibold rounded shadow"
+                                class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
                                 // onclick={move |_| log::debug!("set jill")}>
                                 onclick={move |_| set_name("jill")}
                                 onclick={move |_| set_name("jill")}>

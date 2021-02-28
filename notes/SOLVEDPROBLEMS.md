@@ -355,3 +355,8 @@ fn component(ctx: Context, props: &Props) -> DomTree {
 ```
 
 The DomTree object purely represents a viewable "key". It also forces components to use the "view" function as there is no other way to generate the DomTree object. Because the DomTree is a required type of FC, we can guarantee the same usage and flow patterns for all components.
+
+
+## Events 
+
+Events are finally in! To do events properly, we are abstracting over the event source with synthetic events. This forces 3rd party renderers to create the appropriate cross-platform event 

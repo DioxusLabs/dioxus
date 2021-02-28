@@ -161,7 +161,6 @@ mod tests {
     use dioxus_core as dioxus;
     use dioxus_core::prelude::html;
 
-    #[test]
     fn simple_patch() {
         env::set_var("RUST_LOG", "trace");
         pretty_env_logger::init();

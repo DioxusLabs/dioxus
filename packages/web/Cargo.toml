@@ -3,11 +3,12 @@ name = "dioxus-web"
 version = "0.0.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"
-
+description = "Dioxus VirtualDOM renderer for the web browser using websys"
+license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core" }
+dioxus-core = { path = "../core", version = "0.1.0" }
 js-sys = "0.3"
 wasm-bindgen = "0.2.69"
 # wasm-bindgen = "0.2.70"
@@ -20,6 +21,7 @@ fxhash = "0.2.1"
 pretty_env_logger = "0.4.0"
 console_error_panic_hook = "0.1.6"
 generational-arena = "0.2.8"
+wasm-bindgen-test = "0.3.21"
 # html-validation = { path = "../html-validation", version = "0.1.1" }
 
 [dependencies.web-sys]
