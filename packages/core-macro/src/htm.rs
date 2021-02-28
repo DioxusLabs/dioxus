@@ -13,7 +13,7 @@
 //!
 //!
 
-use ::{
+use {
     proc_macro::TokenStream,
     proc_macro2::{Span, TokenStream as TokenStream2},
     quote::{quote, ToTokens, TokenStreamExt},
@@ -25,21 +25,10 @@ use ::{
     },
 };
 
-/// The html! macro makes it easy for developers to write jsx-style markup in their components.
-/// We aim to keep functional parity with html templates.
-#[proc_macro]
-pub fn html(s: TokenStream) -> TokenStream {
-    let html: HtmlRender = match syn::parse(s) {
-        Ok(s) => s,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    html.to_token_stream().into()
-}
-
 // ==============================================
 // Parse any stream coming from the html! macro
 // ==============================================
-struct HtmlRender {
+pub struct HtmlRender {
     kind: NodeOrList,
 }
 
@@ -401,6 +390,8 @@ impl ToTokens for ToToksCtx<&LitStr> {
         self.inner.to_tokens(tokens)
     }
 }
+
+mod styles {}
 
 #[cfg(test)]
 mod test {

@@ -18,8 +18,8 @@ members = [
     # "packages/hooks",
     "packages/cli",
     "examples",
-    "packages/html-macro",
-    "packages/html-macro-2",
+    # "packages/html-macro",
+    # "packages/html-macro-2",
     #
     #
     #
