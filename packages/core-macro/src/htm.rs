@@ -17,7 +17,6 @@ use {
     proc_macro::TokenStream,
     proc_macro2::{Span, TokenStream as TokenStream2},
     quote::{quote, ToTokens, TokenStreamExt},
-    style_shared::Styles,
     syn::{
         ext::IdentExt,
         parse::{Parse, ParseStream},
@@ -267,15 +266,17 @@ impl Parse for Attr {
                 let outer;
                 syn::braced!(outer in s);
                 // double brace for inline style.
-                if outer.peek(token::Brace) {
-                    let inner;
-                    syn::braced!(inner in outer);
-                    let styles: Styles = inner.parse()?;
-                    MaybeExpr::Literal(LitStr::new(&styles.to_string(), Span::call_site()))
-                } else {
-                    // just parse as an expression
-                    MaybeExpr::Expr(outer.parse()?)
-                }
+                // todo!("Style support not ready yet");
+
+                // if outer.peek(token::Brace) {
+                //     let inner;
+                //     syn::braced!(inner in outer);
+                //     let styles: Styles = inner.parse()?;
+                //     MaybeExpr::Literal(LitStr::new(&styles.to_string(), Span::call_site()))
+                // } else {
+                // just parse as an expression
+                MaybeExpr::Expr(outer.parse()?)
+            // }
             } else {
                 s.parse()?
             };
