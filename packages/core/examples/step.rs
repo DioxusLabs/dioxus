@@ -30,7 +30,7 @@ struct Props {
 // }
 
 static Example: FC<Props> = |ctx, _props| {
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
             <h1> "hello world!" </h1>
             <h1> "hello world!" </h1>

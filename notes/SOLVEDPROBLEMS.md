@@ -222,7 +222,7 @@ fn Example<'src>(ctx: Context<'src, ()>) -> VNode<'src> {
     let handler1 = move |_| println!("Value is {}", val); // deref coercion performed here for printing
     let handler2 = move |_| println!("Value is {}", val); // deref coercion performed here for printing
 
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
             <button onclick={handler1}> "Echo value with h1" </button>
             <button onclick={handler2}> "Echo value with h2" </button>
@@ -316,7 +316,7 @@ Any "dirty" node causes an entire subtree render. Calling "setState" at the very
 ```rust
 static APP: FC<()> = |ctx, props| {
     let title = use_context(Title);
-    ctx.view(html!{
+    ctx.render(html!{
         <div>
             <h1> "{title}"</h1>
             <HeavyList /> // VComponent::new(|| (FC, PropsForFc)) -> needs a context to immediately update the component's props imperatively? store the props in a box on bump? store the props on the child?
@@ -336,7 +336,7 @@ static APP: FC<()> = |ctx, props| {
     })
 };
 static HEAVY_LIST: FC<()> = |ctx, props| {
-    ctx.view({
+    ctx.render({
         {0.100.map(i => <BigElement >)}
     })
 };

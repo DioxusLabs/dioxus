@@ -73,10 +73,10 @@ impl<'a> Context<'a> {
     ///     let lazy_tree = html! {<div>"Hello World"</div>};
     ///     
     ///     // Actually build the tree and allocate it
-    ///     ctx.view(lazy_tree)
+    ///     ctx.render(lazy_tree)
     /// }
     ///```
-    pub fn view(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> DomTree {
+    pub fn render(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> DomTree {
         let safe_nodes = lazy_nodes(self.bump);
         let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
         self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);

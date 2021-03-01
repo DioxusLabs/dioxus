@@ -5,7 +5,6 @@
 // use dioxus_core::prelude::*;
 // use once_cell::sync::{Lazy, OnceCell};
 
-
 use std::ops::Deref;
 
 /*
@@ -97,7 +96,7 @@ fn t<'a>(ctx: Context<'a>) {
         // let val2 = refed.as_bytes();
     });
 
-    ctx.view(move |_b| {});
+    ctx.render(move |_b| {});
 }
 
 fn main() {}

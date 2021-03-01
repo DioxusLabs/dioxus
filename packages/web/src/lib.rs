@@ -168,7 +168,7 @@ mod tests {
 
         wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, _| {
             todo!()
-            // ctx.view(html! {
+            // ctx.render(html! {
             //     <div>
             //         "Hello world"
             //         <button onclick={move |_| log::info!("button1 clicked!")}> "click me" </button>

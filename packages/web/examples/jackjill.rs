@@ -14,7 +14,7 @@ static Example: FC<()> = |ctx, props| {
 
     log::debug!("Running component....");
 
-    ctx.view(html! {
+    ctx.render(html! {
     // <div>
     //     <h1> "Hello, {name}" </h1>
     //     <button onclick={move |_| set_name("jack")}> "jack!" </button>

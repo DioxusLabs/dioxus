@@ -12,7 +12,7 @@ static Header: FC<()> = |ctx, props| {
 
     let handler1 = move || println!("Value is {}", inner.current());
 
-    ctx.view(|bump| {
+    ctx.render(|bump| {
         builder::div(bump)
             .child(VNode::Component(VComponent::new(
                 Bottom,
@@ -24,7 +24,7 @@ static Header: FC<()> = |ctx, props| {
 };
 
 static Bottom: FC<()> = |ctx, props| {
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
             <h1> "bruh 1" </h1>
             <h1> "bruh 2" </h1>

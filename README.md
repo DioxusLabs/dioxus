@@ -14,7 +14,18 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 static Example: FC<()> = |ctx| {
     let (value, set_value) = use_state(&ctx, || "...?");
 
-    ctx.view(html! {
+    // custom (more powerful) syntax
+    ctx.render(html! {
+        div {
+            h1 { "Hello, {value}" }
+            button { "?", onclick: move |_| set_value("world!") }
+            button { "?", onclick: move |_| set_value("Dioxus 🎉") }
+        }
+    })
+
+    // Classic syntax
+    // no more updates, frozen
+    ctx.render(html!{
         <div>
             <h1> "Hello, {value}" </h1>
             <button onclick={move |_| set_value("world!")}> "?" </button>

@@ -13,7 +13,7 @@ fn main() {
 static Example: FC<()> = |ctx, props| {
     let (name, set_name) = use_state(&ctx, || "...?");
 
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
             <h1> "Hello, {name}" </h1>
             <button onclick={move |_| set_name("jack")}> "jack!" </button>

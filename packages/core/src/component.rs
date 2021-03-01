@@ -44,7 +44,7 @@ mod tests {
 
     static TestComponent: FC<()> = |ctx, props| {
         //
-        ctx.view(html! {
+        ctx.render(html! {
             <div>
             </div>
         })
@@ -52,7 +52,7 @@ mod tests {
 
     static TestComponent2: FC<()> = |ctx, props| {
         //
-        ctx.view(|bump: &Bump| VNode::text("blah"))
+        ctx.render(|bump: &Bump| VNode::text("blah"))
     };
 
     #[test]

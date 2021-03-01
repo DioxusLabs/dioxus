@@ -10,7 +10,7 @@ fn main() {
     console_error_panic_hook::set_once();
 
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, _| {
-        ctx.view(html! {
+        ctx.render(html! {
             <div>
                 <div class="flex items-center justify-center flex-col">
                     <div class="flex items-center justify-center">

@@ -57,7 +57,7 @@ fn serve_app(ctx: &Context<()>) -> VNode {
         .with_handler("graph", graph_component)
         .build();
 
-    ctx.view(html! {
+    ctx.render(html! {
         <LiveContext ctx={livecontext}>
             <App />
         </ LiveContext>

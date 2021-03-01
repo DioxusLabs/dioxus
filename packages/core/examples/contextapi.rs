@@ -14,7 +14,7 @@ struct Props {
 static Example: FC<Props> = |ctx, props| {
     let value = ctx.use_context(|c: &SomeContext| c.items.last().unwrap());
 
-    ctx.view(move |bump| {
+    ctx.render(move |bump| {
         button(bump)
             .on("click", move |_| {
                 println!("Value is {}", props.name);
@@ -26,7 +26,7 @@ static Example: FC<Props> = |ctx, props| {
             })
             .finish()
     })
-    // ctx.view(html! {
+    // ctx.render(html! {
     //     <div>
     //         <button onclick={move |_| println!("Value is {}", value)} />
     //         <button onclick={move |_| println!("Value is {}", value)} />

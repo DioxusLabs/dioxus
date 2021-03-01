@@ -15,7 +15,7 @@ fn main() {
 static App: FC<()> = |ctx, _| {
     log::info!("Ran component");
     use dioxus::builder::*;
-    ctx.view(|b| {
+    ctx.render(|b| {
         div(b)
             .child(text("hello"))
             .listeners([on(b, "click", |_| {
@@ -24,7 +24,7 @@ static App: FC<()> = |ctx, _| {
             })])
             .finish()
     })
-    // ctx.view(html! {
+    // ctx.render(html! {
     //     <div onclick={move |_| log::info!("button1 clicked!")}>
     //         "Hello"
     //         // <div class="flex items-center justify-center flex-col">

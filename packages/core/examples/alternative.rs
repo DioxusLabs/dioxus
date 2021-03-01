@@ -1,10 +1,8 @@
 //! An alternative function syntax
 //!
 
-
-
 use bumpalo::Bump;
-use dioxus_core::prelude::{VNode};
+use dioxus_core::prelude::VNode;
 
 fn main() {}
 
@@ -47,7 +45,7 @@ fn Example(ctx: Context2<Props>) -> DTree {
     let val = use_state(&ctx, || String::from("asd"));
     let props = ctx.props();
 
-    ctx.view(move |b| {
+    ctx.render(move |b| {
         dioxus_core::nodebuilder::div(b)
             .child(dioxus_core::nodebuilder::text(props.c.as_str()))
             .child(virtual_child(b, Props2 { a: val }, AltChild))
@@ -59,7 +57,7 @@ fn Example(ctx: Context2<Props>) -> DTree {
 fn Example2(ctx: Context2<()>, name: &str, _blah: &str) -> DTree {
     let val = use_state(&ctx, || String::from("asd"));
 
-    ctx.view(move |b| {
+    ctx.render(move |b| {
         dioxus_core::nodebuilder::div(b)
             .child(dioxus_core::nodebuilder::text(name))
             .child(virtual_child(b, Props2 { a: val }, AltChild))
@@ -81,7 +79,7 @@ struct Props2<'a> {
 impl Properties for Props2<'_> {}
 
 fn AltChild(ctx: Context2<Props2>) -> DTree {
-    ctx.view(|_b| {
+    ctx.render(|_b| {
         //
         todo!()
     })

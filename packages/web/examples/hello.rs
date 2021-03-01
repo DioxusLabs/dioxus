@@ -6,7 +6,7 @@ fn main() {
 }
 
 static Example: FC<()> = |ctx, _props| {
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
             "Hello world!"
         </div>

@@ -30,7 +30,7 @@ mod tests {
     fn ensure_creation() -> Result<(), ()> {
         let mut dom = VirtualDom::new(|ctx, props| {
             //
-            ctx.view(html! { <div>"hello world" </div> })
+            ctx.render(html! { <div>"hello world" </div> })
         });
 
         // dom.progress()?;

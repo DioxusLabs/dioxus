@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn start_dom() {
         let mut dom = VirtualDom::new(|ctx, props| {
-            ctx.view(|bump| {
+            ctx.render(|bump| {
                 use crate::builder::*;
                 div(bump).child(text("hello,    world")).finish()
             })

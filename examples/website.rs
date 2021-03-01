@@ -20,7 +20,7 @@ mod state {
 }
 
 static APP: FC<()> = |ctx, props| {
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
 
         <div>
@@ -29,7 +29,7 @@ static APP: FC<()> = |ctx, props| {
 
 /// Draw the navbar on top of the screen
 static Navbar: FC<state::Route> = |ctx, props| {
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
 
         <div>
@@ -37,7 +37,7 @@ static Navbar: FC<state::Route> = |ctx, props| {
 };
 
 static Homepage: FC<()> = |ctx, props| {
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
 
         <div>

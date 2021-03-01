@@ -9,7 +9,7 @@ struct MyProps {
 }
 
 fn Example(ctx: Context<MyProps>) -> VNode {
-    ctx.view(html! { 
+    ctx.render(html! { 
         <div> "Hello {ctx.props().name}!" </div> 
     })
 }

@@ -266,7 +266,7 @@ mod tests {
     use crate::prelude::format_args_f;
 
     static ListenerTest: FC<()> = |ctx, props| {
-        ctx.view(html! {
+        ctx.render(html! {
             <div onclick={|_| println!("Hell owlrld")}>
                 "hello"
             </div>
@@ -288,7 +288,7 @@ mod tests {
     fn test_scope() {
         let example: FC<()> = |ctx, props| {
             use crate::builder::*;
-            ctx.view(|b| div(b).child(text("a")).finish())
+            ctx.render(|b| div(b).child(text("a")).finish())
         };
 
         let props = ();
@@ -318,7 +318,7 @@ mod tests {
 
         let childprops: ExampleProps<'a> = ExampleProps { name: content };
         // let childprops: ExampleProps<'a> = ExampleProps { name: content };
-        ctx.view(move |b: &'a Bump| {
+        ctx.render(move |b: &'a Bump| {
             div(b)
                 .child(text(props.name))
                 // .child(text(props.name))
@@ -336,7 +336,7 @@ mod tests {
     }
 
     fn child_example<'b>(ctx: Context<'b>, props: &'b ExampleProps) -> DomTree {
-        ctx.view(move |b| {
+        ctx.render(move |b| {
             div(b)
                 .child(text(props.name))
                 //
@@ -346,7 +346,7 @@ mod tests {
 
     static CHILD: FC<ExampleProps> = |ctx, props: &'_ ExampleProps| {
         // todo!()
-        ctx.view(move |b| {
+        ctx.render(move |b| {
             div(b)
                 .child(text(props.name))
                 //
@@ -371,7 +371,7 @@ mod tests {
             // stored value
             // let (text, set_val) = crate::hooks::use_state(&ctx, || "abcd".to_string());
 
-            ctx.view(move |b| {
+            ctx.render(move |b| {
                 todo!()
                 // div(b)
                 //     // .child(text(props.name))

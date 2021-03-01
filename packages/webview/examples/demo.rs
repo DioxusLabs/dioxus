@@ -21,7 +21,7 @@ fn main() {
 }
 
 static Example: FC<()> = |ctx, _props| {
-    ctx.view(html! {
+    ctx.render(html! {
         <div>
             <div class="flex items-center justify-center flex-col">
                 <div class="flex items-center justify-center">

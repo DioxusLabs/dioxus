@@ -70,7 +70,7 @@ fn main() {}
 //     });
 
 //     // todo!()
-//     ctx.view(html! {
+//     ctx.render(html! {
 //         <div>
 //             <h1> "Products" </h1>
 //             <button> "hello!" </button>
@@ -86,7 +86,7 @@ fn main() {}
 //     // VNodes can be constructed via a builder or the html! macro
 //     // However, both of these are "lazy" - they need to be evaluated (aka, "viewed")
 //     // We can "view" them with Context for ultimate speed while inside components
-//     ctx.view(|bump| {
+//     ctx.render(|bump| {
 //         div(bump)
 //             .attr("class", "edit")
 //             .child(text("Hello"))
@@ -102,7 +102,7 @@ fn main() {}
 //     // We can "view" them with Context for ultimate speed while inside components
 //     // use "phase" style allocation;
 
-//     ctx.view(html! {
+//     ctx.render(html! {
 //         <div>
 //             // your template goes here
 //             // feel free to directly use "name"
