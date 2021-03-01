@@ -33,9 +33,10 @@ Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps
 - Ergonomic lifetime design for props and state management
 - Simple build, test, and deploy
 - "Dioxus Designer" for instant component reloading 
+- Support for html! and rsx! templating
 - SSR, WASM, desktop, and mobile support
   
----
+
 ## Get Started with...
 <table style="width:100%" align="center">
     <tr >
