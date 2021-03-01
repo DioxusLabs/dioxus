@@ -55,7 +55,7 @@ impl<'a> Context<'a> {
         todo!()
     }
 
-    fn view(self, _f: impl FnOnce(&'a String) + 'a) {}
+    fn render(self, _f: impl FnOnce(&'a String) + 'a) {}
     // fn view(self, f: impl for<'b> FnOnce(&'a String) + 'a) {}
     // fn view(self, f: impl for<'b> FnOnce(&'b String) + 'a) {}
 }

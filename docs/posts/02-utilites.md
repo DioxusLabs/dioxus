@@ -11,11 +11,7 @@ This macro allows allows a classic struct definition to be embedded directly int
 ```rust
 // Inlines and destructure props *automatically*
 #[functional_component]
-fn Example(ctx: &mut Context<{
-     name: String
-     pending: bool
-     count: i32
-}>) -> VNode {
+fn Example(ctx: Context, name: &str, pending: bool, count: i32 ) -> DomTree {
     html! { 
         <div> 
             <p> "Hello, {name}!" </p>

@@ -10,27 +10,15 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
+static Example: FC<()> = |ctx, props| {
+    let (selection, set_selection) = use_state(&ctx, || "...?");
 
-static Example: FC<()> = |ctx| {
-    let (value, set_value) = use_state(&ctx, || "...?");
-
-    // custom (more powerful) syntax
-    ctx.render(html! {
+    ctx.render(rsx! {
         div {
-            h1 { "Hello, {value}" }
-            button { "?", onclick: move |_| set_value("world!") }
-            button { "?", onclick: move |_| set_value("Dioxus 🎉") }
+            h1 { "Hello, {selection}" }
+            button { "?", onclick: move |_| set_selection("world!") }
+            button { "?", onclick: move |_| set_selection("Dioxus 🎉") }
         }
-    })
-
-    // Classic syntax
-    // no more updates, frozen
-    ctx.render(html!{
-        <div>
-            <h1> "Hello, {value}" </h1>
-            <button onclick={move |_| set_value("world!")}> "?" </button>
-            <button onclick={move |_| set_value("Dioxus 🎉")}> "?" </button>
-        </div>
     })
 };
 
@@ -38,9 +26,17 @@ static Example: FC<()> = |ctx| {
 
 Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, Android apps, iOS Apps, and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
 
-Dioxus is supported by Dioxus Labs, a company providing end-to-end services for building, testing, deploying, and managing Dioxus apps on all supported platforms, designed especially for your next startup.
 
-### Get Started with...
+
+### **Things you'll love ❤️:**
+- Minimal boilerplate
+- Ergonomic lifetime design for props and state management
+- Simple build, test, and deploy
+- "Dioxus Designer" for instant component reloading 
+- SSR, WASM, desktop, and mobile support
+  
+---
+## Get Started with...
 <table style="width:100%" align="center">
     <tr >
         <th><a href="http://github.com/jkelleyrtp/dioxus">WebApps</a></th>
@@ -54,32 +50,21 @@ Dioxus is supported by Dioxus Labs, a company providing end-to-end services for 
 
 
 
-## Features
-Dioxus' goal is to be the most advanced UI system for Rust, targeting isomorphism and hybrid approaches. Our goal is to eliminate context-switching for cross-platform development - both in UI patterns and programming language. Hooks and components should work *everywhere* without compromise.
-
-Dioxus Core supports:
-- [x] Hooks for component state
-- [ ] Concurrent rendering
-- [ ] Context subscriptions
-- [ ] State management integrations
-
-Separately, we maintain a collection of high quality, cross-platform hooks and services in the dioxus-hooks repo:
-- [ ] `dioxus-router`: A hook-based router implementation for Dioxus web apps
-
-We also maintain two state management options that integrate cleanly with Dioxus apps:
-- [ ] `dioxus-reducer`: ReduxJs-style global state management
-- [ ] `dioxus-dataflow`: RecoilJs-style global state management
 
 
 ## Explore
+- [**HTML Templates**: Drop in existing HTML5 templates with html! macro](docs/guides/00-index.md)
+- [**RSX Templates**: Clean component design with rsx! macro](docs/guides/00-index.md)
 - [**Running the examples**: Explore the vast collection of samples, tutorials, and demos](docs/guides/00-index.md)
 - [**Building applications**: Use the Dioxus CLI to build and bundle apps for various platforms](docs/guides/01-ssr.md)
 - [**Liveview**: Build custom liveview components that simplify datafetching on all platforms](docs/guides/01-ssr.md)
 - [**State management**: Easily add powerful state management that comes integrated with Dioxus Core](docs/guides/01-ssr.md)
 - [**Concurrency**: Drop in async where it fits and suspend components until new data is ready](docs/guides/01-ssr.md)
-- [**1st party hooks**: router](docs/guides/01-ssr.md)
+- [**1st party hooks**: Cross-platform router hook](docs/guides/01-ssr.md)
 - [**Community hooks**: 3D renderers](docs/guides/01-ssr.md)
 
+
+---
 ## Dioxus LiveHost
 Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whether they be server-rendered, wasm-only, or a liveview. LiveHost enables a wide set of features:
 
@@ -95,12 +80,3 @@ Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whethe
 - Team + company management
 
 For small teams, LiveHost is free 🎉. Check out the pricing page to see if Dioxus LiveHost is good fit for your team.
-
-
-
-
-
-
-
-
-

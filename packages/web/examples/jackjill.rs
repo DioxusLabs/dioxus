@@ -46,12 +46,11 @@ static Example: FC<()> = |ctx, props| {
                                 </button>
 
                                 <button
-                                class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                                // onclick={move |_| log::debug!("set jill")}>
-                                onclick={move |_| set_name("jill")}
-                                onclick={move |_| set_name("jill")}>
-                                "Jill!"
-                            </button>
+                                    class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+                                    onclick={move |_| set_name("jill")}
+                                    onclick={move |_| set_name("jill")}>
+                                    "Jill!"
+                                </button>
                         </div>
                     </div>
                 </section>

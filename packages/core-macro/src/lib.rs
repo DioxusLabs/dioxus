@@ -12,6 +12,7 @@ use syn::{
 mod fc;
 mod htm;
 mod ifmt;
+mod rsxt;
 // mod styles;
 
 /// The html! macro makes it easy for developers to write jsx-style markup in their components.
@@ -23,6 +24,18 @@ pub fn html(s: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
     html.to_token_stream().into()
+}
+
+/// The html! macro makes it easy for developers to write jsx-style markup in their components.
+/// We aim to keep functional parity with html templates.
+#[proc_macro]
+pub fn rsx(s: TokenStream) -> TokenStream {
+    let template: rsxt::RsxRender = match syn::parse(s) {
+        Ok(s) => s,
+        Err(e) => return e.to_compile_error().into(),
+    };
+
+    template.to_token_stream().into()
 }
 
 /// Label a function or static closure as a functional component.

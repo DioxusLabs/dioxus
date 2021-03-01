@@ -11,7 +11,7 @@ struct Context2<'a, P> {
     rops: &'a P,   // _p: PhantomData<&'a ()>,
 }
 impl<'a, P> Context2<'a, P> {
-    fn view(self, _f: impl FnOnce(&'a Bump) -> VNode<'a>) -> DTree {
+    fn render(self, _f: impl FnOnce(&'a Bump) -> VNode<'a>) -> DTree {
         DTree {}
     }
 

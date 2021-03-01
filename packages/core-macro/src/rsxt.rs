@@ -1,17 +1,36 @@
-//!
-//! TODO:
-//! - [ ] Support for VComponents
-//! - [ ] Support for inline format in text
-//! - [ ] Support for expressions in attribute positions
-//! - [ ] Support for iterators
-//! - [ ] support for inline html!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
+/*
+
+An example usage of rsx! would look like this:
+```ignore
+ctx.render(rsx!{
+    div {
+        h1 { "Example" },
+        p {
+            tag: "type",
+            abc: 123,
+            enabled: true,
+            class: "big small wide short",
+
+            a { "abcder" },
+            h2 { "whatsup", class: "abc-123" },
+            CustomComponent { a: 123, b: 456, key: "1" },
+            { 0..3.map(|i| rsx!{ h1 {"{:i}"} }) },
+            {expr}
+
+            // expr can take:
+            // - iterator
+            // - |bump| { }
+            // - value (gets formatted as &str)
+            // - ... more as we upgrade it
+        }
+    }
+})
+```
+
+each element is given by tag { [Attr] }
+
+*/
+use syn::parse::ParseBuffer;
 
 use {
     proc_macro::TokenStream,
@@ -25,79 +44,32 @@ use {
 };
 
 // ==============================================
-// Parse any stream coming from the html! macro
+// Parse any stream coming from the rsx! macro
 // ==============================================
-pub struct HtmlRender {
-    kind: NodeOrList,
+pub struct RsxRender {}
+
+impl Parse for RsxRender {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let g: Element = input.parse()?;
+        Ok(Self {})
+    }
 }
 
-impl Parse for HtmlRender {
-    fn parse(s: ParseStream) -> Result<Self> {
-        // let ctx: Ident = s.parse()?;
-        // s.parse::<Token![,]>()?;
-        // if elements are in an array, return a bumpalo::collections::Vec rather than a Node.
-        let kind = if s.peek(token::Bracket) {
-            let nodes_toks;
-            syn::bracketed!(nodes_toks in s);
-            let mut nodes: Vec<MaybeExpr<Node>> = vec![nodes_toks.parse()?];
-            while nodes_toks.peek(Token![,]) {
-                nodes_toks.parse::<Token![,]>()?;
-                nodes.push(nodes_toks.parse()?);
+impl ToTokens for RsxRender {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let new_toks = quote! {
+            move |_| {
+                todo!()
             }
-            NodeOrList::List(NodeList(nodes))
-        } else {
-            NodeOrList::Node(s.parse()?)
-        };
-        Ok(HtmlRender { kind })
-    }
-}
-
-impl ToTokens for HtmlRender {
-    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let new_toks = ToToksCtx::new(&self.kind).to_token_stream();
-
-        // create a lazy tree that accepts a bump allocator
-        let final_tokens = quote! {
-            move |bump| { #new_toks }
         };
 
-        final_tokens.to_tokens(out_tokens);
+        new_toks.to_tokens(tokens)
     }
 }
 
-/// =============================================
-/// Parse any child as a node or list of nodes
-/// =============================================
-/// - [ ] Allow iterators
-///
-///
-enum NodeOrList {
-    Node(Node),
-    List(NodeList),
-}
-
-impl ToTokens for ToToksCtx<&NodeOrList> {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match self.inner {
-            NodeOrList::Node(node) => self.recurse(node).to_tokens(tokens),
-            NodeOrList::List(list) => self.recurse(list).to_tokens(tokens),
-        }
-    }
-}
-
-struct NodeList(Vec<MaybeExpr<Node>>);
-
-impl ToTokens for ToToksCtx<&NodeList> {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let nodes = self.inner.0.iter().map(|node| self.recurse(node));
-        tokens.append_all(quote! {
-            dioxus::bumpalo::vec![in bump;
-                #(#nodes),*
-            ]
-        });
-    }
-}
-
+// ==============================================
+// Parse any div {} as a VElement
+// ==============================================
 enum Node {
     Element(Element),
     Text(TextNode),
@@ -177,54 +149,71 @@ impl ToTokens for ToToksCtx<&Element> {
 
 impl Parse for Element {
     fn parse(s: ParseStream) -> Result<Self> {
-        s.parse::<Token![<]>()?;
+        // steps:
+        // grab ident as name
+        // peak to the next character
+        // ensure it's a {
+
+        // s.parse::<Token![<]>()?;
         let name = Ident::parse_any(s)?;
+
+        let content: ParseBuffer;
+        // parse the guts of the div {} tag into the content buffer
+        syn::braced!(content in s);
+
+        // s.
+        // s.parse::<Token!["{"]>()?;
+        // s.parse()
+        // s.parse_terminated(parser)
+        // s.parse::<token::Brace>()?;
+
         let mut attrs = vec![];
+        // let mut children = vec![];
         let mut children: Vec<Node> = vec![];
 
-        // keep looking for attributes
-        while !s.peek(Token![>]) {
-            // self-closing
-            if s.peek(Token![/]) {
-                s.parse::<Token![/]>()?;
-                s.parse::<Token![>]>()?;
-                return Ok(Self {
-                    name,
-                    attrs,
-                    children: MaybeExpr::Literal(vec![]),
-                });
-            }
-            attrs.push(s.parse()?);
-        }
-        s.parse::<Token![>]>()?;
+        // // keep looking for attributes
+        // while !s.peek(Token![>]) {
+        //     // self-closing
+        //     if s.peek(Token![/]) {
+        //         s.parse::<Token![/]>()?;
+        //         s.parse::<Token![>]>()?;
+        //         return Ok(Self {
+        //             name,
+        //             attrs,
+        //             children: MaybeExpr::Literal(vec![]),
+        //         });
+        //     }
+        //     attrs.push(s.parse()?);
+        // }
+        // s.parse::<Token![>]>()?;
 
-        // Contents of an element can either be a brace (in which case we just copy verbatim), or a
-        // sequence of nodes.
-        let children = if s.peek(token::Brace) {
-            // expr
-            let content;
-            syn::braced!(content in s);
-            MaybeExpr::Expr(content.parse()?)
-        } else {
-            // nodes
-            let mut children = vec![];
-            while !(s.peek(Token![<]) && s.peek2(Token![/])) {
-                children.push(s.parse()?);
-            }
-            MaybeExpr::Literal(children)
-        };
+        // // Contents of an element can either be a brace (in which case we just copy verbatim), or a
+        // // sequence of nodes.
+        // let children = if s.peek(token::Brace) {
+        //     // expr
+        //     let content;
+        //     syn::braced!(content in s);
+        //     MaybeExpr::Expr(content.parse()?)
+        // } else {
+        //     // nodes
+        //     let mut children = vec![];
+        //     while !(s.peek(Token![<]) && s.peek2(Token![/])) {
+        //         children.push(s.parse()?);
+        //     }
+        //     MaybeExpr::Literal(children)
+        // };
 
-        // closing element
-        s.parse::<Token![<]>()?;
-        s.parse::<Token![/]>()?;
-        let close = Ident::parse_any(s)?;
-        if close.to_string() != name.to_string() {
-            return Err(Error::new_spanned(
-                close,
-                "closing element does not match opening",
-            ));
-        }
-        s.parse::<Token![>]>()?;
+        // // closing element
+        // s.parse::<Token![<]>()?;
+        // s.parse::<Token![/]>()?;
+        // let close = Ident::parse_any(s)?;
+        // if close.to_string() != name.to_string() {
+        //     return Err(Error::new_spanned(
+        //         close,
+        //         "closing element does not match opening",
+        //     ));
+        // }
+        // s.parse::<Token![>]>()?;
         Ok(Self {
             name,
             attrs,
@@ -389,36 +378,5 @@ impl<'a, T> ToToksCtx<T> {
 impl ToTokens for ToToksCtx<&LitStr> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         self.inner.to_tokens(tokens)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    fn parse(input: &str) -> super::Result<super::HtmlRender> {
-        syn::parse_str(input)
-    }
-
-    #[test]
-    fn div() {
-        parse("bump, <div class=\"test\"/>").unwrap();
-    }
-
-    #[test]
-    fn nested() {
-        parse("bump, <div class=\"test\"><div />\"text\"</div>").unwrap();
-    }
-
-    #[test]
-    fn complex() {
-        parse(
-            "bump,
-            <section style={{
-                display: flex;
-                flex-direction: column;
-                max-width: 95%;
-            }} class=\"map-panel\">{contact_details}</section>
-        ",
-        )
-        .unwrap();
     }
 }
