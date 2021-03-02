@@ -58,7 +58,8 @@ impl Parse for RsxRender {
         // cannot accept multiple elements
         // can only accept one root per component
         // fragments can be used as
-        // _ { content }
+        // todo
+        // enable fragements by autocoerrcing into list
         let el: Element = input.parse()?;
         Ok(Self { el })
     }
@@ -286,11 +287,22 @@ impl Parse for Attr {
         let ty = if name_str.starts_with("on") {
             // remove the "on" bit
             name = Ident::new(&name_str.trim_start_matches("on"), name.span());
-            let content;
-            syn::braced!(content in s);
-            // AttrType::Value(content.parse()?)
-            AttrType::Event(content.parse()?)
-        // AttrType::Event(content.parse()?)
+
+            if s.peek(token::Brace) {
+                let content;
+                syn::braced!(content in s);
+
+                // Try to parse directly as a closure
+                let fork = content.fork();
+                if let Ok(event) = fork.parse::<ExprClosure>() {
+                    content.advance_to(&fork);
+                    AttrType::Event(event)
+                } else {
+                    AttrType::Tok(content.parse()?)
+                }
+            } else {
+                AttrType::Event(s.parse()?)
+            }
         } else {
             let lit_str = if name_str == "style" && s.peek(token::Brace) {
                 // special-case to deal with literal styles.
@@ -340,6 +352,11 @@ impl ToTokens for ToToksCtx<&Attr> {
                     .on(#name, #event)
                 });
             }
+            AttrType::Tok(exp) => {
+                tokens.append_all(quote! {
+                    .on(#name, #exp)
+                });
+            }
         }
     }
 }
@@ -347,6 +364,7 @@ impl ToTokens for ToToksCtx<&Attr> {
 enum AttrType {
     Value(MaybeExpr<LitStr>),
     Event(ExprClosure),
+    Tok(Expr),
     // todo Bool(MaybeExpr<LitBool>)
 }
 

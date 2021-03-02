@@ -1,7 +1,11 @@
 use bumpalo::Bump;
-use dioxus::prelude::*;
+use dioxus::{events::EventTrigger, prelude::*};
 use dioxus_core as dioxus;
 use dioxus_web::WebsysRenderer;
+
+// creates a proxy address that gets transpiled at compile time
+// all asset ids are shuttled through the renderer
+// static IMG: ImgAsset = dioxus_asset!("");
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
@@ -12,26 +16,38 @@ fn main() {
 static Example: FC<()> = |ctx, props| {
     let (name, set_name) = use_state(&ctx, || "...?");
 
+    let handler = move |_| set_name("jill");
+
     ctx.render(rsx! {
-        div { class: "py-12 px-4 text-center w-full max-w-2xl mx-auto"
-            span { "Dioxus Example: Jack and Jill",
+        div { 
+            class: "py-12 px-4 text-center w-full max-w-2xl mx-auto"
+            span { 
                 class: "text-sm font-semibold"
+                "Dioxus Example: Jack and Jill"
             }
-            h2 { "Hello, {name}", 
+            h2 { 
                 class: "text-5xl mt-2 mb-6 leading-tight font-semibold font-heading"   
+                "Hello, {name}"
             }
-            div {
-                button { "Jack!"
-                    class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                    onclick: {move |_| set_name("jack")}
+            button {  
+                class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+                onmouseover: move |_| set_name("jack") 
+                "Jack!"
+            }
+            button {  
+                class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+                onfocus: {handler}
+                onmouseover: move |_| {
+                    set_name("jill");
                 }
-                
-                button { "Jill!"
-                    class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                    onclick: {move |_| set_name("jill")}
-                    onclick: {move |_| set_name("jill")}
-                }
+                "Jill!"
             }
         }
     })
 };
+
+
+
+
+
+// onclick: {move |_| set_name("jill")}
