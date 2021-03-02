@@ -1,13 +1,14 @@
 <div align="center">
   <h1>🌗🚀 Dioxus</h1>
   <p>
-    <strong>A concurrent, functional, virtual DOM for Rust</strong>
+    <strong>Frontend that scales.</strong>
   </p>
 </div>
 
 # About
 
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
+
 
 ```rust
 static Example: FC<()> = |ctx, props| {
@@ -16,8 +17,8 @@ static Example: FC<()> = |ctx, props| {
     ctx.render(rsx! {
         div {
             h1 { "Hello, {selection}" }
-            button { "?", onclick: {move |_| set_selection("world!")}}
-            button { "?", onclick: {move |_| set_selection("Dioxus 🎉")}}
+            button { "?", onclick: move |_| set_selection("world!")}
+            button { "?", onclick: move |_| set_selection("Dioxus 🎉")}
         }
     })
 };
@@ -26,12 +27,12 @@ static Example: FC<()> = |ctx, props| {
 Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, Android apps, iOS Apps, and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
 
 ### **Things you'll love ❤️:**
+- Ergonomic design
 - Minimal boilerplate
-- Ergonomic lifetime design for props and state management
 - Simple build, test, and deploy
-- "Dioxus Designer" for instant component reloading 
-- Support for html! **and** rsx! templating
+- Support for html! and rsx! templating
 - SSR, WASM, desktop, and mobile support
+- Rust! (enums, static types, modules, efficiency)
   
 
 ## Get Started with...
@@ -64,8 +65,14 @@ Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps
 
 ---
 ## Dioxus LiveHost
-Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whether they be server-rendered, wasm-only, or a liveview. LiveHost enables a wide set of features:
+Dioxus LiveHost is a paid service that accelerates the deployment of Dioxus Apps. It provides CI/CD, testing, monitoring, scaling, and deployment specifically for Dioxus apps. 
+- It's the fastest way of launching your next internal tool, side-project, or startup. 🚀
 
+
+<!-- Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whether they be server-rendered, wasm-only, or a liveview. It's  -->
+
+<!-- LiveHost enables a wide set of features: -->
+<!-- 
 - Versioned combined frontend and backend with unique access links
 - Builtin CI/CD for all supported Dioxus platforms (macOS, Windows, Android, iOS, server, WASM, etc)
 - Managed and pluggable storage database backends (PostgresSQL, Redis)
@@ -75,6 +82,6 @@ Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whethe
 - On-premise support (see license terms)
 - Cloudfare/DDoS protection integrations
 - Web-based simulators for iOS, Android, Desktop
-- Team + company management
+- Team + company management -->
 
-For small teams, LiveHost is free 🎉. Check out the pricing page to see if Dioxus LiveHost is good fit for your team.
+<!-- For small teams, LiveHost is free 🎉. Check out the pricing page to see if Dioxus LiveHost is good fit for your team. -->
