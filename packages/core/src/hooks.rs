@@ -117,3 +117,97 @@ mod use_ref_def {
         ctx.use_hook(|| UseRef::new(initial_state_fn()), |state| &*state, |_| {})
     }
 }
+
+mod use_reducer_def {
+    use crate::innerlude::*;
+    use std::{cell::RefCell, ops::DerefMut, rc::Rc};
+
+    struct UseReducer<T: 'static, R: 'static> {
+        new_val: Rc<RefCell<Option<T>>>,
+        current_val: T,
+        caller: Box<dyn Fn(R) + 'static>,
+    }
+
+    /// Store state between component renders!
+    /// When called, this hook retrives a stored value and provides a setter to update that value.
+    /// When the setter is called, the component is re-ran with the new value.
+    ///
+    /// This is behaves almost exactly the same way as React's "use_state".
+    ///
+    pub fn use_reducer<'a, 'c, State: 'static, Action: 'static>(
+        ctx: &'c Context<'a>,
+        initial_state_fn: impl FnOnce() -> State,
+        reducer: impl Fn(&mut State, Action),
+    ) -> (&'a State, &'a impl Fn(Action)) {
+        ctx.use_hook(
+            move || UseReducer {
+                new_val: Rc::new(RefCell::new(None)),
+                current_val: initial_state_fn(),
+                caller: Box::new(|_| println!("setter called!")),
+            },
+            move |hook| {
+                let inner = hook.new_val.clone();
+                let scheduled_update = ctx.schedule_update();
+
+                // get ownership of the new val and replace the current with the new
+                // -> as_ref -> borrow_mut -> deref_mut -> take
+                // -> rc     -> &RefCell   -> RefMut    -> &Option<T> -> T
+                if let Some(new_val) = hook.new_val.as_ref().borrow_mut().deref_mut().take() {
+                    hook.current_val = new_val;
+                }
+
+                // todo: swap out the caller with a subscription call and an internal update
+                hook.caller = Box::new(move |new_val| {
+                    // update the setter with the new value
+                    // let mut new_inner = inner.as_ref().borrow_mut();
+                    // *new_inner = Some(new_val);
+
+                    // Ensure the component gets updated
+                    scheduled_update();
+                });
+
+                // box gets derefed into a ref which is then taken as ref with the hook
+                (&hook.current_val, &hook.caller)
+            },
+            |_| {},
+        )
+    }
+
+    // #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::prelude::*;
+        use bumpalo::Bump;
+
+        enum Actions {
+            Incr,
+            Decr,
+        }
+
+        #[allow(unused)]
+        static Example: FC<()> = |ctx, props| {
+            let (count, reduce) = use_reducer(
+                &ctx,
+                || 0,
+                |count, action| match action {
+                    Actions::Incr => *count += 1,
+                    Actions::Decr => *count -= 1,
+                },
+            );
+
+            ctx.render(rsx! {
+                div {
+                    h1 {"Count: {count}"}
+                    button {
+                        "Increment"
+                        onclick: move |_| reduce(Actions::Incr)
+                    }
+                    button {
+                        "Decrement"
+                        onclick: move |_| reduce(Actions::Decr)
+                    }
+                }
+            })
+        };
+    }
+}
