@@ -12,7 +12,7 @@ description = "CLI tool for developing, testing, and publishing Dioxus apps"
 thiserror = "1.0.23"
 log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }
-wasm-bindgen-cli-support = "0.2.70"
+wasm-bindgen-cli-support = "0.2.71"
 anyhow = "1.0.38"
 argh = "0.1.4"
 serde = "1.0.120"

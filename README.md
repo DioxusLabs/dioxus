@@ -16,24 +16,21 @@ static Example: FC<()> = |ctx, props| {
     ctx.render(rsx! {
         div {
             h1 { "Hello, {selection}" }
-            button { "?", onclick: move |_| set_selection("world!") }
-            button { "?", onclick: move |_| set_selection("Dioxus 🎉") }
+            button { "?", onclick: {move |_| set_selection("world!")}}
+            button { "?", onclick: {move |_| set_selection("Dioxus 🎉")}}
         }
     })
 };
-
 ```
 
 Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, Android apps, iOS Apps, and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
-
-
 
 ### **Things you'll love ❤️:**
 - Minimal boilerplate
 - Ergonomic lifetime design for props and state management
 - Simple build, test, and deploy
 - "Dioxus Designer" for instant component reloading 
-- Support for html! and rsx! templating
+- Support for html! **and** rsx! templating
 - SSR, WASM, desktop, and mobile support
   
 

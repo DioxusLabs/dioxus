@@ -1,13 +1,13 @@
 [workspace]
 members = [
     # Built-in
+    "packages/dioxus",
     "packages/core-macro",
-    # "packages/dioxus",
-    # "packages/core",
+    "packages/core",
+    "packages/web",
     # "packages/router",
     # "packages/ssr",
     # "packages/webview",
-    # "packages/web",
     # "packages/livehost",
     # "packages/vscode-ext",
     # "packages/recoil",
@@ -16,7 +16,7 @@ members = [
     # TODO @Jon, share the validation code
     # "packages/web",
     # "packages/hooks",
-    # "packages/cli",
+    "packages/cli",
     # "examples",
     # "packages/html-macro",
     # "packages/html-macro-2",
