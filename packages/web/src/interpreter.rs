@@ -78,30 +78,30 @@ impl EventDelegater {
 
                 let typ = event.type_();
 
-                let gi_id: usize = target
+                let gi_id = target
                     .get_attribute(&format!("dioxus-giid-{}", typ))
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or_default();
+                    .and_then(|v| v.parse().ok());
 
-                let gi_gen: u64 = target
+                let gi_gen = target
                     .get_attribute(&format!("dioxus-gigen-{}", typ))
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or_default();
+                    .and_then(|v| v.parse().ok());
 
-                let li_idx: usize = target
+                let li_idx = target
                     .get_attribute(&format!("dioxus-lidx-{}", typ))
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or_default();
+                    .and_then(|v| v.parse().ok());
 
-                // Call the trigger
-                trigger.0.as_ref()(EventTrigger::new(
-                    virtual_event_from_websys_event(event),
-                    CbIdx {
-                        gi_gen,
-                        gi_id,
-                        listener_idx: li_idx,
-                    },
-                ));
+                if let (Some(gi_id), Some(gi_gen), Some(li_idx)) = (gi_id, gi_gen, li_idx) {
+                    
+                    // Call the trigger
+                    trigger.0.as_ref()(EventTrigger::new(
+                        virtual_event_from_websys_event(event),
+                        CbIdx {
+                            gi_gen,
+                            gi_id,
+                            listener_idx: li_idx,
+                        },
+                    ));
+                }
             }) as Box<dyn FnMut(&Event)>);
 
             self.root
