@@ -1,6 +1,7 @@
 //! This file handles the supporting infrastructure for the `Component` trait and `Properties` which makes it possible
 //! for components to be used within Nodes.
-//!
+
+pub type ScopeIdx = generational_arena::Index;
 
 /// The `Component` trait refers to any struct or funciton that can be used as a component
 /// We automatically implement Component for FC<T>
@@ -44,6 +45,7 @@ mod tests {
 
     static TestComponent: FC<()> = |ctx, props| {
         //
+
         ctx.render(html! {
             <div>
             </div>
@@ -52,7 +54,7 @@ mod tests {
 
     static TestComponent2: FC<()> = |ctx, props| {
         //
-        ctx.render(|bump: &Bump| VNode::text("blah"))
+        ctx.render(|ctx| VNode::text("blah"))
     };
 
     #[test]

@@ -1,9 +1,6 @@
 use std::{borrow::Borrow, fmt::Debug, sync::Arc};
 
-use dioxus_core::{
-    changelist::{CbIdx, Edit},
-    events::{EventTrigger, MouseEvent, VirtualEvent},
-};
+use dioxus_core::events::{EventTrigger, MouseEvent, VirtualEvent};
 use fxhash::FxHashMap;
 use log::debug;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -91,7 +88,6 @@ impl EventDelegater {
                     .and_then(|v| v.parse().ok());
 
                 if let (Some(gi_id), Some(gi_gen), Some(li_idx)) = (gi_id, gi_gen, li_idx) {
-                    
                     // Call the trigger
                     trigger.0.as_ref()(EventTrigger::new(
                         virtual_event_from_websys_event(event),

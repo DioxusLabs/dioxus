@@ -4,29 +4,21 @@
 //! 3rd party renderers are responsible for forming this virtual events from events
 //!
 //! The goal here is to provide a consistent event interface across all renderer types
-use generational_arena::Index;
 
-use crate::innerlude::CbIdx;
+use crate::innerlude::ScopeIdx;
 
 #[derive(Debug)]
 pub struct EventTrigger {
-    pub component_id: Index,
+    pub component_id: ScopeIdx,
     pub listener_id: usize,
     pub event: VirtualEvent,
 }
 
 impl EventTrigger {
-    pub fn new(event: VirtualEvent, cb: CbIdx) -> Self {
-        let CbIdx {
-            gi_id,
-            gi_gen,
-            listener_idx,
-        } = cb;
-
-        let component_id = Index::from_raw_parts(gi_id, gi_gen);
+    pub fn new(event: VirtualEvent, scope: ScopeIdx, id: usize) -> Self {
         Self {
-            component_id,
-            listener_id: listener_idx,
+            component_id: scope,
+            listener_id: id,
             event,
         }
     }

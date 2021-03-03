@@ -94,7 +94,8 @@ mod vnode {
 }
 
 mod velement {
-    use crate::events::VirtualEvent;
+
+    // use crate::{events::VirtualEvent, innerlude::CbIdx};
 
     use super::*;
     use std::fmt::Debug;
@@ -177,6 +178,11 @@ mod velement {
                 _ => false,
             }
         }
+    }
+
+    pub struct ListenerHandle {
+        pub event: &'static str,
+        pub idx: CbIdx,
     }
 
     /// An event listener.

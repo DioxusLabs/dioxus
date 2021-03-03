@@ -1,8 +1,9 @@
+use crate::component::ScopeIdx;
 use crate::context::hooks::Hook;
 use crate::innerlude::*;
 use crate::nodes::VNode;
 use bumpalo::Bump;
-use generational_arena::Index;
+// use generational_arena::ScopeIdx;
 
 use std::{
     any::TypeId,
@@ -32,7 +33,7 @@ pub struct Scope {
     pub hook_arena: typed_arena::Arena<Hook>,
 
     // Map to the parent
-    pub parent: Option<Index>,
+    pub parent: Option<ScopeIdx>,
 
     pub frames: ActiveFrame,
 
@@ -50,7 +51,7 @@ pub struct Scope {
 
 impl Scope {
     // create a new scope from a function
-    pub fn new<'a, P1, P2: 'static>(f: FC<P1>, props: P1, parent: Option<Index>) -> Self {
+    pub fn new<'a, P1, P2: 'static>(f: FC<P1>, props: P1, parent: Option<ScopeIdx>) -> Self {
         let hook_arena = typed_arena::Arena::new();
         let hooks = RefCell::new(Vec::new());
 
@@ -288,7 +289,7 @@ mod tests {
     fn test_scope() {
         let example: FC<()> = |ctx, props| {
             use crate::builder::*;
-            ctx.render(|b| div(b).child(text("a")).finish())
+            ctx.render(|ctx| div(ctx.bump()).child(text("a")).finish())
         };
 
         let props = ();
@@ -318,7 +319,8 @@ mod tests {
 
         let childprops: ExampleProps<'a> = ExampleProps { name: content };
         // let childprops: ExampleProps<'a> = ExampleProps { name: content };
-        ctx.render(move |b: &'a Bump| {
+        ctx.render(move |ctx| {
+            let b = ctx.bump();
             div(b)
                 .child(text(props.name))
                 // .child(text(props.name))
@@ -336,8 +338,8 @@ mod tests {
     }
 
     fn child_example<'b>(ctx: Context<'b>, props: &'b ExampleProps) -> DomTree {
-        ctx.render(move |b| {
-            div(b)
+        ctx.render(move |ctx| {
+            div(ctx.bump())
                 .child(text(props.name))
                 //
                 .finish()
@@ -346,8 +348,8 @@ mod tests {
 
     static CHILD: FC<ExampleProps> = |ctx, props: &'_ ExampleProps| {
         // todo!()
-        ctx.render(move |b| {
-            div(b)
+        ctx.render(move |ctx| {
+            div(ctx.bump())
                 .child(text(props.name))
                 //
                 .finish()

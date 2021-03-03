@@ -1,15 +1,10 @@
 // use crate::{changelist::EditList, nodes::VNode};
-use crate::{
-    changelist::{self, EditList},
-    dodriodiff::DiffMachine,
-};
-use crate::{events::EventTrigger, innerlude::*};
 
+use crate::innerlude::*;
 use bumpalo::Bump;
-
-use generational_arena::{Arena, Index};
+use generational_arena::Arena;
 use std::{
-    any::{self, TypeId},
+    any::TypeId,
     borrow::BorrowMut,
     cell::{RefCell, UnsafeCell},
     collections::{vec_deque, VecDeque},
@@ -28,7 +23,7 @@ pub struct VirtualDom {
 
     /// The index of the root component.
     /// Will not be ready if the dom is fresh
-    base_scope: Index,
+    base_scope: ScopeIdx,
 
     event_queue: Rc<RefCell<VecDeque<LifecycleEvent>>>,
 
@@ -98,11 +93,7 @@ impl VirtualDom {
 
         component.run::<()>();
 
-        diff_machine.diff_node(
-            component.old_frame(),
-            component.new_frame(),
-            Some(self.base_scope),
-        );
+        diff_machine.diff_node(component.old_frame(), component.new_frame());
 
         Ok(diff_machine.consume())
     }
@@ -173,11 +164,7 @@ impl VirtualDom {
 
         component.run::<()>();
 
-        diff_machine.diff_node(
-            component.old_frame(),
-            component.new_frame(),
-            Some(self.base_scope),
-        );
+        diff_machine.diff_node(component.old_frame(), component.new_frame());
         // diff_machine.diff_node(
         //     component.old_frame(),
         //     component.new_frame(),
@@ -252,7 +239,7 @@ pub struct LifecycleEvent {
 pub enum LifecycleType {
     // Component needs to be mounted, but its scope doesn't exist yet
     Mount {
-        to: Index,
+        to: ScopeIdx,
         under: usize,
         props: Box<dyn std::any::Any>,
     },
@@ -260,17 +247,17 @@ pub enum LifecycleType {
     // Parent was evalauted causing new props to generate
     PropsChanged {
         props: Box<dyn std::any::Any>,
-        component: Index,
+        component: ScopeIdx,
     },
 
     // Hook for the subscription API
     Callback {
-        component: Index,
+        component: ScopeIdx,
     },
 }
 
 impl LifecycleEvent {
-    fn index(&self) -> Option<Index> {
+    fn index(&self) -> Option<ScopeIdx> {
         match &self.event_type {
             LifecycleType::Mount {
                 to: _,
@@ -290,8 +277,9 @@ mod tests {
     #[test]
     fn start_dom() {
         let mut dom = VirtualDom::new(|ctx, props| {
-            ctx.render(|bump| {
+            ctx.render(|ctx| {
                 use crate::builder::*;
+                let bump = ctx.bump();
                 div(bump).child(text("hello,    world")).finish()
             })
         });

@@ -333,7 +333,7 @@ where
     ///
     /// // A button that does something when clicked!
     /// let my_button = button(&b)
-    ///     .on("click", |root, vdom, event| {
+    ///     .on("click", |event| {
     ///         // ...
     ///     })
     ///     .finish();

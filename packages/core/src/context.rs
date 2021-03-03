@@ -76,8 +76,10 @@ impl<'a> Context<'a> {
     ///     ctx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(self, lazy_nodes: impl FnOnce(&'a Bump) -> VNode<'a> + 'a) -> DomTree {
-        let safe_nodes = lazy_nodes(self.bump);
+    pub fn render(self, lazy_nodes: impl FnOnce(NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
+        let ctx = NodeCtx { bump: self.bump };
+        let safe_nodes = lazy_nodes(ctx);
+
         let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
         self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
         DomTree {}
@@ -90,9 +92,22 @@ impl<'a> Context<'a> {
     /// When the future completes, the component will be renderered
     pub fn suspend(
         &self,
-        _fut: impl Future<Output = impl FnOnce(&'a Bump) -> VNode<'a>>,
+        _fut: impl Future<Output = impl FnOnce(&'a NodeCtx<'a>) -> VNode<'a>>,
     ) -> VNode<'a> {
         todo!()
+    }
+}
+
+// NodeCtx is used to build VNodes in the component's memory space.
+// This struct adds metadata to the final DomTree about listeners, attributes, and children
+pub struct NodeCtx<'a> {
+    bump: &'a Bump,
+}
+
+impl NodeCtx<'_> {
+    #[inline]
+    pub fn bump(&self) -> &Bump {
+        self.bump
     }
 }
 

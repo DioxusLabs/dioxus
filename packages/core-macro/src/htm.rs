@@ -58,7 +58,11 @@ impl ToTokens for HtmlRender {
 
         // create a lazy tree that accepts a bump allocator
         let final_tokens = quote! {
-            move |bump| { #new_toks }
+            move |ctx| {
+                let bump = ctx.bump();
+
+                #new_toks
+            }
         };
 
         final_tokens.to_tokens(out_tokens);

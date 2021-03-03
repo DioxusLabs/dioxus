@@ -65,20 +65,21 @@
 //! - dioxus-liveview (SSR + StringRenderer)
 //!
 
-pub mod changelist; // An "edit phase" described by transitions and edit operations
 pub mod component; // Logic for extending FC
 pub mod context; // Logic for providing hook + context functionality to user components
-pub mod debug_renderer; // Test harness for validating that lifecycles and diffs work appropriately
-                        // pub mod diff;
-                        // pub mod patch; // The diffing algorithm that builds the ChangeList
-pub mod dodriodiff; // The diffing algorithm that builds the ChangeList
+pub mod debug_renderer;
+pub mod patch; // An "edit phase" described by transitions and edit operations // Test harness for validating that lifecycles and diffs work appropriately
+               // pub mod diff;
+               // pub mod patch; // The diffing algorithm that builds the ChangeList
+pub mod diff;
+// the diffing algorithm that builds the ChangeList
 pub mod error; // Error type we expose to the renderers
 pub mod events; // Manages the synthetic event API
 pub mod hooks; // Built-in hooks
 pub mod nodebuilder; // Logic for building VNodes with a direct syntax
 pub mod nodes; // Logic for the VNodes
 pub mod scope; // Logic for single components
-pub mod validation; //  Logic for validating trees
+               // pub mod validation; //  Logic for validating trees
 pub mod virtual_dom; // Most fun logic starts here, manages the lifecycle and suspense
 
 pub mod builder {
@@ -96,7 +97,12 @@ pub(crate) mod innerlude {
     pub(crate) use crate::virtual_dom::VirtualDom;
     pub(crate) use nodes::*;
 
-    pub use crate::changelist::CbIdx;
+    pub use crate::component::ScopeIdx;
+    pub use crate::diff::DiffMachine;
+    pub use crate::events::EventTrigger;
+    pub use crate::patch::{EditList, EditMachine};
+    // pub use crate::patchdx;
+    // pub use crate::patchtList;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
 
@@ -138,6 +144,7 @@ pub mod prelude {
 
     // expose our bumpalo type
     pub use bumpalo;
+    pub use bumpalo::Bump;
 
     // Re-export the FC macro
     pub use crate as dioxus;
@@ -146,8 +153,8 @@ pub mod prelude {
     pub use dioxus_core_macro::format_args_f;
     pub use dioxus_core_macro::{fc, html, rsx};
 
-    // pub use crate::diff::DiffMachine;
-    pub use crate::dodriodiff::DiffMachine;
+    pub use crate::component::ScopeIdx;
+    pub use crate::diff::DiffMachine;
 
     pub use crate::hooks::*;
 }
