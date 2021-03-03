@@ -149,7 +149,7 @@ impl ToTokens for ToToksCtx<&Element> {
         // let ctx = self.ctx;
         let name = &self.inner.name;
         tokens.append_all(quote! {
-            dioxus::builder::#name(bump)
+            dioxus::builder::ElementBuilder::new(ctx, "#name")
         });
         for attr in self.inner.attrs.iter() {
             self.recurse(attr).to_tokens(tokens);

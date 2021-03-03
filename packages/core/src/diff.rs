@@ -78,12 +78,6 @@ impl<'a> DiffMachine<'a> {
         new: &VNode<'a>,
         // scope: Option<generational_arena::Index>,
     ) {
-        log::debug!("old {:#?}", old);
-        log::debug!("new {:#?}", new);
-
-        // Set it while diffing
-        // Reset it when finished diffing
-        // self.current_idx = scope;
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
@@ -98,7 +92,6 @@ impl<'a> DiffMachine<'a> {
                 }
             }
 
-            // Definitely different, need to commit update
             (VNode::Text(_), VNode::Element(_)) => {
                 // TODO: Hook up the events properly
                 // todo!("Hook up events registry");
@@ -109,112 +102,37 @@ impl<'a> DiffMachine<'a> {
                 self.change_list.replace_with();
             }
 
-            // Definitely different, need to commit update
             (VNode::Element(_), VNode::Text(_)) => {
                 self.change_list.commit_traversal();
                 self.create(new);
-
-                // create(cached_set, self.change_list, registry, new, cached_roots);
-                // Note: text nodes cannot have event listeners, so we don't need to
-                // remove the old node's listeners from our registry her.
                 self.change_list.replace_with();
             }
-            // compare elements
-            // if different, schedule different types of update
+
             (VNode::Element(eold), VNode::Element(enew)) => {
-                // log::debug!("elements are different");
                 // If the element type is completely different, the element needs to be re-rendered completely
                 if enew.tag_name != eold.tag_name || enew.namespace != eold.namespace {
                     self.change_list.commit_traversal();
-                    // create(cached_set, self.change_list, registry, new, cached_roots);
-                    // registry.remove_subtree(&old);
                     self.change_list.replace_with();
                     return;
                 }
 
                 self.diff_listeners(eold.listeners, enew.listeners);
-
                 self.diff_attr(eold.attributes, enew.attributes, enew.namespace.is_some());
-
                 self.diff_children(eold.children, enew.children);
             }
-            // No immediate change to dom. If props changed though, queue a "props changed" update
-            // However, mark these for a
+
             (VNode::Component(_), VNode::Component(_)) => {
                 todo!("Usage of component VNode not currently supported");
-                //     // Both the new and old nodes are cached.
-                //     (&NodeKind::Cached(ref new), &NodeKind::Cached(ref old)) => {
-                //         cached_roots.insert(new.id);
-                //         if new.id == old.id {
-                //             // This is the same cached node, so nothing has changed!
-                //             return;
-                //         }
-                //         let (new, new_template) = cached_set.get(new.id);
-                //         let (old, old_template) = cached_set.get(old.id);
-                //         if new_template == old_template {
-                //             // If they are both using the same template, then just diff the
-                //             // subtrees.
-                //             diff(cached_set, change_list, registry, old, new, cached_roots);
-                //         } else {
-                //             // Otherwise, they are probably different enough that
-                //             // re-constructing the subtree from scratch should be faster.
-                //             // This doubly holds true if we have a new template.
-                //             change_list.commit_traversal();
-                //             create_and_replace(
-                //                 cached_set,
-                //                 change_list,
-                //                 registry,
-                //                 new_template,
-                //                 old,
-                //                 new,
-                //                 cached_roots,
-                //             );
-                //         }
-                //     }
-                // queue a lifecycle event.
-                // no change
             }
 
-            // A component has been birthed!
-            // Queue its arrival
             (_, VNode::Component(_)) => {
                 todo!("Usage of component VNode not currently supported");
-                //     // Old cached node and new non-cached node. Again, assume that they are
-                //     // probably pretty different and create the new non-cached node afresh.
-                //     (_, &NodeKind::Cached(_)) => {
-                //         change_list.commit_traversal();
-                //         create(cached_set, change_list, registry, new, cached_roots);
-                //         registry.remove_subtree(&old);
-                //         change_list.replace_with();
-                //     }
-                // }
             }
 
-            // A component was removed :(
-            // Queue its removal
             (VNode::Component(_), _) => {
-                //     // New cached node when the old node was not cached. In this scenario,
-                //     // we assume that they are pretty different, and it isn't worth diffing
-                //     // the subtrees, so we just create the new cached node afresh.
-                //     (&NodeKind::Cached(ref c), _) => {
-                //         change_list.commit_traversal();
-                //         cached_roots.insert(c.id);
-                //         let (new, new_template) = cached_set.get(c.id);
-                //         create_and_replace(
-                //             cached_set,
-                //             change_list,
-                //             registry,
-                //             new_template,
-                //             old,
-                //             new,
-                //             cached_roots,
-                //         );
-                //     }
                 todo!("Usage of component VNode not currently supported");
             }
 
-            // A suspended component appeared!
-            // Don't do much, just wait
             (VNode::Suspended, _) | (_, VNode::Suspended) => {
                 // (VNode::Element(_), VNode::Suspended) => {}
                 // (VNode::Text(_), VNode::Suspended) => {}
@@ -254,17 +172,19 @@ impl<'a> DiffMachine<'a> {
                 if new_l.event == old_l.event {
                     // if let Some(scope) = self.current_idx {
                     //     let cb = CbIdx::from_gi_index(scope, l_idx);
-                    self.change_list.update_event_listener(event_type, cb);
+                    self.change_list
+                        .update_event_listener(event_type, new_l.scope, new_l.id);
                     // }
 
                     continue 'outer1;
                 }
             }
 
-            if let Some(scope) = self.current_idx {
-                let cb = CbIdx::from_gi_index(scope, l_idx);
-                self.change_list.new_event_listener(event_type, cb);
-            }
+            // if let Some(scope) = self.current_idx {
+            // let cb = CbIdx::from_gi_index(scope, l_idx);
+            self.change_list
+                .new_event_listener(event_type, new_l.scope, new_l.id);
+            // }
         }
 
         'outer2: for old_l in old {
@@ -893,14 +813,17 @@ impl<'a> DiffMachine<'a> {
                 }
 
                 listeners.iter().enumerate().for_each(|(id, listener)| {
-                    if let Some(index) = self.current_idx {
-                        self.change_list
-                            .new_event_listener(listener.event, CbIdx::from_gi_index(index, id));
-                    } else {
-                        // Don't panic
-                        // Used for testing
-                        log::trace!("Failed to set listener, create was not called in the context of the virtual dom");
-                    }
+                    // if let Some(index) = self.current_idx {
+                    self.change_list.new_event_listener(
+                        listener.event,
+                        listener.scope,
+                        listener.id,
+                    );
+                    // } else {
+                    // Don't panic
+                    // Used for testing
+                    //     log::trace!("Failed to set listener, create was not called in the context of the virtual dom");
+                    // }
                 });
                 // for l in listeners {
                 // unsafe {

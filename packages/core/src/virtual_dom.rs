@@ -56,7 +56,8 @@ impl VirtualDom {
         // Create a reference to the component in the arena
         // Note: we are essentially running the "Mount" lifecycle event manually while the vdom doesnt yet exist
         // This puts the dom in a usable state on creation, rather than being potentially invalid
-        let base_scope = components.insert(Scope::new::<_, P>(root, root_props, None));
+        let base_scope =
+            components.insert_with(|id| Scope::new::<_, P>(root, root_props, id, None));
 
         // evaluate the component, pushing any updates its generates into the lifecycle queue
         // todo!
@@ -277,11 +278,12 @@ mod tests {
     #[test]
     fn start_dom() {
         let mut dom = VirtualDom::new(|ctx, props| {
-            ctx.render(|ctx| {
-                use crate::builder::*;
-                let bump = ctx.bump();
-                div(bump).child(text("hello,    world")).finish()
-            })
+            todo!()
+            // ctx.render(|ctx| {
+            //     use crate::builder::*;
+            //     let bump = ctx.bump();
+            //     div(bump).child(text("hello,    world")).finish()
+            // })
         });
         let edits = dom.rebuild().unwrap();
         println!("{:#?}", edits);

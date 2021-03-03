@@ -48,6 +48,7 @@ mod tests {
 
         ctx.render(html! {
             <div>
+
             </div>
         })
     };

@@ -97,6 +97,8 @@ mod velement {
 
     // use crate::{events::VirtualEvent, innerlude::CbIdx};
 
+    use crate::{events::VirtualEvent, innerlude::ScopeIdx};
+
     use super::*;
     use std::fmt::Debug;
 
@@ -182,7 +184,8 @@ mod velement {
 
     pub struct ListenerHandle {
         pub event: &'static str,
-        pub idx: CbIdx,
+        pub scope: ScopeIdx,
+        pub id: usize,
     }
 
     /// An event listener.
@@ -190,8 +193,8 @@ mod velement {
         /// The type of event to listen for.
         pub(crate) event: &'static str,
 
-        // ref to the real listener
-        // pub(crate) id: u32,
+        pub scope: ScopeIdx,
+        pub id: usize,
 
         // pub(crate) _i: &'bump str,
         // #[serde(skip_serializing, skip_deserializing, default="")]

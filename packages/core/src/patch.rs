@@ -58,7 +58,15 @@ pub enum Edit<'d> {
     PopPushReverseChild { n: u32 },
     RemoveChild { n: u32 },
     SetClass { class_name: &'d str },
-    PushKnown { node: ScopeIdx },
+
+    // push a known node on to the stack
+    TraverseToKnown { node: ScopeIdx },
+
+    // Add the current top of the stack to the known nodes
+    MakeKnown { node: ScopeIdx },
+
+    // Remove the current top of the stack from the known nodes
+    RemoveKnown,
 }
 
 pub type EditList<'src> = Vec<Edit<'src>>;
@@ -67,7 +75,6 @@ pub struct EditMachine<'src> {
     pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
-
     pub emitter: EditList<'src>,
 }
 
@@ -80,8 +87,12 @@ impl<'b> EditMachine<'b> {
             emitter: EditList::default(),
         }
     }
+}
 
-    /// Traversal methods.
+// ===================================
+//  Traversal Methods
+// ===================================
+impl<'b> EditMachine<'b> {
     pub fn go_down(&mut self) {
         self.traversal.down();
     }
@@ -158,6 +169,9 @@ impl<'b> EditMachine<'b> {
     }
 }
 
+// ===================================
+//  Stack methods
+// ===================================
 impl<'a> EditMachine<'a> {
     pub fn next_temporary(&self) -> u32 {
         self.next_temporary
@@ -203,11 +217,6 @@ impl<'a> EditMachine<'a> {
         // debug!("emit: insert_before()");
         // self.emitter.insert_before();
         self.emitter.push(Edit::InsertBefore {})
-    }
-
-    pub fn ensure_string(&mut self, _string: &str) -> StringKey {
-        todo!()
-        // self.strings.ensure_string(string, &self.emitter)
     }
 
     pub fn set_text(&mut self, text: &'a str) {
@@ -307,42 +316,26 @@ impl<'a> EditMachine<'a> {
         self.forcing_new_listeners = previous;
     }
 
-    pub fn new_event_listener(&mut self, event: &'a str, idx: CbIdx) {
+    pub fn new_event_listener(&mut self, event: &'a str, scope: ScopeIdx, id: usize) {
         debug_assert!(self.traversal_is_committed());
         self.emitter.push(Edit::NewEventListener {
             event_type: event,
-            s: idx,
+            s: scope,
         });
-        // todo!("Event listener not wired up yet");
         // log::debug!("emit: new_event_listener({:?})", listener);
-        // let (a, b) = listener.get_callback_parts();
-        // debug_assert!(a != 0);
-        // // let event_id = self.ensure_string(listener.event);
-        // self.emitter.new_event_listener(listener.event.into(), a, b);
     }
 
-    pub fn update_event_listener(&mut self, event: &'a str, idx: CbIdx) {
+    pub fn update_event_listener(&mut self, event: &'a str, scope: ScopeIdx, id: usize) {
         debug_assert!(self.traversal_is_committed());
         if self.forcing_new_listeners {
-            self.new_event_listener(event, idx);
+            self.new_event_listener(event, scope, id);
             return;
         }
 
         self.emitter.push(Edit::NewEventListener {
             event_type: event,
-            s: idx,
+            s: scope,
         });
-
-        // log::debug!("emit: update_event_listener({:?})", listener);
-        // // todo!("Event listener not wired up yet");
-        // let (a, b) = listener.get_callback_parts();
-        // debug_assert!(a != 0);
-        // self.emitter.push(Edit::UpdateEventListener {
-        //     event_type: listener.event.into(),
-        //     a,
-        //     b,
-        // });
-        // self.emitter.update_event_listener(event_id.into(), a, b);
     }
 
     pub fn remove_event_listener(&mut self, event: &'a str) {
@@ -350,15 +343,7 @@ impl<'a> EditMachine<'a> {
         self.emitter
             .push(Edit::RemoveEventListener { event_type: event });
         // debug!("emit: remove_event_listener({:?})", event);
-        // let _event_id = self.ensure_string(event);
-        // todo!("Event listener not wired up yet");
-        // self.emitter.remove_event_listener(event_id.into());
     }
-
-    // #[inline]
-    // pub fn has_template(&mut self, id: CacheId) -> bool {
-    //     self.templates.contains(&id)
-    // }
 
     // pub fn save_template(&mut self, id: CacheId) {
     //     debug_assert!(self.traversal_is_committed());
@@ -516,10 +501,8 @@ impl Traversal {
     /// Commit this traversals moves and return the optimized path from the last
     /// commit.
     #[inline]
-    pub fn commit(&mut self) -> Moves {
-        Moves {
-            inner: self.uncommitted.drain(..),
-        }
+    pub fn commit(&mut self) -> std::vec::Drain<'_, MoveTo> {
+        self.uncommitted.drain(..)
     }
 
     #[inline]
@@ -528,18 +511,18 @@ impl Traversal {
     }
 }
 
-pub struct Moves<'a> {
-    inner: std::vec::Drain<'a, MoveTo>,
-}
+// pub struct Moves<'a> {
+//     inner: std::vec::Drain<'a, MoveTo>,
+// }
 
-impl Iterator for Moves<'_> {
-    type Item = MoveTo;
+// impl Iterator for Moves<'_> {
+//     type Item = MoveTo;
 
-    #[inline]
-    fn next(&mut self) -> Option<MoveTo> {
-        self.inner.next()
-    }
-}
+//     #[inline]
+//     fn next(&mut self) -> Option<MoveTo> {
+//         self.inner.next()
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

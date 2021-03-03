@@ -1,4 +1,3 @@
-use builder::button;
 use dioxus_core::prelude::*;
 
 fn main() {}
@@ -15,7 +14,7 @@ static Example: FC<Props> = |ctx, props| {
     let value = ctx.use_context(|c: &SomeContext| c.items.last().unwrap());
 
     ctx.render(move |bump| {
-        button(bump)
+        builder::ElementBuilder::new(bump, "button")
             .on("click", move |_| {
                 println!("Value is {}", props.name);
                 println!("Value is {}", value.as_str());

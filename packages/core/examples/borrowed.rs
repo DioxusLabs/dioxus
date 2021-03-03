@@ -22,12 +22,12 @@ fn app(ctx: Context, props: &Props) -> DomTree {
     let (f, setter) = use_state(&ctx, || 0);
 
     ctx.render(move |b| {
-        let mut root = builder::div(b);
+        let mut root = builder::ElementBuilder::new(b, "div");
         for child in &props.items {
             // notice that the child directly borrows from our vec
             // this makes lists very fast (simply views reusing lifetimes)
             root = root.child(builder::virtual_child(
-                b,
+                b.bump,
                 ChildProps {
                     item: child,
                     item_handler: setter,

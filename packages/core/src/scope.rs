@@ -45,13 +45,21 @@ pub struct Scope {
     // lying, cheating reference >:(
     pub props: Box<dyn std::any::Any>,
 
+    // our own index
+    pub myidx: ScopeIdx,
+
     // pub props_type: TypeId,
     pub caller: *const (),
 }
 
 impl Scope {
     // create a new scope from a function
-    pub fn new<'a, P1, P2: 'static>(f: FC<P1>, props: P1, parent: Option<ScopeIdx>) -> Self {
+    pub fn new<'a, P1, P2: 'static>(
+        f: FC<P1>,
+        props: P1,
+        myidx: ScopeIdx,
+        parent: Option<ScopeIdx>,
+    ) -> Self {
         let hook_arena = typed_arena::Arena::new();
         let hooks = RefCell::new(Vec::new());
 
@@ -79,6 +87,7 @@ impl Scope {
         let props = unsafe { std::mem::transmute::<_, Box<P2>>(props) };
 
         Self {
+            myidx,
             hook_arena,
             hooks,
             caller,
@@ -109,6 +118,7 @@ impl Scope {
             idx: 0.into(),
             _p: PhantomData {},
             final_nodes: node_slot.clone(),
+            scope: self.myidx,
         };
 
         unsafe {
@@ -276,25 +286,34 @@ mod tests {
 
     #[test]
     fn check_listeners() -> Result<()> {
-        let mut scope = Scope::new::<(), ()>(ListenerTest, (), None);
-        scope.run::<()>();
+        todo!()
+        // let mut scope = Scope::new::<(), ()>(ListenerTest, (), None);
+        // scope.run::<()>();
 
-        let nodes = scope.new_frame();
-        dbg!(nodes);
+        // let nodes = scope.new_frame();
+        // dbg!(nodes);
 
-        Ok(())
+        // Ok(())
     }
 
     #[test]
     fn test_scope() {
         let example: FC<()> = |ctx, props| {
             use crate::builder::*;
-            ctx.render(|ctx| div(ctx.bump()).child(text("a")).finish())
+            ctx.render(|ctx| {
+                builder::ElementBuilder::new(ctx, "div")
+                    .child(text("a"))
+                    .finish()
+            })
         };
 
         let props = ();
         let parent = None;
-        let scope = Scope::new::<(), ()>(example, props, parent);
+        let mut nodes = generational_arena::Arena::new();
+        nodes.insert_with(|f| {
+            let scope = Scope::new::<(), ()>(example, props, f, parent);
+            //
+        });
     }
 
     #[derive(Debug)]
@@ -320,39 +339,42 @@ mod tests {
         let childprops: ExampleProps<'a> = ExampleProps { name: content };
         // let childprops: ExampleProps<'a> = ExampleProps { name: content };
         ctx.render(move |ctx| {
-            let b = ctx.bump();
-            div(b)
-                .child(text(props.name))
-                // .child(text(props.name))
-                .child(virtual_child::<ExampleProps>(b, childprops, child_example))
-                // .child(virtual_child::<ExampleProps<'a>>(b, childprops, CHILD))
-                // as for<'scope> fn(Context<'_>, &'scope ExampleProps<'scope>) -> DomTree
-                // |ctx, pops| todo!(),
-                // .child(virtual_child::<'a>(
-                //     b,
-                //     child_example,
-                //     ExampleProps { name: text },
-                // ))
-                .finish()
+            todo!()
+            // let b = ctx.bump();
+            // div(b)
+            //     .child(text(props.name))
+            //     // .child(text(props.name))
+            //     .child(virtual_child::<ExampleProps>(b, childprops, child_example))
+            //     // .child(virtual_child::<ExampleProps<'a>>(b, childprops, CHILD))
+            //     // as for<'scope> fn(Context<'_>, &'scope ExampleProps<'scope>) -> DomTree
+            //     // |ctx, pops| todo!(),
+            //     // .child(virtual_child::<'a>(
+            //     //     b,
+            //     //     child_example,
+            //     //     ExampleProps { name: text },
+            //     // ))
+            //     .finish()
         })
     }
 
     fn child_example<'b>(ctx: Context<'b>, props: &'b ExampleProps) -> DomTree {
         ctx.render(move |ctx| {
-            div(ctx.bump())
-                .child(text(props.name))
-                //
-                .finish()
+            todo!()
+            // div(ctx.bump())
+            //     .child(text(props.name))
+            //     //
+            //     .finish()
         })
     }
 
     static CHILD: FC<ExampleProps> = |ctx, props: &'_ ExampleProps| {
         // todo!()
         ctx.render(move |ctx| {
-            div(ctx.bump())
-                .child(text(props.name))
-                //
-                .finish()
+            todo!()
+            // div(ctx.bump())
+            //     .child(text(props.name))
+            //     //
+            //     .finish()
         })
     };
     #[test]

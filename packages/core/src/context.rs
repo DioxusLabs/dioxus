@@ -31,6 +31,8 @@ use std::{
 pub struct Context<'src> {
     pub idx: AtomicUsize,
 
+    pub scope: ScopeIdx,
+
     // Borrowed from scope
     pub(crate) arena: &'src typed_arena::Arena<Hook>,
     pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
@@ -76,12 +78,17 @@ impl<'a> Context<'a> {
     ///     ctx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(self, lazy_nodes: impl FnOnce(NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
-        let ctx = NodeCtx { bump: self.bump };
-        let safe_nodes = lazy_nodes(ctx);
+    pub fn render(self, lazy_nodes: impl FnOnce(&'a NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
+        let ctx = NodeCtx {
+            bump: self.bump,
+            idx: 0.into(),
+            scope: self.scope,
+        };
+        todo!();
+        // let safe_nodes = lazy_nodes(&ctx);
 
-        let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
-        self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
+        // let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
+        // self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
         DomTree {}
     }
 
@@ -100,8 +107,11 @@ impl<'a> Context<'a> {
 
 // NodeCtx is used to build VNodes in the component's memory space.
 // This struct adds metadata to the final DomTree about listeners, attributes, and children
+#[derive(Debug, Clone)]
 pub struct NodeCtx<'a> {
-    bump: &'a Bump,
+    pub bump: &'a Bump,
+    pub idx: RefCell<usize>,
+    pub scope: ScopeIdx,
 }
 
 impl NodeCtx<'_> {
