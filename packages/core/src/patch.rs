@@ -16,23 +16,39 @@
 //! Because the change list references data internal to the vdom, it needs to be consumed by the renderer before the vdom
 //! can continue to work. This means once a change list is generated, it should be consumed as fast as possible, otherwise the
 //! dom will be blocked from progressing. This is enforced by lifetimes on the returend changelist object.
-//!
-//!
 
-use bumpalo::Bump;
+use crate::innerlude::ScopeIdx;
 
-use crate::innerlude::{Listener, ScopeIdx};
-use serde::{Deserialize, Serialize};
+pub type EditList<'src> = Vec<Edit<'src>>;
+
 /// The `Edit` represents a single modifcation of the renderer tree.
 /// todo@ jon: allow serde to be optional
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
 pub enum Edit<'d> {
+    // ========================================================
+    // Common Ops: The most common operation types
+    // ========================================================
     SetText {
         text: &'d str,
     },
-    RemoveSelfAndNextSiblings {},
-    ReplaceWith,
+    SetClass {
+        class_name: &'d str,
+    },
+    CreateTextNode {
+        text: &'d str,
+    },
+    CreateElement {
+        tag_name: &'d str,
+    },
+    CreateElementNs {
+        tag_name: &'d str,
+        ns: &'d str,
+    },
+
+    // ========================================================
+    // Attributes
+    // ========================================================
     SetAttribute {
         name: &'d str,
         value: &'d str,
@@ -40,6 +56,45 @@ pub enum Edit<'d> {
     RemoveAttribute {
         name: &'d str,
     },
+    RemoveChild {
+        n: u32,
+    },
+
+    // ============================================================
+    // Event Listeners: Event types and IDs used to update the VDOM
+    // ============================================================
+    NewListener {
+        event: &'d str,
+        scope: ScopeIdx,
+        id: usize,
+    },
+    UpdateListener {
+        event: &'d str,
+        scope: ScopeIdx,
+        id: usize,
+    },
+    RemoveListener {
+        event: &'d str,
+    },
+
+    // ========================================================
+    // Cached Roots: The mount point for individual components
+    //               Allows quick traversal to cached entrypoints
+    // ========================================================
+    // push a known node on to the stack
+    TraverseToKnown {
+        node: ScopeIdx,
+    },
+    // Add the current top of the stack to the known nodes
+    MakeKnown {
+        node: ScopeIdx,
+    },
+    // Remove the current top of the stack from the known nodes
+    RemoveKnown,
+
+    // ========================================================
+    // Stack OPs: Operations for manipulating the stack machine
+    // ========================================================
     PushReverseChild {
         n: u32,
     },
@@ -48,17 +103,8 @@ pub enum Edit<'d> {
     },
     Pop,
     AppendChild,
-    CreateTextNode {
-        text: &'d str,
-    },
-    CreateElement {
-        tag_name: &'d str,
-    },
-
-    CreateElementNs {
-        tag_name: &'d str,
-        ns: &'d str,
-    },
+    RemoveSelfAndNextSiblings {},
+    ReplaceWith,
     SaveChildrenToTemporaries {
         temp: u32,
         start: u32,
@@ -74,42 +120,7 @@ pub enum Edit<'d> {
     PopPushReverseChild {
         n: u32,
     },
-    RemoveChild {
-        n: u32,
-    },
-    SetClass {
-        class_name: &'d str,
-    },
-
-    // push a known node on to the stack
-    TraverseToKnown {
-        node: ScopeIdx,
-    },
-
-    // Add the current top of the stack to the known nodes
-    MakeKnown {
-        node: ScopeIdx,
-    },
-
-    // Remove the current top of the stack from the known nodes
-    RemoveKnown,
-
-    NewListener {
-        event: &'d str,
-        scope: ScopeIdx,
-        id: usize,
-    },
-    UpdateListener {
-        event: &'d str,
-        scope: ScopeIdx,
-        id: usize,
-    },
-    RemoveListener {
-        event: &'d str,
-    },
 }
-
-pub type EditList<'src> = Vec<Edit<'src>>;
 
 pub struct EditMachine<'src> {
     pub traversal: Traversal,
@@ -119,7 +130,8 @@ pub struct EditMachine<'src> {
 }
 
 impl<'b> EditMachine<'b> {
-    pub fn new(_bump: &'b Bump) -> Self {
+    pub fn new(_bump: &'b bumpalo::Bump) -> Self {
+        // todo: see if bumpalo is needed for edit list
         Self {
             traversal: Traversal::new(),
             next_temporary: 0,
@@ -373,7 +385,6 @@ impl<'a> EditMachine<'a> {
 
 // Keeps track of where we are moving in a DOM tree, and shortens traversal
 // paths between mutations to their minimal number of operations.
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MoveTo {
     /// Move from the current node up to its parent.
@@ -503,9 +514,7 @@ impl Traversal {
     /// that have *not* been committed yet?
     #[inline]
     pub fn is_committed(&self) -> bool {
-        // is_empty is not inlined?
         self.uncommitted.is_empty()
-        // self.uncommitted.len() == 0
     }
 
     /// Commit this traversals moves and return the optimized path from the last
@@ -520,19 +529,6 @@ impl Traversal {
         self.uncommitted.clear();
     }
 }
-
-// pub struct Moves<'a> {
-//     inner: std::vec::Drain<'a, MoveTo>,
-// }
-
-// impl Iterator for Moves<'_> {
-//     type Item = MoveTo;
-
-//     #[inline]
-//     fn next(&mut self) -> Option<MoveTo> {
-//         self.inner.next()
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -713,15 +709,5 @@ mod tests {
             let actual_moves: Vec<_> = traversal.commit().collect();
             assert_eq!(actual_moves, expected_moves);
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct StringKey(u32);
-
-impl From<StringKey> for u32 {
-    #[inline]
-    fn from(key: StringKey) -> u32 {
-        key.0
     }
 }
