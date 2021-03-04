@@ -78,17 +78,17 @@ impl<'a> Context<'a> {
     ///     ctx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(self, lazy_nodes: impl FnOnce(&'a NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
+    pub fn render(self, lazy_nodes: impl FnOnce(&NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
         let ctx = NodeCtx {
             bump: self.bump,
             idx: 0.into(),
             scope: self.scope,
         };
-        todo!();
-        // let safe_nodes = lazy_nodes(&ctx);
+        // todo!();
+        let safe_nodes = lazy_nodes(&ctx);
 
-        // let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
-        // self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
+        let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
+        self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
         DomTree {}
     }
 

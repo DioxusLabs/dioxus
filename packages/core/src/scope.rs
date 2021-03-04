@@ -277,11 +277,15 @@ mod tests {
     use crate::prelude::format_args_f;
 
     static ListenerTest: FC<()> = |ctx, props| {
-        ctx.render(html! {
-            <div onclick={|_| println!("Hell owlrld")}>
-                "hello"
-            </div>
+        ctx.render(move |c| {
+            //
+            builder::ElementBuilder::new(c, "div").finish()
         })
+        // ctx.render(html! {
+        //     <div onclick={|_| println!("Hell owlrld")}>
+        //         "hello"
+        //     </div>
+        // })
     };
 
     #[test]

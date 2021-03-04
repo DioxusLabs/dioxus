@@ -15,15 +15,16 @@ fn main() {
 static App: FC<()> = |ctx, _| {
     log::info!("Ran component");
     use dioxus::builder::*;
-    ctx.render(|b| {
-        div(b)
-            .child(text("hello"))
-            .listeners([on(b, "click", |_| {
-                //
-                log::info!("button1 clicked!");
-            })])
-            .finish()
-    })
+    todo!()
+    // ctx.render(|b| {
+    //     div(b)
+    //         .child(text("hello"))
+    //         .listeners([on(b, "click", |_| {
+    //             //
+    //             log::info!("button1 clicked!");
+    //         })])
+    //         .finish()
+    // })
     // ctx.render(html! {
     //     <div onclick={move |_| log::info!("button1 clicked!")}>
     //         "Hello"

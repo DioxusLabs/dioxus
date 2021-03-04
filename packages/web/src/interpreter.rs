@@ -1,6 +1,10 @@
 use std::{borrow::Borrow, fmt::Debug, sync::Arc};
 
-use dioxus_core::events::{EventTrigger, MouseEvent, VirtualEvent};
+use dioxus_core::{
+    events::{EventTrigger, MouseEvent, VirtualEvent},
+    patch::Edit,
+    prelude::ScopeIdx,
+};
 use fxhash::FxHashMap;
 use log::debug;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -59,7 +63,7 @@ impl EventDelegater {
         }
     }
 
-    pub fn add_listener(&mut self, event: &str, cb: CbIdx) {
+    pub fn add_listener(&mut self, event: &str, scope: ScopeIdx) {
         if let Some(entry) = self.listeners.get_mut(event) {
             entry.0 += 1;
         } else {
@@ -75,15 +79,15 @@ impl EventDelegater {
 
                 let typ = event.type_();
 
-                let gi_id = target
+                let gi_id: Option<usize> = target
                     .get_attribute(&format!("dioxus-giid-{}", typ))
                     .and_then(|v| v.parse().ok());
 
-                let gi_gen = target
+                let gi_gen: Option<u64> = target
                     .get_attribute(&format!("dioxus-gigen-{}", typ))
                     .and_then(|v| v.parse().ok());
 
-                let li_idx = target
+                let li_idx: Option<usize> = target
                     .get_attribute(&format!("dioxus-lidx-{}", typ))
                     .and_then(|v| v.parse().ok());
 
@@ -91,11 +95,8 @@ impl EventDelegater {
                     // Call the trigger
                     trigger.0.as_ref()(EventTrigger::new(
                         virtual_event_from_websys_event(event),
-                        CbIdx {
-                            gi_gen,
-                            gi_id,
-                            listener_idx: li_idx,
-                        },
+                        scope,
+                        li_idx,
                     ));
                 }
             }) as Box<dyn FnMut(&Event)>);
@@ -342,7 +343,7 @@ impl PatchMachine {
             }
 
             // 11
-            Edit::NewEventListener { event_type, idx } => {
+            Edit::NewListener { event, id, scope } => {
                 // attach the correct attributes to the element
                 // these will be used by accessing the event's target
                 // This ensures we only ever have one handler attached to the root, but decide
@@ -362,24 +363,25 @@ impl PatchMachine {
 
                 // debug!("adding attributes: {}, {}", a, b);
 
-                let CbIdx {
-                    gi_id,
-                    gi_gen,
-                    listener_idx: lidx,
-                } = idx;
+                // let CbIdx {
+                //     gi_id,
+                //     gi_gen,
+                //     listener_idx: lidx,
+                // } = idx;
 
-                el.set_attribute(&format!("dioxus-giid-{}", event_type), &gi_id.to_string())
+                let (gi_id, gi_gen) = (&scope).into_raw_parts();
+                el.set_attribute(&format!("dioxus-giid-{}", event), &gi_id.to_string())
                     .unwrap();
-                el.set_attribute(&format!("dioxus-gigen-{}", event_type), &gi_gen.to_string())
+                el.set_attribute(&format!("dioxus-gigen-{}", event), &gi_gen.to_string())
                     .unwrap();
-                el.set_attribute(&format!("dioxus-lidx-{}", event_type), &lidx.to_string())
+                el.set_attribute(&format!("dioxus-lidx-{}", event), &id.to_string())
                     .unwrap();
 
-                self.events.add_listener(event_type, idx);
+                self.events.add_listener(event, scope);
             }
 
             // 12
-            Edit::UpdateEventListener { event_type, idx } => {
+            Edit::UpdateListener { event, scope, id } => {
                 // update our internal mapping, and then modify the attribute
 
                 if let Some(el) = self.stack.top().dyn_ref::<Element>() {
@@ -391,7 +393,7 @@ impl PatchMachine {
             }
 
             // 13
-            Edit::RemoveEventListener { event_type } => {
+            Edit::RemoveListener { event: event_type } => {
                 if let Some(el) = self.stack.top().dyn_ref::<Element>() {
                     // el.remove_event_listener_with_callback(
                     //     event_type,
@@ -474,6 +476,9 @@ impl PatchMachine {
                     el.set_class_name(class_name);
                 }
             }
+            Edit::TraverseToKnown { node } => {}
+            Edit::MakeKnown { node } => {}
+            Edit::RemoveKnown => {}
         }
     }
 

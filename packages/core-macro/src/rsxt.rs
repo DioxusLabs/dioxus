@@ -73,7 +73,7 @@ impl ToTokens for RsxRender {
         // create a lazy tree that accepts a bump allocator
         let final_tokens = quote! {
             move |ctx| {
-                let bump = ctx.bump();
+                let bump = ctx.bump;
                 #new_toks
             }
         };

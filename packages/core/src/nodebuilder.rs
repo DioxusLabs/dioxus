@@ -19,13 +19,13 @@ use bumpalo::Bump;
 /// function for building `<div>` elements or the `button` function for building
 /// `<button>` elements.
 #[derive(Debug)]
-pub struct ElementBuilder<'a, Listeners, Attributes, Children>
+pub struct ElementBuilder<'a, 'b, Listeners, Attributes, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
 {
-    ctx: &'a NodeCtx<'a>,
+    ctx: &'b NodeCtx<'a>,
     key: NodeKey,
     tag_name: &'a str,
     listeners: Listeners,
@@ -34,9 +34,10 @@ where
     namespace: Option<&'a str>,
 }
 
-impl<'a>
+impl<'a, 'b>
     ElementBuilder<
         'a,
+        'b,
         bumpalo::collections::Vec<'a, Listener<'a>>,
         bumpalo::collections::Vec<'a, Attribute<'a>>,
         bumpalo::collections::Vec<'a, VNode<'a>>,
@@ -65,9 +66,9 @@ impl<'a>
     /// let my_element_builder = ElementBuilder::new(&b, tag_name);
     /// # fn flip_coin() -> bool { true }
     /// ```
-    pub fn new(ctx: &'a NodeCtx<'a>, tag_name: &'static str) -> Self {
+    pub fn new(ctx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
         // pub fn new<B>(ctx: &'a mut NodeCtx<'a>, tag_name: &'a str) -> Self {
-        let bump = ctx.bump();
+        let bump = ctx.bump;
         ElementBuilder {
             ctx,
             key: NodeKey::NONE,
@@ -80,7 +81,8 @@ impl<'a>
     }
 }
 
-impl<'a, Listeners, Attributes, Children> ElementBuilder<'a, Listeners, Attributes, Children>
+impl<'a, 'b, Listeners, Attributes, Children>
+    ElementBuilder<'a, 'b, Listeners, Attributes, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
@@ -114,7 +116,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn listeners<L>(self, listeners: L) -> ElementBuilder<'a, L, Attributes, Children>
+    pub fn listeners<L>(self, listeners: L) -> ElementBuilder<'a, 'b, L, Attributes, Children>
     where
         L: 'a + AsRef<[Listener<'a>]>,
     {
@@ -153,7 +155,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn attributes<A>(self, attributes: A) -> ElementBuilder<'a, Listeners, A, Children>
+    pub fn attributes<A>(self, attributes: A) -> ElementBuilder<'a, 'b, Listeners, A, Children>
     where
         A: 'a + AsRef<[Attribute<'a>]>,
     {
@@ -192,7 +194,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn children<C>(self, children: C) -> ElementBuilder<'a, Listeners, Attributes, C>
+    pub fn children<C>(self, children: C) -> ElementBuilder<'a, 'b, Listeners, Attributes, C>
     where
         C: 'a + AsRef<[VNode<'a>]>,
     {
@@ -290,17 +292,17 @@ where
     /// ```
     #[inline]
     pub fn finish(self) -> VNode<'a> {
-        let children: &'a Children = self.ctx.bump().alloc(self.children);
+        let children: &'a Children = self.ctx.bump.alloc(self.children);
         let children: &'a [VNode<'a>] = children.as_ref();
 
-        let listeners: &'a Listeners = self.ctx.bump().alloc(self.listeners);
+        let listeners: &'a Listeners = self.ctx.bump.alloc(self.listeners);
         let listeners: &'a [Listener<'a>] = listeners.as_ref();
 
-        let attributes: &'a Attributes = self.ctx.bump().alloc(self.attributes);
+        let attributes: &'a Attributes = self.ctx.bump.alloc(self.attributes);
         let attributes: &'a [Attribute<'a>] = attributes.as_ref();
 
         VNode::element(
-            self.ctx.bump(),
+            self.ctx.bump,
             self.key,
             self.tag_name,
             listeners,
@@ -311,8 +313,8 @@ where
     }
 }
 
-impl<'a, Attributes, Children>
-    ElementBuilder<'a, bumpalo::collections::Vec<'a, Listener<'a>>, Attributes, Children>
+impl<'a, 'b, Attributes, Children>
+    ElementBuilder<'a, 'b, bumpalo::collections::Vec<'a, Listener<'a>>, Attributes, Children>
 where
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
@@ -355,8 +357,8 @@ where
     }
 }
 
-impl<'a, Listeners, Children>
-    ElementBuilder<'a, Listeners, bumpalo::collections::Vec<'a, Attribute<'a>>, Children>
+impl<'a, 'b, Listeners, Children>
+    ElementBuilder<'a, 'b, Listeners, bumpalo::collections::Vec<'a, Attribute<'a>>, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
@@ -414,8 +416,8 @@ where
     }
 }
 
-impl<'a, Listeners, Attributes>
-    ElementBuilder<'a, Listeners, Attributes, bumpalo::collections::Vec<'a, VNode<'a>>>
+impl<'a, 'b, Listeners, Attributes>
+    ElementBuilder<'a, 'b, Listeners, Attributes, bumpalo::collections::Vec<'a, VNode<'a>>>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,

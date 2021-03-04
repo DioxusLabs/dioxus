@@ -24,49 +24,90 @@ use bumpalo::Bump;
 use crate::innerlude::{Listener, ScopeIdx};
 use serde::{Deserialize, Serialize};
 /// The `Edit` represents a single modifcation of the renderer tree.
-///
-///
-///
-///
-///
-///
-///
-///
 /// todo@ jon: allow serde to be optional
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Edit<'d> {
-    SetText { text: &'d str },
+    SetText {
+        text: &'d str,
+    },
     RemoveSelfAndNextSiblings {},
     ReplaceWith,
-    SetAttribute { name: &'d str, value: &'d str },
-    RemoveAttribute { name: &'d str },
-    PushReverseChild { n: u32 },
-    PopPushChild { n: u32 },
+    SetAttribute {
+        name: &'d str,
+        value: &'d str,
+    },
+    RemoveAttribute {
+        name: &'d str,
+    },
+    PushReverseChild {
+        n: u32,
+    },
+    PopPushChild {
+        n: u32,
+    },
     Pop,
     AppendChild,
-    CreateTextNode { text: &'d str },
-    CreateElement { tag_name: &'d str },
-    NewEventListener { event_type: &'d str, s: ScopeIdx },
-    UpdateEventListener { event_type: &'d str, s: ScopeIdx },
-    RemoveEventListener { event_type: &'d str },
-    CreateElementNs { tag_name: &'d str, ns: &'d str },
-    SaveChildrenToTemporaries { temp: u32, start: u32, end: u32 },
-    PushChild { n: u32 },
-    PushTemporary { temp: u32 },
+    CreateTextNode {
+        text: &'d str,
+    },
+    CreateElement {
+        tag_name: &'d str,
+    },
+
+    CreateElementNs {
+        tag_name: &'d str,
+        ns: &'d str,
+    },
+    SaveChildrenToTemporaries {
+        temp: u32,
+        start: u32,
+        end: u32,
+    },
+    PushChild {
+        n: u32,
+    },
+    PushTemporary {
+        temp: u32,
+    },
     InsertBefore,
-    PopPushReverseChild { n: u32 },
-    RemoveChild { n: u32 },
-    SetClass { class_name: &'d str },
+    PopPushReverseChild {
+        n: u32,
+    },
+    RemoveChild {
+        n: u32,
+    },
+    SetClass {
+        class_name: &'d str,
+    },
 
     // push a known node on to the stack
-    TraverseToKnown { node: ScopeIdx },
+    TraverseToKnown {
+        node: ScopeIdx,
+    },
 
     // Add the current top of the stack to the known nodes
-    MakeKnown { node: ScopeIdx },
+    MakeKnown {
+        node: ScopeIdx,
+    },
 
     // Remove the current top of the stack from the known nodes
     RemoveKnown,
+
+    NewListener {
+        event: &'d str,
+        scope: ScopeIdx,
+        id: usize,
+    },
+    UpdateListener {
+        event: &'d str,
+        scope: ScopeIdx,
+        id: usize,
+    },
+    RemoveListener {
+        event: &'d str,
+    },
+    // NewListener { event: &'d str, id: usize, s: ScopeIdx },
 }
 
 pub type EditList<'src> = Vec<Edit<'src>>;
@@ -318,10 +359,7 @@ impl<'a> EditMachine<'a> {
 
     pub fn new_event_listener(&mut self, event: &'a str, scope: ScopeIdx, id: usize) {
         debug_assert!(self.traversal_is_committed());
-        self.emitter.push(Edit::NewEventListener {
-            event_type: event,
-            s: scope,
-        });
+        self.emitter.push(Edit::NewListener { event, scope, id });
         // log::debug!("emit: new_event_listener({:?})", listener);
     }
 
@@ -332,16 +370,12 @@ impl<'a> EditMachine<'a> {
             return;
         }
 
-        self.emitter.push(Edit::NewEventListener {
-            event_type: event,
-            s: scope,
-        });
+        self.emitter.push(Edit::NewListener { event, scope, id });
     }
 
     pub fn remove_event_listener(&mut self, event: &'a str) {
         debug_assert!(self.traversal_is_committed());
-        self.emitter
-            .push(Edit::RemoveEventListener { event_type: event });
+        self.emitter.push(Edit::RemoveListener { event });
         // debug!("emit: remove_event_listener({:?})", event);
     }
 
