@@ -9,24 +9,19 @@
 
 use dioxus::prelude::*;
 
-fn main() {
-    let app = dioxus_webview::new(|ctx| {
+async fn main() {
+    dioxus_webview::launch(|ctx| {
         let (count, set_count) = use_state(ctx, || 0);
 
-        html! {
-            <div>
-                <h1> "Dioxus Desktop Demo" </h1>
-                <p> "Count is {count}"</p>
-                <p> "Count is {count}"</p>
-                <p> "Data is {data}"</p>
-                <button onclick=|_| set_count(count + 1) >
+        ctx.render(rsx! {
+            div {
+                h1 { "Dioxus Desktop Demo" }
+                p { "Count is {count}" }
+                button {
                     "Click to increment"
-                </button>
-             </div>
-        }
-    });
-
-    let f = 10_i32;
-    println!("hello {}", f);
-    app.launch(());
+                    onclick: |_| set_count(count + 1)
+                }
+            }
+        })
+    }).await;
 }
