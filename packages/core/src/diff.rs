@@ -58,13 +58,11 @@ pub struct DiffMachine<'a> {
 
 impl<'a> DiffMachine<'a> {
     pub fn new(bump: &'a Bump) -> Self {
-        // log::debug!("starting diff machine");
         Self {
             change_list: EditMachine::new(bump),
             immediate_queue: Vec::new(),
             diffed: FxHashSet::default(),
             need_to_diff: FxHashSet::default(),
-            // current_idx: None,
         }
     }
 
@@ -72,19 +70,13 @@ impl<'a> DiffMachine<'a> {
         self.change_list.emitter
     }
 
-    pub fn diff_node(
-        &mut self,
-        old: &VNode<'a>,
-        new: &VNode<'a>,
-        // scope: Option<generational_arena::Index>,
-    ) {
+    pub fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
         When re-entering, we reuse the EditList in DiffState
         */
         match (old, new) {
-            // This case occurs when two text nodes are generation
             (VNode::Text(VText { text: old_text }), VNode::Text(VText { text: new_text })) => {
                 if old_text != new_text {
                     self.change_list.commit_traversal();
@@ -93,12 +85,8 @@ impl<'a> DiffMachine<'a> {
             }
 
             (VNode::Text(_), VNode::Element(_)) => {
-                // TODO: Hook up the events properly
-                // todo!("Hook up events registry");
                 self.change_list.commit_traversal();
-                // diff_support::create(cached_set, self.change_list, registry, new, cached_roots);
                 self.create(new);
-                // registry.remove_subtree(&old);
                 self.change_list.replace_with();
             }
 
@@ -121,30 +109,25 @@ impl<'a> DiffMachine<'a> {
                 self.diff_children(eold.children, enew.children);
             }
 
-            (VNode::Component(_), VNode::Component(_)) => {
+            (VNode::Component(cold), VNode::Component(cnew)) => {
+                if cold.comp != cnew.comp {
+                    // queue an event to mount this new component
+                    return;
+                }
+
+                // compare props.... somehow.....
+
                 todo!("Usage of component VNode not currently supported");
             }
 
-            (_, VNode::Component(_)) => {
-                todo!("Usage of component VNode not currently supported");
-            }
-
-            (VNode::Component(_), _) => {
+            (_, VNode::Component(_)) | (VNode::Component(_), _) => {
                 todo!("Usage of component VNode not currently supported");
             }
 
             (VNode::Suspended, _) | (_, VNode::Suspended) => {
-                // (VNode::Element(_), VNode::Suspended) => {}
-                // (VNode::Text(_), VNode::Suspended) => {}
-                // (VNode::Component(_), VNode::Suspended) => {}
-                // (VNode::Suspended, VNode::Element(_)) => {}
-                // (VNode::Suspended, VNode::Text(_)) => {}
-                // (VNode::Suspended, VNode::Suspended) => {}
-                // (VNode::Suspended, VNode::Component(_)) => {}
                 todo!("Suspended components not currently available")
             }
         }
-        // self.current_idx = None;
     }
 
     // Diff event listeners between `old` and `new`.

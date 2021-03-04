@@ -2,7 +2,6 @@ use crate::{
     cli::{BuildOptions, DevelopOptions},
     error::Result,
 };
-// use log::{info, warn};
 use std::{io::Write, path::PathBuf, process::Command};
 
 #[derive(Debug, Clone)]
@@ -70,10 +69,16 @@ impl Config {
         self
     }
 
+    pub fn with_release(&mut self, release: bool) -> &mut Self {
+        self.release = release;
+        self
+    }
+
     pub fn with_build_options(&mut self, options: &BuildOptions) {
         if let Some(name) = &options.example {
             self.as_example(name.clone());
         }
+        self.release = options.release;
         self.out_dir = options.outdir.clone().into();
     }
 
@@ -81,7 +86,7 @@ impl Config {
         if let Some(name) = &options.example {
             self.as_example(name.clone());
         }
-        let outdir = tempfile::Builder::new().tempdir().expect("").into_path();
-        self.out_dir = outdir;
+        self.release = options.release;
+        self.out_dir = tempfile::Builder::new().tempdir().expect("").into_path();
     }
 }

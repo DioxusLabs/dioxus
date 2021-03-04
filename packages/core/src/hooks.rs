@@ -28,8 +28,8 @@ mod use_state_def {
     /// ```ignore
     /// static Example: FC<()> = |ctx| {
     ///     let (counter, set_counter) = use_state(ctx, || 0);
-    ///     let increment = || set_couter(counter + 1);
-    ///     let decrement = || set_couter(counter + 1);
+    ///     let increment = |_| set_couter(counter + 1);
+    ///     let decrement = |_| set_couter(counter + 1);
     ///
     ///     html! {
     ///         <div>

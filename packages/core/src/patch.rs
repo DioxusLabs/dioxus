@@ -107,7 +107,6 @@ pub enum Edit<'d> {
     RemoveListener {
         event: &'d str,
     },
-    // NewListener { event: &'d str, id: usize, s: ScopeIdx },
 }
 
 pub type EditList<'src> = Vec<Edit<'src>>;
@@ -167,40 +166,17 @@ impl<'b> EditMachine<'b> {
 
     pub fn commit_traversal(&mut self) {
         if self.traversal.is_committed() {
-            log::debug!("Traversal already committed");
             return;
         }
 
         for mv in self.traversal.commit() {
             match mv {
-                MoveTo::Parent => {
-                    log::debug!("emit: pop");
-                    self.emitter.push(Edit::Pop {});
-                    // self.emitter.pop();
-                }
-                MoveTo::Child(n) => {
-                    log::debug!("emit: push_child({})", n);
-                    self.emitter.push(Edit::PushChild { n });
-                }
-                MoveTo::ReverseChild(n) => {
-                    log::debug!("emit: push_reverse_child({})", n);
-                    self.emitter.push(Edit::PushReverseChild { n });
-                    // self.emitter.push_reverse_child(n);
-                }
-                MoveTo::Sibling(n) => {
-                    log::debug!("emit: pop_push_child({})", n);
-                    self.emitter.push(Edit::PopPushChild { n });
-                    // self.emitter.pop_push_child(n);
-                }
-                MoveTo::ReverseSibling(n) => {
-                    log::debug!("emit: pop_push_reverse_child({})", n);
-                    self.emitter.push(Edit::PopPushReverseChild { n });
-                }
-                MoveTo::TempChild(temp) => {
-                    log::debug!("emit: push_temporary({})", temp);
-                    self.emitter.push(Edit::PushTemporary { temp });
-                    // self.emitter.push_temporary(temp);
-                }
+                MoveTo::Parent => self.emitter.push(Edit::Pop {}),
+                MoveTo::Child(n) => self.emitter.push(Edit::PushChild { n }),
+                MoveTo::ReverseChild(n) => self.emitter.push(Edit::PushReverseChild { n }),
+                MoveTo::Sibling(n) => self.emitter.push(Edit::PopPushChild { n }),
+                MoveTo::ReverseSibling(n) => self.emitter.push(Edit::PopPushReverseChild { n }),
+                MoveTo::TempChild(temp) => self.emitter.push(Edit::PushTemporary { temp }),
             }
         }
     }

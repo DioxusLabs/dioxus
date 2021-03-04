@@ -227,6 +227,8 @@ impl ActiveFrame {
             true => &self.frames[0],
             false => &self.frames[1],
         };
+
+        // Give out our self-referential item with our own borrowed lifetime
         unsafe {
             let unsafe_head = &raw_node.head_node;
             let safe_node = std::mem::transmute::<&VNode<'static>, &VNode<'b>>(unsafe_head);
@@ -240,6 +242,7 @@ impl ActiveFrame {
             false => &self.frames[1],
         };
 
+        // Give out our self-referential item with our own borrowed lifetime
         unsafe {
             let unsafe_head = &raw_node.head_node;
             let safe_node = std::mem::transmute::<&VNode<'static>, &VNode<'b>>(unsafe_head);
@@ -250,55 +253,27 @@ impl ActiveFrame {
     fn next(&mut self) -> &mut BumpFrame {
         self.idx.fetch_add(1, Ordering::Relaxed);
         let cur = self.idx.borrow().load(Ordering::Relaxed);
-        log::debug!("Next frame! {}", cur);
 
         if cur % 2 == 0 {
-            log::debug!("Chosing frame 0");
             &mut self.frames[0]
         } else {
-            log::debug!("Chosing frame 1");
             &mut self.frames[1]
         }
-        // match cur % 1 {
-        //     0 => {
-        //     }
-        //     1 => {
-        //     }
-        //     _ => unreachable!("mod cannot by non-zero"),
-        // }
     }
 }
 
 // #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::bumpalo;
-    // use crate::prelude::bumpalo::collections::string::String;
-    use crate::prelude::format_args_f;
+    use crate::prelude::*;
 
     static ListenerTest: FC<()> = |ctx, props| {
-        ctx.render(move |c| {
-            //
-            builder::ElementBuilder::new(c, "div").finish()
+        ctx.render(html! {
+            <div onclick={|_| println!("Hell owlrld")}>
+                "hello"
+            </div>
         })
-        // ctx.render(html! {
-        //     <div onclick={|_| println!("Hell owlrld")}>
-        //         "hello"
-        //     </div>
-        // })
     };
-
-    #[test]
-    fn check_listeners() -> Result<()> {
-        todo!()
-        // let mut scope = Scope::new::<(), ()>(ListenerTest, (), None);
-        // scope.run::<()>();
-
-        // let nodes = scope.new_frame();
-        // dbg!(nodes);
-
-        // Ok(())
-    }
 
     #[test]
     fn test_scope() {
@@ -316,7 +291,6 @@ mod tests {
         let mut nodes = generational_arena::Arena::new();
         nodes.insert_with(|f| {
             let scope = Scope::new::<(), ()>(example, props, f, parent);
-            //
         });
     }
 
@@ -324,103 +298,61 @@ mod tests {
     struct ExampleProps<'src> {
         name: &'src String,
     }
-    // impl<'src> Properties<'src> for ExampleProps<'src> {}
 
     #[derive(Debug)]
     struct EmptyProps<'src> {
         name: &'src String,
     }
-    // impl<'src> Properties<'src> for EmptyProps<'src> {}
 
     use crate::{builder::*, hooks::use_ref};
 
     fn example_fc<'a>(ctx: Context<'a>, props: &'a EmptyProps) -> DomTree {
-        // fn example_fc<'a>(ctx: Context<'a>, props: &'a EmptyProps<'a>) -> DomTree {
         let (content, _): (&'a String, _) = crate::hooks::use_state(&ctx, || "abcd".to_string());
-        // let (content, _): (&'a String, _) = crate::hooks::use_state(&ctx, || "abcd".to_string());
-        // let (text, set_val) = crate::hooks::use_state(&ctx, || "abcd".to_string());
 
         let childprops: ExampleProps<'a> = ExampleProps { name: content };
-        // let childprops: ExampleProps<'a> = ExampleProps { name: content };
-        ctx.render(move |ctx| {
-            todo!()
-            // let b = ctx.bump();
-            // div(b)
-            //     .child(text(props.name))
-            //     // .child(text(props.name))
-            //     .child(virtual_child::<ExampleProps>(b, childprops, child_example))
-            //     // .child(virtual_child::<ExampleProps<'a>>(b, childprops, CHILD))
-            //     // as for<'scope> fn(Context<'_>, &'scope ExampleProps<'scope>) -> DomTree
-            //     // |ctx, pops| todo!(),
-            //     // .child(virtual_child::<'a>(
-            //     //     b,
-            //     //     child_example,
-            //     //     ExampleProps { name: text },
-            //     // ))
-            //     .finish()
+        ctx.render(move |c| {
+            builder::ElementBuilder::new(c, "div")
+                .child(text(props.name))
+                .child(virtual_child::<ExampleProps>(
+                    c.bump,
+                    childprops,
+                    child_example,
+                ))
+                .finish()
         })
     }
 
     fn child_example<'b>(ctx: Context<'b>, props: &'b ExampleProps) -> DomTree {
         ctx.render(move |ctx| {
-            todo!()
-            // div(ctx.bump())
-            //     .child(text(props.name))
-            //     //
-            //     .finish()
+            builder::ElementBuilder::new(ctx, "div")
+                .child(text(props.name))
+                .finish()
         })
     }
 
     static CHILD: FC<ExampleProps> = |ctx, props: &'_ ExampleProps| {
-        // todo!()
         ctx.render(move |ctx| {
-            todo!()
-            // div(ctx.bump())
-            //     .child(text(props.name))
-            //     //
-            //     .finish()
+            builder::ElementBuilder::new(ctx, "div")
+                .child(text(props.name))
+                .finish()
         })
     };
+
     #[test]
     fn test_borrowed_scope() {
-        // use crate::builder::*;
-
         let example: FC<EmptyProps> = |ctx, props| {
-            // render counter
-            // let mut val = crate::hooks::use_ref(&ctx, || 0);
-            // val.modify(|f| {
-            //     *f += 1;
-            // });
-            // dbg!(val.current());
-            // only needs to be valid when ran?
-            // can only borrow from parent?
-            // props are boxed in parent's scope?
-            // passing complex structures down to child?
-            // stored value
-            // let (text, set_val) = crate::hooks::use_state(&ctx, || "abcd".to_string());
-
             ctx.render(move |b| {
-                todo!()
-                // div(b)
-                //     // .child(text(props.name))
-                //     // .child(virtual_child(b, CHILD, ExampleProps { name: val.as_str() }))
-                //     .child(virtual_child(b, CHILD, ExampleProps { name:  }))
-                //     .finish()
+                builder::ElementBuilder::new(b, "div")
+                    .child(virtual_child(
+                        b.bump,
+                        ExampleProps { name: props.name },
+                        CHILD,
+                    ))
+                    .finish()
             })
         };
 
         let source_text = "abcd123".to_string();
         let props = ExampleProps { name: &source_text };
-
-        // let parent = None;
-        // let mut scope =
-        //     Scope::new::<EmptyProps, EmptyProps>(example, EmptyProps { name: &() }, parent);
-        // scope.run::<ExampleProps>();
-        // scope.run::<ExampleProps>();
-        // scope.run::<ExampleProps>();
-        // scope.run::<ExampleProps>();
-        // scope.run::<ExampleProps>();
-        // let nodes = scope.current_root_node();
-        // dbg!(nodes);
     }
 }

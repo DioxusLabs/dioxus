@@ -76,27 +76,27 @@ impl WebsysRenderer {
         // todo: initialize the event registry properly on the root
 
         self.internal_dom.rebuild()?.iter().for_each(|edit| {
-            log::debug!("patching with  {:?}", edit);
+            // log::debug!("patching with  {:?}", edit);
             patch_machine.handle_edit(edit);
         });
-        log::debug!("patch stack size {:?}", patch_machine.stack);
+        // log::debug!("patch stack size {:?}", patch_machine.stack);
 
         // Event loop waits for the receiver to finish up
         // TODO! Connect the sender to the virtual dom's suspense system
         // Suspense is basically an external event that can force renders to specific nodes
         while let Some(event) = receiver.next().await {
-            log::debug!("patch stack size before {:#?}", patch_machine.stack);
+            // log::debug!("patch stack size before {:#?}", patch_machine.stack);
             // patch_machine.reset();
             // patch_machine.stack.push(root_node.clone());
             self.internal_dom
                 .progress_with_event(event)?
                 .iter()
                 .for_each(|edit| {
-                    log::debug!("edit stream {:?}", edit);
+                    // log::debug!("edit stream {:?}", edit);
                     patch_machine.handle_edit(edit);
                 });
 
-            log::debug!("patch stack size after {:#?}", patch_machine.stack);
+            // log::debug!("patch stack size after {:#?}", patch_machine.stack);
             patch_machine.reset();
             // our root node reference gets invalidated
             // not sure why

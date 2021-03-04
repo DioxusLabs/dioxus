@@ -1,4 +1,3 @@
-
 use argh::FromArgs;
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -43,6 +42,10 @@ pub struct BuildOptions {
     /// an example in the crate
     #[argh(option)]
     pub example: Option<String>,
+
+    /// develop in release mode
+    #[argh(switch, short = 'r')]
+    pub release: bool,
 }
 
 /// 🛠 Start a development server
@@ -52,4 +55,8 @@ pub struct DevelopOptions {
     /// an example in the crate
     #[argh(option)]
     pub example: Option<String>,
+
+    /// develop in release mode
+    #[argh(switch, short = 'r')]
+    pub release: bool,
 }

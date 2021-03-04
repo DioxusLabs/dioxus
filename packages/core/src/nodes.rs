@@ -296,21 +296,57 @@ mod vtext {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 mod vcomponent {
-    use crate::innerlude::FC;
-    use std::marker::PhantomData;
+    use crate::innerlude::{Context, FC};
+    use std::{any::TypeId, marker::PhantomData};
+
+    use super::DomTree;
 
     #[derive(Debug)]
     pub struct VComponent<'src> {
         _p: PhantomData<&'src ()>,
-        props: Box<dyn std::any::Any>,
-        // props: Box<dyn Properties + 'src>,
-        caller: *const (),
+        pub(crate) props: Box<dyn std::any::Any>,
+        pub(crate) props_type: TypeId,
+        pub(crate) comp: *const (),
+        pub(crate) caller: Caller,
+    }
+
+    pub struct Caller(Box<dyn Fn(Context) -> DomTree>);
+    impl std::fmt::Debug for Caller {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            todo!()
+        }
     }
 
     impl<'a> VComponent<'a> {
-        pub fn new<P>(caller: FC<P>, props: P) -> Self {
-            let _caller = caller as *const ();
-            let _props = Box::new(props);
+        // use the type parameter on props creation and move it into a portable context
+        // this lets us keep scope generic *and* downcast its props when we need to:
+        // - perform comparisons when diffing (memoization)
+        // -
+        pub fn new<P>(comp: FC<P>, props: P) -> Self {
+            let caller = move |ctx: Context| {
+                let t = comp(ctx, &props);
+                t
+            };
+            // let _caller = comp as *const ();
+            // let _props = Box::new(props);
+
+            // cast to static?
+            // how do we save the type of props ?
+            // do it in the caller function?
+            // something like
+
+            // the "true" entrpypoint
+            //
+            // |caller| caller.call(fn, Props {})
+            // fn call<P>(f, new_props) {
+            //     let old_props = old.downcast_ref::<P>();
+            //     if new_props == old_props {
+            //         return;
+            //     } else {
+            //         // set the new props
+            //         // call the fn
+            //     }
+            // }
 
             todo!()
             // Self {

@@ -2,7 +2,6 @@ use crate::nodes::VNode;
 use crate::prelude::*;
 use bumpalo::Bump;
 use hooks::Hook;
-use log::info;
 use std::{
     any::TypeId, borrow::Borrow, cell::RefCell, future::Future, marker::PhantomData, ops::Deref,
     rc::Rc, sync::atomic::AtomicUsize,
@@ -56,11 +55,23 @@ impl<'a> Context<'a> {
         todo!("Children API not yet implemented for component Context")
     }
 
+    pub fn callback(&self, _f: impl Fn(()) + 'a) {}
+
     /// Create a subscription that schedules a future render for the reference component
     pub fn schedule_update(&self) -> impl Fn() -> () {
         // log::debug!()
         // todo!("Subscription API is not ready yet");
         || {}
+    }
+
+    /// Create a suspended component from a future.
+    ///
+    /// When the future completes, the component will be renderered
+    pub fn suspend(
+        &self,
+        _fut: impl Future<Output = impl FnOnce(&'a NodeCtx<'a>) -> VNode<'a>>,
+    ) -> VNode<'a> {
+        todo!()
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -84,24 +95,11 @@ impl<'a> Context<'a> {
             idx: 0.into(),
             scope: self.scope,
         };
-        // todo!();
-        let safe_nodes = lazy_nodes(&ctx);
 
+        let safe_nodes = lazy_nodes(&ctx);
         let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
         self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
         DomTree {}
-    }
-
-    pub fn callback(&self, _f: impl Fn(()) + 'a) {}
-
-    /// Create a suspended component from a future.
-    ///
-    /// When the future completes, the component will be renderered
-    pub fn suspend(
-        &self,
-        _fut: impl Future<Output = impl FnOnce(&'a NodeCtx<'a>) -> VNode<'a>>,
-    ) -> VNode<'a> {
-        todo!()
     }
 }
 

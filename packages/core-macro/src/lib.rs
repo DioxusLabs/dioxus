@@ -1,41 +1,30 @@
 use proc_macro::TokenStream;
-use quote::{quote, quote_spanned, ToTokens};
-use syn::spanned::Spanned;
-use syn::{
-    parse::{Parse, ParseStream},
-    Signature,
-};
-use syn::{
-    parse_macro_input, Attribute, Block, FnArg, Ident, Item, ItemFn, ReturnType, Type, Visibility,
-};
+use quote::ToTokens;
+use syn::parse_macro_input;
 
 mod fc;
 mod htm;
 mod ifmt;
 mod rsxt;
-// mod styles;
 
 /// The html! macro makes it easy for developers to write jsx-style markup in their components.
 /// We aim to keep functional parity with html templates.
 #[proc_macro]
 pub fn html(s: TokenStream) -> TokenStream {
-    let html: htm::HtmlRender = match syn::parse(s) {
-        Ok(s) => s,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    html.to_token_stream().into()
+    match syn::parse::<htm::HtmlRender>(s) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.to_token_stream().into(),
+    }
 }
 
 /// The html! macro makes it easy for developers to write jsx-style markup in their components.
 /// We aim to keep functional parity with html templates.
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
-    let template: rsxt::RsxRender = match syn::parse(s) {
-        Ok(s) => s,
-        Err(e) => return e.to_compile_error().into(),
-    };
-
-    template.to_token_stream().into()
+    match syn::parse::<rsxt::RsxRender>(s) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.to_token_stream().into(),
+    }
 }
 
 /// Label a function or static closure as a functional component.
@@ -49,9 +38,6 @@ pub fn fc(attr: TokenStream, item: TokenStream) -> TokenStream {
     function_component_impl(item)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
-
-    // function_component_impl(attr, item)
-    // let attr = parse_macro_input!(attr as FunctionComponentName);
 }
 
 #[proc_macro]

@@ -8,15 +8,14 @@ use dioxus_web::WebsysRenderer;
 // static IMG: ImgAsset = dioxus_asset!("");
 
 fn main() {
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    console_error_panic_hook::set_once();
+    // wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+    // console_error_panic_hook::set_once();
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example))
 }
 
 static Example: FC<()> = |ctx, props| {
     let (name, set_name) = use_state(&ctx, || "...?");
 
-    let handler = move |_| set_name("jill");
 
     ctx.render(rsx! {
         div { 
@@ -36,11 +35,13 @@ static Example: FC<()> = |ctx, props| {
             }
             button {  
                 class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                onfocus: {handler}
-                onmouseover: move |_| {
-                    set_name("jill");
-                }
+                onmouseover: move |_| set_name("jill")
                 "Jill!"
+            }
+            button {  
+                class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+                onmouseover: move |e| set_name("....")
+                "Reset!"
             }
         }
     })

@@ -62,6 +62,8 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     let mut child = cmd.spawn()?;
     let _err_code = child.wait()?;
 
+    info!("Build complete!");
+
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("wasm");
 

@@ -144,9 +144,9 @@ impl ToTokens for ToToksCtx<&Element> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         // todo!()
         // // let ctx = self.ctx;
-        let name = &self.inner.name;
+        let name = &self.inner.name.to_string();
         tokens.append_all(quote! {
-            dioxus::builder::ElementBuilder::new(ctx, "#name")
+            dioxus::builder::ElementBuilder::new(ctx, #name)
         });
         for attr in self.inner.attrs.iter() {
             self.recurse(attr).to_tokens(tokens);

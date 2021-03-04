@@ -57,7 +57,7 @@ async fn watch_directory(config: Config) -> Result<()> {
         .watch(src_dir.join("examples"), RecursiveMode::Recursive)
         .expect("Failed to watch dir");
 
-    let build_config = BuildConfig::default();
+    let mut build_config = BuildConfig::default();
 
     'run: loop {
         crate::builder::build(&config, &build_config)?;

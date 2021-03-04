@@ -442,6 +442,8 @@ where
         self.children.push(child);
         self
     }
+
+    // pub fn virtual_child(mut self)
 }
 
 /// Construct a text VNode.

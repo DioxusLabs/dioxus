@@ -25,11 +25,12 @@ pub struct VirtualDom {
     /// Will not be ready if the dom is fresh
     base_scope: ScopeIdx,
 
-    event_queue: Rc<RefCell<VecDeque<LifecycleEvent>>>,
+    event_queue: RefCell<VecDeque<LifecycleEvent>>,
 
     // todo: encapsulate more state into this so we can better reuse it
     diff_bump: Bump,
 
+    // Type of the original props. This is done so VirtualDom does not need to be generic.
     #[doc(hidden)]
     _root_prop_type: std::any::TypeId,
 }
@@ -51,7 +52,7 @@ impl VirtualDom {
     pub fn new_with_props<P: 'static>(root: FC<P>, root_props: P) -> Self {
         let mut components = Arena::new();
 
-        let event_queue = Rc::new(RefCell::new(VecDeque::new()));
+        let event_queue = RefCell::new(VecDeque::new());
 
         // Create a reference to the component in the arena
         // Note: we are essentially running the "Mount" lifecycle event manually while the vdom doesnt yet exist
@@ -212,7 +213,7 @@ impl VirtualDom {
 
     /// Pop the top event of the internal lifecycle event queu
     pub fn pop_event(&self) -> Option<LifecycleEvent> {
-        self.event_queue.as_ref().borrow_mut().pop_front()
+        self.event_queue.borrow_mut().pop_front()
     }
 
     /// With access to the virtual dom, schedule an update to the Root component's props.
