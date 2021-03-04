@@ -18,9 +18,9 @@ Here's the two main sources of unsafety:
 - 1) vnodes, bump arenas, and scope
 - 2) context_api and use_context
   
-For 1), we can fairly confidently guarantee safety by being careful about lifetime casts. 
+For 1), we can fairly confidently guarantee safety by being careful about lifetime casts and by using tools like refcell as flags. 
 
-For 2), use_context authors (mostly state management) can implement either the Unsafe API or the Safe API. The Safe API is less performant, but will likely do everything you need. The Unsafe API is more performant,
+For 2), use_context authors (mostly state management) can implement either the Unsafe API or the Safe API. The Safe API is less performant, but will likely do everything you need. The Unsafe API is more performant, but will bite you if you don't implement it properly. Always validate with MIRI!
 
 Because of 2), we provide two state management solutions (D-Reducer and D-Dataflow) that use the Unsafe API, but will still be 100% safe.
 
