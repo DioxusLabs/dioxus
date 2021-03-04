@@ -342,6 +342,7 @@ impl Parse for Attr {
 impl ToTokens for ToToksCtx<&Attr> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = self.inner.name.to_string();
+        let nameident = &self.inner.name;
         let mut attr_stream = TokenStream2::new();
         match &self.inner.ty {
             AttrType::Value(value) => {
@@ -352,13 +353,15 @@ impl ToTokens for ToToksCtx<&Attr> {
             }
             AttrType::Event(event) => {
                 tokens.append_all(quote! {
-                    .on(#name, #event)
+                    .add_listener(dioxus::events::on::#nameident(ctx, #event))
                 });
+                // .on(#name, #event)
             }
             AttrType::Tok(exp) => {
                 tokens.append_all(quote! {
-                    .on(#name, #exp)
+                    .add_listener(dioxus::events::on::#nameident(ctx, #exp))
                 });
+                // .on(#name, #exp)
             }
         }
     }

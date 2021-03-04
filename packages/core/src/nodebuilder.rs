@@ -339,18 +339,18 @@ where
     ///     })
     ///     .finish();
     /// ```
-    #[inline]
     pub fn on(mut self, event: &'static str, callback: impl Fn(VirtualEvent) + 'a) -> Self {
-        // todo:
-        // increment listner id from nodectx ref
-        // add listener attrs here instead of later?
-
-        self.listeners.push(Listener {
+        let listener = Listener {
             event,
             callback: self.ctx.bump.alloc(callback),
             id: *self.ctx.idx.borrow(),
             scope: self.ctx.scope,
-        });
+        };
+        self.add_listener(listener)
+    }
+
+    pub fn add_listener(mut self, listener: Listener<'a>) -> Self {
+        self.listeners.push(listener);
 
         // bump the context id forward
         *self.ctx.idx.borrow_mut() += 1;

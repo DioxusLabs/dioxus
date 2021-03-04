@@ -178,7 +178,6 @@ mod use_reducer_def {
         use super::*;
         use crate::prelude::*;
         use bumpalo::Bump;
-
         enum Actions {
             Incr,
             Decr,

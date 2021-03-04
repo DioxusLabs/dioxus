@@ -93,7 +93,7 @@ pub mod on {
             };
         }
 
-    struct GetModifierKey(Box<dyn Fn(usize) -> bool>);
+    pub struct GetModifierKey(pub Box<dyn Fn(usize) -> bool>);
     impl std::fmt::Debug for GetModifierKey {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             // just skip for now
@@ -159,7 +159,7 @@ pub mod on {
     }
 
     #[derive(Debug)]
-    pub struct MouseEvent(Box<RawMouseEvent>);
+    pub struct MouseEvent(pub Box<RawMouseEvent>);
     impl Deref for MouseEvent {
         type Target = RawMouseEvent;
         fn deref(&self) -> &Self::Target {
@@ -168,19 +168,19 @@ pub mod on {
     }
     #[derive(Debug)]
     pub struct RawMouseEvent {
-        alt_key: bool,
-        button: usize,
-        buttons: usize,
-        client_x: i32,
-        client_y: i32,
-        ctrl_key: bool,
-        meta_key: bool,
-        page_x: i32,
-        page_y: i32,
-        screen_x: i32,
-        screen_y: i32,
-        shift_key: bool,
-        get_modifier_state: GetModifierKey,
+        pub alt_key: bool,
+        pub button: i32,
+        pub buttons: i32,
+        pub client_x: i32,
+        pub client_y: i32,
+        pub ctrl_key: bool,
+        pub meta_key: bool,
+        pub page_x: i32,
+        pub page_y: i32,
+        pub screen_x: i32,
+        pub screen_y: i32,
+        pub shift_key: bool,
+        pub get_modifier_state: GetModifierKey,
         // relatedTarget: DOMEventTarget,
     }
     event_builder! {
