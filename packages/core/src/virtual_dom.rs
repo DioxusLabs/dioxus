@@ -136,11 +136,12 @@ impl VirtualDom {
             .get_mut(component_id)
             .expect("Component should exist if an event was triggered");
 
-        log::debug!("list: {}", component.listeners.len());
+        log::debug!("list: {}", component.listeners.borrow().len());
 
         let listener = unsafe {
             component
                 .listeners
+                .borrow()
                 .get(listener_id as usize)
                 .expect("Listener should exist if it was triggered")
                 .as_ref()

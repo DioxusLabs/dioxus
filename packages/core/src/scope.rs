@@ -3,18 +3,12 @@ use crate::context::hooks::Hook;
 use crate::innerlude::*;
 use crate::nodes::VNode;
 use bumpalo::Bump;
-// use generational_arena::ScopeIdx;
 
 use std::{
-    any::TypeId,
-    borrow::{Borrow, BorrowMut},
-    cell::{RefCell, UnsafeCell},
-    future::Future,
+    any::{Any, TypeId},
+    cell::RefCell,
     marker::PhantomData,
-    ops::{Deref, DerefMut},
-    sync::atomic::AtomicUsize,
-    sync::atomic::Ordering,
-    todo,
+    ops::Deref,
 };
 
 /// Every component in Dioxus is represented by a `Scope`.
@@ -24,23 +18,8 @@ use std::{
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
 pub struct Scope {
-    // pub(crate) struct Scope {
-    // TODO @Jon
-    // These hooks are actually references into the hook arena
-    // These two could be combined with "OwningRef" to remove unsafe usage
-    // could also use ourborous
-    pub hooks: RefCell<Vec<*mut Hook>>,
-    pub hook_arena: typed_arena::Arena<Hook>,
-
     // Map to the parent
     pub parent: Option<ScopeIdx>,
-
-    pub frames: ActiveFrame,
-
-    // List of listeners generated when CTX is evaluated
-    pub listeners: Vec<*const dyn Fn(crate::events::VirtualEvent)>,
-    // pub listeners: Vec<*const dyn Fn(crate::events::VirtualEvent)>,
-    // pub listeners: Vec<Box<dyn Fn(crate::events::VirtualEvent)>>,
 
     // lying, cheating reference >:(
     pub props: Box<dyn std::any::Any>,
@@ -48,7 +27,26 @@ pub struct Scope {
     // our own index
     pub myidx: ScopeIdx,
 
-    // pub props_type: TypeId,
+    // ==========================
+    // slightly unsafe stuff
+    // ==========================
+    // an internal, highly efficient storage of vnodes
+    pub frames: ActiveFrame,
+
+    // These hooks are actually references into the hook arena
+    // These two could be combined with "OwningRef" to remove unsafe usage
+    // could also use ourborous
+    pub hooks: RefCell<Vec<*mut Hook>>,
+    pub hook_arena: typed_arena::Arena<Hook>,
+
+    // Unsafety:
+    // - is self-refenrential and therefore needs to point into the bump
+    //
+    // Stores references into the listeners attached to the vnodes
+    pub listeners: RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
+
+    // Unsafety
+    // - is a raw ptr because we need to compare
     pub caller: *const (),
 }
 
@@ -66,8 +64,7 @@ impl Scope {
         // Capture the caller
         let caller = f as *const ();
 
-        let listeners = vec![];
-        // let listeners: Vec<Box<dyn Fn(crate::events::VirtualEvent)>> = vec![];
+        let listeners = Default::default();
 
         let old_frame = BumpFrame {
             bump: Bump::new(),
@@ -97,7 +94,21 @@ impl Scope {
             props,
         }
     }
+}
 
+pub struct RawComponent {
+    // used as a memoization strategy
+    comparator: *const Box<dyn Fn(&Box<dyn Any>) -> bool>,
+
+    // used to actually run the component
+    // encapsulates props
+    runner: *const Box<dyn Fn(Context) -> DomTree>,
+
+    // the actual FC<T>
+    raw: *const (),
+}
+
+impl Scope {
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
@@ -106,11 +117,11 @@ impl Scope {
         let frame = {
             let frame = self.frames.next();
             frame.bump.reset();
-            log::debug!("Rednering into frame {:?}", frame as *const _);
             frame
         };
 
         let node_slot = std::rc::Rc::new(RefCell::new(None));
+
         let ctx: Context<'bump> = Context {
             arena: &self.hook_arena,
             hooks: &self.hooks,
@@ -119,6 +130,7 @@ impl Scope {
             _p: PhantomData {},
             final_nodes: node_slot.clone(),
             scope: self.myidx,
+            listeners: &self.listeners,
         };
 
         unsafe {
@@ -139,7 +151,7 @@ impl Scope {
             let props = self.props.downcast_ref::<PLocked>().unwrap();
 
             // Note that the actual modification of the vnode head element occurs during this call
-            let _nodes: DomTree = caller(ctx, props);
+            let _: DomTree = caller(ctx, props);
 
             /*
             SAFETY ALERT
@@ -158,31 +170,7 @@ impl Scope {
                 .borrow_mut()
                 .take()
                 .expect("Viewing did not happen");
-
-            // todo:
-            // make this so we dont have to iterate through the vnodes to get its listener
-            let mut listeners = vec![];
-            retrieve_listeners(&frame.head_node, &mut listeners);
-            self.listeners = listeners
-                .into_iter()
-                .map(|f| {
-                    let g = f.callback;
-                    g as *const _
-                })
-                .collect();
-
-            // consume the listeners from the head_node into a list of boxed ref listeners
         }
-    }
-
-    /// Accessor to get the root node and its children (safely)\
-    /// Scope is self-referntial, so we are forced to use the 'static lifetime to cheat
-    pub fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        self.frames.current_head_node()
-    }
-
-    pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        self.frames.prev_head_node()
     }
 }
 
@@ -198,6 +186,21 @@ fn retrieve_listeners(node: &VNode<'static>, listeners: &mut Vec<&Listener>) {
     }
 }
 
+// ==========================
+// Active-frame related code
+// ==========================
+impl Scope {
+    /// Accessor to get the root node and its children (safely)\
+    /// Scope is self-referntial, so we are forced to use the 'static lifetime to cheat
+    pub fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+        self.frames.current_head_node()
+    }
+
+    pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+        self.frames.prev_head_node()
+    }
+}
+
 // todo, do better with the active frame stuff
 // somehow build this vnode with a lifetime tied to self
 // This root node has  "static" lifetime, but it's really not static.
@@ -205,7 +208,7 @@ fn retrieve_listeners(node: &VNode<'static>, listeners: &mut Vec<&Listener>) {
 // Use this node as if it were static is unsafe, and needs to be fixed with ourborous or owning ref
 // ! do not copy this reference are things WILL break !
 pub struct ActiveFrame {
-    pub idx: AtomicUsize,
+    pub idx: RefCell<usize>,
     pub frames: [BumpFrame; 2],
 }
 
@@ -223,7 +226,7 @@ impl ActiveFrame {
     }
 
     fn current_head_node<'b>(&'b self) -> &'b VNode<'b> {
-        let raw_node = match self.idx.borrow().load(Ordering::Relaxed) & 1 == 0 {
+        let raw_node = match *self.idx.borrow() & 1 == 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         };
@@ -237,7 +240,7 @@ impl ActiveFrame {
     }
 
     fn prev_head_node<'b>(&'b self) -> &'b VNode<'b> {
-        let raw_node = match self.idx.borrow().load(Ordering::Relaxed) & 1 != 0 {
+        let raw_node = match *self.idx.borrow() & 1 != 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         };
@@ -251,10 +254,9 @@ impl ActiveFrame {
     }
 
     fn next(&mut self) -> &mut BumpFrame {
-        self.idx.fetch_add(1, Ordering::Relaxed);
-        let cur = self.idx.borrow().load(Ordering::Relaxed);
+        *self.idx.borrow_mut() += 1;
 
-        if cur % 2 == 0 {
+        if *self.idx.borrow() % 2 == 0 {
             &mut self.frames[0]
         } else {
             &mut self.frames[1]
@@ -262,7 +264,7 @@ impl ActiveFrame {
     }
 }
 
-// #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::prelude::*;

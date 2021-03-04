@@ -1,6 +1,6 @@
 //! Helpers for building virtual DOM VNodes.
 
-use std::ops::Deref;
+use std::{borrow::BorrowMut, ops::Deref};
 
 use crate::{
     context::NodeCtx,
@@ -344,6 +344,7 @@ where
         // todo:
         // increment listner id from nodectx ref
         // add listener attrs here instead of later?
+
         self.listeners.push(Listener {
             event,
             callback: self.ctx.bump.alloc(callback),
@@ -353,6 +354,15 @@ where
 
         // bump the context id forward
         *self.ctx.idx.borrow_mut() += 1;
+
+        // Add this listener to the context list
+        // This casts the listener to a self-referential pointer
+        // This is okay because the bump arena is stable
+        self.listeners.last().map(|g| {
+            let r = unsafe { std::mem::transmute::<&Listener<'a>, &Listener<'static>>(g) };
+            self.ctx.listeners.borrow_mut().push(r.callback as *const _);
+        });
+
         self
     }
 }

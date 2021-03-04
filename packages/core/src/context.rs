@@ -39,16 +39,14 @@ pub struct Context<'src> {
 
     pub(crate) final_nodes: Rc<RefCell<Option<VNode<'static>>>>,
 
+    pub listeners: &'src RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
+
     // holder for the src lifetime
     // todo @jon remove this
     pub _p: std::marker::PhantomData<&'src ()>,
 }
 
 impl<'a> Context<'a> {
-    // pub fn props<P>() -> &'a P {
-    //     todo!()
-    // }
-
     // impl<'a, PropType> Context<'a, PropType> {
     /// Access the children elements passed into the component
     pub fn children(&self) -> Vec<VNode> {
@@ -73,7 +71,19 @@ impl<'a> Context<'a> {
     ) -> VNode<'a> {
         todo!()
     }
+}
 
+// NodeCtx is used to build VNodes in the component's memory space.
+// This struct adds metadata to the final DomTree about listeners, attributes, and children
+#[derive(Debug, Clone)]
+pub struct NodeCtx<'a> {
+    pub bump: &'a Bump,
+    pub idx: RefCell<usize>,
+    pub scope: ScopeIdx,
+    pub listeners: &'a RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
+}
+
+impl<'a> Context<'a> {
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
     ///
     /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
@@ -92,8 +102,9 @@ impl<'a> Context<'a> {
     pub fn render(self, lazy_nodes: impl FnOnce(&NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
         let ctx = NodeCtx {
             bump: self.bump,
-            idx: 0.into(),
             scope: self.scope,
+            idx: 0.into(),
+            listeners: self.listeners,
         };
 
         let safe_nodes = lazy_nodes(&ctx);
@@ -103,26 +114,8 @@ impl<'a> Context<'a> {
     }
 }
 
-// NodeCtx is used to build VNodes in the component's memory space.
-// This struct adds metadata to the final DomTree about listeners, attributes, and children
-#[derive(Debug, Clone)]
-pub struct NodeCtx<'a> {
-    pub bump: &'a Bump,
-    pub idx: RefCell<usize>,
-    pub scope: ScopeIdx,
-}
-
-impl NodeCtx<'_> {
-    #[inline]
-    pub fn bump(&self) -> &Bump {
-        self.bump
-    }
-}
-
+/// This module provides internal state management functionality for Dioxus components
 pub mod hooks {
-    //! This module provides internal state management functionality for Dioxus components
-    //!
-
     use super::*;
 
     #[derive(Debug)]
@@ -196,23 +189,21 @@ pub mod hooks {
     }
 }
 
-mod context_api {
-    //! Context API
-    //!
-    //! The context API provides a mechanism for components to borrow state from other components higher in the tree.
-    //! By combining the Context API and the Subscription API, we can craft ergonomic global state management systems.
-    //!
-    //! This API is inherently dangerous because we could easily cause UB by allowing &T and &mut T to exist at the same time.
-    //! To prevent this, we expose the RemoteState<T> and RemoteLock<T> types which act as a form of reverse borrowing.
-    //! This is very similar to RwLock, except that RemoteState is copy-able. Unlike RwLock, derefing RemoteState can
-    //! cause panics if the pointer is null. In essence, we sacrifice the panic protection for ergonomics, but arrive at
-    //! a similar end result.
-    //!
-    //! Instead of placing the onus on the receiver of the data to use it properly, we wrap the source object in a
-    //! "shield" where gaining &mut access can only be done if no active StateGuards are open. This would fail and indicate
-    //! a failure of implementation.
-    //!
-    //!
+/// Context API
+///
+/// The context API provides a mechanism for components to borrow state from other components higher in the tree.
+/// By combining the Context API and the Subscription API, we can craft ergonomic global state management systems.
+///
+/// This API is inherently dangerous because we could easily cause UB by allowing &T and &mut T to exist at the same time.
+/// To prevent this, we expose the RemoteState<T> and RemoteLock<T> types which act as a form of reverse borrowing.
+/// This is very similar to RwLock, except that RemoteState is copy-able. Unlike RwLock, derefing RemoteState can
+/// cause panics if the pointer is null. In essence, we sacrifice the panic protection for ergonomics, but arrive at
+/// a similar end result.
+///
+/// Instead of placing the onus on the receiver of the data to use it properly, we wrap the source object in a
+/// "shield" where gaining &mut access can only be done if no active StateGuards are open. This would fail and indicate
+/// a failure of implementation.
+pub mod context_api {
 
     use std::ops::Deref;
 
