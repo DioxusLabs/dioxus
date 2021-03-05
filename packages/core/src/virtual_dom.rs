@@ -1,6 +1,7 @@
 // use crate::{changelist::EditList, nodes::VNode};
 
-use crate::innerlude::*;
+use crate::scope::{create_scoped, Scoped};
+use crate::{innerlude::*, scope::Properties};
 use bumpalo::Bump;
 use generational_arena::Arena;
 use std::{
@@ -18,8 +19,12 @@ use std::{
 /// Differences are converted into patches which a renderer can use to draw the UI.
 pub struct VirtualDom {
     /// All mounted components are arena allocated to make additions, removals, and references easy to work with
-    /// A generational arean is used to re-use slots of deleted scopes without having to resize the underlying arena.
-    pub(crate) components: Arena<Scope>,
+    /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
+    ///
+    /// eventually, come up with a better datastructure that reuses boxes for known P types
+    /// like a generational typemap bump arena
+    /// -> IE a cache line for each P type with soem heuristics on optimizing layout
+    pub(crate) components: Arena<Box<dyn Scoped>>,
 
     /// The index of the root component.
     /// Will not be ready if the dom is fresh
@@ -49,7 +54,7 @@ impl VirtualDom {
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
-    pub fn new_with_props<P: 'static>(root: FC<P>, root_props: P) -> Self {
+    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let mut components = Arena::new();
 
         let event_queue = RefCell::new(VecDeque::new());
@@ -57,8 +62,7 @@ impl VirtualDom {
         // Create a reference to the component in the arena
         // Note: we are essentially running the "Mount" lifecycle event manually while the vdom doesnt yet exist
         // This puts the dom in a usable state on creation, rather than being potentially invalid
-        let base_scope =
-            components.insert_with(|id| Scope::new::<_, P>(root, root_props, id, None));
+        let base_scope = components.insert_with(|id| create_scoped(root, root_props, id, None));
 
         // evaluate the component, pushing any updates its generates into the lifecycle queue
         // todo!
@@ -93,7 +97,7 @@ impl VirtualDom {
             .get_mut(self.base_scope)
             .expect("Root should always exist");
 
-        component.run::<()>();
+        component.run();
 
         diff_machine.diff_node(component.old_frame(), component.new_frame());
 
@@ -138,22 +142,8 @@ impl VirtualDom {
         self.diff_bump.reset();
         let mut diff_machine = DiffMachine::new(&self.diff_bump);
 
-        // this is still a WIP
-        // we'll need to re-fecth all the scopes that were changed and build the diff machine
-        // fetch the component again
-        // let component = self
-        //     .components
-        //     .get_mut(self.base_scope)
-        //     .expect("Root should always exist");
-
-        component.run::<()>();
-
+        component.run();
         diff_machine.diff_node(component.old_frame(), component.new_frame());
-        // diff_machine.diff_node(
-        //     component.old_frame(),
-        //     component.new_frame(),
-        //     Some(self.base_scope),
-        // );
 
         Ok(diff_machine.consume())
         // Err(crate::error::Error::NoEvent)
@@ -201,18 +191,27 @@ impl VirtualDom {
     /// With access to the virtual dom, schedule an update to the Root component's props.
     /// This generates the appropriate Lifecycle even. It's up to the renderer to actually feed this lifecycle event
     /// back into the event system to get an edit list.
-    pub fn update_props<P: 'static>(&mut self, new_props: P) -> Result<LifecycleEvent> {
-        // Ensure the props match
-        if TypeId::of::<P>() != self._root_prop_type {
-            return Err(Error::WrongProps);
-        }
+    /// todo
+    /// change this to accept a modification closure, so the user gets 0-cost access to the props item.
+    /// Good for cases where the props is changed remotely (or something similar) and building a whole new props item would
+    /// be wasteful
+    pub fn update_props<P: 'static>(
+        &mut self,
+        updater: impl FnOnce(&mut P),
+    ) -> Result<LifecycleEvent> {
+        todo!()
+        // // pub fn update_props<P: 'static>(&mut self, new_props: P) -> Result<LifecycleEvent> {
+        // // Ensure the props match
+        // if TypeId::of::<P>() != self._root_prop_type {
+        //     return Err(Error::WrongProps);
+        // }
 
-        Ok(LifecycleEvent {
-            event_type: LifecycleType::PropsChanged {
-                props: Box::new(new_props),
-                component: self.base_scope,
-            },
-        })
+        // Ok(LifecycleEvent {
+        //     event_type: LifecycleType::PropsChanged {
+        //         props: Box::new(new_props),
+        //         component: self.base_scope,
+        //     },
+        // })
     }
 }
 

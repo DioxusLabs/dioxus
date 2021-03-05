@@ -11,21 +11,32 @@ use std::{
     ops::Deref,
 };
 
+pub trait Properties: PartialEq {}
+impl Properties for () {}
+pub trait Scoped {
+    fn run(&mut self);
+    fn compare_props(&self, new: &dyn std::any::Any) -> bool;
+    fn call_listener(&mut self, trigger: EventTrigger);
+    fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
+    fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
+}
+
 /// Every component in Dioxus is represented by a `Scope`.
 ///
 /// Scopes contain the state for hooks, the component's props, and other lifecycle information.
 ///
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
-pub struct Scope {
+pub struct Scope<P: Properties> {
     // Map to the parent
     pub parent: Option<ScopeIdx>,
 
-    // lying, cheating reference >:(
-    pub props: Box<dyn std::any::Any>,
-
     // our own index
     pub myidx: ScopeIdx,
+
+    pub caller: FC<P>,
+
+    pub props: P,
 
     // ==========================
     // slightly unsafe stuff
@@ -41,65 +52,63 @@ pub struct Scope {
 
     // Unsafety:
     // - is self-refenrential and therefore needs to point into the bump
-    //
     // Stores references into the listeners attached to the vnodes
     // NEEDS TO BE PRIVATE
     listeners: RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
-
-    // Unsafety
-    // - is a raw ptr because we need to compare
-    pub caller: *const (),
 }
 
-impl Scope {
-    // create a new scope from a function
-    pub fn new<'a, P1, P2: 'static>(
-        f: FC<P1>,
-        props: P1,
-        myidx: ScopeIdx,
-        parent: Option<ScopeIdx>,
-    ) -> Self {
-        let hook_arena = typed_arena::Arena::new();
-        let hooks = RefCell::new(Vec::new());
+// instead of having it as a trait method, we use a single function
+// todo: do the unsafety magic stuff to erase the type of p
+pub fn create_scoped<P: Properties + 'static>(
+    caller: FC<P>,
+    props: P,
+    myidx: ScopeIdx,
+    parent: Option<ScopeIdx>,
+) -> Box<dyn Scoped> {
+    let hook_arena = typed_arena::Arena::new();
+    let hooks = RefCell::new(Vec::new());
 
-        // Capture the caller
-        let caller = f as *const ();
+    let listeners = Default::default();
 
-        let listeners = Default::default();
+    let old_frame = BumpFrame {
+        bump: Bump::new(),
+        head_node: VNode::text(""),
+    };
 
-        let old_frame = BumpFrame {
-            bump: Bump::new(),
-            head_node: VNode::text(""),
-        };
+    let new_frame = BumpFrame {
+        bump: Bump::new(),
+        head_node: VNode::text(""),
+    };
 
-        let new_frame = BumpFrame {
-            bump: Bump::new(),
-            head_node: VNode::text(""),
-        };
+    let frames = ActiveFrame::from_frames(old_frame, new_frame);
 
-        let frames = ActiveFrame::from_frames(old_frame, new_frame);
+    Box::new(Scope {
+        myidx,
+        hook_arena,
+        hooks,
+        caller,
+        frames,
+        listeners,
+        parent,
+        props,
+    })
+}
 
-        // box the props
-        let props = Box::new(props);
+impl<P: Properties + 'static> Scoped for Scope<P> {
+    fn run(&mut self) {
+        self.run()
+    }
 
-        let props = unsafe { std::mem::transmute::<_, Box<P2>>(props) };
-
-        Self {
-            myidx,
-            hook_arena,
-            hooks,
-            caller,
-            frames,
-            listeners,
-            parent,
-            props,
-        }
+    fn compare_props(&self, new: &Any) -> bool {
+        new.downcast_ref::<P>()
+            .map(|f| &self.props == f)
+            .expect("Props should not be of a different type")
     }
 
     // A safe wrapper around calling listeners
     // calling listeners will invalidate the list of listeners
     // The listener list will be completely drained because the next frame will write over previous listeners
-    pub fn call_listener(&mut self, trigger: EventTrigger) {
+    fn call_listener(&mut self, trigger: EventTrigger) {
         let EventTrigger {
             listener_id,
             event: source,
@@ -126,26 +135,23 @@ impl Scope {
             self.listeners.borrow_mut().drain(..);
         }
     }
+
+    fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+        self.frames.current_head_node()
+    }
+
+    fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+        self.frames.prev_head_node()
+    }
 }
 
-pub struct RawComponent {
-    // used as a memoization strategy
-    comparator: *const Box<dyn Fn(&Box<dyn Any>) -> bool>,
-
-    // used to actually run the component
-    // encapsulates props
-    runner: *const Box<dyn Fn(Context) -> DomTree>,
-
-    // the actual FC<T>
-    raw: *const (),
-}
-
-impl Scope {
+impl<P: Properties> Scope<P> {
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
-    pub fn run<'bump, PLocked: Sized + 'static>(&'bump mut self) {
+    pub fn run<'bump>(&'bump mut self) {
+        // pub fn run<'bump, PLocked: Sized + 'static>(&'bump mut self) {
         let frame = {
             let frame = self.frames.next();
             frame.bump.reset();
@@ -165,44 +171,46 @@ impl Scope {
             listeners: &self.listeners,
         };
 
-        unsafe {
-            /*
-            SAFETY ALERT
+        // unsafe {
+        /*
+        SAFETY ALERT
 
-            This particular usage of transmute is outlined in its docs https://doc.rust-lang.org/std/mem/fn.transmute.html
-            We hide the generic bound on the function item by casting it to raw pointer. When the function is actually called,
-            we transmute the function back using the props as reference.
+        This particular usage of transmute is outlined in its docs https://doc.rust-lang.org/std/mem/fn.transmute.html
+        We hide the generic bound on the function item by casting it to raw pointer. When the function is actually called,
+        we transmute the function back using the props as reference.
 
-            we could do a better check to make sure that the TypeID is correct before casting
-            --
-            This is safe because we check that the generic type matches before casting.
-            */
-            // we use plocked to be able to remove the borrowed lifetime
-            // these lifetimes could be very broken, so we need to dynamically manage them
-            let caller = std::mem::transmute::<*const (), FC<PLocked>>(self.caller);
-            let props = self.props.downcast_ref::<PLocked>().unwrap();
+        we could do a better check to make sure that the TypeID is correct before casting
+        --
+        This is safe because we check that the generic type matches before casting.
+        */
+        // we use plocked to be able to remove the borrowed lifetime
+        // these lifetimes could be very broken, so we need to dynamically manage them
+        // let caller = std::mem::transmute::<*const (), FC<PLocked>>(self.caller);
+        // let props = self.props.downcast_ref::<PLocked>().unwrap();
+        let caller = self.caller;
+        let props = &self.props;
 
-            // Note that the actual modification of the vnode head element occurs during this call
-            let _: DomTree = caller(ctx, props);
+        // Note that the actual modification of the vnode head element occurs during this call
+        let _: DomTree = caller(ctx, props);
 
-            /*
-            SAFETY ALERT
+        /*
+        SAFETY ALERT
 
-            DO NOT USE THIS VNODE WITHOUT THE APPOPRIATE ACCESSORS.
-            KEEPING THIS STATIC REFERENCE CAN LEAD TO UB.
+        DO NOT USE THIS VNODE WITHOUT THE APPOPRIATE ACCESSORS.
+        KEEPING THIS STATIC REFERENCE CAN LEAD TO UB.
 
-            Some things to note:
-            - The VNode itself is bound to the lifetime, but it itself is owned by scope.
-            - The VNode has a private API and can only be used from accessors.
-            - Public API cannot drop or destructure VNode
-            */
-            // the nodes we care about have been unsafely extended to a static lifetime in context
-            frame.head_node = node_slot
-                .deref()
-                .borrow_mut()
-                .take()
-                .expect("Viewing did not happen");
-        }
+        Some things to note:
+        - The VNode itself is bound to the lifetime, but it itself is owned by scope.
+        - The VNode has a private API and can only be used from accessors.
+        - Public API cannot drop or destructure VNode
+        */
+        // the nodes we care about have been unsafely extended to a static lifetime in context
+        frame.head_node = node_slot
+            .deref()
+            .borrow_mut()
+            .take()
+            .expect("Viewing did not happen");
+        // }
     }
 }
 
@@ -221,17 +229,18 @@ fn retrieve_listeners(node: &VNode<'static>, listeners: &mut Vec<&Listener>) {
 // ==========================
 // Active-frame related code
 // ==========================
-impl Scope {
-    /// Accessor to get the root node and its children (safely)\
-    /// Scope is self-referntial, so we are forced to use the 'static lifetime to cheat
-    pub fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        self.frames.current_head_node()
-    }
 
-    pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        self.frames.prev_head_node()
-    }
-}
+// impl<P: Properties> Scope<P> {
+//     /// Accessor to get the root node and its children (safely)\
+//     /// Scope is self-referntial, so we are forced to use the 'static lifetime to cheat
+//     pub fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+//         self.frames.current_head_node()
+//     }
+
+//     pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+//         self.frames.prev_head_node()
+//     }
+// }
 
 // todo, do better with the active frame stuff
 // somehow build this vnode with a lifetime tied to self
@@ -323,8 +332,8 @@ mod tests {
         let props = ();
         let parent = None;
         let mut nodes = generational_arena::Arena::new();
-        nodes.insert_with(|f| {
-            let scope = Scope::new::<(), ()>(example, props, f, parent);
+        nodes.insert_with(|myidx| {
+            let scope = create_scoped(example, props, myidx, parent);
         });
     }
 
@@ -388,5 +397,37 @@ mod tests {
 
         let source_text = "abcd123".to_string();
         let props = ExampleProps { name: &source_text };
+    }
+}
+
+#[cfg(asd)]
+mod old {
+
+    /// The ComponentCaller struct is an opaque object that encapsultes the memoization and running functionality for FC
+    ///
+    /// It's opaque because during the diffing mechanism, the type of props is sealed away in a closure. This makes it so
+    /// scope doesn't need to be generic
+    pub struct ComponentCaller {
+        // used as a memoization strategy
+        comparator: Box<dyn Fn(&Box<dyn Any>) -> bool>,
+
+        // used to actually run the component
+        // encapsulates props
+        runner: Box<dyn Fn(Context) -> DomTree>,
+
+        props_type: TypeId,
+
+        // the actual FC<T>
+        raw: *const (),
+    }
+
+    impl ComponentCaller {
+        fn new<P>(props: P) -> Self {
+            let comparator = Box::new(|f| false);
+            todo!();
+            // Self { comparator }
+        }
+
+        fn update_props<P>(props: P) {}
     }
 }
