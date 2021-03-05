@@ -296,10 +296,12 @@ mod vtext {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 mod vcomponent {
-    use crate::innerlude::{Context, FC};
-    use std::{any::TypeId, marker::PhantomData};
+    use crate::innerlude::{Context, ScopeIdx, FC};
+    use std::{any::TypeId, cell::RefCell, marker::PhantomData, rc::Rc};
 
     use super::DomTree;
+
+    pub type StableScopeAddres = Rc<RefCell<Option<ScopeIdx>>>;
 
     #[derive(Debug)]
     pub struct VComponent<'src> {
@@ -308,6 +310,11 @@ mod vcomponent {
         pub(crate) props_type: TypeId,
         pub(crate) comp: *const (),
         pub(crate) caller: Caller,
+
+        // once a component gets mounted, its parent gets a stable address.
+        // this way we can carry the scope index from between renders
+        // genius, really!
+        pub assigned_scope: StableScopeAddres,
     }
 
     pub struct Caller(Box<dyn Fn(Context) -> DomTree>);
@@ -323,10 +330,10 @@ mod vcomponent {
         // - perform comparisons when diffing (memoization)
         // -
         pub fn new<P>(comp: FC<P>, props: P) -> Self {
-            let caller = move |ctx: Context| {
-                let t = comp(ctx, &props);
-                t
-            };
+            // let caller = move |ctx: Context| {
+            //     let t = comp(ctx, &props);
+            //     t
+            // };
             // let _caller = comp as *const ();
             // let _props = Box::new(props);
 

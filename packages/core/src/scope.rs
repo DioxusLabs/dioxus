@@ -12,11 +12,14 @@ use std::{
 };
 
 pub trait Properties: PartialEq {}
-impl Properties for () {}
+// just for now
+impl<T: PartialEq> Properties for T {}
+
 pub trait Scoped {
     fn run(&mut self);
     fn compare_props(&self, new: &dyn std::any::Any) -> bool;
     fn call_listener(&mut self, trigger: EventTrigger);
+
     fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
     fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
 }
@@ -46,6 +49,7 @@ pub struct Scope<P: Properties> {
 
     // These hooks are actually references into the hook arena
     // These two could be combined with "OwningRef" to remove unsafe usage
+    // or we could dedicate a tiny bump arena just for them
     // could also use ourborous
     pub hooks: RefCell<Vec<*mut Hook>>,
     pub hook_arena: typed_arena::Arena<Hook>,
@@ -95,8 +99,51 @@ pub fn create_scoped<P: Properties + 'static>(
 }
 
 impl<P: Properties + 'static> Scoped for Scope<P> {
-    fn run(&mut self) {
-        self.run()
+    /// Create a new context and run the component with references from the Virtual Dom
+    /// This function downcasts the function pointer based on the stored props_type
+    ///
+    /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
+    fn run<'bump>(&'bump mut self) {
+        let frame = {
+            let frame = self.frames.next();
+            frame.bump.reset();
+            frame
+        };
+
+        let node_slot = std::rc::Rc::new(RefCell::new(None));
+
+        let ctx: Context<'bump> = Context {
+            arena: &self.hook_arena,
+            hooks: &self.hooks,
+            bump: &frame.bump,
+            idx: 0.into(),
+            _p: PhantomData {},
+            final_nodes: node_slot.clone(),
+            scope: self.myidx,
+            listeners: &self.listeners,
+        };
+
+        // Note that the actual modification of the vnode head element occurs during this call
+        // let _: DomTree = caller(ctx, props);
+        let _: DomTree = (self.caller)(ctx, &self.props);
+
+        /*
+        SAFETY ALERT
+
+        DO NOT USE THIS VNODE WITHOUT THE APPOPRIATE ACCESSORS.
+        KEEPING THIS STATIC REFERENCE CAN LEAD TO UB.
+
+        Some things to note:
+        - The VNode itself is bound to the lifetime, but it itself is owned by scope.
+        - The VNode has a private API and can only be used from accessors.
+        - Public API cannot drop or destructure VNode
+        */
+
+        frame.head_node = node_slot
+            .deref()
+            .borrow_mut()
+            .take()
+            .expect("Viewing did not happen");
     }
 
     fn compare_props(&self, new: &Any) -> bool {
@@ -145,102 +192,9 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
     }
 }
 
-impl<P: Properties> Scope<P> {
-    /// Create a new context and run the component with references from the Virtual Dom
-    /// This function downcasts the function pointer based on the stored props_type
-    ///
-    /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
-    pub fn run<'bump>(&'bump mut self) {
-        // pub fn run<'bump, PLocked: Sized + 'static>(&'bump mut self) {
-        let frame = {
-            let frame = self.frames.next();
-            frame.bump.reset();
-            frame
-        };
-
-        let node_slot = std::rc::Rc::new(RefCell::new(None));
-
-        let ctx: Context<'bump> = Context {
-            arena: &self.hook_arena,
-            hooks: &self.hooks,
-            bump: &frame.bump,
-            idx: 0.into(),
-            _p: PhantomData {},
-            final_nodes: node_slot.clone(),
-            scope: self.myidx,
-            listeners: &self.listeners,
-        };
-
-        // unsafe {
-        /*
-        SAFETY ALERT
-
-        This particular usage of transmute is outlined in its docs https://doc.rust-lang.org/std/mem/fn.transmute.html
-        We hide the generic bound on the function item by casting it to raw pointer. When the function is actually called,
-        we transmute the function back using the props as reference.
-
-        we could do a better check to make sure that the TypeID is correct before casting
-        --
-        This is safe because we check that the generic type matches before casting.
-        */
-        // we use plocked to be able to remove the borrowed lifetime
-        // these lifetimes could be very broken, so we need to dynamically manage them
-        // let caller = std::mem::transmute::<*const (), FC<PLocked>>(self.caller);
-        // let props = self.props.downcast_ref::<PLocked>().unwrap();
-        let caller = self.caller;
-        let props = &self.props;
-
-        // Note that the actual modification of the vnode head element occurs during this call
-        let _: DomTree = caller(ctx, props);
-
-        /*
-        SAFETY ALERT
-
-        DO NOT USE THIS VNODE WITHOUT THE APPOPRIATE ACCESSORS.
-        KEEPING THIS STATIC REFERENCE CAN LEAD TO UB.
-
-        Some things to note:
-        - The VNode itself is bound to the lifetime, but it itself is owned by scope.
-        - The VNode has a private API and can only be used from accessors.
-        - Public API cannot drop or destructure VNode
-        */
-        // the nodes we care about have been unsafely extended to a static lifetime in context
-        frame.head_node = node_slot
-            .deref()
-            .borrow_mut()
-            .take()
-            .expect("Viewing did not happen");
-        // }
-    }
-}
-
-fn retrieve_listeners(node: &VNode<'static>, listeners: &mut Vec<&Listener>) {
-    if let VNode::Element(el) = *node {
-        for listener in el.listeners {
-            // let g = listener as *const Listener;
-            listeners.push(listener);
-        }
-        for child in el.children {
-            retrieve_listeners(child, listeners);
-        }
-    }
-}
-
 // ==========================
 // Active-frame related code
 // ==========================
-
-// impl<P: Properties> Scope<P> {
-//     /// Accessor to get the root node and its children (safely)\
-//     /// Scope is self-referntial, so we are forced to use the 'static lifetime to cheat
-//     pub fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-//         self.frames.current_head_node()
-//     }
-
-//     pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-//         self.frames.prev_head_node()
-//     }
-// }
 
 // todo, do better with the active frame stuff
 // somehow build this vnode with a lifetime tied to self

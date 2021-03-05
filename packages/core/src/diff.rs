@@ -32,10 +32,14 @@
 //!
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
-use crate::innerlude::*;
+use crate::{
+    innerlude::*,
+    scope::{create_scoped, Scoped},
+};
 use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
-use std::cmp::Ordering;
+use generational_arena::Arena;
+use std::{cell::RefCell, cmp::Ordering, collections::VecDeque, rc::Rc};
 
 /// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
 /// diffing trees of components. This means we can "re-enter" a subtree of a component by queuing a "NeedToDiff" event.
@@ -49,20 +53,23 @@ use std::cmp::Ordering;
 /// The order of these re-entrances is stored in the DiffState itself. The DiffState comes pre-loaded with a set of components
 /// that were modified by the eventtrigger. This prevents doubly evaluating components if they wereboth updated via
 /// subscriptions and props changes.
-pub struct DiffMachine<'a> {
+pub struct DiffMachine<'a, 'b> {
     pub change_list: EditMachine<'a>,
-    immediate_queue: Vec<ScopeIdx>,
-    diffed: FxHashSet<ScopeIdx>,
-    need_to_diff: FxHashSet<ScopeIdx>,
+
+    pub vdom: &'b VirtualDom,
+    pub cur_idx: ScopeIdx,
+    pub diffed: FxHashSet<ScopeIdx>,
+    pub need_to_diff: FxHashSet<ScopeIdx>,
 }
 
-impl<'a> DiffMachine<'a> {
-    pub fn new(bump: &'a Bump) -> Self {
+impl<'a, 'b> DiffMachine<'a, 'b> {
+    pub fn new(vdom: &'b VirtualDom, bump: &'a Bump, idx: ScopeIdx) -> Self {
         Self {
+            cur_idx: idx,
             change_list: EditMachine::new(bump),
-            immediate_queue: Vec::new(),
             diffed: FxHashSet::default(),
             need_to_diff: FxHashSet::default(),
+            vdom,
         }
     }
 
@@ -71,6 +78,7 @@ impl<'a> DiffMachine<'a> {
     }
 
     pub fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
+        // pub fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
@@ -120,7 +128,45 @@ impl<'a> DiffMachine<'a> {
                 todo!("Usage of component VNode not currently supported");
             }
 
-            (_, VNode::Component(_)) | (VNode::Component(_), _) => {
+            (_, VNode::Component(new)) => {
+                // let VComponent {
+                //     props,
+                //     props_type,
+                //     comp,
+                //     caller,
+                //     assigned_scope,
+                //     ..
+                // } = *new;
+
+                // make the component
+                // let idx = unsafe {
+                //     // let vdom = &mut *self.vdom;
+                //     vdom.insert_with(|f| {
+                //         todo!()
+                //         //
+                //         // create_scoped(caller, props, myidx, parent)
+                //     })
+                // };
+
+                // we have no stable reference to work from
+                // push the lifecycle event onto the queue
+                // self.lifecycle_events
+                //     .borrow_mut()
+                //     .push_back(LifecycleEvent {
+                //         event_type: LifecycleType::Mount {
+                //             props: new.props,
+                //             to: self.cur_idx,
+                //         },
+                //     });
+                // we need to associaote this new component with a scope...
+
+                // self.change_list.save_known_root(id)
+                self.change_list.commit_traversal();
+
+                // push the current
+            }
+
+            (VNode::Component(old), _) => {
                 todo!("Usage of component VNode not currently supported");
             }
 
@@ -137,7 +183,8 @@ impl<'a> DiffMachine<'a> {
     //     [... node]
     //
     // The change list stack is left unchanged.
-    fn diff_listeners(&mut self, old: &[Listener<'a>], new: &[Listener<'a>]) {
+    fn diff_listeners(&mut self, old: &[Listener<'_>], new: &[Listener<'_>]) {
+        // fn diff_listeners(&mut self, old: &[Listener<'a>], new: &[Listener<'a>]) {
         if !old.is_empty() || !new.is_empty() {
             self.change_list.commit_traversal();
         }
