@@ -43,7 +43,8 @@ pub struct Scope {
     // - is self-refenrential and therefore needs to point into the bump
     //
     // Stores references into the listeners attached to the vnodes
-    pub listeners: RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
+    // NEEDS TO BE PRIVATE
+    listeners: RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
 
     // Unsafety
     // - is a raw ptr because we need to compare
@@ -92,6 +93,37 @@ impl Scope {
             listeners,
             parent,
             props,
+        }
+    }
+
+    // A safe wrapper around calling listeners
+    // calling listeners will invalidate the list of listeners
+    // The listener list will be completely drained because the next frame will write over previous listeners
+    pub fn call_listener(&mut self, trigger: EventTrigger) {
+        let EventTrigger {
+            listener_id,
+            event: source,
+            ..
+        } = trigger;
+
+        unsafe {
+            let listener = self
+                .listeners
+                .borrow()
+                .get(listener_id as usize)
+                .expect("Listener should exist if it was triggered")
+                .as_ref()
+                .unwrap();
+
+            // Run the callback with the user event
+            log::debug!("Running listener");
+            listener(source);
+            log::debug!("Running listener");
+
+            // drain all the event listeners
+            // if we don't, then they'll stick around and become invalid
+            // big big big big safety issue
+            self.listeners.borrow_mut().drain(..);
         }
     }
 }

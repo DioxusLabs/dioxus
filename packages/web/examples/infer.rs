@@ -10,16 +10,32 @@ fn main() {
 }
 
 static Example: FC<()> = |ctx, _props| {
+    let (event, set_event) = use_state(&ctx, || None);
+    let event = format!("{:#?}", event);
+
     let handler = move |evt: MouseEvent| {
-        // Awesome!
-        // We get type inference with events
-        dbg!(evt.alt_key);
+        set_event(Some(evt));
     };
 
     ctx.render(rsx! {
-        button {
-            "Hello"
-            onclick: {handler}
+        div {  
+            
+            class: "py-12 px-4 w-full max-w-2xl mx-auto bg-red-100"
+            // class: "py-12 px-4 text-center w-full max-w-2xl mx-auto bg-red-100"
+            span { 
+                class: "text-sm font-semibold"
+                "Dioxus Example: Synthetic Events"
+            }            
+            button {
+                class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+                
+                "press me"
+            }
+            pre {
+                onmousemove: {handler}
+                id: "json"
+                "{event}"
+            }
         }
     })
 };

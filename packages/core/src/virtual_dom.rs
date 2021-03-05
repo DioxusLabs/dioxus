@@ -125,31 +125,12 @@ impl VirtualDom {
     ///
     /// ```
     pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList<'_>> {
-        let EventTrigger {
-            component_id,
-            listener_id,
-            event: source,
-        } = event;
-
         let component = self
             .components
-            .get_mut(component_id)
+            .get_mut(event.component_id)
             .expect("Component should exist if an event was triggered");
 
-        log::debug!("list: {}", component.listeners.borrow().len());
-
-        let listener = unsafe {
-            component
-                .listeners
-                .borrow()
-                .get(listener_id as usize)
-                .expect("Listener should exist if it was triggered")
-                .as_ref()
-        }
-        .unwrap();
-
-        // Run the callback with the user event
-        listener(source);
+        component.call_listener(event);
 
         // Reset and then build a new diff machine
         // The previous edit list cannot be around while &mut is held
