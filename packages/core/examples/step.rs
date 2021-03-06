@@ -1,33 +1,18 @@
-//! An example that shows how to:
-//!     create a scope,
-//!     render a component,
-//!     change some data
-//!     render it again
-//!     consume the diffs and write that to a renderer
-
 use dioxus_core::prelude::*;
 
 fn main() -> Result<(), ()> {
     let p1 = Props { name: "bob".into() };
 
-    let _vdom = VirtualDom::new_with_props(Example, p1);
-    // vdom.progress()?;
+    let mut vdom = VirtualDom::new_with_props(Example, p1);
+    vdom.update_props(|p: &mut Props| {});
 
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Props {
     name: String,
 }
-
-// impl Properties for Props {
-//     fn call(&self, ptr: *const ()) {}
-
-//     // fn new() -> Self {
-//     //     todo!()
-//     // }
-// }
 
 static Example: FC<Props> = |ctx, _props| {
     ctx.render(html! {

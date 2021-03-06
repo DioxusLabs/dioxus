@@ -126,6 +126,7 @@ pub struct EditMachine<'src> {
     pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
+
     pub emitter: EditList<'src>,
 }
 
@@ -214,10 +215,6 @@ impl<'a> EditMachine<'a> {
         debug_assert!(self.traversal_is_committed());
         debug_assert!(start < end);
         let temp_base = self.next_temporary;
-        // debug!(
-        //     "emit: save_children_to_temporaries({}, {}, {})",
-        //     temp_base, start, end
-        // );
         self.next_temporary = temp_base + (end - start) as u32;
         self.emitter.push(Edit::SaveChildrenToTemporaries {
             temp: temp_base,
@@ -365,6 +362,11 @@ impl<'a> EditMachine<'a> {
         debug_assert!(self.traversal_is_committed());
         self.emitter.push(Edit::RemoveListener { event });
         // debug!("emit: remove_event_listener({:?})", event);
+    }
+
+    pub fn save_known_root(&mut self, id: ScopeIdx) {
+        log::debug!("emit: save_known_root({:?})", id);
+        self.emitter.push(Edit::MakeKnown { node: id })
     }
 
     // pub fn save_template(&mut self, id: CacheId) {
