@@ -524,7 +524,9 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 //     }
 // }
 
-pub fn virtual_child<'a, T>(_bump: &'a Bump, _props: T, _f: crate::innerlude::FC<T>) -> VNode<'a> {
+// _f: crate::innerlude::FC<T>,
+// _props: T
+pub fn virtual_child<'a, T: crate::scope::FC>(ctx: &'a NodeCtx<'a>, p: T) -> VNode<'a> {
     todo!()
     // VNode::Component()
 }

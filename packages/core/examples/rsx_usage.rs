@@ -3,32 +3,52 @@ use dioxus_core::prelude::*;
 
 fn main() {}
 
+trait SProps {}
+
+trait Comp {
+    type Props;
+}
+
+impl<T> Comp for FC<T> {
+    type Props = T;
+}
+
+fn test() {
+    // let g: FC<ButtonProps> = CustomButton;
+}
+
+trait Render {
+    fn render(ctx: Context, props: &Self) -> DomTree;
+}
 // include as much as you might accept
-struct ButtonProps<'a> {
+struct Button<'a> {
     onhover: Option<&'a dyn Fn()>,
-    // // A list of any attrs
-    // attrs: AttrList<'a>,
 }
 
-fn CustomButton(ctx: Context, props: ButtonProps) -> DomTree {
-    let onfocus = move |evt: ()| log::debug!("Focused");
+impl Render for Button<'_> {
+    fn render(ctx: Context, props: &Self) -> DomTree {
+        let onfocus = move |evt: ()| log::debug!("Focused");
 
-    // todo!()
-    ctx.render(rsx! {
-        button {
-            // ..props.attrs,
-            class: "abc123",
-            // style: { a: 2, b: 3, c: 4 },
-            onclick: move |evt| {
-                // log::info("hello world");
-            },
-            // Custom1 { a: 123 }
-            // Custom2 { a: 456, "abc", h1 {"1"}, h2 {"2"} }
-            // Custom3 { a: "sometext goes here" }
-            // Custom4 { onclick: |evt| log::info("click") }
-        }
-    })
+        // todo!()
+        ctx.render(rsx! {
+            button {
+                // ..props.attrs,
+                class: "abc123",
+                // style: { a: 2, b: 3, c: 4 },
+                onclick: move |evt| {
+                    // log::info("hello world");
+                },
+                // Custom1 { a: 123 }
+                // Custom2 { a: 456, "abc", h1 {"1"}, h2 {"2"} }
+                // Custom3 { a: "sometext goes here" }
+                // Custom4 { onclick: |evt| log::info("click") }
+            }
+        })
+    }
 }
+
+// #[fc]
+// fn Button(ctx: Context, onhover: Option<&dyn Fn()>) -> DomTree {}
 
 // h1 {
 //     tag: "type", abc: 123, class: "big small wide short",

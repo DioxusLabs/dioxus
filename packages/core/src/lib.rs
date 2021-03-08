@@ -106,7 +106,7 @@ pub(crate) mod innerlude {
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
 
-    pub type FC<P> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
+    // pub type FC<P> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
 
     mod fc2 {}
     // pub type FC<'a, P: 'a> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
@@ -122,7 +122,8 @@ pub(crate) mod innerlude {
     // Re-export the FC macro
     pub use crate as dioxus;
     pub use crate::nodebuilder as builder;
-    pub use dioxus_core_macro::{fc, html, rsx};
+    pub use dioxus_core_macro::{html, rsx};
+    // pub use dioxus_core_macro::{fc, html, rsx};
 }
 
 /// Re-export common types for ease of development use.
@@ -136,7 +137,7 @@ pub mod prelude {
 
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
-    pub use crate::innerlude::FC;
+    // pub use crate::innerlude::FC;
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate
@@ -151,7 +152,7 @@ pub mod prelude {
     pub use crate::nodebuilder as builder;
     // pub use dioxus_core_macro::fc;
     pub use dioxus_core_macro::format_args_f;
-    pub use dioxus_core_macro::{fc, html, rsx};
+    pub use dioxus_core_macro::{html, rsx};
 
     pub use crate::component::ScopeIdx;
     pub use crate::diff::DiffMachine;

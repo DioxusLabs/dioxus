@@ -1,4 +1,3 @@
-use ::proc_macro::TokenStream;
 use ::quote::{quote, ToTokens};
 use ::std::ops::Not;
 use ::syn::{
@@ -6,27 +5,12 @@ use ::syn::{
     punctuated::Punctuated,
     *,
 };
-use proc_macro2::TokenStream as TokenStream2;
-
-// #[macro_use]
-// mod macros {
+use proc_macro2::TokenStream;
 
 // #[cfg(not(feature = "verbose-expansions"))]
 macro_rules! debug_input {
     ($expr:expr) => {
         $expr
-    };
-}
-
-// #[cfg(feature = "verbose-expansions")]
-macro_rules! debug_input {
-    ($expr:expr) => {
-        match $expr {
-            expr => {
-                eprintln!("-------------------\n{} ! ( {} )", FUNCTION_NAME, expr);
-                expr
-            }
-        }
     };
 }
 
@@ -38,19 +22,30 @@ macro_rules! debug_output {
 }
 
 // #[cfg(feature = "verbose-expansions")]
-macro_rules! debug_output {
-    ($expr:expr) => {
-        match $expr {
-            expr => {
-                eprintln!("=>\n{}\n-------------------\n", expr);
-                expr
-            }
-        }
-    };
-}
+// macro_rules! debug_input {
+//     ($expr:expr) => {
+//         match $expr {
+//             expr => {
+//                 eprintln!("-------------------\n{} ! ( {} )", FUNCTION_NAME, expr);
+//                 expr
+//             }
+//         }
+//     };
 // }
 
-pub fn format_args_f_impl(input: IfmtInput) -> TokenStream {
+// #[cfg(feature = "verbose-expansions")]
+// macro_rules! debug_output {
+//     ($expr:expr) => {
+//         match $expr {
+//             expr => {
+//                 eprintln!("=>\n{}\n-------------------\n", expr);
+//                 expr
+//             }
+//         }
+//     };
+// }
+
+pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     let IfmtInput {
         mut format_literal,
         mut positional_args,
@@ -121,7 +116,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> TokenStream {
                 arg,
             ) {
                 Ok(segments) => segments.into_iter().collect(),
-                Err(err) => return err.to_compile_error().into(),
+                Err(err) => return Err(err),
             }
         };
         match segments.len() {
@@ -151,7 +146,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> TokenStream {
                     format_args!("{}", positional_args.len()),
                 )
                 .expect("`usize` or `char` Display impl cannot panic");
-                let segments: Punctuated<TokenStream2, Token![.]> = segments
+                let segments: Punctuated<TokenStream, Token![.]> = segments
                     .into_iter()
                     .map(|it| match it {
                         Segment::Ident(ident) => ident.into_token_stream(),
@@ -172,13 +167,13 @@ pub fn format_args_f_impl(input: IfmtInput) -> TokenStream {
     });
     format_literal = LitStr::new(out_format_literal, format_literal.span());
 
-    TokenStream::from(debug_output!(quote! {
+    Ok(TokenStream::from(debug_output!(quote! {
         format_args!(
             #format_literal
             #(, #positional_args)*
             #(, #named_args)*
         )
-    }))
+    })))
 }
 
 #[allow(dead_code)] // dumb compiler does not see the struct being used...

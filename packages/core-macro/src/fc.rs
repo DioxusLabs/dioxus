@@ -9,80 +9,13 @@ use syn::{
     parse_macro_input, Attribute, Block, FnArg, Ident, Item, ItemFn, ReturnType, Type, Visibility,
 };
 
-pub fn function_component_impl(
-    // name: FunctionComponentName,
-    component: FunctionComponent,
-) -> syn::Result<TokenStream> {
-    // let FunctionComponentName { component_name } = name;
-
-    let FunctionComponent {
-        block,
-        props_type,
-        arg,
-        vis,
-        attrs,
-        name: function_name,
-        return_type,
-    } = component;
-
-    // if function_name == component_name {
-    //     return Err(syn::Error::new_spanned(
-    //         component_name,
-    //         "the component must not have the same name as the function",
-    //     ));
-    // }
-
-    let quoted = quote! {
-        #[doc(hidden)]
-        #[allow(non_camel_case_types)]
-        mod __component_blah {
-            use super::*;
-
-            #[derive(PartialEq)]
-            pub struct Props<'a> {
-                name: &'a str
-            }
-
-            pub fn component<'a>(ctx: &'a Context<'a, Props>) -> VNode<'a> {
-                // Destructure the props into the parent scope
-                // todo: handle expansion of lifetimes
-                let Props {
-                    name
-                } = ctx.props;
-
-                #block
-            }
-        }
-        #[allow(non_snake_case)]
-        pub use __component_blah::component as #function_name;
-    };
-    // let quoted = quote! {
-    //     #[doc(hidden)]
-    //     #[allow(non_camel_case_types)]
-    //     #vis struct #function_name;
-
-    //     impl ::yew_functional::FunctionProvider for #function_name {
-    //         type TProps = #props_type;
-
-    //         fn run(#arg) -> #ret_type {
-    //             #block
-    //         }
-    //     }
-
-    //     #(#attrs)*
-    //     #vis type #component_name = ::yew_functional::FunctionComponent<#function_name>;
-    // };
-    Ok(quoted)
-}
-
 /// A parsed version of the user's input
 pub struct FunctionComponent {
     // The actual contents of the function
     block: Box<Block>,
 
-    // The user's props type
-    props_type: Box<Type>,
-
+    // // The user's props type
+    // props_type: Box<Type>,
     arg: FnArg,
     vis: Visibility,
     attrs: Vec<Attribute>,
@@ -117,7 +50,7 @@ impl Parse for FunctionComponent {
             .unwrap_or_else(|| syn::parse_quote! { _: &() });
 
         // Extract the "context" object
-        let props_type = validate_context_arg(&first_arg)?;
+        // let props_type = validate_context_arg(&first_arg)?;
 
         /*
         Extract the rest of the function arguments into a struct body
@@ -159,7 +92,7 @@ impl Parse for FunctionComponent {
         let name = sig.ident;
 
         Ok(Self {
-            props_type,
+            // props_type,
             block,
             arg: first_arg,
             vis,
@@ -167,6 +100,89 @@ impl Parse for FunctionComponent {
             name,
             return_type,
         })
+    }
+}
+impl ToTokens for FunctionComponent {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        // let FunctionComponentName { component_name } = name;
+
+        let FunctionComponent {
+            block,
+            // props_type,
+            arg,
+            vis,
+            attrs,
+            name: function_name,
+            return_type,
+        } = self;
+
+        // if function_name == component_name {
+        //     return Err(syn::Error::new_spanned(
+        //         component_name,
+        //         "the component must not have the same name as the function",
+        //     ));
+        // }
+
+        let quoted = quote! {
+
+
+            #[doc(hidden)]
+            #[allow(non_camel_case_types)]
+            #[derive(PartialEq)]
+            pub struct #function_name<'a> {
+                // and some other attrs
+                ___p: std::marker::PhantomData<&'a ()>
+            }
+
+            impl<'a> FC for #function_name<'a> {
+                fn render(ctx: Context<'_>, props: &#function_name<'a>) -> DomTree {
+                    let #function_name {
+                        ..
+                    } = props;
+
+                    #block
+                }
+            }
+
+            // mod __component_blah {
+            // use super::*;
+
+            // #[derive(PartialEq)]
+            // pub struct Props<'a> {
+            //     name: &'a str
+            // }
+
+            // pub fn component<'a>(ctx: &'a Context<'a, Props>) -> VNode<'a> {
+            //     // Destructure the props into the parent scope
+            //     // todo: handle expansion of lifetimes
+            //     let Props {
+            //         name
+            //     } = ctx.props;
+
+            //     #block
+            // }
+            // }
+            // #[allow(non_snake_case)]
+            // pub use __component_blah::component as #function_name;
+        };
+
+        quoted.to_tokens(tokens);
+        // let quoted = quote! {
+        //     #[doc(hidden)]
+        //     #[allow(non_camel_case_types)]
+        //     #vis struct #function_name;
+
+        //     impl ::yew_functional::FunctionProvider for #function_name {
+        //         type TProps = #props_type;
+
+        //         fn run(#arg) -> #ret_type {
+        //             #block
+        //         }
+        //     }
+
+        //     #(#attrs)*
+        //     #vis type #component_name = ::yew_functional::FunctionComponent<#function_name>;
+        // };
     }
 }
 
@@ -228,7 +244,7 @@ pub fn ensure_return_type(output: ReturnType) -> syn::Result<Box<Type>> {
     match output {
         ReturnType::Default => Err(syn::Error::new_spanned(
             output,
-            "function components must return `dioxus::VNode`",
+            "function components must return a `DomTree`",
         )),
         ReturnType::Type(_, ty) => Ok(ty),
     }
@@ -268,39 +284,40 @@ pub fn validate_signature(sig: Signature) -> syn::Result<Signature> {
     Ok(sig)
 }
 
-pub fn validate_context_arg(first_arg: &FnArg) -> syn::Result<Box<Type>> {
-    if let FnArg::Typed(arg) = first_arg {
-        // Input arg is a reference to an &mut Context
-        if let Type::Reference(ty) = &*arg.ty {
-            if ty.lifetime.is_some() {
-                return Err(syn::Error::new_spanned(
-                    &ty.lifetime,
-                    "reference must not have a lifetime",
-                ));
-            }
+// pub fn validate_context_arg(first_arg: &FnArg) -> syn::Result<Box<Type>> {
+//     if let FnArg::Typed(arg) = first_arg {
+//         // if let Type::R
+//         // Input arg is a reference to an &mut Context
+//         // if let Type::Reference(ty) = &*arg.ty {
+//         //     if ty.lifetime.is_some() {
+//         //         return Err(syn::Error::new_spanned(
+//         //             &ty.lifetime,
+//         //             "reference must not have a lifetime",
+//         //         ));
+//         //     }
 
-            if ty.mutability.is_some() {
-                return Err(syn::Error::new_spanned(
-                    &ty.mutability,
-                    "reference must not be mutable",
-                ));
-            }
+//         //     if ty.mutability.is_some() {
+//         //         return Err(syn::Error::new_spanned(
+//         //             &ty.mutability,
+//         //             "reference must not be mutable",
+//         //         ));
+//         //     }
 
-            Ok(ty.elem.clone())
-        } else {
-            let msg = format!(
-                "expected a reference to a `Context` object (try: `&mut {}`)",
-                arg.ty.to_token_stream()
-            );
-            return Err(syn::Error::new_spanned(arg.ty.clone(), msg));
-        }
-    } else {
-        return Err(syn::Error::new_spanned(
-            first_arg,
-            "function components can't accept a receiver",
-        ));
-    }
-}
+//         //     Ok(ty.elem.clone())
+//         // } else {
+//         //     let msg = format!(
+//         //         "expected a reference to a `Context` object (try: `&mut {}`)",
+//         //         arg.ty.to_token_stream()
+//         //     );
+//         //     return Err(syn::Error::new_spanned(arg.ty.clone(), msg));
+//         // }
+//     } else {
+//         return Err(syn::Error::new_spanned(
+//             first_arg,
+//             "function components can't accept a receiver",
+//         ));
+//     }
+// }
 
 pub fn collect_inline_args() {}
 

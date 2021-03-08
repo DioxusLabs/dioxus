@@ -53,23 +53,19 @@ use std::{cell::RefCell, cmp::Ordering, collections::VecDeque, rc::Rc};
 /// The order of these re-entrances is stored in the DiffState itself. The DiffState comes pre-loaded with a set of components
 /// that were modified by the eventtrigger. This prevents doubly evaluating components if they wereboth updated via
 /// subscriptions and props changes.
-pub struct DiffMachine<'a, 'b> {
+pub struct DiffMachine<'a> {
     pub change_list: EditMachine<'a>,
 
-    pub vdom: &'b VirtualDom,
-    pub cur_idx: ScopeIdx,
     pub diffed: FxHashSet<ScopeIdx>,
     pub need_to_diff: FxHashSet<ScopeIdx>,
 }
 
-impl<'a, 'b> DiffMachine<'a, 'b> {
-    pub fn new(vdom: &'b VirtualDom, bump: &'a Bump, idx: ScopeIdx) -> Self {
+impl<'a> DiffMachine<'a> {
+    pub fn new(bump: &'a Bump) -> Self {
         Self {
-            cur_idx: idx,
             change_list: EditMachine::new(bump),
             diffed: FxHashSet::default(),
             need_to_diff: FxHashSet::default(),
-            vdom,
         }
     }
 
@@ -118,10 +114,10 @@ impl<'a, 'b> DiffMachine<'a, 'b> {
             }
 
             (VNode::Component(cold), VNode::Component(cnew)) => {
-                if cold.comp != cnew.comp {
-                    // queue an event to mount this new component
-                    return;
-                }
+                // if cold.comp != cnew.comp {
+                //     // queue an event to mount this new component
+                //     return;
+                // }
 
                 // compare props.... somehow.....
 
@@ -843,23 +839,9 @@ impl<'a, 'b> DiffMachine<'a, 'b> {
                 }
 
                 listeners.iter().enumerate().for_each(|(id, listener)| {
-                    // if let Some(index) = self.current_idx {
-                    self.change_list.new_event_listener(
-                        listener.event,
-                        listener.scope,
-                        listener.id,
-                    );
-                    // } else {
-                    // Don't panic
-                    // Used for testing
-                    //     log::trace!("Failed to set listener, create was not called in the context of the virtual dom");
-                    // }
+                    self.change_list
+                        .new_event_listener(listener.event, listener.scope, listener.id)
                 });
-                // for l in listeners {
-                // unsafe {
-                //     registry.add(l);
-                // }
-                // }
 
                 for attr in attributes {
                     self.change_list

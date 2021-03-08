@@ -296,8 +296,16 @@ mod vtext {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 mod vcomponent {
-    use crate::innerlude::{Context, ScopeIdx, FC};
-    use std::{any::TypeId, cell::RefCell, marker::PhantomData, rc::Rc};
+    use crate::{
+        innerlude::{Context, ScopeIdx},
+        scope::FC,
+    };
+    use std::{
+        any::{Any, TypeId},
+        cell::RefCell,
+        marker::PhantomData,
+        rc::Rc,
+    };
 
     use super::DomTree;
 
@@ -306,19 +314,27 @@ mod vcomponent {
     #[derive(Debug)]
     pub struct VComponent<'src> {
         _p: PhantomData<&'src ()>,
-        pub(crate) props: Box<dyn std::any::Any>,
-        pub(crate) props_type: TypeId,
-        pub(crate) comp: *const (),
-        pub(crate) caller: Caller,
-
+        // pub(crate) props: Box<dyn std::any::Any>,
+        // pub(crate) props_type: TypeId,
+        // pub(crate) comp: *const (),
+        // pub(crate) caller: Caller,
+        pub(crate) comparator: Comparator,
         // once a component gets mounted, its parent gets a stable address.
         // this way we can carry the scope index from between renders
         // genius, really!
-        pub assigned_scope: StableScopeAddres,
+        // pub assigned_scope: StableScopeAddres,
     }
+    pub struct Comparator(Box<dyn Fn(&dyn Any) -> bool>);
+    // pub struct Comparator<'src>(&'src dyn Fn(&dyn Any) -> bool);
 
     pub struct Caller(Box<dyn Fn(Context) -> DomTree>);
     impl std::fmt::Debug for Caller {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            todo!()
+        }
+    }
+
+    impl std::fmt::Debug for Comparator {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             todo!()
         }
@@ -329,7 +345,24 @@ mod vcomponent {
         // this lets us keep scope generic *and* downcast its props when we need to:
         // - perform comparisons when diffing (memoization)
         // -
-        pub fn new<P>(comp: FC<P>, props: P) -> Self {
+        pub fn new<P: FC + 'static>(comp: P) -> Self {
+            todo!()
+            // let p = Rc::new(props);
+
+            // let props_comparator = move |new_props: &dyn Any| -> bool {
+            //     new_props
+            //         .downcast_ref::<P>()
+            //         .map(|new_p| p.as_ref() == new_p)
+            //         .unwrap_or_else(|| {
+            //             log::debug!("downcasting failed, this receovered but SHOULD NOT FAIL");
+            //             false
+            //         })
+            // };
+
+            // Self {
+            //     _p: PhantomData,
+            //     comparator: Comparator(Box::new(props_comparator)),
+            // }
             // let caller = move |ctx: Context| {
             //     let t = comp(ctx, &props);
             //     t
@@ -355,7 +388,7 @@ mod vcomponent {
             //     }
             // }
 
-            todo!()
+            // todo!()
             // Self {
             //     _p: PhantomData {},
             //     props,

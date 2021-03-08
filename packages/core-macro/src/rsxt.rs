@@ -88,6 +88,7 @@ impl ToTokens for RsxRender {
 enum Node {
     Element(Element),
     Text(TextNode),
+    Component(Component),
 }
 
 impl ToTokens for ToToksCtx<&Node> {
@@ -95,28 +96,29 @@ impl ToTokens for ToToksCtx<&Node> {
         match &self.inner {
             Node::Element(el) => self.recurse(el).to_tokens(tokens),
             Node::Text(txt) => self.recurse(txt).to_tokens(tokens),
+            Node::Component(c) => self.recurse(c).to_tokens(tokens),
         }
     }
 }
 
-// impl Node {
-//     fn peek(s: ParseStream) -> bool {
-//         (s.peek(Token![<]) && !s.peek2(Token![/])) || s.peek(token::Brace) || s.peek(LitStr)
-//     }
-// }
-
 impl Parse for Node {
     fn parse(s: ParseStream) -> Result<Self> {
-        let fork = s.fork();
+        let fork1 = s.fork();
+        let fork2 = s.fork();
 
-        let ret = if let Ok(text) = fork.parse::<TextNode>() {
-            s.advance_to(&fork);
-            Ok(Self::Text(text))
-        } else if let Ok(el) = s.parse::<Element>() {
-            Ok(Self::Element(el))
+        // todo: map issues onto the second fork if any arise
+        // it's unlikely that textnodes or components would fail?
+
+        let ret = if let Ok(text) = fork1.parse::<TextNode>() {
+            s.advance_to(&fork1);
+            Self::Text(text)
+        } else if let Ok(element) = fork2.parse::<Element>() {
+            s.advance_to(&fork2);
+            Self::Element(element)
+        } else if let Ok(comp) = s.parse::<Component>() {
+            Self::Component(comp)
         } else {
-            // TODO: Span information
-            panic!("Not a valid child node");
+            return Err(Error::new(s.span(), "Failed to parse as a valid child"));
         };
 
         // consume comma if it exists
@@ -124,7 +126,120 @@ impl Parse for Node {
         if s.peek(Token![,]) {
             let _ = s.parse::<Token![,]>();
         }
-        ret
+        Ok(ret)
+    }
+}
+
+struct Component {
+    name: Ident,
+    body: Vec<Field>,
+    // attrs: Vec<Attr>,
+    children: MaybeExpr<Vec<Node>>,
+}
+
+impl ToTokens for ToToksCtx<&Component> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let name = &self.inner.name;
+
+        // let mut toks = quote! {};
+
+        // for attr in self.inner.attrs.iter() {
+        //     self.recurse(attr).to_tokens(&mut toks);
+        // }
+
+        let body = &self.inner.body;
+        // panic!("tokens are {:#?}", toks);
+
+        // tokens.append_all(quote! {
+        //     dioxus::builder::virtual_child(ctx, #name{ #body, ___p: PhantomData{} })
+        //     // dioxus::builder::ElementBuilder::new(ctx, #name)
+        // });
+
+        // no children right now
+
+        // match &self.inner.children {
+        //     MaybeExpr::Expr(expr) => tokens.append_all(quote! {
+        //         .children(#expr)
+        //     }),
+        //     MaybeExpr::Literal(nodes) => {
+        //         let mut children = nodes.iter();
+        //         if let Some(child) = children.next() {
+        //             let mut inner_toks = TokenStream2::new();
+        //             self.recurse(child).to_tokens(&mut inner_toks);
+        //             while let Some(child) = children.next() {
+        //                 quote!(,).to_tokens(&mut inner_toks);
+        //                 self.recurse(child).to_tokens(&mut inner_toks);
+        //             }
+        //             tokens.append_all(quote! {
+        //                 .children([#inner_toks])
+        //             });
+        //         }
+        //     }
+        // }
+        // tokens.append_all(quote! {
+        //     .finish()
+        // });
+    }
+}
+
+impl Parse for Component {
+    fn parse(s: ParseStream) -> Result<Self> {
+        // TODO: reject anything weird/nonstandard
+        // we want names *only*
+        let name = Ident::parse_any(s)?;
+
+        if crate::util::is_valid_tag(&name.to_string()) {
+            return Err(Error::new(
+                name.span(),
+                "Components cannot share names with valid HTML tags",
+            ));
+        }
+
+        // parse the guts
+        let content: ParseBuffer;
+        syn::braced!(content in s);
+        let mut fields: Vec<Field> = Vec::new();
+
+        'parsing: loop {
+            // [1] Break if empty
+            if content.is_empty() {
+                break 'parsing;
+            }
+        }
+
+        // let body = content.parse()?;
+
+        // eventually we'll parse the attrs
+        // let mut attrs: Vec<Attr> = vec![];
+        let mut children: Vec<Node> = vec![];
+        // parse_element_content(content, &mut attrs, &mut children);
+
+        let children = MaybeExpr::Literal(children);
+
+        Ok(Self {
+            name,
+            body,
+            // attrs,
+            children,
+        })
+    }
+}
+
+// the struct's fields info
+pub struct Field {
+    name: Ident,
+    content: Ident,
+}
+
+impl Parse for Field {
+    fn parse(input: ParseStream) -> Result<Self> {
+        todo!()
+    }
+}
+
+impl ToTokens for ToToksCtx<&Field> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        todo!()
     }
 }
 
@@ -142,12 +257,12 @@ struct Element {
 
 impl ToTokens for ToToksCtx<&Element> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // todo!()
-        // // let ctx = self.ctx;
         let name = &self.inner.name.to_string();
+
         tokens.append_all(quote! {
             dioxus::builder::ElementBuilder::new(ctx, #name)
         });
+
         for attr in self.inner.attrs.iter() {
             self.recurse(attr).to_tokens(tokens);
         }
@@ -182,89 +297,70 @@ impl Parse for Element {
         // we want names *only*
         let name = Ident::parse_any(s)?;
 
+        if !crate::util::is_valid_tag(&name.to_string()) {
+            return Err(Error::new(name.span(), "Not a valid Html tag"));
+        }
+
         // parse the guts
         let content: ParseBuffer;
         syn::braced!(content in s);
 
-        let mut attrs = vec![];
+        let mut attrs: Vec<Attr> = vec![];
         let mut children: Vec<Node> = vec![];
-
-        'parsing: loop {
-            // todo move this around into a more functional style
-            // [1] Break if empty
-            // [2] Try to consume an attr (with comma)
-            // [3] Try to consume a child node (with comma)
-            // [4] Try to consume brackets as anything thats Into<Node>
-            // [last] Fail if none worked
-
-            // [1] Break if empty
-            if content.is_empty() {
-                break 'parsing;
-            }
-
-            // [2] Try to consume an attr
-            let fork = content.fork();
-            if let Ok(attr) = fork.parse::<Attr>() {
-                // make sure to advance or your computer will become a spaceheater :)
-                content.advance_to(&fork);
-                attrs.push(attr);
-                continue 'parsing;
-            }
-
-            // [3] Try to consume a child node
-            let fork = content.fork();
-            if let Ok(node) = fork.parse::<Node>() {
-                // make sure to advance or your computer will become a spaceheater :)
-                content.advance_to(&fork);
-                children.push(node);
-                continue 'parsing;
-            }
-
-            // [4] TODO: Parsing brackets
-            // let fork = content.fork();
-            // if let Ok(el) = fork.parse() {
-            //     children.push(el);
-            //     continue 'parsing;
-            // }
-
-            // todo: pass a descriptive error onto the offending tokens
-            panic!("Entry is not an attr or element\n {}", content)
-        }
+        parse_element_content(content, &mut attrs, &mut children);
 
         let children = MaybeExpr::Literal(children);
-        // let children = MaybeExpr::Literal(Vec::new());
-        // // Contents of an element can either be a brace (in which case we just copy verbatim), or a
-        // // sequence of nodes.
-        // let children = if s.peek(token::Brace) {
-        //     // expr
-        //     let content;
-        //     syn::braced!(content in s);
-        //     MaybeExpr::Expr(content.parse()?)
-        // } else {
-        //     // nodes
-        //     let mut children = vec![];
-        //     while !(s.peek(Token![<]) && s.peek2(Token![/])) {
-        //         children.push(s.parse()?);
-        //     }
-        //     MaybeExpr::Literal(children)
-        // };
 
-        // // closing element
-        // s.parse::<Token![<]>()?;
-        // s.parse::<Token![/]>()?;
-        // let close = Ident::parse_any(s)?;
-        // if close.to_string() != name.to_string() {
-        //     return Err(Error::new_spanned(
-        //         close,
-        //         "closing element does not match opening",
-        //     ));
-        // }
-        // s.parse::<Token![>]>()?;
         Ok(Self {
             name,
             attrs,
             children,
         })
+    }
+}
+
+// used by both vcomponet and velement to parse the contents of the elements into attras and children
+fn parse_element_content(content: ParseBuffer, attrs: &mut Vec<Attr>, children: &mut Vec<Node>) {
+    'parsing: loop {
+        // todo move this around into a more functional style
+        // [1] Break if empty
+        // [2] Try to consume an attr (with comma)
+        // [3] Try to consume a child node (with comma)
+        // [4] Try to consume brackets as anything thats Into<Node>
+        // [last] Fail if none worked
+
+        // [1] Break if empty
+        if content.is_empty() {
+            break 'parsing;
+        }
+
+        // [2] Try to consume an attr
+        let fork = content.fork();
+        if let Ok(attr) = fork.parse::<Attr>() {
+            // make sure to advance or your computer will become a spaceheater :)
+            content.advance_to(&fork);
+            attrs.push(attr);
+            continue 'parsing;
+        }
+
+        // [3] Try to consume a child node
+        let fork = content.fork();
+        if let Ok(node) = fork.parse::<Node>() {
+            // make sure to advance or your computer will become a spaceheater :)
+            content.advance_to(&fork);
+            children.push(node);
+            continue 'parsing;
+        }
+
+        // [4] TODO: Parsing brackets
+        // let fork = content.fork();
+        // if let Ok(el) = fork.parse() {
+        //     children.push(el);
+        //     continue 'parsing;
+        // }
+
+        // todo: pass a descriptive error onto the offending tokens
+        panic!("Entry is not an attr or element\n {}", content)
     }
 }
 

@@ -4,7 +4,7 @@ fn main() -> Result<(), ()> {
     let p1 = Props { name: "bob".into() };
 
     let mut vdom = VirtualDom::new_with_props(Example, p1);
-    vdom.update_props(|p: &mut Props| {});
+    // vdom.update_props(|p: &mut Props| {});
 
     Ok(())
 }

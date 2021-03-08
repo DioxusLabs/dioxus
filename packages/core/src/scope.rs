@@ -11,9 +11,9 @@ use std::{
     ops::Deref,
 };
 
-pub trait Properties: PartialEq {}
-// just for now
-impl<T: PartialEq> Properties for T {}
+pub trait FC: PartialEq {
+    fn render(ctx: Context, props: &Self) -> DomTree;
+}
 
 pub trait Scoped {
     fn run(&mut self);
@@ -30,14 +30,12 @@ pub trait Scoped {
 ///
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
-pub struct Scope<P: Properties> {
+pub struct Scope<P: FC> {
     // Map to the parent
     pub parent: Option<ScopeIdx>,
 
     // our own index
     pub myidx: ScopeIdx,
-
-    pub caller: FC<P>,
 
     pub props: P,
 
@@ -63,8 +61,7 @@ pub struct Scope<P: Properties> {
 
 // instead of having it as a trait method, we use a single function
 // todo: do the unsafety magic stuff to erase the type of p
-pub fn create_scoped<P: Properties + 'static>(
-    caller: FC<P>,
+pub fn create_scoped<P: FC + 'static>(
     props: P,
     myidx: ScopeIdx,
     parent: Option<ScopeIdx>,
@@ -90,7 +87,6 @@ pub fn create_scoped<P: Properties + 'static>(
         myidx,
         hook_arena,
         hooks,
-        caller,
         frames,
         listeners,
         parent,
@@ -98,7 +94,7 @@ pub fn create_scoped<P: Properties + 'static>(
     })
 }
 
-impl<P: Properties + 'static> Scoped for Scope<P> {
+impl<P: FC + 'static> Scoped for Scope<P> {
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
@@ -125,7 +121,8 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
 
         // Note that the actual modification of the vnode head element occurs during this call
         // let _: DomTree = caller(ctx, props);
-        let _: DomTree = (self.caller)(ctx, &self.props);
+        let _: DomTree = P::render(ctx, &self.props);
+        // let _: DomTree = (self.caller)(ctx, &self.props);
 
         /*
         SAFETY ALERT
@@ -264,90 +261,89 @@ mod tests {
     use super::*;
     use crate::prelude::*;
 
-    static ListenerTest: FC<()> = |ctx, props| {
-        ctx.render(html! {
-            <div onclick={|_| println!("Hell owlrld")}>
-                "hello"
-            </div>
-        })
-    };
+    // static ListenerTest: FC<()> = |ctx, props| {
+    //     ctx.render(html! {
+    //         <div onclick={|_| println!("Hell owlrld")}>
+    //             "hello"
+    //         </div>
+    //     })
+    // };
 
     #[test]
     fn test_scope() {
-        let example: FC<()> = |ctx, props| {
-            use crate::builder::*;
-            ctx.render(|ctx| {
-                builder::ElementBuilder::new(ctx, "div")
-                    .child(text("a"))
-                    .finish()
-            })
-        };
+        #[derive(PartialEq)]
+        struct Example {}
+        impl FC for Example {
+            fn render(ctx: Context<'_>, _: &Self) -> DomTree {
+                use crate::builder::*;
+                ctx.render(|ctx| {
+                    builder::ElementBuilder::new(ctx, "div")
+                        .child(text("a"))
+                        .finish()
+                })
+            }
+        }
 
-        let props = ();
-        let parent = None;
         let mut nodes = generational_arena::Arena::new();
         nodes.insert_with(|myidx| {
-            let scope = create_scoped(example, props, myidx, parent);
+            let scope = create_scoped(Example {}, myidx, None);
         });
-    }
-
-    #[derive(Debug)]
-    struct ExampleProps<'src> {
-        name: &'src String,
-    }
-
-    #[derive(Debug)]
-    struct EmptyProps<'src> {
-        name: &'src String,
     }
 
     use crate::{builder::*, hooks::use_ref};
 
-    fn example_fc<'a>(ctx: Context<'a>, props: &'a EmptyProps) -> DomTree {
-        let (content, _): (&'a String, _) = crate::hooks::use_state(&ctx, || "abcd".to_string());
-
-        let childprops: ExampleProps<'a> = ExampleProps { name: content };
-        ctx.render(move |c| {
-            builder::ElementBuilder::new(c, "div")
-                .child(text(props.name))
-                .child(virtual_child::<ExampleProps>(
-                    c.bump,
-                    childprops,
-                    child_example,
-                ))
-                .finish()
-        })
+    #[derive(Debug, PartialEq)]
+    struct EmptyProps<'src> {
+        name: &'src String,
     }
 
-    fn child_example<'b>(ctx: Context<'b>, props: &'b ExampleProps) -> DomTree {
-        ctx.render(move |ctx| {
-            builder::ElementBuilder::new(ctx, "div")
-                .child(text(props.name))
-                .finish()
-        })
+    impl FC for EmptyProps<'_> {
+        fn render(ctx: Context, props: &Self) -> DomTree {
+            let (content, _): (&String, _) = crate::hooks::use_state(&ctx, || "abcd".to_string());
+
+            let childprops: ExampleProps<'_> = ExampleProps { name: content };
+            todo!()
+            // ctx.render(move |c| {
+            //     builder::ElementBuilder::new(c, "div")
+            //         .child(text(props.name))
+            //         .child(virtual_child(c, childprops))
+            //         .finish()
+            // })
+        }
     }
 
-    static CHILD: FC<ExampleProps> = |ctx, props: &'_ ExampleProps| {
-        ctx.render(move |ctx| {
-            builder::ElementBuilder::new(ctx, "div")
-                .child(text(props.name))
-                .finish()
-        })
-    };
+    #[derive(Debug, PartialEq)]
+    struct ExampleProps<'src> {
+        name: &'src String,
+    }
+
+    impl FC for ExampleProps<'_> {
+        fn render(ctx: Context, props: &Self) -> DomTree {
+            ctx.render(move |ctx| {
+                builder::ElementBuilder::new(ctx, "div")
+                    .child(text(props.name))
+                    .finish()
+            })
+        }
+    }
 
     #[test]
     fn test_borrowed_scope() {
-        let example: FC<EmptyProps> = |ctx, props| {
-            ctx.render(move |b| {
-                builder::ElementBuilder::new(b, "div")
-                    .child(virtual_child(
-                        b.bump,
-                        ExampleProps { name: props.name },
-                        CHILD,
-                    ))
-                    .finish()
-            })
-        };
+        #[derive(Debug, PartialEq)]
+        struct Example {
+            name: String,
+        }
+
+        impl FC for Example {
+            fn render(ctx: Context, props: &Self) -> DomTree {
+                todo!()
+                // ctx.render(move |c| {
+                //     builder::ElementBuilder::new(c, "div")
+                //         .child(virtual_child(c, ExampleProps { name: &props.name }))
+                //         .finish()
+                // })
+            }
+        }
 
         let source_text = "abcd123".to_string();
         let props = ExampleProps { name: &source_text };

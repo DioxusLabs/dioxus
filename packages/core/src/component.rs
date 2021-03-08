@@ -39,31 +39,31 @@ mod tests {
     use crate::prelude::bumpalo::Bump;
     use crate::prelude::*;
 
-    fn test_static_fn<'a, P>(b: &'a Bump, r: FC<P>) -> VNode<'a> {
-        todo!()
-    }
+    // fn test_static_fn<'a, P>(b: &'a Bump, r: FC<P>) -> VNode<'a> {
+    //     todo!()
+    // }
 
-    static TestComponent: FC<()> = |ctx, props| {
-        //
+    // static TestComponent: FC<()> = |ctx, props| {
+    //     //
 
-        ctx.render(html! {
-            <div>
+    //     ctx.render(html! {
+    //         <div>
 
-            </div>
-        })
-    };
+    //         </div>
+    //     })
+    // };
 
-    static TestComponent2: FC<()> = |ctx, props| {
-        //
-        ctx.render(|ctx| VNode::text("blah"))
-    };
+    // static TestComponent2: FC<()> = |ctx, props| {
+    //     //
+    //     ctx.render(|ctx| VNode::text("blah"))
+    // };
 
-    #[test]
-    fn ensure_types_work() {
-        let bump = Bump::new();
+    // #[test]
+    // fn ensure_types_work() {
+    //     let bump = Bump::new();
 
-        // Happiness! The VNodes are now allocated onto the bump vdom
-        let _ = test_static_fn(&bump, TestComponent);
-        let _ = test_static_fn(&bump, TestComponent2);
-    }
+    //     // Happiness! The VNodes are now allocated onto the bump vdom
+    //     let _ = test_static_fn(&bump, TestComponent);
+    //     let _ = test_static_fn(&bump, TestComponent2);
+    // }
 }
