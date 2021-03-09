@@ -21,19 +21,25 @@ impl DebugRenderer {
     pub fn log_dom(&self) {}
 }
 
+#[cfg(old)]
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::prelude::*;
+    use crate::scope::Properties;
 
     #[test]
     fn ensure_creation() -> Result<(), ()> {
-        let mut dom = VirtualDom::new(|ctx, props| {
-            //
-            ctx.render(html! { <div>"hello world" </div> })
-        });
+        #[derive(PartialEq)]
+        struct Creation {}
+        impl FC for Creation {
+            fn render(ctx: Context, props: &Self) -> DomTree {
+                ctx.render(html! { <div>"hello world" </div> })
+            }
+        }
 
-        // dom.progress()?;
+        let mut dom = VirtualDom::new_with_props(Creation {});
+
         Ok(())
     }
 }

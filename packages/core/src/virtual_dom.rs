@@ -1,6 +1,6 @@
 // use crate::{changelist::EditList, nodes::VNode};
 
-use crate::{innerlude::*, scope::Properties};
+use crate::innerlude::*;
 use crate::{
     patch::Edit,
     scope::{create_scoped, Scoped},
@@ -63,19 +63,19 @@ impl VirtualDom {
     pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
-
     /// Start a new VirtualDom instance with a dependent props.
     /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let mut components = Arena::new();
+        // let mut components = Arena::new();
+        // let mut components = Arena::new();
 
         // Create a reference to the component in the arena
         // Note: we are essentially running the "Mount" lifecycle event manually while the vdom doesnt yet exist
         // This puts the dom in a usable state on creation, rather than being potentially invalid
-        let base_scope = components.insert_with(|id| create_scoped(root, root_props, id, None));
+        // let base_scope = components.insert_with(|id| create_scoped(root, root_props, id, None));
 
         todo!()
         // Self {
@@ -106,19 +106,16 @@ impl VirtualDom {
 
         let b = Bump::new();
 
-        let mut diff_machine = DiffMachine::new(self, &b, self.base_scope);
+        let mut diff_machine = DiffMachine::new(&self.diff_bump);
         // let mut diff_machine = DiffMachine::new(self, &self.diff_bump, self.base_scope);
 
-        todo!()
-        // let component = self.components.get(self.base_scope).unwrap();
+        // todo!()
 
-        // diff_machine.diff_node(component.old_frame(), component.new_frame());
-
-        // let edits = diff_machine.consume();
-
+        let component = self.components.get(self.base_scope).unwrap();
+        diff_machine.diff_node(component.old_frame(), component.new_frame());
+        let edits = diff_machine.consume();
         // self.diff_bump = b;
-
-        // Ok(edits)
+        Ok(edits)
     }
 
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
@@ -187,6 +184,9 @@ impl VirtualDom {
     }
 }
 
-// struct LockedEdits<'src> {
-//     edits:
-// }
+enum LifeCycleEvent {
+    // Mount {
+//     props: &dyn Properties,
+// // f: FC<dyn Properties>,
+// },
+}

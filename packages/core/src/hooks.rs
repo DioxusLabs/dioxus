@@ -183,30 +183,30 @@ mod use_reducer_def {
             Decr,
         }
 
-        #[allow(unused)]
-        static Example: FC<()> = |ctx, props| {
-            let (count, reduce) = use_reducer(
-                &ctx,
-                || 0,
-                |count, action| match action {
-                    Actions::Incr => *count += 1,
-                    Actions::Decr => *count -= 1,
-                },
-            );
+        // #[allow(unused)]
+        // static Example: FC<()> = |ctx, props| {
+        //     let (count, reduce) = use_reducer(
+        //         &ctx,
+        //         || 0,
+        //         |count, action| match action {
+        //             Actions::Incr => *count += 1,
+        //             Actions::Decr => *count -= 1,
+        //         },
+        //     );
 
-            ctx.render(rsx! {
-                div {
-                    h1 {"Count: {count}"}
-                    button {
-                        "Increment"
-                        onclick: move |_| reduce(Actions::Incr)
-                    }
-                    button {
-                        "Decrement"
-                        onclick: move |_| reduce(Actions::Decr)
-                    }
-                }
-            })
-        };
+        //     ctx.render(rsx! {
+        //         div {
+        //             h1 {"Count: {count}"}
+        //             button {
+        //                 "Increment"
+        //                 onclick: move |_| reduce(Actions::Incr)
+        //             }
+        //             button {
+        //                 "Decrement"
+        //                 onclick: move |_| reduce(Actions::Decr)
+        //             }
+        //         }
+        //     })
+        // };
     }
 }

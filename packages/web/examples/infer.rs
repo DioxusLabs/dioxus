@@ -9,6 +9,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
 
+// this is a component
 static Example: FC<()> = |ctx, _props| {
     let (event, set_event) = use_state(&ctx, || None);
     let event = format!("{:#?}", event);
@@ -21,14 +22,12 @@ static Example: FC<()> = |ctx, _props| {
         div {  
             
             class: "py-12 px-4 w-full max-w-2xl mx-auto bg-red-100"
-            // class: "py-12 px-4 text-center w-full max-w-2xl mx-auto bg-red-100"
             span { 
                 class: "text-sm font-semibold"
                 "Dioxus Example: Synthetic Events"
             }            
             button {
                 class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                
                 "press me"
             }
             pre {
@@ -36,6 +35,21 @@ static Example: FC<()> = |ctx, _props| {
                 id: "json"
                 "{event}"
             }
+            Example2 { name: "{event}" }
+        }
+    })
+};
+
+
+#[derive(Debug, PartialEq)]
+struct Props {
+    name: String
+}
+
+static Example2: FC<Props> = |ctx, props| {
+    ctx.render(rsx!{
+        div {
+            h1 {"hello {props.name}"}
         }
     })
 };

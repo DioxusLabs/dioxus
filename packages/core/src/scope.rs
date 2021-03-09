@@ -11,10 +11,6 @@ use std::{
     ops::Deref,
 };
 
-pub trait Properties: PartialEq {}
-// just for now
-impl<T: PartialEq> Properties for T {}
-
 pub trait Scoped {
     fn run(&mut self);
     fn compare_props(&self, new: &dyn std::any::Any) -> bool;
@@ -37,9 +33,11 @@ pub struct Scope<P: Properties> {
     // our own index
     pub myidx: ScopeIdx,
 
-    pub caller: FC<P>,
-
+    // the props
     pub props: P,
+
+    // and the actual render function
+    pub caller: FC<P>,
 
     // ==========================
     // slightly unsafe stuff
@@ -87,10 +85,10 @@ pub fn create_scoped<P: Properties + 'static>(
     let frames = ActiveFrame::from_frames(old_frame, new_frame);
 
     Box::new(Scope {
+        caller,
         myidx,
         hook_arena,
         hooks,
-        caller,
         frames,
         listeners,
         parent,
@@ -125,6 +123,7 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
 
         // Note that the actual modification of the vnode head element occurs during this call
         // let _: DomTree = caller(ctx, props);
+        // let _: DomTree = P::render (ctx, &self.props);
         let _: DomTree = (self.caller)(ctx, &self.props);
 
         /*
@@ -259,95 +258,95 @@ impl ActiveFrame {
     }
 }
 
+#[cfg(old)]
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::prelude::*;
 
-    static ListenerTest: FC<()> = |ctx, props| {
-        ctx.render(html! {
-            <div onclick={|_| println!("Hell owlrld")}>
-                "hello"
-            </div>
-        })
-    };
+    // static ListenerTest: FC<()> = |ctx, props| {
+    //     ctx.render(html! {
+    //         <div onclick={|_| println!("Hell owlrld")}>
+    //             "hello"
+    //         </div>
+    //     })
+    // };
 
     #[test]
     fn test_scope() {
-        let example: FC<()> = |ctx, props| {
-            use crate::builder::*;
-            ctx.render(|ctx| {
-                builder::ElementBuilder::new(ctx, "div")
-                    .child(text("a"))
-                    .finish()
-            })
-        };
+        #[derive(PartialEq)]
+        struct Example {}
+        impl FC for Example {
+            fn render(ctx: Context<'_>, _: &Self) -> DomTree {
+                use crate::builder::*;
+                ctx.render(|ctx| {
+                    builder::ElementBuilder::new(ctx, "div")
+                        .child(text("a"))
+                        .finish()
+                })
+            }
+        }
 
-        let props = ();
-        let parent = None;
         let mut nodes = generational_arena::Arena::new();
         nodes.insert_with(|myidx| {
-            let scope = create_scoped(example, props, myidx, parent);
+            let scope = create_scoped(Example {}, myidx, None);
         });
-    }
-
-    #[derive(Debug)]
-    struct ExampleProps<'src> {
-        name: &'src String,
-    }
-
-    #[derive(Debug)]
-    struct EmptyProps<'src> {
-        name: &'src String,
     }
 
     use crate::{builder::*, hooks::use_ref};
 
-    fn example_fc<'a>(ctx: Context<'a>, props: &'a EmptyProps) -> DomTree {
-        let (content, _): (&'a String, _) = crate::hooks::use_state(&ctx, || "abcd".to_string());
-
-        let childprops: ExampleProps<'a> = ExampleProps { name: content };
-        ctx.render(move |c| {
-            builder::ElementBuilder::new(c, "div")
-                .child(text(props.name))
-                .child(virtual_child::<ExampleProps>(
-                    c.bump,
-                    childprops,
-                    child_example,
-                ))
-                .finish()
-        })
+    #[derive(Debug, PartialEq)]
+    struct EmptyProps<'src> {
+        name: &'src String,
     }
 
-    fn child_example<'b>(ctx: Context<'b>, props: &'b ExampleProps) -> DomTree {
-        ctx.render(move |ctx| {
-            builder::ElementBuilder::new(ctx, "div")
-                .child(text(props.name))
-                .finish()
-        })
+    impl FC for EmptyProps<'_> {
+        fn render(ctx: Context, props: &Self) -> DomTree {
+            let (content, _): (&String, _) = crate::hooks::use_state(&ctx, || "abcd".to_string());
+
+            let childprops: ExampleProps<'_> = ExampleProps { name: content };
+            todo!()
+            // ctx.render(move |c| {
+            //     builder::ElementBuilder::new(c, "div")
+            //         .child(text(props.name))
+            //         .child(virtual_child(c, childprops))
+            //         .finish()
+            // })
+        }
     }
 
-    static CHILD: FC<ExampleProps> = |ctx, props: &'_ ExampleProps| {
-        ctx.render(move |ctx| {
-            builder::ElementBuilder::new(ctx, "div")
-                .child(text(props.name))
-                .finish()
-        })
-    };
+    #[derive(Debug, PartialEq)]
+    struct ExampleProps<'src> {
+        name: &'src String,
+    }
+
+    impl FC for ExampleProps<'_> {
+        fn render(ctx: Context, props: &Self) -> DomTree {
+            ctx.render(move |ctx| {
+                builder::ElementBuilder::new(ctx, "div")
+                    .child(text(props.name))
+                    .finish()
+            })
+        }
+    }
 
     #[test]
     fn test_borrowed_scope() {
-        let example: FC<EmptyProps> = |ctx, props| {
-            ctx.render(move |b| {
-                builder::ElementBuilder::new(b, "div")
-                    .child(virtual_child(
-                        b.bump,
-                        ExampleProps { name: props.name },
-                        CHILD,
-                    ))
-                    .finish()
-            })
-        };
+        #[derive(Debug, PartialEq)]
+        struct Example {
+            name: String,
+        }
+
+        impl FC for Example {
+            fn render(ctx: Context, props: &Self) -> DomTree {
+                todo!()
+                // ctx.render(move |c| {
+                //     builder::ElementBuilder::new(c, "div")
+                //         .child(virtual_child(c, ExampleProps { name: &props.name }))
+                //         .finish()
+                // })
+            }
+        }
 
         let source_text = "abcd123".to_string();
         let props = ExampleProps { name: &source_text };

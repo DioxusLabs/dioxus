@@ -360,3 +360,37 @@ The DomTree object purely represents a viewable "key". It also forces components
 ## Events 
 
 Events are finally in! To do events properly, we are abstracting over the event source with synthetic events. This forces 3rd party renderers to create the appropriate cross-platform event 
+
+
+## Optional Props on Components
+
+A major goal here is ergonomics. Any field that is Option<T> should default to none. 
+
+```rust
+
+rsx! {
+    Example { /* args go here */ a: 10, b: 20 }
+}
+
+
+```
+
+```rust
+#[derive(Properties)]
+struct Props {
+
+}
+
+static Component: FC<Props> = |ctx, props| {
+
+}
+```
+
+or
+
+```rust
+#[fc]
+static Component: FC = |ctx, name: &str| {
+
+}
+```

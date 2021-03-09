@@ -90,6 +90,7 @@ pub mod builder {
 pub(crate) mod innerlude {
     // pub(crate) use crate::component::Properties;
 
+    pub(crate) use crate::component::Properties;
     pub(crate) use crate::context::Context;
     pub(crate) use crate::error::{Error, Result};
     use crate::nodes;
@@ -122,13 +123,14 @@ pub(crate) mod innerlude {
     // Re-export the FC macro
     pub use crate as dioxus;
     pub use crate::nodebuilder as builder;
-    pub use dioxus_core_macro::{fc, html, rsx};
+    pub use dioxus_core_macro::{html, rsx};
+    // pub use dioxus_core_macro::{fc, html, rsx};
 }
 
 /// Re-export common types for ease of development use.
 /// Essential when working with the html! macro
 pub mod prelude {
-    // pub use crate::component::Properties;
+    pub use crate::component::{fc_to_builder, Properties};
     pub use crate::context::Context;
     use crate::nodes;
     pub use crate::virtual_dom::VirtualDom;
@@ -150,8 +152,8 @@ pub mod prelude {
     pub use crate as dioxus;
     pub use crate::nodebuilder as builder;
     // pub use dioxus_core_macro::fc;
-    pub use dioxus_core_macro::format_args_f;
-    pub use dioxus_core_macro::{fc, html, rsx};
+
+    pub use dioxus_core_macro::{format_args_f, html, rsx, Props};
 
     pub use crate::component::ScopeIdx;
     pub use crate::diff::DiffMachine;
