@@ -198,14 +198,19 @@ impl Parse for Component {
         // parse the guts
         let content: ParseBuffer;
         syn::braced!(content in s);
-        let mut fields: Vec<Field> = Vec::new();
 
-        'parsing: loop {
-            // [1] Break if empty
-            if content.is_empty() {
-                break 'parsing;
-            }
-        }
+        let mut body: Vec<Field> = Vec::new();
+        let mut attrs = Vec::new();
+        let mut children: Vec<Node> = Vec::new();
+
+        parse_element_content(content, &mut attrs, &mut children);
+
+        // 'parsing: loop {
+        //     // [1] Break if empty
+        //     if content.is_empty() {
+        //         break 'parsing;
+        //     }
+        // }
 
         // let body = content.parse()?;
 

@@ -5,7 +5,7 @@ use std::{borrow::BorrowMut, ops::Deref};
 use crate::{
     context::NodeCtx,
     events::VirtualEvent,
-    innerlude::VComponent,
+    innerlude::{VComponent, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::VElement,
 };
@@ -526,7 +526,11 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 
 // _f: crate::innerlude::FC<T>,
 // _props: T
-pub fn virtual_child<'a, T: crate::scope::FC>(ctx: &'a NodeCtx<'a>, p: T) -> VNode<'a> {
+pub fn virtual_child<'a, 'b, T: crate::innerlude::Properties>(
+    ctx: &'b NodeCtx<'a>,
+    p: T,
+    f: FC<T>,
+) -> VNode<'a> {
     todo!()
     // VNode::Component()
 }

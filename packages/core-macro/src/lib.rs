@@ -5,6 +5,7 @@ use syn::parse_macro_input;
 mod fc;
 mod htm;
 mod ifmt;
+mod props;
 mod rsxt;
 mod util;
 
@@ -58,4 +59,13 @@ pub fn format_args_f(input: TokenStream) -> TokenStream {
     format_args_f_impl(item)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
+}
+
+#[proc_macro_derive(Props, attributes(builder))]
+pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+    match props::impl_my_derive(&input) {
+        Ok(output) => output.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
 }

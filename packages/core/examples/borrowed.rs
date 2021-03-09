@@ -7,12 +7,15 @@
 
 fn main() {}
 
-use dioxus_core::prelude::*;
+use std::fmt::Debug;
+
+use dioxus_core::{component::Properties, prelude::*};
 
 struct Props {
     items: Vec<ListItem>,
 }
 
+#[derive(PartialEq)]
 struct ListItem {
     name: String,
     age: u32,
@@ -21,18 +24,18 @@ struct ListItem {
 fn app(ctx: Context, props: &Props) -> DomTree {
     let (f, setter) = use_state(&ctx, || 0);
 
-    ctx.render(move |b| {
-        let mut root = builder::ElementBuilder::new(b, "div");
+    ctx.render(move |c| {
+        let mut root = builder::ElementBuilder::new(c, "div");
         for child in &props.items {
             // notice that the child directly borrows from our vec
             // this makes lists very fast (simply views reusing lifetimes)
+            // <ChildItem item=child hanldler=setter />
             root = root.child(builder::virtual_child(
-                b.bump,
+                c,
                 ChildProps {
                     item: child,
                     item_handler: setter,
                 },
-                // <ChildItem item=child hanldler=setter />
                 child_item,
             ));
         }
@@ -41,13 +44,35 @@ fn app(ctx: Context, props: &Props) -> DomTree {
 }
 
 type StateSetter<T> = dyn Fn(T);
+// struct StateSetter<T>(dyn Fn(T));
 
+// impl<T> PartialEq for StateSetter<T> {
+//     fn eq(&self, other: &Self) -> bool {
+//         self as *const _ == other as *const _
+//     }
+// }
+
+// props should derive a partialeq implementation automatically, but implement ptr compare for & fields
+#[derive(Props)]
 struct ChildProps<'a> {
     // Pass down complex structs
     item: &'a ListItem,
 
     // Even pass down handlers!
     item_handler: &'a StateSetter<i32>,
+}
+
+impl PartialEq for ChildProps<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
+}
+
+impl<'a> Properties for ChildProps<'a> {
+    type Builder = ChildPropsBuilder<'a, ((), ())>;
+    fn builder() -> <Self as Properties>::Builder {
+        ChildProps::builder()
+    }
 }
 
 fn child_item(ctx: Context, props: &ChildProps) -> DomTree {

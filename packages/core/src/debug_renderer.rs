@@ -21,11 +21,12 @@ impl DebugRenderer {
     pub fn log_dom(&self) {}
 }
 
+#[cfg(old)]
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::prelude::*;
-    use crate::scope::FC;
+    use crate::scope::Properties;
 
     #[test]
     fn ensure_creation() -> Result<(), ()> {

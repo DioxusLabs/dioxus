@@ -1,20 +1,19 @@
-use dioxus_core::prelude::*;
+use dioxus_core::{component::Properties, prelude::*};
 
 fn main() -> Result<(), ()> {
-    let p1 = Props { name: "bob".into() };
+    let p1 = SomeProps { name: "bob".into() };
 
     let mut vdom = VirtualDom::new_with_props(Example, p1);
-    // vdom.update_props(|p: &mut Props| {});
 
     Ok(())
 }
 
-#[derive(Debug, PartialEq)]
-struct Props {
+#[derive(Debug, PartialEq, Props)]
+struct SomeProps {
     name: String,
 }
 
-static Example: FC<Props> = |ctx, _props| {
+static Example: FC<SomeProps> = |ctx, _props| {
     ctx.render(html! {
         <div>
             <h1> "hello world!" </h1>
@@ -24,3 +23,11 @@ static Example: FC<Props> = |ctx, _props| {
         </div>
     })
 };
+
+// toodo: derive this
+impl Properties for SomeProps {
+    type Builder = SomePropsBuilder<((),)>;
+    fn builder() -> Self::Builder {
+        SomeProps::builder()
+    }
+}

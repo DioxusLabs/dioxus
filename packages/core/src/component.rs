@@ -1,69 +1,33 @@
 //! This file handles the supporting infrastructure for the `Component` trait and `Properties` which makes it possible
 //! for components to be used within Nodes.
+//!
+//! Note - using the builder pattern does not required the Properties trait to be implemented - the only thing that matters is
+//! if the type suppports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
+//! that ensures compile-time required and optional fields on props.
 
+use crate::innerlude::FC;
 pub type ScopeIdx = generational_arena::Index;
 
-/// The `Component` trait refers to any struct or funciton that can be used as a component
-/// We automatically implement Component for FC<T>
-// pub trait Component {
-//     type Props: Properties<'static>;
-//     fn builder(&'static self) -> Self::Props;
-// }
+pub trait Properties: PartialEq {
+    type Builder;
+    fn builder() -> Self::Builder;
+}
 
-// // Auto implement component for a FC
-// // Calling the FC is the same as "rendering" it
-// impl<P: Properties<'static>> Component for FC<P> {
-//     type Props = P;
+pub struct EmptyBuilder;
+impl EmptyBuilder {
+    pub fn build() -> () {
+        ()
+    }
+}
 
-//     fn builder(&self) -> Self::Props {
-//         todo!()
-//     }
-// }
+impl Properties for () {
+    type Builder = EmptyBuilder;
 
-/// The `Properties` trait defines any struct that can be constructed using a combination of default / optional fields.
-/// Components take a "properties" object
-// pub trait Properties<'a>
-// where
-//     Self: Debug,
-// {
-//     fn call(&self, ptr: *const ()) {}
-// }
+    fn builder() -> Self::Builder {
+        EmptyBuilder {}
+    }
+}
 
-// // Auto implement for no-prop components
-// impl<'a> Properties<'a> for () {
-//     fn call(&self, ptr: *const ()) {}
-// }
-
-#[cfg(test)]
-mod tests {
-    use crate::prelude::bumpalo::Bump;
-    use crate::prelude::*;
-
-    // fn test_static_fn<'a, P>(b: &'a Bump, r: FC<P>) -> VNode<'a> {
-    //     todo!()
-    // }
-
-    // static TestComponent: FC<()> = |ctx, props| {
-    //     //
-
-    //     ctx.render(html! {
-    //         <div>
-
-    //         </div>
-    //     })
-    // };
-
-    // static TestComponent2: FC<()> = |ctx, props| {
-    //     //
-    //     ctx.render(|ctx| VNode::text("blah"))
-    // };
-
-    // #[test]
-    // fn ensure_types_work() {
-    //     let bump = Bump::new();
-
-    //     // Happiness! The VNodes are now allocated onto the bump vdom
-    //     let _ = test_static_fn(&bump, TestComponent);
-    //     let _ = test_static_fn(&bump, TestComponent2);
-    // }
+pub fn fc_to_builder<T: Properties>(f: FC<T>) -> T::Builder {
+    T::builder()
 }

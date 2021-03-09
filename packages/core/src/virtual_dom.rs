@@ -1,6 +1,6 @@
 // use crate::{changelist::EditList, nodes::VNode};
 
-use crate::{innerlude::*, scope::FC};
+use crate::innerlude::*;
 use crate::{
     patch::Edit,
     scope::{create_scoped, Scoped},
@@ -60,17 +60,16 @@ impl VirtualDom {
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
     /// The root component can access things like routing in its context.
-    pub fn new(root: impl Fn(Context) -> DomTree) -> Self {
-        todo!()
-        // Self::new_with_props(root)
+    pub fn new(root: FC<()>) -> Self {
+        Self::new_with_props(root, ())
     }
-
     /// Start a new VirtualDom instance with a dependent props.
     /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
-    pub fn new_with_props<P: FC + 'static>(root: P) -> Self {
+    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
+        // let mut components = Arena::new();
         // let mut components = Arena::new();
 
         // Create a reference to the component in the arena

@@ -1,5 +1,5 @@
 use dioxus_core::prelude::*;
-use dioxus_core::scope::FC;
+
 use dioxus_core_macro::fc;
 
 use std::marker::PhantomData;
@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 
 // always try to fill in with Default
 
-#[fc]
+// #[fc]
 fn Example(ctx: Context, a: &str, b: &str, c: &str) -> DomTree {
     ctx.render(rsx! {
         div {
@@ -33,7 +33,7 @@ fn Example(ctx: Context, a: &str, b: &str, c: &str) -> DomTree {
     })
 }
 
-#[fc]
+// #[fc]
 fn SomeComponent(ctx: Context, a: &str, b: &str) -> DomTree {
     todo!()
 }

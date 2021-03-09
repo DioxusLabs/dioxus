@@ -296,10 +296,7 @@ mod vtext {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 mod vcomponent {
-    use crate::{
-        innerlude::{Context, ScopeIdx},
-        scope::FC,
-    };
+    use crate::innerlude::{Context, Properties, ScopeIdx, FC};
     use std::{
         any::{Any, TypeId},
         cell::RefCell,
@@ -345,7 +342,7 @@ mod vcomponent {
         // this lets us keep scope generic *and* downcast its props when we need to:
         // - perform comparisons when diffing (memoization)
         // -
-        pub fn new<P: FC + 'static>(comp: P) -> Self {
+        pub fn new<P: Properties + 'static>(caller: FC<P>, comp: P) -> Self {
             todo!()
             // let p = Rc::new(props);
 

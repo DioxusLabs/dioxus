@@ -11,10 +11,6 @@ use std::{
     ops::Deref,
 };
 
-pub trait FC: PartialEq {
-    fn render(ctx: Context, props: &Self) -> DomTree;
-}
-
 pub trait Scoped {
     fn run(&mut self);
     fn compare_props(&self, new: &dyn std::any::Any) -> bool;
@@ -30,14 +26,18 @@ pub trait Scoped {
 ///
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
-pub struct Scope<P: FC> {
+pub struct Scope<P: Properties> {
     // Map to the parent
     pub parent: Option<ScopeIdx>,
 
     // our own index
     pub myidx: ScopeIdx,
 
+    // the props
     pub props: P,
+
+    // and the actual render function
+    pub caller: FC<P>,
 
     // ==========================
     // slightly unsafe stuff
@@ -61,7 +61,8 @@ pub struct Scope<P: FC> {
 
 // instead of having it as a trait method, we use a single function
 // todo: do the unsafety magic stuff to erase the type of p
-pub fn create_scoped<P: FC + 'static>(
+pub fn create_scoped<P: Properties + 'static>(
+    caller: FC<P>,
     props: P,
     myidx: ScopeIdx,
     parent: Option<ScopeIdx>,
@@ -84,6 +85,7 @@ pub fn create_scoped<P: FC + 'static>(
     let frames = ActiveFrame::from_frames(old_frame, new_frame);
 
     Box::new(Scope {
+        caller,
         myidx,
         hook_arena,
         hooks,
@@ -94,7 +96,7 @@ pub fn create_scoped<P: FC + 'static>(
     })
 }
 
-impl<P: FC + 'static> Scoped for Scope<P> {
+impl<P: Properties + 'static> Scoped for Scope<P> {
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
@@ -121,8 +123,8 @@ impl<P: FC + 'static> Scoped for Scope<P> {
 
         // Note that the actual modification of the vnode head element occurs during this call
         // let _: DomTree = caller(ctx, props);
-        let _: DomTree = P::render(ctx, &self.props);
-        // let _: DomTree = (self.caller)(ctx, &self.props);
+        // let _: DomTree = P::render (ctx, &self.props);
+        let _: DomTree = (self.caller)(ctx, &self.props);
 
         /*
         SAFETY ALERT
@@ -256,6 +258,7 @@ impl ActiveFrame {
     }
 }
 
+#[cfg(old)]
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,32 +1,20 @@
-use std::marker::PhantomData;
+use dioxus_core_macro::Props;
 
-fn main() {}
+#[derive(Debug, Props)]
+struct SomeProps {
+    a: i32,
 
-trait Props<'parent> {}
-
-struct SomeProps<'p> {
-    text: &'p str,
+    // automatically do the default (none) and automatically Into<T>
+    #[builder(default, setter(strip_option))]
+    b: Option<i32>,
 }
 
-impl<'p> Props<'p> for SomeProps<'p> {}
+// have we committed to the trait style yet?
 
-struct OutputNode<'a> {
-    _p: PhantomData<&'a ()>,
+fn main() {
+    let g: SomeProps = SomeProps::builder().a(10).b(10).build();
+
+    let r = g.b.unwrap_or_else(|| 10);
 }
 
-// combine reference to self (borrowed from self) and referenfce to parent (borrowed from parent)
-// borrow chain looks like 'p + 's -> 'p + 's -> 'p + 's
-// always adding new lifetimes from self into the mix
-// what does a "self" lifetime mean?
-// a "god" gives us our data
-// the god's lifetime is tied to Context, and the borrowed props object
-// for the sake of simplicity, we just clobber lifetimes.
-// user functions are just lies and we abuse lifetimes.
-// everything is managed at runtime because that's how we make something ergonomc
-// lifetime management in dioxus is just cheating around the rules
-// our kind god manages lifetimes for us so we don't have to, thanks god
-fn something<'s>(_props: &'s SomeProps<'s>) -> OutputNode<'s> {
-    todo!()
-}
-
-// type BC<'p, P: Props<'p>> = for<'a, 'b, 'c> fn(&'a P<'b>) -> OutputNode<'c>;
+fn auto_into_some() {}

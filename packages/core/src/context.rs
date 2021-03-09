@@ -99,7 +99,7 @@ impl<'a> Context<'a> {
     ///     ctx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(self, lazy_nodes: impl FnOnce(&NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
+    pub fn render(self, lazy_nodes: impl FnOnce(&'_ NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
         let ctx = NodeCtx {
             bump: self.bump,
             scope: self.scope,
