@@ -10,7 +10,6 @@ static BLAH: FC<()> = |ctx, props| {
         div {
             SomeComponent {
                 some_field: g
-                abc123: 10,
             }
         }
     })
