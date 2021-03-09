@@ -15,7 +15,7 @@ pub trait Properties: PartialEq {
 
 pub struct EmptyBuilder;
 impl EmptyBuilder {
-    pub fn build() -> () {
+    pub fn build(self) -> () {
         ()
     }
 }

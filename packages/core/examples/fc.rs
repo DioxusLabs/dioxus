@@ -1,41 +1,37 @@
+use dioxus_core::component::fc_to_builder;
 use dioxus_core::prelude::*;
-
 use dioxus_core_macro::fc;
 
 use std::marker::PhantomData;
-// #[derive(PartialEq)]
-// pub struct Example<'a> {
-//     b: &'a str,
-//     ___p: std::marker::PhantomData<&'a ()>,
-// }
 
-// impl<'a> FC for Example<'a> {
-//     fn render(ctx: Context<'_>, props: &Example<'a>) -> DomTree {
-//         let Example { b, .. } = props;
-//         {
-//             ctx.render(rsx! {
-//                 div { "abcd {b}" }
-//             })
-//         }
-//     }
-// }
-
-// always try to fill in with Default
-
-// #[fc]
-fn Example(ctx: Context, a: &str, b: &str, c: &str) -> DomTree {
+static BLAH: FC<()> = |ctx, props| {
+    let g = "asd".to_string();
     ctx.render(rsx! {
         div {
             SomeComponent {
-                a: "123"
+                some_field: g
+                abc123: 10,
             }
         }
     })
+};
+
+#[derive(PartialEq, Props)]
+pub struct ExampleProps {
+    some_field: String,
 }
 
-// #[fc]
-fn SomeComponent(ctx: Context, a: &str, b: &str) -> DomTree {
-    todo!()
-}
+static SomeComponent: FC<ExampleProps> = |ctx, props| {
+    ctx.render(rsx! {
+        div { }
+    })
+};
 
 fn main() {}
+
+impl Properties for ExampleProps {
+    type Builder = ExamplePropsBuilder<((),)>;
+    fn builder() -> Self::Builder {
+        ExampleProps::builder()
+    }
+}

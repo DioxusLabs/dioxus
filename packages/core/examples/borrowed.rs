@@ -9,7 +9,7 @@ fn main() {}
 
 use std::fmt::Debug;
 
-use dioxus_core::{component::Properties, prelude::*};
+use dioxus_core::prelude::*;
 
 struct Props {
     items: Vec<ListItem>,
@@ -32,11 +32,12 @@ fn app(ctx: Context, props: &Props) -> DomTree {
             // <ChildItem item=child hanldler=setter />
             root = root.child(builder::virtual_child(
                 c,
-                ChildProps {
-                    item: child,
-                    item_handler: setter,
-                },
-                child_item,
+                ChildItem,
+                // create the props with nothing but the fc<T>
+                fc_to_builder(ChildItem)
+                    .item(child)
+                    .item_handler(setter)
+                    .build(),
             ));
         }
         root.finish()
@@ -64,7 +65,9 @@ struct ChildProps<'a> {
 
 impl PartialEq for ChildProps<'_> {
     fn eq(&self, other: &Self) -> bool {
-        todo!()
+        // assume the dyn fn is never stable -
+        // wrap with use_callback if it's an issue for you
+        false
     }
 }
 
@@ -75,7 +78,7 @@ impl<'a> Properties for ChildProps<'a> {
     }
 }
 
-fn child_item(ctx: Context, props: &ChildProps) -> DomTree {
+fn ChildItem(ctx: Context, props: &ChildProps) -> DomTree {
     todo!()
     //     ctx.render(rsx! {
     //         div {

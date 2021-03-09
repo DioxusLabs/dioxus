@@ -130,7 +130,7 @@ pub(crate) mod innerlude {
 /// Re-export common types for ease of development use.
 /// Essential when working with the html! macro
 pub mod prelude {
-    // pub use crate::component::Properties;
+    pub use crate::component::{fc_to_builder, Properties};
     pub use crate::context::Context;
     use crate::nodes;
     pub use crate::virtual_dom::VirtualDom;

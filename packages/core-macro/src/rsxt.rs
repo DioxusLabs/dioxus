@@ -132,7 +132,7 @@ impl Parse for Node {
 
 struct Component {
     name: Ident,
-    body: Vec<Field>,
+    body: Vec<ComponentField>,
     // attrs: Vec<Attr>,
     children: MaybeExpr<Vec<Node>>,
 }
@@ -147,13 +147,19 @@ impl ToTokens for ToToksCtx<&Component> {
         //     self.recurse(attr).to_tokens(&mut toks);
         // }
 
-        let body = &self.inner.body;
-        // panic!("tokens are {:#?}", toks);
+        let mut builder = quote! {
+            fc_to_builder(#name)
+        };
 
-        // tokens.append_all(quote! {
-        //     dioxus::builder::virtual_child(ctx, #name{ #body, ___p: PhantomData{} })
-        //     // dioxus::builder::ElementBuilder::new(ctx, #name)
-        // });
+        for field in &self.inner.body {
+            builder.append_all(quote! {#field});
+        }
+
+        builder.append_all(quote! {
+            .build()
+        });
+
+        // panic!("tokens are {:#?}", toks);
 
         // no children right now
 
@@ -179,6 +185,9 @@ impl ToTokens for ToToksCtx<&Component> {
         // tokens.append_all(quote! {
         //     .finish()
         // });
+        let toks = tokens.append_all(quote! {
+            dioxus::builder::virtual_child(ctx, #name, #builder)
+        });
     }
 }
 
@@ -199,18 +208,21 @@ impl Parse for Component {
         let content: ParseBuffer;
         syn::braced!(content in s);
 
-        let mut body: Vec<Field> = Vec::new();
-        let mut attrs = Vec::new();
+        let mut body: Vec<ComponentField> = Vec::new();
         let mut children: Vec<Node> = Vec::new();
 
-        parse_element_content(content, &mut attrs, &mut children);
+        // parse_element_content(content, &mut attrs, &mut children);
 
-        // 'parsing: loop {
-        //     // [1] Break if empty
-        //     if content.is_empty() {
-        //         break 'parsing;
-        //     }
-        // }
+        'parsing: loop {
+            // [1] Break if empty
+            if content.is_empty() {
+                break 'parsing;
+            }
+
+            if let Ok(field) = content.parse::<ComponentField>() {
+                body.push(field);
+            }
+        }
 
         // let body = content.parse()?;
 
@@ -231,20 +243,36 @@ impl Parse for Component {
 }
 
 // the struct's fields info
-pub struct Field {
+pub struct ComponentField {
     name: Ident,
-    content: Ident,
+    content: Expr,
 }
 
-impl Parse for Field {
+impl Parse for ComponentField {
     fn parse(input: ParseStream) -> Result<Self> {
-        todo!()
+        let mut name = Ident::parse_any(input)?;
+        let name_str = name.to_string();
+        input.parse::<Token![:]>()?;
+        let content = input.parse()?;
+
+        // consume comma if it exists
+        // we don't actually care if there *are* commas between attrs
+        if input.peek(Token![,]) {
+            let _ = input.parse::<Token![,]>();
+        }
+
+        Ok(Self { name, content })
     }
 }
 
-impl ToTokens for ToToksCtx<&Field> {
+impl ToTokens for &ComponentField {
+    // impl ToTokens for ToToksCtx<&ComponentField> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        todo!()
+        let name = &self.name;
+        let content = &self.content;
+        tokens.append_all(quote! {
+            .#name(#content)
+        })
     }
 }
 
