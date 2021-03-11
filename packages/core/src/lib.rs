@@ -91,11 +91,11 @@ pub(crate) mod innerlude {
     // pub(crate) use crate::component::Properties;
     pub(crate) use crate::component::Properties;
     pub(crate) use crate::context::Context;
-    pub(crate) use crate::error::{Error, Result};
+    pub(crate) use crate::error::{Result};
     pub use crate::events::EventTrigger;
     use crate::nodes;
-    pub(crate) use crate::scope::Scope;
-    pub(crate) use crate::virtual_dom::VirtualDom;
+    
+    
     pub(crate) use nodes::*;
 
     pub use crate::component::ScopeIdx;

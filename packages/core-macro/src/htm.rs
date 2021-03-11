@@ -147,7 +147,7 @@ struct Element {
 impl ToTokens for ToToksCtx<&Element> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         // let ctx = self.ctx;
-        let name = &self.inner.name;
+        let _name = &self.inner.name;
         tokens.append_all(quote! {
             dioxus::builder::ElementBuilder::new(ctx, "#name")
         });
@@ -184,7 +184,7 @@ impl Parse for Element {
         s.parse::<Token![<]>()?;
         let name = Ident::parse_any(s)?;
         let mut attrs = vec![];
-        let mut children: Vec<Node> = vec![];
+        let _children: Vec<Node> = vec![];
 
         // keep looking for attributes
         while !s.peek(Token![>]) {
@@ -293,7 +293,7 @@ impl Parse for Attr {
 impl ToTokens for ToToksCtx<&Attr> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = self.inner.name.to_string();
-        let mut attr_stream = TokenStream2::new();
+        let _attr_stream = TokenStream2::new();
         match &self.inner.ty {
             AttrType::Value(value) => {
                 let value = self.recurse(value);

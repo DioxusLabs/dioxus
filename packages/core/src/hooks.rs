@@ -137,7 +137,7 @@ mod use_reducer_def {
     pub fn use_reducer<'a, 'c, State: 'static, Action: 'static>(
         ctx: &'c Context<'a>,
         initial_state_fn: impl FnOnce() -> State,
-        reducer: impl Fn(&mut State, Action),
+        _reducer: impl Fn(&mut State, Action),
     ) -> (&'a State, &'a impl Fn(Action)) {
         ctx.use_hook(
             move || UseReducer {
@@ -146,7 +146,7 @@ mod use_reducer_def {
                 caller: Box::new(|_| println!("setter called!")),
             },
             move |hook| {
-                let inner = hook.new_val.clone();
+                let _inner = hook.new_val.clone();
                 let scheduled_update = ctx.schedule_update();
 
                 // get ownership of the new val and replace the current with the new
@@ -157,7 +157,7 @@ mod use_reducer_def {
                 }
 
                 // todo: swap out the caller with a subscription call and an internal update
-                hook.caller = Box::new(move |new_val| {
+                hook.caller = Box::new(move |_new_val| {
                     // update the setter with the new value
                     // let mut new_inner = inner.as_ref().borrow_mut();
                     // *new_inner = Some(new_val);
@@ -175,9 +175,9 @@ mod use_reducer_def {
 
     // #[cfg(test)]
     mod tests {
-        use super::*;
+        
         use crate::prelude::*;
-        use bumpalo::Bump;
+        
         enum Actions {
             Incr,
             Decr,

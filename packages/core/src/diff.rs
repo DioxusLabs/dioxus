@@ -34,11 +34,10 @@
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 use crate::{
     innerlude::*,
-    scope::{create_scoped, Scoped},
 };
 use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
-use generational_arena::Arena;
+
 use std::{cell::RefCell, cmp::Ordering, collections::VecDeque, rc::Rc};
 
 /// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
@@ -112,7 +111,7 @@ impl<'a> DiffMachine<'a> {
                 self.diff_children(eold.children, enew.children);
             }
 
-            (VNode::Component(cold), VNode::Component(cnew)) => {
+            (VNode::Component(_cold), VNode::Component(_cnew)) => {
                 // if cold.comp != cnew.comp {
                 //     // queue an event to mount this new component
                 //     return;
@@ -123,7 +122,7 @@ impl<'a> DiffMachine<'a> {
                 todo!("Usage of component VNode not currently supported");
             }
 
-            (_, VNode::Component(new)) => {
+            (_, VNode::Component(_new)) => {
                 // we have no stable reference to work from
                 // push the lifecycle event onto the queue
                 // self.lifecycle_events
@@ -142,7 +141,7 @@ impl<'a> DiffMachine<'a> {
                 // push the current
             }
 
-            (VNode::Component(old), _) => {
+            (VNode::Component(_old), _) => {
                 todo!("Usage of component VNode not currently supported");
             }
 
@@ -165,7 +164,7 @@ impl<'a> DiffMachine<'a> {
             self.change_list.commit_traversal();
         }
 
-        'outer1: for (l_idx, new_l) in new.iter().enumerate() {
+        'outer1: for (_l_idx, new_l) in new.iter().enumerate() {
             // unsafe {
             // Safety relies on removing `new_l` from the registry manually at
             // the end of its lifetime. This happens below in the `'outer2`
@@ -818,7 +817,7 @@ impl<'a> DiffMachine<'a> {
                     self.change_list.create_element(tag_name);
                 }
 
-                listeners.iter().enumerate().for_each(|(id, listener)| {
+                listeners.iter().enumerate().for_each(|(_id, listener)| {
                     self.change_list
                         .new_event_listener(listener.event, listener.scope, listener.id)
                 });

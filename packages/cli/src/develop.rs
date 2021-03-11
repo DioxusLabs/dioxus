@@ -1,5 +1,5 @@
 use crate::{builder::BuildConfig, cli::DevelopOptions, config::Config, error::Result};
-use async_std::{channel, prelude::FutureExt};
+use async_std::{prelude::FutureExt};
 
 use async_std::future;
 use async_std::prelude::*;
@@ -57,7 +57,7 @@ async fn watch_directory(config: Config) -> Result<()> {
         .watch(src_dir.join("examples"), RecursiveMode::Recursive)
         .expect("Failed to watch dir");
 
-    let mut build_config = BuildConfig::default();
+    let build_config = BuildConfig::default();
 
     'run: loop {
         crate::builder::build(&config, &build_config)?;

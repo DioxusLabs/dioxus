@@ -14,7 +14,7 @@ struct SomeProps {
 fn main() {
     let g: SomeProps = SomeProps::builder().a(10).b(10).build();
 
-    let r = g.b.unwrap_or_else(|| 10);
+    let _r = g.b.unwrap_or_else(|| 10);
 }
 
 fn auto_into_some() {}

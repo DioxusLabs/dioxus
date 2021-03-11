@@ -1,16 +1,16 @@
 // #[macro_use]
 extern crate fstrings;
 
-use bumpalo::collections::String;
+
 
 // use dioxus_core::ifmt;
 // use fstrings::format_args_f;
-use bumpalo::core_alloc::fmt::Write;
+
 
 fn main() {
     let bump = bumpalo::Bump::new();
-    let b = &bump;
-    let world = "123";
+    let _b = &bump;
+    let _world = "123";
     // dioxus_core::ifmt!(in b; "Hello {world}";);
 }
 

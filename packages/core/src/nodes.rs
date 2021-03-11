@@ -11,7 +11,7 @@ use crate::{
 use bumpalo::Bump;
 use std::fmt::Debug;
 use std::{
-    any::{Any, TypeId},
+    any::{Any},
     cell::RefCell,
     marker::PhantomData,
     rc::Rc,
@@ -280,14 +280,14 @@ pub struct VComponent<'src> {
 }
 pub struct Comparator(Box<dyn Fn(&dyn Any) -> bool>);
 impl std::fmt::Debug for Comparator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
 
 pub struct Caller(Box<dyn Fn(Context) -> DomTree>);
 impl std::fmt::Debug for Caller {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }

@@ -29,6 +29,6 @@ impl Properties for () {
     }
 }
 
-pub fn fc_to_builder<T: Properties>(f: FC<T>) -> T::Builder {
+pub fn fc_to_builder<T: Properties>(_f: FC<T>) -> T::Builder {
     T::builder()
 }

@@ -1,6 +1,6 @@
 //! Helpers for building virtual DOM VNodes.
 
-use std::{borrow::BorrowMut, ops::Deref};
+use std::{borrow::BorrowMut};
 
 use crate::{
     context::NodeCtx,
@@ -10,8 +10,8 @@ use crate::{
     prelude::VElement,
 };
 
-use bumpalo::format;
-use bumpalo::Bump;
+
+
 
 /// A virtual DOM element builder.
 ///
@@ -339,7 +339,7 @@ where
     ///     })
     ///     .finish();
     /// ```
-    pub fn on(mut self, event: &'static str, callback: impl Fn(VirtualEvent) + 'a) -> Self {
+    pub fn on(self, event: &'static str, callback: impl Fn(VirtualEvent) + 'a) -> Self {
         let listener = Listener {
             event,
             callback: self.ctx.bump.alloc(callback),
@@ -527,9 +527,9 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 // _f: crate::innerlude::FC<T>,
 // _props: T
 pub fn virtual_child<'a, 'b, T: crate::innerlude::Properties>(
-    ctx: &'b NodeCtx<'a>,
-    f: FC<T>,
-    p: T,
+    _ctx: &'b NodeCtx<'a>,
+    _f: FC<T>,
+    _p: T,
 ) -> VNode<'a> {
     // crate::nodes::VComponent
     todo!()

@@ -1,4 +1,4 @@
-use bumpalo::Bump;
+
 use dioxus_core::prelude::*;
 
 fn main() {}
@@ -26,8 +26,8 @@ struct Button<'a> {
 }
 
 impl Render for Button<'_> {
-    fn render(ctx: Context, props: &Self) -> DomTree {
-        let onfocus = move |evt: ()| log::debug!("Focused");
+    fn render(ctx: Context, _props: &Self) -> DomTree {
+        let _onfocus = move |_evt: ()| log::debug!("Focused");
 
         // todo!()
         ctx.render(rsx! {
@@ -35,7 +35,7 @@ impl Render for Button<'_> {
                 // ..props.attrs,
                 class: "abc123",
                 // style: { a: 2, b: 3, c: 4 },
-                onclick: move |evt| {
+                onclick: move |_evt| {
                     // log::info("hello world");
                 },
                 // Custom1 { a: 123 }

@@ -7,16 +7,7 @@ use crate::{
 };
 use bumpalo::Bump;
 use generational_arena::Arena;
-use std::{
-    any::TypeId,
-    borrow::BorrowMut,
-    cell::{RefCell, UnsafeCell},
-    collections::{vec_deque, VecDeque},
-    future::Future,
-    marker::PhantomData,
-    rc::Rc,
-    sync::atomic::AtomicUsize,
-};
+
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -68,7 +59,7 @@ impl VirtualDom {
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
-    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
+    pub fn new_with_props<P: Properties + 'static>(_root: FC<P>, _root_props: P) -> Self {
         // let mut components = Arena::new();
         // let mut components = Arena::new();
 
@@ -104,7 +95,7 @@ impl VirtualDom {
             .expect("Root should always exist")
             .run();
 
-        let b = Bump::new();
+        let _b = Bump::new();
 
         let mut diff_machine = DiffMachine::new(&self.diff_bump);
         // let mut diff_machine = DiffMachine::new(self, &self.diff_bump, self.base_scope);
@@ -142,7 +133,7 @@ impl VirtualDom {
     /// }
     ///
     /// ```
-    pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList<'_>> {
+    pub fn progress_with_event(&mut self, _event: EventTrigger) -> Result<EditList<'_>> {
         // self.components
         //     .borrow_mut()
         //     .get_mut(event.component_id)

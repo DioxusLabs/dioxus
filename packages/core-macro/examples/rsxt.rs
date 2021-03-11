@@ -1,4 +1,4 @@
-use dioxus_core_macro::rsx;
+
 
 pub mod dioxus {
     pub mod builder {
@@ -25,32 +25,32 @@ pub mod dioxus {
 
         impl Builder {
             // fn attr<T>(mut self, key: &str, value: impl Into<AttrVal>) -> Self {
-            pub fn attr<T>(mut self, key: &str, value: T) -> Self {
+            pub fn attr<T>(self, _key: &str, _value: T) -> Self {
                 Self
             }
 
-            pub fn on<T>(mut self, key: &str, value: T) -> Self {
+            pub fn on<T>(self, _key: &str, _value: T) -> Self {
                 Self
             }
 
-            pub fn finish(mut self) {
+            pub fn finish(self) {
                 // Self
             }
         }
 
         pub struct Bump;
-        pub fn div(bump: &Bump) -> Builder {
+        pub fn div(_bump: &Bump) -> Builder {
             todo!()
         }
-        pub fn h1(bump: &Bump) -> Builder {
+        pub fn h1(_bump: &Bump) -> Builder {
             todo!()
         }
-        pub fn h2(bump: &Bump) -> Builder {
+        pub fn h2(_bump: &Bump) -> Builder {
             todo!()
         }
     }
 }
-use dioxus::builder::Bump;
+
 pub fn main() {
     // render(rsx! {
     //     div { // we can actually support just a list of nodes too
@@ -86,7 +86,7 @@ pub fn main() {
     //     }
     // });
 
-    let g = String::from("asd");
+    let _g = String::from("asd");
 
     // let lazy = rsx! {
     //     div {
@@ -124,4 +124,4 @@ pub fn main() {
     // render(lazy);
 }
 
-fn render(f: impl Fn(&dioxus::builder::Bump)) {}
+fn render(_f: impl Fn(&dioxus::builder::Bump)) {}

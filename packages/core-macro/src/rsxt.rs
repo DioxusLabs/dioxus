@@ -185,7 +185,7 @@ impl ToTokens for ToToksCtx<&Component> {
         // tokens.append_all(quote! {
         //     .finish()
         // });
-        let toks = tokens.append_all(quote! {
+        let _toks = tokens.append_all(quote! {
             dioxus::builder::virtual_child(ctx, #name, #builder)
         });
     }
@@ -209,7 +209,7 @@ impl Parse for Component {
         syn::braced!(content in s);
 
         let mut body: Vec<ComponentField> = Vec::new();
-        let mut children: Vec<Node> = Vec::new();
+        let _children: Vec<Node> = Vec::new();
 
         // parse_element_content(content, &mut attrs, &mut children);
 
@@ -228,7 +228,7 @@ impl Parse for Component {
 
         // eventually we'll parse the attrs
         // let mut attrs: Vec<Attr> = vec![];
-        let mut children: Vec<Node> = vec![];
+        let children: Vec<Node> = vec![];
         // parse_element_content(content, &mut attrs, &mut children);
 
         let children = MaybeExpr::Literal(children);
@@ -250,8 +250,8 @@ pub struct ComponentField {
 
 impl Parse for ComponentField {
     fn parse(input: ParseStream) -> Result<Self> {
-        let mut name = Ident::parse_any(input)?;
-        let name_str = name.to_string();
+        let name = Ident::parse_any(input)?;
+        let _name_str = name.to_string();
         input.parse::<Token![:]>()?;
         let content = input.parse()?;
 
@@ -472,7 +472,7 @@ impl ToTokens for ToToksCtx<&Attr> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = self.inner.name.to_string();
         let nameident = &self.inner.name;
-        let mut attr_stream = TokenStream2::new();
+        let _attr_stream = TokenStream2::new();
         match &self.inner.ty {
             AttrType::Value(value) => {
                 let value = self.recurse(value);

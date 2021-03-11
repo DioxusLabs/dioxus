@@ -1,12 +1,12 @@
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned, ToTokens};
-use syn::spanned::Spanned;
+use quote::{quote, ToTokens};
+
 use syn::{
     parse::{Parse, ParseStream},
     Signature,
 };
 use syn::{
-    parse_macro_input, Attribute, Block, FnArg, Ident, Item, ItemFn, ReturnType, Type, Visibility,
+    Attribute, Block, FnArg, Ident, Item, ItemFn, ReturnType, Type, Visibility,
 };
 
 /// A parsed version of the user's input
@@ -109,11 +109,11 @@ impl ToTokens for FunctionComponent {
         let FunctionComponent {
             block,
             // props_type,
-            arg,
-            vis,
-            attrs,
+            arg: _,
+            vis: _,
+            attrs: _,
             name: function_name,
-            return_type,
+            return_type: _,
         } = self;
 
         // if function_name == component_name {
@@ -192,19 +192,19 @@ pub fn ensure_fn_block(item: Item) -> syn::Result<ItemFn> {
         Item::Fn(it) => Ok(it),
         Item::Static(it) => {
             let syn::ItemStatic {
-                attrs,
-                vis,
-                static_token,
-                mutability,
-                ident,
-                colon_token,
+                attrs: _,
+                vis: _,
+                static_token: _,
+                mutability: _,
+                ident: _,
+                colon_token: _,
                 ty,
-                eq_token,
-                expr,
-                semi_token,
+                eq_token: _,
+                expr: _,
+                semi_token: _,
             } = &it;
             match ty.as_ref() {
-                Type::BareFn(bare) => {}
+                Type::BareFn(_bare) => {}
                 // Type::Array(_)
                 // | Type::Group(_)
                 // | Type::ImplTrait(_)

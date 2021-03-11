@@ -1,10 +1,10 @@
 use dioxus_core::component::fc_to_builder;
 use dioxus_core::prelude::*;
-use dioxus_core_macro::fc;
 
-use std::marker::PhantomData;
 
-static BLAH: FC<()> = |ctx, props| {
+
+
+static BLAH: FC<()> = |ctx, _props| {
     let g = "asd".to_string();
     ctx.render(rsx! {
         div {
@@ -20,7 +20,7 @@ pub struct ExampleProps {
     some_field: String,
 }
 
-static SomeComponent: FC<ExampleProps> = |ctx, props| {
+static SomeComponent: FC<ExampleProps> = |ctx, _props| {
     ctx.render(rsx! {
         div { }
     })

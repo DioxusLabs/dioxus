@@ -45,7 +45,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn fc(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn fc(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match syn::parse::<fc::FunctionComponent>(item) {
         Err(e) => e.to_compile_error().into(),
         Ok(s) => s.to_token_stream().into(),

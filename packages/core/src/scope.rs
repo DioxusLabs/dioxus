@@ -5,7 +5,7 @@ use crate::nodes::VNode;
 use bumpalo::Bump;
 
 use std::{
-    any::{Any, TypeId},
+    any::{Any},
     cell::RefCell,
     marker::PhantomData,
     ops::Deref,
@@ -145,7 +145,7 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
             .expect("Viewing did not happen");
     }
 
-    fn compare_props(&self, new: &Any) -> bool {
+    fn compare_props(&self, new: &dyn Any) -> bool {
         new.downcast_ref::<P>()
             .map(|f| &self.props == f)
             .expect("Props should not be of a different type")

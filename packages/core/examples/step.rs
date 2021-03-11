@@ -3,7 +3,7 @@ use dioxus_core::{component::Properties, prelude::*};
 fn main() -> Result<(), ()> {
     let p1 = SomeProps { name: "bob".into() };
 
-    let mut vdom = VirtualDom::new_with_props(Example, p1);
+    let _vdom = VirtualDom::new_with_props(Example, p1);
 
     Ok(())
 }

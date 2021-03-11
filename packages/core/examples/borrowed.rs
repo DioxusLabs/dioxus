@@ -7,7 +7,7 @@
 
 fn main() {}
 
-use std::fmt::Debug;
+
 
 use dioxus_core::prelude::*;
 
@@ -22,7 +22,7 @@ struct ListItem {
 }
 
 fn app(ctx: Context, props: &Props) -> DomTree {
-    let (f, setter) = use_state(&ctx, || 0);
+    let (_f, setter) = use_state(&ctx, || 0);
 
     ctx.render(move |c| {
         let mut root = builder::ElementBuilder::new(c, "div");
@@ -64,7 +64,7 @@ struct ChildProps<'a> {
 }
 
 impl PartialEq for ChildProps<'_> {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         // assume the dyn fn is never stable -
         // wrap with use_callback if it's an issue for you
         false
@@ -78,7 +78,7 @@ impl<'a> Properties for ChildProps<'a> {
     }
 }
 
-fn ChildItem(ctx: Context, props: &ChildProps) -> DomTree {
+fn ChildItem(_ctx: Context, _props: &ChildProps) -> DomTree {
     todo!()
     //     ctx.render(rsx! {
     //         div {

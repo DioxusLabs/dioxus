@@ -10,7 +10,7 @@ use proc_macro2::TokenStream;
 
 use syn::parse::Error;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, DeriveInput};
+
 
 use quote::quote;
 
