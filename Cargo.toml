@@ -4,7 +4,7 @@ members = [
     "packages/dioxus",
     "packages/core-macro",
     "packages/core",
-    # "packages/web",
+    "packages/web",
     # "packages/router",
     # "packages/ssr",
     # "packages/webview",

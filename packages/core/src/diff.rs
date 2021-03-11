@@ -32,13 +32,18 @@
 //!
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
-use crate::{
-    innerlude::*,
-};
+use crate::{innerlude::*, scope::Scoped};
 use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
+use generational_arena::Arena;
+use uuid::Uuid;
 
-use std::{cell::RefCell, cmp::Ordering, collections::VecDeque, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    cmp::Ordering,
+    collections::VecDeque,
+    rc::Rc,
+};
 
 /// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
 /// diffing trees of components. This means we can "re-enter" a subtree of a component by queuing a "NeedToDiff" event.
@@ -50,20 +55,29 @@ use std::{cell::RefCell, cmp::Ordering, collections::VecDeque, rc::Rc};
 /// different cursor position.
 ///
 /// The order of these re-entrances is stored in the DiffState itself. The DiffState comes pre-loaded with a set of components
-/// that were modified by the eventtrigger. This prevents doubly evaluating components if they wereboth updated via
+/// that were modified by the eventtrigger. This prevents doubly evaluating components if they were both updated via
 /// subscriptions and props changes.
 pub struct DiffMachine<'a> {
     pub change_list: EditMachine<'a>,
     pub diffed: FxHashSet<ScopeIdx>,
-    pub need_to_diff: FxHashSet<ScopeIdx>,
+    pub lifecycle_events: VecDeque<LifeCycleEvent>,
+}
+
+#[derive(Debug)]
+pub enum LifeCycleEvent {
+    Mount { caller: Caller, id: Uuid },
+    PropsChanged,
+    SameProps,
+    Remove,
 }
 
 impl<'a> DiffMachine<'a> {
-    pub fn new(bump: &'a Bump) -> Self {
+    pub fn new() -> Self {
+        // pub fn new(bump: &'a Bump) -> Self {
         Self {
-            change_list: EditMachine::new(bump),
+            lifecycle_events: VecDeque::new(),
+            change_list: EditMachine::new(),
             diffed: FxHashSet::default(),
-            need_to_diff: FxHashSet::default(),
         }
     }
 
@@ -111,18 +125,31 @@ impl<'a> DiffMachine<'a> {
                 self.diff_children(eold.children, enew.children);
             }
 
-            (VNode::Component(_cold), VNode::Component(_cnew)) => {
-                // if cold.comp != cnew.comp {
-                //     // queue an event to mount this new component
+            (VNode::Component(cold), VNode::Component(cnew)) => {
+                todo!("should not happen")
+                // if cold.caller_ref != cnew.caller_ref {
+                //     // todo: create a stable addr
+                //     self.lifecycle_events.push_back(LifeCycleEvent::Mount);
                 //     return;
                 // }
 
-                // compare props.... somehow.....
+                // let comparator = &cnew.comparator.0;
+                // let old_props = cold.raw_props.as_ref();
+                // let has_changed = comparator(old_props);
 
-                todo!("Usage of component VNode not currently supported");
+                // if has_changed {
+                //     self.lifecycle_events
+                //         .push_back(LifeCycleEvent::PropsChanged);
+                //     return;
+                // }
+
+                // the component is the same and hasn't changed
+                // migrate props over (so the addr remains stable) but don't rerun the component
             }
 
+            // todo: knock out any listeners
             (_, VNode::Component(_new)) => {
+                // self.lifecycle_events.push_back(LifeCycleEvent::Mount);
                 // we have no stable reference to work from
                 // push the lifecycle event onto the queue
                 // self.lifecycle_events
@@ -147,6 +174,100 @@ impl<'a> DiffMachine<'a> {
 
             (VNode::Suspended, _) | (_, VNode::Suspended) => {
                 todo!("Suspended components not currently available")
+            }
+        }
+    }
+
+    // Emit instructions to create the given virtual node.
+    //
+    // The change list stack may have any shape upon entering this function:
+    //
+    //     [...]
+    //
+    // When this function returns, the new node is on top of the change list stack:
+    //
+    //     [... node]
+    fn create(&mut self, node: &VNode<'a>) {
+        debug_assert!(self.change_list.traversal_is_committed());
+        match node {
+            VNode::Text(VText { text }) => {
+                self.change_list.create_text_node(text);
+            }
+            VNode::Element(&VElement {
+                key: _,
+                tag_name,
+                listeners,
+                attributes,
+                children,
+                namespace,
+            }) => {
+                // log::info!("Creating {:#?}", node);
+                if let Some(namespace) = namespace {
+                    self.change_list.create_element_ns(tag_name, namespace);
+                } else {
+                    self.change_list.create_element(tag_name);
+                }
+
+                listeners.iter().enumerate().for_each(|(_id, listener)| {
+                    self.change_list
+                        .new_event_listener(listener.event, listener.scope, listener.id)
+                });
+
+                for attr in attributes {
+                    self.change_list
+                        .set_attribute(&attr.name, &attr.value, namespace.is_some());
+                }
+
+                // Fast path: if there is a single text child, it is faster to
+                // create-and-append the text node all at once via setting the
+                // parent's `textContent` in a single change list instruction than
+                // to emit three instructions to (1) create a text node, (2) set its
+                // text content, and finally (3) append the text node to this
+                // parent.
+                if children.len() == 1 {
+                    if let VNode::Text(VText { text }) = children[0] {
+                        self.change_list.set_text(text);
+                        return;
+                    }
+                }
+
+                for child in children {
+                    self.create(child);
+                    self.change_list.append_child();
+                }
+            }
+
+            /*
+            todo: integrate re-entrace
+            */
+            // NodeKind::Cached(ref c) => {
+            //     cached_roots.insert(c.id);
+            //     let (node, template) = cached_set.get(c.id);
+            //     if let Some(template) = template {
+            //         create_with_template(
+            //             cached_set,
+            //             self.change_list,
+            //             registry,
+            //             template,
+            //             node,
+            //             cached_roots,
+            //         );
+            //     } else {
+            //         create(cached_set, change_list, registry, node, cached_roots);
+            //     }
+            // }
+            VNode::Component(component) => {
+                self.change_list
+                    .create_text_node("placeholder for vcomponent");
+                let id = uuid::Uuid::new_v4();
+                self.change_list.save_known_root(id);
+                self.lifecycle_events.push_back(LifeCycleEvent::Mount {
+                    caller: component.caller.clone(),
+                    id,
+                });
+            }
+            VNode::Suspended => {
+                todo!("Creation of VNode::Suspended not yet supported")
             }
         }
     }
@@ -786,93 +907,6 @@ impl<'a> DiffMachine<'a> {
     // ======================
     // Support methods
     // ======================
-
-    // Emit instructions to create the given virtual node.
-    //
-    // The change list stack may have any shape upon entering this function:
-    //
-    //     [...]
-    //
-    // When this function returns, the new node is on top of the change list stack:
-    //
-    //     [... node]
-    fn create(&mut self, node: &VNode<'a>) {
-        debug_assert!(self.change_list.traversal_is_committed());
-        match node {
-            VNode::Text(VText { text }) => {
-                self.change_list.create_text_node(text);
-            }
-            VNode::Element(&VElement {
-                key: _,
-                tag_name,
-                listeners,
-                attributes,
-                children,
-                namespace,
-            }) => {
-                // log::info!("Creating {:#?}", node);
-                if let Some(namespace) = namespace {
-                    self.change_list.create_element_ns(tag_name, namespace);
-                } else {
-                    self.change_list.create_element(tag_name);
-                }
-
-                listeners.iter().enumerate().for_each(|(_id, listener)| {
-                    self.change_list
-                        .new_event_listener(listener.event, listener.scope, listener.id)
-                });
-
-                for attr in attributes {
-                    self.change_list
-                        .set_attribute(&attr.name, &attr.value, namespace.is_some());
-                }
-
-                // Fast path: if there is a single text child, it is faster to
-                // create-and-append the text node all at once via setting the
-                // parent's `textContent` in a single change list instruction than
-                // to emit three instructions to (1) create a text node, (2) set its
-                // text content, and finally (3) append the text node to this
-                // parent.
-                if children.len() == 1 {
-                    if let VNode::Text(VText { text }) = children[0] {
-                        self.change_list.set_text(text);
-                        return;
-                    }
-                }
-
-                for child in children {
-                    self.create(child);
-                    self.change_list.append_child();
-                }
-            }
-
-            /*
-            todo: integrate re-entrace
-            */
-            // NodeKind::Cached(ref c) => {
-            //     cached_roots.insert(c.id);
-            //     let (node, template) = cached_set.get(c.id);
-            //     if let Some(template) = template {
-            //         create_with_template(
-            //             cached_set,
-            //             self.change_list,
-            //             registry,
-            //             template,
-            //             node,
-            //             cached_roots,
-            //         );
-            //     } else {
-            //         create(cached_set, change_list, registry, node, cached_roots);
-            //     }
-            // }
-            VNode::Suspended => {
-                todo!("Creation of VNode::Suspended not yet supported")
-            }
-            VNode::Component(_) => {
-                todo!("Creation of VNode::Component not yet supported")
-            }
-        }
-    }
 
     // Remove all of a node's children.
     //

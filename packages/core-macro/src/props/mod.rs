@@ -11,7 +11,6 @@ use proc_macro2::TokenStream;
 use syn::parse::Error;
 use syn::spanned::Spanned;
 
-
 use quote::quote;
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {

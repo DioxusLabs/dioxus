@@ -1,17 +1,14 @@
 //! Helpers for building virtual DOM VNodes.
 
-use std::{borrow::BorrowMut};
+use std::{borrow::BorrowMut, intrinsics::transmute};
 
 use crate::{
     context::NodeCtx,
     events::VirtualEvent,
-    innerlude::{VComponent, FC},
+    innerlude::{Properties, VComponent, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::VElement,
 };
-
-
-
 
 /// A virtual DOM element builder.
 ///
@@ -526,12 +523,10 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 
 // _f: crate::innerlude::FC<T>,
 // _props: T
-pub fn virtual_child<'a, 'b, T: crate::innerlude::Properties>(
-    _ctx: &'b NodeCtx<'a>,
-    _f: FC<T>,
-    _p: T,
-) -> VNode<'a> {
-    // crate::nodes::VComponent
-    todo!()
-    // VNode::Component()
+pub fn virtual_child<'a, T: Properties>(ctx: &NodeCtx<'a>, f: FC<T>, p: T) -> VNode<'a> {
+    // alloc props into the bump;
+
+    // erase the lifetime
+    let p_static = unsafe { p.into_static() };
+    VNode::Component(crate::nodes::VComponent::new(f, p_static))
 }

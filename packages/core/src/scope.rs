@@ -1,21 +1,12 @@
-use crate::component::ScopeIdx;
-use crate::context::hooks::Hook;
 use crate::innerlude::*;
-use crate::nodes::VNode;
 use bumpalo::Bump;
 
-use std::{
-    any::{Any},
-    cell::RefCell,
-    marker::PhantomData,
-    ops::Deref,
-};
+use std::{any::Any, cell::RefCell, collections::HashSet, marker::PhantomData, ops::Deref};
 
 pub trait Scoped {
     fn run(&mut self);
-    fn compare_props(&self, new: &dyn std::any::Any) -> bool;
+    // fn compare_props(&self, new: &dyn std::any::Any) -> bool;
     fn call_listener(&mut self, trigger: EventTrigger);
-
     fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
     fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
 }
@@ -33,11 +24,16 @@ pub struct Scope<P: Properties> {
     // our own index
     pub myidx: ScopeIdx,
 
-    // the props
-    pub props: P,
+    //
+    pub children: HashSet<ScopeIdx>,
+
+    // // the props
+    // pub props: P,
 
     // and the actual render function
-    pub caller: FC<P>,
+    pub caller: Caller,
+    _p: std::marker::PhantomData<P>,
+    // pub raw_caller: FC<P>,
 
     // ==========================
     // slightly unsafe stuff
@@ -56,43 +52,31 @@ pub struct Scope<P: Properties> {
     // - is self-refenrential and therefore needs to point into the bump
     // Stores references into the listeners attached to the vnodes
     // NEEDS TO BE PRIVATE
-    listeners: RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
+    listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
 }
 
 // instead of having it as a trait method, we use a single function
 // todo: do the unsafety magic stuff to erase the type of p
-pub fn create_scoped<P: Properties + 'static>(
-    caller: FC<P>,
-    props: P,
+pub fn create_scoped(
+    // raw_f: FC<P>,
+    caller: Caller,
+
+    // props: P,
     myidx: ScopeIdx,
     parent: Option<ScopeIdx>,
 ) -> Box<dyn Scoped> {
-    let hook_arena = typed_arena::Arena::new();
-    let hooks = RefCell::new(Vec::new());
-
-    let listeners = Default::default();
-
-    let old_frame = BumpFrame {
-        bump: Bump::new(),
-        head_node: VNode::text(""),
-    };
-
-    let new_frame = BumpFrame {
-        bump: Bump::new(),
-        head_node: VNode::text(""),
-    };
-
-    let frames = ActiveFrame::from_frames(old_frame, new_frame);
-
-    Box::new(Scope {
+    Box::new(Scope::<()> {
+        // raw_caller: raw_f,
+        _p: Default::default(),
         caller,
         myidx,
-        hook_arena,
-        hooks,
-        frames,
-        listeners,
+        hook_arena: typed_arena::Arena::new(),
+        hooks: RefCell::new(Vec::new()),
+        frames: ActiveFrame::new(),
+        children: HashSet::new(),
+        listeners: Default::default(),
         parent,
-        props,
+        // props,
     })
 }
 
@@ -122,9 +106,8 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
         };
 
         // Note that the actual modification of the vnode head element occurs during this call
-        // let _: DomTree = caller(ctx, props);
-        // let _: DomTree = P::render (ctx, &self.props);
-        let _: DomTree = (self.caller)(ctx, &self.props);
+        let _: DomTree = (self.caller.0.as_ref())(ctx);
+        // let _: DomTree = (self.raw_caller)(ctx, &self.props);
 
         /*
         SAFETY ALERT
@@ -145,11 +128,11 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
             .expect("Viewing did not happen");
     }
 
-    fn compare_props(&self, new: &dyn Any) -> bool {
-        new.downcast_ref::<P>()
-            .map(|f| &self.props == f)
-            .expect("Props should not be of a different type")
-    }
+    // fn compare_props(&self, new: &dyn Any) -> bool {
+    //     new.downcast_ref::<P>()
+    //         .map(|f| &self.props == f)
+    //         .expect("Props should not be of a different type")
+    // }
 
     // A safe wrapper around calling listeners
     // calling listeners will invalidate the list of listeners
@@ -194,7 +177,6 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
 // ==========================
 // Active-frame related code
 // ==========================
-
 // todo, do better with the active frame stuff
 // somehow build this vnode with a lifetime tied to self
 // This root node has  "static" lifetime, but it's really not static.
@@ -212,6 +194,19 @@ pub struct BumpFrame {
 }
 
 impl ActiveFrame {
+    pub fn new() -> Self {
+        Self::from_frames(
+            BumpFrame {
+                bump: Bump::new(),
+                head_node: VNode::text(""),
+            },
+            BumpFrame {
+                bump: Bump::new(),
+                head_node: VNode::text(""),
+            },
+        )
+    }
+
     fn from_frames(a: BumpFrame, b: BumpFrame) -> Self {
         Self {
             idx: 0.into(),

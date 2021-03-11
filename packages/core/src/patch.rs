@@ -83,11 +83,13 @@ pub enum Edit<'d> {
     // ========================================================
     // push a known node on to the stack
     TraverseToKnown {
-        node: ScopeIdx,
+        node: uuid::Uuid,
+        // node: ScopeIdx,
     },
     // Add the current top of the stack to the known nodes
     MakeKnown {
-        node: ScopeIdx,
+        node: uuid::Uuid,
+        // node: ScopeIdx,
     },
     // Remove the current top of the stack from the known nodes
     RemoveKnown,
@@ -126,18 +128,18 @@ pub struct EditMachine<'src> {
     pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
-
     pub emitter: EditList<'src>,
 }
 
 impl<'b> EditMachine<'b> {
-    pub fn new(_bump: &'b bumpalo::Bump) -> Self {
+    pub fn new() -> Self {
+        // pub fn new(_bump: &'b bumpalo::Bump) -> Self {
         // todo: see if bumpalo is needed for edit list
         Self {
             traversal: Traversal::new(),
             next_temporary: 0,
             forcing_new_listeners: false,
-            emitter: EditList::default(),
+            emitter: EditList::<'b>::default(),
         }
     }
 }
@@ -364,9 +366,16 @@ impl<'a> EditMachine<'a> {
         // debug!("emit: remove_event_listener({:?})", event);
     }
 
-    pub fn save_known_root(&mut self, id: ScopeIdx) {
+    pub fn save_known_root(&mut self, id: uuid::Uuid) {
+        // pub fn save_known_root(&mut self, id: ScopeIdx) {
+        // pub fn save_known_root(&mut self, id: ScopeIdx) {
         log::debug!("emit: save_known_root({:?})", id);
         self.emitter.push(Edit::MakeKnown { node: id })
+    }
+
+    pub fn load_known_root(&mut self, id: uuid::Uuid) {
+        log::debug!("emit: TraverseToKnown({:?})", id);
+        self.emitter.push(Edit::TraverseToKnown { node: id })
     }
 
     // pub fn save_template(&mut self, id: CacheId) {

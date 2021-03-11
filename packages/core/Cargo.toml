@@ -10,10 +10,8 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# dodrio-derive = { path = "../html-macro-2", version = "0.1.0" }
-# dioxus-html-macro = { path = "../html-macro", version = "0.1.0" }
-# dioxus-html-2 = { path = "../html-macro-2", version = "0.1.0" }
 dioxus-core-macro = { path = "../core-macro", version = "0.1.1" }
+
 # Backs some static data
 once_cell = "1.5.2"
 
@@ -22,18 +20,12 @@ generational-arena = { version = "0.2.8", features = ["serde"] }
 # Bumpalo backs the VNode creation
 bumpalo = { version = "3.6.0", features = ["collections"] }
 
-owning_ref = "0.4.1"
-
 # all the arenas 👿
 typed-arena = "2.0.1"
-toolshed = "0.8.1"
 id-arena = "2.2.1"
 thiserror = "1.0.23"
 fxhash = "0.2.1"
 longest-increasing-subsequence = "0.1.0"
 serde = { version = "1.0.123", features = ["derive"] }
 log = "0.4.14"
-pretty_env_logger = "0.4.0"
-fstrings = "0.2.3"
-# ouroboros = "0.8.0"
-# hashbrown = { version = "0.9.1", features = ["bumpalo"] }
+uuid = {version = "0.8.2", features=["serde", "v4"]}

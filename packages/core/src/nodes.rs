@@ -10,12 +10,7 @@ use crate::{
 
 use bumpalo::Bump;
 use std::fmt::Debug;
-use std::{
-    any::{Any},
-    cell::RefCell,
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
 /// A domtree represents the result of "Viewing" the context
 /// It's a placeholder over vnodes, to make working with lifetimes easier
@@ -271,21 +266,28 @@ impl<'a> VText<'a> {
 /// Only supports the functional syntax
 pub type StableScopeAddres = Rc<RefCell<Option<usize>>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VComponent<'src> {
     pub stable_addr: StableScopeAddres,
+    pub raw_props: Rc<dyn Any>,
     pub comparator: Comparator,
     pub caller: Caller,
+    pub caller_ref: *const (),
     _p: PhantomData<&'src ()>,
 }
-pub struct Comparator(Box<dyn Fn(&dyn Any) -> bool>);
+pub trait PropsComparator {}
+
+#[derive(Clone)]
+pub struct Comparator(pub Rc<dyn Fn(&dyn PropsComparator) -> bool>);
+// pub struct Comparator(pub Rc<dyn Fn(&dyn Any) -> bool>);
 impl std::fmt::Debug for Comparator {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
 
-pub struct Caller(Box<dyn Fn(Context) -> DomTree>);
+#[derive(Clone)]
+pub struct Caller(pub Rc<dyn Fn(Context) -> DomTree>);
 impl std::fmt::Debug for Caller {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
@@ -298,30 +300,41 @@ impl<'a> VComponent<'a> {
     // - perform comparisons when diffing (memoization)
     // TODO: lift the requirement that props need to be static
     // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
-    pub fn new<P: Properties + 'static>(caller: FC<P>, props: P) -> Self {
+    pub fn new<P0: Properties, P: Properties + 'static>(caller: FC<P0>, props: P) -> Self {
+        let caller_ref = caller as *const ();
+
         let props = Rc::new(props);
 
         // used for memoization
         let p1 = props.clone();
-        let props_comparator = move |new_props: &dyn Any| -> bool {
-            new_props
-                .downcast_ref::<P>()
-                .map(|new_p| p1.as_ref() == new_p)
-                .unwrap_or_else(|| {
-                    log::debug!("downcasting failed, this receovered but SHOULD NOT FAIL");
-                    false
-                })
+        let props_comparator = move |new_props: ()| -> bool {
+            false
+            // let props_comparator = move |new_props: &dyn Any| -> bool {
+            // new_props
+            //     .downcast_ref::<P>()
+            //     .map(|new_p| p1.as_ref() == new_p)
+            //     .unwrap_or_else(|| {
+            //         log::debug!("downcasting failed, this receovered but SHOULD NOT FAIL");
+            //         false
+            //     })
         };
 
         // used for actually rendering the custom component
         let p2 = props.clone();
-        let caller = move |ctx: Context| -> DomTree { caller(ctx, p2.as_ref()) };
+        let caller = move |ctx: Context| -> DomTree {
+            //
+            // cast back into the right lifetime
+            caller(ctx, p2.as_ref())
+        };
 
-        Self {
-            _p: PhantomData,
-            comparator: Comparator(Box::new(props_comparator)),
-            caller: Caller(Box::new(caller)),
-            stable_addr: Rc::new(RefCell::new(None)),
-        }
+        todo!()
+        // Self {
+        //     caller_ref,
+        //     raw_props: props,
+        //     _p: PhantomData,
+        //     comparator: Comparator(Rc::new(props_comparator)),
+        //     caller: Caller(Rc::new(caller)),
+        //     stable_addr: Rc::new(RefCell::new(None)),
+        // }
     }
 }

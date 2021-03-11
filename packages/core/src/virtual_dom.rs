@@ -7,7 +7,7 @@ use crate::{
 };
 use bumpalo::Bump;
 use generational_arena::Arena;
-
+use std::{any::TypeId, cell::RefCell, rc::Rc};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -17,8 +17,9 @@ pub struct VirtualDom {
     ///
     /// eventually, come up with a better datastructure that reuses boxes for known P types
     /// like a generational typemap bump arena
-    /// -> IE a cache line for each P type with soem heuristics on optimizing layout
+    /// -> IE a cache line for each P type with some heuristics on optimizing layout
     pub(crate) components: Arena<Box<dyn Scoped>>,
+    // pub(crate) components: RefCell<Arena<Box<dyn Scoped>>>,
     // pub(crate) components: Rc<RefCell<Arena<Box<dyn Scoped>>>>,
     /// The index of the root component.
     /// Will not be ready if the dom is fresh
@@ -59,53 +60,87 @@ impl VirtualDom {
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
-    pub fn new_with_props<P: Properties + 'static>(_root: FC<P>, _root_props: P) -> Self {
-        // let mut components = Arena::new();
-        // let mut components = Arena::new();
+    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
+        let mut components = Arena::new();
 
         // Create a reference to the component in the arena
         // Note: we are essentially running the "Mount" lifecycle event manually while the vdom doesnt yet exist
-        // This puts the dom in a usable state on creation, rather than being potentially invalid
+        let caller = Caller(Rc::new(move |ctx| {
+            //
+            root(ctx, &root_props)
+            // DomTree {}
+        }));
+        let base_scope = components.insert_with(|id| create_scoped(caller, id, None));
         // let base_scope = components.insert_with(|id| create_scoped(root, root_props, id, None));
 
-        todo!()
-        // Self {
-        //     // components: RefCell::new(components),
-        //     components: components,
-        //     // components: Rc::new(RefCell::new(components)),
-        //     base_scope,
-        //     // event_queue: RefCell::new(VecDeque::new()),
-        //     diff_bump: Bump::new(),
-        //     _root_prop_type: TypeId::of::<P>(),
-        // }
+        Self {
+            components,
+            base_scope,
+            diff_bump: Bump::new(),
+            _root_prop_type: TypeId::of::<P>(),
+        }
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom.
-
-    // pub fn rebuild<'s>(&'s mut self) -> Result<> {
-    // pub fn rebuild<'s>(&'s mut self) -> Result<std::cell::Ref<'_, Arena<Box<dyn Scoped>>>> {
     pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
+        log::debug!("rebuilding...");
         // Reset and then build a new diff machine
         // The previous edit list cannot be around while &mut is held
         // Make sure variance doesnt break this
-        self.diff_bump.reset();
+        // bump.reset();
 
-        self.components
-            .get_mut(self.base_scope)
-            .expect("Root should always exist")
-            .run();
+        // Diff from the top
+        let mut diff_machine = DiffMachine::new(); // partial borrow
+        {
+            let component = self
+                .components
+                .get_mut(self.base_scope)
+                .expect("failed to acquire base scope");
 
-        let _b = Bump::new();
+            component.run();
+        }
 
-        let mut diff_machine = DiffMachine::new(&self.diff_bump);
-        // let mut diff_machine = DiffMachine::new(self, &self.diff_bump, self.base_scope);
+        {
+            let component = self
+                .components
+                .get(self.base_scope)
+                .expect("failed to acquire base scope");
 
-        // todo!()
+            diff_machine.diff_node(component.old_frame(), component.new_frame());
+        }
 
-        let component = self.components.get(self.base_scope).unwrap();
-        diff_machine.diff_node(component.old_frame(), component.new_frame());
-        let edits = diff_machine.consume();
-        // self.diff_bump = b;
+        // 'render: loop {
+        //     for event in &mut diff_machine.lifecycle_events.drain(..) {
+        //         log::debug!("event is {:#?}", event);
+        //         match event {
+        //             LifeCycleEvent::Mount { caller, id } => {
+        //                 diff_machine.change_list.load_known_root(id);
+        //                 let idx = self
+        //                     .components
+        //                     .insert_with(|f| create_scoped(caller, f, None));
+        //                 // .insert_with(|f| create_scoped(caller, props, myidx, parent));
+        //             }
+        //             LifeCycleEvent::PropsChanged => {
+        //                 //
+        //                 break 'render;
+        //             }
+        //             LifeCycleEvent::SameProps => {
+        //                 //
+        //                 break 'render;
+        //             }
+        //             LifeCycleEvent::Remove => {
+        //                 //
+        //                 break 'render;
+        //             }
+        //         }
+        //     }
+
+        //     if diff_machine.lifecycle_events.is_empty() {
+        //         break 'render;
+        //     }
+        // }
+
+        let edits: Vec<Edit<'s>> = diff_machine.consume();
         Ok(edits)
     }
 
@@ -133,50 +168,20 @@ impl VirtualDom {
     /// }
     ///
     /// ```
-    pub fn progress_with_event(&mut self, _event: EventTrigger) -> Result<EditList<'_>> {
-        // self.components
-        //     .borrow_mut()
-        //     .get_mut(event.component_id)
-        //     .map(|f| {
-        //         f.call_listener(event);
-        //         f
-        //     })
-        //     .map(|f| f.run())
-        //     .expect("Borrowing should not fail");
+    pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList<'_>> {
+        let component = self
+            .components
+            .get_mut(event.component_id)
+            .expect("Borrowing should not fail");
 
-        // component.call_listener(event);
+        component.call_listener(event);
+        component.run();
 
-        // .expect("Component should exist if an event was triggered");
-        // Reset and then build a new diff machine
-        // The previous edit list cannot be around while &mut is held
-        // Make sure variance doesnt break this
-        // self.diff_bump.reset();
-        // let mut diff_machine = DiffMachine::new(&mut self, event.component_id);
-        // let mut diff_machine =
-        //     DiffMachine::new(&self.diff_bump, &mut self.components, event.component_id);
+        let mut diff_machine = DiffMachine::new();
+        // let mut diff_machine = DiffMachine::new(&self.diff_bump);
 
-        // component.run();
-        // diff_machine.diff_node(component.old_frame(), component.new_frame());
+        diff_machine.diff_node(component.old_frame(), component.new_frame());
 
-        todo!()
-        // Ok(diff_machine.consume())
-        // Err(crate::error::Error::NoEvent)
-        // Mark dirty components. Descend from the highest node until all dirty nodes are updated.
-        // let mut affected_components = Vec::new();
-
-        // while let Some(event) = self.pop_event() {
-        //     if let Some(component_idx) = event.index() {
-        //         affected_components.push(component_idx);
-        //     }
-        //     self.process_lifecycle(event)?;
-        // }
-
-        // todo!()
+        Ok(diff_machine.consume())
     }
 }
-
-enum LifeCycleEvent {
-    Mount {},
-}
-
-// todo: add some "handle" to the vdom. Or a way of giving out closures that can mutate the vdoms internal data.

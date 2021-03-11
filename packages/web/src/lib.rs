@@ -2,6 +2,7 @@
 //! --------------
 //! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using Websys.
 
+use dioxus::prelude::Properties;
 use fxhash::FxHashMap;
 use web_sys::{window, Document, Element, Event, Node};
 
@@ -48,7 +49,7 @@ impl WebsysRenderer {
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
     /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new_with_props<T: 'static>(root: FC<T>, root_props: T) -> Self {
+    pub fn new_with_props<T: Properties + 'static>(root: FC<T>, root_props: T) -> Self {
         Self::from_vdom(VirtualDom::new_with_props(root, root_props))
     }
 
@@ -59,7 +60,7 @@ impl WebsysRenderer {
     }
 
     pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
-        let (mut sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
+        let (sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
 
         let body_element = prepare_websys_dom();
 
@@ -75,8 +76,10 @@ impl WebsysRenderer {
 
         // todo: initialize the event registry properly on the root
 
-        self.internal_dom.rebuild()?.iter().for_each(|edit| {
-            // log::debug!("patching with  {:?}", edit);
+        let edits = self.internal_dom.rebuild()?;
+        log::debug!("Received edits: {:#?}", edits);
+        edits.iter().for_each(|edit| {
+            log::debug!("patching with  {:?}", edit);
             patch_machine.handle_edit(edit);
         });
         // log::debug!("patch stack size {:?}", patch_machine.stack);
@@ -92,7 +95,7 @@ impl WebsysRenderer {
                 .progress_with_event(event)?
                 .iter()
                 .for_each(|edit| {
-                    // log::debug!("edit stream {:?}", edit);
+                    log::debug!("edit stream {:?}", edit);
                     patch_machine.handle_edit(edit);
                 });
 

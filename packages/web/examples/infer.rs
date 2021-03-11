@@ -6,6 +6,7 @@ fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
+    log::info!("hello world");
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
 
@@ -17,6 +18,8 @@ static Example: FC<()> = |ctx, _props| {
     let handler = move |evt: MouseEvent| {
         set_event(Some(evt));
     };
+
+    log::info!("hello world");
 
     ctx.render(rsx! {
         div {  
@@ -35,21 +38,35 @@ static Example: FC<()> = |ctx, _props| {
                 id: "json"
                 "{event}"
             }
-            Example2 { name: "{event}" }
+            // Example2 { name: "{event}".to_string() }
         }
     })
 };
 
 
-#[derive(Debug, PartialEq)]
-struct Props {
+#[derive(Debug, PartialEq, Props)]
+struct ExampleProps {
     name: String
 }
 
-static Example2: FC<Props> = |ctx, props| {
+static Example2: FC<ExampleProps> = |ctx, props| {
     ctx.render(rsx!{
         div {
             h1 {"hello {props.name}"}
         }
     })
 };
+
+
+impl Properties for ExampleProps {
+    type Builder = ExamplePropsBuilder<((),)>;
+    type StaticOutput = ExampleProps;
+    fn builder() -> Self::Builder {
+        ExampleProps::builder()
+    }
+
+
+    unsafe fn into_static(self) -> Self::StaticOutput {
+        todo!()
+    }
+}

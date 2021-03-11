@@ -91,14 +91,17 @@ pub(crate) mod innerlude {
     // pub(crate) use crate::component::Properties;
     pub(crate) use crate::component::Properties;
     pub(crate) use crate::context::Context;
-    pub(crate) use crate::error::{Result};
-    pub use crate::events::EventTrigger;
+    pub use crate::diff::LifeCycleEvent;
+    pub(crate) use crate::error::Result;
+    pub use crate::events::{EventTrigger, VirtualEvent};
     use crate::nodes;
-    
-    
-    pub(crate) use nodes::*;
 
     pub use crate::component::ScopeIdx;
+    pub use crate::context::hooks::Hook;
+    pub use crate::nodes::VNode;
+
+    pub(crate) use nodes::*;
+
     pub use crate::diff::DiffMachine;
     pub use crate::patch::{EditList, EditMachine};
     // pub use crate::patchdx;

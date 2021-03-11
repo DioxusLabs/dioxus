@@ -11,7 +11,9 @@ pub type ScopeIdx = generational_arena::Index;
 
 pub trait Properties: PartialEq {
     type Builder;
+    type StaticOutput: Properties + 'static;
     fn builder() -> Self::Builder;
+    unsafe fn into_static(self) -> Self::StaticOutput;
 }
 
 pub struct EmptyBuilder;
@@ -23,9 +25,14 @@ impl EmptyBuilder {
 
 impl Properties for () {
     type Builder = EmptyBuilder;
+    type StaticOutput = ();
 
     fn builder() -> Self::Builder {
         EmptyBuilder {}
+    }
+
+    unsafe fn into_static(self) -> Self::StaticOutput {
+        std::mem::transmute(self)
     }
 }
 

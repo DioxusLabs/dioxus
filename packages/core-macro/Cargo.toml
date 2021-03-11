@@ -16,7 +16,7 @@ once_cell = "1.7.2"
 proc-macro-hack = "0.5.19"
 proc-macro2 = "1.0.6"
 quote = "1.0"
-syn = { version = "1.0.11", features = ["full"] }
+syn = { version = "1.0.11", features = ["full",  "extra-traits"] }
 
 # testing
 [dev-dependencies]

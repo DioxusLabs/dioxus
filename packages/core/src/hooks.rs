@@ -10,12 +10,32 @@ pub use use_state_def::use_state;
 
 mod use_state_def {
     use crate::innerlude::*;
-    use std::{cell::RefCell, ops::DerefMut, rc::Rc};
+    use std::{
+        cell::RefCell,
+        ops::{Deref, DerefMut},
+        rc::Rc,
+    };
 
     struct UseState<T: 'static> {
         new_val: Rc<RefCell<Option<T>>>,
         current_val: T,
         caller: Box<dyn Fn(T) + 'static>,
+    }
+
+    struct UseStateHandle<'a, T> {
+        inner: &'a T,
+    }
+    impl<'a, T> UseStateHandle<'a, T> {
+        fn set(&self, new_val: T) {}
+        fn modify(&self, f: impl FnOnce(&mut T)) {}
+    }
+
+    impl<'a, T> Deref for UseStateHandle<'a, T> {
+        type Target = T;
+
+        fn deref(&self) -> &Self::Target {
+            self.inner
+        }
     }
 
     /// Store state between component renders!
@@ -175,9 +195,9 @@ mod use_reducer_def {
 
     // #[cfg(test)]
     mod tests {
-        
+
         use crate::prelude::*;
-        
+
         enum Actions {
             Incr,
             Decr,

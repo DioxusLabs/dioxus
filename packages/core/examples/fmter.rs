@@ -1,11 +1,7 @@
 // #[macro_use]
-extern crate fstrings;
-
-
 
 // use dioxus_core::ifmt;
 // use fstrings::format_args_f;
-
 
 fn main() {
     let bump = bumpalo::Bump::new();

@@ -1,22 +1,16 @@
-use bumpalo::Bump;
-use dioxus::{events::EventTrigger, prelude::*};
+#![allow(non_snake_case)]
 use dioxus_core as dioxus;
+use dioxus::prelude::*;
 use dioxus_web::WebsysRenderer;
 
-// creates a proxy address that gets transpiled at compile time
-// all asset ids are shuttled through the renderer
-// static IMG: ImgAsset = dioxus_asset!("");
-
 fn main() {
-    // wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    // console_error_panic_hook::set_once();
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
+    console_error_panic_hook::set_once();
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example))
 }
 
-static Example: FC<()> = |ctx, props| {
+static Example: FC<()> = |ctx, _props| {
     let (name, set_name) = use_state(&ctx, || "...?");
-
-    
 
     ctx.render(rsx! {
         div { 
@@ -47,9 +41,3 @@ static Example: FC<()> = |ctx, props| {
         }
     })
 };
-
-
-
-
-
-// onclick: {move |_| set_name("jill")}
