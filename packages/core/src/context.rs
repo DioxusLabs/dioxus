@@ -2,10 +2,7 @@ use crate::nodes::VNode;
 use crate::prelude::*;
 use bumpalo::Bump;
 use hooks::Hook;
-use std::{
-    any::TypeId, borrow::Borrow, cell::RefCell, future::Future, marker::PhantomData, ops::Deref,
-    rc::Rc, sync::atomic::AtomicUsize,
-};
+use std::{cell::RefCell, future::Future, ops::Deref, rc::Rc, sync::atomic::AtomicUsize};
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
 /// This lets components schedule updates, integrate hooks, and expose their context via the context api.
@@ -19,7 +16,7 @@ use std::{
 ///
 /// }
 ///
-/// fn example(ctx: &Context<Props>) -> VNode {
+/// fn example(ctx: Context, props: &Props -> VNode {
 ///     html! {
 ///         <div> "Hello, {ctx.props.name}" </div>
 ///     }
@@ -47,7 +44,6 @@ pub struct Context<'src> {
 }
 
 impl<'a> Context<'a> {
-    // impl<'a, PropType> Context<'a, PropType> {
     /// Access the children elements passed into the component
     pub fn children(&self) -> Vec<VNode> {
         todo!("Children API not yet implemented for component Context")
@@ -55,10 +51,12 @@ impl<'a> Context<'a> {
 
     pub fn callback(&self, _f: impl Fn(()) + 'a) {}
 
+    // call this closure after the component has been committed to the editlist
+    // this provides the founation of "use_effect"
+    fn post_update() {}
+
     /// Create a subscription that schedules a future render for the reference component
     pub fn schedule_update(&self) -> impl Fn() -> () {
-        // log::debug!()
-        // todo!("Subscription API is not ready yet");
         || {}
     }
 
@@ -93,7 +91,7 @@ impl<'a> Context<'a> {
     /// ```ignore
     /// fn Component(ctx: Context<Props>) -> VNode {
     ///     // Lazy assemble the VNode tree
-    ///     let lazy_tree = html! {<div>"Hello World"</div>};
+    ///     let lazy_tree = html! {<div> "Hello World" </div>};
     ///     
     ///     // Actually build the tree and allocate it
     ///     ctx.render(lazy_tree)

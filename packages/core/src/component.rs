@@ -6,6 +6,7 @@
 //! that ensures compile-time required and optional fields on props.
 
 use crate::innerlude::FC;
+
 pub type ScopeIdx = generational_arena::Index;
 
 pub trait Properties: PartialEq {
