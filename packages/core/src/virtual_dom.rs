@@ -185,8 +185,7 @@ impl VirtualDom {
 }
 
 enum LifeCycleEvent {
-    // Mount {
-//     props: &dyn Properties,
-// // f: FC<dyn Properties>,
-// },
+    Mount {},
 }
+
+// todo: add some "handle" to the vdom. Or a way of giving out closures that can mutate the vdoms internal data.

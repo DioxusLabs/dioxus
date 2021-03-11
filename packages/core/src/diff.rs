@@ -55,7 +55,6 @@ use std::{cell::RefCell, cmp::Ordering, collections::VecDeque, rc::Rc};
 /// subscriptions and props changes.
 pub struct DiffMachine<'a> {
     pub change_list: EditMachine<'a>,
-
     pub diffed: FxHashSet<ScopeIdx>,
     pub need_to_diff: FxHashSet<ScopeIdx>,
 }
@@ -125,25 +124,6 @@ impl<'a> DiffMachine<'a> {
             }
 
             (_, VNode::Component(new)) => {
-                // let VComponent {
-                //     props,
-                //     props_type,
-                //     comp,
-                //     caller,
-                //     assigned_scope,
-                //     ..
-                // } = *new;
-
-                // make the component
-                // let idx = unsafe {
-                //     // let vdom = &mut *self.vdom;
-                //     vdom.insert_with(|f| {
-                //         todo!()
-                //         //
-                //         // create_scoped(caller, props, myidx, parent)
-                //     })
-                // };
-
                 // we have no stable reference to work from
                 // push the lifecycle event onto the queue
                 // self.lifecycle_events

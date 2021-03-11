@@ -89,10 +89,10 @@ pub mod builder {
 // types used internally that are important
 pub(crate) mod innerlude {
     // pub(crate) use crate::component::Properties;
-
     pub(crate) use crate::component::Properties;
     pub(crate) use crate::context::Context;
     pub(crate) use crate::error::{Error, Result};
+    pub use crate::events::EventTrigger;
     use crate::nodes;
     pub(crate) use crate::scope::Scope;
     pub(crate) use crate::virtual_dom::VirtualDom;
@@ -100,7 +100,6 @@ pub(crate) mod innerlude {
 
     pub use crate::component::ScopeIdx;
     pub use crate::diff::DiffMachine;
-    pub use crate::events::EventTrigger;
     pub use crate::patch::{EditList, EditMachine};
     // pub use crate::patchdx;
     // pub use crate::patchtList;
