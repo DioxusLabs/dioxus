@@ -135,7 +135,6 @@ pub mod prelude {
     pub use crate::component::{fc_to_builder, Properties};
     pub use crate::context::Context;
     use crate::nodes;
-    pub use crate::virtual_dom::VirtualDom;
     pub use nodes::*;
 
     // pub use nodes::iterables::IterableNodes;
@@ -144,7 +143,6 @@ pub mod prelude {
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate
-    pub type VirtualNode<'a> = VNode<'a>;
 
     // expose our bumpalo type
     pub use bumpalo;
@@ -160,5 +158,6 @@ pub mod prelude {
     pub use crate::component::ScopeIdx;
     pub use crate::diff::DiffMachine;
 
+    pub use crate::debug_renderer::DebugRenderer;
     pub use crate::hooks::*;
 }

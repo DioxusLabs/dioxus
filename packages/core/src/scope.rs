@@ -126,7 +126,7 @@ impl Scope {
     /// This function downcasts the function pointer based on the stored props_type
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
-    pub fn run<'bump>(&'bump mut self) {
+    pub fn run_scope<'bump>(&'bump mut self) -> Result<()> {
         let frame = {
             let frame = self.frames.next();
             frame.bump.reset();

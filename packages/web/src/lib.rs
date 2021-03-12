@@ -6,11 +6,9 @@ use dioxus::prelude::Properties;
 use fxhash::FxHashMap;
 use web_sys::{window, Document, Element, Event, Node};
 
+use dioxus::virtual_dom::VirtualDom;
 pub use dioxus_core as dioxus;
-use dioxus_core::{
-    events::EventTrigger,
-    prelude::{VirtualDom, FC},
-};
+use dioxus_core::{events::EventTrigger, prelude::FC};
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
 pub mod interpreter;

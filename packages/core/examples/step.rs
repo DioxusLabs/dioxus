@@ -1,3 +1,4 @@
+use dioxus_core::virtual_dom::VirtualDom;
 use dioxus_core::{component::Properties, prelude::*};
 
 fn main() -> Result<(), ()> {

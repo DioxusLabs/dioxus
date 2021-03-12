@@ -58,6 +58,7 @@ use std::{
 /// that were modified by the eventtrigger. This prevents doubly evaluating components if they were both updated via
 /// subscriptions and props changes.
 pub struct DiffMachine<'a> {
+    pub create_diffs: bool,
     pub change_list: EditMachine<'a>,
     pub diffed: FxHashSet<ScopeIdx>,
     pub lifecycle_events: VecDeque<LifeCycleEvent<'a>>,
@@ -75,6 +76,7 @@ pub enum LifeCycleEvent<'a> {
 impl<'a> DiffMachine<'a> {
     pub fn new() -> Self {
         Self {
+            create_diffs: true,
             lifecycle_events: VecDeque::new(),
             change_list: EditMachine::new(),
             diffed: FxHashSet::default(),

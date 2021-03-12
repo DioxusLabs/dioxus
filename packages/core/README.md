@@ -2,6 +2,8 @@
 
 This is the core crate for the Dioxus Virtual DOM. This README will focus on the technical design and layout of this Virtual DOM implementation. If you want to read more about using Dioxus, then check out the Dioxus crate, documentation, and website.
 
+We reserve the "dioxus" name and aggregate all the various renderers under it. If you want just a single dioxus renderer, then chose from "dioxus-web", "dioxus-desktop", etc.
+
 ## Internals
 Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus borrows these concepts:
 

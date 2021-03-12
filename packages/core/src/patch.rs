@@ -16,16 +16,20 @@
 //! Because the change list references data internal to the vdom, it needs to be consumed by the renderer before the vdom
 //! can continue to work. This means once a change list is generated, it should be consumed as fast as possible, otherwise the
 //! dom will be blocked from progressing. This is enforced by lifetimes on the returend changelist object.
+//!
+//! # Known Issues
+//! ----
+//! - stack machine approach does not work when 3rd party extensions inject elements (breaking our view of the dom)
 
 use crate::innerlude::ScopeIdx;
 
 pub type EditList<'src> = Vec<Edit<'src>>;
 
 /// The `Edit` represents a single modifcation of the renderer tree.
-/// todo@ jon: allow serde to be optional
 /// todo @jon, go through and make certain fields static. tag names should be known at compile time
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type")]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+#[derive(Debug)]
 pub enum Edit<'src_bump> {
     // ========================================================
     // Common Ops: The most common operation types

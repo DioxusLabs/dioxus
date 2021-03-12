@@ -1,53 +1,36 @@
 // use crate::{changelist::EditList, nodes::VNode};
 
-use crate::innerlude::*;
+use crate::{error::Error, innerlude::*};
 use crate::{patch::Edit, scope::Scope};
-use bumpalo::Bump;
 use generational_arena::Arena;
 use std::{
     any::TypeId,
-    cell::RefCell,
     rc::{Rc, Weak},
 };
+use thiserror::private::AsDynError;
+
+// We actually allocate the properties for components in their parent's properties
+// We then expose a handle to use those props for render in the form of "OpaqueComponent"
+pub(crate) type OpaqueComponent<'a> = dyn Fn(Context) -> DomTree + 'a;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
 pub struct VirtualDom {
     /// All mounted components are arena allocated to make additions, removals, and references easy to work with
     /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
-    ///
-    /// eventually, come up with a better datastructure that reuses boxes for known P types
-    /// like a generational typemap bump arena
-    /// -> IE a cache line for each P type with some heuristics on optimizing layout
-    pub(crate) components: Arena<Scope>,
-    // pub(crate) components: RefCell<Arena<Box<dyn Scoped>>>,
-    // pub(crate) components: Rc<RefCell<Arena<Box<dyn Scoped>>>>,
+    components: Arena<Scope>,
+
     /// The index of the root component.
     /// Will not be ready if the dom is fresh
-    pub(crate) base_scope: ScopeIdx,
+    base_scope: ScopeIdx,
 
-    pub(crate) root_caller: Rc<dyn Fn(Context) -> DomTree + 'static>,
+    // a strong allocation to the "caller" for the original props
+    #[doc(hidden)]
+    _root_caller: Rc<OpaqueComponent<'static>>,
 
     // Type of the original props. This is done so VirtualDom does not need to be generic.
     #[doc(hidden)]
     _root_prop_type: std::any::TypeId,
-    // ======================
-    //  DIFF RELATED ITEMs
-    // ======================
-    // // todo: encapsulate more state into this so we can better reuse it
-    pub(crate) diff_bump: Bump,
-    // // be very very very very very careful
-    // pub change_list: EditMachine<'static>,
-
-    // // vdom: &'a VirtualDom,
-    // vdom: *mut Arena<Box<dyn Scoped>>,
-
-    // // vdom: Rc<RefCell<Arena<Box<dyn Scoped>>>>,
-    // pub cur_idx: ScopeIdx,
-
-    // // todo
-    // // do an indexmap sorted by height
-    // dirty_nodes: fxhash::FxHashSet<ScopeIdx>,
 }
 
 impl VirtualDom {
@@ -67,52 +50,49 @@ impl VirtualDom {
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let mut components = Arena::new();
 
-        // the root is kept around
-        let root_caller: Rc<dyn Fn(Context) -> DomTree + 'static> =
-            Rc::new(move |ctx| root(ctx, &root_props));
-        let weak_caller: Weak<dyn Fn(Context) -> DomTree + 'static> = Rc::downgrade(&root_caller);
-        let base_scope = components.insert_with(move |id| Scope::new(weak_caller, id, None));
+        // the root is kept around with a "hard" allocation
+        let root_caller: Rc<OpaqueComponent> = Rc::new(move |ctx| root(ctx, &root_props));
+
+        // we then expose this to the component with a weak allocation
+        let weak_caller: Weak<OpaqueComponent> = Rc::downgrade(&root_caller);
+
+        let base_scope = components.insert_with(move |myidx| Scope::new(weak_caller, myidx, None));
 
         Self {
             components,
-            root_caller,
+            _root_caller: root_caller,
             base_scope,
-            diff_bump: Bump::new(),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
 
+    // consume the top of the diff machine event cycle and dump edits into the edit list
+    pub fn step(&mut self, event: LifeCycleEvent) -> Result<()> {
+        Ok(())
+    }
+
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom.
     pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
-        log::debug!("rebuilding...");
-        // Reset and then build a new diff machine
-        // The previous edit list cannot be around while &mut is held
-        // Make sure variance doesnt break this
-        // bump.reset();
-
         // Diff from the top
         let mut diff_machine = DiffMachine::new(); // partial borrow
-        {
-            let component = self
-                .components
-                .get_mut(self.base_scope)
-                .expect("failed to acquire base scope");
 
-            component.run();
-        }
+        self.components
+            .get_mut(self.base_scope)
+            .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?
+            .run_scope()?;
 
-        // get raw pointer to the arena
-        let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
+        // // get raw pointer to the arena
+        // let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
 
-        {
-            let component = self
-                .components
-                .get(self.base_scope)
-                .expect("failed to acquire base scope");
+        // {
+        //     let component = self
+        //         .components
+        //         .get(self.base_scope)
+        //         .expect("failed to acquire base scope");
 
-            diff_machine.diff_node(component.old_frame(), component.new_frame());
-        }
-
+        //     diff_machine.diff_node(component.old_frame(), component.new_frame());
+        // }
+        // let p = &mut self.components;
         // chew down the the lifecycle events until all dirty nodes are computed
         while let Some(event) = diff_machine.lifecycle_events.pop_front() {
             match event {
@@ -127,13 +107,16 @@ impl VirtualDom {
                     // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
                     // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
                     unsafe {
-                        let p = &mut *(very_unsafe_components);
+                        // let p = &mut *(very_unsafe_components);
+                        // let p = &mut self.components;
 
                         // todo, hook up the parent/child indexes properly
-                        let idx = p.insert_with(|f| Scope::new(caller, f, None));
-                        let c = p.get_mut(idx).unwrap();
-                        c.run();
-                        diff_machine.diff_node(c.old_frame(), c.new_frame());
+                        let idx = self.components.insert_with(|f| Scope::new(caller, f, None));
+                        let c = self.components.get_mut(idx).unwrap();
+                        // let idx = p.insert_with(|f| Scope::new(caller, f, None));
+                        // let c = p.get_mut(idx).unwrap();
+                        c.run_scope();
+                        // diff_machine.diff_node(c.old_frame(), c.new_frame());
                     }
                 }
                 LifeCycleEvent::PropsChanged => {
@@ -190,7 +173,7 @@ impl VirtualDom {
             .expect("Borrowing should not fail");
 
         component.call_listener(event);
-        component.run();
+        component.run_scope();
 
         let mut diff_machine = DiffMachine::new();
         // let mut diff_machine = DiffMachine::new(&self.diff_bump);

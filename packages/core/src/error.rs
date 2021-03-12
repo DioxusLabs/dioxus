@@ -3,6 +3,9 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(ThisError, Debug)]
 pub enum Error {
+    #[error("Fatal Internal Error: {0}")]
+    FatalInternal(&'static str),
+
     #[error("No event to progress")]
     NoEvent,
 

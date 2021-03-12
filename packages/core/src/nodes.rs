@@ -146,7 +146,7 @@ impl<'a> VElement<'a> {
 
 /// An attribute on a DOM node, such as `id="my-thing"` or
 /// `href="https://example.com"`.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Attribute<'a> {
     pub name: &'static str,
     pub value: &'a str,
@@ -244,7 +244,7 @@ impl NodeKey {
     }
 }
 
-#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq)]
 pub struct VText<'bump> {
     pub text: &'bump str,
 }
