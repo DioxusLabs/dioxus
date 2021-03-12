@@ -12,12 +12,12 @@ static Header: FC<()> = |ctx, props| {
 
     let handler1 = move || println!("Value is {}", inner.current());
 
-    ctx.render(|bump| {
-        builder::ElementBuilder::new(bump, "div")
+    ctx.render(|c| {
+        builder::ElementBuilder::new(c, "div")
             .child(VNode::Component(VComponent::new(
                 Bottom,
                 //
-                &mut (),
+                c.bump.alloc(()),
             )))
             .finish()
     })

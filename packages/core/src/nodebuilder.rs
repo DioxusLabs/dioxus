@@ -521,8 +521,9 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 //     }
 // }
 
-pub fn virtual_child<'a, T: Properties>(ctx: &NodeCtx<'a>, f: FC<T>, p: T) -> VNode<'a> {
-    VNode::Component(crate::nodes::VComponent::new(f, ctx.bump.alloc(p)))
+pub fn virtual_child<'a, T: Properties + 'a>(ctx: &NodeCtx<'a>, f: FC<T>, p: T) -> VNode<'a> {
+    let propsd: &'a mut _ = ctx.bump.alloc(p);
+    VNode::Component(crate::nodes::VComponent::new(f, propsd))
 }
 
 trait Bany {

@@ -60,13 +60,7 @@ static Example2: FC<ExampleProps> = |ctx, props| {
 
 impl Properties for ExampleProps {
     type Builder = ExamplePropsBuilder<((),)>;
-    type StaticOutput = ExampleProps;
     fn builder() -> Self::Builder {
         ExampleProps::builder()
-    }
-
-
-    unsafe fn into_static(self) -> Self::StaticOutput {
-        todo!()
     }
 }

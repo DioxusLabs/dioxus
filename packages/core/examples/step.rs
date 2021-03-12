@@ -27,12 +27,7 @@ static Example: FC<SomeProps> = |ctx, _props| {
 // toodo: derive this
 impl Properties for SomeProps {
     type Builder = SomePropsBuilder<((),)>;
-    type StaticOutput = SomeProps;
     fn builder() -> Self::Builder {
         SomeProps::builder()
-    }
-
-    unsafe fn into_static(self) -> Self {
-        self
     }
 }

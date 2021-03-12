@@ -1,15 +1,22 @@
 use crate::innerlude::*;
 use bumpalo::Bump;
 
-use std::{any::Any, cell::RefCell, collections::HashSet, marker::PhantomData, ops::Deref};
+use std::{
+    any::Any,
+    cell::RefCell,
+    collections::HashSet,
+    marker::PhantomData,
+    ops::Deref,
+    rc::{Rc, Weak},
+};
 
-pub trait Scoped {
-    fn run(&mut self);
-    // fn compare_props(&self, new: &dyn std::any::Any) -> bool;
-    fn call_listener(&mut self, trigger: EventTrigger);
-    fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
-    fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
-}
+// pub trait Scoped {
+//     fn run(&mut self);
+//     // fn compare_props(&self, new: &dyn std::any::Any) -> bool;
+//     fn call_listener(&mut self, trigger: EventTrigger);
+//     fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
+//     fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump>;
+// }
 
 /// Every component in Dioxus is represented by a `Scope`.
 ///
@@ -17,7 +24,8 @@ pub trait Scoped {
 ///
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
-pub struct Scope<P: Properties> {
+pub struct Scope {
+    // pub struct Scope<P: Properties> {
     // Map to the parent
     pub parent: Option<ScopeIdx>,
 
@@ -27,12 +35,15 @@ pub struct Scope<P: Properties> {
     //
     pub children: HashSet<ScopeIdx>,
 
+    pub caller: Weak<dyn Fn(Context) -> DomTree + 'static>,
+
     // // the props
     // pub props: P,
 
     // and the actual render function
-    pub caller: Caller,
-    _p: std::marker::PhantomData<P>,
+    // pub caller: *const dyn Fn(Context) -> DomTree,
+    // _p: std::marker::PhantomData<P>,
+    // _p: std::marker::PhantomData<P>,
     // pub raw_caller: FC<P>,
 
     // ==========================
@@ -57,35 +68,62 @@ pub struct Scope<P: Properties> {
 
 // instead of having it as a trait method, we use a single function
 // todo: do the unsafety magic stuff to erase the type of p
-pub fn create_scoped(
-    // raw_f: FC<P>,
-    caller: Caller,
+// pub fn create_scoped(
+//     // raw_f: FC<P>,
+//     // caller: Caller,
 
-    // props: P,
-    myidx: ScopeIdx,
-    parent: Option<ScopeIdx>,
-) -> Box<dyn Scoped> {
-    Box::new(Scope::<()> {
-        // raw_caller: raw_f,
-        _p: Default::default(),
-        caller,
-        myidx,
-        hook_arena: typed_arena::Arena::new(),
-        hooks: RefCell::new(Vec::new()),
-        frames: ActiveFrame::new(),
-        children: HashSet::new(),
-        listeners: Default::default(),
-        parent,
-        // props,
-    })
-}
+//     // props: P,
+//     myidx: ScopeIdx,
+//     parent: Option<ScopeIdx>,
+// ) -> Box<dyn Scoped> {
+//     Box::new(Scope::<()> {
+//         // raw_caller: raw_f,
+//         _p: Default::default(),
+//         // caller,
+//         myidx,
+//         hook_arena: typed_arena::Arena::new(),
+//         hooks: RefCell::new(Vec::new()),
+//         frames: ActiveFrame::new(),
+//         children: HashSet::new(),
+//         listeners: Default::default(),
+//         parent,
+//         // props,
+//     })
+// }
 
-impl<P: Properties + 'static> Scoped for Scope<P> {
+impl Scope {
+    // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
+    // we are going to break this lifetime by force in order to save it on ourselves.
+    // To make sure that the lifetime isn't truly broken, we receive a Weak RC so we can't keep it around after the parent dies.
+    // This should never happen, but is a good check to keep around
+    pub fn new<'creator_node>(
+        caller: Weak<dyn Fn(Context) -> DomTree + 'creator_node>,
+        myidx: ScopeIdx,
+        parent: Option<ScopeIdx>,
+    ) -> Self {
+        // caller has been broken free
+        // however, it's still weak, so if the original Rc gets killed, we can't touch it
+        let broken_caller: Weak<dyn Fn(Context) -> DomTree + 'static> =
+            unsafe { std::mem::transmute(caller) };
+
+        Self {
+            caller: broken_caller,
+            hook_arena: typed_arena::Arena::new(),
+            hooks: RefCell::new(Vec::new()),
+            frames: ActiveFrame::new(),
+            children: HashSet::new(),
+            listeners: Default::default(),
+            parent,
+            myidx,
+        }
+    }
+
+    // impl<P: Properties + 'static> Scoped for Scope<P> {
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
-    fn run<'bump>(&'bump mut self) {
+    pub fn run<'bump>(&'bump mut self) {
         let frame = {
             let frame = self.frames.next();
             frame.bump.reset();
@@ -105,8 +143,9 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
             listeners: &self.listeners,
         };
 
+        todo!()
         // Note that the actual modification of the vnode head element occurs during this call
-        let _: DomTree = (self.caller.0.as_ref())(ctx);
+        // let _: DomTree = (self.caller.0.as_ref())(ctx);
         // let _: DomTree = (self.raw_caller)(ctx, &self.props);
 
         /*
@@ -121,14 +160,14 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
         - Public API cannot drop or destructure VNode
         */
 
-        frame.head_node = node_slot
-            .deref()
-            .borrow_mut()
-            .take()
-            .expect("Viewing did not happen");
+        // frame.head_node = node_slot
+        //     .deref()
+        //     .borrow_mut()
+        //     .take()
+        //     .expect("Viewing did not happen");
     }
 
-    // fn compare_props(&self, new: &dyn Any) -> bool {
+    // pub fn compare_props(&self, new: &dyn Any) -> bool {
     //     new.downcast_ref::<P>()
     //         .map(|f| &self.props == f)
     //         .expect("Props should not be of a different type")
@@ -137,7 +176,7 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
     // A safe wrapper around calling listeners
     // calling listeners will invalidate the list of listeners
     // The listener list will be completely drained because the next frame will write over previous listeners
-    fn call_listener(&mut self, trigger: EventTrigger) {
+    pub fn call_listener(&mut self, trigger: EventTrigger) {
         let EventTrigger {
             listener_id,
             event: source,
@@ -165,11 +204,11 @@ impl<P: Properties + 'static> Scoped for Scope<P> {
         }
     }
 
-    fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+    pub fn new_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
         self.frames.current_head_node()
     }
 
-    fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+    pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
         self.frames.prev_head_node()
     }
 }

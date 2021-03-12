@@ -32,7 +32,7 @@
 //!
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
-use crate::{innerlude::*, scope::Scoped};
+use crate::{innerlude::*, scope::Scope};
 use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
 use generational_arena::Arena;
@@ -60,12 +60,15 @@ use std::{
 pub struct DiffMachine<'a> {
     pub change_list: EditMachine<'a>,
     pub diffed: FxHashSet<ScopeIdx>,
-    pub lifecycle_events: VecDeque<LifeCycleEvent>,
+    pub lifecycle_events: VecDeque<LifeCycleEvent<'a>>,
 }
 
-#[derive(Debug)]
-pub enum LifeCycleEvent {
-    Mount { caller: Caller, id: Uuid },
+// #[derive(Debug)]
+pub enum LifeCycleEvent<'a> {
+    Mount {
+        caller: Rc<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        id: Uuid,
+    },
     PropsChanged,
     SameProps,
     Remove,
@@ -260,6 +263,7 @@ impl<'a> DiffMachine<'a> {
                 self.change_list
                     .create_text_node("placeholder for vcomponent");
                 let id = uuid::Uuid::new_v4();
+                *component.stable_addr.as_ref().borrow_mut() = Some(id);
                 self.change_list.save_known_root(id);
                 self.lifecycle_events.push_back(LifeCycleEvent::Mount {
                     caller: component.caller.clone(),

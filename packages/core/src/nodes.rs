@@ -264,35 +264,40 @@ impl<'a> VText<'a> {
 
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
-pub type StableScopeAddres = Rc<RefCell<Option<usize>>>;
+pub type StableScopeAddres = Rc<RefCell<Option<uuid::Uuid>>>;
 
-#[derive(Debug, Clone)]
 pub struct VComponent<'src> {
     pub stable_addr: StableScopeAddres,
-    pub raw_props: Rc<*mut dyn Any>,
-    // pub comparator: Comparator,
-    pub caller: Caller,
-    pub caller_ref: *const (),
+
+    pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
+    pub caller: Rc<dyn for<'r> Fn(Context<'r>) -> DomTree + 'src>,
+
+    // a pointer into the bump arena (given by the 'src lifetime)
+    raw_props: *const (),
+
+    // a pointer to the raw fn typ
+    caller_ref: *const (),
     _p: PhantomData<&'src ()>,
 }
-pub trait PropsComparator {}
 
-#[derive(Clone)]
-// pub struct Comparator(pub Rc<dyn Fn(&dyn PropsComparator) -> bool>);
-pub struct Comparator(pub Rc<dyn Fn(&dyn Any) -> bool>);
-impl std::fmt::Debug for Comparator {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
+impl std::fmt::Debug for VComponent<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
     }
 }
+// pub struct Comparator(pub Rc<dyn Fn(&VComponent) -> bool>);
+// impl std::fmt::Debug for Comparator {
+//     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         Ok(())
+//     }
+// }
 
-#[derive(Clone)]
-pub struct Caller(pub Rc<dyn Fn(Context) -> DomTree>);
-impl std::fmt::Debug for Caller {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
-    }
-}
+// pub struct Caller(pub Rc<dyn Fn(Context) -> DomTree>);
+// impl std::fmt::Debug for Caller {
+//     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         Ok(())
+//     }
+// }
 
 impl<'a> VComponent<'a> {
     // use the type parameter on props creation and move it into a portable context
@@ -300,36 +305,40 @@ impl<'a> VComponent<'a> {
     // - perform comparisons when diffing (memoization)
     // TODO: lift the requirement that props need to be static
     // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
-    pub fn new<P: Properties>(caller: FC<P>, props: &mut P) -> Self {
-        let caller_ref = caller as *const ();
+    pub fn new<P: Properties + 'a>(component: FC<P>, props: &'a P) -> Self {
+        let caller_ref = component as *const ();
 
-        let props = Rc::new(props);
+        let raw_props = props as *const P as *const ();
 
-        // used for memoization
-        let p1 = props.clone();
-
-        // let props_comparator = move |new_props| -> bool {
-        //     false
-        // let p = new_props.downcast_ref::<P::StaticOutput>().expect("");
-        // let r = unsafe { std::mem::transmute::<_, &P>(p) };
-        // &r == p1.as_ref()
-        // };
-
-        // used for actually rendering the custom component
-        let p2 = props.clone();
-        let caller = move |ctx: Context| -> DomTree {
-            // cast back into the right lifetime
-            caller(ctx, p2.as_ref())
+        let props_comparator = move |other: &VComponent| {
+            // Safety:
+            // We are guaranteed that the props will be of the same type because
+            // there is no way to create a VComponent other than this `new` method.
+            //
+            // Therefore, if the render functions are identical (by address), then so will be
+            // props type paramter (because it is the same render function). Therefore, we can be
+            // sure
+            if caller_ref == other.caller_ref {
+                let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
+                real_other == props
+            } else {
+                false
+            }
         };
 
-        todo!()
-        // Self {
-        //     caller_ref,
-        //     raw_props: props,
-        //     _p: PhantomData,
-        //     comparator: Comparator(Rc::new(props_comparator)),
-        //     caller: Caller(Rc::new(caller)),
-        //     stable_addr: Rc::new(RefCell::new(None)),
-        // }
+        let caller = move |ctx: Context| -> DomTree {
+            // cast back into the right lifetime
+            let safe_props: &P = unsafe { &*(raw_props as *const P) };
+            component(ctx, props)
+        };
+
+        Self {
+            caller_ref,
+            raw_props: props as *const P as *const _,
+            _p: PhantomData,
+            caller: Rc::new(caller),
+            comparator: Rc::new(props_comparator),
+            stable_addr: Rc::new(RefCell::new(None)),
+        }
     }
 }

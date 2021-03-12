@@ -1,13 +1,14 @@
 // use crate::{changelist::EditList, nodes::VNode};
 
 use crate::innerlude::*;
-use crate::{
-    patch::Edit,
-    scope::{create_scoped, Scoped},
-};
+use crate::{patch::Edit, scope::Scope};
 use bumpalo::Bump;
 use generational_arena::Arena;
-use std::{any::TypeId, cell::RefCell, rc::Rc};
+use std::{
+    any::TypeId,
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -18,12 +19,14 @@ pub struct VirtualDom {
     /// eventually, come up with a better datastructure that reuses boxes for known P types
     /// like a generational typemap bump arena
     /// -> IE a cache line for each P type with some heuristics on optimizing layout
-    pub(crate) components: Arena<Box<dyn Scoped>>,
+    pub(crate) components: Arena<Scope>,
     // pub(crate) components: RefCell<Arena<Box<dyn Scoped>>>,
     // pub(crate) components: Rc<RefCell<Arena<Box<dyn Scoped>>>>,
     /// The index of the root component.
     /// Will not be ready if the dom is fresh
     pub(crate) base_scope: ScopeIdx,
+
+    pub(crate) root_caller: Rc<dyn Fn(Context) -> DomTree + 'static>,
 
     // Type of the original props. This is done so VirtualDom does not need to be generic.
     #[doc(hidden)]
@@ -55,6 +58,7 @@ impl VirtualDom {
     pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
+
     /// Start a new VirtualDom instance with a dependent props.
     /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
     ///
@@ -63,18 +67,15 @@ impl VirtualDom {
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let mut components = Arena::new();
 
-        // Create a reference to the component in the arena
-        // Note: we are essentially running the "Mount" lifecycle event manually while the vdom doesnt yet exist
-        let caller = Caller(Rc::new(move |ctx| {
-            //
-            root(ctx, &root_props)
-            // DomTree {}
-        }));
-        let base_scope = components.insert_with(|id| create_scoped(caller, id, None));
-        // let base_scope = components.insert_with(|id| create_scoped(root, root_props, id, None));
+        // the root is kept around
+        let root_caller: Rc<dyn Fn(Context) -> DomTree + 'static> =
+            Rc::new(move |ctx| root(ctx, &root_props));
+        let weak_caller: Weak<dyn Fn(Context) -> DomTree + 'static> = Rc::downgrade(&root_caller);
+        let base_scope = components.insert_with(move |id| Scope::new(weak_caller, id, None));
 
         Self {
             components,
+            root_caller,
             base_scope,
             diff_bump: Bump::new(),
             _root_prop_type: TypeId::of::<P>(),

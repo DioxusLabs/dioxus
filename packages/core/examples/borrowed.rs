@@ -71,13 +71,8 @@ impl PartialEq for ChildProps<'_> {
 
 impl<'a> Properties for ChildProps<'a> {
     type Builder = ChildPropsBuilder<'a, ((), ())>;
-    type StaticOutput = ChildProps<'static>;
     fn builder() -> <Self as Properties>::Builder {
         ChildProps::builder()
-    }
-
-    unsafe fn into_static(self) -> Self::StaticOutput {
-        unsafe { std::mem::transmute(self) }
     }
 }
 
