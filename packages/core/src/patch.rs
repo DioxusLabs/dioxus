@@ -23,38 +23,42 @@ pub type EditList<'src> = Vec<Edit<'src>>;
 
 /// The `Edit` represents a single modifcation of the renderer tree.
 /// todo@ jon: allow serde to be optional
+/// todo @jon, go through and make certain fields static. tag names should be known at compile time
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
-pub enum Edit<'d> {
+pub enum Edit<'src_bump> {
     // ========================================================
     // Common Ops: The most common operation types
     // ========================================================
     SetText {
-        text: &'d str,
+        text: &'src_bump str,
     },
     SetClass {
-        class_name: &'d str,
+        class_name: &'src_bump str,
     },
     CreateTextNode {
-        text: &'d str,
+        text: &'src_bump str,
     },
     CreateElement {
-        tag_name: &'d str,
+        // todo - make static?
+        tag_name: &'src_bump str,
     },
     CreateElementNs {
-        tag_name: &'d str,
-        ns: &'d str,
+        // todo - make static?
+        tag_name: &'src_bump str,
+        // todo - make static?
+        ns: &'src_bump str,
     },
 
     // ========================================================
     // Attributes
     // ========================================================
     SetAttribute {
-        name: &'d str,
-        value: &'d str,
+        name: &'src_bump str,
+        value: &'src_bump str,
     },
     RemoveAttribute {
-        name: &'d str,
+        name: &'src_bump str,
     },
     RemoveChild {
         n: u32,
@@ -64,17 +68,20 @@ pub enum Edit<'d> {
     // Event Listeners: Event types and IDs used to update the VDOM
     // ============================================================
     NewListener {
-        event: &'d str,
+        // todo - make static?
+        event: &'src_bump str,
         scope: ScopeIdx,
         id: usize,
     },
     UpdateListener {
-        event: &'d str,
+        // todo - make static?
+        event: &'src_bump str,
         scope: ScopeIdx,
         id: usize,
     },
     RemoveListener {
-        event: &'d str,
+        // todo - make static?
+        event: &'src_bump str,
     },
 
     // ========================================================
@@ -124,22 +131,28 @@ pub enum Edit<'d> {
     },
 }
 
-pub struct EditMachine<'src> {
+/// The edit machine represents a stream of differences between two component trees.
+///
+/// This struct is interesting in that it keeps track of differences by borrowing
+/// from the source rather than writing to a new buffer. This means that the virtual dom
+/// *cannot* be updated while this machine is in existence without "unsafe".
+///
+/// This unsafety is handled by methods on the virtual dom and is not exposed via lib code.
+pub struct EditMachine<'lock> {
     pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
-    pub emitter: EditList<'src>,
+
+    pub emitter: EditList<'lock>,
 }
 
-impl<'b> EditMachine<'b> {
+impl<'lock> EditMachine<'lock> {
     pub fn new() -> Self {
-        // pub fn new(_bump: &'b bumpalo::Bump) -> Self {
-        // todo: see if bumpalo is needed for edit list
         Self {
             traversal: Traversal::new(),
             next_temporary: 0,
             forcing_new_listeners: false,
-            emitter: EditList::<'b>::default(),
+            emitter: EditList::<'lock>::default(),
         }
     }
 }
@@ -147,7 +160,7 @@ impl<'b> EditMachine<'b> {
 // ===================================
 //  Traversal Methods
 // ===================================
-impl<'b> EditMachine<'b> {
+impl<'src> EditMachine<'src> {
     pub fn go_down(&mut self) {
         self.traversal.down();
     }

@@ -97,6 +97,8 @@ impl Scope {
     // To make sure that the lifetime isn't truly broken, we receive a Weak RC so we can't keep it around after the parent dies.
     // This should never happen, but is a good check to keep around
     pub fn new<'creator_node>(
+        // pub fn new(
+        // caller: Weak<dyn Fn(Context) -> DomTree + 'static>,
         caller: Weak<dyn Fn(Context) -> DomTree + 'creator_node>,
         myidx: ScopeIdx,
         parent: Option<ScopeIdx>,
@@ -106,6 +108,7 @@ impl Scope {
         let broken_caller: Weak<dyn Fn(Context) -> DomTree + 'static> =
             unsafe { std::mem::transmute(caller) };
 
+        // let broken_caller = caller;
         Self {
             caller: broken_caller,
             hook_arena: typed_arena::Arena::new(),

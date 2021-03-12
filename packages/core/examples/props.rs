@@ -1,6 +1,6 @@
-use dioxus_core_macro::Props;
+use dioxus_core::prelude::*;
 
-#[derive(Debug, Props)]
+#[derive(Debug, PartialEq, Props)]
 struct SomeProps {
     a: i32,
 
@@ -9,12 +9,8 @@ struct SomeProps {
     b: Option<i32>,
 }
 
-// have we committed to the trait style yet?
-
 fn main() {
     let g: SomeProps = SomeProps::builder().a(10).b(10).build();
 
     let _r = g.b.unwrap_or_else(|| 10);
 }
-
-fn auto_into_some() {}

@@ -23,11 +23,3 @@ static Example: FC<SomeProps> = |ctx, _props| {
         </div>
     })
 };
-
-// toodo: derive this
-impl Properties for SomeProps {
-    type Builder = SomePropsBuilder<((),)>;
-    fn builder() -> Self::Builder {
-        SomeProps::builder()
-    }
-}

@@ -101,6 +101,9 @@ impl VirtualDom {
             component.run();
         }
 
+        // get raw pointer to the arena
+        let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
+
         {
             let component = self
                 .components
@@ -110,36 +113,47 @@ impl VirtualDom {
             diff_machine.diff_node(component.old_frame(), component.new_frame());
         }
 
-        // 'render: loop {
-        //     for event in &mut diff_machine.lifecycle_events.drain(..) {
-        //         log::debug!("event is {:#?}", event);
-        //         match event {
-        //             LifeCycleEvent::Mount { caller, id } => {
-        //                 diff_machine.change_list.load_known_root(id);
-        //                 let idx = self
-        //                     .components
-        //                     .insert_with(|f| create_scoped(caller, f, None));
-        //                 // .insert_with(|f| create_scoped(caller, props, myidx, parent));
-        //             }
-        //             LifeCycleEvent::PropsChanged => {
-        //                 //
-        //                 break 'render;
-        //             }
-        //             LifeCycleEvent::SameProps => {
-        //                 //
-        //                 break 'render;
-        //             }
-        //             LifeCycleEvent::Remove => {
-        //                 //
-        //                 break 'render;
-        //             }
-        //         }
-        //     }
+        // chew down the the lifecycle events until all dirty nodes are computed
+        while let Some(event) = diff_machine.lifecycle_events.pop_front() {
+            match event {
+                // A new component has been computed from the diffing algorithm
+                // create a new component in the arena, run it, move the diffing machine to this new spot, and then diff it
+                // this will flood the lifecycle queue with new updates
+                LifeCycleEvent::Mount { caller, id } => {
+                    log::debug!("Mounting a new component");
+                    diff_machine.change_list.load_known_root(id);
 
-        //     if diff_machine.lifecycle_events.is_empty() {
-        //         break 'render;
-        //     }
-        // }
+                    // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
+                    // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
+                    // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
+                    unsafe {
+                        let p = &mut *(very_unsafe_components);
+
+                        // todo, hook up the parent/child indexes properly
+                        let idx = p.insert_with(|f| Scope::new(caller, f, None));
+                        let c = p.get_mut(idx).unwrap();
+                        c.run();
+                        diff_machine.diff_node(c.old_frame(), c.new_frame());
+                    }
+                }
+                LifeCycleEvent::PropsChanged => {
+                    //
+                    // break 'render;
+                }
+                LifeCycleEvent::SameProps => {
+                    //
+                    // break 'render;
+                }
+                LifeCycleEvent::Remove => {
+                    //
+                    // break 'render;
+                }
+            }
+
+            // } else {
+            //     break 'render;
+            // }
+        }
 
         let edits: Vec<Edit<'s>> = diff_machine.consume();
         Ok(edits)

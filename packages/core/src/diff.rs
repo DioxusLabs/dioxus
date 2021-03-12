@@ -42,7 +42,7 @@ use std::{
     cell::{RefCell, RefMut},
     cmp::Ordering,
     collections::VecDeque,
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 /// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
@@ -62,11 +62,9 @@ pub struct DiffMachine<'a> {
     pub diffed: FxHashSet<ScopeIdx>,
     pub lifecycle_events: VecDeque<LifeCycleEvent<'a>>,
 }
-
-// #[derive(Debug)]
 pub enum LifeCycleEvent<'a> {
     Mount {
-        caller: Rc<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
         id: Uuid,
     },
     PropsChanged,
@@ -76,7 +74,6 @@ pub enum LifeCycleEvent<'a> {
 
 impl<'a> DiffMachine<'a> {
     pub fn new() -> Self {
-        // pub fn new(bump: &'a Bump) -> Self {
         Self {
             lifecycle_events: VecDeque::new(),
             change_list: EditMachine::new(),
@@ -265,8 +262,13 @@ impl<'a> DiffMachine<'a> {
                 let id = uuid::Uuid::new_v4();
                 *component.stable_addr.as_ref().borrow_mut() = Some(id);
                 self.change_list.save_known_root(id);
+
+                let caller = Rc::downgrade(&component.caller);
+                // let broken_caller: Weak<dyn Fn(Context) -> DomTree + 'static> =
+                //     unsafe { std::mem::transmute(caller) };
                 self.lifecycle_events.push_back(LifeCycleEvent::Mount {
-                    caller: component.caller.clone(),
+                    caller,
+                    // caller: broken_caller,
                     id,
                 });
             }

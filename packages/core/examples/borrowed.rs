@@ -69,13 +69,6 @@ impl PartialEq for ChildProps<'_> {
     }
 }
 
-impl<'a> Properties for ChildProps<'a> {
-    type Builder = ChildPropsBuilder<'a, ((), ())>;
-    fn builder() -> <Self as Properties>::Builder {
-        ChildProps::builder()
-    }
-}
-
 fn ChildItem(_ctx: Context, _props: &ChildProps) -> DomTree {
     todo!()
     //     ctx.render(rsx! {

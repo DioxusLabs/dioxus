@@ -24,10 +24,3 @@ static SomeComponent: FC<ExampleProps> = |ctx, _props| {
 };
 
 fn main() {}
-
-impl Properties for ExampleProps {
-    type Builder = ExamplePropsBuilder<((),)>;
-    fn builder() -> Self::Builder {
-        ExampleProps::builder()
-    }
-}
