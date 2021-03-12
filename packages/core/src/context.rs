@@ -76,9 +76,9 @@ impl<'a> Context<'a> {
 #[derive(Debug, Clone)]
 pub struct NodeCtx<'a> {
     pub bump: &'a Bump,
+    pub listeners: &'a RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
     pub idx: RefCell<usize>,
     pub scope: ScopeIdx,
-    pub listeners: &'a RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
 }
 
 impl<'a> Context<'a> {

@@ -1,6 +1,6 @@
 //! Helpers for building virtual DOM VNodes.
 
-use std::{borrow::BorrowMut, intrinsics::transmute};
+use std::{any::Any, borrow::BorrowMut, intrinsics::transmute, u128};
 
 use crate::{
     context::NodeCtx,
@@ -521,12 +521,30 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 //     }
 // }
 
-// _f: crate::innerlude::FC<T>,
-// _props: T
 pub fn virtual_child<'a, T: Properties>(ctx: &NodeCtx<'a>, f: FC<T>, p: T) -> VNode<'a> {
-    // alloc props into the bump;
-
-    // erase the lifetime
-    let p_static = unsafe { p.into_static() };
-    VNode::Component(crate::nodes::VComponent::new(f, p_static))
+    VNode::Component(crate::nodes::VComponent::new(f, ctx.bump.alloc(p)))
 }
+
+trait Bany {
+    // fn compare_to<P: Properties>(other: &P) -> bool;
+}
+
+pub fn test_vchild<T: Properties>(p: &T) {
+    // let r = p as *const dyn Bany;
+    // let r = p as *const dyn Bany;
+
+    // std::any::Any
+    // let r = p as &dyn Any;
+    // let g = p as *const u128;
+    // let l = unsafe { std::mem::transmute::<&T, &dyn Any>(p) };
+}
+
+/*
+
+Problem:
+compare two props that we know are the same type without transmute
+
+
+
+
+*/

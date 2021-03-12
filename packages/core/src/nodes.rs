@@ -269,8 +269,8 @@ pub type StableScopeAddres = Rc<RefCell<Option<usize>>>;
 #[derive(Debug, Clone)]
 pub struct VComponent<'src> {
     pub stable_addr: StableScopeAddres,
-    pub raw_props: Rc<dyn Any>,
-    pub comparator: Comparator,
+    pub raw_props: Rc<*mut dyn Any>,
+    // pub comparator: Comparator,
     pub caller: Caller,
     pub caller_ref: *const (),
     _p: PhantomData<&'src ()>,
@@ -278,8 +278,8 @@ pub struct VComponent<'src> {
 pub trait PropsComparator {}
 
 #[derive(Clone)]
-pub struct Comparator(pub Rc<dyn Fn(&dyn PropsComparator) -> bool>);
-// pub struct Comparator(pub Rc<dyn Fn(&dyn Any) -> bool>);
+// pub struct Comparator(pub Rc<dyn Fn(&dyn PropsComparator) -> bool>);
+pub struct Comparator(pub Rc<dyn Fn(&dyn Any) -> bool>);
 impl std::fmt::Debug for Comparator {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
@@ -300,29 +300,24 @@ impl<'a> VComponent<'a> {
     // - perform comparisons when diffing (memoization)
     // TODO: lift the requirement that props need to be static
     // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
-    pub fn new<P0: Properties, P: Properties + 'static>(caller: FC<P0>, props: P) -> Self {
+    pub fn new<P: Properties>(caller: FC<P>, props: &mut P) -> Self {
         let caller_ref = caller as *const ();
 
         let props = Rc::new(props);
 
         // used for memoization
         let p1 = props.clone();
-        let props_comparator = move |new_props: ()| -> bool {
-            false
-            // let props_comparator = move |new_props: &dyn Any| -> bool {
-            // new_props
-            //     .downcast_ref::<P>()
-            //     .map(|new_p| p1.as_ref() == new_p)
-            //     .unwrap_or_else(|| {
-            //         log::debug!("downcasting failed, this receovered but SHOULD NOT FAIL");
-            //         false
-            //     })
-        };
+
+        // let props_comparator = move |new_props| -> bool {
+        //     false
+        // let p = new_props.downcast_ref::<P::StaticOutput>().expect("");
+        // let r = unsafe { std::mem::transmute::<_, &P>(p) };
+        // &r == p1.as_ref()
+        // };
 
         // used for actually rendering the custom component
         let p2 = props.clone();
         let caller = move |ctx: Context| -> DomTree {
-            //
             // cast back into the right lifetime
             caller(ctx, p2.as_ref())
         };
