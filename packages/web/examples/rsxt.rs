@@ -6,11 +6,16 @@ use dioxus_web::WebsysRenderer;
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
     console_error_panic_hook::set_once();
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example))
+    wasm_bindgen_futures::spawn_local(async {WebsysRenderer::new_with_props(Example, ExampleProps { initial_name: "..?"}).run().await.unwrap()} );
 }
 
-static Example: FC<()> = |ctx, _props| {
-    let (name, set_name) = use_state(&ctx, || "...?");
+#[derive(PartialEq, Props)]
+struct ExampleProps {
+    initial_name: &'static str
+}
+
+static Example: FC<ExampleProps> = |ctx, props| {
+    let (name, set_name) = use_state(&ctx, move || props.initial_name);
 
     ctx.render(rsx! {
         div { 
@@ -35,9 +40,24 @@ static Example: FC<()> = |ctx, _props| {
             }
             button {  
                 class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                onmouseover: move |e| set_name("....")
+                onmouseover: move |_| set_name(props.initial_name)
                 "Reset!"
+            }
+            Child {
+                initial_name: "bill"
+            }
+            Child {
+                initial_name: "bob"
             }
         }
     })
 };
+
+static Child: FC<ExampleProps> = |ctx, props| {
+    ctx.render(rsx!{
+        div {
+            "Child name: {props.initial_name}"
+        }
+    })
+};
+

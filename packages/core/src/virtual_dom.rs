@@ -76,19 +76,22 @@ impl VirtualDom {
         // Diff from the top
         let mut diff_machine = DiffMachine::new(); // partial borrow
 
-        self.components
+        let mut component = self
+            .components
             .get_mut(self.base_scope)
-            .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?
-            .run_scope()?;
+            .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?;
+
+        component.run_scope()?;
+        let component = &*component;
 
         // // get raw pointer to the arena
         // let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
 
         // {
-        //     let component = self
-        //         .components
-        //         .get(self.base_scope)
-        //         .expect("failed to acquire base scope");
+        //         let component = self
+        //             .components
+        //             .get(self.base_scope)
+        // .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?
 
         //     diff_machine.diff_node(component.old_frame(), component.new_frame());
         // }
