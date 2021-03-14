@@ -14,7 +14,7 @@ wasm-bindgen = "0.2.71"
 # wasm-bindgen = "0.2.70"
 lazy_static = "1.4.0"
 wasm-bindgen-futures = "0.4.20"
-futures = "0.3.12"
+# futures = "0.3.12"
 wasm-logger = "0.2.0"
 log = "0.4.14"
 fxhash = "0.2.1"
@@ -24,6 +24,9 @@ generational-arena = "0.2.8"
 wasm-bindgen-test = "0.3.21"
 once_cell = "1.7.2"
 # html-validation = { path = "../html-validation", version = "0.1.1" }
+
+async-channel = "1.6.1"
+# futures-lite = "1.11.3"
 
 [dependencies.web-sys]
 version = "0.3"

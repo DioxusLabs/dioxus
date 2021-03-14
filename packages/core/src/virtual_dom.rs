@@ -3,10 +3,7 @@
 use crate::{error::Error, innerlude::*};
 use crate::{patch::Edit, scope::Scope};
 use generational_arena::Arena;
-use std::{
-    any::TypeId,
-    rc::{Rc, Weak},
-};
+use std::{any::TypeId, borrow::Borrow, rc::{Rc, Weak}};
 use thiserror::private::AsDynError;
 
 // We actually allocate the properties for components in their parent's properties
@@ -82,19 +79,19 @@ impl VirtualDom {
             .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?;
 
         component.run_scope()?;
-        let component = &*component;
+        // let component = &*component;
 
-        // // get raw pointer to the arena
-        // let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
+        // get raw pointer to the arena
+        let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
 
-        // {
-        //         let component = self
-        //             .components
-        //             .get(self.base_scope)
-        // .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?
+        {
+            let component = self
+                .components
+                .get(self.base_scope)
+                .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?;
 
-        //     diff_machine.diff_node(component.old_frame(), component.new_frame());
-        // }
+            diff_machine.diff_node(component.old_frame(), component.new_frame());
+        }
         // let p = &mut self.components;
         // chew down the the lifecycle events until all dirty nodes are computed
         while let Some(event) = diff_machine.lifecycle_events.pop_front() {
@@ -102,31 +99,48 @@ impl VirtualDom {
                 // A new component has been computed from the diffing algorithm
                 // create a new component in the arena, run it, move the diffing machine to this new spot, and then diff it
                 // this will flood the lifecycle queue with new updates
-                LifeCycleEvent::Mount { caller, id } => {
+                LifeCycleEvent::Mount { caller, id, scope } => {
                     log::debug!("Mounting a new component");
-                    diff_machine.change_list.load_known_root(id);
 
                     // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
                     // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
                     // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
                     unsafe {
-                        // let p = &mut *(very_unsafe_components);
-                        // let p = &mut self.components;
+                        let p = &mut *(very_unsafe_components);
 
                         // todo, hook up the parent/child indexes properly
-                        let idx = self.components.insert_with(|f| Scope::new(caller, f, None));
-                        let c = self.components.get_mut(idx).unwrap();
-                        // let idx = p.insert_with(|f| Scope::new(caller, f, None));
-                        // let c = p.get_mut(idx).unwrap();
-                        c.run_scope();
-                        // diff_machine.diff_node(c.old_frame(), c.new_frame());
+                        let idx = p.insert_with(|f| Scope::new(caller, f, None));
+                        let c = p.get_mut(idx).unwrap();
+
+                        let real_scope = scope.upgrade().unwrap();
+                        *real_scope.as_ref().borrow_mut() = Some(idx);
+                        c.run_scope()?;
+
+                        diff_machine.change_list.load_known_root(id);
+
+                        diff_machine.diff_node(c.old_frame(), c.new_frame());
                     }
                 }
-                LifeCycleEvent::PropsChanged => {
-                    //
+                LifeCycleEvent::PropsChanged { caller, id, scope } => {
+                    let idx = scope.upgrade().unwrap().as_ref().borrow().unwrap();
+
+                    // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
+                    // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
+                    // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
+                    unsafe {
+                        let p = &mut *(very_unsafe_components);
+                        // todo, hook up the parent/child indexes properly
+                        // let idx = p.insert_with(|f| Scope::new(caller, f, None));
+                        let c = p.get_mut(idx).unwrap();
+                        c.run_scope()?;
+
+                        diff_machine.change_list.load_known_root(id);
+
+                        diff_machine.diff_node(c.old_frame(), c.new_frame());
+                    }
                     // break 'render;
                 }
-                LifeCycleEvent::SameProps => {
+                LifeCycleEvent::SameProps { caller, id, scope } => {
                     //
                     // break 'render;
                 }
@@ -134,6 +148,7 @@ impl VirtualDom {
                     //
                     // break 'render;
                 }
+                LifeCycleEvent::Replace { caller, id, .. } => {}
             }
 
             // } else {
@@ -176,13 +191,14 @@ impl VirtualDom {
             .expect("Borrowing should not fail");
 
         component.call_listener(event);
-        component.run_scope();
+        component.run_scope()?;
 
         let mut diff_machine = DiffMachine::new();
         // let mut diff_machine = DiffMachine::new(&self.diff_bump);
 
-        diff_machine.diff_node(component.old_frame(), component.new_frame());
+        // diff_machine.diff_node(component.old_frame(), component.new_frame());
 
-        Ok(diff_machine.consume())
+        // Ok(diff_machine.consume())
+        self.rebuild()
     }
 }

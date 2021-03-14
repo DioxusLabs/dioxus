@@ -16,7 +16,7 @@ members = [
     # TODO @Jon, share the validation code
     # "packages/web",
     # "packages/hooks",
-    "packages/cli",
+    # "packages/cli",
     # "examples",
     # "packages/html-macro",
     # "packages/html-macro-2",

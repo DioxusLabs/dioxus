@@ -96,10 +96,11 @@ impl Scope {
             scope: self.myidx,
             listeners: &self.listeners,
         };
+        let caller = self.caller.upgrade().expect("Failed to get caller");
 
-        todo!()
+        // todo!()
         // Note that the actual modification of the vnode head element occurs during this call
-        // let _: DomTree = (self.caller.0.as_ref())(ctx);
+        let _: DomTree = (caller.as_ref())(ctx);
         // let _: DomTree = (self.raw_caller)(ctx, &self.props);
 
         /*
@@ -114,11 +115,13 @@ impl Scope {
         - Public API cannot drop or destructure VNode
         */
 
-        // frame.head_node = node_slot
-        //     .deref()
-        //     .borrow_mut()
-        //     .take()
-        //     .expect("Viewing did not happen");
+        frame.head_node = node_slot.as_ref()
+            // .deref()
+            .borrow_mut()
+            .take()
+            .expect("Viewing did not happen");
+
+            Ok(())
     }
 
     // A safe wrapper around calling listeners

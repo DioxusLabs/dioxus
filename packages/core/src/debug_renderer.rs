@@ -3,7 +3,7 @@
 //!
 //! Renderers don't actually need to own the virtual dom (it's up to the implementer).
 
-use crate::virtual_dom::VirtualDom;
+use crate::{events::EventTrigger, virtual_dom::VirtualDom};
 use crate::{innerlude::Result, prelude::*};
 
 pub struct DebugRenderer {
@@ -31,6 +31,10 @@ impl DebugRenderer {
     pub fn from_vdom(dom: VirtualDom) -> Self {
         // todo: initialize the event registry properly
         Self { internal_dom: dom }
+    }
+
+    pub fn handle_event(&mut self, trigger: EventTrigger) -> Result<()> {
+        Ok(())
     }
 
     pub fn step(&mut self, machine: &mut DiffMachine) -> Result<()> {

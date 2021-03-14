@@ -94,12 +94,12 @@ pub enum Edit<'src_bump> {
     // ========================================================
     // push a known node on to the stack
     TraverseToKnown {
-        node: uuid::Uuid,
+        node: u32,
         // node: ScopeIdx,
     },
     // Add the current top of the stack to the known nodes
     MakeKnown {
-        node: uuid::Uuid,
+        node: u32,
         // node: ScopeIdx,
     },
     // Remove the current top of the stack from the known nodes
@@ -383,32 +383,16 @@ impl<'a> EditMachine<'a> {
         // debug!("emit: remove_event_listener({:?})", event);
     }
 
-    pub fn save_known_root(&mut self, id: uuid::Uuid) {
-        // pub fn save_known_root(&mut self, id: ScopeIdx) {
-        // pub fn save_known_root(&mut self, id: ScopeIdx) {
+    pub fn save_known_root(&mut self, id: u32) {
         log::debug!("emit: save_known_root({:?})", id);
         self.emitter.push(Edit::MakeKnown { node: id })
     }
 
-    pub fn load_known_root(&mut self, id: uuid::Uuid) {
+    pub fn load_known_root(&mut self, id: u32) {
         log::debug!("emit: TraverseToKnown({:?})", id);
         self.emitter.push(Edit::TraverseToKnown { node: id })
     }
 
-    // pub fn save_template(&mut self, id: CacheId) {
-    //     debug_assert!(self.traversal_is_committed());
-    //     debug_assert!(!self.has_template(id));
-    //     // debug!("emit: save_template({:?})", id);
-    //     self.templates.insert(id);
-    //     self.emitter.save_template(id.into());
-    // }
-
-    // pub fn push_template(&mut self, id: CacheId) {
-    //     debug_assert!(self.traversal_is_committed());
-    //     debug_assert!(self.has_template(id));
-    //     // debug!("emit: push_template({:?})", id);
-    //     self.emitter.push_template(id.into());
-    // }
 }
 
 // Keeps track of where we are moving in a DOM tree, and shortens traversal

@@ -8,7 +8,8 @@ fn main() {
     console_error_panic_hook::set_once();
     
     wasm_bindgen_futures::spawn_local(async {
-        WebsysRenderer::new_with_props(Example, ExampleProps { initial_name: "..?", blarg: Vec::new()})
+        let props = ExampleProps { initial_name: "..?", blarg: vec!["abc".to_string(), "abc".to_string()]};
+        WebsysRenderer::new_with_props(Example, props)
             .run()
             .await
             .unwrap()
@@ -38,17 +39,19 @@ static Example: FC<ExampleProps> = |ctx, props| {
                 "Hello, {name}"
             }
             
-            CustomButton { name: sub, set_name: Box::new(move || set_name("jack")) }
-            // CustomButton { name: "Jack!", set_name: Box::new(move || set_name("jack")) }
-            // CustomButton { name: "Jill!", set_name: Box::new(move || set_name("jill")) }
-            // CustomButton { name: "Reset!", set_name: Box::new(move || set_name(props.initial_name)) }
+            // CustomButton { name: sub, set_name: Box::new(move || set_name("jack")) }
+            CustomButton { name: "Jack!", set_name: Box::new(move || set_name("jack")) }
+            CustomButton { name: "Jill!", set_name: Box::new(move || set_name("jill")) }
+            CustomButton { name: "Bill!", set_name: Box::new(move || set_name("Bill")) }
+            CustomButton { name: "Reset!", set_name: Box::new(move || set_name(props.initial_name)) }
+
         }
     })
 };
 
 #[derive(Props)]
 struct ButtonProps<'src> {
-    name: &'src String,
+    name: &'src str,
     // name: &'src str,
     set_name: Box< dyn Fn() + 'src>
 }

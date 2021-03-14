@@ -3,7 +3,7 @@
 //! 3rd party renderers are responsible for forming this virtual events from events.
 //! The goal here is to provide a consistent event interface across all renderer types.
 //!
-//! also... websys is kinda bad for rust-analyzer so we coerce for you automatically :)
+//! also... websys integerates poorly with rust analyzer, so we handle that for you automatically.
 
 use crate::innerlude::ScopeIdx;
 

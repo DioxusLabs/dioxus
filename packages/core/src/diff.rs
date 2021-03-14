@@ -36,13 +36,13 @@ use crate::{innerlude::*, scope::Scope};
 use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
 use generational_arena::Arena;
-use uuid::Uuid;
 
 use std::{
     cell::{RefCell, RefMut},
     cmp::Ordering,
     collections::VecDeque,
     rc::{Rc, Weak},
+    sync::atomic::AtomicU32,
 };
 
 /// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
@@ -66,11 +66,31 @@ pub struct DiffMachine<'a> {
 pub enum LifeCycleEvent<'a> {
     Mount {
         caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
-        id: Uuid,
+        scope: Weak<VCompAssociatedScope>,
+        id: u32,
     },
-    PropsChanged,
-    SameProps,
+    PropsChanged {
+        caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        scope: Weak<VCompAssociatedScope>,
+        id: u32,
+    },
+    SameProps {
+        caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        scope: Weak<VCompAssociatedScope>,
+        id: u32,
+    },
+    Replace {
+        caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        old_scope: Weak<VCompAssociatedScope>,
+        new_scope: Weak<VCompAssociatedScope>,
+        id: u32,
+    },
     Remove,
+}
+
+static COUNTER: AtomicU32 = AtomicU32::new(1);
+fn get_id() -> u32 {
+    COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl<'a> DiffMachine<'a> {
@@ -128,12 +148,27 @@ impl<'a> DiffMachine<'a> {
             }
 
             (VNode::Component(cold), VNode::Component(cnew)) => {
-                todo!("should not happen")
-                // if cold.caller_ref != cnew.caller_ref {
-                //     // todo: create a stable addr
-                //     self.lifecycle_events.push_back(LifeCycleEvent::Mount);
-                //     return;
-                // }
+                // todo!("should not happen")
+                if cold.user_fc == cnew.user_fc {
+                    // todo: create a stable addr
+                    let caller = Rc::downgrade(&cnew.caller);
+                    let id = cold.stable_addr.borrow().unwrap();
+                    let scope = Rc::downgrade(&cold.ass_scope);
+                    self.lifecycle_events
+                        .push_back(LifeCycleEvent::PropsChanged { caller, id, scope });
+                } else {
+                    let caller = Rc::downgrade(&cnew.caller);
+                    let id = cold.stable_addr.borrow().unwrap();
+                    let old_scope = Rc::downgrade(&cold.ass_scope);
+                    let new_scope = Rc::downgrade(&cnew.ass_scope);
+
+                    self.lifecycle_events.push_back(LifeCycleEvent::Replace {
+                        caller,
+                        id,
+                        old_scope,
+                        new_scope,
+                    });
+                }
 
                 // let comparator = &cnew.comparator.0;
                 // let old_props = cold.raw_props.as_ref();
@@ -151,23 +186,7 @@ impl<'a> DiffMachine<'a> {
 
             // todo: knock out any listeners
             (_, VNode::Component(_new)) => {
-                // self.lifecycle_events.push_back(LifeCycleEvent::Mount);
-                // we have no stable reference to work from
-                // push the lifecycle event onto the queue
-                // self.lifecycle_events
-                //     .borrow_mut()
-                //     .push_back(LifecycleEvent {
-                //         event_type: LifecycleType::Mount {
-                //             props: new.props,
-                //             to: self.cur_idx,
-                //         },
-                //     });
-                // we need to associaote this new component with a scope...
-
-                // self.change_list.save_known_root(id)
                 self.change_list.commit_traversal();
-
-                // push the current
             }
 
             (VNode::Component(_old), _) => {
@@ -242,36 +261,18 @@ impl<'a> DiffMachine<'a> {
             /*
             todo: integrate re-entrace
             */
-            // NodeKind::Cached(ref c) => {
-            //     cached_roots.insert(c.id);
-            //     let (node, template) = cached_set.get(c.id);
-            //     if let Some(template) = template {
-            //         create_with_template(
-            //             cached_set,
-            //             self.change_list,
-            //             registry,
-            //             template,
-            //             node,
-            //             cached_roots,
-            //         );
-            //     } else {
-            //         create(cached_set, change_list, registry, node, cached_roots);
-            //     }
-            // }
             VNode::Component(component) => {
                 self.change_list
                     .create_text_node("placeholder for vcomponent");
-                let id = uuid::Uuid::new_v4();
+
+                let id = get_id();
                 *component.stable_addr.as_ref().borrow_mut() = Some(id);
                 self.change_list.save_known_root(id);
-
-                let caller = Rc::downgrade(&component.caller);
-                // let broken_caller: Weak<dyn Fn(Context) -> DomTree + 'static> =
-                //     unsafe { std::mem::transmute(caller) };
+                let scope = Rc::downgrade(&component.ass_scope);    
                 self.lifecycle_events.push_back(LifeCycleEvent::Mount {
-                    caller,
-                    // caller: broken_caller,
+                    caller: Rc::downgrade(&component.caller),
                     id,
+                    scope
                 });
             }
             VNode::Suspended => {

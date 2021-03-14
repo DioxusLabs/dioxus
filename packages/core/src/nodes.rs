@@ -88,8 +88,8 @@ impl<'a> VNode<'a> {
             VNode::Suspended => {
                 todo!()
             }
-            VNode::Component(_) => {
-                todo!()
+            VNode::Component(c) => {
+                c.key
             }
         }
     }
@@ -107,27 +107,6 @@ pub struct VElement<'a> {
     pub attributes: &'a [Attribute<'a>],
     pub children: &'a [VNode<'a>],
     pub namespace: Option<&'a str>,
-    // The HTML tag, such as "div"
-    // pub tag: &'a str,
-
-    // pub tag_name: &'a str,
-    // pub attributes: &'a [Attribute<'a>],
-    // todo: hook up listeners
-    // pub listeners: &'a [Listener<'a>],
-    // / HTML attributes such as id, class, style, etc
-    // pub attrs: HashMap<String, String>,
-    // TODO: @JON Get this to not heap allocate, but rather borrow
-    // pub attrs: HashMap<&'static str, &'static str>,
-
-    // TODO @Jon, re-enable "events"
-    //
-    // /// Events that will get added to your real DOM element via `.addEventListener`
-    // pub events: Events,
-    // pub events: HashMap<String, ()>,
-
-    // /// The children of this `VNode`. So a <div> <em></em> </div> structure would
-    // /// have a parent div and one child, em.
-    // pub children: Vec<VNode>,
 }
 
 impl<'a> VElement<'a> {
@@ -264,10 +243,14 @@ impl<'a> VText<'a> {
 
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
-pub type StableScopeAddres = Rc<RefCell<Option<uuid::Uuid>>>;
+pub type StableScopeAddres = RefCell<Option<u32>>;
+pub type VCompAssociatedScope = RefCell<Option<ScopeIdx>>;
 
 pub struct VComponent<'src> {
-    pub stable_addr: StableScopeAddres,
+    pub key: NodeKey,
+
+    pub stable_addr: Rc<StableScopeAddres>,
+    pub ass_scope: Rc<VCompAssociatedScope>,
 
     pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
     pub caller: Rc<dyn for<'r> Fn(Context<'r>) -> DomTree + 'src>,
@@ -276,28 +259,15 @@ pub struct VComponent<'src> {
     raw_props: *const (),
 
     // a pointer to the raw fn typ
-    caller_ref: *const (),
+    pub user_fc: *const (),
     _p: PhantomData<&'src ()>,
 }
 
 impl std::fmt::Debug for VComponent<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        Ok(())
     }
 }
-// pub struct Comparator(pub Rc<dyn Fn(&VComponent) -> bool>);
-// impl std::fmt::Debug for Comparator {
-//     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         Ok(())
-//     }
-// }
-
-// pub struct Caller(pub Rc<dyn Fn(Context) -> DomTree>);
-// impl std::fmt::Debug for Caller {
-//     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         Ok(())
-//     }
-// }
 
 impl<'a> VComponent<'a> {
     // use the type parameter on props creation and move it into a portable context
@@ -318,7 +288,7 @@ impl<'a> VComponent<'a> {
             // Therefore, if the render functions are identical (by address), then so will be
             // props type paramter (because it is the same render function). Therefore, we can be
             // sure
-            if caller_ref == other.caller_ref {
+            if caller_ref == other.user_fc {
                 let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
                 real_other == props
             } else {
@@ -333,7 +303,9 @@ impl<'a> VComponent<'a> {
         };
 
         Self {
-            caller_ref,
+            key: NodeKey::NONE,
+            ass_scope: Rc::new(RefCell::new(None)),
+            user_fc: caller_ref,
             raw_props: props as *const P as *const _,
             _p: PhantomData,
             caller: Rc::new(caller),

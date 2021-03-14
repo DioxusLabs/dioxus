@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, convert::TryInto, fmt::Debug, sync::Arc};
+use std::{borrow::Borrow, convert::TryInto, default, fmt::Debug, sync::Arc};
 
 use dioxus_core::{
     events::{EventTrigger, VirtualEvent},
@@ -26,6 +26,8 @@ impl std::fmt::Debug for RootCallback {
 #[derive(Debug)]
 pub(crate) struct PatchMachine {
     pub(crate) stack: Stack,
+
+    pub(crate) known_roots: FxHashMap<u32, Node>,
 
     pub(crate) root: Element,
 
@@ -165,6 +167,7 @@ impl PatchMachine {
         let events = EventDelegater::new(root.clone(), event_callback);
 
         Self {
+            known_roots: Default::default(),
             root,
             events,
             stack: Stack::with_capacity(20),
@@ -476,8 +479,15 @@ impl PatchMachine {
                     el.set_class_name(class_name);
                 }
             }
-            Edit::TraverseToKnown { node } => {}
-            Edit::MakeKnown { node } => {}
+            Edit::MakeKnown { node } => {
+                let domnode = self.stack.top();
+                self.known_roots.insert(node, domnode.clone());
+            }
+            Edit::TraverseToKnown { node } => {
+                let domnode = self.known_roots.get(&node).expect("Failed to pop know root");
+                self.stack.push(domnode.clone());
+
+            }
             Edit::RemoveKnown => {}
         }
     }

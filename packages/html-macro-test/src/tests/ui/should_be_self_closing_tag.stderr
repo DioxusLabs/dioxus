@@ -1,5 +1,0 @@
-error: br is a self closing tag. Try "<br>" or "<br />"
-  --> $DIR/should_be_self_closing_tag.rs:10:15
-   |
-10 |         <br></br>
-   |               ^^

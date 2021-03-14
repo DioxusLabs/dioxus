@@ -28,12 +28,12 @@
 
 # Project: Web_sys renderer (TBD)
 - [x] WebSys edit interpreter
-- [ ] Event system using async channels
-
+- [x] Event system using async channels
+- [ ] Implement conversion of all event types into synthetic events
 # Project: String Render (TBD)
 > Implement a light-weight string renderer with basic caching 
-- [ ] (SSR) Implement stateful 3rd party string renderer
 - [x] (Macro) Make VText nodes automatically capture and format IE allow "Text is {blah}"
+- [ ] (SSR) Implement stateful 3rd party string renderer
 
 # Project: Hooks + Context + Subscriptions (TBD)
 > Implement the foundations for state management
@@ -41,12 +41,12 @@
 - [x] Implement use_state (rewrite to use the use_reducer api like rei)
 - [x] Implement use_ref
 - [x] Implement use_context (only the API, not the state management solution)
-- [ ] Implement use_reducer
+- [ ] Implement use_reducer (WIP)
 
 # Project: QOL 
 > Make it easier to write components
-- [x] (Macro) Tweak event syntax to not be dependent on wasm32 target (just return regular closures which get boxed)
-- [ ] (Macro) Tweak component syntax to accept a new custom element 
+- [x] (Macro) Tweak event syntax to not be dependent on wasm32 target (just return regular closures which get boxed/alloced)
+- [x] (Macro) Tweak component syntax to accept a new custom element 
 - [ ] (Macro) Allow components to specify their props as function args
 
 # Project: Initial VDOM support (TBD)
@@ -58,6 +58,6 @@
 - [x] (Core) Introduce the VDOM and patch API for 3rd party renderers
 - [x] (Core) Implement lifecycle
 - [x] (Core) Implement an event system 
-- [ ] (Core) Implement child nodes, scope creation
+- [x] (Core) Implement child nodes, scope creation
 - [ ] (Core) Implement dirty tagging and compression
 

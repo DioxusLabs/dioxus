@@ -9,7 +9,7 @@ use web_sys::{window, Document, Element, Event, Node};
 use dioxus::virtual_dom::VirtualDom;
 pub use dioxus_core as dioxus;
 use dioxus_core::{events::EventTrigger, prelude::FC};
-use futures::{channel::mpsc, SinkExt, StreamExt};
+// use futures::{channel::mpsc, SinkExt, StreamExt};
 
 pub mod interpreter;
 
@@ -58,7 +58,7 @@ impl WebsysRenderer {
     }
 
     pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
-        let (sender, mut receiver) = mpsc::unbounded::<EventTrigger>();
+        let (sender, mut receiver) = async_channel::unbounded::<EventTrigger>();
 
         let body_element = prepare_websys_dom();
 
@@ -85,7 +85,7 @@ impl WebsysRenderer {
         // Event loop waits for the receiver to finish up
         // TODO! Connect the sender to the virtual dom's suspense system
         // Suspense is basically an external event that can force renders to specific nodes
-        while let Some(event) = receiver.next().await {
+        while let Ok(event) = receiver.recv().await {
             // log::debug!("patch stack size before {:#?}", patch_machine.stack);
             // patch_machine.reset();
             // patch_machine.stack.push(root_node.clone());
