@@ -73,6 +73,12 @@ impl Scope {
         }
     }
 
+    pub fn update_caller<'creator_node>(&mut self, caller: Weak<OpaqueComponent<'creator_node>>) {
+        let broken_caller: Weak<OpaqueComponent<'static>> = unsafe { std::mem::transmute(caller) };
+
+        self.caller = broken_caller;
+    }
+
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
@@ -115,13 +121,14 @@ impl Scope {
         - Public API cannot drop or destructure VNode
         */
 
-        frame.head_node = node_slot.as_ref()
+        frame.head_node = node_slot
+            .as_ref()
             // .deref()
             .borrow_mut()
             .take()
             .expect("Viewing did not happen");
 
-            Ok(())
+        Ok(())
     }
 
     // A safe wrapper around calling listeners

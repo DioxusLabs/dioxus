@@ -3,7 +3,7 @@
 use crate::{error::Error, innerlude::*};
 use crate::{patch::Edit, scope::Scope};
 use generational_arena::Arena;
-use std::{any::TypeId, borrow::Borrow, rc::{Rc, Weak}};
+use std::{any::TypeId, borrow::{Borrow, BorrowMut}, rc::{Rc, Weak}};
 use thiserror::private::AsDynError;
 
 // We actually allocate the properties for components in their parent's properties
@@ -119,21 +119,20 @@ impl VirtualDom {
                         diff_machine.change_list.load_known_root(id);
                         
                         diff_machine.diff_node(c.old_frame(), c.new_frame());
-                        diff_machine.change_list.save_known_root(id);
+                        // diff_machine.change_list.save_known_root(id);
                     }
                 }
                 LifeCycleEvent::PropsChanged { caller, id, scope } => {
                     let idx = scope.upgrade().unwrap().as_ref().borrow().unwrap();
 
-                    // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
-                    // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
-                    // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
                     unsafe {
                         let p = &mut *(very_unsafe_components);
                         // todo, hook up the parent/child indexes properly
                         // let idx = p.insert_with(|f| Scope::new(caller, f, None));
                         let c = p.get_mut(idx).unwrap();                        
+                        c.update_caller(caller);
                         c.run_scope()?;
+                        // c.caller = caller;
 
                         diff_machine.change_list.load_known_root(id);
 

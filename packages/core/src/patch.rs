@@ -146,13 +146,17 @@ pub struct EditMachine<'lock> {
     pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
-
+    
+    // // if the current node is a "known" node
+    // // any actions that modify this node should update the mapping
+    // current_known: Option<u32>,
     pub emitter: EditList<'lock>,
 }
 
 impl<'lock> EditMachine<'lock> {
     pub fn new() -> Self {
         Self {
+            // current_known: None,
             traversal: Traversal::new(),
             next_temporary: 0,
             forcing_new_listeners: false,
@@ -283,6 +287,11 @@ impl<'a> EditMachine<'a> {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: replace_with()");
         self.emitter.push(Edit::ReplaceWith {});
+        // if let Some(id) = self.current_known {
+        //     // update mapping
+        //     self.emitter.push(Edit::MakeKnown{node: id});
+        //     self.current_known = None;
+        // }
         // self.emitter.replace_with();
     }
 
@@ -377,6 +386,7 @@ impl<'a> EditMachine<'a> {
 
     pub fn load_known_root(&mut self, id: u32) {
         log::debug!("emit: TraverseToKnown({:?})", id);
+        // self.current_known = Some(id);
         self.emitter.push(Edit::TraverseToKnown { node: id })
     }
 

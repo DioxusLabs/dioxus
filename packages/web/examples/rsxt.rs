@@ -40,10 +40,56 @@ static Example: FC<ExampleProps> = |ctx, props| {
             }
             
             // CustomButton { name: sub, set_name: Box::new(move || set_name("jack")) }
-            CustomButton { name: "Jack!", set_name: Box::new(move || set_name("jack")) }
-            CustomButton { name: "Jill!", set_name: Box::new(move || set_name("jill")) }
-            CustomButton { name: "Bill!", set_name: Box::new(move || set_name("Bill")) }
-            CustomButton { name: "Reset!", set_name: Box::new(move || set_name(props.initial_name)) }
+            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
+            CustomButton { name: "back!", set_name: Box::new(set_name) }
+            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
+            CustomButton { name: "back!", set_name: Box::new(set_name) }
+            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
+            CustomButton { name: "back!", set_name: Box::new(set_name) }
+            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
+            CustomButton { name: "back!", set_name: Box::new(set_name) }
+            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
+            CustomButton { name: "back!", set_name: Box::new(set_name) }
+            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
+            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
+            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
+            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
+            CustomButton { name: "back!", set_name: Box::new(set_name) }
+            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
+            // CustomButton { name: "Bill!", set_name: Box::new(move || set_name("Bill")) }
+            // CustomButton { name: "Reset!", set_name: Box::new(move || set_name(props.initial_name)) }
 
         }
     })
@@ -51,9 +97,9 @@ static Example: FC<ExampleProps> = |ctx, props| {
 
 #[derive(Props)]
 struct ButtonProps<'src> {
-    name: &'src str,
+    name: &'static str,
     // name: &'src str,
-    set_name: Box< dyn Fn() + 'src>
+    set_name: Box< dyn Fn(&'static str) + 'src>
 }
 impl PartialEq for ButtonProps<'_> {
     fn eq(&self, other: &Self) -> bool {
@@ -63,13 +109,13 @@ impl PartialEq for ButtonProps<'_> {
 
 fn CustomButton<'a>(ctx: Context<'a>, props: &'a ButtonProps<'a>) -> DomTree {
     ctx.render(rsx!{
-        div {
-            button {  
-                class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                onmouseover: move |_| (props.set_name)()
-                "{props.name}"
-            }
+        // div {
+        button {  
+            class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+            onmouseover: move |_| (props.set_name)(props.name)
+            "{props.name}"
         }
+        // }
     })
 }
 

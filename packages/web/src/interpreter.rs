@@ -36,6 +36,8 @@ pub(crate) struct PatchMachine {
     pub(crate) document: Document,
 
     pub(crate) events: EventDelegater,
+
+    pub(crate) current_known: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -95,9 +97,13 @@ impl EventDelegater {
 
                 if let (Some(gi_id), Some(gi_gen), Some(li_idx)) = (gi_id, gi_gen, li_idx) {
                     // Call the trigger
+                    log::debug!("decoded gi_id: {},  gi_gen: {},  li_idx: {}", gi_id,gi_gen,li_idx);
+
+                    let triggered_scope = ScopeIdx::from_raw_parts(gi_id, gi_gen);
                     trigger.0.as_ref()(EventTrigger::new(
                         virtual_event_from_websys_event(event),
-                        scope,
+                        triggered_scope,
+                        // scope,
                         li_idx,
                     ));
                 }
@@ -167,6 +173,7 @@ impl PatchMachine {
         let events = EventDelegater::new(root.clone(), event_callback);
 
         Self {
+            current_known: None,
             known_roots: Default::default(),
             root,
             events,
@@ -248,6 +255,13 @@ impl PatchMachine {
                         .unwrap();
                 } else {
                     panic!("Cannot replace node: {:?}", old_node);
+                }
+
+                // poc to see if this is a valid solution
+                if let Some(id) = self.current_known {
+                    // update mapping
+                    self.known_roots.insert(id, new_node.clone());
+                    self.current_known = None;
                 }
 
                 self.stack.push(new_node);
@@ -485,9 +499,12 @@ impl PatchMachine {
                 self.known_roots.insert(node, domnode.clone());
             }
             Edit::TraverseToKnown { node } => {
-                let domnode = self.known_roots.get(&node).expect("Failed to pop know root");
+                let domnode = self
+                    .known_roots
+                    .get(&node)
+                    .expect("Failed to pop know root");
+                self.current_known = Some(node);
                 self.stack.push(domnode.clone());
-
             }
             Edit::RemoveKnown => {}
         }
