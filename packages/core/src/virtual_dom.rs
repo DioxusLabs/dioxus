@@ -117,8 +117,9 @@ impl VirtualDom {
                         c.run_scope()?;
 
                         diff_machine.change_list.load_known_root(id);
-
+                        
                         diff_machine.diff_node(c.old_frame(), c.new_frame());
+                        diff_machine.change_list.save_known_root(id);
                     }
                 }
                 LifeCycleEvent::PropsChanged { caller, id, scope } => {
@@ -131,7 +132,7 @@ impl VirtualDom {
                         let p = &mut *(very_unsafe_components);
                         // todo, hook up the parent/child indexes properly
                         // let idx = p.insert_with(|f| Scope::new(caller, f, None));
-                        let c = p.get_mut(idx).unwrap();
+                        let c = p.get_mut(idx).unwrap();                        
                         c.run_scope()?;
 
                         diff_machine.change_list.load_known_root(id);
@@ -193,7 +194,7 @@ impl VirtualDom {
         component.call_listener(event);
         component.run_scope()?;
 
-        let mut diff_machine = DiffMachine::new();
+        // let mut diff_machine = DiffMachine::new();
         // let mut diff_machine = DiffMachine::new(&self.diff_bump);
 
         // diff_machine.diff_node(component.old_frame(), component.new_frame());

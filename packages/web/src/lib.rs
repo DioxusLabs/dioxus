@@ -80,22 +80,31 @@ impl WebsysRenderer {
             log::debug!("patching with  {:?}", edit);
             patch_machine.handle_edit(edit);
         });
+
+
+
+        patch_machine.reset();
+        let root_node = body_element.first_child().unwrap();
+        patch_machine.stack.push(root_node.clone());
+                
         // log::debug!("patch stack size {:?}", patch_machine.stack);
 
         // Event loop waits for the receiver to finish up
         // TODO! Connect the sender to the virtual dom's suspense system
         // Suspense is basically an external event that can force renders to specific nodes
         while let Ok(event) = receiver.recv().await {
+            log::debug!("Stack before entrance {:#?}", patch_machine.stack.top());
             // log::debug!("patch stack size before {:#?}", patch_machine.stack);
             // patch_machine.reset();
             // patch_machine.stack.push(root_node.clone());
-            self.internal_dom
-                .progress_with_event(event)?
-                .iter()
-                .for_each(|edit| {
-                    log::debug!("edit stream {:?}", edit);
-                    patch_machine.handle_edit(edit);
-                });
+            let edits = self.internal_dom.progress_with_event(event)?;
+            log::debug!("Received edits: {:#?}", edits);
+
+            for edit in &edits {
+                log::debug!("edit stream {:?}", edit);
+                log::debug!("Stream stack {:#?}", patch_machine.stack.top());
+                patch_machine.handle_edit(edit);
+            }
 
             // log::debug!("patch stack size after {:#?}", patch_machine.stack);
             patch_machine.reset();

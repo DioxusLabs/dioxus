@@ -325,29 +325,17 @@ impl<'a> EditMachine<'a> {
 
     pub fn create_text_node(&mut self, text: &'a str) {
         debug_assert!(self.traversal_is_committed());
-        // debug!("emit: create_text_node({:?})", text);
-        // self.emitter.create_text_node(text);
         self.emitter.push(Edit::CreateTextNode { text });
     }
 
     pub fn create_element(&mut self, tag_name: &'a str) {
-        // debug_assert!(self.traversal_is_committed());
-        // debug!("emit: create_element({:?})", tag_name);
-        // let tag_name_id = self.ensure_string(tag_name);
+        debug_assert!(self.traversal_is_committed());;
         self.emitter.push(Edit::CreateElement { tag_name });
-        // self.emitter.create_element(tag_name);
-        // self.emitter.create_element(tag_name_id.into());
     }
 
     pub fn create_element_ns(&mut self, tag_name: &'a str, ns: &'a str) {
         debug_assert!(self.traversal_is_committed());
-        // debug!("emit: create_element_ns({:?}, {:?})", tag_name, ns);
-        // let tag_name_id = self.ensure_string(tag_name);
-        // let ns_id = self.ensure_string(ns);
-        // self.emitter.create_element_ns(tag_name, ns);
         self.emitter.push(Edit::CreateElementNs { tag_name, ns });
-        // self.emitter
-        //     .create_element_ns(tag_name_id.into(), ns_id.into());
     }
 
     pub fn push_force_new_listeners(&mut self) -> bool {
@@ -364,7 +352,6 @@ impl<'a> EditMachine<'a> {
     pub fn new_event_listener(&mut self, event: &'a str, scope: ScopeIdx, id: usize) {
         debug_assert!(self.traversal_is_committed());
         self.emitter.push(Edit::NewListener { event, scope, id });
-        // log::debug!("emit: new_event_listener({:?})", listener);
     }
 
     pub fn update_event_listener(&mut self, event: &'a str, scope: ScopeIdx, id: usize) {

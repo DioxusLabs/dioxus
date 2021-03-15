@@ -149,10 +149,14 @@ impl<'a> DiffMachine<'a> {
 
             (VNode::Component(cold), VNode::Component(cnew)) => {
                 // todo!("should not happen")
+                // self.change_list.commit_traversal();
                 if cold.user_fc == cnew.user_fc {
                     // todo: create a stable addr
                     let caller = Rc::downgrade(&cnew.caller);
                     let id = cold.stable_addr.borrow().unwrap();
+                    *cnew.stable_addr.borrow_mut() = Some(id);
+                    *cnew.ass_scope.borrow_mut() = *cold.ass_scope.borrow();
+
                     let scope = Rc::downgrade(&cold.ass_scope);
                     self.lifecycle_events
                         .push_back(LifeCycleEvent::PropsChanged { caller, id, scope });
@@ -169,19 +173,6 @@ impl<'a> DiffMachine<'a> {
                         new_scope,
                     });
                 }
-
-                // let comparator = &cnew.comparator.0;
-                // let old_props = cold.raw_props.as_ref();
-                // let has_changed = comparator(old_props);
-
-                // if has_changed {
-                //     self.lifecycle_events
-                //         .push_back(LifeCycleEvent::PropsChanged);
-                //     return;
-                // }
-
-                // the component is the same and hasn't changed
-                // migrate props over (so the addr remains stable) but don't rerun the component
             }
 
             // todo: knock out any listeners
@@ -448,13 +439,9 @@ impl<'a> DiffMachine<'a> {
 
         if new_is_keyed && old_is_keyed {
             let t = self.change_list.next_temporary();
-            // diff_keyed_children(self.change_list, old, new);
-            // diff_keyed_children(self.change_list, old, new, cached_roots);
-            // diff_keyed_children(cached_set, self.change_list, registry, old, new, cached_roots);
             self.change_list.set_next_temporary(t);
         } else {
             self.diff_non_keyed_children(old, new);
-            // diff_non_keyed_children(cached_set, change_list, registry, old, new, cached_roots);
         }
     }
 
@@ -480,8 +467,6 @@ impl<'a> DiffMachine<'a> {
     //
     // Upon exiting, the change list stack is in the same state.
     fn diff_keyed_children(&mut self, old: &[VNode<'a>], new: &[VNode<'a>]) {
-        // let DiffState { change_list, queue } = &*state;
-
         if cfg!(debug_assertions) {
             let mut keys = fxhash::FxHashSet::default();
             let mut assert_unique_keys = |children: &[VNode]| {

@@ -434,6 +434,7 @@ impl PatchMachine {
             // 16
             Edit::PushChild { n } => {
                 let parent = self.stack.top();
+                // log::debug!("PushChild {:#?}", parent);
                 let child = parent.child_nodes().get(n).unwrap();
                 self.stack.push(child);
             }

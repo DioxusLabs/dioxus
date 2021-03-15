@@ -63,10 +63,12 @@ impl PartialEq for ButtonProps<'_> {
 
 fn CustomButton<'a>(ctx: Context<'a>, props: &'a ButtonProps<'a>) -> DomTree {
     ctx.render(rsx!{
-        button {  
-            class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-            onmouseover: move |_| (props.set_name)()
-            "{props.name}"
+        div {
+            button {  
+                class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+                onmouseover: move |_| (props.set_name)()
+                "{props.name}"
+            }
         }
     })
 }
