@@ -5,7 +5,7 @@
   </p>
 </div>
 
-# About
+<!-- # About -->
 
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 

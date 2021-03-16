@@ -306,7 +306,6 @@ unnecessary function runs
 Does any of this matter?
 Should we just run any component we see, immediately and imperatively? That will cause checks throughout the whole tree, no matter where the update occurred 
 
-
 https://calendar.perfplanet.com/2013/diff/
 
 Here's how react does it:

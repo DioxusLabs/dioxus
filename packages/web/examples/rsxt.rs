@@ -8,7 +8,7 @@ fn main() {
     console_error_panic_hook::set_once();
     
     wasm_bindgen_futures::spawn_local(async {
-        let props = ExampleProps { initial_name: "..?", blarg: vec!["abc".to_string(), "abc".to_string()]};
+        let props = ExampleProps { initial_name: "..?"};
         WebsysRenderer::new_with_props(Example, props)
             .run()
             .await
@@ -19,13 +19,10 @@ fn main() {
 #[derive(PartialEq, Props)]
 struct ExampleProps {
     initial_name: &'static str,
-    blarg: Vec<String>
 }
 
 static Example: FC<ExampleProps> = |ctx, props| {
-    let (name, set_name) = use_state(&ctx, move || props.initial_name);
-
-    let sub = props.blarg.last().unwrap();
+    let (name, set_name) = use_state(&ctx, move || props.initial_name.to_string());
 
     ctx.render(rsx! {
         div { 
@@ -39,83 +36,33 @@ static Example: FC<ExampleProps> = |ctx, props| {
                 "Hello, {name}"
             }
             
-            // CustomButton { name: sub, set_name: Box::new(move || set_name("jack")) }
-            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
-            CustomButton { name: "back!", set_name: Box::new(set_name) }
-            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
-            CustomButton { name: "back!", set_name: Box::new(set_name) }
-            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
-            CustomButton { name: "back!", set_name: Box::new(set_name) }
-            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
-            CustomButton { name: "back!", set_name: Box::new(set_name) }
-            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
-            CustomButton { name: "back!", set_name: Box::new(set_name) }
-            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jack!", set_name: Box::new(set_name) }
-            CustomButton { name: "Jill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bob!", set_name: Box::new(set_name) }
-            CustomButton { name: "Bill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Dill!", set_name: Box::new(set_name) }
-            CustomButton { name: "Crack!", set_name: Box::new(set_name) }
-            CustomButton { name: "back!", set_name: Box::new(set_name) }
-            CustomButton { name: "cheder!", set_name: Box::new(set_name) }
-            // CustomButton { name: "Bill!", set_name: Box::new(move || set_name("Bill")) }
-            // CustomButton { name: "Reset!", set_name: Box::new(move || set_name(props.initial_name)) }
-
+            CustomButton { name: "Jack!", set_name: set_name }
+            CustomButton { name: "Jill!", set_name: set_name }
+            CustomButton { name: "Bob!", set_name: set_name }
         }
     })
 };
 
 #[derive(Props)]
 struct ButtonProps<'src> {
-    name: &'static str,
-    // name: &'src str,
-    set_name: Box< dyn Fn(&'static str) + 'src>
+    name: &'src str,
+    set_name: &'src dyn Fn(String)
 }
+
+/// this is an awesome component
+fn CustomButton<'a>(ctx: Context<'a>, props: &'a ButtonProps<'a>) -> DomTree {
+    ctx.render(rsx!{
+        button {  
+            class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+            onmouseover: move |evt| (props.set_name)(props.name.to_string())
+            "{props.name}"
+        }
+    })
+}
+
+
 impl PartialEq for ButtonProps<'_> {
     fn eq(&self, other: &Self) -> bool {
         false
     }
 }
-
-fn CustomButton<'a>(ctx: Context<'a>, props: &'a ButtonProps<'a>) -> DomTree {
-    ctx.render(rsx!{
-        // div {
-        button {  
-            class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-            onmouseover: move |_| (props.set_name)(props.name)
-            "{props.name}"
-        }
-        // }
-    })
-}
-

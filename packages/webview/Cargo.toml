@@ -21,4 +21,5 @@ thiserror = "1.0.23"
 log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }
 
+
 [build-dependencies]

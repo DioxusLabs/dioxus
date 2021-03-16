@@ -71,28 +71,16 @@ impl VirtualDom {
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom.
     pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
         // Diff from the top
-        let mut diff_machine = DiffMachine::new(); // partial borrow
+        let mut diff_machine = DiffMachine::new();
 
+        let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
         let mut component = self
             .components
             .get_mut(self.base_scope)
             .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?;
-
         component.run_scope()?;
-        // let component = &*component;
+        diff_machine.diff_node(component.old_frame(), component.new_frame());
 
-        // get raw pointer to the arena
-        let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
-
-        {
-            let component = self
-                .components
-                .get(self.base_scope)
-                .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?;
-
-            diff_machine.diff_node(component.old_frame(), component.new_frame());
-        }
-        // let p = &mut self.components;
         // chew down the the lifecycle events until all dirty nodes are computed
         while let Some(event) = diff_machine.lifecycle_events.pop_front() {
             match event {
@@ -115,27 +103,19 @@ impl VirtualDom {
                         let real_scope = scope.upgrade().unwrap();
                         *real_scope.as_ref().borrow_mut() = Some(idx);
                         c.run_scope()?;
-
                         diff_machine.change_list.load_known_root(id);
-                        
                         diff_machine.diff_node(c.old_frame(), c.new_frame());
-                        // diff_machine.change_list.save_known_root(id);
                     }
                 }
                 LifeCycleEvent::PropsChanged { caller, id, scope } => {
                     let idx = scope.upgrade().unwrap().as_ref().borrow().unwrap();
-
                     unsafe {
+
                         let p = &mut *(very_unsafe_components);
-                        // todo, hook up the parent/child indexes properly
-                        // let idx = p.insert_with(|f| Scope::new(caller, f, None));
                         let c = p.get_mut(idx).unwrap();                        
                         c.update_caller(caller);
                         c.run_scope()?;
-                        // c.caller = caller;
-
                         diff_machine.change_list.load_known_root(id);
-
                         diff_machine.diff_node(c.old_frame(), c.new_frame());
                     }
                     // break 'render;

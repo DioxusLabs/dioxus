@@ -83,7 +83,8 @@ impl Scope {
     /// This function downcasts the function pointer based on the stored props_type
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
-    pub fn run_scope<'bump>(&'bump mut self) -> Result<()> {
+    pub fn run_scope(&mut self) -> Result<()> {
+        // pub fn run_scope<'bump>(&'bump mut self) -> Result<()> {
         let frame = {
             let frame = self.frames.next();
             frame.bump.reset();
@@ -92,7 +93,7 @@ impl Scope {
 
         let node_slot = std::rc::Rc::new(RefCell::new(None));
 
-        let ctx: Context<'bump> = Context {
+        let ctx = Context {
             arena: &self.hook_arena,
             hooks: &self.hooks,
             bump: &frame.bump,
@@ -107,7 +108,6 @@ impl Scope {
         // todo!()
         // Note that the actual modification of the vnode head element occurs during this call
         let _: DomTree = (caller.as_ref())(ctx);
-        // let _: DomTree = (self.raw_caller)(ctx, &self.props);
 
         /*
         SAFETY ALERT
@@ -123,7 +123,6 @@ impl Scope {
 
         frame.head_node = node_slot
             .as_ref()
-            // .deref()
             .borrow_mut()
             .take()
             .expect("Viewing did not happen");

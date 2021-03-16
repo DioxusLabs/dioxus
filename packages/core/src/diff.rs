@@ -259,11 +259,11 @@ impl<'a> DiffMachine<'a> {
                 let id = get_id();
                 *component.stable_addr.as_ref().borrow_mut() = Some(id);
                 self.change_list.save_known_root(id);
-                let scope = Rc::downgrade(&component.ass_scope);    
+                let scope = Rc::downgrade(&component.ass_scope);
                 self.lifecycle_events.push_back(LifeCycleEvent::Mount {
                     caller: Rc::downgrade(&component.caller),
                     id,
-                    scope
+                    scope,
                 });
             }
             VNode::Suspended => {
@@ -286,20 +286,26 @@ impl<'a> DiffMachine<'a> {
         }
 
         'outer1: for (_l_idx, new_l) in new.iter().enumerate() {
-            // unsafe {
-            // Safety relies on removing `new_l` from the registry manually at
-            // the end of its lifetime. This happens below in the `'outer2`
-            // loop, and elsewhere in diffing when removing old dom trees.
-            // registry.add(new_l);
-            // }
+            // go through each new listener
+            // find its corresponding partner in the old list
+            // if any characteristics changed, remove and then re-add
+
+            // if nothing changed, then just move on
+
             let event_type = new_l.event;
 
             for old_l in old {
                 if new_l.event == old_l.event {
+                    if new_l.id != old_l.id {
+                        self.change_list.remove_event_listener(event_type);
+                        self.change_list
+                            .update_event_listener(event_type, new_l.scope, new_l.id)
+                    }
+
                     // if let Some(scope) = self.current_idx {
                     //     let cb = CbIdx::from_gi_index(scope, l_idx);
-                    self.change_list
-                        .update_event_listener(event_type, new_l.scope, new_l.id);
+                    // self.change_list
+                    //     .update_event_listener(event_type, new_l.scope, new_l.id);
                     // }
 
                     continue 'outer1;
