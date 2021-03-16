@@ -11,7 +11,6 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 
 ```rust
-#[fc]
 static Example: FC<()> = |ctx, props| {
     let (selection, set_selection) = use_state(&ctx, || "...?");
 

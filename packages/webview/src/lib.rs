@@ -2,12 +2,13 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 use dioxus_core::prelude::*;
+use dioxus_core::virtual_dom::VirtualDom;
 use web_view::Handle;
 use web_view::{WVResult, WebView, WebViewBuilder};
 
-static HTML_CONTENT: &'static str = include_str!("./index.html");
+static HTML_CONTENT: &'static str = include_str!("./../../liveview/index.html");
 
-pub fn launch<T: 'static>(
+pub fn launch<T: Properties + 'static>(
     builder: impl FnOnce(DioxusWebviewBuilder) -> DioxusWebviewBuilder,
     props: T,
     root: FC<T>,
@@ -25,7 +26,7 @@ enum InnerEvent {
     Initiate(Handle<()>),
 }
 
-impl<T: 'static> WebviewRenderer<T> {
+impl<T: Properties + 'static> WebviewRenderer<T> {
     pub fn run(
         root: FC<T>,
         props: T,

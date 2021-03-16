@@ -38,7 +38,7 @@ static Example: FC<()> = |ctx, _props| {
                 id: "json"
                 "{event}"
             }
-            // Example2 { name: "{event}".to_string() }
+            Example2 { name: event }
         }
     })
 };

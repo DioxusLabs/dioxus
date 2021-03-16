@@ -5,7 +5,9 @@ members = [
     "packages/core-macro",
     "packages/core",
     "packages/web",
-    "packages/webview/client"
+    "packages/webview/client",
+    "packages/webview",
+    "packages/liveview",
     # "packages/router",
     # "packages/ssr",
     # "packages/webview",

@@ -35,3 +35,38 @@ mod tests {
     </Redux>
     */
 }
+
+struct Context {
+    data: String,
+    logged_in: bool,
+}
+
+// "static" selectors automatically get memoized
+static SelectUserName: Selector<&str> = |root: Context| root.data.as_str();
+static SelectUserName: Selector<bool> = |root: Context| root.data.logged_in;
+
+fn main() {
+    /*
+    use_context is very unsafe! It essentially exposes your data in an unsafecell where &mut T and &T can exist at the same time. It's up to *you* the library implmenetor to make this safe.
+
+    We provide a redux-style system and a recoil-style system that are both saf
+
+    */
+
+    // connect itsy bits of state together
+    let context = use_create_context(
+        ctx,
+        ContextBuilder::new()
+            .with_root(|| Context {})
+            .with_root(|| Context {})
+            .with_root(|| Context {})
+            .with_root(|| Context {})
+            .with_root(|| Context {})
+            .with_root(|| Context {})
+            .with_root(|| Context {})
+            .with_root(|| Context {})
+            .build(),
+    );
+
+    let g: HashMap<TypeId, Box<dyn Any>> = HashMap::new();
+}

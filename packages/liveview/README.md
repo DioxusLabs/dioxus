@@ -11,4 +11,3 @@ This comes in the form of two approaches:
 
 Tight coupling is basically an implmentation of loose coupling where **all** events move through the backend connection. This coupling option has higher latency but is very simple to deploy. We use this approach for dioxus-webview where latency is minimal (hosted locally) and we want builds to be simple - no need to manually bundle a custom frontend because everything is server rendered.
 
-

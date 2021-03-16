@@ -14,7 +14,10 @@ struct ServerRendered {
     name7: String,
 }
 
-fn main() {
+fn main() {}
+
+#[cfg(old)]
+fn blah() {
     // connect to the host server
 
     let server_rendered = use_server_rendered((111111, 11111, 11), SERVER_RENDERED_KEY, || {
