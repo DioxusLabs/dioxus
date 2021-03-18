@@ -104,79 +104,28 @@ mod server {
 
     static STREAM_LIST: FC<SreamListProps> = |ctx, props| {
         //
-        match props.selected_stream {
+        let g = match props.selected_stream {
             SelectedStream::Football => ctx.render(rsx! {
                 li {
                     "watch football!"
                 }
             }),
+            SelectedStream::Hockey => ctx.render(rsx! {
+                li {
+                    "watch football!"
+                }
+            }),
+            SelectedStream::Socker => ctx.render(rsx! {
+                li {
+                    "watch football!"
+                }
+            }),
+        };
 
-            _ => unimplemented!()
-            // .render(ctx),
-            // SelectedStream::Hockey => rsx! {
-            //     li {
-            //         "watch football!"
-            //     }
-            // }
-            // .render(ctx),
-            // SelectedStream::Socker => rsx! {
-            //     li {
-            //         "watch football!"
-            //     }
-            // }
-            // .render(ctx),
-        }
+        ctx.render(rsx! {
+            div {
+
+            }
+        })
     };
-}
-
-mod ergorsx {
-
-    // struct Ncx {}
-
-    // struct VVNode {}
-    // struct DTree {
-    //     // struct DTree<F: Fn(&Ncx) -> VVNode> {
-    //     caller: F,
-    // }
-    // impl<F: Fn(&Ncx) -> VVNode> DTree<F> {
-    //     fn new(f: F) -> Self {
-    //         Self { caller: f }
-    //     }
-    // }
-
-    // trait Renderable {
-    //     fn render(self, nodectx: &Ncx) -> VVNode;
-    // }
-
-    // impl<F: Fn(&Ncx) -> VVNode> Renderable for DTree<F> {
-    //     fn render(self, nodectx: &Ncx) -> VVNode {
-    //         (self.caller)(nodectx)
-    //     }
-    // }
-
-    // fn test() {
-    //     let t = 123;
-    //     let r = match t {
-    //         123 => DTree::new(|f| VVNode {}).render(ctx),
-    //         456 => DTree::new(|f| VVNode {}).render(ctx),
-    //         789 => DTree::new(|f| VVNode {}).render(ctx),
-    //         _ => unreachable!(),
-    //     };
-    // }
-
-    // fn example() {
-    //     rsx! {
-    //         div {
-
-    //         }
-    //     }.render(ctx)
-    // }
-
-    // fn example() {
-    //     ctx.render(rsx!{
-    //         div {
-
-    //         }
-    //     })
-    // }
 }

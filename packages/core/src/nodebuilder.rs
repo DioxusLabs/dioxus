@@ -5,7 +5,7 @@ use std::{any::Any, borrow::BorrowMut, intrinsics::transmute, u128};
 use crate::{
     context::NodeCtx,
     events::VirtualEvent,
-    innerlude::{Properties, VComponent, FC},
+    innerlude::{DomTree, Properties, VComponent, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::VElement,
 };
@@ -16,13 +16,14 @@ use crate::{
 /// function for building `<div>` elements or the `button` function for building
 /// `<button>` elements.
 #[derive(Debug)]
-pub struct ElementBuilder<'a, 'b, Listeners, Attributes, Children>
+pub struct ElementBuilder<'a, Listeners, Attributes, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
 {
-    ctx: &'b NodeCtx<'a>,
+    ctx: NodeCtx<'a>,
+    // ctx: &'b NodeCtx<'a>,
     key: NodeKey,
     tag_name: &'a str,
     listeners: Listeners,
@@ -31,10 +32,9 @@ where
     namespace: Option<&'a str>,
 }
 
-impl<'a, 'b>
+impl<'a>
     ElementBuilder<
         'a,
-        'b,
         bumpalo::collections::Vec<'a, Listener<'a>>,
         bumpalo::collections::Vec<'a, Attribute<'a>>,
         bumpalo::collections::Vec<'a, VNode<'a>>,
@@ -63,23 +63,24 @@ impl<'a, 'b>
     /// let my_element_builder = ElementBuilder::new(&b, tag_name);
     /// # fn flip_coin() -> bool { true }
     /// ```
-    pub fn new(ctx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
+    pub fn new(ctx: &NodeCtx<'a>, tag_name: &'static str) -> Self {
+        // pub fn new(ctx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
         // pub fn new<B>(ctx: &'a mut NodeCtx<'a>, tag_name: &'a str) -> Self {
         let bump = ctx.bump;
-        ElementBuilder {
-            ctx,
-            key: NodeKey::NONE,
-            tag_name,
-            listeners: bumpalo::collections::Vec::new_in(bump),
-            attributes: bumpalo::collections::Vec::new_in(bump),
-            children: bumpalo::collections::Vec::new_in(bump),
-            namespace: None,
-        }
+        todo!()
+        // ElementBuilder {
+        //     ctx,
+        //     key: NodeKey::NONE,
+        //     tag_name,
+        //     listeners: bumpalo::collections::Vec::new_in(bump),
+        //     attributes: bumpalo::collections::Vec::new_in(bump),
+        //     children: bumpalo::collections::Vec::new_in(bump),
+        //     namespace: None,
+        // }
     }
 }
 
-impl<'a, 'b, Listeners, Attributes, Children>
-    ElementBuilder<'a, 'b, Listeners, Attributes, Children>
+impl<'a, Listeners, Attributes, Children> ElementBuilder<'a, Listeners, Attributes, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
@@ -113,7 +114,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn listeners<L>(self, listeners: L) -> ElementBuilder<'a, 'b, L, Attributes, Children>
+    pub fn listeners<L>(self, listeners: L) -> ElementBuilder<'a, L, Attributes, Children>
     where
         L: 'a + AsRef<[Listener<'a>]>,
     {
@@ -152,7 +153,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn attributes<A>(self, attributes: A) -> ElementBuilder<'a, 'b, Listeners, A, Children>
+    pub fn attributes<A>(self, attributes: A) -> ElementBuilder<'a, Listeners, A, Children>
     where
         A: 'a + AsRef<[Attribute<'a>]>,
     {
@@ -191,7 +192,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn children<C>(self, children: C) -> ElementBuilder<'a, 'b, Listeners, Attributes, C>
+    pub fn children<C>(self, children: C) -> ElementBuilder<'a, Listeners, Attributes, C>
     where
         C: 'a + AsRef<[VNode<'a>]>,
     {
@@ -310,8 +311,8 @@ where
     }
 }
 
-impl<'a, 'b, Attributes, Children>
-    ElementBuilder<'a, 'b, bumpalo::collections::Vec<'a, Listener<'a>>, Attributes, Children>
+impl<'a, Attributes, Children>
+    ElementBuilder<'a, bumpalo::collections::Vec<'a, Listener<'a>>, Attributes, Children>
 where
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
@@ -364,8 +365,8 @@ where
     }
 }
 
-impl<'a, 'b, Listeners, Children>
-    ElementBuilder<'a, 'b, Listeners, bumpalo::collections::Vec<'a, Attribute<'a>>, Children>
+impl<'a, Listeners, Children>
+    ElementBuilder<'a, Listeners, bumpalo::collections::Vec<'a, Attribute<'a>>, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
@@ -423,8 +424,8 @@ where
     }
 }
 
-impl<'a, 'b, Listeners, Attributes>
-    ElementBuilder<'a, 'b, Listeners, Attributes, bumpalo::collections::Vec<'a, VNode<'a>>>
+impl<'a, Listeners, Attributes>
+    ElementBuilder<'a, Listeners, Attributes, bumpalo::collections::Vec<'a, VNode<'a>>>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
@@ -450,7 +451,190 @@ where
         self
     }
 
-    // pub fn virtual_child(mut self)
+    pub fn iter_child(mut self, nodes: impl IntoIterator<Item = DomTree>) -> Self {
+        for item in nodes.into_iter() {
+            self.children.push(item.root);
+        }
+        self
+    }
+
+    pub fn into_tomdtree(mut self, nodes: impl IntoDomTree<'a>) -> Self {
+        self
+    }
+}
+
+impl IntoIterator for DomTree {
+    type Item = DomTree;
+    type IntoIter = std::iter::Once<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(self)
+    }
+}
+
+pub trait IntoDomTree<'a> {
+    type NodeIter: IntoIterator<Item = DomTree>;
+    fn into_domtree(self, ctx: &NodeCtx<'a>) -> Self::NodeIter;
+}
+
+impl IntoDomTree<'_> for DomTree {
+    type NodeIter = std::iter::Once<DomTree>;
+    fn into_domtree(self, ctx: &NodeCtx) -> Self::NodeIter {
+        std::iter::once(self)
+    }
+}
+
+impl<'a, G> IntoDomTree<'a> for NodeWrapper<'a, G>
+where
+    G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
+{
+    type NodeIter = std::iter::Once<DomTree>;
+
+    fn into_domtree(self, ctx: &NodeCtx) -> Self::NodeIter {
+        let p: VNode<'_> = (self.inner)(ctx);
+        let root: VNode<'static> = unsafe { std::mem::transmute(p) };
+        std::iter::once(DomTree { root })
+    }
+}
+
+impl<'a, G, I> IntoDomTree<'a> for I
+where
+    G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
+    I: Iterator<Item = NodeWrapper<'a, G>>,
+    // O: Iterator<Item = DomTree>,
+{
+    type NodeIter = std::iter::Map<I, O>;
+
+    fn into_domtree(self, ctx: &NodeCtx) -> Self::NodeIter {
+        self.map(|f| {
+            //
+            let caller = (f.inner);
+            let r = caller(ctx);
+        })
+        // todo!()
+        // let p: VNode<'_> = (self.inner)(ctx);
+        // let root: VNode<'static> = unsafe { std::mem::transmute(p) };
+        // std::iter::once(DomTree { root })
+    }
+}
+
+/*
+all possible impls
+
+rsx!{ }
+ctx.render(rsx!)
+
+map(rsx!)
+map(ctx.render(rsx!))
+*/
+
+pub struct NodeWrapper<'a, G>
+where
+    G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
+{
+    inner: G,
+    _p: std::marker::PhantomData<&'a ()>,
+}
+
+fn new_wrapper<'a, G>(f: G) -> NodeWrapper<'a, G>
+where
+    G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
+{
+    NodeWrapper {
+        inner: f,
+        _p: std::default::Default::default(),
+    }
+}
+
+#[test]
+fn test_iterator_of_nodes<'b>() {
+    let p = (0..10).map(|f| {
+        //
+        new_wrapper(rsx! {
+            div {
+                "aaa {f}"
+            }
+        })
+    });
+
+    let g = p.into_iter();
+    for f in g {}
+
+    static Example: FC<()> = |ctx, props| {
+        ctx.render(|c| {
+            //
+            ElementBuilder::new(c, "div")
+                .into_tomdtree({
+                    // rsx!
+                    new_wrapper(move |n: &NodeCtx| -> VNode {
+                        //
+                        ElementBuilder::new(n, "div").finish()
+                    })
+                    // use the macro to be "blind" to the type
+                    // everything gets interpreted as
+                    /*
+
+
+
+                    for node in {expr} {
+                        ctx.push_alloc_node(node)
+                    }
+
+
+                    so.... just make sure whatever enters {} is iterable (domtree and nodewrapper need impls, )
+
+
+                    */
+                    //
+                })
+                .into_tomdtree({
+                    // render to wrapper -> tree
+                    ctx.render(rsx! {
+                        div {}
+                    })
+                })
+                .into_tomdtree({
+                    // map rsx!
+                    (0..10).map(|f| {
+                        new_wrapper(move |n: &NodeCtx| -> VNode {
+                            //
+                            ElementBuilder::new(n, "div").finish()
+                        })
+                    })
+                })
+                .finish()
+        })
+    };
+
+    use crate::prelude::*;
+
+    // static Example: FC<()> = |ctx, props| {
+    //     //
+    //     let list = (0..10).map(|f| {
+    //         ctx.render(rsx! {
+    //             div {}
+    //         })
+    //     });
+
+    //     ctx.render(|c| {
+    //         ElementBuilder::new(c, "div")
+    //             .iter_child({
+    //                 //
+    //                 ctx.render(rsx! {
+    //                     div {}
+    //                 })
+    //             })
+    //             .iter_child({
+    //                 //
+    //                 (0..10).map(|f| {
+    //                     ctx.render(rsx! {
+    //                         div {}
+    //                     })
+    //                 })
+    //             })
+    //             .iter_child(list)
+    //             .finish()
+    //     })
+    // };
 }
 
 /// Construct a text VNode.
@@ -510,7 +694,7 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 // /// });
 // /// ```
 // pub fn on<'a, 'b>(
-//     // pub fn on<'a, 'b, F: 'static>(
+//     // pub fn on<'a, F: 'static>(
 //     bump: &'a Bump,
 //     event: &'static str,
 //     callback: impl Fn(VirtualEvent) + 'a,
@@ -525,27 +709,3 @@ pub fn virtual_child<'a, T: Properties + 'a>(ctx: &NodeCtx<'a>, f: FC<T>, p: T) 
     let propsd: &'a mut _ = ctx.bump.alloc(p);
     VNode::Component(crate::nodes::VComponent::new(f, propsd))
 }
-
-trait Bany {
-    // fn compare_to<P: Properties>(other: &P) -> bool;
-}
-
-pub fn test_vchild<T: Properties>(p: &T) {
-    // let r = p as *const dyn Bany;
-    // let r = p as *const dyn Bany;
-
-    // std::any::Any
-    // let r = p as &dyn Any;
-    // let g = p as *const u128;
-    // let l = unsafe { std::mem::transmute::<&T, &dyn Any>(p) };
-}
-
-/*
-
-Problem:
-compare two props that we know are the same type without transmute
-
-
-
-
-*/

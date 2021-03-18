@@ -102,6 +102,7 @@ pub(crate) mod innerlude {
 
     pub(crate) use nodes::*;
 
+    pub use crate::context::NodeCtx;
     pub use crate::diff::DiffMachine;
     pub use crate::patch::{EditList, EditMachine};
     // pub use crate::patchdx;
@@ -137,6 +138,7 @@ pub mod prelude {
     use crate::nodes;
     pub use nodes::*;
 
+    pub use crate::context::NodeCtx;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
     pub use crate::innerlude::FC;

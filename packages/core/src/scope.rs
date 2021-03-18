@@ -83,7 +83,7 @@ impl Scope {
     /// This function downcasts the function pointer based on the stored props_type
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
-    pub fn run_scope(&mut self) -> Result<()> {
+    pub fn run_scope<'b>(&'b mut self) -> Result<()> {
         // pub fn run_scope<'bump>(&'bump mut self) -> Result<()> {
         let frame = {
             let frame = self.frames.next();
@@ -91,23 +91,16 @@ impl Scope {
             frame
         };
 
-        let node_slot = std::rc::Rc::new(RefCell::new(None));
-
-        let ctx = Context {
+        let ctx: Context<'b> = Context {
             arena: &self.hook_arena,
             hooks: &self.hooks,
             bump: &frame.bump,
             idx: 0.into(),
             _p: PhantomData {},
-            final_nodes: node_slot.clone(),
             scope: self.myidx,
             listeners: &self.listeners,
         };
         let caller = self.caller.upgrade().expect("Failed to get caller");
-
-        // todo!()
-        // Note that the actual modification of the vnode head element occurs during this call
-        let _: DomTree = (caller.as_ref())(ctx);
 
         /*
         SAFETY ALERT
@@ -121,11 +114,11 @@ impl Scope {
         - Public API cannot drop or destructure VNode
         */
 
-        frame.head_node = node_slot
-            .as_ref()
-            .borrow_mut()
-            .take()
-            .expect("Viewing did not happen");
+        frame.head_node = unsafe {
+            let caller2: Rc<OpaqueComponent<'b>> = std::mem::transmute(caller);
+            let tree = (caller2.as_ref())(ctx);
+            tree.root
+        };
 
         Ok(())
     }

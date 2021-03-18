@@ -14,7 +14,10 @@ use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
 /// A domtree represents the result of "Viewing" the context
 /// It's a placeholder over vnodes, to make working with lifetimes easier
-pub struct DomTree;
+pub struct DomTree {
+    // this should *never* be publicly accessible to external
+    pub(crate) root: VNode<'static>,
+}
 
 // ==============================
 //   VNODES
@@ -88,9 +91,7 @@ impl<'a> VNode<'a> {
             VNode::Suspended => {
                 todo!()
             }
-            VNode::Component(c) => {
-                c.key
-            }
+            VNode::Component(c) => c.key,
         }
     }
 }
@@ -253,7 +254,7 @@ pub struct VComponent<'src> {
     pub ass_scope: Rc<VCompAssociatedScope>,
 
     pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
-    pub caller: Rc<dyn for<'r> Fn(Context<'r>) -> DomTree + 'src>,
+    pub caller: Rc<dyn Fn(Context) -> DomTree + 'src>,
 
     // a pointer into the bump arena (given by the 'src lifetime)
     raw_props: *const (),
@@ -296,11 +297,7 @@ impl<'a> VComponent<'a> {
             }
         };
 
-        let caller = move |ctx: Context| -> DomTree {
-            // cast back into the right lifetime
-            let safe_props: &P = unsafe { &*(raw_props as *const P) };
-            component(ctx, props)
-        };
+        let caller = Rc::new(create_closure(component, raw_props));
 
         Self {
             key: NodeKey::NONE,
@@ -308,9 +305,20 @@ impl<'a> VComponent<'a> {
             user_fc: caller_ref,
             raw_props: props as *const P as *const _,
             _p: PhantomData,
-            caller: Rc::new(caller),
+            caller,
             comparator: Rc::new(props_comparator),
             stable_addr: Rc::new(RefCell::new(None)),
         }
+    }
+}
+
+fn create_closure<'a, P: Properties + 'a>(
+    component: FC<P>,
+    raw_props: *const (),
+) -> impl for<'r> Fn(Context<'r>) -> DomTree + 'a {
+    move |ctx: Context| -> DomTree {
+        // cast back into the right lifetime
+        let safe_props: &'a P = unsafe { &*(raw_props as *const P) };
+        component(ctx, safe_props)
     }
 }

@@ -34,8 +34,6 @@ pub struct Context<'src> {
     pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
     pub(crate) bump: &'src Bump,
 
-    pub(crate) final_nodes: Rc<RefCell<Option<VNode<'static>>>>,
-
     pub listeners: &'src RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
 
     // holder for the src lifetime
@@ -97,7 +95,7 @@ impl<'a> Context<'a> {
     ///     ctx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(self, lazy_nodes: impl FnOnce(&'_ NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
+    pub fn render(&self, lazy_nodes: impl FnOnce(&'_ NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
         let ctx = NodeCtx {
             bump: self.bump,
             scope: self.scope,
@@ -106,9 +104,8 @@ impl<'a> Context<'a> {
         };
 
         let safe_nodes = lazy_nodes(&ctx);
-        let unsafe_nodes = unsafe { std::mem::transmute::<VNode<'a>, VNode<'static>>(safe_nodes) };
-        self.final_nodes.deref().borrow_mut().replace(unsafe_nodes);
-        DomTree {}
+        let root: VNode<'static> = unsafe { std::mem::transmute(safe_nodes) };
+        DomTree { root }
     }
 }
 

@@ -3,12 +3,16 @@
 use crate::{error::Error, innerlude::*};
 use crate::{patch::Edit, scope::Scope};
 use generational_arena::Arena;
-use std::{any::TypeId, borrow::{Borrow, BorrowMut}, rc::{Rc, Weak}};
+use std::{
+    any::TypeId,
+    borrow::{Borrow, BorrowMut},
+    rc::{Rc, Weak},
+};
 use thiserror::private::AsDynError;
 
 // We actually allocate the properties for components in their parent's properties
 // We then expose a handle to use those props for render in the form of "OpaqueComponent"
-pub(crate) type OpaqueComponent<'a> = dyn Fn(Context) -> DomTree + 'a;
+pub(crate) type OpaqueComponent<'a> = dyn for<'b> Fn(Context<'b>) -> DomTree + 'a;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -47,8 +51,15 @@ impl VirtualDom {
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let mut components = Arena::new();
 
+        // let prr = Rc::new(root_props);
+
         // the root is kept around with a "hard" allocation
-        let root_caller: Rc<OpaqueComponent> = Rc::new(move |ctx| root(ctx, &root_props));
+        let root_caller: Rc<OpaqueComponent> = Rc::new(move |ctx| {
+            //
+            // let p2 = &root_props;
+            // let p2 = prr.clone();
+            root(ctx, &root_props)
+        });
 
         // we then expose this to the component with a weak allocation
         let weak_caller: Weak<OpaqueComponent> = Rc::downgrade(&root_caller);
@@ -110,9 +121,8 @@ impl VirtualDom {
                 LifeCycleEvent::PropsChanged { caller, id, scope } => {
                     let idx = scope.upgrade().unwrap().as_ref().borrow().unwrap();
                     unsafe {
-
                         let p = &mut *(very_unsafe_components);
-                        let c = p.get_mut(idx).unwrap();                        
+                        let c = p.get_mut(idx).unwrap();
                         c.update_caller(caller);
                         c.run_scope()?;
                         diff_machine.change_list.load_known_root(id);

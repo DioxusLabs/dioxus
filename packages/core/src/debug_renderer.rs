@@ -48,13 +48,13 @@ mod tests {
 
     #[test]
     fn ensure_creation() -> Result<(), ()> {
-        static Example: FC<()> = |ctx, props| {
-            //
-            ctx.render(html! { <div> "hello world" </div> })
-        };
+        // static Example: FC<()> = |ctx, props| {
+        //     //
+        //     ctx.render(html! { <div> "hello world" </div> })
+        // };
 
-        let mut dom = VirtualDom::new(Example);
-        let machine = DiffMachine::new();
+        // let mut dom = VirtualDom::new(Example);
+        // let machine = DiffMachine::new();
 
         Ok(())
     }

@@ -1,35 +1,34 @@
 [workspace]
 members = [
-    # Built-in
     "packages/dioxus",
     "packages/core-macro",
     "packages/core",
     "packages/web",
-    "packages/webview/client",
-    "packages/webview",
     "packages/liveview",
-    # "packages/router",
-    # "packages/ssr",
-    # "packages/webview",
-    # "packages/livehost",
-    # "packages/vscode-ext",
-    # "packages/recoil",
-    # "packages/redux",
-    # "packages/macro",
-    # TODO @Jon, share the validation code
-    # "packages/web",
-    # "packages/hooks",
-    # "packages/cli",
-    # "examples",
-    # "packages/html-macro",
-    # "packages/html-macro-2",
-    #
-    #
-    #
-    # Pulled from percy
-    # "packages/html-macro-test",
-    # "packages/virtual-dom-rs",
-    # "packages/virtual-node",
 ]
 
-
+# Built-in
+# "packages/webview/client",
+# "packages/webview",
+# "packages/router",
+# "packages/ssr",
+# "packages/webview",
+# "packages/livehost",
+# "packages/vscode-ext",
+# "packages/recoil",
+# "packages/redux",
+# "packages/macro",
+# TODO @Jon, share the validation code
+# "packages/web",
+# "packages/hooks",
+# "packages/cli",
+# "examples",
+# "packages/html-macro",
+# "packages/html-macro-2",
+#
+#
+#
+# Pulled from percy
+# "packages/html-macro-test",
+# "packages/virtual-dom-rs",
+# "packages/virtual-node",
