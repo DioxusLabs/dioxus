@@ -64,9 +64,28 @@ Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps
 
 
 ---
-## Dioxus LiveHost
+## Why?
+
+CRUD applications are more complex than ever, requiring knowledge of multiple programming languages on top of annoying build systems and opinionated frameworks. Most JavaScript solutions require libraries to patch core language limitations like Immer for immutable state and TypeScript for static typing.
+
+Certainly, there has to be a better way. Dioxus was made specifically to bring order to this complex ecosystem, taking advantage of immutability-by-default, algebraic datatypes, and efficiency of the Rust programming language. Because Rust runs in both the browser and the server, we can finally write isomoprhic applications that run everywhere, bind to native libraries, and scale well.
+
+Don't be scared of the learning curve - the type of code needed to power a webapp is fairly simple. Diouxs opts to use unsafe (but miri tested!) code to expose an ergonomic API that requires understanding of very few Rust concepts to build a powerful webapp. In many cases, Rust code will end up simpler than JavaScript through the use of immutability, ADTs, and a powerful iterator system that doesn't require annoying "hacks" like `Object.fromEntries`. 
+
+
+## Liveview?
+Liveview is an architecture for building web applications where the final page is generated through 3 methods:
+- Statically render the bundle.
+- Hydrate the bundle to add dynamic functionality.
+- Link individual components to the webserver with websockets.
+
+In other frameworks, the DOM will be updated after events from the page are sent to the server and new html is generated. The html is then sent back to the page over websockets (ie html over websockets).
+
+In Dioxus, the user's bundle will link individual components on the page to the Liveview server. This ensures local events propogate through the page virtual dom if the server is not needed, keeping interactive latency low. This ensures the server load stays low, enablinmg a single server to handle tens of thousands of simultaneous clients.
+
+<!-- ## Dioxus LiveHost
 Dioxus LiveHost is a paid service that accelerates the deployment of Dioxus Apps. It provides CI/CD, testing, monitoring, scaling, and deployment specifically for Dioxus apps. 
-- It's the fastest way of launching your next internal tool, side-project, or startup. 🚀
+- It's the fastest way of launching your next internal tool, side-project, or startup. 🚀 -->
 
 
 <!-- Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whether they be server-rendered, wasm-only, or a liveview. It's  -->
