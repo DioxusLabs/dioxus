@@ -22,7 +22,7 @@ struct ListItem {
 fn app(ctx: Context, props: &Props) -> DomTree {
     let (_f, setter) = use_state(&ctx, || 0);
 
-    ctx.render(move |c| {
+    ctx.render(dioxus::prelude::LazyNodes::new(move |c| {
         let mut root = builder::ElementBuilder::new(c, "div");
         for child in &props.items {
             // notice that the child directly borrows from our vec
@@ -39,7 +39,7 @@ fn app(ctx: Context, props: &Props) -> DomTree {
             ));
         }
         root.finish()
-    })
+    }))
 }
 
 type StateSetter<T> = dyn Fn(T);

@@ -1,5 +1,5 @@
-use crate::nodes::VNode;
-use crate::prelude::*;
+use crate::{nodebuilder::IntoDomTree, prelude::*};
+use crate::{nodebuilder::LazyNodes, nodes::VNode};
 use bumpalo::Bump;
 use hooks::Hook;
 use std::{cell::RefCell, future::Future, ops::Deref, rc::Rc, sync::atomic::AtomicUsize};
@@ -95,7 +95,10 @@ impl<'a> Context<'a> {
     ///     ctx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(&self, lazy_nodes: impl FnOnce(&'_ NodeCtx<'a>) -> VNode<'a> + 'a) -> DomTree {
+    pub fn render<F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a>(
+        &self,
+        lazy_nodes: LazyNodes<'a, F>,
+    ) -> DomTree {
         let ctx = NodeCtx {
             bump: self.bump,
             scope: self.scope,
@@ -103,7 +106,7 @@ impl<'a> Context<'a> {
             listeners: self.listeners,
         };
 
-        let safe_nodes = lazy_nodes(&ctx);
+        let safe_nodes = lazy_nodes.into_vnode(&ctx);
         let root: VNode<'static> = unsafe { std::mem::transmute(safe_nodes) };
         DomTree { root }
     }

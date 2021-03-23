@@ -160,12 +160,7 @@ pub mod on {
 
     #[derive(Debug)]
     pub struct MouseEvent(pub Box<RawMouseEvent>);
-    impl Deref for MouseEvent {
-        type Target = RawMouseEvent;
-        fn deref(&self) -> &Self::Target {
-            self.0.as_ref()
-        }
-    }
+
     #[derive(Debug)]
     pub struct RawMouseEvent {
         pub alt_key: bool,
@@ -182,6 +177,12 @@ pub mod on {
         pub shift_key: bool,
         pub get_modifier_state: GetModifierKey,
         // relatedTarget: DOMEventTarget,
+    }
+    impl Deref for MouseEvent {
+        type Target = RawMouseEvent;
+        fn deref(&self) -> &Self::Target {
+            self.0.as_ref()
+        }
     }
     event_builder! {
         MouseEvent;

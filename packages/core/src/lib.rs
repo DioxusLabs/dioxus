@@ -138,6 +138,8 @@ pub mod prelude {
     use crate::nodes;
     pub use nodes::*;
 
+    pub use crate::nodebuilder::LazyNodes;
+
     pub use crate::context::NodeCtx;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.

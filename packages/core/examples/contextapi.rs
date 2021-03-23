@@ -13,7 +13,7 @@ struct Props {
 static Example: FC<Props> = |ctx, props| {
     let value = ctx.use_context(|c: &SomeContext| c.items.last().unwrap());
 
-    ctx.render(move |bump| {
+    ctx.render(LazyNodes::new(move |bump| {
         builder::ElementBuilder::new(bump, "button")
             .on("click", move |_| {
                 println!("Value is {}", props.name);
@@ -24,7 +24,7 @@ static Example: FC<Props> = |ctx, props| {
                 println!("Value is {}", props.name);
             })
             .finish()
-    })
+    }))
     // ctx.render(html! {
     //     <div>
     //         <button onclick={move |_| println!("Value is {}", value)} />

@@ -16,14 +16,13 @@ use crate::{
 /// function for building `<div>` elements or the `button` function for building
 /// `<button>` elements.
 #[derive(Debug)]
-pub struct ElementBuilder<'a, Listeners, Attributes, Children>
+pub struct ElementBuilder<'a, 'b, Listeners, Attributes, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
 {
-    ctx: NodeCtx<'a>,
-    // ctx: &'b NodeCtx<'a>,
+    ctx: &'b NodeCtx<'a>,
     key: NodeKey,
     tag_name: &'a str,
     listeners: Listeners,
@@ -32,9 +31,10 @@ where
     namespace: Option<&'a str>,
 }
 
-impl<'a>
+impl<'a, 'b>
     ElementBuilder<
         'a,
+        'b,
         bumpalo::collections::Vec<'a, Listener<'a>>,
         bumpalo::collections::Vec<'a, Attribute<'a>>,
         bumpalo::collections::Vec<'a, VNode<'a>>,
@@ -63,24 +63,22 @@ impl<'a>
     /// let my_element_builder = ElementBuilder::new(&b, tag_name);
     /// # fn flip_coin() -> bool { true }
     /// ```
-    pub fn new(ctx: &NodeCtx<'a>, tag_name: &'static str) -> Self {
-        // pub fn new(ctx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
-        // pub fn new<B>(ctx: &'a mut NodeCtx<'a>, tag_name: &'a str) -> Self {
+    pub fn new(ctx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
         let bump = ctx.bump;
-        todo!()
-        // ElementBuilder {
-        //     ctx,
-        //     key: NodeKey::NONE,
-        //     tag_name,
-        //     listeners: bumpalo::collections::Vec::new_in(bump),
-        //     attributes: bumpalo::collections::Vec::new_in(bump),
-        //     children: bumpalo::collections::Vec::new_in(bump),
-        //     namespace: None,
-        // }
+        ElementBuilder {
+            ctx,
+            key: NodeKey::NONE,
+            tag_name,
+            listeners: bumpalo::collections::Vec::new_in(bump),
+            attributes: bumpalo::collections::Vec::new_in(bump),
+            children: bumpalo::collections::Vec::new_in(bump),
+            namespace: None,
+        }
     }
 }
 
-impl<'a, Listeners, Attributes, Children> ElementBuilder<'a, Listeners, Attributes, Children>
+impl<'a, 'b, Listeners, Attributes, Children>
+    ElementBuilder<'a, 'b, Listeners, Attributes, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
@@ -114,7 +112,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn listeners<L>(self, listeners: L) -> ElementBuilder<'a, L, Attributes, Children>
+    pub fn listeners<L>(self, listeners: L) -> ElementBuilder<'a, 'b, L, Attributes, Children>
     where
         L: 'a + AsRef<[Listener<'a>]>,
     {
@@ -153,7 +151,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn attributes<A>(self, attributes: A) -> ElementBuilder<'a, Listeners, A, Children>
+    pub fn attributes<A>(self, attributes: A) -> ElementBuilder<'a, 'b, Listeners, A, Children>
     where
         A: 'a + AsRef<[Attribute<'a>]>,
     {
@@ -192,7 +190,7 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn children<C>(self, children: C) -> ElementBuilder<'a, Listeners, Attributes, C>
+    pub fn children<C>(self, children: C) -> ElementBuilder<'a, 'b, Listeners, Attributes, C>
     where
         C: 'a + AsRef<[VNode<'a>]>,
     {
@@ -311,8 +309,8 @@ where
     }
 }
 
-impl<'a, Attributes, Children>
-    ElementBuilder<'a, bumpalo::collections::Vec<'a, Listener<'a>>, Attributes, Children>
+impl<'a, 'b, Attributes, Children>
+    ElementBuilder<'a, 'b, bumpalo::collections::Vec<'a, Listener<'a>>, Attributes, Children>
 where
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
@@ -365,8 +363,8 @@ where
     }
 }
 
-impl<'a, Listeners, Children>
-    ElementBuilder<'a, Listeners, bumpalo::collections::Vec<'a, Attribute<'a>>, Children>
+impl<'a, 'b, Listeners, Children>
+    ElementBuilder<'a, 'b, Listeners, bumpalo::collections::Vec<'a, Attribute<'a>>, Children>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
@@ -424,8 +422,8 @@ where
     }
 }
 
-impl<'a, Listeners, Attributes>
-    ElementBuilder<'a, Listeners, Attributes, bumpalo::collections::Vec<'a, VNode<'a>>>
+impl<'a, 'b, Listeners, Attributes>
+    ElementBuilder<'a, 'b, Listeners, Attributes, bumpalo::collections::Vec<'a, VNode<'a>>>
 where
     Listeners: 'a + AsRef<[Listener<'a>]>,
     Attributes: 'a + AsRef<[Attribute<'a>]>,
@@ -451,14 +449,24 @@ where
         self
     }
 
-    pub fn iter_child(mut self, nodes: impl IntoIterator<Item = DomTree>) -> Self {
-        for item in nodes.into_iter() {
-            self.children.push(item.root);
+    /// Add multiple children to this element from an iterator.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use dioxus::{builder::*, bumpalo::Bump};
+    ///
+    /// let b = Bump::new();
+    ///
+    /// let my_div = p(&b)
+    ///     .iter_child((0..10).map(|f| span(&b).finish())
+    ///     .finish();
+    /// ```    
+    pub fn iter_child(mut self, nodes: impl IntoIterator<Item = impl IntoDomTree<'a>>) -> Self {
+        for item in nodes {
+            let child = item.into_vnode(&self.ctx);
+            self.children.push(child);
         }
-        self
-    }
-
-    pub fn into_tomdtree(mut self, nodes: impl IntoDomTree<'a>) -> Self {
         self
     }
 }
@@ -472,166 +480,124 @@ impl IntoIterator for DomTree {
 }
 
 pub trait IntoDomTree<'a> {
-    type NodeIter: IntoIterator<Item = DomTree>;
-    fn into_domtree(self, ctx: &NodeCtx<'a>) -> Self::NodeIter;
+    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a>;
 }
 
-impl IntoDomTree<'_> for DomTree {
-    type NodeIter = std::iter::Once<DomTree>;
-    fn into_domtree(self, ctx: &NodeCtx) -> Self::NodeIter {
-        std::iter::once(self)
+// Cover the cases where nodes are pre-rendered.
+// Likely used by enums.
+// ----
+//  let nodes = ctx.render(rsx!{ ... };
+//  rsx! { {nodes } }
+impl<'a> IntoDomTree<'a> for DomTree {
+    fn into_vnode(self, _ctx: &NodeCtx<'a>) -> VNode<'a> {
+        self.root
     }
 }
 
-impl<'a, G> IntoDomTree<'a> for NodeWrapper<'a, G>
+// Wrap the the node-builder closure in a concrete type.
+// ---
+// This is a bit of a hack to implement the IntoDomTree trait for closure types.
+pub struct LazyNodes<'a, G>
 where
-    G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
-{
-    type NodeIter = std::iter::Once<DomTree>;
-
-    fn into_domtree(self, ctx: &NodeCtx) -> Self::NodeIter {
-        let p: VNode<'_> = (self.inner)(ctx);
-        let root: VNode<'static> = unsafe { std::mem::transmute(p) };
-        std::iter::once(DomTree { root })
-    }
-}
-
-impl<'a, G, I> IntoDomTree<'a> for I
-where
-    G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
-    I: Iterator<Item = NodeWrapper<'a, G>>,
-    // O: Iterator<Item = DomTree>,
-{
-    type NodeIter = std::iter::Map<I, O>;
-
-    fn into_domtree(self, ctx: &NodeCtx) -> Self::NodeIter {
-        self.map(|f| {
-            //
-            let caller = (f.inner);
-            let r = caller(ctx);
-        })
-        // todo!()
-        // let p: VNode<'_> = (self.inner)(ctx);
-        // let root: VNode<'static> = unsafe { std::mem::transmute(p) };
-        // std::iter::once(DomTree { root })
-    }
-}
-
-/*
-all possible impls
-
-rsx!{ }
-ctx.render(rsx!)
-
-map(rsx!)
-map(ctx.render(rsx!))
-*/
-
-pub struct NodeWrapper<'a, G>
-where
-    G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
+    G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
 {
     inner: G,
     _p: std::marker::PhantomData<&'a ()>,
 }
 
-fn new_wrapper<'a, G>(f: G) -> NodeWrapper<'a, G>
+impl<'a, G> LazyNodes<'a, G>
+where
+    G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+{
+    pub fn new(f: G) -> Self {
+        Self {
+            inner: f,
+            _p: std::default::Default::default(),
+        }
+    }
+}
+
+// Cover the cases where nodes are used by macro.
+// Likely used directly.
+// ---
+//  let nodes = rsx!{ ... };
+//  rsx! { {nodes } }
+impl<'a, G> IntoDomTree<'a> for LazyNodes<'a, G>
+where
+    G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+{
+    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+        (self.inner)(ctx)
+    }
+}
+
+// Required because anything that enters brackets in the rsx! macro needs to implement IntoIterator
+impl<'a, G> IntoIterator for LazyNodes<'a, G>
 where
     G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
 {
-    NodeWrapper {
-        inner: f,
-        _p: std::default::Default::default(),
+    type Item = Self;
+    type IntoIter = std::iter::Once<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(self)
     }
 }
 
 #[test]
 fn test_iterator_of_nodes<'b>() {
-    let p = (0..10).map(|f| {
-        //
-        new_wrapper(rsx! {
-            div {
-                "aaa {f}"
-            }
-        })
-    });
-
-    let g = p.into_iter();
-    for f in g {}
+    use crate::prelude::*;
 
     static Example: FC<()> = |ctx, props| {
-        ctx.render(|c| {
-            //
-            ElementBuilder::new(c, "div")
-                .into_tomdtree({
-                    // rsx!
-                    new_wrapper(move |n: &NodeCtx| -> VNode {
-                        //
-                        ElementBuilder::new(n, "div").finish()
-                    })
-                    // use the macro to be "blind" to the type
-                    // everything gets interpreted as
-                    /*
+        let g: LazyNodes<_> = rsx! {
+            div {}
+        };
 
-
-
-                    for node in {expr} {
-                        ctx.push_alloc_node(node)
-                    }
-
-
-                    so.... just make sure whatever enters {} is iterable (domtree and nodewrapper need impls, )
-
-
-                    */
-                    //
-                })
-                .into_tomdtree({
-                    // render to wrapper -> tree
-                    ctx.render(rsx! {
-                        div {}
-                    })
-                })
-                .into_tomdtree({
-                    // map rsx!
-                    (0..10).map(|f| {
-                        new_wrapper(move |n: &NodeCtx| -> VNode {
-                            //
-                            ElementBuilder::new(n, "div").finish()
-                        })
-                    })
-                })
-                .finish()
+        ctx.render(rsx! {
+            div {
+                h1 {}
+                {}
+            }
         })
     };
 
-    use crate::prelude::*;
+    // let p = (0..10).map(|f| {
+    //     //
+    //     LazyNodes::new(rsx! {
+    //         div {
+    //             "aaa {f}"
+    //         }
+    //     })
+    // });
+
+    // let g = p.into_iter();
+    // for f in g {}
 
     // static Example: FC<()> = |ctx, props| {
-    //     //
-    //     let list = (0..10).map(|f| {
-    //         ctx.render(rsx! {
-    //             div {}
-    //         })
-    //     });
-
     //     ctx.render(|c| {
+    //         //
     //         ElementBuilder::new(c, "div")
     //             .iter_child({
-    //                 //
+    //                 // rsx!
+    //                 LazyNodes::new(move |n: &NodeCtx| -> VNode {
+    //                     //
+    //                     ElementBuilder::new(n, "div").finish()
+    //                 })
+    //             })
+    //             .iter_child({
+    //                 // render to wrapper -> tree
     //                 ctx.render(rsx! {
     //                     div {}
     //                 })
     //             })
     //             .iter_child({
-    //                 //
+    //                 // map rsx!
     //                 (0..10).map(|f| {
-    //                     ctx.render(rsx! {
-    //                         div {}
+    //                     LazyNodes::new(move |n: &NodeCtx| -> VNode {
+    //                         //
+    //                         ElementBuilder::new(n, "div").finish()
     //                     })
     //                 })
     //             })
-    //             .iter_child(list)
     //             .finish()
     //     })
     // };

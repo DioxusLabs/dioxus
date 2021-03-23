@@ -12,7 +12,7 @@ static Header: FC<()> = |ctx, props| {
 
     let handler1 = move || println!("Value is {}", inner.current());
 
-    ctx.render(|c| {
+    ctx.render(dioxus::prelude::LazyNodes::new(|c| {
         builder::ElementBuilder::new(c, "div")
             .child(VNode::Component(VComponent::new(
                 Bottom,
@@ -20,7 +20,7 @@ static Header: FC<()> = |ctx, props| {
                 c.bump.alloc(()),
             )))
             .finish()
-    })
+    }))
 };
 
 static Bottom: FC<()> = |ctx, props| {

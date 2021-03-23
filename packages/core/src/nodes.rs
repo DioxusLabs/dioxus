@@ -5,7 +5,7 @@
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, Properties, ScopeIdx, FC},
+    innerlude::{Context, NodeCtx, Properties, ScopeIdx, FC},
 };
 
 use bumpalo::Bump;

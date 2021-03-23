@@ -21,6 +21,10 @@
 
 use dioxus_core::prelude::{VNode, FC};
 
+pub mod prelude {
+    pub use dioxus_core::prelude::*;
+}
+
 /// The `TextRenderer` provides a way of rendering a Dioxus Virtual DOM to a String.
 ///
 ///

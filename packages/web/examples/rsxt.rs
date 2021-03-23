@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use dioxus_core as dioxus;
-use dioxus::prelude::*;
+use dioxus::{events::on::MouseEvent, prelude::*};
 use dioxus_web::WebsysRenderer;
 
 fn main() {
@@ -15,6 +15,9 @@ fn main() {
             .unwrap()
     });
 }
+
+
+
 
 #[derive(PartialEq, Props)]
 struct ExampleProps {
@@ -43,13 +46,14 @@ static Example: FC<ExampleProps> = |ctx, props| {
     })
 };
 
+
+
 #[derive(Props)]
 struct ButtonProps<'src> {
     name: &'src str,
     set_name: &'src dyn Fn(String)
 }
 
-/// this is an awesome component
 fn CustomButton<'a>(ctx: Context<'a>, props: &'a ButtonProps<'a>) -> DomTree {
     ctx.render(rsx!{
         button {  

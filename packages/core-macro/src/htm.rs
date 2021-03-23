@@ -58,11 +58,11 @@ impl ToTokens for HtmlRender {
 
         // create a lazy tree that accepts a bump allocator
         let final_tokens = quote! {
-            move |ctx| {
+            dioxus::prelude::LazyNodes::new(move |ctx| {
                 let bump = ctx.bump;
 
                 #new_toks
-            }
+            })
         };
 
         final_tokens.to_tokens(out_tokens);

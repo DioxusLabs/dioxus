@@ -6,6 +6,7 @@ members = [
     "packages/web",
     "packages/liveview",
     "packages/3d",
+    "packages/docsite",
 ]
 
 # Built-in
