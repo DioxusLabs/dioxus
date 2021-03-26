@@ -12,13 +12,13 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 static Example: FC<()> = |ctx, props| {
-    let (selection, set_selection) = use_state(&ctx, || "...?");
+    let selection = use_state(&ctx, || "...?");
 
     ctx.render(rsx! {
         div {
             h1 { "Hello, {selection}" }
-            button { "?", onclick: move |_| set_selection("world!")}
-            button { "?", onclick: move |_| set_selection("Dioxus 🎉")}
+            button { "?", onclick: move |_| selection.set("world!")}
+            button { "?", onclick: move |_| selection.set("Dioxus 🎉")}
         }
     })
 };

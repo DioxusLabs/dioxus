@@ -5,6 +5,7 @@
 //! - [ ] use_reducer
 //! - [ ] use_effect
 
+pub use use_reducer_def::use_reducer;
 pub use use_ref_def::use_ref;
 pub use use_state_def::use_state;
 
@@ -12,29 +13,52 @@ mod use_state_def {
     use crate::innerlude::*;
     use std::{
         cell::RefCell,
+        fmt::Display,
         ops::{Deref, DerefMut},
         rc::Rc,
     };
 
-    struct UseState<T: 'static> {
-        new_val: Rc<RefCell<Option<T>>>,
+    pub struct UseState<T: 'static> {
+        modifier: Rc<RefCell<Option<Box<dyn FnOnce(&mut T)>>>>,
         current_val: T,
-        caller: Box<dyn Fn(T) + 'static>,
+        update: Box<dyn Fn() + 'static>,
     }
 
-    struct UseStateHandle<'a, T> {
-        inner: &'a T,
-    }
-    impl<'a, T> UseStateHandle<'a, T> {
-        fn set(&self, new_val: T) {}
-        fn modify(&self, f: impl FnOnce(&mut T)) {}
-    }
+    // #[derive(Clone, Copy)]
+    // pub struct UseStateHandle<'a, T: 'static> {
+    //     inner: &'a UseState<T>,
+    //     // pub setter: &'a dyn Fn(T),
+    //     // pub modifier: &'a dyn Fn(&mut T),
+    // }
 
-    impl<'a, T> Deref for UseStateHandle<'a, T> {
+    impl<'a, T: 'static> UseState<T> {
+        pub fn setter(&self) -> &dyn Fn(T) {
+            todo!()
+        }
+        pub fn set(&self, new_val: T) {
+            self.modify(|f| *f = new_val);
+        }
+
+        // signal that we need to be updated
+        // save the modifier
+        pub fn modify(&self, f: impl FnOnce(&mut T) + 'static) {
+            let mut slot = self.modifier.as_ref().borrow_mut();
+            *slot = Some(Box::new(f));
+            (self.update)();
+        }
+    }
+    impl<'a, T: 'static> std::ops::Deref for UseState<T> {
         type Target = T;
 
         fn deref(&self) -> &Self::Target {
-            self.inner
+            &self.current_val
+        }
+    }
+
+    // enable displaty for the handle
+    impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.current_val)
         }
     }
 
@@ -63,37 +87,26 @@ mod use_state_def {
     pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
         ctx: &'c Context<'a>,
         initial_state_fn: F,
-    ) -> (&'a T, &'a impl Fn(T)) {
+    ) -> &'a UseState<T> {
         ctx.use_hook(
             move || UseState {
-                new_val: Rc::new(RefCell::new(None)),
+                modifier: Rc::new(RefCell::new(None)),
                 current_val: initial_state_fn(),
-                caller: Box::new(|_| println!("setter called!")),
+                update: Box::new(|| {}),
             },
             move |hook| {
-                log::debug!("Use_state set called");
-                let inner = hook.new_val.clone();
                 let scheduled_update = ctx.schedule_update();
 
                 // get ownership of the new val and replace the current with the new
                 // -> as_ref -> borrow_mut -> deref_mut -> take
                 // -> rc     -> &RefCell   -> RefMut    -> &Option<T> -> T
-                if let Some(new_val) = hook.new_val.as_ref().borrow_mut().deref_mut().take() {
-                    hook.current_val = new_val;
+                if let Some(new_val) = hook.modifier.as_ref().borrow_mut().deref_mut().take() {
+                    (new_val)(&mut hook.current_val);
                 }
 
-                // todo: swap out the caller with a subscription call and an internal update
-                hook.caller = Box::new(move |new_val| {
-                    // update the setter with the new value
-                    let mut new_inner = inner.as_ref().borrow_mut();
-                    *new_inner = Some(new_val);
+                hook.update = Box::new(move || scheduled_update());
 
-                    // Ensure the component gets updated
-                    scheduled_update();
-                });
-
-                // box gets derefed into a ref which is then taken as ref with the hook
-                (&hook.current_val, &hook.caller)
+                &*hook
             },
             |_| {},
         )

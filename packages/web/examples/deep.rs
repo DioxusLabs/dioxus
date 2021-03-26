@@ -10,26 +10,26 @@ fn main() {
 use components::CustomB;
 
 fn CustomA<'a>(ctx: Context<'a>, props: &'a ()) -> DomTree {
-    let (val, set_val) = use_state(&ctx, || "abcdef".to_string());
+    let val = use_state(&ctx, || "abcdef".to_string());
+
     ctx.render(rsx! {
         div {
             class: "m-8"
             "CustomA {val}"
             button {
                 "Upper"
-                onclick: move |_| set_val(val.to_ascii_uppercase())
+                onclick: move |_| val.set(val.to_ascii_uppercase())
             }
             button {
                 "Lower"
-                onclick: move |_| set_val(val.to_ascii_lowercase())
+                onclick: move |_| val.set(val.to_ascii_lowercase())
             }
             CustomB {
-                val: val
+                val: val.as_ref()
             }
         }
     })
 }
-
 
 mod components {
     use super::*;

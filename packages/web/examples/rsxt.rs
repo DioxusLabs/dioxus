@@ -25,7 +25,7 @@ struct ExampleProps {
 }
 
 static Example: FC<ExampleProps> = |ctx, props| {
-    let (name, set_name) = use_state(&ctx, move || props.initial_name.to_string());
+    let name = use_state(&ctx, move || props.initial_name.to_string());
 
     ctx.render(rsx! {
         div { 
@@ -39,9 +39,9 @@ static Example: FC<ExampleProps> = |ctx, props| {
                 "Hello, {name}"
             }
             
-            CustomButton { name: "Jack!", set_name: set_name }
-            CustomButton { name: "Jill!", set_name: set_name }
-            CustomButton { name: "Bob!", set_name: set_name }
+            CustomButton { name: "Jack!", set_name: name.setter() }
+            CustomButton { name: "Jill!", set_name: name.setter() }
+            CustomButton { name: "Bob!", set_name: name.setter() }
         }
     })
 };

@@ -496,6 +496,17 @@ pub trait IntoDomTree<'a> {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a>;
 }
 
+pub trait DomTreeBuilder<'a, G>: IntoIterator<Item = G>
+where
+    G: IntoDomTree<'a>,
+{
+}
+
+impl<'a, F> DomTreeBuilder<'a, LazyNodes<'a, F>> for LazyNodes<'a, F> where
+    F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a
+{
+}
+
 // Cover the cases where nodes are pre-rendered.
 // Likely used by enums.
 // ----
@@ -547,7 +558,7 @@ where
 // Required because anything that enters brackets in the rsx! macro needs to implement IntoIterator
 impl<'a, G> IntoIterator for LazyNodes<'a, G>
 where
-    G: for<'b, 'c> FnOnce(&'b NodeCtx<'c>) -> VNode<'c> + 'a,
+    G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
 {
     type Item = Self;
     type IntoIter = std::iter::Once<Self::Item>;

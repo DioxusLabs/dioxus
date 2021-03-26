@@ -40,6 +40,33 @@ impl DebugRenderer {
     pub fn step(&mut self, machine: &mut DiffMachine) -> Result<()> {
         Ok(())
     }
+
+    // this does a "holy" compare - if something is missing in the rhs, it doesn't complain.
+    // it only complains if something shows up that's not in the lhs, *or* if a value is different.
+    // This lets you exclude various fields if you just want to drill in to a specific prop
+    // It leverages the internal diffing mechanism.
+    // If you have a list or "nth" child, you do need to list those children, but you don't need to
+    // fill in their children/attrs/etc
+    // Does not handle children or lifecycles and will always fail the test if they show up in the rhs
+    pub fn compare<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
+    where
+        F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+    {
+        Ok(())
+    }
+
+    // Do a full compare - everything must match
+    // Ignores listeners and children components
+    pub fn compare_full<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
+    where
+        F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+    {
+        Ok(())
+    }
+
+    pub fn trigger_listener(&mut self, id: usize) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

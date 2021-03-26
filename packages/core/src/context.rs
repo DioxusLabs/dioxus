@@ -61,9 +61,9 @@ impl<'a> Context<'a> {
     /// Create a suspended component from a future.
     ///
     /// When the future completes, the component will be renderered
-    pub fn suspend(
+    pub fn suspend<F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a>(
         &self,
-        _fut: impl Future<Output = impl FnOnce(&'a NodeCtx<'a>) -> VNode<'a>>,
+        _fut: impl Future<Output = LazyNodes<'a, F>>,
     ) -> VNode<'a> {
         todo!()
     }

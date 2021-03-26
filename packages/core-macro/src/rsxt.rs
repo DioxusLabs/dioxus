@@ -1,42 +1,3 @@
-/*
-
-
-https://github.com/chinedufn/percy/issues/37
-
-An example usage of rsx! would look like this:
-```ignore
-ctx.render(rsx!{
-    div {
-        h1 { "Example" },
-        p {
-            tag: "type",
-            abc: 123,
-            enabled: true,
-            class: "big small wide short",
-
-            a { "abcder" },
-            h2 { "whatsup", class: "abc-123" },
-            CustomComponent { a: 123, b: 456, key: "1" },
-            { 0..3.map(|i| rsx!{ h1 {"{:i}"} }) },
-            {expr}
-
-            // expr can take:
-            // - iterator
-            // - |bump| { }
-            // - value (gets formatted as &str)
-            // - ... more as we upgrade it
-        }
-    }
-})
-```
-
-optionally, include the allocator directly
-
-rsx!(ctx, div { "hello"} )
-
-each element is given by tag { [Attr] }
-
-*/
 use syn::parse::{discouraged::Speculative, ParseBuffer};
 
 use {
@@ -72,11 +33,6 @@ impl Parse for RsxRender {
             })
             .ok();
 
-        // cannot accept multiple elements
-        // can only accept one root per component
-        // fragments can be used as
-        // todo
-        // enable fragements by autocoerrcing into list
         let el: Element = input.parse()?;
         Ok(Self { el, custom_context })
     }
@@ -85,7 +41,6 @@ impl Parse for RsxRender {
 impl ToTokens for RsxRender {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let new_toks = (&self.el).to_token_stream();
-        // let new_toks = ToToksCtx::new(&self.kind).to_token_stream();
 
         // create a lazy tree that accepts a bump allocator
         let final_tokens = match &self.custom_context {
@@ -130,42 +85,40 @@ impl ToTokens for &Node {
 
 impl Parse for Node {
     fn parse(stream: ParseStream) -> Result<Self> {
-        let fork1 = stream.fork();
-        let fork2 = stream.fork();
-        let fork3 = stream.fork();
+        // Supposedly this approach is discouraged due to inability to return proper errors
+        // TODO: Rework this to provide more informative errors
 
-        // todo: map issues onto the second fork if any arise
-        // it's unlikely that textnodes or components would fail?
-
-        let ret = if let Ok(text) = fork1.parse::<TextNode>() {
-            stream.advance_to(&fork1);
-            Self::Text(text)
-        } else if let Ok(element) = fork2.parse::<Element>() {
-            stream.advance_to(&fork2);
-            Self::Element(element)
-        } else if let Ok(comp) = fork3.parse::<Component>() {
-            stream.advance_to(&fork3);
-            Self::Component(comp)
-        } else {
-            return Err(Error::new(
-                stream.span(),
-                "Failed to parse as a valid child",
-            ));
-        };
-
-        // consume comma if it exists
-        // we don't actually care if there *are* commas after elements/text
-        if stream.peek(Token![,]) {
-            let _ = stream.parse::<Token![,]>();
+        let fork = stream.fork();
+        if let Ok(text) = fork.parse::<TextNode>() {
+            stream.advance_to(&fork);
+            return Ok(Self::Text(text));
         }
-        Ok(ret)
+
+        let fork = stream.fork();
+        if let Ok(element) = fork.parse::<Element>() {
+            stream.advance_to(&fork);
+            return Ok(Self::Element(element));
+        }
+
+        let fork = stream.fork();
+        if let Ok(comp) = fork.parse::<Component>() {
+            stream.advance_to(&fork);
+            return Ok(Self::Component(comp));
+        }
+
+        let fork = stream.fork();
+        if let Ok(tok) = try_parse_bracketed(&fork) {
+            stream.advance_to(&fork);
+            return Ok(Node::RawExpr(tok));
+        }
+
+        return Err(Error::new(stream.span(), "Failed to parse as a valid node"));
     }
 }
 
 struct Component {
     name: Ident,
     body: Vec<ComponentField>,
-    // attrs: Vec<Attr>,
     children: Vec<Node>,
 }
 
@@ -185,38 +138,6 @@ impl ToTokens for &Component {
             .build()
         });
 
-        // let mut toks = quote! {};
-
-        // for attr in self.inner.attrs.iter() {
-        //     self.recurse(attr).to_tokens(&mut toks);
-        // }
-
-        // panic!("tokens are {:#?}", toks);
-
-        // no children right now
-
-        // match &self.inner.children {
-        //     MaybeExpr::Expr(expr) => tokens.append_all(quote! {
-        //         .children(#expr)
-        //     }),
-        //     MaybeExpr::Literal(nodes) => {
-        //         let mut children = nodes.iter();
-        //         if let Some(child) = children.next() {
-        //             let mut inner_toks = TokenStream2::new();
-        //             self.recurse(child).to_tokens(&mut inner_toks);
-        //             while let Some(child) = children.next() {
-        //                 quote!(,).to_tokens(&mut inner_toks);
-        //                 self.recurse(child).to_tokens(&mut inner_toks);
-        //             }
-        //             tokens.append_all(quote! {
-        //                 .children([#inner_toks])
-        //             });
-        //         }
-        //     }
-        // }
-        // tokens.append_all(quote! {
-        //     .finish()
-        // });
         let _toks = tokens.append_all(quote! {
             dioxus::builder::virtual_child(ctx, #name, #builder)
         });
@@ -225,8 +146,6 @@ impl ToTokens for &Component {
 
 impl Parse for Component {
     fn parse(s: ParseStream) -> Result<Self> {
-        // TODO: reject anything weird/nonstandard
-        // we want names *only*
         let name = Ident::parse_any(s)?;
 
         if crate::util::is_valid_tag(&name.to_string()) {
@@ -252,11 +171,16 @@ impl Parse for Component {
             if let Ok(field) = content.parse::<ComponentField>() {
                 body.push(field);
             }
+
+            // consume comma if it exists
+            // we don't actually care if there *are* commas between attrs
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>();
+            }
         }
 
         // todo: add support for children
         let children: Vec<Node> = vec![];
-        // let children = MaybeExpr::Literal(children);
 
         Ok(Self {
             name,
@@ -275,25 +199,16 @@ pub struct ComponentField {
 impl Parse for ComponentField {
     fn parse(input: ParseStream) -> Result<Self> {
         let name = Ident::parse_any(input)?;
-        let _name_str = name.to_string();
         input.parse::<Token![:]>()?;
         let content = input.parse()?;
-
-        // consume comma if it exists
-        // we don't actually care if there *are* commas between attrs
-        if input.peek(Token![,]) {
-            let _ = input.parse::<Token![,]>();
-        }
 
         Ok(Self { name, content })
     }
 }
 
 impl ToTokens for &ComponentField {
-    // impl ToTokens for ToToksCtx<&ComponentField> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = &self.name;
-        let content = &self.content;
+        let ComponentField { name, content, .. } = self;
         tokens.append_all(quote! {
             .#name(#content)
         })
@@ -307,7 +222,6 @@ struct Element {
     name: Ident,
     attrs: Vec<Attr>,
     children: Vec<Node>,
-    // children: MaybeExpr<Vec<Node>>,
 }
 
 impl ToTokens for &Element {
@@ -321,46 +235,15 @@ impl ToTokens for &Element {
         for attr in self.attrs.iter() {
             attr.to_tokens(tokens);
         }
-        // match &self.children {
-        //     // MaybeExpr::Expr(expr) => tokens.append_all(quote! {
-        //     //     .iter_child(#expr)
-        //     // }),
-        //     MaybeExpr::Literal(nodes) => {
-        // let mut children = nodes.iter();
+
         let mut children = self.children.iter();
         while let Some(child) = children.next() {
-            // if let Some(child) = children.next() {
-            // let mut inner_toks = TokenStream2::new();
-            // child.to_tokens(&mut inner_toks);
-            // while let Some(child) = children.next() {
-            match child {
-                // raw exprs need to be wrapped in a once type?
-                Node::RawExpr(_) => {
-                    let inner_toks = child.to_token_stream();
-                    tokens.append_all(quote! {
-                        .iter_child(std::iter::once(#inner_toks))
-                    })
-                }
-                _ => {
-                    let inner_toks = child.to_token_stream();
-                    tokens.append_all(quote! {
-                        .iter_child(#inner_toks)
-                    })
-                }
-            }
-            // quote!(,).to_tokens(&mut inner_toks);
-            // child.to_tokens(&mut inner_toks);
-            // }
-            // while let Some(child) = children.next() {
-            //     quote!(,).to_tokens(&mut inner_toks);
-            //     child.to_tokens(&mut inner_toks);
-            // }
-            // tokens.append_all(quote! {
-            //     .iter_child([#inner_toks])
-            // });
+            let inner_toks = child.to_token_stream();
+            tokens.append_all(quote! {
+                .iter_child(#inner_toks)
+            })
         }
-        // }
-        // }
+
         tokens.append_all(quote! {
             .finish()
         });
@@ -383,8 +266,6 @@ impl Parse for Element {
         let mut children: Vec<Node> = vec![];
         parse_element_content(content, &mut attrs, &mut children)?;
 
-        // let children = MaybeExpr::Literal(children);
-
         Ok(Self {
             name,
             attrs,
@@ -400,12 +281,11 @@ fn parse_element_content(
     children: &mut Vec<Node>,
 ) -> Result<()> {
     'parsing: loop {
-        // todo move this around into a more functional style
-        // [1] Break if empty
-        // [2] Try to consume an attr (with comma)
-        // [3] Try to consume a child node (with comma)
-        // [4] Try to consume brackets as anything thats Into<Node>
-        // [last] Fail if none worked
+        // consume comma if it exists
+        // we don't actually care if there *are* commas after elements/text
+        if stream.peek(Token![,]) {
+            let _ = stream.parse::<Token![,]>();
+        }
 
         // [1] Break if empty
         if stream.is_empty() {
@@ -430,33 +310,6 @@ fn parse_element_content(
             continue 'parsing;
         }
 
-        // [4] TODO: Parsing brackets
-
-        let fork = stream.fork();
-        if fork.peek(token::Brace) {
-            // todo!("Add support");
-            // this can fail (mismatched brackets)
-            // let content;
-            // syn::braced!(content in &stream);
-            match try_parse_bracketed(&fork) {
-                Ok(tok) => {
-                    children.push(Node::RawExpr(tok))
-                    // todo!("succeeded")
-                }
-                Err(e) => {
-                    todo!("failed {}", e)
-                }
-            }
-            stream.advance_to(&fork);
-            continue 'parsing;
-            // let fork = content.fork();
-            // stream.advance_to(fork)
-        }
-        // if let Ok(el) = fork.parse() {
-        //     children.push(el);
-        //     continue 'parsing;
-        // }
-
         // todo: pass a descriptive error onto the offending tokens
         panic!("Entry is not an attr or element\n {}", stream)
     }
@@ -471,9 +324,6 @@ fn try_parse_bracketed(stream: &ParseBuffer) -> Result<Expr> {
 /// =======================================
 /// Parse a VElement's Attributes
 /// =======================================
-/// - [ ] Allow expressions as attribute
-///
-///
 struct Attr {
     name: Ident,
     ty: AttrType,
@@ -540,7 +390,6 @@ impl Parse for Attr {
 }
 
 impl ToTokens for &Attr {
-    // impl ToTokens for ToToksCtx<&Attr> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = self.name.to_string();
         let nameident = &self.name;
@@ -555,13 +404,11 @@ impl ToTokens for &Attr {
                 tokens.append_all(quote! {
                     .add_listener(dioxus::events::on::#nameident(ctx, #event))
                 });
-                // .on(#name, #event)
             }
             AttrType::Tok(exp) => {
                 tokens.append_all(quote! {
                     .add_listener(dioxus::events::on::#nameident(ctx, #exp))
                 });
-                // .on(#name, #exp)
             }
         }
     }
@@ -571,17 +418,12 @@ enum AttrType {
     Value(LitStr),
     Event(ExprClosure),
     Tok(Expr),
-    // todo Bool(MaybeExpr<LitBool>)
 }
 
 // =======================================
 // Parse just plain text
 // =======================================
-// - [ ] Perform formatting automatically
-//
-//
 struct TextNode(LitStr);
-// struct TextNode(MaybeExpr<LitStr>);
 
 impl Parse for TextNode {
     fn parse(s: ParseStream) -> Result<Self> {
@@ -590,9 +432,8 @@ impl Parse for TextNode {
 }
 
 impl ToTokens for TextNode {
-    // impl ToTokens for ToToksCtx<&TextNode> {
-    // self.recurse(&self.inner.0).to_tokens(&mut token_stream);
     fn to_tokens(&self, tokens: &mut TokenStream2) {
+        // todo: use heuristics to see if we can promote to &static str
         let token_stream = &self.0.to_token_stream();
         tokens.append_all(quote! {
             {
@@ -604,29 +445,3 @@ impl ToTokens for TextNode {
         });
     }
 }
-
-// enum MaybeExpr<T> {
-//     Literal(T),
-//     Expr(Expr),
-// }
-
-// impl<T: Parse> Parse for MaybeExpr<T> {
-//     fn parse(s: ParseStream) -> Result<Self> {
-//         if s.peek(token::Brace) {
-//             let content;
-//             syn::braced!(content in s);
-//             Ok(MaybeExpr::Expr(content.parse()?))
-//         } else {
-//             Ok(MaybeExpr::Literal(s.parse()?))
-//         }
-//     }
-// }
-
-// impl<'a, T: 'a + ToTokens> ToTokens for &'a MaybeExpr<T> {
-//     fn to_tokens(&self, tokens: &mut TokenStream2) {
-//         match &self {
-//             MaybeExpr::Literal(v) => v.to_tokens(tokens),
-//             MaybeExpr::Expr(expr) => expr.to_tokens(tokens),
-//         }
-//     }
-// }

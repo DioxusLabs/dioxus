@@ -1,43 +1,52 @@
-use dioxus_ssr::{prelude::*, TextRenderer};
+use dioxus_ssr::{
+    prelude::{builder::IntoDomTree, dioxus::events::on::MouseEvent, *},
+    TextRenderer,
+};
+mod components {
+    mod app;
+}
 
 fn main() {
     TextRenderer::new(App);
 }
 
 #[derive(Debug, PartialEq)]
-enum Routes {
+enum Route {
     Homepage,
-    ExampleList,
+    Examples,
 }
 
 #[derive(Debug, PartialEq, Props)]
 struct AppProps {
-    route: Routes,
+    route: Route,
 }
 
-trait Blah {}
-impl<'a, G> Blah for LazyNodes<'a, G> where G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a {}
-
 static App: FC<AppProps> = |ctx, props| {
-    //
-    let body = rsx! {
-        div {}
-    };
+    let body = match props.route {
+        Route::Homepage => ctx.render(rsx! {
+            div {
+                "Some Content"
+            }
+        }),
 
-    let top = rsx! {
-        div {}
+        Route::Examples => ctx.render(rsx! {
+            div {
+                "Other Content"
+            }
+        }),
     };
 
     ctx.render(rsx!(
         div {
             Header {}
             {body}
-            {top}
-            {rsx!{
-                div {
-                    "you ugl"
-                }
-            }}
+            ul {
+                {(0..10).map(|f| rsx!{
+                    li {
+                        "this is list item {f}"
+                    }
+                })}
+            }
         }
     ))
 };
@@ -49,3 +58,48 @@ static Header: FC<()> = |ctx, _| {
         }
     })
 };
+
+mod example {
+    use super::*;
+    static ExampleUsage: FC<()> = |ctx, props| {
+        // direct rsx!
+        let body = rsx! {
+            div {}
+        };
+
+        // rendered rsx!
+        let top = ctx.render(rsx! {
+            div {
+                "ack!"
+            }
+        });
+
+        // listy rsx
+        let list2 = (0..10).map(|f| {
+            rsx! {
+                div {}
+            }
+        });
+
+        // rendered list rsx
+        let list = (0..10).map(|f| {
+            ctx.render(rsx! {
+                div {}
+            })
+        });
+
+        ctx.render(rsx!(
+            div {
+                Header {}
+                {body}
+                {top}
+                {list}
+                {list2}
+                // inline rsx
+                {rsx!{
+                    div { "hello" }
+                }}
+            }
+        ))
+    };
+}

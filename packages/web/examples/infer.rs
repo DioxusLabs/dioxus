@@ -12,11 +12,10 @@ fn main() {
 
 // this is a component
 static Example: FC<()> = |ctx, _props| {
-    let (event, set_event) = use_state(&ctx, || None);
-    let event = format!("{:#?}", event);
+    let event = use_state(&ctx, || None);
 
     let handler = move |evt: MouseEvent| {
-        set_event(Some(evt));
+        event.set(Some(evt));
     };
 
     log::info!("hello world");
@@ -36,9 +35,9 @@ static Example: FC<()> = |ctx, _props| {
             pre {
                 onmousemove: {handler}
                 id: "json"
-                "{event}"
+                "Hello world"
             }
-            Example2 { name: event }
+            Example2 { name: "Blah".into() }
         }
     })
 };

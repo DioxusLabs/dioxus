@@ -10,19 +10,11 @@ fn main() {
 }
 
 static Example: FC<()> = |ctx, props| {
-    let (name, set_name) = use_state(&ctx, || "...?");
+    let name = use_state(&ctx, || "...?");
 
     log::debug!("Running component....");
 
     ctx.render(html! {
-    // <div>
-    //     <h1> "Hello, {name}" </h1>
-    //     <button onclick={move |_| set_name("jack")}> "jack!" </button>
-    //     <button
-    //         onclick={move |_| set_name("jill")}
-    //         onclick={move |_| set_name("jill")}
-    //     > "jill!" </button>
-    // </div>
             <div>
                 <section class="py-12 px-4 text-center">
                     <div class="w-full max-w-2xl mx-auto">
@@ -40,15 +32,14 @@ static Example: FC<()> = |ctx, props| {
                         <div>
                             <button
                                 class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                                // onclick={move |_| log::debug!("set jack")}>
-                                onclick={move |_| set_name("jack")}>
+                                onclick={move |_| name.set("jack")}>
                                 "Jack!"
                                 </button>
 
                                 <button
                                     class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                                    onclick={move |_| set_name("jill")}
-                                    onclick={move |_| set_name("jill")}>
+                                    onclick={move |_| name.set("jill")}
+                                    onclick={move |_| name.set("jill")}>
                                     "Jill!"
                                 </button>
                         </div>
@@ -57,9 +48,3 @@ static Example: FC<()> = |ctx, props| {
             </div>
         })
 };
-
-// <div>
-//     <h1> "Hello, {name}" </h1>
-//     <button onclick={move |_| set_name("jack   .")}> "jack!" </button>
-//     <button onclick={move |_| set_name("jill   .")}> "jill!" </button>
-// </div>
