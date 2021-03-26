@@ -20,60 +20,29 @@ impl<'a, G> Blah for LazyNodes<'a, G> where G: for<'b> FnOnce(&'b NodeCtx<'a>) -
 
 static App: FC<AppProps> = |ctx, props| {
     //
-    let body = match props.route {
-        Routes::Homepage => ctx.render(rsx!(
-            div {
-                Homepage {}
-            }
-        )),
-        Routes::ExampleList => ctx.render(rsx!(
-        div {
-            ExampleList {}
-            }
-        )),
+    let body = rsx! {
+        div {}
+    };
+
+    let top = rsx! {
+        div {}
     };
 
     ctx.render(rsx!(
         div {
             Header {}
             {body}
-            {
-            }
-            Footer {}
+            {top}
+            {rsx!{
+                div {
+                    "you ugl"
+                }
+            }}
         }
     ))
 };
 
-#[derive(Debug, PartialEq, Props)]
-struct HeaderProp {
-    selected: Routes,
-}
-
 static Header: FC<()> = |ctx, _| {
-    ctx.render(rsx! {
-        div {
-
-        }
-    })
-};
-
-static Footer: FC<()> = |ctx, _| {
-    ctx.render(rsx! {
-        div {
-
-        }
-    })
-};
-
-static Homepage: FC<()> = |ctx, _| {
-    ctx.render(rsx! {
-        div {
-
-        }
-    })
-};
-
-static ExampleList: FC<()> = |ctx, _| {
     ctx.render(rsx! {
         div {
 

@@ -479,6 +479,19 @@ impl IntoIterator for DomTree {
     }
 }
 
+impl<'a> IntoIterator for VNode<'a> {
+    type Item = VNode<'a>;
+    type IntoIter = std::iter::Once<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(self)
+    }
+}
+impl<'a> IntoDomTree<'a> for VNode<'a> {
+    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+        self
+    }
+}
+
 pub trait IntoDomTree<'a> {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a>;
 }
@@ -547,18 +560,17 @@ where
 fn test_iterator_of_nodes<'b>() {
     use crate::prelude::*;
 
-    static Example: FC<()> = |ctx, props| {
-        let g: LazyNodes<_> = rsx! {
-            div {}
-        };
+    // static Example: FC<()> = |ctx, props| {
+    //     let body = rsx! {
+    //         div {}
+    //     };
 
-        ctx.render(rsx! {
-            div {
-                h1 {}
-                {}
-            }
-        })
-    };
+    //     ctx.render(rsx! {
+    //         div {
+    //             h1 {}
+    //         }
+    //     })
+    // };
 
     // let p = (0..10).map(|f| {
     //     //
