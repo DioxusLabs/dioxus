@@ -22,7 +22,7 @@ struct ListItem {
 }
 
 fn app<'a>(ctx: Context<'a>, props: &Props) -> DomTree {
-    let val = use_state(&ctx, || 0);
+    let (val, set_val) = use_state(&ctx, || 0);
 
     ctx.render(dioxus::prelude::LazyNodes::new(move |c| {
         let mut root = builder::ElementBuilder::new(c, "div");
@@ -36,7 +36,7 @@ fn app<'a>(ctx: Context<'a>, props: &Props) -> DomTree {
                 // create the props with nothing but the fc<T>
                 fc_to_builder(ChildItem)
                     .item(child)
-                    .item_handler(val.setter())
+                    .item_handler(set_val)
                     .build(),
             ));
         }

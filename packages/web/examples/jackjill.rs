@@ -10,7 +10,7 @@ fn main() {
 }
 
 static Example: FC<()> = |ctx, props| {
-    let name = use_state(&ctx, || "...?");
+    let (name, set_name) = use_state(&ctx, || "...?");
 
     log::debug!("Running component....");
 
@@ -32,14 +32,14 @@ static Example: FC<()> = |ctx, props| {
                         <div>
                             <button
                                 class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                                onclick={move |_| name.set("jack")}>
+                                onclick={move |_| set_name("jack")}>
                                 "Jack!"
                                 </button>
 
                                 <button
                                     class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                                    onclick={move |_| name.set("jill")}
-                                    onclick={move |_| name.set("jill")}>
+                                    onclick={move |_| set_name("jill")}
+                                    onclick={move |_| set_name("jill")}>
                                     "Jill!"
                                 </button>
                         </div>

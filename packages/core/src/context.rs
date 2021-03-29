@@ -2,7 +2,7 @@ use crate::{nodebuilder::IntoDomTree, prelude::*};
 use crate::{nodebuilder::LazyNodes, nodes::VNode};
 use bumpalo::Bump;
 use hooks::Hook;
-use std::{cell::RefCell, future::Future, ops::Deref, rc::Rc, sync::atomic::AtomicUsize};
+use std::{cell::RefCell, future::Future, ops::Deref, pin::Pin, rc::Rc, sync::atomic::AtomicUsize};
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
 /// This lets components schedule updates, integrate hooks, and expose their context via the context api.
@@ -25,13 +25,14 @@ use std::{cell::RefCell, future::Future, ops::Deref, rc::Rc, sync::atomic::Atomi
 // todo: force lifetime of source into T as a valid lifetime too
 // it's definitely possible, just needs some more messing around
 pub struct Context<'src> {
-    pub idx: AtomicUsize,
+    pub idx: RefCell<usize>,
 
     pub scope: ScopeIdx,
 
     // Borrowed from scope
-    pub(crate) arena: &'src typed_arena::Arena<Hook>,
-    pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
+    // pub(crate) arena: &'src typed_arena::Arena<Hook>,
+    pub(crate) hooks: &'src RefCell<Vec<Hook>>,
+    // pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
     pub(crate) bump: &'src Bump,
 
     pub listeners: &'src RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
@@ -114,14 +115,16 @@ impl<'a> Context<'a> {
 
 /// This module provides internal state management functionality for Dioxus components
 pub mod hooks {
+    use std::any::Any;
+
     use super::*;
 
     #[derive(Debug)]
-    pub struct Hook(pub Box<dyn std::any::Any>);
+    pub struct Hook(pub Pin<Box<dyn std::any::Any>>);
 
     impl Hook {
-        pub fn new(state: Box<dyn std::any::Any>) -> Self {
-            Self(state)
+        pub fn new<T: 'static>(state: T) -> Self {
+            Self(Box::pin(state))
         }
     }
 
@@ -139,28 +142,27 @@ pub mod hooks {
             // TODO: add this to the "clean up" group for when the component is dropped
             _cleanup: impl FnOnce(InternalHookState),
         ) -> Output {
-            let raw_hook = {
-                let idx = self.idx.load(std::sync::atomic::Ordering::Relaxed);
+            let idx = *self.idx.borrow();
 
-                // Mutate hook list if necessary
-                let mut hooks = self.hooks.borrow_mut();
+            // Mutate hook list if necessary
+            let mut hooks = self.hooks.borrow_mut();
 
-                // Initialize the hook by allocating it in the typed arena.
-                // We get a reference from the arena which is owned by the component scope
-                // This is valid because "Context" is only valid while the scope is borrowed
-                if idx >= hooks.len() {
-                    let new_state = initializer();
-                    let boxed_state: Box<dyn std::any::Any> = Box::new(new_state);
-                    let hook = self.arena.alloc(Hook::new(boxed_state));
+            // Initialize the hook by allocating it in the typed arena.
+            // We get a reference from the arena which is owned by the component scope
+            // This is valid because "Context" is only valid while the scope is borrowed
+            if idx >= hooks.len() {
+                let new_state = initializer();
+                hooks.push(Hook::new(new_state));
+            }
+            *self.idx.borrow_mut() = 1;
 
-                    // Push the raw pointer instead of the &mut
-                    // A "poor man's OwningRef"
-                    hooks.push(hook);
-                }
-                self.idx.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let stable_ref = hooks.get_mut(idx).unwrap().0.as_mut();
+            let v = unsafe { Pin::get_unchecked_mut(stable_ref) };
+            let internal_state = v.downcast_mut::<InternalHookState>().unwrap();
 
-                *hooks.get(idx).unwrap()
-            };
+            // we extend the lifetime from borrowed in this scope to borrowed from self.
+            // This is okay because the hook is pinned
+            runner(unsafe { &mut *(internal_state as *mut _) })
 
             /*
             ** UNSAFETY ALERT **
@@ -178,11 +180,17 @@ pub mod hooks {
             - We don't expose the raw hook pointer outside of the scope of use_hook
             - The reference is tied to context, meaning it can only be used while ctx is around to free it
             */
-            let borrowed_hook: &'a mut _ = unsafe { raw_hook.as_mut().unwrap() };
+            // let raw_hook: &'scope mut _ = unsafe { &mut *raw_hook };
+            // let p = raw_hook.0.downcast_mut::<InternalHookState>();
+            // let r = p.unwrap();
+            // let v = unsafe { Pin::get_unchecked_mut(raw_hook) };
+            // // let carreied_ref: &'scope mut dyn Any = unsafe { &mut *v };
+            // let internal_state = v.downcast_mut::<InternalHookState>().unwrap();
 
-            let internal_state = borrowed_hook.0.downcast_mut::<InternalHookState>().unwrap();
+            // let real_internal = unsafe { internal_state as *mut _ };
 
-            runner(internal_state)
+            // runner(unsafe { &mut *real_internal })
+            // runner(internal_state)
         }
     }
 }
@@ -247,6 +255,8 @@ Context should *never* be dangling!. If a Context is torn down, so should anythi
         pub fn use_context<I, O>(&'a self, _narrow: impl Fn(&'_ I) -> &'_ O) -> RemoteState<O> {
             todo!()
         }
+
+        pub fn create_context<T: 'static>(&self, creator: impl FnOnce() -> T) {}
     }
 
     /// # SAFETY ALERT

@@ -10,7 +10,7 @@ fn main() {
 use components::CustomB;
 
 fn CustomA<'a>(ctx: Context<'a>, props: &'a ()) -> DomTree {
-    let val = use_state(&ctx, || "abcdef".to_string());
+    let (val, set_val) = use_state(&ctx, || "abcdef".to_string());
 
     ctx.render(rsx! {
         div {
@@ -18,11 +18,11 @@ fn CustomA<'a>(ctx: Context<'a>, props: &'a ()) -> DomTree {
             "CustomA {val}"
             button {
                 "Upper"
-                onclick: move |_| val.set(val.to_ascii_uppercase())
+                onclick: move |_| set_val(val.to_ascii_uppercase())
             }
             button {
                 "Lower"
-                onclick: move |_| val.set(val.to_ascii_lowercase())
+                onclick: move |_| set_val(val.to_ascii_lowercase())
             }
             CustomB {
                 val: val.as_ref()

@@ -4,16 +4,16 @@ members = [
     "packages/core-macro",
     "packages/core",
     "packages/web",
-    "packages/liveview",
-    "packages/3d",
     "packages/docsite",
+    "packages/ssr",
 ]
+# "packages/liveview",
+# "packages/3d",
 
 # Built-in
 # "packages/webview/client",
 # "packages/webview",
 # "packages/router",
-# "packages/ssr",
 # "packages/webview",
 # "packages/livehost",
 # "packages/vscode-ext",

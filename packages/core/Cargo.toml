@@ -17,10 +17,7 @@ dioxus-core-macro = { path = "../core-macro", version = "0.1.1" }
 generational-arena = { version = "0.2.8", features = ["serde"] }
 
 # Bumpalo backs the VNode creation
-bumpalo = { version = "3.6.0", features = ["collections"] }
-
-# Backs hook data - might move away from this arena
-typed-arena = "2.0.1"
+bumpalo = { version = "3.6.0", features = ["collections", "boxed"] }
 
 # custom error type
 thiserror = "1.0.23"
@@ -34,7 +31,7 @@ longest-increasing-subsequence = "0.1.0"
 # internall used
 log = "0.4.14"
 
-serde = { version = "1.0.123", features = ["derive"], optional=true }
+serde = { version = "1.0.123", features = ["derive"], optional = true }
 
 [features]
 default = []

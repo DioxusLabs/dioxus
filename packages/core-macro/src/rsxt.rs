@@ -16,7 +16,24 @@ use {
 // ==============================================
 pub struct RsxRender {
     custom_context: Option<Ident>,
-    el: Element,
+    root: RootOption,
+}
+
+enum RootOption {
+    // for lists of components
+    Fragment(),
+    Element(Element),
+    Component(Component),
+}
+
+impl ToTokens for RootOption {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            RootOption::Fragment() => todo!(),
+            RootOption::Element(el) => el.to_tokens(tokens),
+            RootOption::Component(comp) => comp.to_tokens(tokens),
+        }
+    }
 }
 
 impl Parse for RsxRender {
@@ -33,14 +50,24 @@ impl Parse for RsxRender {
             })
             .ok();
 
-        let el: Element = input.parse()?;
-        Ok(Self { el, custom_context })
+        let forked = input.fork();
+        let name = forked.parse::<Ident>()?;
+
+        let root = match crate::util::is_valid_tag(&name.to_string()) {
+            true => input.parse::<Element>().map(|el| RootOption::Element(el)),
+            false => input.parse::<Component>().map(|c| RootOption::Component(c)),
+        }?;
+
+        Ok(Self {
+            root,
+            custom_context,
+        })
     }
 }
 
 impl ToTokens for RsxRender {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let new_toks = (&self.el).to_token_stream();
+        let new_toks = (&self.root).to_token_stream();
 
         // create a lazy tree that accepts a bump allocator
         let final_tokens = match &self.custom_context {

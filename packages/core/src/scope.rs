@@ -36,9 +36,9 @@ pub struct Scope {
     // These two could be combined with "OwningRef" to remove unsafe usage
     // or we could dedicate a tiny bump arena just for them
     // could also use ourborous
-    pub hooks: RefCell<Vec<*mut Hook>>,
+    pub hooks: RefCell<Vec<Hook>>,
 
-    pub hook_arena: typed_arena::Arena<Hook>,
+    pub hook_arena: Vec<Hook>,
 
     // Unsafety:
     // - is self-refenrential and therefore needs to point into the bump
@@ -63,7 +63,7 @@ impl Scope {
 
         Self {
             caller: broken_caller,
-            hook_arena: typed_arena::Arena::new(),
+            hook_arena: Vec::new(),
             hooks: RefCell::new(Vec::new()),
             frames: ActiveFrame::new(),
             children: HashSet::new(),
@@ -92,7 +92,7 @@ impl Scope {
         };
 
         let ctx: Context<'b> = Context {
-            arena: &self.hook_arena,
+            // arena: &self.hook_arena,
             hooks: &self.hooks,
             bump: &frame.bump,
             idx: 0.into(),
@@ -145,7 +145,7 @@ impl Scope {
             // Run the callback with the user event
             log::debug!("Running listener");
             listener(source);
-            log::debug!("Running listener");
+            log::debug!("Listener finished");
 
             // drain all the event listeners
             // if we don't, then they'll stick around and become invalid
@@ -203,7 +203,7 @@ impl ActiveFrame {
         }
     }
 
-    fn current_head_node<'b>(&'b self) -> &'b VNode<'b> {
+    pub fn current_head_node<'b>(&'b self) -> &'b VNode<'b> {
         let raw_node = match *self.idx.borrow() & 1 == 0 {
             true => &self.frames[0],
             false => &self.frames[1],
@@ -217,7 +217,7 @@ impl ActiveFrame {
         }
     }
 
-    fn prev_head_node<'b>(&'b self) -> &'b VNode<'b> {
+    pub fn prev_head_node<'b>(&'b self) -> &'b VNode<'b> {
         let raw_node = match *self.idx.borrow() & 1 != 0 {
             true => &self.frames[0],
             false => &self.frames[1],

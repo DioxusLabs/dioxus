@@ -20,6 +20,7 @@
 //!
 
 use dioxus_core::prelude::{VNode, FC};
+pub mod tostring;
 
 pub mod prelude {
     pub use dioxus_core::prelude::*;

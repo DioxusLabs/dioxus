@@ -38,7 +38,7 @@ Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps
 ## Get Started with...
 <table style="width:100%" align="center">
     <tr >
-        <th><a href="http://github.com/jkelleyrtp/dioxus">WebApps</a></th>
+        <th><a href="http://github.com/jkelleyrtp/dioxus">Web</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Desktop</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Mobile</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">State Management</a></th>

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use dioxus::prelude::*;
+use dioxus::{events::on::MouseEvent, prelude::*};
 use dioxus_core as dioxus;
 use dioxus_web::WebsysRenderer;
 
@@ -17,37 +17,38 @@ fn main() {
 
 use lazy_static::lazy_static;
 lazy_static! {
-    static ref DummyData: HashMap<String, String> = {
+    static ref DummyData: BTreeMap<usize, String> = {
         let vals = vec![
-            ("0 ", "abc123"),
-            ("1 ", "abc124"),
-            ("2 ", "abc125"),
-            ("3 ", "abc126"),
-            ("4 ", "abc127"),
-            ("5 ", "abc128"),
-            ("6 ", "abc129"),
-            ("7 ", "abc1210"),
-            ("8 ", "abc1211"),
-            ("9 ", "abc1212"),
-            ("10 ", "abc1213"),
-            ("11 ", "abc1214"),
-            ("12 ", "abc1215"),
-            ("13 ", "abc1216"),
-            ("14 ", "abc1217"),
-            ("15 ", "abc1218"),
-            ("16 ", "abc1219"),
-            ("17 ", "abc1220"),
-            ("18 ", "abc1221"),
-            ("19 ", "abc1222"),
+            "abc123", //
+            "abc124", //
+            "abc125", //
+            "abc126", //
+            "abc127", //
+            "abc128", //
+            "abc129", //
+            "abc1210", //
+            "abc1211", //
+            "abc1212", //
+            "abc1213", //
+            "abc1214", //
+            "abc1215", //
+            "abc1216", //
+            "abc1217", //
+            "abc1218", //
+            "abc1219", //
+            "abc1220", //
+            "abc1221", //
+            "abc1222", //
         ];
         vals.into_iter()
-            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .map(ToString::to_string)
+            .enumerate()
             .collect()
     };
 }
 
 static App: FC<()> = |ctx, _| {
-    let items = use_state(&ctx, || DummyData.clone());
+    let items = use_state_new(&ctx, || DummyData.clone());
 
     // handle new elements
     let add_new = move |_| {
@@ -59,20 +60,18 @@ static App: FC<()> = |ctx, _| {
                 (_, 0) => "Buzz".to_string(),
                 _ => k.to_string(),
             };
-            m.insert(k.to_string(), v);
+            m.insert(k, v);
         })
     };
 
     let elements = items.iter().map(|(k, v)| {
         rsx! {
-            li {
-                span {"{k}: {v}"}
-                button {
-                    "Remove"
-                    onclick: move |_| {
-                        let key_to_remove = k.clone();
-                        items.modify(move |m| { m.remove(&key_to_remove); } )
-                    }
+            ListHelper {
+                name: k,
+                value: v
+                onclick: move |_| {
+                    let key = k.clone();
+                    items.modify(move |m| { m.remove(&key); } )
                 }
             }
         }
@@ -81,17 +80,47 @@ static App: FC<()> = |ctx, _| {
     ctx.render(rsx!(
         div {
             h1 {"Some list"}
-
-            // button  to add new item
+            button {
+                "Remove all"
+                onclick: move |_| items.set(BTreeMap::new())
+            }
             button {
                 "add new"
                 onclick: {add_new}
             }
-
-            // list elements
             ul {
                 {elements}
             }
         }
     ))
 };
+
+#[derive(Props)]
+struct ListProps<'a, F: Fn(MouseEvent) + 'a> {
+    name: &'a usize,
+    value: &'a str,
+    onclick: F,
+}
+
+impl<F: Fn(MouseEvent)> PartialEq for ListProps<'_, F> {
+    fn eq(&self, other: &Self) -> bool {
+        // no references are ever the same
+        false
+    }
+}
+
+fn ListHelper<F: Fn(MouseEvent)>(ctx: Context, props: &ListProps<F>) -> DomTree {
+    let k = props.name;
+    let v = props.value;
+    ctx.render(rsx! {
+        li {
+            class: "flex items-center text-xl"
+            key: "{k}"
+            span { "{k}: {v}" }
+            button {
+                "__ Remove"
+                onclick: {&props.onclick}
+            }
+        }
+    })
+}

@@ -12,10 +12,10 @@ fn main() {
 
 // this is a component
 static Example: FC<()> = |ctx, _props| {
-    let event = use_state(&ctx, || None);
+    let (event, set_event) = use_state(&ctx, || None);
 
     let handler = move |evt: MouseEvent| {
-        event.set(Some(evt));
+        set_event(Some(evt));
     };
 
     log::info!("hello world");

@@ -566,6 +566,11 @@ where
         std::iter::once(self)
     }
 }
+impl<'a> IntoDomTree<'a> for () {
+    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+        VNode::Suspended
+    }
+}
 
 #[test]
 fn test_iterator_of_nodes<'b>() {
@@ -646,9 +651,6 @@ pub fn text2<'a>(contents: bumpalo::collections::String<'a>) -> VNode<'a> {
     let f: &'a str = contents.into_bump_str();
     VNode::text(f)
 }
-// pub fn text<'a>(contents: &'a str) -> VNode<'a> {
-//     VNode::text(contents)
-// }
 
 /// Construct an attribute for an element.
 ///
@@ -666,35 +668,9 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
     Attribute { name, value }
 }
 
-// /// Create an event listener.
-// ///
-// /// `event` is the type of event to listen for, e.g. `"click"`. The `callback`
-// /// is the function that will be invoked when the event occurs.
-// ///
-// /// # Example
-// ///
-// /// ```no_run
-// /// use dioxus::{builder::*, bumpalo::Bump};
-// ///
-// /// let b = Bump::new();
-// ///
-// /// let listener = on(&b, "click", |root, vdom, event| {
-// ///     // do something when a click happens...
-// /// });
-// /// ```
-// pub fn on<'a, 'b>(
-//     // pub fn on<'a, F: 'static>(
-//     bump: &'a Bump,
-//     event: &'static str,
-//     callback: impl Fn(VirtualEvent) + 'a,
-// ) -> Listener<'a> {
-//     Listener {
-//         event,
-//         callback: bump.alloc(callback),
-//     }
-// }
-
 pub fn virtual_child<'a, T: Properties + 'a>(ctx: &NodeCtx<'a>, f: FC<T>, p: T) -> VNode<'a> {
+    // currently concerned about if props have a custom drop implementation
+    // might override it with the props macro
     let propsd: &'a mut _ = ctx.bump.alloc(p);
     VNode::Component(crate::nodes::VComponent::new(f, propsd))
 }

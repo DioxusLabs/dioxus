@@ -6,6 +6,8 @@ use generational_arena::Arena;
 use std::{
     any::TypeId,
     borrow::{Borrow, BorrowMut},
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
     rc::{Rc, Weak},
 };
 use thiserror::private::AsDynError;
@@ -19,11 +21,13 @@ pub(crate) type OpaqueComponent<'a> = dyn for<'b> Fn(Context<'b>) -> DomTree + '
 pub struct VirtualDom {
     /// All mounted components are arena allocated to make additions, removals, and references easy to work with
     /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
-    components: Arena<Scope>,
+    pub components: Arena<Scope>,
 
     /// The index of the root component.
     /// Will not be ready if the dom is fresh
-    base_scope: ScopeIdx,
+    pub base_scope: ScopeIdx,
+
+    pub(crate) update_schedule: Rc<RefCell<Vec<HierarchyMarker>>>,
 
     // a strong allocation to the "caller" for the original props
     #[doc(hidden)]
@@ -70,6 +74,7 @@ impl VirtualDom {
             components,
             _root_caller: root_caller,
             base_scope,
+            update_schedule: Rc::new(RefCell::new(Vec::new())),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
@@ -85,13 +90,14 @@ impl VirtualDom {
         let mut diff_machine = DiffMachine::new();
 
         let very_unsafe_components = &mut self.components as *mut generational_arena::Arena<Scope>;
-        let mut component = self
+        let component = self
             .components
             .get_mut(self.base_scope)
             .ok_or_else(|| Error::FatalInternal("Acquring base component should never fail"))?;
         component.run_scope()?;
         diff_machine.diff_node(component.old_frame(), component.new_frame());
 
+        // log::debug!("New events generated: {:#?}", diff_machine.lifecycle_events);
         // chew down the the lifecycle events until all dirty nodes are computed
         while let Some(event) = diff_machine.lifecycle_events.pop_front() {
             match event {
@@ -119,6 +125,7 @@ impl VirtualDom {
                     }
                 }
                 LifeCycleEvent::PropsChanged { caller, id, scope } => {
+                    log::debug!("PROPS CHANGED");
                     let idx = scope.upgrade().unwrap().as_ref().borrow().unwrap();
                     unsafe {
                         let p = &mut *(very_unsafe_components);
@@ -131,6 +138,7 @@ impl VirtualDom {
                     // break 'render;
                 }
                 LifeCycleEvent::SameProps { caller, id, scope } => {
+                    log::debug!("SAME PROPS RECEIVED");
                     //
                     // break 'render;
                 }
@@ -181,7 +189,15 @@ impl VirtualDom {
             .expect("Borrowing should not fail");
 
         component.call_listener(event);
-        component.run_scope()?;
+
+        /*
+        -> call listener
+        -> sort through accumulated queue by the top
+        -> run each component, running its children
+        -> add new updates to the tree of updates (these are dirty)
+        ->
+        */
+        // component.run_scope()?;
 
         // let mut diff_machine = DiffMachine::new();
         // let mut diff_machine = DiffMachine::new(&self.diff_bump);
@@ -191,4 +207,9 @@ impl VirtualDom {
         // Ok(diff_machine.consume())
         self.rebuild()
     }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HierarchyMarker {
+    height: u32,
 }

@@ -5,6 +5,7 @@
 //! - [ ] use_reducer
 //! - [ ] use_effect
 
+pub use new_use_state_def::use_state_new;
 pub use use_reducer_def::use_reducer;
 pub use use_ref_def::use_ref;
 pub use use_state_def::use_state;
@@ -13,8 +14,85 @@ mod use_state_def {
     use crate::innerlude::*;
     use std::{
         cell::RefCell,
-        fmt::Display,
         ops::{Deref, DerefMut},
+        rc::Rc,
+    };
+
+    struct UseState<T: 'static> {
+        new_val: Rc<RefCell<Option<T>>>,
+        current_val: T,
+        caller: Box<dyn Fn(T) + 'static>,
+    }
+
+    /// Store state between component renders!
+    /// When called, this hook retrives a stored value and provides a setter to update that value.
+    /// When the setter is called, the component is re-ran with the new value.
+    ///
+    /// This is behaves almost exactly the same way as React's "use_state".
+    ///
+    /// Usage:
+    /// ```ignore
+    /// static Example: FC<()> = |ctx| {
+    ///     let (counter, set_counter) = use_state(ctx, || 0);
+    ///     let increment = |_| set_couter(counter + 1);
+    ///     let decrement = |_| set_couter(counter + 1);
+    ///
+    ///     html! {
+    ///         <div>
+    ///             <h1>"Counter: {counter}" </h1>
+    ///             <button onclick={increment}> "Increment" </button>
+    ///             <button onclick={decrement}> "Decrement" </button>
+    ///         </div>  
+    ///     }
+    /// }
+    /// ```
+    pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
+        ctx: &'c Context<'a>,
+        initial_state_fn: F,
+    ) -> (&'a T, &'a impl Fn(T)) {
+        ctx.use_hook(
+            move || UseState {
+                new_val: Rc::new(RefCell::new(None)),
+                current_val: initial_state_fn(),
+                caller: Box::new(|_| println!("setter called!")),
+            },
+            move |hook| {
+                log::debug!("Use_state set called");
+                let inner = hook.new_val.clone();
+                let scheduled_update = ctx.schedule_update();
+
+                // get ownership of the new val and replace the current with the new
+                // -> as_ref -> borrow_mut -> deref_mut -> take
+                // -> rc     -> &RefCell   -> RefMut    -> &Option<T> -> T
+                if let Some(new_val) = hook.new_val.as_ref().borrow_mut().deref_mut().take() {
+                    hook.current_val = new_val;
+                }
+
+                // todo: swap out the caller with a subscription call and an internal update
+                hook.caller = Box::new(move |new_val| {
+                    // update the setter with the new value
+                    let mut new_inner = inner.as_ref().borrow_mut();
+                    *new_inner = Some(new_val);
+
+                    // Ensure the component gets updated
+                    scheduled_update();
+                });
+
+                // box gets derefed into a ref which is then taken as ref with the hook
+                (&hook.current_val, &hook.caller)
+            },
+            |_| {},
+        )
+    }
+}
+
+mod new_use_state_def {
+    use crate::innerlude::*;
+    use std::{
+        cell::RefCell,
+        fmt::{Debug, Display},
+        ops::{Deref, DerefMut},
+        pin::Pin,
         rc::Rc,
     };
 
@@ -22,6 +100,8 @@ mod use_state_def {
         modifier: Rc<RefCell<Option<Box<dyn FnOnce(&mut T)>>>>,
         current_val: T,
         update: Box<dyn Fn() + 'static>,
+        setter: Box<dyn Fn(T) + 'static>,
+        // setter: Box<dyn Fn(T) + 'static>,
     }
 
     // #[derive(Clone, Copy)]
@@ -33,8 +113,11 @@ mod use_state_def {
 
     impl<'a, T: 'static> UseState<T> {
         pub fn setter(&self) -> &dyn Fn(T) {
-            todo!()
+            &self.setter
+            // let r = self.setter.as_mut();
+            // unsafe { Pin::get_unchecked_mut(r) }
         }
+
         pub fn set(&self, new_val: T) {
             self.modify(|f| *f = new_val);
         }
@@ -84,7 +167,7 @@ mod use_state_def {
     ///     }
     /// }
     /// ```
-    pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
+    pub fn use_state_new<'a, 'c, T: 'static, F: FnOnce() -> T>(
         ctx: &'c Context<'a>,
         initial_state_fn: F,
     ) -> &'a UseState<T> {
@@ -93,18 +176,31 @@ mod use_state_def {
                 modifier: Rc::new(RefCell::new(None)),
                 current_val: initial_state_fn(),
                 update: Box::new(|| {}),
+                setter: Box::new(|_| {}),
             },
             move |hook| {
+                log::debug!("addr of hook: {:#?}", hook as *const _);
                 let scheduled_update = ctx.schedule_update();
 
+                // log::debug!("Checking if new value {:#?}", &hook.current_val);
                 // get ownership of the new val and replace the current with the new
                 // -> as_ref -> borrow_mut -> deref_mut -> take
                 // -> rc     -> &RefCell   -> RefMut    -> &Option<T> -> T
                 if let Some(new_val) = hook.modifier.as_ref().borrow_mut().deref_mut().take() {
+                    // log::debug!("setting prev {:#?}", &hook.current_val);
                     (new_val)(&mut hook.current_val);
+                    // log::debug!("setting new value {:#?}", &hook.current_val);
                 }
 
                 hook.update = Box::new(move || scheduled_update());
+
+                let modifier = hook.modifier.clone();
+                hook.setter = Box::new(move |new_val: T| {
+                    let mut slot = modifier.as_ref().borrow_mut();
+
+                    let slot2 = slot.deref_mut();
+                    *slot2 = Some(Box::new(move |old: &mut T| *old = new_val));
+                });
 
                 &*hook
             },

@@ -16,16 +16,13 @@ fn main() {
     });
 }
 
-
-
-
 #[derive(PartialEq, Props)]
 struct ExampleProps {
     initial_name: &'static str,
 }
 
 static Example: FC<ExampleProps> = |ctx, props| {
-    let name = use_state(&ctx, move || props.initial_name.to_string());
+    let name = use_state_new(&ctx, move || props.initial_name.to_string());
 
     ctx.render(rsx! {
         div { 
@@ -39,9 +36,9 @@ static Example: FC<ExampleProps> = |ctx, props| {
                 "Hello, {name}"
             }
             
-            CustomButton { name: "Jack!", set_name: name.setter() }
-            CustomButton { name: "Jill!", set_name: name.setter() }
-            CustomButton { name: "Bob!", set_name: name.setter() }
+            CustomButton { name: "Jack!", handler: move |evt| name.set("Jack".to_string()) }
+            CustomButton { name: "Jill!", handler: move |evt| name.set("Jill".to_string()) }
+            CustomButton { name: "Bob!", handler: move |evt| name.set("Bob".to_string())}
         }
     })
 };
@@ -49,23 +46,22 @@ static Example: FC<ExampleProps> = |ctx, props| {
 
 
 #[derive(Props)]
-struct ButtonProps<'src> {
+struct ButtonProps<'src, F: Fn(MouseEvent)> {
     name: &'src str,
-    set_name: &'src dyn Fn(String)
+    handler: F
 }
 
-fn CustomButton<'a>(ctx: Context<'a>, props: &'a ButtonProps<'a>) -> DomTree {
+fn CustomButton<'b, 'a, F: Fn(MouseEvent)>(ctx: Context<'a>, props: &'b ButtonProps<'b, F>) -> DomTree {
     ctx.render(rsx!{
         button {  
             class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-            onmouseover: move |evt| (props.set_name)(props.name.to_string())
+            onmouseover: {&props.handler}
             "{props.name}"
         }
     })
 }
 
-
-impl PartialEq for ButtonProps<'_> {
+impl<F: Fn(MouseEvent)> PartialEq for ButtonProps<'_, F> {
     fn eq(&self, other: &Self) -> bool {
         false
     }
