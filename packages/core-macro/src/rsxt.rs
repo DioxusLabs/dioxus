@@ -157,16 +157,32 @@ impl ToTokens for &Component {
             fc_to_builder(#name)
         };
 
+        let mut has_key = None;
+
         for field in &self.body {
-            builder.append_all(quote! {#field});
+            if field.name.to_string() == "key" {
+                has_key = Some(field);
+            } else {
+                builder.append_all(quote! {#field});
+            }
         }
 
         builder.append_all(quote! {
             .build()
         });
 
+        let key_token = match has_key {
+            Some(field) => {
+                let inners = field.content.to_token_stream();
+                quote! {
+                    Some(#inners)
+                }
+            }
+            None => quote! {None},
+        };
+
         let _toks = tokens.append_all(quote! {
-            dioxus::builder::virtual_child(ctx, #name, #builder)
+            dioxus::builder::virtual_child(ctx, #name, #builder, #key_token)
         });
     }
 }

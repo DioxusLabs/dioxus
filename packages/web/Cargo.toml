@@ -59,3 +59,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
 uuid = { version = "0.8.2", features = ["v4"] }
+
+[[example]]
+name = "todomvc"
+path = "./examples/todomvc/main.rs"

@@ -23,7 +23,7 @@ where
     Children: 'a + AsRef<[VNode<'a>]>,
 {
     ctx: &'b NodeCtx<'a>,
-    key: NodeKey,
+    key: NodeKey<'a>,
     tag_name: &'a str,
     listeners: Listeners,
     attributes: Attributes,
@@ -264,10 +264,8 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn key(mut self, key: u32) -> Self {
-        use std::u32;
-        debug_assert!(key != u32::MAX);
-        self.key = NodeKey(key);
+    pub fn key(mut self, key: &'a str) -> Self {
+        self.key = NodeKey(Some(key));
         self
     }
 
@@ -572,65 +570,6 @@ impl<'a> IntoDomTree<'a> for () {
     }
 }
 
-#[test]
-fn test_iterator_of_nodes<'b>() {
-    use crate::prelude::*;
-
-    // static Example: FC<()> = |ctx, props| {
-    //     let body = rsx! {
-    //         div {}
-    //     };
-
-    //     ctx.render(rsx! {
-    //         div {
-    //             h1 {}
-    //         }
-    //     })
-    // };
-
-    // let p = (0..10).map(|f| {
-    //     //
-    //     LazyNodes::new(rsx! {
-    //         div {
-    //             "aaa {f}"
-    //         }
-    //     })
-    // });
-
-    // let g = p.into_iter();
-    // for f in g {}
-
-    // static Example: FC<()> = |ctx, props| {
-    //     ctx.render(|c| {
-    //         //
-    //         ElementBuilder::new(c, "div")
-    //             .iter_child({
-    //                 // rsx!
-    //                 LazyNodes::new(move |n: &NodeCtx| -> VNode {
-    //                     //
-    //                     ElementBuilder::new(n, "div").finish()
-    //                 })
-    //             })
-    //             .iter_child({
-    //                 // render to wrapper -> tree
-    //                 ctx.render(rsx! {
-    //                     div {}
-    //                 })
-    //             })
-    //             .iter_child({
-    //                 // map rsx!
-    //                 (0..10).map(|f| {
-    //                     LazyNodes::new(move |n: &NodeCtx| -> VNode {
-    //                         //
-    //                         ElementBuilder::new(n, "div").finish()
-    //                     })
-    //                 })
-    //             })
-    //             .finish()
-    //     })
-    // };
-}
-
 /// Construct a text VNode.
 ///
 /// This is `dioxus`'s virtual DOM equivalent of `document.createTextVNode`.
@@ -668,9 +607,14 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
     Attribute { name, value }
 }
 
-pub fn virtual_child<'a, T: Properties + 'a>(ctx: &NodeCtx<'a>, f: FC<T>, p: T) -> VNode<'a> {
+pub fn virtual_child<'a, T: Properties + 'a>(
+    ctx: &NodeCtx<'a>,
+    f: FC<T>,
+    p: T,
+    key: Option<&'a str>, // key: NodeKey<'a>,
+) -> VNode<'a> {
     // currently concerned about if props have a custom drop implementation
     // might override it with the props macro
     let propsd: &'a mut _ = ctx.bump.alloc(p);
-    VNode::Component(crate::nodes::VComponent::new(f, propsd))
+    VNode::Component(crate::nodes::VComponent::new(f, propsd, key))
 }

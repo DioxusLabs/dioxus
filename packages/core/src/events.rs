@@ -146,7 +146,9 @@ pub mod on {
     }
 
     #[derive(Debug)]
-    pub struct FormEvent {}
+    pub struct FormEvent {
+        pub value: String,
+    }
     event_builder! {
         FormEvent;
         change input invalid reset submit

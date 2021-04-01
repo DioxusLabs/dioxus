@@ -33,7 +33,7 @@ impl WebsysRenderer {
     /// Run the app to completion, panicing if any error occurs while rendering.
     /// Pairs well with the wasm_bindgen async handler
     pub async fn start(root: FC<()>) {
-        Self::new(root).run().await.expect("Virtual DOM failed");
+        Self::new(root).run().await.expect("Virtual DOM failed :(");
     }
 
     /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
@@ -43,6 +43,7 @@ impl WebsysRenderer {
     pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
+
     /// Create a new text-renderer instance from a functional component root.
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
@@ -53,7 +54,6 @@ impl WebsysRenderer {
 
     /// Create a new text renderer from an existing Virtual DOM.
     pub fn from_vdom(dom: VirtualDom) -> Self {
-        // todo: initialize the event registry properly
         Self { internal_dom: dom }
     }
 
@@ -81,12 +81,10 @@ impl WebsysRenderer {
             patch_machine.handle_edit(edit);
         });
 
-
-
         patch_machine.reset();
         let root_node = body_element.first_child().unwrap();
         patch_machine.stack.push(root_node.clone());
-                
+
         // log::debug!("patch stack size {:?}", patch_machine.stack);
 
         // Event loop waits for the receiver to finish up

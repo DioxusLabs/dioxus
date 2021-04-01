@@ -59,7 +59,7 @@ impl<'a> VNode<'a> {
     #[inline]
     pub fn element(
         bump: &'a Bump,
-        key: NodeKey,
+        key: NodeKey<'a>,
         tag_name: &'a str,
         listeners: &'a [Listener<'a>],
         attributes: &'a [Attribute<'a>],
@@ -102,7 +102,7 @@ impl<'a> VNode<'a> {
 #[derive(Debug)]
 pub struct VElement<'a> {
     /// Elements have a tag name, zero or more attributes, and zero or more
-    pub key: NodeKey,
+    pub key: NodeKey<'a>,
     pub tag_name: &'a str,
     pub listeners: &'a [Listener<'a>],
     pub attributes: &'a [Attribute<'a>],
@@ -191,16 +191,16 @@ impl Debug for Listener<'_> {
 ///
 /// If any sibling is keyed, then they all must be keyed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct NodeKey(pub(crate) u32);
+pub struct NodeKey<'a>(pub(crate) Option<&'a str>);
 
-impl Default for NodeKey {
-    fn default() -> NodeKey {
+impl<'a> Default for NodeKey<'a> {
+    fn default() -> NodeKey<'a> {
         NodeKey::NONE
     }
 }
-impl NodeKey {
+impl<'a> NodeKey<'a> {
     /// The default, lack of a key.
-    pub const NONE: NodeKey = NodeKey(u32::MAX);
+    pub const NONE: NodeKey<'a> = NodeKey(None);
 
     /// Is this key `NodeKey::NONE`?
     #[inline]
@@ -218,9 +218,8 @@ impl NodeKey {
     ///
     /// `key` must not be `u32::MAX`.
     #[inline]
-    pub fn new(key: u32) -> Self {
-        debug_assert_ne!(key, u32::MAX);
-        NodeKey(key)
+    pub fn new(key: &'a str) -> Self {
+        NodeKey(Some(key))
     }
 }
 
@@ -231,9 +230,7 @@ pub struct VText<'bump> {
 
 impl<'a> VText<'a> {
     // / Create an new `VText` instance with the specified text.
-    pub fn new(text: &'a str) -> Self
-// pub fn new(text: Into<str>) -> Self
-    {
+    pub fn new(text: &'a str) -> Self {
         VText { text: text.into() }
     }
 }
@@ -248,7 +245,7 @@ pub type StableScopeAddres = RefCell<Option<u32>>;
 pub type VCompAssociatedScope = RefCell<Option<ScopeIdx>>;
 
 pub struct VComponent<'src> {
-    pub key: NodeKey,
+    pub key: NodeKey<'src>,
 
     pub stable_addr: Rc<StableScopeAddres>,
     pub ass_scope: Rc<VCompAssociatedScope>,
@@ -276,7 +273,7 @@ impl<'a> VComponent<'a> {
     // - perform comparisons when diffing (memoization)
     // TODO: lift the requirement that props need to be static
     // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
-    pub fn new<P: Properties + 'a>(component: FC<P>, props: &'a P) -> Self {
+    pub fn new<P: Properties + 'a>(component: FC<P>, props: &'a P, key: Option<&'a str>) -> Self {
         let caller_ref = component as *const ();
 
         let raw_props = props as *const P as *const ();
@@ -299,8 +296,13 @@ impl<'a> VComponent<'a> {
 
         let caller = Rc::new(create_closure(component, raw_props));
 
+        let key = match key {
+            Some(key) => NodeKey::new(key),
+            None => NodeKey(None),
+        };
+
         Self {
-            key: NodeKey::NONE,
+            key,
             ass_scope: Rc::new(RefCell::new(None)),
             user_fc: caller_ref,
             raw_props: props as *const P as *const _,

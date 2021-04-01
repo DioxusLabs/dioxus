@@ -53,6 +53,9 @@ fn html_render(
 #[test]
 fn test_serialize() {
     let mut dom = VirtualDom::new(|ctx, props| {
+        //
+        //
+        //
         ctx.render(rsx! {
             div {
                 title: "About W3Schools"
@@ -70,6 +73,7 @@ fn test_serialize() {
             }
         })
     });
+
     dom.rebuild();
     let renderer = SsrRenderer { dom };
 

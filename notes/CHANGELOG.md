@@ -76,17 +76,20 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 
 ## Outstanding todos:
 > anything missed so far
-- dirty tagging, compression
-- fragments
-- make ssr follow HTML spec
-- code health
-- miri tests
-- todo mvc
-- fix
-- node refs (postpone for future release?)
-- styling built-in (future release?)
-- key handler?
-- FC macro
-- Documentation overhaul
-- Website
-- keys on components
+- [ ] dirty tagging, compression
+- [ ] fragments
+- [ ] make ssr follow HTML spec
+- [ ] code health
+- [ ] miri tests
+- [ ] todo mvc
+- [ ] fix
+- [ ] node refs (postpone for future release?)
+- [ ] styling built-in (future release?)
+- [ ] key handler?
+- [ ] FC macro
+- [ ] Documentation overhaul
+- [ ] Website
+- [x] keys on components
+- [ ] fix keys on elements
+- [ ] all synthetic events filed out
+- [ ] doublecheck event targets and stuff

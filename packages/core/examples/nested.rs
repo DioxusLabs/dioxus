@@ -18,6 +18,7 @@ static Header: FC<()> = |ctx, props| {
                 Bottom,
                 //
                 c.bump.alloc(()),
+                None,
             )))
             .finish()
     }))

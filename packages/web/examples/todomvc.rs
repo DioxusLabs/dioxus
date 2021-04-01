@@ -1,75 +1,49 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::atomic::AtomicUsize,
-};
-
 use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
+use recoil::{use_recoil_callback, RecoilContext};
 use uuid::Uuid;
 
-// Entry point
+static TODOS: AtomFamily<Uuid, TodoItem> = atom_family(|_| {});
+
 fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, props| {
-        ctx.create_context(|| model::TodoManager::new());
+        let global_reducer = use_recoil_callback(|| ());
+
+        let todos = use_atom(TODOS).iter().map(|(order, item)| {
+            rsx!(TodoItem {
+                key: "{order}",
+                id: item.id,
+            })
+        });
 
         ctx.render(rsx! {
             div {
-                TodoList {}
+                {todos}
                 Footer {}
             }
         })
     }))
 }
 
-static TodoList: FC<()> = |ctx, props| {
-    let todos = use_state_new(&ctx, || BTreeMap::<usize, model::TodoItem>::new());
-
-    let items = todos.iter().map(|(order, item)| {
-        rsx!(TodoItem {
-            // key: "{}",
-            todo: item
-        })
-    });
-
-    ctx.render(rsx! {
-        div {
-            {items}
-        }
-    })
-};
-
-#[derive(Debug, PartialEq, Props)]
-struct TodoItemsProp<'a> {
-    todo: &'a model::TodoItem,
+#[derive(Debug, PartialEq, Clone)]
+pub struct TodoItem {
+    pub id: Uuid,
+    pub checked: bool,
+    pub contents: String,
 }
 
-fn TodoItem(ctx: Context, props: &TodoItemsProp) -> DomTree {
-    let (editing, set_editing) = use_state(&ctx, || false);
-
-    let id = props.todo.id;
-    ctx.render(rsx! (
-        li {
-            div {
-                "{id}"
-            }
-            // {input}
-        }
-    ))
+// build a global context for the app
+// as we scale the app, we can create separate, stateful impls
+impl RecoilContext<()> {
+    fn add_todo(&self) {}
+    fn remove_todo(&self) {}
+    fn select_all_todos(&self) {}
 }
 
-static Footer: FC<()> = |ctx, props| {
-    ctx.render(html! {
-        <footer className="info">
-            <p>"Double-click to edit a todo"</p>
-            <p>
-                "Created by "<a href="http://github.com/jkelleyrtp/">"jkelleyrtp"</a>
-            </p>
-            <p>
-                "Part of "<a href="http://todomvc.com">"TodoMVC"</a>
-            </p>
-        </footer>
-    })
-};
+mod hooks {
+    use super::*;
+    fn use_keyboard_shortcuts(ctx: &Context) {}
+}
 
 // The data model that the todo mvc uses
 mod model {
@@ -84,11 +58,25 @@ mod model {
         pub contents: String,
     }
 
-    struct Dispatcher {}
+    fn atom() {}
+
+    // struct Dispatcher {}
 
     struct AppContext<T: Clone> {
         _t: std::rc::Rc<T>,
     }
+
+    // pub fn use_appcontext<T: Clone>(ctx: &Context, f: impl FnOnce() -> T) -> AppContext<T> {
+    //     todo!()
+    // }
+
+    // static TodoList: ContextFamily = context_family();
+
+    // struct TodoBoss<'a> {}
+
+    // fn use_recoil_todos() -> TodoBoss {}
+
+    // pub fn use_context_family(ctx: &Context) {}
 
     impl<T: Clone> AppContext<T> {
         fn dispatch(&self, f: impl FnOnce(&mut T)) {}
@@ -101,78 +89,130 @@ mod model {
         }
     }
 
-    // use im-rc if your contexts are too large to clone!
-    // or, dangerously mutate and update subscriptions manually
-    #[derive(Clone)]
-    pub struct TodoManager {
-        items: Vec<u32>,
+    // // use im-rc if your contexts are too large to clone!
+    // // or, dangerously mutate and update subscriptions manually
+    // #[derive(Clone, Debug, PartialEq)]
+    // pub struct TodoManager {
+    //     items: Vec<u32>,
+    // }
+
+    // // App context is an ergonomic way of sharing data models through a tall tree
+    // // Because it holds onto the source data with Rc, it's cheap to clone through props and allows advanced memoization
+    // // It's particularly useful when moving through tall trees, or iterating through complex data models.
+    // // By wrapping the source type, we can forward any mutation through "dispatch", making it clear when clones occur.
+    // // This also enables traditional method-style
+    // impl AppContext<TodoManager> {
+    //     fn get_todos(&self, ctx: &Context) {}
+
+    //     fn remove_todo(&self, id: Uuid) {
+    //         self.dispatch(|f| {
+    //             // todos... remove
+    //         })
+    //     }
+
+    //     async fn push_todo(&self, todo: TodoItem) {
+    //         self.dispatch(|f| {
+    //             //
+    //             f.items.push(10);
+    //         });
+    //     }
+
+    //     fn add_todo(&self) {
+    //         // self.dispatch(|f| {});
+    //         // let items = self.get(|f| &f.items);
+    //     }
+    // }
+
+    // pub enum TodoActions {}
+    // impl TodoManager {
+    //     pub fn reduce(s: &mut Rc<Self>, action: TodoActions) {
+    //         match action {
+    //             _ => {}
+    //         }
+    //     }
+
+    //     pub fn new() -> Rc<Self> {
+    //         todo!()
+    //     }
+
+    //     pub fn get_todo(&self, id: Uuid) -> &TodoItem {
+    //         todo!()
+    //     }
+
+    //     pub fn get_todos(&self) -> &BTreeMap<String, TodoItem> {
+    //         todo!()
+    //     }
+    // }
+
+    // pub struct TodoHandle {}
+    // impl TodoHandle {
+    //     fn get_todo(&self, id: Uuid) -> &TodoItem {
+    //         todo!()
+    //     }
+
+    //     fn add_todo(&self, todo: TodoItem) {}
+    // }
+
+    // // use_reducer, but exposes the reducer and context to children
+    // fn use_reducer_context() {}
+    // fn use_context_selector() {}
+
+    // fn use_context<'b, 'c, Root: 'static, Item: 'c>(
+    //     ctx: &'b Context<'c>,
+    //     f: impl Fn(Root) -> &'c Item,
+    // ) -> &'c Item {
+    //     todo!()
+    // }
+
+    // pub fn use_todo_item<'b, 'c>(ctx: &'b Context<'c>, item: Uuid) -> &'c TodoItem {
+    //     todo!()
+    //     // ctx.use_hook(|| TodoManager::new(), |hook| {}, cleanup)
+    // }
+    // fn use_todos(ctx: &Context) -> TodoHandle {
+    //     todo!()
+    // }
+
+    // fn use_todo_context(ctx: &Context) -> AppContext<TodoManager> {
+    //     todo!()
+    // }
+
+    // fn test(ctx: Context) {
+    //     let todos = use_todos(&ctx);
+    //     let todo = todos.get_todo(Uuid::new_v4());
+
+    //     let c = use_todo_context(&ctx);
+    //     // todos.add_todo();
+    // }
+}
+
+mod recoil {
+
+    pub struct RecoilContext<T: 'static> {
+        _inner: T,
     }
 
-    impl AppContext<TodoManager> {
-        fn remove_todo(&self, id: Uuid) {
-            self.dispatch(|f| {})
-        }
+    impl<T: 'static> RecoilContext<T> {
+        /// Get the value of an atom. Returns a reference to the underlying data.
 
-        async fn push_todo(&self, todo: TodoItem) {
-            self.dispatch(|f| {
-                //
-                f.items.push(10);
-            });
-        }
+        pub fn get(&self) {}
 
-        fn add_todo(&self) {
-            // self.dispatch(|f| {});
-            // let items = self.get(|f| &f.items);
-        }
+        /// Replace an existing value with a new value
+        ///
+        /// This does not replace the value instantly, and all calls to "get" within the current scope will return
+        pub fn set(&self) {}
+
+        // Modify lets you modify the value in place. However, because there's no previous value around to compare
+        // the new one with, we are unable to memoize the change. As such, all downsteam users of this Atom will
+        // be updated, causing all subsrcibed components to re-render.
+        //
+        // This is fine for most values, but might not be performant when dealing with collections. For collections,
+        // use the "Family" variants as these will stay memoized for inserts, removals, and modifications.
+        //
+        // Note - like "set" this won't propogate instantly. Once all "gets" are dropped, only then will we run the
+        pub fn modify(&self) {}
     }
 
-    impl TodoManager {
-        pub fn new() -> Self {
-            todo!()
-        }
-
-        pub fn get_todo(&self) -> &TodoItem {
-            todo!()
-        }
-    }
-
-    pub struct TodoHandle {}
-    impl TodoHandle {
-        fn get_todo(&self, id: Uuid) -> &TodoItem {
-            todo!()
-        }
-
-        fn add_todo(&self, todo: TodoItem) {}
-    }
-
-    // use_reducer, but exposes the reducer and context to children
-    fn use_reducer_context() {}
-    fn use_context_selector() {}
-
-    fn use_context<'b, 'c, Root: 'static, Item: 'c>(
-        ctx: &'b Context<'c>,
-        f: impl Fn(Root) -> &'c Item,
-    ) -> &'c Item {
+    pub fn use_recoil_callback<G>(f: impl Fn() -> G) -> RecoilContext<G> {
         todo!()
-    }
-
-    pub fn use_todo_item<'b, 'c>(ctx: &'b Context<'c>, item: Uuid) -> &'c TodoItem {
-        todo!()
-        // ctx.use_hook(|| TodoManager::new(), |hook| {}, cleanup)
-    }
-    fn use_todos(ctx: &Context) -> TodoHandle {
-        todo!()
-    }
-
-    fn use_todo_context(ctx: &Context) -> AppContext<TodoManager> {
-        todo!()
-    }
-
-    fn test(ctx: Context) {
-        let todos = use_todos(&ctx);
-        let todo = todos.get_todo(Uuid::new_v4());
-
-        let c = use_todo_context(&ctx);
-        // todos.add_todo();
     }
 }

@@ -38,6 +38,7 @@ fn app<'a>(ctx: Context<'a>, props: &Props) -> DomTree {
                     .item(child)
                     .item_handler(set_val)
                     .build(),
+                None,
             ));
         }
         root.finish()
