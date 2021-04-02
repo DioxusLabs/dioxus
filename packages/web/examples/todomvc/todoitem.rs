@@ -1,11 +1,10 @@
 use super::state::TODOS;
 use crate::recoil::use_atom_family;
 use dioxus_core::prelude::*;
-use uuid::Uuid;
 
 #[derive(PartialEq, Props)]
 pub struct TodoEntryProps {
-    id: Uuid,
+    id: uuid::Uuid,
 }
 
 pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
@@ -20,17 +19,11 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
                 type: "checkbox"
                 "{todo.checked}"
             }
-            {is_editing.then(|| {
-                rsx!(input {
+            {is_editing.then(|| rsx!(
+                input {
                     value: "{contents}"
-                })
-            })}
+                }
+            ))}
         }
     ))
-}
-
-pub fn Example(ctx: Context, id: Uuid, name: String) -> DomTree {
-    ctx.render(rsx! {
-        div {}
-    })
 }

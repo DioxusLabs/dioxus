@@ -11,6 +11,7 @@ pub use dioxus_core as dioxus;
 use dioxus_core::{events::EventTrigger, prelude::FC};
 // use futures::{channel::mpsc, SinkExt, StreamExt};
 
+pub use dioxus_core::prelude;
 pub mod interpreter;
 
 /// The `WebsysRenderer` provides a way of rendering a Dioxus Virtual DOM to the browser's DOM.

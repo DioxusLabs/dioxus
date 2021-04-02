@@ -115,7 +115,7 @@ pub mod on {
         data: String,
     }
     event_builder! {
-        ClipboardEvent;
+        CompositionEvent;
         compositionend compositionstart compositionupdate
     }
 
@@ -133,6 +133,29 @@ pub mod on {
         which: usize,
         get_modifier_state: GetModifierKey,
     }
+    pub struct KeyboardEvent2(pub Box<dyn KeyboardEventT>);
+    impl std::ops::Deref for KeyboardEvent2 {
+        type Target = Box<dyn KeyboardEventT>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    pub trait KeyboardEventT {
+        fn char_code(&self) -> usize;
+        fn ctrl_key(&self) -> bool;
+        fn key(&self) -> String;
+        fn key_code(&self) -> usize;
+        fn locale(&self) -> String;
+        fn location(&self) -> usize;
+        fn meta_key(&self) -> bool;
+        fn repeat(&self) -> bool;
+        fn shift_key(&self) -> bool;
+        fn which(&self) -> usize;
+        fn get_modifier_state(&self) -> GetModifierKey;
+    }
+
     event_builder! {
         KeyboardEvent;
         keydown keypress keyup

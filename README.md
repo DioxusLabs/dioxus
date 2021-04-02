@@ -29,9 +29,10 @@ Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps
 ### **Things you'll love ❤️:**
 - Ergonomic design
 - Minimal boilerplate
-- Simple build, test, and deploy
+- Simple build, test, and deploy 
 - Support for html! and rsx! templating
 - SSR, WASM, desktop, and mobile support
+- Powerful and simple integrated state management
 - Rust! (enums, static types, modules, efficiency)
   
 
@@ -46,10 +47,6 @@ Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps
         <th><a href="http://github.com/jkelleyrtp/dioxus">Tools</a></th>
     <tr>
 </table>
-
-
-
-
 
 ## Explore
 - [**HTML Templates**: Drop in existing HTML5 templates with html! macro](docs/guides/00-index.md)
@@ -81,7 +78,7 @@ Liveview is an architecture for building web applications where the final page i
 
 In other frameworks, the DOM will be updated after events from the page are sent to the server and new html is generated. The html is then sent back to the page over websockets (ie html over websockets).
 
-In Dioxus, the user's bundle will link individual components on the page to the Liveview server. This ensures local events propogate through the page virtual dom if the server is not needed, keeping interactive latency low. This ensures the server load stays low, enablinmg a single server to handle tens of thousands of simultaneous clients.
+In Dioxus, the user's bundle will link individual components on the page to the Liveview server. This ensures local events propogate through the page virtual dom if the server is not needed, keeping interactive latency low. This ensures the server load stays low, enabling a single server to handle tens of thousands of simultaneous clients.
 
 <!-- ## Dioxus LiveHost
 Dioxus LiveHost is a paid service that accelerates the deployment of Dioxus Apps. It provides CI/CD, testing, monitoring, scaling, and deployment specifically for Dioxus apps. 

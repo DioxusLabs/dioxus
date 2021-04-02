@@ -36,9 +36,9 @@ static Example: FC<ExampleProps> = |ctx, props| {
                 "Hello, {name}"
             }
             
-            CustomButton { name: "Jack!", handler: move |evt| name.set("Jack".to_string()) }
-            CustomButton { name: "Jill!", handler: move |evt| name.set("Jill".to_string()) }
-            CustomButton { name: "Bob!", handler: move |evt| name.set("Bob".to_string())}
+            CustomButton { name: "Jack!", handler: move |_| name.set("Jack".to_string()) }
+            CustomButton { name: "Jill!", handler: move |_| name.set("Jill".to_string()) }
+            CustomButton { name: "Bob!", handler: move |_| name.set("Bob".to_string())}
         }
     })
 };

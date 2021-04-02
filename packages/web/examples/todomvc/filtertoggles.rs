@@ -13,7 +13,7 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
     ]
     .iter()
     .map(|(name, path, filter)| {
-        rsx! {
+        rsx!(
             li {
                 class: "{name}"
                 a {
@@ -22,7 +22,7 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
                     "{name}"
                 }
             }
-        }
+        )
     });
 
     // todo

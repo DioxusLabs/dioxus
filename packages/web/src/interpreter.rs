@@ -97,7 +97,12 @@ impl EventDelegater {
 
                 if let (Some(gi_id), Some(gi_gen), Some(li_idx)) = (gi_id, gi_gen, li_idx) {
                     // Call the trigger
-                    log::debug!("decoded gi_id: {},  gi_gen: {},  li_idx: {}", gi_id,gi_gen,li_idx);
+                    log::debug!(
+                        "decoded gi_id: {},  gi_gen: {},  li_idx: {}",
+                        gi_id,
+                        gi_gen,
+                        li_idx
+                    );
 
                     let triggered_scope = ScopeIdx::from_raw_parts(gi_id, gi_gen);
                     trigger.0.as_ref()(EventTrigger::new(
@@ -514,6 +519,33 @@ impl PatchMachine {
 fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
     use dioxus_core::events::on::*;
     match event.type_().as_str() {
+        "copy" | "cut" | "paste" => {
+            // let evt: web_sys::ClipboardEvent = event.clone().dyn_into().unwrap();
+
+            todo!()
+        }
+
+        "compositionend" | "compositionstart" | "compositionupdate" => {
+            let evt: web_sys::CompositionEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "keydown" | "keypress" | "keyup" => {
+            let evt: web_sys::KeyboardEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "focus" | "blur" => {
+            let evt: web_sys::FocusEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "change" | "input" | "invalid" | "reset" | "submit" => {
+            // is a special react events
+            // let evt: web_sys::FormEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
@@ -536,6 +568,61 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
                     todo!("This is not yet implemented properly, sorry :(");
                 })),
             })))
+        }
+
+        "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
+        | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
+            let evt: web_sys::PointerEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "select" => {
+            // let evt: web_sys::SelectionEvent = event.clone().dyn_into().unwrap();
+            // not required to construct anything special beyond standard event stuff
+            todo!()
+        }
+
+        "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
+            let evt: web_sys::TouchEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "scroll" => {
+            // let evt: web_sys::UIEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "wheel" => {
+            let evt: web_sys::WheelEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
+        | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
+        | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
+        | "timeupdate" | "volumechange" | "waiting" => {
+            // not required to construct anything special beyond standard event stuff
+
+            // let evt: web_sys::MediaEvent = event.clone().dyn_into().unwrap();
+            // let evt: web_sys::MediaEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "animationstart" | "animationend" | "animationiteration" => {
+            let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "transitionend" => {
+            let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "toggle" => {
+            // not required to construct anything special beyond standard event stuff (target)
+
+            // let evt: web_sys::ToggleEvent = event.clone().dyn_into().unwrap();
+            todo!()
         }
         _ => VirtualEvent::OtherEvent,
     }

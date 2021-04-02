@@ -144,9 +144,51 @@ impl Parse for Node {
 }
 
 struct Component {
-    name: Ident,
+    // accept any path-like argument
+    name: syn::Path,
     body: Vec<ComponentField>,
     children: Vec<Node>,
+}
+
+impl Parse for Component {
+    fn parse(s: ParseStream) -> Result<Self> {
+        // let name = s.parse::<syn::ExprPath>()?;
+        // todo: look into somehow getting the crate/super/etc
+
+        let name = syn::Path::parse_mod_style(s)?;
+        // parse the guts
+        let content: ParseBuffer;
+        syn::braced!(content in s);
+
+        let mut body: Vec<ComponentField> = Vec::new();
+        let _children: Vec<Node> = Vec::new();
+
+        'parsing: loop {
+            // [1] Break if empty
+            if content.is_empty() {
+                break 'parsing;
+            }
+
+            if let Ok(field) = content.parse::<ComponentField>() {
+                body.push(field);
+            }
+
+            // consume comma if it exists
+            // we don't actually care if there *are* commas between attrs
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>();
+            }
+        }
+
+        // todo: add support for children
+        let children: Vec<Node> = vec![];
+
+        Ok(Self {
+            name,
+            body,
+            children,
+        })
+    }
 }
 
 impl ToTokens for &Component {
@@ -186,53 +228,6 @@ impl ToTokens for &Component {
         });
     }
 }
-
-impl Parse for Component {
-    fn parse(s: ParseStream) -> Result<Self> {
-        let name = Ident::parse_any(s)?;
-
-        if crate::util::is_valid_tag(&name.to_string()) {
-            return Err(Error::new(
-                name.span(),
-                "Components cannot share names with valid HTML tags",
-            ));
-        }
-
-        // parse the guts
-        let content: ParseBuffer;
-        syn::braced!(content in s);
-
-        let mut body: Vec<ComponentField> = Vec::new();
-        let _children: Vec<Node> = Vec::new();
-
-        'parsing: loop {
-            // [1] Break if empty
-            if content.is_empty() {
-                break 'parsing;
-            }
-
-            if let Ok(field) = content.parse::<ComponentField>() {
-                body.push(field);
-            }
-
-            // consume comma if it exists
-            // we don't actually care if there *are* commas between attrs
-            if content.peek(Token![,]) {
-                let _ = content.parse::<Token![,]>();
-            }
-        }
-
-        // todo: add support for children
-        let children: Vec<Node> = vec![];
-
-        Ok(Self {
-            name,
-            body,
-            children,
-        })
-    }
-}
-
 // the struct's fields info
 pub struct ComponentField {
     name: Ident,

@@ -85,3 +85,17 @@ mod atoms {
     pub struct atom_family<K: PartialEq, V: PartialEq>(pub fn(&mut AtomFamilyBuilder<K, V>));
     pub type AtomFamily<K: PartialEq, V: PartialEq> = atom_family<K, V>;
 }
+
+pub use selectors::selector;
+mod selectors {
+    pub struct SelectorBuilder<Out, const Built: bool> {
+        _p: std::marker::PhantomData<Out>,
+    }
+    impl<O> SelectorBuilder<O, false> {
+        pub fn getter(self, f: impl Fn(()) -> O) -> SelectorBuilder<O, true> {
+            std::rc::Rc::pin(value)
+            todo!()
+        }
+    }
+    pub struct selector<O>(pub fn(SelectorBuilder<O, false>) -> SelectorBuilder<O, true>);
+}

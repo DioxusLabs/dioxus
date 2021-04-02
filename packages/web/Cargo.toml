@@ -45,10 +45,23 @@ features = [
     "Event",
     "MouseEvent",
     "InputEvent",
+    "ClipboardEvent",
+    "KeyboardEvent",
+    "TouchEvent",
+    "WheelEvent",
+    "AnimationEvent",
+    "TransitionEvent",
+    "PointerEvent",
+    "FocusEvent",
+    "CompositionEvent",
     "DocumentType",
     "CharacterData",
     "HtmlOptionElement",
-]
+] # "FormEvent",
+# "UIEvent",
+# "ToggleEvent",
+# "MediaEvent",
+# "SelectionEvent",
 
 [profile.release]
 debug = true

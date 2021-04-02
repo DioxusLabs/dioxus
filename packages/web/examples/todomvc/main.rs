@@ -1,13 +1,10 @@
-use dioxus_core::prelude::*;
-use dioxus_web::WebsysRenderer;
+use dioxus_web::{prelude::*, WebsysRenderer};
 
 mod filtertoggles;
 mod recoil;
 mod state;
 mod todoitem;
 mod todolist;
-
-use todolist::TodoList;
 
 static APP_STYLE: &'static str = include_str!("./style.css");
 
@@ -19,7 +16,7 @@ fn main() {
                 style { "{APP_STYLE}" }
 
                 // list
-                TodoList {}
+                todolist::TodoList {}
 
                 // footer
                 footer {
