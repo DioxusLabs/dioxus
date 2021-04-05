@@ -1,4 +1,4 @@
-use crate::{nodebuilder::IntoDomTree, prelude::*};
+use crate::{nodebuilder::IntoDomTree, prelude::*, scope::Scope};
 use crate::{nodebuilder::LazyNodes, nodes::VNode};
 use bumpalo::Bump;
 use hooks::Hook;
@@ -27,15 +27,12 @@ use std::{cell::RefCell, future::Future, ops::Deref, pin::Pin, rc::Rc, sync::ato
 pub struct Context<'src> {
     pub idx: RefCell<usize>,
 
-    pub scope: ScopeIdx,
-
-    // Borrowed from scope
-    // pub(crate) arena: &'src typed_arena::Arena<Hook>,
-    pub(crate) hooks: &'src RefCell<Vec<Hook>>,
-    // pub(crate) hooks: &'src RefCell<Vec<*mut Hook>>,
-    pub(crate) bump: &'src Bump,
-
-    pub listeners: &'src RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
+    // pub scope: ScopeIdx,
+    pub scope: &'src Scope,
+    // // Borrowed from scope
+    // pub(crate) hooks: &'src RefCell<Vec<Hook>>,
+    // pub(crate) bump: &'src Bump,
+    // pub listeners: &'src RefCell<Vec<*const dyn Fn(crate::events::VirtualEvent)>>,
 
     // holder for the src lifetime
     // todo @jon remove this
@@ -101,10 +98,10 @@ impl<'a> Context<'a> {
         lazy_nodes: LazyNodes<'a, F>,
     ) -> DomTree {
         let ctx = NodeCtx {
-            bump: self.bump,
-            scope: self.scope,
+            bump: &self.scope.cur_frame().bump,
+            scope: self.scope.myidx,
             idx: 0.into(),
-            listeners: self.listeners,
+            listeners: &self.scope.listeners,
         };
 
         let safe_nodes = lazy_nodes.into_vnode(&ctx);
@@ -145,7 +142,7 @@ pub mod hooks {
             let idx = *self.idx.borrow();
 
             // Mutate hook list if necessary
-            let mut hooks = self.hooks.borrow_mut();
+            let mut hooks = self.scope.hooks.borrow_mut();
 
             // Initialize the hook by allocating it in the typed arena.
             // We get a reference from the arena which is owned by the component scope

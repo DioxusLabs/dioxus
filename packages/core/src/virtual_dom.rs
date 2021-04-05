@@ -27,7 +27,7 @@ pub struct VirtualDom {
     /// Will not be ready if the dom is fresh
     pub base_scope: ScopeIdx,
 
-    pub(crate) update_schedule: Rc<RefCell<Vec<HierarchyMarker>>>,
+    pub(crate) update_schedule: UpdateFunnel,
 
     // a strong allocation to the "caller" for the original props
     #[doc(hidden)]
@@ -74,7 +74,7 @@ impl VirtualDom {
             components,
             _root_caller: root_caller,
             base_scope,
-            update_schedule: Rc::new(RefCell::new(Vec::new())),
+            update_schedule: UpdateFunnel::default(),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
@@ -211,5 +211,21 @@ impl VirtualDom {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HierarchyMarker {
-    height: u32,
+    source: ScopeIdx,
+}
+
+#[derive(Debug, Default, PartialEq, Clone)]
+pub struct UpdateFunnel(Rc<RefCell<Vec<HierarchyMarker>>>);
+
+impl UpdateFunnel {
+    fn schedule_update(&self, source: ScopeIdx) -> impl Fn() {
+        let inner = self.clone();
+        move || {
+            inner
+                .0
+                .as_ref()
+                .borrow_mut()
+                .push(HierarchyMarker { source })
+        }
+    }
 }

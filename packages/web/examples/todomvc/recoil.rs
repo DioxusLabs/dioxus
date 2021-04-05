@@ -93,8 +93,9 @@ mod selectors {
     }
     impl<O> SelectorBuilder<O, false> {
         pub fn getter(self, f: impl Fn(()) -> O) -> SelectorBuilder<O, true> {
-            std::rc::Rc::pin(value)
             todo!()
+            // std::rc::Rc::pin(value)
+            // todo!()
         }
     }
     pub struct selector<O>(pub fn(SelectorBuilder<O, false>) -> SelectorBuilder<O, true>);

@@ -44,7 +44,7 @@ pub struct Scope {
     // - is self-refenrential and therefore needs to point into the bump
     // Stores references into the listeners attached to the vnodes
     // NEEDS TO BE PRIVATE
-    listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
+    pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
 }
 
 impl Scope {
@@ -85,21 +85,26 @@ impl Scope {
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
     pub fn run_scope<'b>(&'b mut self) -> Result<()> {
         // pub fn run_scope<'bump>(&'bump mut self) -> Result<()> {
-        let frame = {
+        // let frame = {
+        {
             let frame = self.frames.next();
             frame.bump.reset();
-            frame
-        };
+        }
+        //     frame
+        // };
+        // self.new_frame()
 
-        let ctx: Context<'b> = Context {
+        let ctx = Context {
             // arena: &self.hook_arena,
-            hooks: &self.hooks,
-            bump: &frame.bump,
+            // hooks: &self.hooks,
+            // bump: &frame.bump,
             idx: 0.into(),
             _p: PhantomData {},
-            scope: self.myidx,
-            listeners: &self.listeners,
+            scope: self,
+            // scope: self.myidx,
+            // listeners: &self.listeners,
         };
+
         let caller = self.caller.upgrade().expect("Failed to get caller");
 
         /*
@@ -114,12 +119,16 @@ impl Scope {
         - Public API cannot drop or destructure VNode
         */
 
-        frame.head_node = unsafe {
-            let caller2: Rc<OpaqueComponent<'b>> = std::mem::transmute(caller);
-            let tree = (caller2.as_ref())(ctx);
-            tree.root
+        let new_head = unsafe {
+            // frame.head_node = unsafe {
+            //     // use the same type, just manipulate the lifetime
+            type ComComp<'c> = Rc<OpaqueComponent<'c>>;
+            let caller = std::mem::transmute::<ComComp<'static>, ComComp<'b>>(caller);
+            let r: DomTree = (caller.as_ref())(ctx);
+            r
         };
 
+        self.frames.cur_frame_mut().head_node = new_head.root;
         Ok(())
     }
 
@@ -161,6 +170,10 @@ impl Scope {
     pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
         self.frames.prev_head_node()
     }
+
+    pub fn cur_frame(&self) -> &BumpFrame {
+        self.frames.cur_frame()
+    }
 }
 
 // ==========================
@@ -200,6 +213,19 @@ impl ActiveFrame {
         Self {
             idx: 0.into(),
             frames: [a, b],
+        }
+    }
+
+    fn cur_frame(&self) -> &BumpFrame {
+        match *self.idx.borrow() & 1 == 0 {
+            true => &self.frames[0],
+            false => &self.frames[1],
+        }
+    }
+    fn cur_frame_mut(&mut self) -> &mut BumpFrame {
+        match *self.idx.borrow() & 1 == 0 {
+            true => &mut self.frames[0],
+            false => &mut self.frames[1],
         }
     }
 
