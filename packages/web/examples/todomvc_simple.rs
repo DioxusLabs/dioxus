@@ -79,10 +79,12 @@ pub fn TodoList(ctx: Context, props: &()) -> DomTree {
                     FilterState::Completed => item.checked,
                 })
                 .map(|(id, item)| {
-                    rsx!(TodoEntry {
-                        key: "{order}",
-                        item: item.clone()
-                    })
+                    TodoEntry!();
+                    todo!()
+                    // rsx!(TodoEntry {
+                    //     key: "{order}",
+                    //     item: item.clone()
+                    // })
                 })
             }
 
@@ -99,9 +101,24 @@ pub struct TodoEntryProps {
     item: Rc<TodoItem>,
 }
 
-pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
+mod mac {
+    #[macro_export]
+    macro_rules! TodoEntry {
+        () => {};
+    }
+}
+
+// pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
+// #[inline_props]
+pub fn TodoEntry(
+    ctx: Context,
+    baller: &impl Fn() -> (),
+    caller: &impl Fn() -> (),
+    todo: &Rc<TodoItem>,
+) -> DomTree {
+    // pub fn TodoEntry(ctx: Context, todo: &Rc<TodoItem>) -> DomTree {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    let todo = &props.item;
+    // let todo = &props.item;
 
     ctx.render(rsx! (
         li {
@@ -111,11 +128,11 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
                 type: "checkbox"
                 "{todo.checked}"
             }
-            {is_editing.then(|| rsx!(
+           {is_editing.then(|| rsx!{
                 input {
                     value: "{contents}"
                 }
-            ))}
+            })}
         }
     ))
 }

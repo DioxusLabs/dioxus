@@ -229,3 +229,20 @@ impl UpdateFunnel {
         }
     }
 }
+
+macro_rules! UpdateFunnel {
+    (root: $root:expr) => {
+        VirtualDom::new($root)
+    };
+}
+
+// #[test]
+// fn test_new_vdom() {
+//     let dom = UpdateFunnel! {
+//         root: |ctx, props| {
+//             ctx.render(rsx!{
+
+//             })
+//         }
+//     };
+// }

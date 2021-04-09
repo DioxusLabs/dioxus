@@ -84,25 +84,14 @@ impl Scope {
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
     pub fn run_scope<'b>(&'b mut self) -> Result<()> {
-        // pub fn run_scope<'bump>(&'bump mut self) -> Result<()> {
-        // let frame = {
-        {
-            let frame = self.frames.next();
-            frame.bump.reset();
-        }
-        //     frame
-        // };
-        // self.new_frame()
+        // cycle to the next frame and then reset it
+        // this breaks any latent references
+        self.frames.next().bump.reset();
 
         let ctx = Context {
-            // arena: &self.hook_arena,
-            // hooks: &self.hooks,
-            // bump: &frame.bump,
             idx: 0.into(),
             _p: PhantomData {},
             scope: self,
-            // scope: self.myidx,
-            // listeners: &self.listeners,
         };
 
         let caller = self.caller.upgrade().expect("Failed to get caller");
@@ -118,14 +107,11 @@ impl Scope {
         - The VNode has a private API and can only be used from accessors.
         - Public API cannot drop or destructure VNode
         */
-
         let new_head = unsafe {
-            // frame.head_node = unsafe {
-            //     // use the same type, just manipulate the lifetime
+            // use the same type, just manipulate the lifetime
             type ComComp<'c> = Rc<OpaqueComponent<'c>>;
             let caller = std::mem::transmute::<ComComp<'static>, ComComp<'b>>(caller);
-            let r: DomTree = (caller.as_ref())(ctx);
-            r
+            (caller.as_ref())(ctx)
         };
 
         self.frames.cur_frame_mut().head_node = new_head.root;
