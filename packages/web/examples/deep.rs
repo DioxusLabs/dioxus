@@ -7,8 +7,6 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(CustomA))
 }
 
-use components::CustomB;
-
 fn CustomA<'a>(ctx: Context<'a>, props: &'a ()) -> DomTree {
     let (val, set_val) = use_state(&ctx, || "abcdef".to_string());
 
@@ -24,7 +22,7 @@ fn CustomA<'a>(ctx: Context<'a>, props: &'a ()) -> DomTree {
                 "Lower"
                 onclick: move |_| set_val(val.to_ascii_lowercase())
             }
-            CustomB {
+            components::CustomB {
                 val: val.as_ref()
             }
         }

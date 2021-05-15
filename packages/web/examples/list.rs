@@ -1,125 +1,185 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-
-use dioxus::{events::on::MouseEvent, prelude::*};
 use dioxus_core as dioxus;
+use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
+use std::collections::BTreeMap;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
-    wasm_bindgen_futures::spawn_local(async move {
-        WebsysRenderer::new_with_props(App, ())
-            .run()
-            .await
-            .expect("major crash");
-    });
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-use lazy_static::lazy_static;
-lazy_static! {
-    static ref DummyData: BTreeMap<usize, String> = {
-        let vals = vec![
-            "abc123", //
-            "abc124", //
-            "abc125", //
-            "abc126", //
-            "abc127", //
-            "abc128", //
-            "abc129", //
-            "abc1210", //
-            "abc1211", //
-            "abc1212", //
-            "abc1213", //
-            "abc1214", //
-            "abc1215", //
-            "abc1216", //
-            "abc1217", //
-            "abc1218", //
-            "abc1219", //
-            "abc1220", //
-            "abc1221", //
-            "abc1222", //
-        ];
-        vals.into_iter()
-            .map(ToString::to_string)
-            .enumerate()
-            .collect()
-    };
+static APP_STYLE: &'static str = include_str!("./todomvc/style.css");
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum FilterState {
+    All,
+    Active,
+    Completed,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TodoItem {
+    pub id: uuid::Uuid,
+    pub checked: bool,
+    pub contents: String,
 }
 
 static App: FC<()> = |ctx, _| {
-    let items = use_state_new(&ctx, || DummyData.clone());
+    let (draft, set_draft) = use_state(&ctx, || "".to_string());
+    let (filter, set_filter) = use_state(&ctx, || FilterState::All);
+    let (is_editing, set_is_editing) = use_state(&ctx, || false);
+    // let (todos, set_todos) = use_state(&ctx, || BTreeMap::<String, TodoItem>::new());
 
-    // handle new elements
-    let add_new = move |_| {
-        items.modify(|m| {
-            let k = m.len();
-            let v = match (k % 3, k % 5) {
-                (0, 0) => "FizzBuzz".to_string(),
-                (0, _) => "Fizz".to_string(),
-                (_, 0) => "Buzz".to_string(),
-                _ => k.to_string(),
-            };
-            m.insert(k, v);
-        })
-    };
+    // let todos = use_ref(&ctx, || BTreeMap::<String, TodoItem>::new());
+    let todos = use_state_new(&ctx, || BTreeMap::<uuid::Uuid, TodoItem>::new());
 
-    let elements = items.iter().map(|(k, v)| {
-        rsx! {
-            ListHelper {
-                name: k,
-                value: v
-                onclick: move |_| {
-                    let key = k.clone();
-                    items.modify(move |m| { m.remove(&key); } )
-                }
-            }
-        }
-    });
-
+    // let blah = "{draft}"
     ctx.render(rsx!(
         div {
-            h1 {"Some list"}
-            button {
-                "Remove all"
-                onclick: move |_| items.set(BTreeMap::new())
+            id: "app"
+            style { "{APP_STYLE}" }
+
+            div {
+                header {
+                    class: "header"
+                    h1 {"todos"}
+                    button {
+                        "press me"
+                        onclick: move |evt| {
+                            let contents = draft.clone();
+                            todos.modify(|f| {
+                                let id = uuid::Uuid::new_v4();
+                                f.insert(id.clone(), TodoItem {
+                                    id,
+                                    checked: false,
+                                    contents
+                                });
+                            })
+                        }
+                    }
+                    input {
+                        class: "new-todo"
+                        placeholder: "What needs to be done?"
+                        // value: "{draft}"
+                        oninput: move |evt| set_draft(evt.value)
+                    }
+                }
+
+                { // list
+                    todos
+                    .iter()
+                    .filter(|(id, item)| match filter {
+                        FilterState::All => true,
+                        FilterState::Active => !item.checked,
+                        FilterState::Completed => item.checked,
+                    })
+                    .map(|(id, todo)| {
+                        rsx!{
+                            li {
+                                "{todo.contents}"
+                                input {
+                                    class: "toggle"
+                                    type: "checkbox"
+                                    "{todo.checked}"
+                                }
+                                // {is_editing.then(|| rsx!(
+                                //     input {
+                                //         value: "{contents}"
+                                //     }
+                                // ))}
+                            }
+                        }
+                    })
+                }
+
+                // filter toggle (show only if the list isn't empty)
+                {(!todos.is_empty()).then(||
+                    rsx!{
+                        footer {
+                            span {
+                                strong {"10"}
+                                span {"0 items left"}
+                            }
+                            ul {
+                                class: "filters"
+                            {[
+                                    ("All", "", FilterState::All),
+                                    ("Active", "active", FilterState::Active),
+                                    ("Completed", "completed", FilterState::Completed),
+                                ]
+                                .iter()
+                                .map(|(name, path, filter)| {
+                                    rsx!(
+                                        li {
+                                            class: "{name}"
+                                            a {
+                                                href: "{path}"
+                                                onclick: move |_| set_filter(filter.clone())
+                                                "{name}"
+                                            }
+                                        }
+                                    )
+                                })
+                            }}
+                        }
+                    }
+                )}
             }
-            button {
-                "add new"
-                onclick: {add_new}
-            }
-            ul {
-                {elements}
+
+
+            footer {
+                class: "info"
+                p {"Double-click to edit a todo"}
+                p {
+                    "Created by "
+                    a { "jkelleyrtp", href: "http://github.com/jkelleyrtp/" }
+                }
+                p {
+                    "Part of "
+                    a { "TodoMVC", href: "http://todomvc.com" }
+                }
             }
         }
     ))
 };
 
-#[derive(Props)]
-struct ListProps<'a, F: Fn(MouseEvent) + 'a> {
-    name: &'a usize,
-    value: &'a str,
-    onclick: F,
-}
+pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
+    // let reducer = recoil::use_callback(&ctx, || ());
+    // let items_left = recoil::use_atom_family(&ctx, &TODOS, uuid::Uuid::new_v4());
 
-impl<F: Fn(MouseEvent)> PartialEq for ListProps<'_, F> {
-    fn eq(&self, other: &Self) -> bool {
-        // no references are ever the same
-        false
-    }
-}
+    let toggles = [
+        ("All", "", FilterState::All),
+        ("Active", "active", FilterState::Active),
+        ("Completed", "completed", FilterState::Completed),
+    ]
+    .iter()
+    .map(|(name, path, _filter)| {
+        rsx!(
+            li {
+                class: "{name}"
+                a {
+                    href: "{path}"
+                    // onclick: move |_| reducer.set_filter(&filter)
+                    "{name}"
+                }
+            }
+        )
+    });
 
-fn ListHelper<F: Fn(MouseEvent)>(ctx: Context, props: &ListProps<F>) -> DomTree {
-    let k = props.name;
-    let v = props.value;
+    // todo
+    let item_text = "";
+    let items_left = "";
+
     ctx.render(rsx! {
-        li {
-            class: "flex items-center text-xl"
-            key: "{k}"
-            span { "{k}: {v}" }
-            button {
-                "__ Remove"
-                onclick: {&props.onclick}
+        footer {
+            span {
+                strong {"{items_left}"}
+                span {"{item_text} left"}
+            }
+            ul {
+                class: "filters"
+                {toggles}
             }
         }
     })

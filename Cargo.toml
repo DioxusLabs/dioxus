@@ -1,18 +1,28 @@
 [workspace]
+# members = ["packages/core-macro"]
 members = [
-    "packages/dioxus",
     "packages/core-macro",
     "packages/core",
     "packages/web",
-    "packages/docsite",
-    "packages/ssr",
+    "packages/webview",
+    "packages/dioxus",
 ]
+
+# "packages/docsite",
+# "packages/ssr",
+# "packages/cli",
+# "packages/webview",
+# "packages/hooks",
+# "packages/ios",
+
+[profile.dev]
+split-debuginfo = "unpacked"
+
 # "packages/liveview",
 # "packages/3d",
 
 # Built-in
 # "packages/webview/client",
-# "packages/webview",
 # "packages/router",
 # "packages/webview",
 # "packages/livehost",
@@ -22,7 +32,6 @@ members = [
 # "packages/macro",
 # TODO @Jon, share the validation code
 # "packages/web",
-# "packages/hooks",
 # "packages/cli",
 # "examples",
 # "packages/html-macro",

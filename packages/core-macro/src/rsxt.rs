@@ -1,5 +1,7 @@
 use syn::parse::{discouraged::Speculative, ParseBuffer};
 
+use crate::util::is_valid_html_tag;
+
 use {
     proc_macro::TokenStream,
     proc_macro2::{Span, TokenStream as TokenStream2},
@@ -15,77 +17,105 @@ use {
 // Parse any stream coming from the rsx! macro
 // ==============================================
 pub struct RsxRender {
-    custom_context: Option<Ident>,
-    root: RootOption,
-}
-
-enum RootOption {
-    // for lists of components
-    Fragment(),
-    Element(Element),
-    Component(Component),
-}
-
-impl ToTokens for RootOption {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match self {
-            RootOption::Fragment() => todo!(),
-            RootOption::Element(el) => el.to_tokens(tokens),
-            RootOption::Component(comp) => comp.to_tokens(tokens),
-        }
-    }
+    // custom_context: Option<Ident>,
+    root: AmbiguousElement,
 }
 
 impl Parse for RsxRender {
     fn parse(input: ParseStream) -> Result<Self> {
-        let fork = input.fork();
+        let root = { input.parse::<AmbiguousElement>() }?;
+        if !input.is_empty() {
+            return Err(Error::new(
+                input.span(),
+                "Currently only one element is allowed per component",
+            ));
+        }
 
-        let custom_context = fork
-            .parse::<Ident>()
-            .and_then(|ident| {
-                fork.parse::<Token![,]>().map(|_| {
-                    input.advance_to(&fork);
-                    ident
-                })
-            })
-            .ok();
-
-        let forked = input.fork();
-        let name = forked.parse::<Ident>()?;
-
-        let root = match crate::util::is_valid_tag(&name.to_string()) {
-            true => input.parse::<Element>().map(|el| RootOption::Element(el)),
-            false => input.parse::<Component>().map(|c| RootOption::Component(c)),
-        }?;
-
-        Ok(Self {
-            root,
-            custom_context,
-        })
+        Ok(Self { root })
     }
 }
 
 impl ToTokens for RsxRender {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let new_toks = (&self.root).to_token_stream();
-
         // create a lazy tree that accepts a bump allocator
-        let final_tokens = match &self.custom_context {
-            Some(ident) => quote! {
-                #ident.render(dioxus::prelude::LazyNodes::new(move |ctx|{
-                    let bump = ctx.bump;
-                    #new_toks
-                }))
-            },
-            None => quote! {
-                dioxus::prelude::LazyNodes::new(move |ctx|{
-                    let bump = ctx.bump;
-                    #new_toks
-                })
-            },
-        };
+        // Currently disabled
+        //
+        // let final_tokens = match &self.custom_context {
+        // Some(ident) => quote! {
+        //     #ident.render(dioxus::prelude::LazyNodes::new(move |ctx|{
+        //         let bump = ctx.bump;
+        //         #new_toks
+        //     }))
+        // },
 
-        final_tokens.to_tokens(out_tokens);
+        let inner = &self.root;
+        let output = quote! {
+            dioxus::prelude::LazyNodes::new(move |ctx|{
+                let bump = ctx.bump;
+                #inner
+             })
+        };
+        output.to_tokens(out_tokens)
+    }
+}
+
+enum AmbiguousElement {
+    Element(Element),
+    Component(Component),
+}
+
+impl Parse for AmbiguousElement {
+    fn parse(input: ParseStream) -> Result<Self> {
+        // Try to parse as an absolute path and immediately defer to the componetn
+        if input.peek(Token![::]) {
+            return input
+                .parse::<Component>()
+                .map(|c| AmbiguousElement::Component(c));
+        }
+
+        // If not an absolute path, then parse the ident and check if it's a valid tag
+
+        if let Ok(pat) = input.fork().parse::<syn::Path>() {
+            if pat.segments.len() > 1 {
+                return input
+                    .parse::<Component>()
+                    .map(|c| AmbiguousElement::Component(c));
+            }
+        }
+
+        if let Ok(name) = input.fork().parse::<Ident>() {
+            let name_str = name.to_string();
+
+            match is_valid_html_tag(&name_str) {
+                true => input
+                    .parse::<Element>()
+                    .map(|c| AmbiguousElement::Element(c)),
+                false => {
+                    let first_char = name_str.chars().next().unwrap();
+                    if first_char.is_ascii_uppercase() {
+                        input
+                            .parse::<Component>()
+                            .map(|c| AmbiguousElement::Component(c))
+                    } else {
+                        Err(Error::new(
+                            name.span(),
+                            "Components must be uppercased, perhaps you mispelled a html tag",
+                        ))
+                    }
+                }
+            }
+        } else {
+            Err(Error::new(input.span(), "Not a valid Html tag"))
+        }
+    }
+}
+
+impl ToTokens for AmbiguousElement {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            AmbiguousElement::Element(el) => el.to_tokens(tokens),
+            AmbiguousElement::Component(comp) => comp.to_tokens(tokens),
+        }
     }
 }
 
@@ -93,9 +123,8 @@ impl ToTokens for RsxRender {
 // Parse any div {} as a VElement
 // ==============================================
 enum Node {
-    Element(Element),
+    Element(AmbiguousElement),
     Text(TextNode),
-    Component(Component),
     RawExpr(Expr),
 }
 
@@ -104,7 +133,6 @@ impl ToTokens for &Node {
         match &self {
             Node::Element(el) => el.to_tokens(tokens),
             Node::Text(txt) => txt.to_tokens(tokens),
-            Node::Component(c) => c.to_tokens(tokens),
             Node::RawExpr(exp) => exp.to_tokens(tokens),
         }
     }
@@ -115,31 +143,17 @@ impl Parse for Node {
         // Supposedly this approach is discouraged due to inability to return proper errors
         // TODO: Rework this to provide more informative errors
 
-        let fork = stream.fork();
-        if let Ok(text) = fork.parse::<TextNode>() {
-            stream.advance_to(&fork);
-            return Ok(Self::Text(text));
+        if stream.peek(token::Brace) {
+            let content;
+            syn::braced!(content in stream);
+            return Ok(Node::RawExpr(content.parse::<Expr>()?));
         }
 
-        let fork = stream.fork();
-        if let Ok(element) = fork.parse::<Element>() {
-            stream.advance_to(&fork);
-            return Ok(Self::Element(element));
+        if stream.peek(LitStr) {
+            return Ok(Node::Text(stream.parse::<TextNode>()?));
         }
 
-        let fork = stream.fork();
-        if let Ok(comp) = fork.parse::<Component>() {
-            stream.advance_to(&fork);
-            return Ok(Self::Component(comp));
-        }
-
-        let fork = stream.fork();
-        if let Ok(tok) = try_parse_bracketed(&fork) {
-            stream.advance_to(&fork);
-            return Ok(Node::RawExpr(tok));
-        }
-
-        return Err(Error::new(stream.span(), "Failed to parse as a valid node"));
+        Ok(Node::Element(stream.parse::<AmbiguousElement>()?))
     }
 }
 
@@ -156,6 +170,7 @@ impl Parse for Component {
         // todo: look into somehow getting the crate/super/etc
 
         let name = syn::Path::parse_mod_style(s)?;
+
         // parse the guts
         let content: ParseBuffer;
         syn::braced!(content in s);
@@ -169,9 +184,7 @@ impl Parse for Component {
                 break 'parsing;
             }
 
-            if let Ok(field) = content.parse::<ComponentField>() {
-                body.push(field);
-            }
+            body.push(content.parse::<ComponentField>()?);
 
             // consume comma if it exists
             // we don't actually care if there *are* commas between attrs
@@ -228,6 +241,7 @@ impl ToTokens for &Component {
         });
     }
 }
+
 // the struct's fields info
 pub struct ComponentField {
     name: Ident,
@@ -258,8 +272,54 @@ impl ToTokens for &ComponentField {
 // =======================================
 struct Element {
     name: Ident,
-    attrs: Vec<Attr>,
+    attrs: Vec<ElementAttr>,
     children: Vec<Node>,
+}
+
+impl Parse for Element {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        //
+        let name = Ident::parse(stream)?;
+
+        if !crate::util::is_valid_html_tag(&name.to_string()) {
+            return Err(Error::new(name.span(), "Not a valid Html tag"));
+        }
+
+        // parse the guts
+        let content: ParseBuffer;
+        syn::braced!(content in stream);
+
+        let mut attrs: Vec<ElementAttr> = vec![];
+        let mut children: Vec<Node> = vec![];
+        'parsing: loop {
+            // [1] Break if empty
+            if content.is_empty() {
+                break 'parsing;
+            }
+
+            let forked = content.fork();
+            if forked.call(Ident::parse_any).is_ok()
+                && forked.parse::<Token![:]>().is_ok()
+                && forked.parse::<Expr>().is_ok()
+            {
+                attrs.push(content.parse::<ElementAttr>()?);
+            } else {
+                children.push(content.parse::<Node>()?);
+            }
+
+            // consume comma if it exists
+            // we don't actually care if there *are* commas after elements/text
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>();
+            }
+        }
+
+        Ok(Self {
+            name,
+            attrs,
+            children,
+        })
+    }
 }
 
 impl ToTokens for &Element {
@@ -288,86 +348,22 @@ impl ToTokens for &Element {
     }
 }
 
-impl Parse for Element {
-    fn parse(s: ParseStream) -> Result<Self> {
-        let name = Ident::parse_any(s)?;
-
-        if !crate::util::is_valid_tag(&name.to_string()) {
-            return Err(Error::new(name.span(), "Not a valid Html tag"));
-        }
-
-        // parse the guts
-        let content: ParseBuffer;
-        syn::braced!(content in s);
-
-        let mut attrs: Vec<Attr> = vec![];
-        let mut children: Vec<Node> = vec![];
-        parse_element_content(content, &mut attrs, &mut children)?;
-
-        Ok(Self {
-            name,
-            attrs,
-            children,
-        })
-    }
-}
-
-// used by both vcomponet and velement to parse the contents of the elements into attras and children
-fn parse_element_content(
-    stream: ParseBuffer,
-    attrs: &mut Vec<Attr>,
-    children: &mut Vec<Node>,
-) -> Result<()> {
-    'parsing: loop {
-        // consume comma if it exists
-        // we don't actually care if there *are* commas after elements/text
-        if stream.peek(Token![,]) {
-            let _ = stream.parse::<Token![,]>();
-        }
-
-        // [1] Break if empty
-        if stream.is_empty() {
-            break 'parsing;
-        }
-
-        // [2] Try to consume an attr
-        let fork = stream.fork();
-        if let Ok(attr) = fork.parse::<Attr>() {
-            // make sure to advance or your computer will become a space heater :)
-            stream.advance_to(&fork);
-            attrs.push(attr);
-            continue 'parsing;
-        }
-
-        // [3] Try to consume a child node
-        let fork = stream.fork();
-        if let Ok(node) = fork.parse::<Node>() {
-            // make sure to advance or your computer will become a space heater :)
-            stream.advance_to(&fork);
-            children.push(node);
-            continue 'parsing;
-        }
-
-        // todo: pass a descriptive error onto the offending tokens
-        panic!("Entry is not an attr or element\n {}", stream)
-    }
-    Ok(())
-}
-fn try_parse_bracketed(stream: &ParseBuffer) -> Result<Expr> {
-    let content;
-    syn::braced!(content in stream);
-    content.parse()
-}
-
 /// =======================================
 /// Parse a VElement's Attributes
 /// =======================================
-struct Attr {
+struct ElementAttr {
     name: Ident,
     ty: AttrType,
 }
 
-impl Parse for Attr {
+enum AttrType {
+    Value(LitStr),
+    FieldTokens(Expr),
+    EventTokens(Expr),
+    Event(ExprClosure),
+}
+
+impl Parse for ElementAttr {
     fn parse(s: ParseStream) -> Result<Self> {
         let mut name = Ident::parse_any(s)?;
         let name_str = name.to_string();
@@ -389,32 +385,39 @@ impl Parse for Attr {
                     content.advance_to(&fork);
                     AttrType::Event(event)
                 } else {
-                    AttrType::Tok(content.parse()?)
+                    AttrType::EventTokens(content.parse()?)
                 }
             } else {
                 AttrType::Event(s.parse()?)
             }
         } else {
-            let lit_str = if name_str == "style" && s.peek(token::Brace) {
-                // special-case to deal with literal styles.
-                let outer;
-                syn::braced!(outer in s);
-                // double brace for inline style.
-                // todo!("Style support not ready yet");
-
-                // if outer.peek(token::Brace) {
-                //     let inner;
-                //     syn::braced!(inner in outer);
-                //     let styles: Styles = inner.parse()?;
-                //     MaybeExpr::Literal(LitStr::new(&styles.to_string(), Span::call_site()))
-                // } else {
-                // just parse as an expression
-                outer.parse()?
-            // }
+            let fork = s.fork();
+            if let Ok(rawtext) = fork.parse::<LitStr>() {
+                s.advance_to(&fork);
+                AttrType::Value(rawtext)
             } else {
-                s.parse()?
-            };
-            AttrType::Value(lit_str)
+                let toks = s.parse::<Expr>()?;
+                AttrType::FieldTokens(toks)
+            }
+            // let lit_str = if name_str == "style" && s.peek(token::Brace) {
+            //     // special-case to deal with literal styles.
+            //     let outer;
+            //     syn::braced!(outer in s);
+            //     // double brace for inline style.
+            //     // todo!("Style support not ready yet");
+
+            //     // if outer.peek(token::Brace) {
+            //     //     let inner;
+            //     //     syn::braced!(inner in outer);
+            //     //     let styles: Styles = inner.parse()?;
+            //     //     MaybeExpr::Literal(LitStr::new(&styles.to_string(), Span::call_site()))
+            //     // } else {
+            //     // just parse as an expression
+            //     outer.parse()?
+            // // }
+            // } else {
+            //     s.parse()?
+            // };
         };
 
         // consume comma if it exists
@@ -423,11 +426,11 @@ impl Parse for Attr {
             let _ = s.parse::<Token![,]>();
         }
 
-        Ok(Attr { name, ty })
+        Ok(ElementAttr { name, ty })
     }
 }
 
-impl ToTokens for &Attr {
+impl ToTokens for &ElementAttr {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = self.name.to_string();
         let nameident = &self.name;
@@ -435,7 +438,12 @@ impl ToTokens for &Attr {
         match &self.ty {
             AttrType::Value(value) => {
                 tokens.append_all(quote! {
-                    .attr(#name, #value)
+                    .attr(#name, {
+                        use bumpalo::core_alloc::fmt::Write;
+                        let mut s = bumpalo::collections::String::new_in(bump);
+                        s.write_fmt(format_args_f!(#value)).unwrap();
+                        s.into_bump_str()
+                    })
                 });
             }
             AttrType::Event(event) => {
@@ -443,19 +451,19 @@ impl ToTokens for &Attr {
                     .add_listener(dioxus::events::on::#nameident(ctx, #event))
                 });
             }
-            AttrType::Tok(exp) => {
+            AttrType::FieldTokens(exp) => {
                 tokens.append_all(quote! {
-                    .add_listener(dioxus::events::on::#nameident(ctx, #exp))
+                    .attr(#name, #exp)
                 });
+            }
+            AttrType::EventTokens(event) => {
+                //
+                tokens.append_all(quote! {
+                    .add_listener(dioxus::events::on::#nameident(ctx, #event))
+                })
             }
         }
     }
-}
-
-enum AttrType {
-    Value(LitStr),
-    Event(ExprClosure),
-    Tok(Expr),
 }
 
 // =======================================
@@ -482,4 +490,10 @@ impl ToTokens for TextNode {
             }
         });
     }
+}
+
+fn try_parse_bracketed(stream: &ParseBuffer) -> Result<Expr> {
+    let content;
+    syn::braced!(content in stream);
+    content.parse()
 }

@@ -117,6 +117,9 @@ static VALID_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "var",
         "video",
         "wbr",
+        // SVTG
+        "svg",
+        "path",
     ]
     .iter()
     .cloned()
@@ -132,6 +135,6 @@ static VALID_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 ///
 /// assert_eq!(is_valid_tag("random"), false);
 /// ```
-pub fn is_valid_tag(tag: &str) -> bool {
+pub fn is_valid_html_tag(tag: &str) -> bool {
     VALID_TAGS.contains(tag)
 }

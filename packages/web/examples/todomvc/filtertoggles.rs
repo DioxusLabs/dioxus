@@ -13,16 +13,14 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
     ]
     .iter()
     .map(|(name, path, filter)| {
-        rsx!(
-            li {
-                class: "{name}"
-                a {
-                    href: "{path}"
-                    onclick: move |_| reducer.set_filter(&filter)
-                    "{name}"
-                }
+        rsx!(li {
+            class: "{name}"
+            a {
+                "{name}"
+                href: "{path}"
+                onclick: move |_| reducer.set_filter(&filter)
             }
-        )
+        })
     });
 
     // todo

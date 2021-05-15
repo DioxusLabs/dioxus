@@ -1,23 +1,20 @@
-//! An example where the dioxus vdom is running in a native thread, interacting with webview
-//! Content is passed from the native thread into the webview
-use dioxus_core::prelude::*;
+//! Basic example that renders a simple domtree to the browser.
 
+use std::rc::Rc;
+
+use dioxus_core::prelude::*;
+use dioxus_web::*;
 fn main() {
-    dioxus_webview::launch(
-        |builder| {
-            builder
-                .title("Test Dioxus App")
-                .size(320, 480)
-                .resizable(false)
-                .debug(true)
-        },
-        (),
-        Example,
-    )
-    .expect("Webview finished");
+    // Setup logging
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+    console_error_panic_hook::set_once();
+    // Run the app
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static Example: FC<()> = |ctx, _props| {
+static App: FC<()> = |ctx, _| {
+    let (contents, set_contents) = use_state(&ctx, || "asd");
+
     ctx.render(rsx! {
         div  {
             class: "flex items-center justify-center flex-col"
@@ -25,8 +22,8 @@ static Example: FC<()> = |ctx, _props| {
                 class: "flex items-center justify-center"
                 div {
                     class: "flex flex-col bg-white rounded p-4 w-full max-w-xs"
-                    div { class: "font-bold text-xl", "Example desktop app" }
-                    div { class: "text-sm text-gray-500", "This is running natively" }
+                    div { class: "font-bold text-xl", "Example cloud app" }
+                    div { class: "text-sm text-gray-500", "This is running in the cloud!!" }
                     div {
                         class: "flex flex-row items-center justify-center mt-6"
                         div { class: "font-medium text-6xl", "100%" }

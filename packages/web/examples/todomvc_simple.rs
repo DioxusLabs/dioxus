@@ -101,13 +101,6 @@ pub struct TodoEntryProps {
     item: Rc<TodoItem>,
 }
 
-mod mac {
-    #[macro_export]
-    macro_rules! TodoEntry {
-        () => {};
-    }
-}
-
 // pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
 // #[inline_props]
 pub fn TodoEntry(

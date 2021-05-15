@@ -24,7 +24,7 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 > Make it easier to write components
 - [x] (Macro) Tweak event syntax to not be dependent on wasm32 target (just return regular closures which get boxed/alloced)
 - [x] (Macro) Tweak component syntax to accept a new custom element 
-- [ ] (Macro) Allow components to specify their props as function args  (not going to do)
+- [ ] (Macro) Allow components to specify their props as function args
 
 ## Project: Hooks + Context + Subscriptions (TBD)
 > Implement the foundations for state management
@@ -80,20 +80,21 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 - [x] Allow paths for components
 - [x] todo mvc
 - [ ] Make events lazy (use traits + Box<dyn>)
-- [ ] attrs on elements should implement format_args
+- [ ] Attributes on elements should implement format_args
 - [ ] Beef up the dioxus CLI tool
 - [ ] Tweak macro parsing for better errors
-- [ ] make ssr follow HTML spec (ish)
+- [ ] make SSR follow HTML spec
 - [ ] dirty tagging, compression
 - [ ] fix keys on elements
-- [ ] miri tests
+- [ ] MIRI tests
 - [ ] code health
 - [ ] all synthetic events filled out
-- [ ] doublecheck event targets and stuff
+- [ ] double check event targets and stuff
 - [ ] Documentation overhaul
 - [ ] Website
+= [ ] controlled components
 
-lower priorty features
+lower priority features
 - [ ] fragments
 - [ ] node refs (postpone for future release?)
 - [ ] styling built-in (future release?)

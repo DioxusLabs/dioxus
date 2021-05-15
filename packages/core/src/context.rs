@@ -1,4 +1,4 @@
-use crate::{nodebuilder::IntoDomTree, prelude::*, scope::Scope};
+use crate::{innerlude::*, nodebuilder::IntoDomTree};
 use crate::{nodebuilder::LazyNodes, nodes::VNode};
 use bumpalo::Bump;
 use hooks::Hook;
@@ -97,9 +97,12 @@ impl<'a> Context<'a> {
         &self,
         lazy_nodes: LazyNodes<'a, F>,
     ) -> DomTree {
+        // let idx = self.idx.borrow();
         let ctx = NodeCtx {
             bump: &self.scope.cur_frame().bump,
             scope: self.scope.myidx,
+
+            // hmmmmmmmm not sure if this is right
             idx: 0.into(),
             listeners: &self.scope.listeners,
         };
@@ -151,11 +154,14 @@ pub mod hooks {
                 let new_state = initializer();
                 hooks.push(Hook::new(new_state));
             }
-            *self.idx.borrow_mut() = 1;
+
+            *self.idx.borrow_mut() += 1;
 
             let stable_ref = hooks.get_mut(idx).unwrap().0.as_mut();
             let v = unsafe { Pin::get_unchecked_mut(stable_ref) };
-            let internal_state = v.downcast_mut::<InternalHookState>().unwrap();
+            let internal_state = v
+                .downcast_mut::<InternalHookState>()
+                .expect("couldn't find the hook state");
 
             // we extend the lifetime from borrowed in this scope to borrowed from self.
             // This is okay because the hook is pinned

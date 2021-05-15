@@ -34,4 +34,4 @@ log = "0.4.14"
 serde = { version = "1.0.123", features = ["derive"], optional = true }
 
 [features]
-default = []
+default = ["serde"]

@@ -21,7 +21,7 @@ mod use_state_def {
     struct UseState<T: 'static> {
         new_val: Rc<RefCell<Option<T>>>,
         current_val: T,
-        caller: Box<dyn Fn(T) + 'static>,
+        caller: Rc<dyn Fn(T) + 'static>,
     }
 
     /// Store state between component renders!
@@ -49,12 +49,12 @@ mod use_state_def {
     pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
         ctx: &'c Context<'a>,
         initial_state_fn: F,
-    ) -> (&'a T, &'a impl Fn(T)) {
+    ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
         ctx.use_hook(
             move || UseState {
                 new_val: Rc::new(RefCell::new(None)),
                 current_val: initial_state_fn(),
-                caller: Box::new(|_| println!("setter called!")),
+                caller: Rc::new(|_| println!("setter called!")),
             },
             move |hook| {
                 log::debug!("Use_state set called");
@@ -69,7 +69,7 @@ mod use_state_def {
                 }
 
                 // todo: swap out the caller with a subscription call and an internal update
-                hook.caller = Box::new(move |new_val| {
+                hook.caller = Rc::new(move |new_val| {
                     // update the setter with the new value
                     let mut new_inner = inner.as_ref().borrow_mut();
                     *new_inner = Some(new_val);

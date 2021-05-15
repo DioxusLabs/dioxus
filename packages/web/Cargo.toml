@@ -29,7 +29,7 @@ async-channel = "1.6.1"
 # futures-lite = "1.11.3"
 
 [dependencies.web-sys]
-version = "0.3"
+version = "0.3.50"
 features = [
     "Comment",
     "Document",
@@ -71,7 +71,7 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dev-dependencies]
-uuid = { version = "0.8.2", features = ["v4"] }
+uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
 
 [[example]]
 name = "todomvc"

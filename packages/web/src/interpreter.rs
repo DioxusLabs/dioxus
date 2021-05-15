@@ -542,8 +542,14 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
 
         "change" | "input" | "invalid" | "reset" | "submit" => {
             // is a special react events
-            // let evt: web_sys::FormEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            let evt: web_sys::InputEvent = event.clone().dyn_into().expect("wrong event type");
+            let value: Option<String> = (&evt).data();
+            let value = value.unwrap_or_default();
+            // let value = (&evt).data().expect("No data to unwrap");
+
+            // todo - this needs to be a "controlled" event
+            // these events won't carry the right data with them
+            VirtualEvent::FormEvent(FormEvent { value })
         }
 
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"

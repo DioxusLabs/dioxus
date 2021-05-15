@@ -115,6 +115,7 @@ pub struct TodoEntryProps {
 pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
     let todo = use_atom_family(&ctx, &TODOS, props.id);
+    let contents = "";
 
     ctx.render(rsx! (
         li {

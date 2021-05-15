@@ -17,7 +17,7 @@ fn main() {
                         <div class="flex flex-col bg-white rounded p-4 w-full max-w-xs">
                             // Title
                             <div class="font-bold text-xl">
-                                "Jon's awesome site!!11"
+                                "Jon's awesome site!!"
                             </div>
 
                             // Subtext / description
@@ -45,4 +45,3 @@ fn main() {
         })
     }));
 }
-

@@ -68,18 +68,14 @@
 pub mod component; // Logic for extending FC
 pub mod context; // Logic for providing hook + context functionality to user components
 pub mod debug_renderer;
-pub mod patch; // An "edit phase" described by transitions and edit operations // Test harness for validating that lifecycles and diffs work appropriately
-               // pub mod diff;
-               // pub mod patch; // The diffing algorithm that builds the ChangeList
 pub mod diff;
-// the diffing algorithm that builds the ChangeList
+pub mod patch; // An "edit phase" described by transitions and edit operations // Test harness for validating that lifecycles and diffs work appropriately
+               // the diffing algorithm that builds the ChangeList
 pub mod error; // Error type we expose to the renderers
 pub mod events; // Manages the synthetic event API
 pub mod hooks; // Built-in hooks
 pub mod nodebuilder; // Logic for building VNodes with a direct syntax
 pub mod nodes; // Logic for the VNodes
-pub mod scope; // Logic for single components
-               // pub mod validation; //  Logic for validating trees
 pub mod virtual_dom; // Most fun logic starts here, manages the lifecycle and suspense
 
 pub mod builder {
@@ -88,36 +84,19 @@ pub mod builder {
 
 // types used internally that are important
 pub(crate) mod innerlude {
-    // pub(crate) use crate::component::Properties;
-    pub(crate) use crate::component::Properties;
-    pub(crate) use crate::context::Context;
-    pub use crate::diff::LifeCycleEvent;
-    pub(crate) use crate::error::Result;
-    pub use crate::events::{EventTrigger, VirtualEvent};
-    use crate::nodes;
-
-    pub use crate::component::ScopeIdx;
-    pub use crate::context::hooks::Hook;
-    pub use crate::nodes::VNode;
-
-    pub(crate) use nodes::*;
-
-    pub use crate::context::NodeCtx;
-    pub use crate::diff::DiffMachine;
-    pub use crate::patch::{EditList, EditMachine};
-    // pub use crate::patchdx;
-    // pub use crate::patchtList;
-    // pub use nodes::iterables::IterableNodes;
-    /// This type alias is an internal way of abstracting over the static functions that represent components.
+    pub use crate::component::*;
+    pub use crate::context::*;
+    pub use crate::debug_renderer::*;
+    pub use crate::diff::*;
+    pub use crate::error::*;
+    pub use crate::events::*;
+    pub use crate::hooks::*;
+    pub use crate::nodebuilder::*;
+    pub use crate::nodes::*;
+    pub use crate::patch::*;
+    pub use crate::virtual_dom::*;
 
     pub type FC<P> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
-
-    mod fc2 {}
-    // pub type FC<'a, P: 'a> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
-    // pub type FC<P> = for<'scope, 'r> fn(Context<'scope>, &'scope P) -> DomTree;
-    // pub type FC<P> = for<'scope, 'r> fn(Context<'scope>, &'r P) -> VNode<'scope>;
-    // pub type FC<P> = for<'scope, 'r> fn(Context<'scope>, &'r P) -> VNode<'scope>;
-    // pub type FC<P> = for<'a> fn(Context<'a, P>) -> VNode<'a>;
 
     // TODO @Jon, fix this
     // hack the VNode type until VirtualNode is fixed in the macro crate
@@ -127,7 +106,6 @@ pub(crate) mod innerlude {
     pub use crate as dioxus;
     pub use crate::nodebuilder as builder;
     pub use dioxus_core_macro::{html, rsx};
-    // pub use dioxus_core_macro::{fc, html, rsx};
 }
 
 /// Re-export common types for ease of development use.

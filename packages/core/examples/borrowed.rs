@@ -7,7 +7,7 @@
 
 fn main() {}
 
-use std::borrow::Borrow;
+use std::{borrow::Borrow, rc::Rc};
 
 use dioxus_core::prelude::*;
 
@@ -36,7 +36,7 @@ fn app<'a>(ctx: Context<'a>, props: &Props) -> DomTree {
                 // create the props with nothing but the fc<T>
                 fc_to_builder(ChildItem)
                     .item(child)
-                    .item_handler(set_val)
+                    .item_handler(set_val.clone())
                     .build(),
                 None,
             ));
@@ -52,7 +52,7 @@ struct ChildProps<'a> {
     item: &'a ListItem,
 
     // Even pass down handlers!
-    item_handler: &'a dyn Fn(i32),
+    item_handler: Rc<dyn Fn(i32)>,
 }
 
 impl PartialEq for ChildProps<'_> {

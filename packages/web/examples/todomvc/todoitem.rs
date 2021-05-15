@@ -21,7 +21,7 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
             }
             {is_editing.then(|| rsx!(
                 input {
-                    value: "{contents}"
+                    value: "{todo.contents}"
                 }
             ))}
         }

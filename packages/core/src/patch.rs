@@ -21,9 +21,14 @@
 //! ----
 //! - stack machine approach does not work when 3rd party extensions inject elements (breaking our view of the dom)
 
+use std::cell::Ref;
+
 use crate::innerlude::ScopeIdx;
 
 pub type EditList<'src> = Vec<Edit<'src>>;
+// pub struct EditList<'src> {
+//     edits: Vec<Edit<'src>>,
+// }
 
 /// The `Edit` represents a single modifcation of the renderer tree.
 /// todo @jon, go through and make certain fields static. tag names should be known at compile time
@@ -146,7 +151,7 @@ pub struct EditMachine<'lock> {
     pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
-    
+
     // // if the current node is a "known" node
     // // any actions that modify this node should update the mapping
     // current_known: Option<u32>,
@@ -338,7 +343,7 @@ impl<'a> EditMachine<'a> {
     }
 
     pub fn create_element(&mut self, tag_name: &'a str) {
-        debug_assert!(self.traversal_is_committed());;
+        debug_assert!(self.traversal_is_committed());
         self.emitter.push(Edit::CreateElement { tag_name });
     }
 
@@ -389,7 +394,6 @@ impl<'a> EditMachine<'a> {
         // self.current_known = Some(id);
         self.emitter.push(Edit::TraverseToKnown { node: id })
     }
-
 }
 
 // Keeps track of where we are moving in a DOM tree, and shortens traversal

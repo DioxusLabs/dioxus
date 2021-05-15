@@ -32,7 +32,7 @@
 //!
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
-use crate::{innerlude::*, scope::Scope};
+use crate::innerlude::*;
 use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
 use generational_arena::Arena;
@@ -66,26 +66,29 @@ pub struct DiffMachine<'a> {
 pub enum LifeCycleEvent<'a> {
     Mount {
         caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
-        scope: Weak<VCompAssociatedScope>,
-        id: u32,
+        stable_scope_addr: Weak<VCompAssociatedScope>,
+        root_id: u32,
     },
     PropsChanged {
         caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
-        scope: Weak<VCompAssociatedScope>,
-        id: u32,
+        stable_scope_addr: Weak<VCompAssociatedScope>,
+        root_id: u32,
     },
     SameProps {
         caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
-        scope: Weak<VCompAssociatedScope>,
-        id: u32,
+        stable_scope_addr: Weak<VCompAssociatedScope>,
+        root_id: u32,
     },
     Replace {
         caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
         old_scope: Weak<VCompAssociatedScope>,
         new_scope: Weak<VCompAssociatedScope>,
-        id: u32,
+        root_id: u32,
     },
-    Remove,
+    Remove {
+        stable_scope_addr: Weak<VCompAssociatedScope>,
+        root_id: u32,
+    },
 }
 
 static COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -159,7 +162,11 @@ impl<'a> DiffMachine<'a> {
 
                     let scope = Rc::downgrade(&cold.ass_scope);
                     self.lifecycle_events
-                        .push_back(LifeCycleEvent::PropsChanged { caller, id, scope });
+                        .push_back(LifeCycleEvent::PropsChanged {
+                            caller,
+                            root_id: id,
+                            stable_scope_addr: scope,
+                        });
                 } else {
                     let caller = Rc::downgrade(&cnew.caller);
                     let id = cold.stable_addr.borrow().unwrap();
@@ -168,7 +175,7 @@ impl<'a> DiffMachine<'a> {
 
                     self.lifecycle_events.push_back(LifeCycleEvent::Replace {
                         caller,
-                        id,
+                        root_id: id,
                         old_scope,
                         new_scope,
                     });
@@ -262,8 +269,8 @@ impl<'a> DiffMachine<'a> {
                 let scope = Rc::downgrade(&component.ass_scope);
                 self.lifecycle_events.push_back(LifeCycleEvent::Mount {
                     caller: Rc::downgrade(&component.caller),
-                    id,
-                    scope,
+                    root_id: id,
+                    stable_scope_addr: scope,
                 });
             }
             VNode::Suspended => {
