@@ -18,7 +18,7 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
-use crate::innerlude::*;
+use crate::{arena::ScopeArena, innerlude::*};
 use bumpalo::Bump;
 use generational_arena::Arena;
 use std::{
@@ -41,7 +41,7 @@ pub struct VirtualDom {
     ///
     /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
     /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    components: UnsafeCell<Arena<Scope>>,
+    components: ScopeArena,
 
     /// The index of the root component
     /// Should always be the first (gen0, id0)
@@ -152,7 +152,7 @@ impl VirtualDom {
             _root_caller,
             base_scope,
             event_queue,
-            components: UnsafeCell::new(components),
+            components: ScopeArena::new(components),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
@@ -164,16 +164,18 @@ impl VirtualDom {
         // Schedule an update and then immediately call it on the root component
         // This is akin to a hook being called from a listener and requring a re-render
         // Instead, this is done on top-level component
-        unsafe {
-            let components = &*self.components.get();
-            let base = components.get(self.base_scope).unwrap();
-            let update = self.event_queue.schedule_update(base);
-            update();
-        };
+
+        let base = self.components.try_get(self.base_scope)?;
+        let update = self.event_queue.schedule_update(base);
+        update();
 
         self.progress_completely(&mut diff_machine)?;
 
         Ok(diff_machine.consume())
+    }
+
+    pub fn base_scope(&self) -> &Scope {
+        todo!()
     }
 }
 
@@ -223,16 +225,11 @@ impl VirtualDom {
     // in crafting a 100% safe solution with traditional lifetimes. Consider this method to be internally unsafe
     // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
     //
-    // A good project would be to remove all unsafe from this crate and move the unsafety into abstractions.
+    // A good project would be to remove all unsafe from this crate and move the unsafety into safer abstractions.
     pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList> {
         let id = event.component_id.clone();
 
-        unsafe {
-            (&mut *self.components.get())
-                .get_mut(id)
-                .ok_or(Error::FatalInternal("Borrowing should not fail"))?
-                .call_listener(event)?;
-        }
+        self.components.try_get_mut(id)?.call_listener(event)?;
 
         let mut diff_machine = DiffMachine::new();
         self.progress_completely(&mut diff_machine)?;
@@ -240,8 +237,16 @@ impl VirtualDom {
         Ok(diff_machine.consume())
     }
 
-    pub(crate) fn progress_completely(&mut self, diff_machine: &mut DiffMachine) -> Result<()> {
+    /// Consume the event queue, descending depth-first.
+    /// Only ever run each component once.
+    ///
+    /// The DiffMachine logs its progress as it goes which might be useful for certain types of renderers.
+    pub(crate) fn progress_completely<'s>(
+        &'s mut self,
+        diff_machine: &'_ mut DiffMachine<'s>,
+    ) -> Result<()> {
         // Add this component to the list of components that need to be difed
+        #[allow(unused_assignments)]
         let mut cur_height: u32 = 0;
 
         // Now, there are events in the queue
@@ -263,20 +268,16 @@ impl VirtualDom {
             // Now, all the "seen nodes" are nodes that got notified by running this listener
             seen_nodes.insert(update.idx.clone());
 
-            unsafe {
-                // Start a new mutable borrow to components
+            // Start a new mutable borrow to components
+            // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
 
-                // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
-                let component = (&mut *self.components.get())
-                    .get_mut(update.idx)
-                    .expect("msg");
+            let component = self.components.try_get_mut(update.idx).unwrap();
 
-                component.run_scope()?;
+            component.run_scope()?;
 
-                diff_machine.diff_node(component.old_frame(), component.next_frame());
+            diff_machine.diff_node(component.old_frame(), component.next_frame());
 
-                cur_height = component.height;
-            }
+            cur_height = component.height;
 
             log::debug!(
                 "Processing update: {:#?} with height {}",
@@ -301,15 +302,22 @@ impl VirtualDom {
                         // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
                         // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
                         // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
-                        let components: &mut _ = unsafe { &mut *self.components.get() };
 
                         // Insert a new scope into our component list
-                        let idx = components.insert_with(|f| {
-                            Scope::new(caller, f, None, cur_height + 1, self.event_queue.clone())
-                        });
+                        let idx = self.components.with(|components| {
+                            components.insert_with(|f| {
+                                Scope::new(
+                                    caller,
+                                    f,
+                                    None,
+                                    cur_height + 1,
+                                    self.event_queue.clone(),
+                                )
+                            })
+                        })?;
 
                         // Grab out that component
-                        let component = components.get_mut(idx).unwrap();
+                        let component = self.components.try_get_mut(idx).unwrap();
 
                         // Actually initialize the caller's slot with the right address
                         *stable_scope_addr.upgrade().unwrap().as_ref().borrow_mut() = Some(idx);
@@ -336,8 +344,6 @@ impl VirtualDom {
                     } => {
                         log::debug!("Updating a component after its props have changed");
 
-                        let components: &mut _ = unsafe { &mut *self.components.get() };
-
                         // Get the stable index to the target component
                         // This *should* exist due to guarantees in the diff algorithm
                         let idx = stable_scope_addr
@@ -348,7 +354,7 @@ impl VirtualDom {
                             .unwrap();
 
                         // Grab out that component
-                        let component = components.get_mut(idx).unwrap();
+                        let component = self.components.try_get_mut(idx).unwrap();
 
                         // We have to move the caller over or running the scope will fail
                         component.update_caller(caller);
@@ -377,8 +383,6 @@ impl VirtualDom {
                         // However, since our caller is located in a Bump frame, we need to update the caller pointer (which is now invalid)
                         log::debug!("Received the same props");
 
-                        let components: &mut _ = unsafe { &mut *self.components.get() };
-
                         // Get the stable index to the target component
                         // This *should* exist due to guarantees in the diff algorithm
                         let idx = stable_scope_addr
@@ -389,7 +393,7 @@ impl VirtualDom {
                             .unwrap();
 
                         // Grab out that component
-                        let component = components.get_mut(idx).unwrap();
+                        let component = self.components.try_get_mut(idx).unwrap();
 
                         // We have to move the caller over or running the scope will fail
                         component.update_caller(caller);
@@ -445,7 +449,7 @@ pub struct Scope {
     // slightly unsafe stuff
     // ==========================
     // an internal, highly efficient storage of vnodes
-    pub(crate) frames: ActiveFrame,
+    pub frames: ActiveFrame,
 
     // These hooks are actually references into the hook arena
     // These two could be combined with "OwningRef" to remove unsafe usage

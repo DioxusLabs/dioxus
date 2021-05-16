@@ -22,11 +22,11 @@ impl ScopeArena {
         }
     }
 
-    pub fn get(&self, idx: ScopeIdx) -> Result<&Scope> {
+    pub fn try_get(&self, idx: ScopeIdx) -> Result<&Scope> {
         todo!()
     }
 
-    pub fn get_mut(&self, idx: ScopeIdx) -> Result<&Scope> {
+    pub fn try_get_mut(&self, idx: ScopeIdx) -> Result<&mut Scope> {
         todo!()
     }
 
@@ -38,7 +38,7 @@ impl ScopeArena {
         todo!()
     }
 
-    pub fn with<T>(&mut self, f: impl FnOnce(&mut Arena<Scope>) -> T) -> T {
+    pub fn with<T>(&self, f: impl FnOnce(&mut Arena<Scope>) -> T) -> Result<T> {
         todo!()
     }
 
