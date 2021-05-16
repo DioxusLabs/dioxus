@@ -65,6 +65,7 @@
 //! - dioxus-liveview (SSR + StringRenderer)
 //!
 
+pub mod arena;
 pub mod component; // Logic for extending FC
 pub mod context; // Logic for providing hook + context functionality to user components
 pub mod debug_renderer;

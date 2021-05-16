@@ -14,7 +14,7 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 dioxus-core-macro = { path = "../core-macro", version = "0.1.1" }
 
 # Backs scopes and graphs between parent and children
-generational-arena = { version = "0.2.8", features = ["serde"] }
+generational-arena = { version = "0.2.8" }
 
 # Bumpalo backs the VNode creation
 bumpalo = { version = "3.6.0", features = ["collections", "boxed"] }
@@ -36,3 +36,4 @@ serde = { version = "1", features = ["derive"], optional = true }
 
 [features]
 default = []
+serialize = ["serde", "generational-arena/serde"]

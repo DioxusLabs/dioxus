@@ -11,9 +11,10 @@ impl Display for SsrRenderer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let node = self
             .dom
-            .components
-            .get(self.dom.base_scope)
-            .unwrap()
+            .base_scope()
+            // .components
+            // .get(self.dom.base_scope)
+            // .unwrap()
             .frames
             .current_head_node();
 

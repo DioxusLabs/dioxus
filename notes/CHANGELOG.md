@@ -77,17 +77,16 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 - [x] keys on components
 - [x] Allow paths for components
 - [x] todo mvc
-- [ ] Make events lazy (use traits + Box<dyn>) - not sure what this means anymore
-- [ ] Attributes on elements should implement format_args instead of string fmt
-- [ ] Beef up the dioxus CLI tool to report build progress
 - [x] Tweak macro parsing for better errors
+- [x] dirty tagging, compression
+- [x] code health
+- [ ] Make events lazy (use traits + Box<dyn>) - not sure what this means anymore
+- [ ] Beef up the dioxus CLI tool to report build progress
 - [ ] Extract arena logic out for better safety guarantees
 - [ ] Extract BumpFrame logic out for better safety guarantees
 - [ ] make SSR follow HTML spec
-- [x] dirty tagging, compression
 - [ ] fix keys on elements
 - [ ] MIRI tests
-- [ ] code health
 - [ ] all synthetic events filled out
 - [ ] double check event targets and stuff
 - [ ] Documentation overhaul
@@ -95,6 +94,7 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 - [ ] controlled components
 
 lower priority features
+- [ ] Attributes on elements should implement format_args instead of string fmt
 - [ ] fragments
 - [ ] node refs (postpone for future release?)
 - [ ] styling built-in (future release?)

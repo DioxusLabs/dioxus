@@ -19,16 +19,11 @@
 //!
 //! # Known Issues
 //! ----
-//! - stack machine approach does not work when 3rd party extensions inject elements (breaking our view of the dom)
-
-use std::cell::Ref;
+//! - stack machine approach does not work when 3rd party extensions inject elements (breaking our view of the dom) - solvable by the renderer
 
 use crate::innerlude::ScopeIdx;
 
 pub type EditList<'src> = Vec<Edit<'src>>;
-// pub struct EditList<'src> {
-//     edits: Vec<Edit<'src>>,
-// }
 
 /// The `Edit` represents a single modifcation of the renderer tree.
 /// todo @jon, go through and make certain fields static. tag names should be known at compile time

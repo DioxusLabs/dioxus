@@ -120,4 +120,4 @@ impl<'a> crate::virtual_dom::Context<'a> {
 ///
 /// - Dioxus reducer is built on the safe API and provides a useful but slightly limited API.
 /// - Dioxus Dataflow is built on the unsafe API and provides an even snazzier API than Dioxus Reducer.    
-fn blah() {}
+fn _blah() {}

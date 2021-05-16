@@ -1,3 +1,7 @@
+//! Internal error handling for Dioxus
+//!
+//!
+
 use thiserror::Error as ThisError;
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
