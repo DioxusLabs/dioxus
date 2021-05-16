@@ -2,9 +2,7 @@
 Welcome to the first iteration of the Dioxus Virtual DOM! This release brings support for:
 - Web via WASM
 - Desktop via webview integration
-- Server-rendering with custom Display Impl
-- Liveview (experimental)
-- Mobile (experimental)
+- Server-rendering with custom ToString implementation
 - State management
 - Build CLI
 ----
@@ -79,12 +77,14 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 - [x] keys on components
 - [x] Allow paths for components
 - [x] todo mvc
-- [ ] Make events lazy (use traits + Box<dyn>)
-- [ ] Attributes on elements should implement format_args
-- [ ] Beef up the dioxus CLI tool
-- [ ] Tweak macro parsing for better errors
+- [ ] Make events lazy (use traits + Box<dyn>) - not sure what this means anymore
+- [ ] Attributes on elements should implement format_args instead of string fmt
+- [ ] Beef up the dioxus CLI tool to report build progress
+- [x] Tweak macro parsing for better errors
+- [ ] Extract arena logic out for better safety guarantees
+- [ ] Extract BumpFrame logic out for better safety guarantees
 - [ ] make SSR follow HTML spec
-- [ ] dirty tagging, compression
+- [x] dirty tagging, compression
 - [ ] fix keys on elements
 - [ ] MIRI tests
 - [ ] code health
@@ -92,11 +92,11 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 - [ ] double check event targets and stuff
 - [ ] Documentation overhaul
 - [ ] Website
-= [ ] controlled components
+- [ ] controlled components
 
 lower priority features
 - [ ] fragments
 - [ ] node refs (postpone for future release?)
 - [ ] styling built-in (future release?)
 - [ ] key handler?
-- [ ] FC macro
+- [ ] FC macro?

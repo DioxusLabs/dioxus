@@ -1,19 +1,37 @@
-use crate::{error::Error, innerlude::*};
-use crate::{innerlude::hooks::Hook, patch::Edit};
+//! # VirtualDOM Implementation for Rust
+//! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
+//!
+//! In this file, multiple items are defined. This file is big, but should be documented well to
+//! navigate the innerworkings of the Dom. We try to keep these main mechanics in this file to limit
+//! the possible exposed API surface (keep fields private). This particular implementation of VDOM
+//! is extremely efficient, but relies on some unsafety under the hood to do things like manage
+//! micro-heaps for components.
+//!
+//! Included is:
+//! - The [`VirtualDom`] itself
+//! - The [`Scope`] object for mangning component lifecycle
+//! - The [`ActiveFrame`] object for managing the Scope`s microheap
+//! - The [`Context`] object for exposing VirtualDOM API to components
+//! - The [`NodeCtx`] object for lazyily exposing the `Context` API to the nodebuilder API
+//! - The [`Hook`] object for exposing state management in components.
+//!
+//! This module includes just the barebones for a complete VirtualDOM API.
+//! Additional functionality is defined in the respective files.
+
+use crate::innerlude::*;
 use bumpalo::Bump;
 use generational_arena::Arena;
 use std::{
     any::TypeId,
-    borrow::{Borrow, BorrowMut},
-    cell::{Ref, RefCell, UnsafeCell},
-    collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet},
+    cell::{RefCell, UnsafeCell},
+    collections::HashSet,
+    fmt::Debug,
+    future::Future,
+    pin::Pin,
     rc::{Rc, Weak},
 };
-use thiserror::private::AsDynError;
 
-// We actually allocate the properties for components in their parent's properties
-// We then expose a handle to use those props for render in the form of "OpaqueComponent"
-pub(crate) type OpaqueComponent<'a> = dyn for<'b> Fn(Context<'b>) -> DomTree + 'a;
+pub use support::*;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -25,30 +43,60 @@ pub struct VirtualDom {
     /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
     components: UnsafeCell<Arena<Scope>>,
 
-    /// The index of the root component.\
-    /// Should always be the first
+    /// The index of the root component
+    /// Should always be the first (gen0, id0)
     pub base_scope: ScopeIdx,
 
     /// All components dump their updates into a queue to be processed
-    pub(crate) update_schedule: UpdateFunnel,
+    pub(crate) event_queue: EventQueue,
 
-    // a strong allocation to the "caller" for the original props
+    /// a strong allocation to the "caller" for the original component and its props
     #[doc(hidden)]
-    root_caller: Rc<OpaqueComponent<'static>>,
+    _root_caller: Rc<OpaqueComponent<'static>>,
 
-    // Type of the original props. This is done so VirtualDom does not need to be generic.
+    /// Type of the original props. This is stored as TypeId so VirtualDom does not need to be generic.
+    ///
+    /// Whenver props need to be updated, an Error will be thrown if the new props do not
+    /// match the props used to create the VirtualDom.
     #[doc(hidden)]
     _root_prop_type: std::any::TypeId,
 }
 
 // ======================================
-// Public Methods for the VirtualDOM
+// Public Methods for the VirtualDom
 // ======================================
 impl VirtualDom {
     /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
     /// The root component can access things like routing in its context.
+    ///
+    /// As an end-user, you'll want to use the Renderer's "new" method instead of this method.
+    /// Directly creating the VirtualDOM is only useful when implementing a new renderer.
+    ///
+    ///
+    /// ```ignore
+    /// // Directly from a closure
+    ///
+    /// let dom = VirtualDom::new(|ctx, _| ctx.render(rsx!{ div {"hello world"} }));
+    ///
+    /// // or pass in...
+    ///
+    /// let root = |ctx, _| {
+    ///     ctx.render(rsx!{
+    ///         div {"hello world"}
+    ///     })
+    /// }
+    /// let dom = VirtualDom::new(root);
+    ///
+    /// // or directly from a fn
+    ///
+    /// fn Example(ctx: Context, props: &()) -> DomTree  {
+    ///     ctx.render(rsx!{ div{"hello world"} })
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Example);
+    /// ```
     pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
@@ -58,52 +106,80 @@ impl VirtualDom {
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
+    ///
+    /// ```ignore
+    /// // Directly from a closure
+    ///
+    /// let dom = VirtualDom::new(|ctx, props| ctx.render(rsx!{ div {"hello world"} }));
+    ///
+    /// // or pass in...
+    ///
+    /// let root = |ctx, props| {
+    ///     ctx.render(rsx!{
+    ///         div {"hello world"}
+    ///     })
+    /// }
+    /// let dom = VirtualDom::new(root);
+    ///
+    /// // or directly from a fn
+    ///
+    /// fn Example(ctx: Context, props: &SomeProps) -> DomTree  {
+    ///     ctx.render(rsx!{ div{"hello world"} })
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Example);
+    /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let mut components = Arena::new();
 
-        // The user passes in a "root" component (IE the function)
-        // When components are used in the rsx! syntax, the parent assumes ownership
-        // Here, the virtual dom needs to own the function, wrapping it with a `context caller`
-        // The RC holds this component with a hard allocation
-        let root_caller: Rc<OpaqueComponent> = Rc::new(move |ctx| root(ctx, &root_props));
+        // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
+        // Here, we need to make it manually, using an RC to force the Weak reference to stick around for the main scope.
+        let _root_caller: Rc<OpaqueComponent> = Rc::new(move |ctx| root(ctx, &root_props));
 
-        // To make it easier to pass the root around, we just leak it
-        // When the virtualdom is dropped, we unleak it, so that unsafe isn't here, but it's important to remember
-        let leaked_caller = Rc::downgrade(&root_caller);
+        // Create a weak reference to the OpaqueComponent for the root scope to use as its render function
+        let caller_ref = Rc::downgrade(&_root_caller);
+
+        // Build a funnel for hooks to send their updates into. The `use_hook` method will call into the update funnel.
+        let event_queue = EventQueue::default();
+        let _event_queue = event_queue.clone();
+
+        // Make the first scope
+        // We don't run the component though, so renderers will need to call "rebuild" when they initialize their DOM
+        let base_scope = components
+            .insert_with(move |myidx| Scope::new(caller_ref, myidx, None, 0, _event_queue));
 
         Self {
-            root_caller,
-            base_scope: components
-                .insert_with(move |myidx| Scope::new(leaked_caller, myidx, None, 0)),
+            _root_caller,
+            base_scope,
+            event_queue,
             components: UnsafeCell::new(components),
-            update_schedule: UpdateFunnel::default(),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom. from scratch
     pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
-        todo!()
+        let mut diff_machine = DiffMachine::new();
+
+        // Schedule an update and then immediately call it on the root component
+        // This is akin to a hook being called from a listener and requring a re-render
+        // Instead, this is done on top-level component
+        unsafe {
+            let components = &*self.components.get();
+            let base = components.get(self.base_scope).unwrap();
+            let update = self.event_queue.schedule_update(base);
+            update();
+        };
+
+        self.progress_completely(&mut diff_machine)?;
+
+        Ok(diff_machine.consume())
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct HeightMarker {
-    idx: ScopeIdx,
-    height: u32,
-}
-impl Ord for HeightMarker {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.height.cmp(&other.height)
-    }
-}
-
-impl PartialOrd for HeightMarker {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
+// ======================================
+// Private Methods for the VirtualDom
+// ======================================
 impl VirtualDom {
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
     ///  
@@ -146,23 +222,31 @@ impl VirtualDom {
     // The final EditList has edits that pull directly from the Bump Arenas which add significant complexity
     // in crafting a 100% safe solution with traditional lifetimes. Consider this method to be internally unsafe
     // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
+    //
+    // A good project would be to remove all unsafe from this crate and move the unsafety into abstractions.
     pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList> {
         let id = event.component_id.clone();
 
         unsafe {
             (&mut *self.components.get())
                 .get_mut(id)
-                .expect("Borrowing should not fail")
+                .ok_or(Error::FatalInternal("Borrowing should not fail"))?
                 .call_listener(event)?;
         }
 
-        // Add this component to the list of components that need to be difed
         let mut diff_machine = DiffMachine::new();
-        let mut cur_height = 0;
+        self.progress_completely(&mut diff_machine)?;
+
+        Ok(diff_machine.consume())
+    }
+
+    pub(crate) fn progress_completely(&mut self, diff_machine: &mut DiffMachine) -> Result<()> {
+        // Add this component to the list of components that need to be difed
+        let mut cur_height: u32 = 0;
 
         // Now, there are events in the queue
         let mut seen_nodes = HashSet::<ScopeIdx>::new();
-        let mut updates = self.update_schedule.0.as_ref().borrow_mut();
+        let mut updates = self.event_queue.0.as_ref().borrow_mut();
 
         // Order the nodes by their height, we want the biggest nodes on the top
         // This prevents us from running the same component multiple times
@@ -191,8 +275,14 @@ impl VirtualDom {
 
                 diff_machine.diff_node(component.old_frame(), component.next_frame());
 
-                cur_height = component.height + 1;
+                cur_height = component.height;
             }
+
+            log::debug!(
+                "Processing update: {:#?} with height {}",
+                &update.idx,
+                cur_height
+            );
 
             // Now, the entire subtree has been invalidated. We need to descend depth-first and process
             // any updates that the diff machine has proprogated into the component lifecycle queue
@@ -214,8 +304,9 @@ impl VirtualDom {
                         let components: &mut _ = unsafe { &mut *self.components.get() };
 
                         // Insert a new scope into our component list
-                        let idx =
-                            components.insert_with(|f| Scope::new(caller, f, None, cur_height));
+                        let idx = components.insert_with(|f| {
+                            Scope::new(caller, f, None, cur_height + 1, self.event_queue.clone())
+                        });
 
                         // Grab out that component
                         let component = components.get_mut(idx).unwrap();
@@ -279,8 +370,8 @@ impl VirtualDom {
                     // This means the caller ptr is invalidated and needs to be updated, but the component itself does not need to be re-ran
                     LifeCycleEvent::SameProps {
                         caller,
-                        root_id,
                         stable_scope_addr,
+                        ..
                     } => {
                         // In this case, the parent made a new DomTree that resulted in the same props for us
                         // However, since our caller is located in a Bump frame, we need to update the caller pointer (which is now invalid)
@@ -323,38 +414,10 @@ impl VirtualDom {
             }
         }
 
-        Ok(diff_machine.consume())
+        Ok(())
     }
 }
 
-impl Drop for VirtualDom {
-    fn drop(&mut self) {
-        // Drop all the components first
-        // self.components.drain();
-
-        // Finally, drop the root caller
-        unsafe {
-            // let root: Box<OpaqueComponent<'static>> =
-            //     Box::from_raw(self.root_caller as *const OpaqueComponent<'static> as *mut _);
-
-            // std::mem::drop(root);
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct UpdateFunnel(Rc<RefCell<Vec<HeightMarker>>>);
-
-impl UpdateFunnel {
-    fn schedule_update(&self, source: &Scope) -> impl Fn() {
-        let inner = self.clone();
-        let marker = HeightMarker {
-            height: source.height,
-            idx: source.myidx,
-        };
-        move || inner.0.as_ref().borrow_mut().push(marker)
-    }
-}
 /// Every component in Dioxus is represented by a `Scope`.
 ///
 /// Scopes contain the state for hooks, the component's props, and other lifecycle information.
@@ -370,11 +433,12 @@ pub struct Scope {
 
     pub height: u32,
 
+    pub event_queue: EventQueue,
+
     // A list of children
     // TODO, repalce the hashset with a faster hash function
     pub children: HashSet<ScopeIdx>,
 
-    // caller: &'static OpaqueComponent<'static>,
     pub caller: Weak<OpaqueComponent<'static>>,
 
     // ==========================
@@ -409,15 +473,24 @@ impl Scope {
         myidx: ScopeIdx,
         parent: Option<ScopeIdx>,
         height: u32,
+        event_queue: EventQueue,
     ) -> Self {
         log::debug!(
             "New scope created, height is {}, idx is {:?}",
             height,
             myidx
         );
-        // Caller has been broken free
-        // However, it's still weak, so if the original Rc gets killed, we can't touch it
-        let broken_caller: Weak<OpaqueComponent<'static>> = unsafe { std::mem::transmute(caller) };
+
+        // The Componet has a lifetime that's "stuck" to its original allocation.
+        // We need to "break" this reference and manually manage the lifetime.
+        //
+        // Not the best solution, so TODO on removing this in favor of a dedicated resource abstraction.
+        let broken_caller = unsafe {
+            std::mem::transmute::<
+                Weak<OpaqueComponent<'creator_node>>,
+                Weak<OpaqueComponent<'static>>,
+            >(caller)
+        };
 
         Self {
             caller: broken_caller,
@@ -428,10 +501,17 @@ impl Scope {
             parent,
             myidx,
             height,
+            event_queue,
         }
     }
+
     pub fn update_caller<'creator_node>(&mut self, caller: Weak<OpaqueComponent<'creator_node>>) {
-        let broken_caller: Weak<OpaqueComponent<'static>> = unsafe { std::mem::transmute(caller) };
+        let broken_caller = unsafe {
+            std::mem::transmute::<
+                Weak<OpaqueComponent<'creator_node>>,
+                Weak<OpaqueComponent<'static>>,
+            >(caller)
+        };
 
         self.caller = broken_caller;
     }
@@ -441,8 +521,8 @@ impl Scope {
     ///
     /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
     pub fn run_scope<'b>(&'b mut self) -> Result<()> {
-        // cycle to the next frame and then reset it
-        // this breaks any latent references
+        // Cycle to the next frame and then reset it
+        // This breaks any latent references, invalidating every pointer referencing into it.
         self.frames.next().bump.reset();
 
         let ctx = Context {
@@ -451,27 +531,18 @@ impl Scope {
             scope: self,
         };
 
-        let caller = self.caller.upgrade().expect("Failed to get caller");
+        let caller = self
+            .caller
+            .upgrade()
+            .ok_or(Error::FatalInternal("Failed to get caller"))?;
 
-        /*
-        SAFETY ALERT
-
-        DO NOT USE THIS VNODE WITHOUT THE APPOPRIATE ACCESSORS.
-        KEEPING THIS STATIC REFERENCE CAN LEAD TO UB.
-
-        Some things to note:
-        - The VNode itself is bound to the lifetime, but it itself is owned by scope.
-        - The VNode has a private API and can only be used from accessors.
-        - Public API cannot drop or destructure VNode
-        */
         let new_head = unsafe {
-            // use the same type, just manipulate the lifetime
-            type ComComp<'c> = Rc<OpaqueComponent<'c>>;
-            let caller = std::mem::transmute::<ComComp<'static>, ComComp<'b>>(caller);
-            (caller.as_ref())(ctx)
-        };
+            // Cast the caller ptr from static to one with our own reference
+            std::mem::transmute::<&OpaqueComponent<'static>, &OpaqueComponent<'b>>(caller.as_ref())
+        }(ctx);
 
         self.frames.cur_frame_mut().head_node = new_head.root;
+
         Ok(())
     }
 
@@ -480,32 +551,33 @@ impl Scope {
     // The listener list will be completely drained because the next frame will write over previous listeners
     pub fn call_listener(&mut self, trigger: EventTrigger) -> Result<()> {
         let EventTrigger {
-            listener_id,
-            event: source,
-            ..
+            listener_id, event, ..
         } = trigger;
 
         unsafe {
             // Convert the raw ptr into an actual object
             // This operation is assumed to be safe
-
-            log::debug!("Running listener");
-
-            self.listeners
-                .borrow()
+            let listener_fn = self
+                .listeners
+                .try_borrow()
+                .ok()
+                .ok_or(Error::FatalInternal("Borrowing listener failed "))?
                 .get(listener_id as usize)
-                .ok_or(Error::FatalInternal("Event should exist if it was triggered"))?
+                .ok_or(Error::FatalInternal("Event should exist if triggered"))?
                 .as_ref()
-                .ok_or(Error::FatalInternal("Raw event ptr is invalid"))?
-                // Run the callback with the user event
-                (source);
+                .ok_or(Error::FatalInternal("Raw event ptr is invalid"))?;
 
-            log::debug!("Listener finished");
+            // Run the callback with the user event
+            listener_fn(event);
 
             // drain all the event listeners
             // if we don't, then they'll stick around and become invalid
             // big big big big safety issue
-            self.listeners.borrow_mut().drain(..);
+            self.listeners
+                .try_borrow_mut()
+                .ok()
+                .ok_or(Error::FatalInternal("Borrowing listener failed"))?
+                .drain(..);
         }
         Ok(())
     }
@@ -523,21 +595,12 @@ impl Scope {
     }
 }
 
-// ==========================
-// Active-frame related code
-// ==========================
-// todo, do better with the active frame stuff
-// somehow build this vnode with a lifetime tied to self
-// This root node has  "static" lifetime, but it's really not static.
-// It's goverened by the oldest of the two frames and is switched every time a new render occurs
-// Use this node as if it were static is unsafe, and needs to be fixed with ourborous or owning ref
-// ! do not copy this reference are things WILL break !
 pub struct ActiveFrame {
-    pub idx: RefCell<usize>,
-    pub frames: [BumpFrame; 2],
-
     // We use a "generation" for users of contents in the bump frames to ensure their data isn't broken
-    pub generation: u32,
+    pub generation: RefCell<usize>,
+
+    // The double-buffering situation that we will use
+    pub frames: [BumpFrame; 2],
 }
 
 pub struct BumpFrame {
@@ -561,27 +624,26 @@ impl ActiveFrame {
 
     fn from_frames(a: BumpFrame, b: BumpFrame) -> Self {
         Self {
-            idx: 0.into(),
+            generation: 0.into(),
             frames: [a, b],
-            generation: 0,
         }
     }
 
     fn cur_frame(&self) -> &BumpFrame {
-        match *self.idx.borrow() & 1 == 0 {
+        match *self.generation.borrow() & 1 == 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         }
     }
     fn cur_frame_mut(&mut self) -> &mut BumpFrame {
-        match *self.idx.borrow() & 1 == 0 {
+        match *self.generation.borrow() & 1 == 0 {
             true => &mut self.frames[0],
             false => &mut self.frames[1],
         }
     }
 
     pub fn current_head_node<'b>(&'b self) -> &'b VNode<'b> {
-        let raw_node = match *self.idx.borrow() & 1 == 0 {
+        let raw_node = match *self.generation.borrow() & 1 == 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         };
@@ -595,7 +657,7 @@ impl ActiveFrame {
     }
 
     pub fn prev_head_node<'b>(&'b self) -> &'b VNode<'b> {
-        let raw_node = match *self.idx.borrow() & 1 != 0 {
+        let raw_node = match *self.generation.borrow() & 1 != 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         };
@@ -609,9 +671,9 @@ impl ActiveFrame {
     }
 
     fn next(&mut self) -> &mut BumpFrame {
-        *self.idx.borrow_mut() += 1;
+        *self.generation.borrow_mut() += 1;
 
-        if *self.idx.borrow() % 2 == 0 {
+        if *self.generation.borrow() % 2 == 0 {
             &mut self.frames[0]
         } else {
             &mut self.frames[1]
@@ -619,7 +681,218 @@ impl ActiveFrame {
     }
 }
 
-mod test {
+/// Components in Dioxus use the "Context" object to interact with their lifecycle.
+/// This lets components schedule updates, integrate hooks, and expose their context via the context api.
+///
+/// Properties passed down from the parent component are also directly accessible via the exposed "props" field.
+///
+/// ```ignore
+/// #[derive(Properties)]
+/// struct Props {
+///     name: String
+///
+/// }
+///
+/// fn example(ctx: Context, props: &Props -> VNode {
+///     html! {
+///         <div> "Hello, {ctx.props.name}" </div>
+///     }
+/// }
+/// ```
+// todo: force lifetime of source into T as a valid lifetime too
+// it's definitely possible, just needs some more messing around
+pub struct Context<'src> {
+    pub idx: RefCell<usize>,
+
+    // pub scope: ScopeIdx,
+    pub scope: &'src Scope,
+
+    pub _p: std::marker::PhantomData<&'src ()>,
+}
+
+impl<'a> Context<'a> {
+    /// Access the children elements passed into the component
+    pub fn children(&self) -> Vec<VNode> {
+        todo!("Children API not yet implemented for component Context")
+    }
+
+    pub fn callback(&self, _f: impl Fn(()) + 'a) {}
+
+    /// Create a subscription that schedules a future render for the reference component
+    pub fn schedule_update(&self) -> impl Fn() -> () {
+        self.scope.event_queue.schedule_update(&self.scope)
+    }
+
+    /// Create a suspended component from a future.
+    ///
+    /// When the future completes, the component will be renderered
+    pub fn suspend<F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a>(
+        &self,
+        _fut: impl Future<Output = LazyNodes<'a, F>>,
+    ) -> VNode<'a> {
+        todo!()
+    }
+}
+
+impl<'scope> Context<'scope> {
+    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
+    ///
+    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
+    ///
+    /// ## Example
+    ///
+    /// ```ignore
+    /// fn Component(ctx: Context<Props>) -> VNode {
+    ///     // Lazy assemble the VNode tree
+    ///     let lazy_tree = html! {<div> "Hello World" </div>};
+    ///     
+    ///     // Actually build the tree and allocate it
+    ///     ctx.render(lazy_tree)
+    /// }
+    ///```
+    pub fn render<F: for<'b> FnOnce(&'b NodeCtx<'scope>) -> VNode<'scope> + 'scope>(
+        &self,
+        lazy_nodes: LazyNodes<'scope, F>,
+    ) -> DomTree {
+        let ctx = NodeCtx {
+            scope_ref: self.scope,
+            idx: 0.into(),
+        };
+
+        let safe_nodes: VNode<'scope> = lazy_nodes.into_vnode(&ctx);
+        let root: VNode<'static> = unsafe { std::mem::transmute(safe_nodes) };
+        DomTree { root }
+    }
+}
+
+type Hook = Pin<Box<dyn std::any::Any>>;
+
+impl<'scope> Context<'scope> {
+    /// Store a value between renders
+    ///
+    /// - Initializer: closure used to create the initial hook state
+    /// - Runner: closure used to output a value every time the hook is used
+    /// - Cleanup: closure used to teardown the hook once the dom is cleaned up
+    ///
+    /// ```ignore
+    /// // use_ref is the simplest way of storing a value between renders
+    /// pub fn use_ref<T: 'static>(initial_value: impl FnOnce() -> T + 'static) -> Rc<RefCell<T>> {
+    ///     use_hook(
+    ///         || Rc::new(RefCell::new(initial_value())),
+    ///         |state, _| state.clone(),
+    ///         |_| {},
+    ///     )
+    /// }
+    /// ```
+    pub fn use_hook<'c, InternalHookState: 'static, Output: 'scope>(
+        &'c self,
+
+        // The closure that builds the hook state
+        initializer: impl FnOnce() -> InternalHookState,
+
+        // The closure that takes the hookstate and returns some value
+        runner: impl FnOnce(&'scope mut InternalHookState) -> Output,
+
+        // The closure that cleans up whatever mess is left when the component gets torn down
+        // TODO: add this to the "clean up" group for when the component is dropped
+        _cleanup: impl FnOnce(InternalHookState),
+    ) -> Output {
+        let idx = *self.idx.borrow();
+
+        // Grab out the hook list
+        let mut hooks = self.scope.hooks.borrow_mut();
+
+        // If the idx is the same as the hook length, then we need to add the current hook
+        if idx >= hooks.len() {
+            let new_state = initializer();
+            hooks.push(Box::pin(new_state));
+        }
+
+        *self.idx.borrow_mut() += 1;
+
+        let stable_ref = hooks
+            .get_mut(idx)
+            .expect("Should not fail, idx is validated")
+            .as_mut();
+
+        let pinned_state = unsafe { Pin::get_unchecked_mut(stable_ref) };
+
+        let internal_state = pinned_state.downcast_mut::<InternalHookState>().expect(
+            r###"
+                Unable to retrive the hook that was initialized in this index.
+                Consult the `rules of hooks` to understand how to use hooks properly.
+
+                You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+            "###,
+        );
+
+        // We extend the lifetime of the internal state
+        runner(unsafe { &mut *(internal_state as *mut _) })
+    }
+}
+
+mod support {
+    use super::*;
+
+    // We actually allocate the properties for components in their parent's properties
+    // We then expose a handle to use those props for render in the form of "OpaqueComponent"
+    pub(crate) type OpaqueComponent<'a> = dyn for<'b> Fn(Context<'b>) -> DomTree + 'a;
+
+    #[derive(Debug, Default, Clone)]
+    pub struct EventQueue(pub(crate) Rc<RefCell<Vec<HeightMarker>>>);
+
+    impl EventQueue {
+        pub fn schedule_update(&self, source: &Scope) -> impl Fn() {
+            let inner = self.clone();
+            let marker = HeightMarker {
+                height: source.height,
+                idx: source.myidx,
+            };
+            move || inner.0.as_ref().borrow_mut().push(marker)
+        }
+    }
+
+    /// A helper type that lets scopes be ordered by their height
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) struct HeightMarker {
+        pub idx: ScopeIdx,
+        pub height: u32,
+    }
+
+    impl Ord for HeightMarker {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            self.height.cmp(&other.height)
+        }
+    }
+
+    impl PartialOrd for HeightMarker {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    // NodeCtx is used to build VNodes in the component's memory space.
+    // This struct adds metadata to the final DomTree about listeners, attributes, and children
+    #[derive(Clone)]
+    pub struct NodeCtx<'a> {
+        pub scope_ref: &'a Scope,
+        pub idx: RefCell<usize>,
+    }
+
+    impl<'a> NodeCtx<'a> {
+        pub fn bump(&self) -> &'a Bump {
+            &self.scope_ref.cur_frame().bump
+        }
+    }
+
+    impl Debug for NodeCtx<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            Ok(())
+        }
+    }
+}
+
+mod tests {
     use super::*;
 
     #[test]
@@ -634,12 +907,4 @@ mod test {
         });
         // let root = dom.components.get(dom.base_scope).unwrap();
     }
-
-    // // This marker is designed to ensure resources shared from one bump to another are handled properly
-    // // The underlying T may be already freed if there is an issue with our crate
-    // pub(crate) struct BumpResource<T: 'static> {
-    //     resource: T,
-    //     scope: ScopeIdx,
-    //     gen: u32,
-    // }
 }

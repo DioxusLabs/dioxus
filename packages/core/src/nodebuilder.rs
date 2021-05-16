@@ -3,11 +3,11 @@
 use std::{any::Any, borrow::BorrowMut, intrinsics::transmute, u128};
 
 use crate::{
-    context::NodeCtx,
     events::VirtualEvent,
     innerlude::{DomTree, Properties, VComponent, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::VElement,
+    virtual_dom::NodeCtx,
 };
 
 /// A virtual DOM element builder.
@@ -64,7 +64,7 @@ impl<'a, 'b>
     /// # fn flip_coin() -> bool { true }
     /// ```
     pub fn new(ctx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
-        let bump = ctx.bump;
+        let bump = ctx.bump();
         ElementBuilder {
             ctx,
             key: NodeKey::NONE,
@@ -286,17 +286,19 @@ where
     /// ```
     #[inline]
     pub fn finish(self) -> VNode<'a> {
-        let children: &'a Children = self.ctx.bump.alloc(self.children);
+        let bump = self.ctx.bump();
+
+        let children: &'a Children = bump.alloc(self.children);
         let children: &'a [VNode<'a>] = children.as_ref();
 
-        let listeners: &'a Listeners = self.ctx.bump.alloc(self.listeners);
+        let listeners: &'a Listeners = bump.alloc(self.listeners);
         let listeners: &'a [Listener<'a>] = listeners.as_ref();
 
-        let attributes: &'a Attributes = self.ctx.bump.alloc(self.attributes);
+        let attributes: &'a Attributes = bump.alloc(self.attributes);
         let attributes: &'a [Attribute<'a>] = attributes.as_ref();
 
         VNode::element(
-            self.ctx.bump,
+            bump,
             self.key,
             self.tag_name,
             listeners,
@@ -334,11 +336,13 @@ where
     ///     .finish();
     /// ```
     pub fn on(self, event: &'static str, callback: impl Fn(VirtualEvent) + 'a) -> Self {
+        let bump = &self.ctx.bump();
+
         let listener = Listener {
             event,
-            callback: self.ctx.bump.alloc(callback),
+            callback: bump.alloc(callback),
             id: *self.ctx.idx.borrow(),
-            scope: self.ctx.scope,
+            scope: self.ctx.scope_ref.myidx,
         };
         self.add_listener(listener)
     }
@@ -354,7 +358,11 @@ where
         // This is okay because the bump arena is stable
         self.listeners.last().map(|g| {
             let r = unsafe { std::mem::transmute::<&Listener<'a>, &Listener<'static>>(g) };
-            self.ctx.listeners.borrow_mut().push(r.callback as *const _);
+            self.ctx
+                .scope_ref
+                .listeners
+                .borrow_mut()
+                .push(r.callback as *const _);
         });
 
         self
@@ -615,6 +623,7 @@ pub fn virtual_child<'a, T: Properties + 'a>(
 ) -> VNode<'a> {
     // currently concerned about if props have a custom drop implementation
     // might override it with the props macro
-    let propsd: &'a mut _ = ctx.bump.alloc(p);
+    let bump = &ctx.bump();
+    let propsd: &'a mut _ = bump.alloc(p);
     VNode::Component(crate::nodes::VComponent::new(f, propsd, key))
 }

@@ -112,13 +112,13 @@ pub(crate) mod innerlude {
 /// Essential when working with the html! macro
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Properties};
-    pub use crate::context::Context;
     use crate::nodes;
+    pub use crate::virtual_dom::Context;
     pub use nodes::*;
 
     pub use crate::nodebuilder::LazyNodes;
 
-    pub use crate::context::NodeCtx;
+    pub use crate::virtual_dom::NodeCtx;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
     pub use crate::innerlude::FC;

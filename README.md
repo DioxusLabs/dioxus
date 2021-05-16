@@ -5,13 +5,11 @@
   </p>
 </div>
 
-<!-- # About -->
-
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 
 ```rust
-static Example: FC<()> = |ctx, props| {
+fn Example(ctx: Context, props: &()) -> DomTree {
     let selection = use_state(&ctx, || "...?");
 
     ctx.render(rsx! {
@@ -80,24 +78,3 @@ In other frameworks, the DOM will be updated after events from the page are sent
 
 In Dioxus, the user's bundle will link individual components on the page to the Liveview server. This ensures local events propogate through the page virtual dom if the server is not needed, keeping interactive latency low. This ensures the server load stays low, enabling a single server to handle tens of thousands of simultaneous clients.
 
-<!-- ## Dioxus LiveHost
-Dioxus LiveHost is a paid service that accelerates the deployment of Dioxus Apps. It provides CI/CD, testing, monitoring, scaling, and deployment specifically for Dioxus apps. 
-- It's the fastest way of launching your next internal tool, side-project, or startup. 🚀 -->
-
-
-<!-- Dioxus LiveHost is a paid service dedicated to hosting your Dioxus Apps - whether they be server-rendered, wasm-only, or a liveview. It's  -->
-
-<!-- LiveHost enables a wide set of features: -->
-<!-- 
-- Versioned combined frontend and backend with unique access links
-- Builtin CI/CD for all supported Dioxus platforms (macOS, Windows, Android, iOS, server, WASM, etc)
-- Managed and pluggable storage database backends (PostgresSQL, Redis)
-- Serverless support for minimal latency
-- Analytics
-- Lighthouse optimization
-- On-premise support (see license terms)
-- Cloudfare/DDoS protection integrations
-- Web-based simulators for iOS, Android, Desktop
-- Team + company management -->
-
-<!-- For small teams, LiveHost is free 🎉. Check out the pricing page to see if Dioxus LiveHost is good fit for your team. -->

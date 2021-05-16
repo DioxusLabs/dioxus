@@ -20,7 +20,7 @@ generational-arena = { version = "0.2.8", features = ["serde"] }
 bumpalo = { version = "3.6.0", features = ["collections", "boxed"] }
 
 # custom error type
-thiserror = "1.0.23"
+thiserror = "1"
 
 # faster hashmaps
 fxhash = "0.2.1"
@@ -29,9 +29,10 @@ fxhash = "0.2.1"
 longest-increasing-subsequence = "0.1.0"
 
 # internall used
-log = "0.4.14"
+log = "0.4"
 
-serde = { version = "1.0.123", features = ["derive"], optional = true }
+# Serialize the Edits for use in Webview/Liveview instances
+serde = { version = "1", features = ["derive"], optional = true }
 
 [features]
-default = ["serde"]
+default = []

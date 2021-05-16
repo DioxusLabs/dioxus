@@ -58,8 +58,8 @@ pub mod on {
 
     use crate::{
         builder::ElementBuilder,
-        context::NodeCtx,
         innerlude::{Attribute, Listener, VNode},
+        virtual_dom::NodeCtx,
     };
 
     use super::VirtualEvent;
@@ -77,11 +77,12 @@ pub mod on {
                         c: &'_ NodeCtx<'a>,
                         callback: impl Fn($eventdata) + 'a,
                     ) -> Listener<'a> {
+                        let bump = &c.bump();
                         Listener {
                             event: stringify!($name),
                             id: *c.idx.borrow(),
-                            scope: c.scope,
-                            callback: c.bump.alloc(move |evt: VirtualEvent| match evt {
+                            scope: c.scope_ref.myidx,
+                            callback: bump.alloc(move |evt: VirtualEvent| match evt {
                                 VirtualEvent::$eventdata(event) => callback(event),
                                 _ => {
                                     unreachable!("Downcasted VirtualEvent to wrong event type - this is a bug!")

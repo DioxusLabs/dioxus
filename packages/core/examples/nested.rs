@@ -17,7 +17,7 @@ static Header: FC<()> = |ctx, props| {
             .child(VNode::Component(VComponent::new(
                 Bottom,
                 //
-                c.bump.alloc(()),
+                c.bump().alloc(()),
                 None,
             )))
             .finish()

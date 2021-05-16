@@ -51,7 +51,7 @@ impl ToTokens for RsxRender {
         let inner = &self.root;
         let output = quote! {
             dioxus::prelude::LazyNodes::new(move |ctx|{
-                let bump = ctx.bump;
+                let bump = &ctx.bump();
                 #inner
              })
         };

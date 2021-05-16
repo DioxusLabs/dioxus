@@ -22,7 +22,7 @@ struct ExampleProps {
 }
 
 static Example: FC<ExampleProps> = |ctx, props| {
-    let name = use_state_new(&ctx, move || props.initial_name.to_string());
+    let name = use_state_new(&ctx, move || props.initial_name);
 
     ctx.render(rsx! {
         div { 
@@ -36,9 +36,11 @@ static Example: FC<ExampleProps> = |ctx, props| {
                 "Hello, {name}"
             }
             
-            CustomButton { name: "Jack!", handler: move |_| name.set("Jack".to_string()) }
-            CustomButton { name: "Jill!", handler: move |_| name.set("Jill".to_string()) }
-            CustomButton { name: "Bob!", handler: move |_| name.set("Bob".to_string())}
+            CustomButton { name: "Jack!", handler: move |_| name.set("Jack") }
+            CustomButton { name: "Jill!", handler: move |_| name.set("Jill") }
+            CustomButton { name: "Bob!", handler: move |_| name.set("Bob")}
+            Placeholder {val: name}
+            Placeholder {val: name}
         }
     })
 };
@@ -65,4 +67,17 @@ impl<F: Fn(MouseEvent)> PartialEq for ButtonProps<'_, F> {
     fn eq(&self, other: &Self) -> bool {
         false
     }
+}
+
+
+#[derive(Props, PartialEq)]
+struct PlaceholderProps {
+    val: &'static str
+}
+fn Placeholder(ctx: Context, props: &PlaceholderProps) -> DomTree {
+    ctx.render(rsx!{
+        div {
+            "child: {props.val}"
+        }
+    })
 }
