@@ -9,14 +9,7 @@ struct SsrRenderer {
 
 impl Display for SsrRenderer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let node = self
-            .dom
-            .base_scope()
-            // .components
-            // .get(self.dom.base_scope)
-            // .unwrap()
-            .frames
-            .current_head_node();
+        let node = self.dom.base_scope().frames.current_head_node();
 
         html_render(&self.dom, node, f)
     }
@@ -45,7 +38,12 @@ fn html_render(
         VNode::Suspended => todo!(),
         VNode::Component(vcomp) => {
             let id = vcomp.ass_scope.as_ref().borrow().unwrap();
-            let new_node = dom.components.get(id).unwrap().frames.current_head_node();
+            let new_node = dom
+                .components
+                .try_get(id)
+                .unwrap()
+                .frames
+                .current_head_node();
             html_render(&dom, new_node, f)
         }
     }

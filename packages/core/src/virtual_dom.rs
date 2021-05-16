@@ -41,7 +41,7 @@ pub struct VirtualDom {
     ///
     /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
     /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    components: ScopeArena,
+    pub components: ScopeArena,
 
     /// The index of the root component
     /// Should always be the first (gen0, id0)
