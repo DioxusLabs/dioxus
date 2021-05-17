@@ -22,9 +22,9 @@ use crate::{arena::ScopeArena, innerlude::*};
 use bumpalo::Bump;
 use generational_arena::Arena;
 use std::{
-    any::TypeId,
+    any::{Any, TypeId},
     cell::{RefCell, UnsafeCell},
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     future::Future,
     pin::Pin,
@@ -49,6 +49,10 @@ pub struct VirtualDom {
 
     /// All components dump their updates into a queue to be processed
     pub(crate) event_queue: EventQueue,
+
+    /// Global contexts shared within the VirtualDOM
+    /// These are anchored to individual scopes, making them inaccessible if a context is created from a sibiling
+    pub(crate) contexts: HashMap<ContextId, Box<dyn Any>>,
 
     /// a strong allocation to the "caller" for the original component and its props
     #[doc(hidden)]
@@ -152,6 +156,7 @@ impl VirtualDom {
             _root_caller,
             base_scope,
             event_queue,
+            contexts: Default::default(),
             components: ScopeArena::new(components),
             _root_prop_type: TypeId::of::<P>(),
         }
@@ -720,8 +725,6 @@ impl<'a> Context<'a> {
         todo!("Children API not yet implemented for component Context")
     }
 
-    pub fn callback(&self, _f: impl Fn(()) + 'a) {}
-
     /// Create a subscription that schedules a future render for the reference component
     pub fn schedule_update(&self) -> impl Fn() -> () {
         self.scope.event_queue.schedule_update(&self.scope)
@@ -763,12 +766,15 @@ impl<'scope> Context<'scope> {
             idx: 0.into(),
         };
 
-        let safe_nodes: VNode<'scope> = lazy_nodes.into_vnode(&ctx);
-        let root: VNode<'static> = unsafe { std::mem::transmute(safe_nodes) };
-        DomTree { root }
+        DomTree {
+            root: unsafe {
+                std::mem::transmute::<VNode<'scope>, VNode<'static>>(lazy_nodes.into_vnode(&ctx))
+            },
+        }
     }
 }
 
+// We need to pin the hook so it doesn't move as we initialize the list of hooks
 type Hook = Pin<Box<dyn std::any::Any>>;
 
 impl<'scope> Context<'scope> {
@@ -833,6 +839,16 @@ impl<'scope> Context<'scope> {
         // We extend the lifetime of the internal state
         runner(unsafe { &mut *(internal_state as *mut _) })
     }
+
+    fn create_context_provider<T: 'static>(&self, init: impl Fn() -> T) {}
+
+    fn try_consume_context<T: 'static>(&self) -> Result<&T> {
+        todo!()
+    }
+
+    fn consume_context<T: 'static>(&self) -> &T {
+        self.try_consume_context().unwrap()
+    }
 }
 
 mod support {
@@ -893,6 +909,18 @@ mod support {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             Ok(())
         }
+    }
+
+    #[derive(Debug, PartialEq, Hash)]
+    pub struct ContextId {
+        // Which component is the scope in
+        original: ScopeIdx,
+
+        // What's the height of the scope
+        height: u32,
+
+        // Which scope is it (in order)
+        id: u32,
     }
 }
 

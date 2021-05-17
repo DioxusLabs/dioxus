@@ -8,4 +8,35 @@
 
 use dioxus::prelude::*;
 
-fn main() {}
+fn main() {
+    diouxs_webview::launch(App).run().await
+}
+
+fn App(ctx: Context, props: &()) -> DomTree {
+    let router = use_router(&ctx, |router| {
+        //
+        router.get("/dogs/:dogId/").render(|ctx, request| {
+            rsx! {
+                div {
+
+                }
+            }
+        });
+
+        router.get("/cats/:catId/").render(|ctx, request| {
+            rsx! {
+                div {
+
+                }
+            }
+        });
+    });
+
+    ctx.render(rsx! {
+        div {
+            a { href="/dogs/"}
+            a { href="/cats/"}
+            {router.render()}
+        }
+    })
+}
