@@ -11,20 +11,21 @@ struct Props {
 
 #[allow(unused)]
 static Example: FC<Props> = |ctx, props| {
-    let value = ctx.use_context(|c: &SomeContext| c.items.last().unwrap());
+    todo!()
+    // let value = ctx.use_context(|c: &SomeContext| c.items.last().unwrap());
 
-    ctx.render(LazyNodes::new(move |bump| {
-        builder::ElementBuilder::new(bump, "button")
-            .on("click", move |_| {
-                println!("Value is {}", props.name);
-                println!("Value is {}", value.as_str());
-                println!("Value is {}", *value);
-            })
-            .on("click", move |_| {
-                println!("Value is {}", props.name);
-            })
-            .finish()
-    }))
+    // ctx.render(LazyNodes::new(move |bump| {
+    //     builder::ElementBuilder::new(bump, "button")
+    //         .on("click", move |_| {
+    //             println!("Value is {}", props.name);
+    //             println!("Value is {}", value.as_str());
+    //             println!("Value is {}", *value);
+    //         })
+    //         .on("click", move |_| {
+    //             println!("Value is {}", props.name);
+    //         })
+    //         .finish()
+    // }))
     // ctx.render(html! {
     //     <div>
     //         <button onclick={move |_| println!("Value is {}", value)} />

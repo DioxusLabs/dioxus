@@ -55,14 +55,14 @@ impl<T> Deref for RemoteState<T> {
     }
 }
 
-impl<'a> crate::virtual_dom::Context<'a> {
-    // impl<'a, P> super::Context<'a, P> {
-    pub fn use_context<I, O>(&'a self, _narrow: impl Fn(&'_ I) -> &'_ O) -> RemoteState<O> {
-        todo!()
-    }
+// impl<'a> crate::virtual_dom::Context<'a> {
+//     // impl<'a, P> super::Context<'a, P> {
+//     pub fn use_context<I, O>(&'a self, _narrow: impl Fn(&'_ I) -> &'_ O) -> RemoteState<O> {
+//         todo!()
+//     }
 
-    pub fn create_context<T: 'static>(&self, creator: impl FnOnce() -> T) {}
-}
+//     pub fn create_context<T: 'static>(&self, creator: impl FnOnce() -> T) {}
+// }
 
 /// # SAFETY ALERT
 ///

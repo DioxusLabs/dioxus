@@ -10,6 +10,9 @@ pub enum Error {
     #[error("Fatal Internal Error: {0}")]
     FatalInternal(&'static str),
 
+    #[error("Context is missing")]
+    MissingSharedContext,
+
     #[error("No event to progress")]
     NoEvent,
 

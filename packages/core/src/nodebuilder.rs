@@ -341,7 +341,7 @@ where
         let listener = Listener {
             event,
             callback: bump.alloc(callback),
-            id: *self.ctx.idx.borrow(),
+            id: *self.ctx.listener_id.borrow(),
             scope: self.ctx.scope_ref.myidx,
         };
         self.add_listener(listener)
@@ -351,7 +351,7 @@ where
         self.listeners.push(listener);
 
         // bump the context id forward
-        *self.ctx.idx.borrow_mut() += 1;
+        *self.ctx.listener_id.borrow_mut() += 1;
 
         // Add this listener to the context list
         // This casts the listener to a self-referential pointer

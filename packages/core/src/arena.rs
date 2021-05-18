@@ -1,10 +1,17 @@
-use std::{cell::UnsafeCell, collections::HashMap};
+use std::{
+    cell::{RefCell, UnsafeCell},
+    collections::HashMap,
+    rc::Rc,
+};
 
 use generational_arena::Arena;
 
 use crate::innerlude::*;
 
-pub struct ScopeArena {
+#[derive(Clone)]
+pub struct ScopeArena(Rc<RefCell<ScopeArenaInner>>);
+
+struct ScopeArenaInner {
     pub(crate) arena: UnsafeCell<Arena<Scope>>,
     locks: HashMap<ScopeIdx, MutStatus>,
 }
@@ -16,10 +23,10 @@ enum MutStatus {
 
 impl ScopeArena {
     pub fn new(arena: Arena<Scope>) -> Self {
-        Self {
+        ScopeArena(Rc::new(RefCell::new(ScopeArenaInner {
             arena: UnsafeCell::new(arena),
             locks: Default::default(),
-        }
+        })))
     }
 
     pub fn try_get(&self, idx: ScopeIdx) -> Result<&Scope> {

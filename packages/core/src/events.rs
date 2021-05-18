@@ -80,7 +80,7 @@ pub mod on {
                         let bump = &c.bump();
                         Listener {
                             event: stringify!($name),
-                            id: *c.idx.borrow(),
+                            id: *c.listener_id.borrow(),
                             scope: c.scope_ref.myidx,
                             callback: bump.alloc(move |evt: VirtualEvent| match evt {
                                 VirtualEvent::$eventdata(event) => callback(event),
