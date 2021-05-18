@@ -29,12 +29,20 @@ impl ScopeArena {
         })))
     }
 
+    /// THIS METHOD IS CURRENTLY UNSAFE
+    /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
     pub fn try_get(&self, idx: ScopeIdx) -> Result<&Scope> {
-        todo!()
+        let inner = unsafe { &*self.0.borrow().arena.get() };
+        let scope = inner.get(idx);
+        scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
     }
 
+    /// THIS METHOD IS CURRENTLY UNSAFE
+    /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
     pub fn try_get_mut(&self, idx: ScopeIdx) -> Result<&mut Scope> {
-        todo!()
+        let inner = unsafe { &mut *self.0.borrow().arena.get() };
+        let scope = inner.get_mut(idx);
+        scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
     }
 
     fn inner(&self) -> &Arena<Scope> {
@@ -45,8 +53,12 @@ impl ScopeArena {
         todo!()
     }
 
+    /// THIS METHOD IS CURRENTLY UNSAFE
+    /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
     pub fn with<T>(&self, f: impl FnOnce(&mut Arena<Scope>) -> T) -> Result<T> {
-        todo!()
+        let inner = unsafe { &mut *self.0.borrow().arena.get() };
+        Ok(f(inner))
+        // todo!()
     }
 
     unsafe fn inner_unchecked<'s>() -> &'s mut Arena<Scope> {

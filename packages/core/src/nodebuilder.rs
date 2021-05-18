@@ -342,7 +342,7 @@ where
             event,
             callback: bump.alloc(callback),
             id: *self.ctx.listener_id.borrow(),
-            scope: self.ctx.scope_ref.myidx,
+            scope: self.ctx.scope_ref.arena_idx,
         };
         self.add_listener(listener)
     }

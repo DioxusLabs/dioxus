@@ -277,13 +277,13 @@ impl VirtualDom {
             // Start a new mutable borrow to components
             // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
 
-            let component = self.components.try_get_mut(update.idx).unwrap();
+            let mut cur_component = self.components.try_get_mut(update.idx).unwrap();
 
-            component.run_scope()?;
+            cur_component.run_scope()?;
 
-            diff_machine.diff_node(component.old_frame(), component.next_frame());
+            diff_machine.diff_node(cur_component.old_frame(), cur_component.next_frame());
 
-            cur_height = component.height;
+            cur_height = cur_component.height;
 
             log::debug!(
                 "Processing update: {:#?} with height {}",
@@ -315,7 +315,7 @@ impl VirtualDom {
                                 Scope::new(
                                     caller,
                                     f,
-                                    None,
+                                    Some(cur_component.arena_idx),
                                     cur_height + 1,
                                     self.event_queue.clone(),
                                     self.components.clone(),
@@ -323,20 +323,23 @@ impl VirtualDom {
                             })
                         })?;
 
+                        cur_component.children.borrow_mut().insert(idx);
+
                         // Grab out that component
-                        let component = self.components.try_get_mut(idx).unwrap();
+                        let new_component = self.components.try_get_mut(idx).unwrap();
 
                         // Actually initialize the caller's slot with the right address
                         *stable_scope_addr.upgrade().unwrap().as_ref().borrow_mut() = Some(idx);
 
                         // Run the scope for one iteration to initialize it
-                        component.run_scope()?;
+                        new_component.run_scope()?;
 
                         // Navigate the diff machine to the right point in the output dom
                         diff_machine.change_list.load_known_root(id);
 
                         // And then run the diff algorithm
-                        diff_machine.diff_node(component.old_frame(), component.next_frame());
+                        diff_machine
+                            .diff_node(new_component.old_frame(), new_component.next_frame());
 
                         // Finally, insert this node as a seen node.
                         seen_nodes.insert(idx);
@@ -439,6 +442,8 @@ pub struct Scope {
     // The parent's scope ID
     pub parent: Option<ScopeIdx>,
 
+    pub children: RefCell<HashSet<ScopeIdx>>,
+
     // A reference to the list of components.
     // This lets us traverse the component list whenever we need to access our parent or children.
     arena_link: ScopeArena,
@@ -446,7 +451,7 @@ pub struct Scope {
     pub shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
     // Our own ID accessible from the component map
-    pub myidx: ScopeIdx,
+    pub arena_idx: ScopeIdx,
 
     pub height: u32,
 
@@ -521,8 +526,9 @@ impl Scope {
             frames: ActiveFrame::new(),
             listeners: Default::default(),
             hookidx: Default::default(),
+            children: Default::default(),
             parent,
-            myidx,
+            arena_idx: myidx,
             height,
             event_queue,
             arena_link,
@@ -548,6 +554,8 @@ impl Scope {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         self.frames.next().bump.reset();
+
+        *self.hookidx.borrow_mut() = 0;
 
         let caller = self
             .caller
@@ -777,23 +785,24 @@ impl Scope {
         let mut ctxs = self.shared_contexts.borrow_mut();
         let ty = TypeId::of::<T>();
 
-        let initialized = self.use_hook(
+        let is_initialized = self.use_hook(
             || false,
             |s| {
-                let i = *s;
+                let i = s.clone();
                 *s = true;
                 i
             },
             |_| {},
         );
 
-        match (initialized, ctxs.contains_key(&ty)) {
+        match (is_initialized, ctxs.contains_key(&ty)) {
             // Do nothing, already initialized and already exists
             (true, true) => {}
 
             // Needs to be initialized
             (false, false) => {
-                ctxs.insert(ty, Rc::new(init())).unwrap();
+                log::debug!("Initializing context...");
+                ctxs.insert(ty, Rc::new(init()));
             }
 
             (false, true) => panic!("Cannot initialize two contexts of the same type"),
@@ -807,6 +816,7 @@ impl Scope {
         let mut scope = Some(self);
 
         while let Some(inner) = scope {
+            log::debug!("Searching {:#?} for valid shared_context", inner.arena_idx);
             let shared_contexts = inner.shared_contexts.borrow();
             if let Some(shared_ctx) = shared_contexts.get(&ty) {
                 return Ok(shared_ctx.clone().downcast().unwrap());
@@ -849,7 +859,7 @@ impl EventQueue {
         let inner = self.clone();
         let marker = HeightMarker {
             height: source.height,
-            idx: source.myidx,
+            idx: source.arena_idx,
         };
         move || inner.0.as_ref().borrow_mut().push(marker)
     }

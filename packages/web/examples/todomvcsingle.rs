@@ -1,68 +1,24 @@
+#![allow(non_snake_case)]
 use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
 
 static APP_STYLE: &'static str = include_str!("./todomvc/style.css");
 
-fn main() {
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
-}
-// =======================
-// state-related items
-// =======================
 pub static TODOS: AtomFamily<uuid::Uuid, TodoItem> = atom_family(|_| {});
 pub static FILTER: Atom<FilterState> = atom(|_| FilterState::All);
 pub static SHOW_ALL_TODOS: selector<bool> = selector(|g| g.getter(|f| false));
 
-#[derive(PartialEq)]
-pub enum FilterState {
-    All,
-    Active,
-    Completed,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct TodoItem {
-    pub id: uuid::Uuid,
-    pub checked: bool,
-    pub contents: String,
-}
-
-impl RecoilContext<()> {
-    pub fn add_todo(&self, contents: String) {}
-    pub fn remove_todo(&self, id: &uuid::Uuid) {}
-    pub fn select_all_todos(&self) {}
-    pub fn toggle_todo(&self, id: &uuid::Uuid) {}
-    pub fn clear_completed(&self) {}
-    pub fn set_filter(&self, filter: &FilterState) {}
-}
-
-// =======================
-// Components
-// =======================
-pub fn App(ctx: Context, props: &()) -> DomTree {
-    ctx.render(rsx! {
-        div {
-            id: "app"
-            style { "{APP_STYLE}" }
-
-            // list
-            TodoList {}
-
-            // footer
-            footer {
-                class: "info"
-                p {"Double-click to edit a todo"}
-                p {
-                    "Created by "
-                    a { "jkelleyrtp", href: "http://github.com/jkelleyrtp/" }
-                }
-                p {
-                    "Part of "
-                    a { "TodoMVC", href: "http://todomvc.com" }
-                }
+fn main() {
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, props| {
+        ctx.render(rsx! {
+            div {
+                id: "app",
+                style { "{APP_STYLE}" }
+                TodoList {}
+                Footer {}
             }
-        }
-    })
+        })
+    }));
 }
 
 pub fn TodoList(ctx: Context, props: &()) -> DomTree {
@@ -125,11 +81,11 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
                 type: "checkbox"
                 "{todo.checked}"
             }
-            {is_editing.then(|| rsx!(
+           {is_editing.then(|| rsx!(
                 input {
                     value: "{contents}"
                 }
-            ))}
+           ))}
         }
     ))
 }
@@ -173,6 +129,46 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
             }
         }
     })
+}
+
+pub fn Footer(ctx: Context, props: &()) -> DomTree {
+    ctx.render(rsx! {
+        footer {
+            class: "info"
+            p {"Double-click to edit a todo"}
+            p {
+                "Created by "
+                a { "jkelleyrtp", href: "http://github.com/jkelleyrtp/" }
+            }
+            p {
+                "Part of "
+                a { "TodoMVC", href: "http://todomvc.com" }
+            }
+        }
+    })
+}
+
+#[derive(PartialEq)]
+pub enum FilterState {
+    All,
+    Active,
+    Completed,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TodoItem {
+    pub id: uuid::Uuid,
+    pub checked: bool,
+    pub contents: String,
+}
+
+impl RecoilContext<()> {
+    pub fn add_todo(&self, contents: String) {}
+    pub fn remove_todo(&self, id: &uuid::Uuid) {}
+    pub fn select_all_todos(&self) {}
+    pub fn toggle_todo(&self, id: &uuid::Uuid) {}
+    pub fn clear_completed(&self) {}
+    pub fn set_filter(&self, filter: &FilterState) {}
 }
 
 pub use recoil::*;

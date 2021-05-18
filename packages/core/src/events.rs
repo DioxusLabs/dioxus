@@ -81,7 +81,7 @@ pub mod on {
                         Listener {
                             event: stringify!($name),
                             id: *c.listener_id.borrow(),
-                            scope: c.scope_ref.myidx,
+                            scope: c.scope_ref.arena_idx,
                             callback: bump.alloc(move |evt: VirtualEvent| match evt {
                                 VirtualEvent::$eventdata(event) => callback(event),
                                 _ => {
