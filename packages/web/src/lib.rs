@@ -100,7 +100,7 @@ impl WebsysRenderer {
             log::debug!("Received edits: {:#?}", edits);
 
             for edit in &edits {
-                log::debug!("edit stream {:?}", edit);
+                // log::debug!("edit stream {:?}", edit);
                 // log::debug!("Stream stack {:#?}", patch_machine.stack.top());
                 patch_machine.handle_edit(edit);
             }

@@ -26,7 +26,7 @@ use std::{
     any::{Any, TypeId},
     borrow::{Borrow, BorrowMut},
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     fmt::Debug,
     future::Future,
     pin::Pin,
@@ -277,7 +277,7 @@ impl VirtualDom {
             // Start a new mutable borrow to components
             // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
 
-            let mut cur_component = self.components.try_get_mut(update.idx).unwrap();
+            let cur_component = self.components.try_get_mut(update.idx).unwrap();
 
             cur_component.run_scope()?;
 
@@ -323,7 +323,12 @@ impl VirtualDom {
                             })
                         })?;
 
-                        cur_component.children.borrow_mut().insert(idx);
+                        {
+                            let cur_component = self.components.try_get_mut(update.idx).unwrap();
+                            let mut ch = cur_component.children.borrow_mut();
+                            ch.insert(idx);
+                            std::mem::drop(ch);
+                        }
 
                         // Grab out that component
                         let new_component = self.components.try_get_mut(idx).unwrap();
@@ -415,8 +420,33 @@ impl VirtualDom {
                         root_id,
                         stable_scope_addr,
                     } => {
-                        unimplemented!("This feature (Remove) is unimplemented")
+                        let id = stable_scope_addr
+                            .upgrade()
+                            .unwrap()
+                            .as_ref()
+                            .borrow()
+                            .unwrap();
+
+                        log::warn!("Removing node {:#?}", id);
+
+                        // This would normally be recursive but makes sense to do linear to
+                        let mut children_to_remove = VecDeque::new();
+                        children_to_remove.push_back(id);
+
+                        // Accumulate all the child components that need to be removed
+                        while let Some(child_id) = children_to_remove.pop_back() {
+                            let comp = self.components.try_get(child_id).unwrap();
+                            let children = comp.children.borrow();
+                            for child in children.iter() {
+                                children_to_remove.push_front(*child);
+                            }
+                            log::debug!("Removing component: {:#?}", child_id);
+                            self.components
+                                .with(|components| components.remove(child_id).unwrap())
+                                .unwrap();
+                        }
                     }
+
                     LifeCycleEvent::Replace {
                         caller,
                         root_id: id,
@@ -442,6 +472,8 @@ pub struct Scope {
     // The parent's scope ID
     pub parent: Option<ScopeIdx>,
 
+    // IDs of children that this scope has created
+    // This enables us to drop the children and their children when this scope is destroyed
     pub children: RefCell<HashSet<ScopeIdx>>,
 
     // A reference to the list of components.

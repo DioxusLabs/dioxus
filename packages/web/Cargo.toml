@@ -21,6 +21,7 @@ console_error_panic_hook = "0.1.6"
 generational-arena = "0.2.8"
 wasm-bindgen-test = "0.3.21"
 once_cell = "1.7.2"
+recoil = { path = "../recoil" }
 
 # wasm-bindgen = "0.2.70"
 # futures = "0.3.12"

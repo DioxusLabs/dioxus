@@ -1,30 +1,113 @@
+//! Example: TODOVMC - One file
+//! ---------------------------
+//! This example shows how to build a one-file TODO MVC app with Dioxus and Recoil.
+//! This project is confined to a single file to showcase the suggested patterns
+//! for building a small but mighty UI with Dioxus without worrying about project structure.
+//!
+//! If you want an example on recommended project structure, check out the TodoMVC folder
+//!
+//! Here, we show to use Dioxus' Recoil state management solution to simplify app logic
+
 #![allow(non_snake_case)]
-use dioxus_core::prelude::*;
-use dioxus_web::WebsysRenderer;
+use dioxus_web::dioxus::prelude::*;
+use recoil::*;
+use std::collections::HashMap;
+use uuid::Uuid;
 
-static APP_STYLE: &'static str = include_str!("./todomvc/style.css");
-
-pub static TODOS: AtomFamily<uuid::Uuid, TodoItem> = atom_family(|_| {});
-pub static FILTER: Atom<FilterState> = atom(|_| FilterState::All);
-pub static SHOW_ALL_TODOS: selector<bool> = selector(|g| g.getter(|f| false));
+const APP_STYLE: &'static str = include_str!("./todomvc/style.css");
 
 fn main() {
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, props| {
-        ctx.render(rsx! {
-            div {
-                id: "app",
-                style { "{APP_STYLE}" }
-                TodoList {}
-                Footer {}
+    wasm_bindgen_futures::spawn_local(dioxus_web::WebsysRenderer::start(App));
+}
+
+// Declare our global app state
+const TODO_LIST: Atom<HashMap<Uuid, TodoItem>> = atom(|_| Default::default());
+const FILTER: Atom<FilterState> = atom(|_| FilterState::All);
+const TODOS_LEFT: selector<usize> = selector(|api| api.get(&TODO_LIST).len());
+
+// Implement a simple abstraction over sets/gets of multiple atoms
+struct TodoManager(RecoilContext);
+impl TodoManager {
+    fn add_todo(&self, contents: String) {
+        let item = TodoItem {
+            checked: false,
+            contents,
+            id: Uuid::new_v4(),
+        };
+        self.0.modify(&TODO_LIST, move |list| {
+            list.insert(item.id, item);
+        });
+    }
+    fn remove_todo(&self, id: &Uuid) {
+        self.0.modify(&TODO_LIST, move |list| {
+            list.remove(id);
+        })
+    }
+    fn select_all_todos(&self) {
+        self.0.modify(&TODO_LIST, move |list| {
+            for item in list.values_mut() {
+                item.checked = true;
             }
         })
-    }));
+    }
+    fn toggle_todo(&self, id: &Uuid) {
+        self.0.modify(&TODO_LIST, move |list| {
+            list.get_mut(id).map(|item| item.checked = !item.checked)
+        });
+    }
+    fn clear_completed(&self) {
+        self.0.modify(&TODO_LIST, move |list| {
+            *list = list.drain().filter(|(_, item)| !item.checked).collect();
+        })
+    }
+    fn set_filter(&self, filter: &FilterState) {
+        self.0.modify(&FILTER, move |f| *f = *filter);
+    }
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum FilterState {
+    All,
+    Active,
+    Completed,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TodoItem {
+    pub id: Uuid,
+    pub checked: bool,
+    pub contents: String,
+}
+
+fn App(ctx: Context, props: &()) -> DomTree {
+    init_recoil_root(ctx);
+
+    ctx.render(rsx! {
+        div { id: "app", style { "{APP_STYLE}" }
+            TodoList {}
+            Footer {}
+        }
+    })
 }
 
 pub fn TodoList(ctx: Context, props: &()) -> DomTree {
-    let (draft, set_draft) = use_state(&ctx, || "".to_string());
-    let (todos, _) = use_state(&ctx, || Vec::<TodoItem>::new());
+    let draft = use_state_new(&ctx, || "".to_string());
+    let todos = use_atom(&ctx, &TODO_LIST);
     let filter = use_atom(&ctx, &FILTER);
+
+    let todolist = todos
+        .values()
+        .filter(|item| match filter {
+            FilterState::All => true,
+            FilterState::Active => !item.checked,
+            FilterState::Completed => item.checked,
+        })
+        .map(|item| {
+            rsx!(TodoEntry {
+                key: "{order}",
+                id: item.id,
+            })
+        });
 
     ctx.render(rsx! {
         div {
@@ -35,43 +118,26 @@ pub fn TodoList(ctx: Context, props: &()) -> DomTree {
                     class: "new-todo"
                     placeholder: "What needs to be done?"
                     value: "{draft}"
-                    oninput: move |evt| set_draft(evt.value)
+                    oninput: move |evt| draft.set(evt.value)
                 }
             }
+            {todolist}
 
-            { // list
-                todos
-                .iter()
-                .filter(|item| match filter {
-                    FilterState::All => true,
-                    FilterState::Active => !item.checked,
-                    FilterState::Completed => item.checked,
-                })
-                .map(|item| {
-                    rsx!(TodoEntry {
-                        key: "{order}",
-                        id: item.id,
-                    })
-                })
-            }
-
-            // filter toggle (show only if the list isn't empty)
-            {(!todos.is_empty()).then(||
-                rsx!( FilterToggles {})
-            )}
+            // rsx! accepts optionals, so we suggest the `then` method in place of ternary
+            {(!todos.is_empty()).then(|| rsx!( FilterToggles {}) )}
         }
     })
 }
 
 #[derive(PartialEq, Props)]
 pub struct TodoEntryProps {
-    id: uuid::Uuid,
+    id: Uuid,
 }
 
 pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    let todo = use_atom_family(&ctx, &TODOS, props.id);
-    let contents = "";
+    let todo = use_atom(&ctx, &TODO_LIST).get(&props.id).unwrap();
+    // let todo = use_atom_family(&ctx, &TODOS, props.id);
 
     ctx.render(rsx! (
         li {
@@ -83,7 +149,7 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
             }
            {is_editing.then(|| rsx!(
                 input {
-                    value: "{contents}"
+                    value: "{todo.contents}"
                 }
            ))}
         }
@@ -91,8 +157,8 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
 }
 
 pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
-    let reducer = recoil::use_callback(&ctx, || ());
-    let items_left = recoil::use_atom_family(&ctx, &TODOS, uuid::Uuid::new_v4());
+    let reducer = use_recoil_context::<TodoManager>(ctx);
+    let items_left = use_selector(ctx, &TODOS_LEFT);
 
     let toggles = [
         ("All", "", FilterState::All),
@@ -105,19 +171,20 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
             li {
                 class: "{name}"
                 a {
-                    href: "{path}"
-                    onclick: move |_| reducer.set_filter(&filter)
+                    href: "{path}",
+                    onclick: move |_| reducer.set_filter(&filter),
                     "{name}"
                 }
             }
         )
     });
 
-    // todo
-    let item_text = "";
-    let items_left = "";
+    let item_text = match items_left {
+        1 => "item",
+        _ => "items",
+    };
 
-    ctx.render(rsx! {
+    rsx! { in ctx,
         footer {
             span {
                 strong {"{items_left}"}
@@ -128,11 +195,11 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
                 {toggles}
             }
         }
-    })
+    }
 }
 
 pub fn Footer(ctx: Context, props: &()) -> DomTree {
-    ctx.render(rsx! {
+    rsx!( in ctx,
         footer {
             class: "info"
             p {"Double-click to edit a todo"}
@@ -145,134 +212,5 @@ pub fn Footer(ctx: Context, props: &()) -> DomTree {
                 a { "TodoMVC", href: "http://todomvc.com" }
             }
         }
-    })
-}
-
-#[derive(PartialEq)]
-pub enum FilterState {
-    All,
-    Active,
-    Completed,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct TodoItem {
-    pub id: uuid::Uuid,
-    pub checked: bool,
-    pub contents: String,
-}
-
-impl RecoilContext<()> {
-    pub fn add_todo(&self, contents: String) {}
-    pub fn remove_todo(&self, id: &uuid::Uuid) {}
-    pub fn select_all_todos(&self) {}
-    pub fn toggle_todo(&self, id: &uuid::Uuid) {}
-    pub fn clear_completed(&self) {}
-    pub fn set_filter(&self, filter: &FilterState) {}
-}
-
-pub use recoil::*;
-mod recoil {
-    use dioxus_core::context::Context;
-
-    pub struct RecoilContext<T: 'static> {
-        _inner: T,
-    }
-
-    impl<T: 'static> RecoilContext<T> {
-        /// Get the value of an atom. Returns a reference to the underlying data.
-
-        pub fn get(&self) {}
-
-        /// Replace an existing value with a new value
-        ///
-        /// This does not replace the value instantly, and all calls to "get" within the current scope will return
-        pub fn set(&self) {}
-
-        // Modify lets you modify the value in place. However, because there's no previous value around to compare
-        // the new one with, we are unable to memoize the change. As such, all downsteam users of this Atom will
-        // be updated, causing all subsrcibed components to re-render.
-        //
-        // This is fine for most values, but might not be performant when dealing with collections. For collections,
-        // use the "Family" variants as these will stay memoized for inserts, removals, and modifications.
-        //
-        // Note - like "set" this won't propogate instantly. Once all "gets" are dropped, only then will we run the
-        pub fn modify(&self) {}
-    }
-
-    pub fn use_callback<'a, G>(c: &Context<'a>, f: impl Fn() -> G) -> &'a RecoilContext<G> {
-        todo!()
-    }
-
-    pub fn use_atom<T: PartialEq, O>(c: &Context, t: &'static Atom<T>) -> O {
-        todo!()
-    }
-    pub fn use_batom<T: PartialEq, O>(c: &Context, t: impl Readable) -> O {
-        todo!()
-    }
-
-    pub trait Readable {}
-    impl<T: PartialEq> Readable for &'static Atom<T> {}
-    impl<K: PartialEq, V: PartialEq> Readable for &'static AtomFamily<K, V> {}
-
-    pub fn use_atom_family<'a, K: PartialEq, V: PartialEq>(
-        c: &Context<'a>,
-        t: &'static AtomFamily<K, V>,
-        g: K,
-    ) -> &'a V {
-        todo!()
-    }
-
-    pub use atoms::{atom, Atom};
-    pub use atoms::{atom_family, AtomFamily};
-    mod atoms {
-
-        use super::*;
-        pub struct AtomBuilder<T: PartialEq> {
-            pub key: String,
-            pub manual_init: Option<Box<dyn Fn() -> T>>,
-            _never: std::marker::PhantomData<T>,
-        }
-
-        impl<T: PartialEq> AtomBuilder<T> {
-            pub fn new() -> Self {
-                Self {
-                    key: uuid::Uuid::new_v4().to_string(),
-                    manual_init: None,
-                    _never: std::marker::PhantomData {},
-                }
-            }
-
-            pub fn init<A: Fn() -> T + 'static>(&mut self, f: A) {
-                self.manual_init = Some(Box::new(f));
-            }
-
-            pub fn set_key(&mut self, _key: &'static str) {}
-        }
-
-        pub struct atom<T: PartialEq>(pub fn(&mut AtomBuilder<T>) -> T);
-        pub type Atom<T: PartialEq> = atom<T>;
-
-        pub struct AtomFamilyBuilder<K, V> {
-            _never: std::marker::PhantomData<(K, V)>,
-        }
-
-        pub struct atom_family<K: PartialEq, V: PartialEq>(pub fn(&mut AtomFamilyBuilder<K, V>));
-        pub type AtomFamily<K: PartialEq, V: PartialEq> = atom_family<K, V>;
-    }
-
-    pub use selectors::selector;
-    mod selectors {
-        pub struct SelectorBuilder<Out, const Built: bool> {
-            _p: std::marker::PhantomData<Out>,
-        }
-        impl<O> SelectorBuilder<O, false> {
-            pub fn getter(self, f: impl Fn(()) -> O) -> SelectorBuilder<O, true> {
-                todo!()
-                // std::rc::Rc::pin(value)
-                // todo!()
-            }
-        }
-        pub struct selector<O>(pub fn(SelectorBuilder<O, false>) -> SelectorBuilder<O, true>);
-    }
+    )
 }

@@ -17,12 +17,31 @@ use {
 // Parse any stream coming from the rsx! macro
 // ==============================================
 pub struct RsxRender {
-    // custom_context: Option<Ident>,
+    custom_context: Option<Ident>,
     root: AmbiguousElement,
 }
 
 impl Parse for RsxRender {
     fn parse(input: ParseStream) -> Result<Self> {
+        // try to parse the first ident and comma
+        let custom_context =
+            if input.peek(Token![in]) && input.peek2(Ident) && input.peek3(Token![,]) {
+                let _ = input.parse::<Token![in]>()?;
+                let name = input.parse::<Ident>()?;
+                if is_valid_html_tag(&name.to_string()) {
+                    return Err(Error::new(
+                        input.span(),
+                        "Custom context cannot be an html element name",
+                    ));
+                } else {
+                    input.parse::<Token![,]>().unwrap();
+                    Some(name)
+                }
+            } else {
+                // todo!("NOT WORKIGN");
+                None
+            };
+
         let root = { input.parse::<AmbiguousElement>() }?;
         if !input.is_empty() {
             return Err(Error::new(
@@ -31,7 +50,10 @@ impl Parse for RsxRender {
             ));
         }
 
-        Ok(Self { root })
+        Ok(Self {
+            root,
+            custom_context,
+        })
     }
 }
 
@@ -39,22 +61,29 @@ impl ToTokens for RsxRender {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         // create a lazy tree that accepts a bump allocator
         // Currently disabled
-        //
-        // let final_tokens = match &self.custom_context {
-        // Some(ident) => quote! {
-        //     #ident.render(dioxus::prelude::LazyNodes::new(move |ctx|{
-        //         let bump = ctx.bump;
-        //         #new_toks
-        //     }))
-        // },
 
         let inner = &self.root;
-        let output = quote! {
-            dioxus::prelude::LazyNodes::new(move |ctx|{
-                let bump = &ctx.bump();
-                #inner
-             })
+
+        let output = match &self.custom_context {
+            Some(ident) => {
+                //
+                quote! {
+                    #ident.render(dioxus::prelude::LazyNodes::new(move |__ctx|{
+                        let bump = &__ctx.bump();
+                        #inner
+                    }))
+                }
+            }
+            None => {
+                quote! {
+                    dioxus::prelude::LazyNodes::new(move |__ctx|{
+                        let bump = &__ctx.bump();
+                        #inner
+                     })
+                }
+            }
         };
+
         output.to_tokens(out_tokens)
     }
 }
@@ -237,7 +266,7 @@ impl ToTokens for &Component {
         };
 
         let _toks = tokens.append_all(quote! {
-            dioxus::builder::virtual_child(ctx, #name, #builder, #key_token)
+            dioxus::builder::virtual_child(__ctx, #name, #builder, #key_token)
         });
     }
 }
@@ -327,7 +356,7 @@ impl ToTokens for &Element {
         let name = &self.name.to_string();
 
         tokens.append_all(quote! {
-            dioxus::builder::ElementBuilder::new(ctx, #name)
+            dioxus::builder::ElementBuilder::new(__ctx, #name)
         });
 
         for attr in self.attrs.iter() {
@@ -448,7 +477,7 @@ impl ToTokens for &ElementAttr {
             }
             AttrType::Event(event) => {
                 tokens.append_all(quote! {
-                    .add_listener(dioxus::events::on::#nameident(ctx, #event))
+                    .add_listener(dioxus::events::on::#nameident(__ctx, #event))
                 });
             }
             AttrType::FieldTokens(exp) => {
@@ -459,7 +488,7 @@ impl ToTokens for &ElementAttr {
             AttrType::EventTokens(event) => {
                 //
                 tokens.append_all(quote! {
-                    .add_listener(dioxus::events::on::#nameident(ctx, #event))
+                    .add_listener(dioxus::events::on::#nameident(__ctx, #event))
                 })
             }
         }

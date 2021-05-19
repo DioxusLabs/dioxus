@@ -887,6 +887,7 @@ impl<'a> DiffMachine<'a> {
         }
 
         match old.len().cmp(&new.len()) {
+            // old.len > new.len -> removing some nodes
             Ordering::Greater => {
                 // [... parent prev_child]
                 self.change_list.go_to_sibling(new.len());
@@ -896,6 +897,7 @@ impl<'a> DiffMachine<'a> {
                 self.remove_self_and_next_siblings(&old[new.len()..]);
                 // [... parent]
             }
+            // old.len < new.len -> adding some nodes
             Ordering::Less => {
                 // [... parent last_child]
                 self.change_list.go_up();
@@ -903,6 +905,7 @@ impl<'a> DiffMachine<'a> {
                 self.change_list.commit_traversal();
                 self.create_and_append_children(&new[old.len()..]);
             }
+            // old.len == new.len -> no nodes added/removed, but πerhaps changed
             Ordering::Equal => {
                 // [... parent child]
                 self.change_list.go_up();
@@ -924,6 +927,7 @@ impl<'a> DiffMachine<'a> {
     // When this function returns, the change list stack is in the same state.
     pub fn remove_all_children(&mut self, old: &[VNode<'a>]) {
         debug_assert!(self.change_list.traversal_is_committed());
+        log::debug!("REMOVING CHILDREN");
         for _child in old {
             // registry.remove_subtree(child);
         }
@@ -958,7 +962,27 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     pub fn remove_self_and_next_siblings(&mut self, old: &[VNode<'a>]) {
         debug_assert!(self.change_list.traversal_is_committed());
-        for _child in old {
+        for child in old {
+            if let VNode::Component(vcomp) = child {
+                // self.change_list
+                //     .create_text_node("placeholder for vcomponent");
+
+                let root_id = vcomp.stable_addr.as_ref().borrow().unwrap();
+                self.lifecycle_events.push_back(LifeCycleEvent::Remove {
+                    root_id,
+                    stable_scope_addr: Rc::downgrade(&vcomp.ass_scope),
+                })
+                // let id = get_id();
+                // *component.stable_addr.as_ref().borrow_mut() = Some(id);
+                // self.change_list.save_known_root(id);
+                // let scope = Rc::downgrade(&component.ass_scope);
+                // self.lifecycle_events.push_back(LifeCycleEvent::Mount {
+                //     caller: Rc::downgrade(&component.caller),
+                //     root_id: id,
+                //     stable_scope_addr: scope,
+                // });
+            }
+
             // registry.remove_subtree(child);
         }
         self.change_list.remove_self_and_next_siblings();
