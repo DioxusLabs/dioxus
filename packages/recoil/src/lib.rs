@@ -2,15 +2,32 @@
 //   Important hooks
 // ========================
 
-pub fn init_recoil_root(ctx: Context) {}
+pub fn init_recoil_root(ctx: Context) {
+    let res = ctx.try_use_context::<RecoilRoot>();
+    ctx.create_context(move || {
+        //
+        if res.is_ok() {
+            panic!(
+                "Cannot initialize a recoil root inside of a recoil root.\n An app may only have one recoil root per virtual dom instance"
+            );
+        }
+        RecoilRoot {}
+    })
+}
 
-pub fn use_recoil_value() {}
+pub fn use_atom<'a, T: PartialEq>(c: Context<'a>, t: &'static Atom<T>) -> &'a T {
+    todo!()
+}
 
-pub fn use_recoil() {}
+pub fn use_set_atom<'a, T: PartialEq>(c: Context<'a>, t: &'static Atom<T>) -> Rc<dyn Fn(T)> {
+    todo!()
+}
 
-pub fn use_set_recoil() {}
+use std::rc::Rc;
 
 use dioxus_core::virtual_dom::Context;
+
+pub struct RecoilRoot {}
 
 pub struct RecoilContext {}
 
@@ -24,7 +41,7 @@ impl RecoilContext {
     ///
     /// This does not replace the value instantly.
     /// All calls to "get" will return the old value until the component is rendered.
-    pub fn set<T: PartialEq, O>(&self, t: &'static Atom<T>, new: T) {
+    pub fn set<T: PartialEq>(&self, t: &'static Atom<T>, new: T) {
         self.modify(t, move |old| *old = new);
     }
 
@@ -48,10 +65,6 @@ pub fn use_recoil_context<T>(c: Context) -> &T {
 // pub fn use_callback<'a>(c: &Context<'a>, f: impl Fn() -> G) -> &'a RecoilContext {
 //     todo!()
 // }
-
-pub fn use_atom<'a, T: PartialEq>(c: Context<'a>, t: &'static Atom<T>) -> &'a T {
-    todo!()
-}
 
 pub trait Readable {}
 impl<T: PartialEq> Readable for &'static Atom<T> {}
@@ -129,4 +142,35 @@ pub type Selector<O> = selector<O>;
 
 pub fn use_selector<'a, O>(c: Context<'a>, s: &'static Selector<O>) -> &'a O {
     todo!()
+}
+
+pub fn callback_example(ctx: Context) {
+    let set_user = use_recoil_callback(ctx, |api| {
+        |a: String, b: ()| {
+            //
+        }
+    });
+
+    let set_user = use_recoil_callback(ctx, |api| {
+        //
+    });
+}
+
+fn use_recoil_callback<F>(ctx: Context, f: impl Fn(RecoilContext) -> F) -> F {
+    todo!()
+}
+
+mod analyzer {
+    use super::*;
+
+    const TITLE: Atom<&'static str> = atom(|_| Default::default());
+
+    // pub fn use_add_todo(ctx: Context) -> impl Fn(&'static str) + '_ {
+    //     use_recoil_callback(ctx, move |api| move |a: &'static str| api.set(&TITLE, a))
+    // }
+
+    struct Analyzer(RecoilContext);
+    fn use_analyzer(ctx: Context) -> Analyzer {
+        use_recoil_callback(ctx, |api| Analyzer(api))
+    }
 }

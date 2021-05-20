@@ -38,7 +38,6 @@ impl Parse for RsxRender {
                     Some(name)
                 }
             } else {
-                // todo!("NOT WORKIGN");
                 None
             };
 
@@ -126,6 +125,7 @@ impl Parse for AmbiguousElement {
                             .parse::<Component>()
                             .map(|c| AmbiguousElement::Component(c))
                     } else {
+                        let name = input.parse::<Ident>().unwrap();
                         Err(Error::new(
                             name.span(),
                             "Components must be uppercased, perhaps you mispelled a html tag",

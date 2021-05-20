@@ -7,7 +7,6 @@
 //! If you want an example on recommended project structure, check out the TodoMVC folder
 //!
 //! Here, we show to use Dioxus' Recoil state management solution to simplify app logic
-
 #![allow(non_snake_case)]
 use dioxus_web::dioxus::prelude::*;
 use recoil::*;
@@ -56,6 +55,8 @@ impl TodoManager {
         });
     }
     fn clear_completed(&self) {
+        TODO_LIST.with(api).get()
+        
         self.0.modify(&TODO_LIST, move |list| {
             *list = list.drain().filter(|(_, item)| !item.checked).collect();
         })
@@ -82,12 +83,12 @@ pub struct TodoItem {
 fn App(ctx: Context, props: &()) -> DomTree {
     init_recoil_root(ctx);
 
-    ctx.render(rsx! {
+    rsx! { in ctx,
         div { id: "app", style { "{APP_STYLE}" }
             TodoList {}
             Footer {}
         }
-    })
+    }
 }
 
 pub fn TodoList(ctx: Context, props: &()) -> DomTree {
@@ -109,7 +110,7 @@ pub fn TodoList(ctx: Context, props: &()) -> DomTree {
             })
         });
 
-    ctx.render(rsx! {
+    rsx! { in ctx,
         div {
             header {
                 class: "header"
@@ -126,7 +127,7 @@ pub fn TodoList(ctx: Context, props: &()) -> DomTree {
             // rsx! accepts optionals, so we suggest the `then` method in place of ternary
             {(!todos.is_empty()).then(|| rsx!( FilterToggles {}) )}
         }
-    })
+    }
 }
 
 #[derive(PartialEq, Props)]
@@ -199,7 +200,7 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
 }
 
 pub fn Footer(ctx: Context, props: &()) -> DomTree {
-    rsx!( in ctx,
+    rsx! { in ctx,
         footer {
             class: "info"
             p {"Double-click to edit a todo"}
@@ -212,5 +213,5 @@ pub fn Footer(ctx: Context, props: &()) -> DomTree {
                 a { "TodoMVC", href: "http://todomvc.com" }
             }
         }
-    )
+    }
 }
