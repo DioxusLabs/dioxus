@@ -5,6 +5,10 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 - Server-rendering with custom ToString implementation
 - State management
 - Build CLI
+- Foundational hooks
+- Context API
+- Basic suspense
+- Controlled components
 ----
 ## Project: Initial VDOM support (TBD)
 > Get the initial VDom + Event System + Patching + Diffing + Component framework up and running
@@ -80,18 +84,25 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 - [x] Tweak macro parsing for better errors
 - [x] dirty tagging, compression
 - [x] code health
+- [ ] name spacing so svg works
+- [ ] fix keys on elements
+- [ ] controlled components (kinda tuff since we need all these different platforms)
+  - [ ] Their own crate
+  - [ ] Re-exported through the `dioxus` crate (not core)
+- [ ] Hooks
+  - [ ] Re-exported through the `dioxus` crate (not essential to core virtualdom)
+
+## Less-essential todos
 - [ ] Make events lazy (use traits + Box<dyn>) - not sure what this means anymore
 - [ ] Beef up the dioxus CLI tool to report build progress
 - [ ] Extract arena logic out for better safety guarantees
 - [ ] Extract BumpFrame logic out for better safety guarantees
 - [ ] make SSR follow HTML spec
-- [ ] fix keys on elements
 - [ ] MIRI tests
 - [ ] all synthetic events filled out
 - [ ] double check event targets and stuff
 - [ ] Documentation overhaul
 - [ ] Website
-- [ ] controlled components
 
 lower priority features
 - [ ] Attributes on elements should implement format_args instead of string fmt

@@ -43,6 +43,7 @@ pub struct CollectionSelection<T> {
     _never: PhantomData<T>,
 }
 impl<T> Readable<T> for CollectionSelection<T> {}
+impl<T> Writeable<T> for CollectionSelection<T> {}
 
 // =================
 //    Selectors
@@ -125,22 +126,26 @@ mod hooks {
 
     pub fn use_set_state<'a, T: PartialEq>(
         c: Context<'a>,
-        t: &'static impl Writeable<T>,
+        t: &impl Writeable<T>,
     ) -> &'a Rc<dyn Fn(T)> {
         todo!()
     }
 
     pub fn use_recoil_state<'a, T: PartialEq + 'static>(
         ctx: Context<'a>,
-        readable: &'static impl Writeable<T>,
+        writeable: &impl Writeable<T>,
     ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
         todo!()
     }
 
-    pub fn use_recoil_value<'a, T: PartialEq>(
+    pub fn use_recoil_value<'a, T: PartialEq>(ctx: Context<'a>, t: &impl Readable<T>) -> &'a T {
+        todo!()
+    }
+
+    pub fn use_recoil_family<'a, K, V, C: FamilyCollection<K, V>>(
         ctx: Context<'a>,
-        t: &'static impl Readable<T>,
-    ) -> &'a T {
+        t: &AtomFamily<K, V, C>,
+    ) -> &'a C {
         todo!()
     }
 

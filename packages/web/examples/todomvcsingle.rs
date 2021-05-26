@@ -13,16 +13,24 @@ use recoil::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-const APP_STYLE: &'static str = include_str!("./todomvc/style.css");
+#[derive(PartialEq, Clone, Copy)]
+pub enum FilterState {
+    All,
+    Active,
+    Completed,
+}
 
-fn main() {
-    wasm_bindgen_futures::spawn_local(dioxus_web::WebsysRenderer::start(App));
+#[derive(Debug, PartialEq, Clone)]
+pub struct TodoItem {
+    pub id: Uuid,
+    pub checked: bool,
+    pub contents: String,
 }
 
 // Declare our global app state
-const TODO_LIST: Atom<HashMap<Uuid, TodoItem>> = atom(|_| Default::default());
-const FILTER: Atom<FilterState> = atom(|_| FilterState::All);
-const TODOS_LEFT: selector<usize> = selector(|api| api.get(&TODO_LIST).len());
+const TODO_LIST: Atom<HashMap<Uuid, TodoItem>> = |_| Default::default();
+const FILTER: Atom<FilterState> = |_| FilterState::All;
+const TODOS_LEFT: Selector<usize> = |api| api.get(&TODO_LIST).len();
 
 // Implement a simple abstraction over sets/gets of multiple atoms
 struct TodoManager(RecoilApi);
@@ -64,32 +72,7 @@ impl TodoManager {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
-pub enum FilterState {
-    All,
-    Active,
-    Completed,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct TodoItem {
-    pub id: Uuid,
-    pub checked: bool,
-    pub contents: String,
-}
-
-fn App(ctx: Context, props: &()) -> DomTree {
-    use_init_recoil_root(ctx);
-
-    rsx! { in ctx,
-        div { id: "app", style { "{APP_STYLE}" }
-            TodoList {}
-            Footer {}
-        }
-    }
-}
-
-pub fn TodoList(ctx: Context, props: &()) -> DomTree {
+pub fn TodoList(ctx: Context, _props: &()) -> DomTree {
     let draft = use_state_new(&ctx, || "".to_string());
     let todos = use_recoil_value(&ctx, &TODO_LIST);
     let filter = use_recoil_value(&ctx, &FILTER);
@@ -154,9 +137,9 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
     ))
 }
 
-pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
-    let reducer = use_recoil_context::<TodoManager>(ctx);
-    let items_left = use_selector(ctx, &TODOS_LEFT);
+pub fn FilterToggles(ctx: Context, _props: &()) -> DomTree {
+    let reducer = use_recoil_callback(ctx, |api| TodoManager(api));
+    let items_left = use_recoil_value(ctx, &TODOS_LEFT);
 
     let toggles = [
         ("All", "", FilterState::All),
@@ -168,10 +151,9 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
         rsx!(
             li {
                 class: "{name}"
-                a {
+                a { "{name}",
                     href: "{path}",
                     onclick: move |_| reducer.set_filter(&filter),
-                    "{name}"
                 }
             }
         )
@@ -196,7 +178,7 @@ pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
     }
 }
 
-pub fn Footer(ctx: Context, props: &()) -> DomTree {
+pub fn Footer(ctx: Context, _props: &()) -> DomTree {
     rsx! { in ctx,
         footer {
             class: "info"
@@ -211,4 +193,20 @@ pub fn Footer(ctx: Context, props: &()) -> DomTree {
             }
         }
     }
+}
+
+const APP_STYLE: &'static str = include_str!("./todomvc/style.css");
+
+fn App(ctx: Context, _props: &()) -> DomTree {
+    use_init_recoil_root(ctx);
+    rsx! { in ctx,
+        div { id: "app", style { "{APP_STYLE}" }
+            TodoList {}
+            Footer {}
+        }
+    }
+}
+
+fn main() {
+    wasm_bindgen_futures::spawn_local(dioxus_web::WebsysRenderer::start(App));
 }
