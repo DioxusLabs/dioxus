@@ -10,6 +10,8 @@ pub use use_reducer_def::use_reducer;
 pub use use_ref_def::use_ref;
 pub use use_state_def::use_state;
 
+use crate::innerlude::Context;
+
 mod use_state_def {
     use crate::innerlude::*;
     use std::{
@@ -213,26 +215,31 @@ mod use_ref_def {
     use crate::innerlude::*;
     use std::{cell::RefCell, ops::DerefMut};
 
-    pub struct UseRef<T: 'static> {
-        _current: RefCell<T>,
-    }
-    impl<T: 'static> UseRef<T> {
-        fn new(val: T) -> Self {
-            Self {
-                _current: RefCell::new(val),
-            }
-        }
+    // pub struct UseRef<T: 'static> {
+    //     _current: RefCell<T>,
+    // }
+    // impl<T: 'static> UseRef<T> {
+    //     fn new(val: T) -> Self {
+    //         Self {
+    //             _current: RefCell::new(val),
+    //         }
+    //     }
 
-        pub fn modify(&self, modifier: impl FnOnce(&mut T)) {
-            let mut val = self._current.borrow_mut();
-            let val_as_ref = val.deref_mut();
-            modifier(val_as_ref);
-        }
+    //     pub fn set(&self, new: T) {
+    //         let mut val = self._current.borrow_mut();
+    //         *val = new;
+    //     }
 
-        pub fn current(&self) -> std::cell::Ref<'_, T> {
-            self._current.borrow()
-        }
-    }
+    //     pub fn modify(&self, modifier: impl FnOnce(&mut T)) {
+    //         let mut val = self._current.borrow_mut();
+    //         let val_as_ref = val.deref_mut();
+    //         modifier(val_as_ref);
+    //     }
+
+    //     pub fn current(&self) -> std::cell::Ref<'_, T> {
+    //         self._current.borrow()
+    //     }
+    // }
 
     /// Store a mutable value between renders!
     /// To read the value, borrow the ref.
@@ -240,10 +247,10 @@ mod use_ref_def {
     /// Modifications to this value do not cause updates to the component
     /// Attach to inner context reference, so context can be consumed
     pub fn use_ref<'a, T: 'static>(
-        ctx: &'_ Context<'a>,
+        ctx: Context<'a>,
         initial_state_fn: impl FnOnce() -> T + 'static,
-    ) -> &'a UseRef<T> {
-        ctx.use_hook(|| UseRef::new(initial_state_fn()), |state| &*state, |_| {})
+    ) -> &'a RefCell<T> {
+        ctx.use_hook(|| RefCell::new(initial_state_fn()), |state| &*state, |_| {})
     }
 }
 
@@ -337,5 +344,17 @@ mod use_reducer_def {
         //         }
         //     })
         // };
+    }
+}
+
+pub fn use_is_initialized(ctx: Context) -> bool {
+    let val = use_ref(ctx, || false);
+    match *val.borrow() {
+        true => true,
+        false => {
+            //
+            *val.borrow_mut() = true;
+            false
+        }
     }
 }

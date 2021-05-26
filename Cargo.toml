@@ -35,11 +35,3 @@ split-debuginfo = "unpacked"
 # "packages/cli",
 # "examples",
 # "packages/html-macro",
-# "packages/html-macro-2",
-#
-#
-#
-# Pulled from percy
-# "packages/html-macro-test",
-# "packages/virtual-dom-rs",
-# "packages/virtual-node",

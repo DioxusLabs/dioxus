@@ -25,7 +25,7 @@ const FILTER: Atom<FilterState> = atom(|_| FilterState::All);
 const TODOS_LEFT: selector<usize> = selector(|api| api.get(&TODO_LIST).len());
 
 // Implement a simple abstraction over sets/gets of multiple atoms
-struct TodoManager(RecoilContext);
+struct TodoManager(RecoilApi);
 impl TodoManager {
     fn add_todo(&self, contents: String) {
         let item = TodoItem {
@@ -55,8 +55,6 @@ impl TodoManager {
         });
     }
     fn clear_completed(&self) {
-        TODO_LIST.with(api).get()
-        
         self.0.modify(&TODO_LIST, move |list| {
             *list = list.drain().filter(|(_, item)| !item.checked).collect();
         })
@@ -81,7 +79,7 @@ pub struct TodoItem {
 }
 
 fn App(ctx: Context, props: &()) -> DomTree {
-    init_recoil_root(ctx);
+    use_init_recoil_root(ctx);
 
     rsx! { in ctx,
         div { id: "app", style { "{APP_STYLE}" }
@@ -93,8 +91,8 @@ fn App(ctx: Context, props: &()) -> DomTree {
 
 pub fn TodoList(ctx: Context, props: &()) -> DomTree {
     let draft = use_state_new(&ctx, || "".to_string());
-    let todos = use_atom(&ctx, &TODO_LIST);
-    let filter = use_atom(&ctx, &FILTER);
+    let todos = use_recoil_value(&ctx, &TODO_LIST);
+    let filter = use_recoil_value(&ctx, &FILTER);
 
     let todolist = todos
         .values()
@@ -137,8 +135,7 @@ pub struct TodoEntryProps {
 
 pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    let todo = use_atom(&ctx, &TODO_LIST).get(&props.id).unwrap();
-    // let todo = use_atom_family(&ctx, &TODOS, props.id);
+    let todo = use_recoil_value(&ctx, &TODO_LIST).get(&props.id).unwrap();
 
     ctx.render(rsx! (
         li {

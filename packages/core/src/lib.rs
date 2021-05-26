@@ -142,5 +142,15 @@ pub mod prelude {
     pub use crate::diff::DiffMachine;
 
     pub use crate::debug_renderer::DebugRenderer;
+    pub use crate::dioxus_main;
     pub use crate::hooks::*;
+}
+
+#[macro_export]
+macro_rules! dioxus_main {
+    ($i:ident) => {
+        fn main() {
+            todo!("this macro is a placeholder for launching a dioxus app on different platforms. \nYou probably don't want to use this, but it's okay for small apps.")
+        }
+    };
 }

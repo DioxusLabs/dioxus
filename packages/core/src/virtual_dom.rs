@@ -24,7 +24,6 @@ use bumpalo::Bump;
 use generational_arena::Arena;
 use std::{
     any::{Any, TypeId},
-    borrow::{Borrow, BorrowMut},
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
     fmt::Debug,
@@ -130,7 +129,7 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Example);
     /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let mut components = ScopeArena::new(Arena::new());
+        let components = ScopeArena::new(Arena::new());
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
         // Here, we need to make it manually, using an RC to force the Weak reference to stick around for the main scope.
@@ -522,7 +521,7 @@ impl Scope {
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     fn new<'creator_node>(
         caller: Weak<OpaqueComponent<'creator_node>>,
-        myidx: ScopeIdx,
+        arena_idx: ScopeIdx,
         parent: Option<ScopeIdx>,
         height: u32,
         event_queue: EventQueue,
@@ -531,7 +530,7 @@ impl Scope {
         log::debug!(
             "New scope created, height is {}, idx is {:?}",
             height,
-            myidx
+            arena_idx
         );
 
         // The function to run this scope is actually located in the parent's bump arena.
@@ -544,7 +543,7 @@ impl Scope {
         // this is a bit of a hack, but will remain this way until we've figured out a cleaner solution.
         //
         // Not the best solution, so TODO on removing this in favor of a dedicated resource abstraction.
-        let broken_caller = unsafe {
+        let caller = unsafe {
             std::mem::transmute::<
                 Weak<OpaqueComponent<'creator_node>>,
                 Weak<OpaqueComponent<'static>>,
@@ -552,18 +551,18 @@ impl Scope {
         };
 
         Self {
-            shared_contexts: Default::default(),
-            caller: broken_caller,
-            hooks: RefCell::new(Vec::new()),
-            frames: ActiveFrame::new(),
-            listeners: Default::default(),
-            hookidx: Default::default(),
-            children: Default::default(),
+            caller,
             parent,
-            arena_idx: myidx,
+            arena_idx,
             height,
             event_queue,
             arena_link,
+            frames: ActiveFrame::new(),
+            hooks: Default::default(),
+            shared_contexts: Default::default(),
+            listeners: Default::default(),
+            hookidx: Default::default(),
+            children: Default::default(),
         }
     }
 
@@ -594,8 +593,8 @@ impl Scope {
             .upgrade()
             .ok_or(Error::FatalInternal("Failed to get caller"))?;
 
+        // Cast the caller ptr from static to one with our own reference
         let new_head = unsafe {
-            // Cast the caller ptr from static to one with our own reference
             std::mem::transmute::<&OpaqueComponent<'static>, &OpaqueComponent<'sel>>(
                 caller.as_ref(),
             )
@@ -621,7 +620,7 @@ impl Scope {
                 .listeners
                 .try_borrow()
                 .ok()
-                .ok_or(Error::FatalInternal("Borrowing listener failed "))?
+                .ok_or(Error::FatalInternal("Borrowing listener failed"))?
                 .get(listener_id as usize)
                 .ok_or(Error::FatalInternal("Event should exist if triggered"))?
                 .as_ref()
@@ -797,10 +796,11 @@ impl Scope {
 
         let internal_state = pinned_state.downcast_mut::<InternalHookState>().expect(
             r###"
-                Unable to retrive the hook that was initialized in this index.
-                Consult the `rules of hooks` to understand how to use hooks properly.
+Unable to retrive the hook that was initialized in this index.
+Consult the `rules of hooks` to understand how to use hooks properly.
 
-                You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+Any function prefixed with "use" should not be called conditionally.
             "###,
         );
 
@@ -813,7 +813,19 @@ impl Scope {
 //   Context API Implementation for Components
 // ================================================
 impl Scope {
-    pub fn create_context<T: 'static>(&self, init: impl Fn() -> T) {
+    /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
+    ///
+    /// This is a hook, so it may not be called conditionally!
+    ///
+    /// The init method is ran *only* on first use, otherwise it is ignored. However, it uses hooks (ie `use`)
+    /// so don't put it in a conditional.
+    ///
+    /// When the component is dropped, so is the context. Be aware of this behavior when consuming
+    /// the context via Rc/Weak.
+    ///
+    ///
+    ///
+    pub fn use_create_context<T: 'static>(&self, init: impl Fn() -> T) {
         let mut ctxs = self.shared_contexts.borrow_mut();
         let ty = TypeId::of::<T>();
 
@@ -837,27 +849,56 @@ impl Scope {
                 ctxs.insert(ty, Rc::new(init()));
             }
 
-            (false, true) => panic!("Cannot initialize two contexts of the same type"),
-            (true, false) => panic!("Implementation failure resulted in missing context"),
+            _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
         }
     }
 
+    /// There are hooks going on here!
+    pub fn use_context<T: 'static>(&self) -> Rc<T> {
+        self.try_use_context().unwrap()
+    }
+
+    ///
     pub fn try_use_context<T: 'static>(&self) -> Result<Rc<T>> {
         let ty = TypeId::of::<T>();
 
         let mut scope = Some(self);
+        let cached_root = use_ref(self, || None as Option<Weak<T>>);
+
+        // Try to provide the cached version without having to re-climb the tree
+        if let Some(ptr) = cached_root.borrow().as_ref() {
+            if let Some(pt) = ptr.clone().upgrade() {
+                return Ok(pt);
+            } else {
+                /*
+                failed to upgrade the weak is strange
+                this means the root dropped the context (the scope was killed)
+
+                The main idea here is to prevent memory leaks where parents should be cleaning up their own memory.
+
+                However, this behavior allows receivers/providers to move around in the hierarchy.
+                This works because we climb the tree if upgrading the Rc failed.
+                */
+            }
+        }
 
         while let Some(inner) = scope {
             log::debug!("Searching {:#?} for valid shared_context", inner.arena_idx);
             let shared_contexts = inner.shared_contexts.borrow();
             if let Some(shared_ctx) = shared_contexts.get(&ty) {
-                return Ok(shared_ctx.clone().downcast().unwrap());
+                let rc = shared_ctx
+                    .clone()
+                    .downcast()
+                    .expect("Should not fail, already validated the type from the hashmap");
+
+                *cached_root.borrow_mut() = Some(Rc::downgrade(&rc));
+                return Ok(rc);
             } else {
                 match inner.parent {
-                    Some(parid) => {
+                    Some(parent_id) => {
                         let parent = inner
                             .arena_link
-                            .try_get(parid)
+                            .try_get(parent_id)
                             .map_err(|_| Error::FatalInternal("Failed to find parent"))?;
 
                         scope = Some(parent);
@@ -868,10 +909,6 @@ impl Scope {
         }
 
         Err(Error::MissingSharedContext)
-    }
-
-    pub fn use_context<T: 'static>(&self) -> Rc<T> {
-        self.try_use_context().unwrap()
     }
 }
 

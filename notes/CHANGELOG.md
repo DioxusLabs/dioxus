@@ -16,7 +16,7 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 - [x] (Core) Implement lifecycle
 - [x] (Core) Implement an event system 
 - [x] (Core) Implement child nodes, scope creation
-- [ ] (Core) Implement dirty tagging and compression
+- [x] (Core) Implement dirty tagging and compression
 
 ## Project: QOL 
 > Make it easier to write components

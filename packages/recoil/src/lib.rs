@@ -1,176 +1,162 @@
-// ========================
-//   Important hooks
-// ========================
+use std::{
+    cell::{Ref, RefCell},
+    collections::HashMap,
+    hash::Hash,
+    marker::PhantomData,
+    rc::Rc,
+};
 
-pub fn init_recoil_root(ctx: Context) {
-    let res = ctx.try_use_context::<RecoilRoot>();
-    ctx.create_context(move || {
-        //
-        if res.is_ok() {
-            panic!(
-                "Cannot initialize a recoil root inside of a recoil root.\n An app may only have one recoil root per virtual dom instance"
-            );
-        }
-        RecoilRoot {}
-    })
-}
+pub trait FamilyKey: PartialEq + Hash {}
+impl<T: PartialEq + Hash> FamilyKey for T {}
 
-pub fn use_atom<'a, T: PartialEq>(c: Context<'a>, t: &'static Atom<T>) -> &'a T {
-    todo!()
-}
+pub trait AtomValue: PartialEq + Clone {}
+impl<T: PartialEq + Clone> AtomValue for T {}
 
-pub fn use_set_atom<'a, T: PartialEq>(c: Context<'a>, t: &'static Atom<T>) -> Rc<dyn Fn(T)> {
-    todo!()
-}
+// Atoms, selectors, and their family variants are readable
+pub trait Readable<T> {}
 
-use std::rc::Rc;
+// Only atoms and atom families are writable
+// Selectors are not
+pub trait Writeable<T>: Readable<T> {}
 
-use dioxus_core::virtual_dom::Context;
+// =================
+//    Atoms
+// =================
 
-pub struct RecoilRoot {}
+pub struct AtomBuilder {}
+pub type Atom<T> = fn(&mut AtomBuilder) -> T;
+impl<T> Readable<T> for Atom<T> {}
+impl<T> Writeable<T> for Atom<T> {}
 
-pub struct RecoilContext {}
+pub type AtomFamily<K, V, F = HashMap<K, V>> = fn((K, V)) -> F;
 
-impl RecoilContext {
-    /// Get the value of an atom. Returns a reference to the underlying data.
-    pub fn get<T: PartialEq>(&self, t: &'static Atom<T>) -> &T {
+pub trait SelectionSelector<K, V> {
+    fn select(&self, k: &K) -> CollectionSelection<V> {
         todo!()
     }
+}
+impl<K, V, F> SelectionSelector<K, V> for AtomFamily<K, V, F> {}
 
-    /// Replace an existing value with a new value
-    ///
-    /// This does not replace the value instantly.
-    /// All calls to "get" will return the old value until the component is rendered.
-    pub fn set<T: PartialEq>(&self, t: &'static Atom<T>, new: T) {
-        self.modify(t, move |old| *old = new);
+pub trait FamilyCollection<K, V> {}
+impl<K, V> FamilyCollection<K, V> for HashMap<K, V> {}
+pub struct CollectionSelection<T> {
+    _never: PhantomData<T>,
+}
+impl<T> Readable<T> for CollectionSelection<T> {}
+
+// =================
+//    Selectors
+// =================
+pub struct SelectorBuilder {}
+impl SelectorBuilder {
+    pub fn get<T: PartialEq>(&self, t: &impl Readable<T>) -> &T {
+        todo!()
     }
+}
+pub type Selector<T> = fn(&mut SelectorBuilder) -> T;
+impl<T> Readable<T> for Selector<T> {}
 
-    /// Modify lets you modify the value in place. However, because there's no previous value around to compare
-    /// the new one with, we are unable to memoize the change. As such, all downsteam users of this Atom will
-    /// be updated, causing all subsrcibed components to re-render.
-    ///
-    /// This is fine for most values, but might not be performant when dealing with collections. For collections,
-    /// use the "Family" variants as these will stay memoized for inserts, removals, and modifications.
-    ///
-    /// Note - like "set" this won't propogate instantly. Once all "gets" are dropped, only then will the update occur
+pub struct SelectorFamilyBuilder {}
+
+impl SelectorFamilyBuilder {
+    pub fn get<T: PartialEq>(&self, t: &impl Readable<T>) -> &T {
+        todo!()
+    }
+}
+
+/// Create a new value as a result of a combination of previous values
+/// If you need to return borrowed data, check out [`SelectorFamilyBorrowed`]
+pub type SelectorFamily<Key, Value> = fn(&mut SelectorFamilyBuilder, Key) -> Value;
+
+impl<K, V> Readable<V> for SelectorFamily<K, V> {}
+
+/// Borrowed selector families are – surprisingly - discouraged.
+/// This is because it's not possible safely memoize these values without keeping old versions around.
+///
+/// However, it does come in handy to borrow the contents of an item without re-rendering child components.
+pub type SelectorFamilyBorrowed<Key, Value> =
+    for<'a> fn(&'a mut SelectorFamilyBuilder, Key) -> &'a Value;
+
+impl<'a, K, V: 'a> SelectionSelector<K, V> for fn(&'a mut SelectorFamilyBuilder, K) -> V {}
+// =================
+//    API
+// =================
+pub struct RecoilApi {}
+impl RecoilApi {
+    pub fn get<T: PartialEq>(&self, t: &'static Atom<T>) -> Rc<T> {
+        todo!()
+    }
     pub fn modify<T: PartialEq, O>(&self, t: &'static Atom<T>, f: impl FnOnce(&mut T) -> O) -> O {
         todo!()
     }
+    pub fn set<T: PartialEq>(&self, t: &'static Atom<T>, new: T) {
+        self.modify(t, move |old| *old = new);
+    }
 }
 
-pub fn use_recoil_context<T>(c: Context) -> &T {
-    todo!()
+// ================
+//    Root
+// ================
+type AtomId = u32;
+type ConsumerId = u32;
+
+pub struct RecoilRoot {
+    consumers: RefCell<HashMap<AtomId, Box<dyn RecoilSlot>>>,
 }
 
-// pub fn use_callback<'a>(c: &Context<'a>, f: impl Fn() -> G) -> &'a RecoilContext {
-//     todo!()
-// }
+trait RecoilSlot {}
 
-pub trait Readable {}
-impl<T: PartialEq> Readable for &'static Atom<T> {}
-impl<K: PartialEq, V: PartialEq> Readable for &'static AtomFamily<K, V> {}
-
-pub fn use_atom_family<'a, K: PartialEq, V: PartialEq>(
-    c: &Context<'a>,
-    t: &'static AtomFamily<K, V>,
-    g: K,
-) -> &'a V {
-    todo!()
-}
-
-pub struct AtomBuilder<T: PartialEq> {
-    pub key: String,
-    pub manual_init: Option<Box<dyn Fn() -> T>>,
-    _never: std::marker::PhantomData<T>,
-}
-
-impl<T: PartialEq> AtomBuilder<T> {
-    pub fn new() -> Self {
+impl RecoilRoot {
+    pub(crate) fn new() -> Self {
         Self {
-            key: "".to_string(),
-            manual_init: None,
-            _never: std::marker::PhantomData {},
+            consumers: Default::default(),
         }
     }
+}
 
-    pub fn init<A: Fn() -> T + 'static>(&mut self, f: A) {
-        self.manual_init = Some(Box::new(f));
+pub use hooks::*;
+mod hooks {
+    use super::*;
+    use dioxus_core::prelude::Context;
+
+    pub fn use_init_recoil_root(ctx: Context) {
+        ctx.use_create_context(move || RecoilRoot::new())
     }
 
-    pub fn set_key(&mut self, _key: &'static str) {}
-}
+    pub fn use_set_state<'a, T: PartialEq>(
+        c: Context<'a>,
+        t: &'static impl Writeable<T>,
+    ) -> &'a Rc<dyn Fn(T)> {
+        todo!()
+    }
 
-// =====================================
-//    Atom
-// =====================================
-pub struct atom<T: PartialEq>(pub fn(&mut AtomBuilder<T>) -> T);
-pub type Atom<T: PartialEq> = atom<T>;
+    pub fn use_recoil_state<'a, T: PartialEq + 'static>(
+        ctx: Context<'a>,
+        readable: &'static impl Writeable<T>,
+    ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
+        todo!()
+    }
 
-// =====================================
-//    Atom Family
-// =====================================
-pub struct AtomFamilyBuilder<K, V> {
-    _never: std::marker::PhantomData<(K, V)>,
-}
+    pub fn use_recoil_value<'a, T: PartialEq>(
+        ctx: Context<'a>,
+        t: &'static impl Readable<T>,
+    ) -> &'a T {
+        todo!()
+    }
 
-pub struct atom_family<K: PartialEq, V: PartialEq>(pub fn(&mut AtomFamilyBuilder<K, V>));
-pub type AtomFamily<K: PartialEq, V: PartialEq> = atom_family<K, V>;
-
-// =====================================
-//    Selectors
-// =====================================
-pub struct SelectorApi {}
-impl SelectorApi {
-    pub fn get<T: PartialEq>(&self, t: &'static Atom<T>) -> &T {
+    pub fn use_recoil_callback<'a, F: 'a>(
+        ctx: Context<'a>,
+        f: impl Fn(RecoilApi) -> F + 'static,
+    ) -> &F {
         todo!()
     }
 }
-// pub struct SelectorBuilder<Out, const Built: bool> {
-//     _p: std::marker::PhantomData<Out>,
-// }
-// impl<O> SelectorBuilder<O, false> {
-//     pub fn getter(self, f: impl Fn(()) -> O) -> SelectorBuilder<O, true> {
-//         todo!()
-//         // std::rc::Rc::pin(value)
-//         // todo!()
-//     }
-// }
 
-pub struct selector<O>(pub fn(&SelectorApi) -> O);
-// pub struct selector<O>(pub fn(SelectorBuilder<O, false>) -> SelectorBuilder<O, true>);
-pub type Selector<O> = selector<O>;
-
-pub fn use_selector<'a, O>(c: Context<'a>, s: &'static Selector<O>) -> &'a O {
-    todo!()
-}
-
-pub fn callback_example(ctx: Context) {
-    let set_user = use_recoil_callback(ctx, |api| {
-        |a: String, b: ()| {
-            //
-        }
-    });
-
-    let set_user = use_recoil_callback(ctx, |api| {
-        //
-    });
-}
-
-fn use_recoil_callback<F>(ctx: Context, f: impl Fn(RecoilContext) -> F) -> F {
-    todo!()
-}
-
-mod analyzer {
+pub use ecs::*;
+mod ecs {
     use super::*;
-
-    const TITLE: Atom<&'static str> = atom(|_| Default::default());
-
-    // pub fn use_add_todo(ctx: Context) -> impl Fn(&'static str) + '_ {
-    //     use_recoil_callback(ctx, move |api| move |a: &'static str| api.set(&TITLE, a))
-    // }
-
-    struct Analyzer(RecoilContext);
-    fn use_analyzer(ctx: Context) -> Analyzer {
-        use_recoil_callback(ctx, |api| Analyzer(api))
+    pub struct Blah<K, V> {
+        _p: PhantomData<(K, V)>,
     }
+    pub type EcsModel<K, Ty> = fn(Blah<K, Ty>);
 }

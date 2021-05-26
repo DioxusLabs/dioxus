@@ -1,32 +1,31 @@
+//! Example: Context API
+//! --------------------
+//! This example demonstrates how to use the raw context api for sharing state throughout the VirtualDOM Tree.
+//! A custom context must be its own unique type - otherwise use_context will fail. A context may be c
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
 
-use std::fmt::Display;
-
-use dioxus::{events::on::MouseEvent, prelude::*};
-use dioxus_core as dioxus;
+use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
     console_error_panic_hook::set_once();
-
-    wasm_bindgen_futures::spawn_local(async {
-        WebsysRenderer::new_with_props(Example, ())
-            .run()
-            .await
-            .unwrap()
-    });
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
 
 
 #[derive(Debug)]
 struct CustomContext([&'static str; 3]);
 
-
 static Example: FC<()> = |ctx, props| {
-    ctx.create_context(|| CustomContext(["Jack", "Jill", "Bob"]));
-
-        let names = ctx.use_context::<CustomContext>();
-    // let name = names.0[props.id as usize];
+    ctx.use_create_context(|| CustomContext(["Jack", "Jill", "Bob"]));
 
     ctx.render(rsx! {
         div {
@@ -53,7 +52,7 @@ struct ButtonProps {
     id: u8,
 }
 
-fn CustomButton<'b, 'a,>(ctx: Context<'a>, props: &'b ButtonProps) -> DomTree {
+fn CustomButton(ctx: Context, props: &ButtonProps) -> DomTree {
     let names = ctx.use_context::<CustomContext>();
     let name = names.0[props.id as usize];
 

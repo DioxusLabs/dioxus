@@ -9,3 +9,7 @@ edition = "2018"
 [dependencies]
 dioxus-core = { path = "../core" }
 uuid = "0.8.2"
+
+[dev-dependencies]
+dioxus-web = { path = "../web" }
+wasm-bindgen-futures = "*"
