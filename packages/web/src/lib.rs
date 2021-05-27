@@ -2,7 +2,7 @@
 //! --------------
 //! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using Websys.
 
-use dioxus::prelude::Properties;
+use dioxus::prelude::{Context, DomTree, Properties};
 use fxhash::FxHashMap;
 use web_sys::{window, Document, Element, Event, Node};
 // use futures::{channel::mpsc, SinkExt, StreamExt};
@@ -33,7 +33,7 @@ impl WebsysRenderer {
     ///
     /// Run the app to completion, panicing if any error occurs while rendering.
     /// Pairs well with the wasm_bindgen async handler
-    pub async fn start(root: FC<()>) {
+    pub async fn start(root: impl for<'a> Fn(Context<'a>, &'a ()) -> DomTree + 'static) {
         Self::new(root).run().await.expect("Virtual DOM failed :(");
     }
 
@@ -41,7 +41,7 @@ impl WebsysRenderer {
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
     /// The root component can access things like routing in its context.
-    pub fn new(root: FC<()>) -> Self {
+    pub fn new(root: impl for<'a> Fn(Context<'a>, &'a ()) -> DomTree + 'static) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -49,7 +49,10 @@ impl WebsysRenderer {
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
     /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new_with_props<T: Properties + 'static>(root: FC<T>, root_props: T) -> Self {
+    pub fn new_with_props<T: Properties + 'static>(
+        root: impl for<'a> Fn(Context<'a>, &'a T) -> DomTree + 'static,
+        root_props: T,
+    ) -> Self {
         Self::from_vdom(VirtualDom::new_with_props(root, root_props))
     }
 

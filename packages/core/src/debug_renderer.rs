@@ -15,7 +15,7 @@ impl DebugRenderer {
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
     /// The root component can access things like routing in its context.
-    pub fn new(root: FC<()>) -> Self {
+    pub fn new(root: impl for<'a> Fn(Context<'a>, &'a ()) -> DomTree + 'static) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -23,7 +23,10 @@ impl DebugRenderer {
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
     /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new_with_props<T: Properties + 'static>(root: FC<T>, root_props: T) -> Self {
+    pub fn new_with_props<T: Properties + 'static>(
+        root: impl for<'a> Fn(Context<'a>, &'a T) -> DomTree + 'static,
+        root_props: T,
+    ) -> Self {
         Self::from_vdom(VirtualDom::new_with_props(root, root_props))
     }
 

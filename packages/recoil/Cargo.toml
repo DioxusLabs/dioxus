@@ -7,7 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.40"
 dioxus-core = { path = "../core" }
+generational-arena = "0.2.8"
+thiserror = "1.0.24"
 
 [dev-dependencies]
 uuid = { version = "0.8.2", features = ["v4"] }

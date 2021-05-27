@@ -5,7 +5,7 @@
 //! slicing up your state beyond atoms might be desirable.
 //!
 //! Instead of storing groups of entities in a collection of structs, the ECS Architecture instead stores
-//! an array for each entity in the collection. This tends to improve performance for batch operations on
+//! an array for each field in of a struct. This tends to improve performance for batch operations on
 //! individual fields at the cost of complexity. Fortunately, this ECS model is built right into Recoil,
 //! making it easier than ever to enable sharded datastructures in your app.
 //!
@@ -16,6 +16,7 @@
 //!
 //! This approach is best suited for applications where individual entries in families are very large
 //! and updates to neighbors are costly in terms of Clone or field comparisons for memoization.
+
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
 use recoil::*;
@@ -31,8 +32,9 @@ const TODOS: EcsModel<u32, TodoModel> = |builder| {};
 // const SELECT_SUBTITLE: SelectorBorrowed<u32, &str> = |s, k| TODOS.field(1).select(k);
 
 static App: FC<()> = |ctx, _| {
+    use_init_recoil_root(ctx, |_| {});
+
     // let title = use_recoil_value(ctx, &C_SELECTOR);
-    dbg!(TODOS);
 
     let title = "";
     rsx! { in ctx,

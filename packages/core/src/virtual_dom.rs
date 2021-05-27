@@ -29,8 +29,11 @@ use std::{
     fmt::Debug,
     future::Future,
     pin::Pin,
-    rc::{Rc, Weak},
+    // rc::{Rc, Weak},
+    sync::{Arc, Weak},
 };
+
+type Rc<T> = Arc<T>;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -96,7 +99,7 @@ impl VirtualDom {
     ///
     /// let dom = VirtualDom::new(Example);
     /// ```
-    pub fn new(root: FC<()>) -> Self {
+    pub fn new(root: impl Fn(Context, &()) -> DomTree + 'static) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -128,7 +131,10 @@ impl VirtualDom {
     ///
     /// let dom = VirtualDom::new(Example);
     /// ```
-    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
+    pub fn new_with_props<P: Properties + 'static>(
+        root: impl for<'a> Fn(Context<'a>, &'a P) -> DomTree + 'static,
+        root_props: P,
+    ) -> Self {
         let components = ScopeArena::new(Arena::new());
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
@@ -887,12 +893,11 @@ impl Scope {
             let shared_contexts = inner.shared_contexts.borrow();
             if let Some(shared_ctx) = shared_contexts.get(&ty) {
                 let rc = shared_ctx
-                    .clone()
-                    .downcast()
+                    .downcast_ref()
                     .expect("Should not fail, already validated the type from the hashmap");
 
                 *cached_root.borrow_mut() = Some(Rc::downgrade(&rc));
-                return Ok(rc);
+                return Ok(rc.clone());
             } else {
                 match inner.parent {
                     Some(parent_id) => {
@@ -1085,5 +1090,19 @@ mod tests {
             })
         });
         // let root = dom.components.get(dom.base_scope).unwrap();
+    }
+
+    // ensure the virtualdom is send + sync
+    // needed for use in async/await contexts
+    fn is_send_sync() {
+        fn check_send<T: Send>(a: T) -> T {
+            todo!()
+        }
+        fn check_sync<T: Sync>(a: T) -> T {
+            todo!()
+        }
+
+        let _ = check_send(VirtualDom::new(|ctx, props| ctx.render(rsx! { div {}})));
+        let _ = check_sync(VirtualDom::new(|ctx, props| ctx.render(rsx! { div {}})));
     }
 }

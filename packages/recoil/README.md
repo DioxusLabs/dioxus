@@ -14,7 +14,7 @@ A simple atom of state is defined globally as a const:
 const Light: Atom<&'static str> = |_| "Green";
 ```
 
-This atom of state is initialized with a value of `"Green"`. The atom that is returned does not actually contain any values. Instead, the atom's key - which is automatically generated in this instance - is used in the context of a Recoil App.  
+This atom of state is initialized with a value of `"Green"`. The atom that is returned does not actually contain any values. Instead, the atom's key - which is automatically generated in this instance - is used in the context of a Recoil App.
 
 This is then later used in components like so:
 
@@ -23,7 +23,7 @@ fn App(ctx: Context, props: &()) -> DomTree {
     // The recoil root must be initialized at the top of the application before any use_recoil hooks
     recoil::init_recoil_root(&ctx, |_| {});
 
-    let color = use_recoil(&ctx, &TITLE);
+    let color = recoil::use_read(ctx, Light);
 
     ctx.render(rsx!{
         h1 {"Color of light: {color}"}

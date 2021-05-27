@@ -91,8 +91,8 @@ pub fn TodoList(ctx: Context, _props: &()) -> DomTree {
             })
         });
 
-    rsx! { in ctx,
-        div {
+    rsx! { in ctuse_read
+        div {use_read
             header {
                 class: "header"
                 h1 {"todos"}
@@ -135,7 +135,7 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
            ))}
         }
     ))
-}
+}use_read
 
 pub fn FilterToggles(ctx: Context, _props: &()) -> DomTree {
     let reducer = use_recoil_callback(ctx, |api| TodoManager(api));

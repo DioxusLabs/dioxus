@@ -20,8 +20,8 @@ fn update_title(api: &RecoilApi) {
 }
 
 static App: FC<()> = |ctx, _| {
-    let title = use_recoil_value(ctx, &TITLE);
-    let next_light = use_recoil_callback(ctx, |api| move |_| update_title(&api));
+    let title = use_read(ctx, &TITLE);
+    let next_light = use_recoil_api(ctx, |api| move |_| update_title(&api));
 
     rsx! { in ctx,
         div {

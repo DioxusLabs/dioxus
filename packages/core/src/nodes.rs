@@ -10,7 +10,9 @@ use crate::{
 
 use bumpalo::Bump;
 use std::fmt::Debug;
-use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
+use std::sync::Arc;
+use std::{any::Any, cell::RefCell, marker::PhantomData};
+type Rc<T> = Arc<T>;
 
 /// A domtree represents the result of "Viewing" the context
 /// It's a placeholder over vnodes, to make working with lifetimes easier

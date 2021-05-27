@@ -41,9 +41,11 @@ use std::{
     cell::{RefCell, RefMut},
     cmp::Ordering,
     collections::VecDeque,
-    rc::{Rc, Weak},
     sync::atomic::AtomicU32,
+    // rc::{Rc, Weak},
+    sync::{Arc, Weak},
 };
+type Rc<T> = Arc<T>;
 
 /// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
 /// diffing trees of components. This means we can "re-enter" a subtree of a component by queuing a "NeedToDiff" event.

@@ -1,13 +1,14 @@
 use std::{
     cell::{RefCell, UnsafeCell},
     collections::HashMap,
-    rc::Rc,
+    sync::Arc,
 };
 
 use generational_arena::Arena;
 
 use crate::innerlude::*;
 
+type Rc<T> = Arc<T>;
 #[derive(Clone)]
 pub struct ScopeArena(Rc<RefCell<ScopeArenaInner>>);
 

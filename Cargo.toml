@@ -7,9 +7,9 @@ members = [
     "packages/dioxus",
     "packages/recoil",
     "packages/docsite",
+    "packages/ssr",
 ] # "packages/webview",
 
-# "packages/ssr",
 # "packages/cli",
 # "packages/webview",
 # "packages/hooks",
