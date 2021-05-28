@@ -12,7 +12,10 @@ fn main() {
             }
             baller::Baller {}
             baller::Baller {}
-            Baller {}
+            Baller {
+                // todo: manual props
+                // {...BallerProps {}}
+            }
             div {
                 a: "asd",
                 a: "asd",
@@ -23,11 +26,12 @@ fn main() {
                     "asdas",
                     "asdas",
                     "asdas",
+                    div {},
                     div {
-
-                    },
-                    div {
-
+                        // classes: {[ ("baller", true), ("maller", false) ]}
+                        // class: "asdasd"
+                        // class: "{customname}",
+                        // class: {[("baller", true), ("hover", false)]}
                     },
                 }
             }
@@ -50,5 +54,6 @@ pub struct TallerProps {
 }
 
 pub fn Taller(ctx: Context, props: &TallerProps) -> DomTree {
+    let b = true;
     todo!()
 }

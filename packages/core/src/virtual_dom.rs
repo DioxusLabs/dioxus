@@ -29,11 +29,8 @@ use std::{
     fmt::Debug,
     future::Future,
     pin::Pin,
-    // rc::{Rc, Weak},
-    sync::{Arc, Weak},
+    rc::{Rc, Weak},
 };
-
-type Rc<T> = Arc<T>;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -1100,15 +1097,16 @@ mod tests {
 
     // ensure the virtualdom is send + sync
     // needed for use in async/await contexts
+    #[test]
     fn is_send_sync() {
-        fn check_send<T: Send>(a: T) -> T {
+        fn check_send<T: Send>(_a: T) -> T {
             todo!()
         }
-        fn check_sync<T: Sync>(a: T) -> T {
+        fn check_sync<T: Sync>(_a: T) -> T {
             todo!()
         }
 
-        let _ = check_send(VirtualDom::new(|ctx, props| ctx.render(rsx! { div {}})));
-        let _ = check_sync(VirtualDom::new(|ctx, props| ctx.render(rsx! { div {}})));
+        let _ = check_send(VirtualDom::new(|ctx, _props| ctx.render(rsx! { div {}})));
+        let _ = check_sync(VirtualDom::new(|ctx, _props| ctx.render(rsx! { div {}})));
     }
 }

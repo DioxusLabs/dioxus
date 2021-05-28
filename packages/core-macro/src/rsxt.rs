@@ -213,6 +213,14 @@ impl Parse for Component {
                 break 'parsing;
             }
 
+            if content.peek(token::Brace) {
+                let inner: ParseBuffer;
+                syn::braced!(inner in content);
+                if inner.peek(Token![...]) {
+                    todo!("Inline props not yet supported");
+                }
+            }
+
             body.push(content.parse::<ComponentField>()?);
 
             // consume comma if it exists
@@ -329,7 +337,7 @@ impl Parse for Element {
             let forked = content.fork();
             if forked.call(Ident::parse_any).is_ok()
                 && forked.parse::<Token![:]>().is_ok()
-                && forked.parse::<Expr>().is_ok()
+                && forked.parse::<Token![:]>().is_err()
             {
                 attrs.push(content.parse::<ElementAttr>()?);
             } else {
@@ -386,7 +394,7 @@ struct ElementAttr {
 }
 
 enum AttrType {
-    Value(LitStr),
+    BumpText(LitStr),
     FieldTokens(Expr),
     EventTokens(Expr),
     Event(ExprClosure),
@@ -420,14 +428,34 @@ impl Parse for ElementAttr {
                 AttrType::Event(s.parse()?)
             }
         } else {
-            let fork = s.fork();
-            if let Ok(rawtext) = fork.parse::<LitStr>() {
-                s.advance_to(&fork);
-                AttrType::Value(rawtext)
-            } else {
-                let toks = s.parse::<Expr>()?;
-                AttrType::FieldTokens(toks)
+            match name_str.as_str() {
+                "style" => {
+                    //
+                    todo!("inline style not yet supported")
+                }
+                "classes" => {
+                    //
+                    todo!("custom class lsit not supported")
+                }
+                "namespace" => {
+                    //
+                    todo!("custom namespace not supported")
+                }
+                "ref" => {
+                    //
+                    todo!("custom ref not supported")
+                }
+                _ => {
+                    if s.peek(LitStr) {
+                        let rawtext = s.parse::<LitStr>().unwrap();
+                        AttrType::BumpText(rawtext)
+                    } else {
+                        let toks = s.parse::<Expr>()?;
+                        AttrType::FieldTokens(toks)
+                    }
+                }
             }
+
             // let lit_str = if name_str == "style" && s.peek(token::Brace) {
             //     // special-case to deal with literal styles.
             //     let outer;
@@ -465,7 +493,7 @@ impl ToTokens for &ElementAttr {
         let nameident = &self.name;
         let _attr_stream = TokenStream2::new();
         match &self.ty {
-            AttrType::Value(value) => {
+            AttrType::BumpText(value) => {
                 tokens.append_all(quote! {
                     .attr(#name, {
                         use bumpalo::core_alloc::fmt::Write;

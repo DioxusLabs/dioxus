@@ -30,3 +30,8 @@ partialeq
 rsx
 Ctx
 fmt
+Reqwest
+Gloo
+mobx
+img
+svg

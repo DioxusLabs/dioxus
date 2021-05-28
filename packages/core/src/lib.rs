@@ -6,7 +6,7 @@
 //! </div>
 //! Dioxus: a concurrent, functional, reactive virtual dom for any renderer in Rust.
 //!
-//! This crate aims to maintain a uniform hook-based, renderer-agnostic UI framework for cross-platform development.
+//! This crate aims to maintain a hook-based, renderer-agnostic framework for cross-platform UI development.
 //!
 //! ## Components
 //! The base unit of Dioxus is the `component`. Components can be easily created from just a function - no traits required:
@@ -16,8 +16,8 @@
 //! #[derive(Properties)]
 //! struct Props { name: String }
 //!
-//! fn Example(ctx: &mut Context<Props>) -> VNode {
-//!     html! { <div> "Hello {ctx.props.name}!" </div> }
+//! fn Example(ctx: Context, props: &Props) -> DomTree {
+//!     html! { <div> "Hello {props.name}!" </div> }
 //! }
 //! ```
 //! Components need to take a "Context" parameter which is generic over some properties. This defines how the component can be used
@@ -37,11 +37,14 @@
 //! ```
 //!
 //! If the properties struct is too noisy for you, we also provide a macro that converts variadic functions into components automatically.
+//! Many people don't like the magic of proc macros, so this is entirely optional. Under-the-hood, we simply transplant the
+//! function arguments into a struct, so there's very little actual magic happening.
+//!
 //! ```
 //! use dioxus_core::prelude::*;
 //!
-//! #[fc]
-//! static Example: FC = |ctx, name: String| {
+//! #[derive_props]
+//! static Example: FC = |ctx, name: &String| {
 //!     html! { <div> "Hello {name}!" </div> }
 //! }
 //! ```
@@ -49,7 +52,8 @@
 //! ## Hooks
 //! Dioxus uses hooks for state management. Hooks are a form of state persisted between calls of the function component. Instead of
 //! using a single struct to store data, hooks use the "use_hook" building block which allows the persistence of data between
-//! function component renders.
+//! function component renders. Each hook stores some data in a "memory cell" and needs to be called in a consistent order.
+//! This means hooks "anything with `use_x`" may not be called conditionally.
 //!
 //! This allows functions to reuse stateful logic between components, simplify large complex components, and adopt more clear context
 //! subscription patterns to make components easier to read.
@@ -67,7 +71,7 @@
 
 pub mod arena;
 pub mod component; // Logic for extending FC
-pub mod context; // Logic for providing hook + context functionality to user components
+
 pub mod debug_renderer;
 pub mod diff;
 pub mod patch; // An "edit phase" described by transitions and edit operations // Test harness for validating that lifecycles and diffs work appropriately
@@ -86,7 +90,7 @@ pub mod builder {
 // types used internally that are important
 pub(crate) mod innerlude {
     pub use crate::component::*;
-    pub use crate::context::*;
+
     pub use crate::debug_renderer::*;
     pub use crate::diff::*;
     pub use crate::error::*;
@@ -98,10 +102,6 @@ pub(crate) mod innerlude {
     pub use crate::virtual_dom::*;
 
     pub type FC<P> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
-
-    // TODO @Jon, fix this
-    // hack the VNode type until VirtualNode is fixed in the macro crate
-    pub type VirtualNode<'a> = VNode<'a>;
 
     // Re-export the FC macro
     pub use crate as dioxus;

@@ -5,10 +5,11 @@ This is the core crate for the Dioxus Virtual DOM. This README will focus on the
 We reserve the "dioxus" name and aggregate all the various renderers under it. If you want just a single dioxus renderer, then chose from "dioxus-web", "dioxus-desktop", etc.
 
 ## Internals
+
 Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus borrows these concepts:
 
 - React: hooks, concurrency, suspense
-- Dodrio: bump allocation, double buffering, and source code for nodes + NodeBuilder
+- Dodrio: bump allocation, double buffering, and source code for NodeBuilder
 - Percy: html! macro architecture, platform-agnostic edits
 - Yew: passion and inspiration ❤️
 
@@ -28,7 +29,7 @@ We have big goals for Dioxus. The final implementation must:
 
 - Support a pluggable allocation strategy that makes VNode creation **very** fast
 - Support lazy DomTrees (ie DomTrees that are not actually created when the html! macro is used)
-- Support advanced diffing strategies (patience, Myers, etc)
+- Support advanced diffing strategies (patience, Meyers, etc)
 
 ## Design Quirks
 

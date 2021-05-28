@@ -5,14 +5,10 @@
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, NodeCtx, Properties, ScopeIdx, FC},
+    innerlude::{Context, Properties, ScopeIdx, FC},
 };
-
 use bumpalo::Bump;
-use std::fmt::Debug;
-use std::sync::Arc;
-use std::{any::Any, cell::RefCell, marker::PhantomData};
-type Rc<T> = Arc<T>;
+use std::{cell::RefCell, fmt::Debug, marker::PhantomData, rc::Rc};
 
 /// A domtree represents the result of "Viewing" the context
 /// It's a placeholder over vnodes, to make working with lifetimes easier
@@ -21,25 +17,16 @@ pub struct DomTree {
     pub(crate) root: VNode<'static>,
 }
 
-// ==============================
-//   VNODES
-// ==============================
-
 /// Tools for the base unit of the virtual dom - the VNode
 /// VNodes are intended to be quickly-allocated, lightweight enum values.
 ///
 /// Components will be generating a lot of these very quickly, so we want to
 /// limit the amount of heap allocations / overly large enum sizes.
-#[derive(Debug)]
 pub enum VNode<'src> {
     /// An element node (node type `ELEMENT_NODE`).
     Element(&'src VElement<'src>),
 
     /// A text node (node type `TEXT_NODE`).
-    ///
-    /// Note: This wraps a `VText` instead of a plain `String` in
-    /// order to enable custom methods like `create_text_node()` on the
-    /// wrapped type.
     Text(VText<'src>),
 
     /// A "suspended component"
@@ -101,7 +88,6 @@ impl<'a> VNode<'a> {
 // ========================================================
 //   VElement (div, h1, etc), attrs, keys, listener handle
 // ========================================================
-#[derive(Debug)]
 pub struct VElement<'a> {
     /// Elements have a tag name, zero or more attributes, and zero or more
     pub key: NodeKey<'a>,
@@ -110,20 +96,6 @@ pub struct VElement<'a> {
     pub attributes: &'a [Attribute<'a>],
     pub children: &'a [VNode<'a>],
     pub namespace: Option<&'a str>,
-}
-
-impl<'a> VElement<'a> {
-    // The tag of a component MUST be known at compile time
-    pub fn new(_tag: &'a str) -> Self {
-        todo!()
-        // VElement {
-        //     tag,
-        //     attrs: HashMap::new(),
-        //     events: HashMap::new(),
-        //     // events: Events(HashMap::new()),
-        //     children: vec![],
-        // }
-    }
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or
@@ -174,17 +146,8 @@ pub struct Listener<'bump> {
     pub scope: ScopeIdx,
     pub id: usize,
 
-    // pub(crate) _i: &'bump str,
-    // #[serde(skip_serializing, skip_deserializing, default="")]
-    // /// The callback to invoke when the event happens.
+    /// The callback to invoke when the event happens.
     pub(crate) callback: &'bump (dyn Fn(VirtualEvent)),
-}
-impl Debug for Listener<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Listener")
-            .field("event", &self.event)
-            .finish()
-    }
 }
 
 /// The key for keyed children.
@@ -261,12 +224,6 @@ pub struct VComponent<'src> {
     // a pointer to the raw fn typ
     pub user_fc: *const (),
     _p: PhantomData<&'src ()>,
-}
-
-impl std::fmt::Debug for VComponent<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
-    }
 }
 
 impl<'a> VComponent<'a> {

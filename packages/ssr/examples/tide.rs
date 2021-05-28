@@ -29,7 +29,12 @@ static Example: FC<ExampleProps> = |ctx, props| {
 
     ctx.render(rsx! {
         div {
-            class: "py-12 px-4 text-center w-full max-w-2xl mx-auto"
+            class: "py-12 px-4 text-center w-full max-w-2xl mx-auto",
+            // classes: [Some("asd")]
+            // style: {
+            //     a: "asd"
+            //     b: "ad"
+            // }
             span {
                 class: "text-sm font-semibold"
                 "Dioxus Example: Jack and Jill"
