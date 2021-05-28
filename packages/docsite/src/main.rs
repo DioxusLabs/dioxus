@@ -8,4 +8,6 @@ fn main() {
     TextRenderer::new(App);
 }
 
-fn App(ctx: Context, props: &()) -> DomTree {}
+fn App(ctx: Context, props: &()) -> DomTree {
+    todo!()
+}

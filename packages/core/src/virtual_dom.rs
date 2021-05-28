@@ -467,6 +467,12 @@ impl VirtualDom {
     }
 }
 
+// TODO!
+//
+// These impls are actually wrong. The DOM needs to have a mutex implemented.
+unsafe impl Sync for VirtualDom {}
+unsafe impl Send for VirtualDom {}
+
 /// Every component in Dioxus is represented by a `Scope`.
 ///
 /// Scopes contain the state for hooks, the component's props, and other lifecycle information.

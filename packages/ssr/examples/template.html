@@ -272,6 +272,8 @@
             const template = interp.getTemplate(id);
             interp.stack.push(template.cloneNode(true));
         }
+
+        NewListener(edit, interp) {}
     }
 
     const op_table = new OPTABLE();
@@ -284,7 +286,13 @@
         });
     }
 
-    external.invoke("initiate");
+    let socket = new WebSocket("ws://127.0.0.1:8080/session/itsworkinggg");
+    socket.onmessage = function(event) {
+        console.log(event.data);
+        EditListReceived(event.data);
+    }
+    // external.invoke("initiate");
+
 </script>
 
 </html>

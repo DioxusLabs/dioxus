@@ -15,7 +15,7 @@ struct ExampleProps {
 }
 
 static Example: FC<ExampleProps> = |ctx, props| {
-    let dispaly_name = use_state_new(&ctx, move || props.initial_name);
+    let dispaly_name = use_state_new(&ctx, move || props.initial_name.clone());
 
     let buttons = ["Jack", "Jill", "Bob"].iter().map(|name| {
         rsx!{
@@ -38,65 +38,39 @@ static Example: FC<ExampleProps> = |ctx, props| {
                 class: "text-5xl mt-2 mb-6 leading-tight font-semibold font-heading"
                 "Hello, {dispaly_name}"
             }
+            {buttons}
         }
     })
 };
 
 const TEMPLATE: &str = include_str!("./template.html");
 
-// static VDOM: Arc<RwLock<VirtualDom>> = Arc::new(RwLock::new(VirtualDom::new_with_props(
-//     Example,
-//     ExampleProps {
-//         initial_name: "asd".to_string(),
-//     },
-// )));
-
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
     let mut app = tide::new();
 
-    let (se, re) = async_std::channel::unbounded::<()>();
-    async_std::task::spawn(async move {
-        let dom = VirtualDom::new_with_props(
-            Example,
-            ExampleProps {
-                initial_name: "asd".to_string(),
-            },
-        );
-        while let Ok(msg) = re.recv().await {
-            //
-        }
-    });
-    // app.at("/").get(|_| async { Ok(Body::from_file())});
-
     app.at("/").get(|_| async {
-        //
-        let response = Response::builder(200)
+        Ok(Response::builder(200)
             .body(TEMPLATE)
             .content_type(tide::http::mime::HTML)
-            .build();
-        Ok(response)
+            .build())
     });
 
     app.at("/session/:name")
         .get(WebSocket::new(|req: Request<()>, mut stream| async move {
             let initial_name: String = req.param("name")?.parse().unwrap_or("...?".to_string());
 
-            // {
-            //     let a = Rc::new(());
+            let mut dom = VirtualDom::new_with_props(Example, ExampleProps { initial_name });
+
+            let edits = dom.rebuild().unwrap();
+            stream.send_json(&edits).await?;
+
+            // while let Some(Ok(Message::Text(input))) = stream.next().await {
+            //     let output: String = input.chars().rev().collect();
+            //     stream
+            //         .send_string(format!("{} | {}", &input, &output))
+            //         .await?;
             // }
-            // let dom = VirtualDom::new_with_props(Example, ExampleProps { initial_name });
-
-            // let g = RwLock::new(Rc::new(10));
-            // drop(g);
-
-            while let Some(Ok(Message::Text(input))) = stream.next().await {
-                let output: String = input.chars().rev().collect();
-
-                stream
-                    .send_string(format!("{} | {}", &input, &output))
-                    .await?;
-            }
 
             Ok(())
         }));
