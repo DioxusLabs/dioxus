@@ -28,7 +28,7 @@ pub struct TodoItem {
 }
 
 // Declare our global app state
-const TODO_LIST: Atom<HashMap<Uuid, TodoItem>> = |_| Default::default();
+const TODO_LIST: AtomHashMap<Uuid, TodoItem> = |_| {};
 const FILTER: Atom<FilterState> = |_| FilterState::All;
 const TODOS_LEFT: Selector<usize> = |api| api.get(&TODO_LIST).len();
 
@@ -74,8 +74,8 @@ impl TodoManager {
 
 pub fn TodoList(ctx: Context, _props: &()) -> DomTree {
     let draft = use_state_new(&ctx, || "".to_string());
-    let todos = use_recoil_value(&ctx, &TODO_LIST);
-    let filter = use_recoil_value(&ctx, &FILTER);
+    let todos = use_read(&ctx, &TODO_LIST);
+    let filter = use_read(&ctx, &FILTER);
 
     let todolist = todos
         .values()
@@ -91,8 +91,8 @@ pub fn TodoList(ctx: Context, _props: &()) -> DomTree {
             })
         });
 
-    rsx! { in ctuse_read
-        div {use_read
+    rsx! { in ctx,
+        div {
             header {
                 class: "header"
                 h1 {"todos"}
@@ -118,7 +118,7 @@ pub struct TodoEntryProps {
 
 pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    let todo = use_recoil_value(&ctx, &TODO_LIST).get(&props.id).unwrap();
+    let todo = use_read(&ctx, &TODO_LIST).get(&props.id).unwrap();
 
     ctx.render(rsx! (
         li {
@@ -135,11 +135,11 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
            ))}
         }
     ))
-}use_read
+}
 
 pub fn FilterToggles(ctx: Context, _props: &()) -> DomTree {
-    let reducer = use_recoil_callback(ctx, |api| TodoManager(api));
-    let items_left = use_recoil_value(ctx, &TODOS_LEFT);
+    let reducer = TodoManager(use_recoil_api(ctx));
+    let items_left = use_read(ctx, &TODOS_LEFT);
 
     let toggles = [
         ("All", "", FilterState::All),
@@ -198,9 +198,9 @@ pub fn Footer(ctx: Context, _props: &()) -> DomTree {
 const APP_STYLE: &'static str = include_str!("./todomvc/style.css");
 
 fn App(ctx: Context, _props: &()) -> DomTree {
-    use_init_recoil_root(ctx);
+    use_init_recoil_root(ctx, |_| {});
     rsx! { in ctx,
-        div { id: "app", style { "{APP_STYLE}" }
+        div { id: "app"
             TodoList {}
             Footer {}
         }

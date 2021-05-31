@@ -136,6 +136,8 @@
         interp.stack.push(document.createElement(tagName));
       }
 
+
+
       // 11
       NewEventListener(edit, interp) {
         // todo!
@@ -186,7 +188,7 @@
       }
 
       // 16
-      CreateElementNS(edit, interp) {
+      CreateElementNs(edit, interp) {
         //   const tagNameId = mem32[i++];
         //   const tagName = interp.getCachedString(tagNameId);
         //   const nsId = mem32[i++];
@@ -280,7 +282,9 @@
 
     function EditListReceived(rawEditList) {
       let editList = JSON.parse(rawEditList);
+      console.warn("hnelllo");
       editList.forEach(function (edit, index) {
+        console.log(edit);
         op_table[edit.type](edit, interpreter);
       });
     }

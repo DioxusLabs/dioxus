@@ -38,7 +38,6 @@ static App: FC<()> = |ctx, _| {
     ctx.render(rsx!(
         div {
             id: "app"
-            style { "{APP_STYLE}" }
 
             div {
                 header {

@@ -30,7 +30,6 @@ pub fn App(ctx: Context, props: &()) -> DomTree {
     ctx.render(rsx! {
         div {
             id: "app"
-            style { "{APP_STYLE}" }
 
             // list
             TodoList {}
@@ -101,7 +100,7 @@ pub struct TodoEntryProps {
     item: Rc<TodoItem>,
 }
 
-// pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
+pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
 // #[inline_props]
 pub fn TodoEntry(
     ctx: Context,

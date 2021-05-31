@@ -13,6 +13,8 @@
 //!
 //!
 
+use crate::util::is_valid_svg_tag;
+
 use {
     proc_macro::TokenStream,
     proc_macro2::{Span, TokenStream as TokenStream2},
@@ -32,13 +34,17 @@ pub struct HtmlRender {
 }
 
 impl Parse for HtmlRender {
-    fn parse(s: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(LitStr) {
+            return input.parse::<LitStr>()?.parse::<HtmlRender>();
+        }
+
         // let ctx: Ident = s.parse()?;
         // s.parse::<Token![,]>()?;
         // if elements are in an array, return a bumpalo::collections::Vec rather than a Node.
-        let kind = if s.peek(token::Bracket) {
+        let kind = if input.peek(token::Bracket) {
             let nodes_toks;
-            syn::bracketed!(nodes_toks in s);
+            syn::bracketed!(nodes_toks in input);
             let mut nodes: Vec<MaybeExpr<Node>> = vec![nodes_toks.parse()?];
             while nodes_toks.peek(Token![,]) {
                 nodes_toks.parse::<Token![,]>()?;
@@ -46,7 +52,7 @@ impl Parse for HtmlRender {
             }
             NodeOrList::List(NodeList(nodes))
         } else {
-            NodeOrList::Node(s.parse()?)
+            NodeOrList::Node(input.parse()?)
         };
         Ok(HtmlRender { kind })
     }
@@ -147,13 +153,20 @@ struct Element {
 impl ToTokens for ToToksCtx<&Element> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         // let ctx = self.ctx;
-        let _name = &self.inner.name;
+        let name = &self.inner.name.to_string();
         tokens.append_all(quote! {
-            dioxus::builder::ElementBuilder::new(ctx, "#name")
+            dioxus::builder::ElementBuilder::new(ctx, #name)
         });
         for attr in self.inner.attrs.iter() {
             self.recurse(attr).to_tokens(tokens);
         }
+
+        if is_valid_svg_tag(name) {
+            tokens.append_all(quote! {
+                .namespace(Some("http://www.w3.org/2000/svg"))
+            });
+        }
+
         match &self.inner.children {
             MaybeExpr::Expr(expr) => tokens.append_all(quote! {
                 .children(#expr)
@@ -229,6 +242,7 @@ impl Parse for Element {
             ));
         }
         s.parse::<Token![>]>()?;
+
         Ok(Self {
             name,
             attrs,
@@ -297,9 +311,15 @@ impl ToTokens for ToToksCtx<&Attr> {
         match &self.inner.ty {
             AttrType::Value(value) => {
                 let value = self.recurse(value);
-                tokens.append_all(quote! {
-                    .attr(#name, #value)
-                });
+                if name == "xmlns" {
+                    tokens.append_all(quote! {
+                        .namespace(Some(#value))
+                    });
+                } else {
+                    tokens.append_all(quote! {
+                        .attr(#name, format_args_f!(#value))
+                    });
+                }
             }
             AttrType::Event(event) => {
                 tokens.append_all(quote! {
@@ -334,14 +354,7 @@ impl ToTokens for ToToksCtx<&TextNode> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let mut token_stream = TokenStream2::new();
         self.recurse(&self.inner.0).to_tokens(&mut token_stream);
-        tokens.append_all(quote! {
-            {
-                use bumpalo::core_alloc::fmt::Write;
-                let mut s = bumpalo::collections::String::new_in(bump);
-                s.write_fmt(format_args_f!(#token_stream)).unwrap();
-                dioxus::builder::text2(s)
-            }
-        });
+        tokens.append_all(quote! {dioxus::builder::text3(bump, format_args_f!(#token_stream))});
     }
 }
 

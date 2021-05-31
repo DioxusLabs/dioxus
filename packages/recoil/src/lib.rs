@@ -6,7 +6,6 @@ use std::{
     rc::Rc,
 };
 
-pub use api::*;
 pub use atomfamily::*;
 pub use atoms::*;
 pub use ecs::*;
@@ -18,13 +17,14 @@ pub use selector::*;
 pub use selectorfamily::*;
 pub use traits::*;
 pub use utils::*;
+mod tracingimmap;
 
 mod traits {
     use dioxus_core::prelude::Context;
 
     use super::*;
-    pub trait FamilyKey: PartialEq + Hash + 'static {}
-    impl<T: PartialEq + Hash + 'static> FamilyKey for T {}
+    pub trait MapKey: PartialEq + Hash + 'static {}
+    impl<T: PartialEq + Hash + 'static> MapKey for T {}
 
     pub trait AtomValue: PartialEq + 'static {}
     impl<T: PartialEq + 'static> AtomValue for T {}
@@ -32,8 +32,7 @@ mod traits {
     // Atoms, selectors, and their family variants are readable
     pub trait Readable<T: AtomValue>: Sized + Copy {
         fn use_read<'a>(self, ctx: Context<'a>) -> &'a T {
-            hooks::use_read(ctx, self);
-            todo!()
+            hooks::use_read(ctx, self)
         }
 
         // This returns a future of the value
@@ -44,9 +43,7 @@ mod traits {
             todo!()
         }
 
-        fn initialize(self, api: &RecoilRoot) -> T {
-            todo!()
-        }
+        fn initialize(self, api: &RecoilRoot) -> T;
 
         // We use the Raw Ptr to the atom
         // TODO: Make sure atoms with the same definitions don't get merged together. I don't think they do, but double check
@@ -78,7 +75,13 @@ mod atoms {
     // impl<T: AtomValue> Readable<T> for Atom<T> {}
     impl<T: AtomValue> Readable<T> for &'static Atom<T> {
         fn static_id(self) -> u32 {
-            todo!()
+            self as *const _ as u32
+        }
+
+        fn initialize(self, api: &RecoilRoot) -> T {
+            let mut builder = AtomBuilder {};
+            let p = self(&mut builder);
+            p
         }
     }
 
@@ -88,13 +91,13 @@ mod atoms {
         use super::*;
         use dioxus_core::prelude::Context;
 
-        const Example: Atom<i32> = |_| 10;
+        fn _test(ctx: Context) {
+            const EXAMPLE_ATOM: Atom<i32> = |_| 10;
 
-        fn test(ctx: Context) {
             // ensure that atoms are both read and write
-            let _ = use_read(ctx, &Example);
-            let _ = use_read_write(ctx, &Example);
-            let _ = use_write(ctx, &Example);
+            let _ = use_read(ctx, &EXAMPLE_ATOM);
+            let _ = use_read_write(ctx, &EXAMPLE_ATOM);
+            let _ = use_write(ctx, &EXAMPLE_ATOM);
         }
     }
 }
@@ -104,38 +107,57 @@ mod atomfamily {
     pub trait FamilyCollection<K, V> {}
     impl<K, V> FamilyCollection<K, V> for HashMap<K, V> {}
 
-    pub type AtomFamily<K, V, F = HashMap<K, V>> = fn((&K, &V)) -> F;
+    use im_rc::HashMap as ImHashMap;
 
-    pub trait AtomFamilySelector<K: FamilyKey, V: AtomValue> {
-        fn select(&'static self, k: &K) -> AtomFamilySelection<K, V> {
+    /// AtomHashMaps provide an efficient way of maintaing collections of atoms.
+    ///
+    /// Under the hood, AtomHashMaps uses [IM](https://www.rust-lang.org)'s immutable HashMap implementation to lazily
+    /// clone data as it is modified.
+    ///
+    ///
+    ///
+    ///
+    ///
+    ///
+    pub type AtomHashMap<K, V> = fn(&mut ImHashMap<K, V>);
+
+    pub trait AtomFamilySelector<K: MapKey, V: AtomValue + Clone> {
+        fn select(&'static self, k: &K) -> AtomMapSelection<K, V> {
             todo!()
         }
     }
 
-    impl<K: FamilyKey, V: AtomValue> AtomFamilySelector<K, V> for AtomFamily<K, V> {
-        fn select(&'static self, k: &K) -> AtomFamilySelection<K, V> {
+    impl<K: MapKey, V: AtomValue + Clone> AtomFamilySelector<K, V> for AtomHashMap<K, V> {
+        fn select(&'static self, k: &K) -> AtomMapSelection<K, V> {
             todo!()
         }
     }
 
-    pub struct AtomFamilySelection<'a, K: FamilyKey, V: AtomValue> {
-        root: &'static AtomFamily<K, V>,
+    pub struct AtomMapSelection<'a, K: MapKey, V: AtomValue> {
+        root: &'static AtomHashMap<K, V>,
         key: &'a K,
     }
 
-    impl<'a, K: FamilyKey, V: AtomValue> Readable<V> for &AtomFamilySelection<'a, K, V> {
+    impl<'a, K: MapKey, V: AtomValue> Readable<V> for &AtomMapSelection<'a, K, V> {
         fn static_id(self) -> u32 {
             todo!()
         }
+
+        fn initialize(self, api: &RecoilRoot) -> V {
+            todo!()
+            // let mut builder = AtomBuilder {};
+            // let p = self(&mut builder);
+            // p
+        }
     }
 
-    impl<'a, K: FamilyKey, T: AtomValue> Writable<T> for &AtomFamilySelection<'a, K, T> {}
+    impl<'a, K: MapKey, T: AtomValue> Writable<T> for &AtomMapSelection<'a, K, T> {}
 
     mod compiletests {
         use dioxus_core::prelude::Context;
 
         use super::*;
-        const Titles: AtomFamily<u32, &str> = |_| HashMap::new();
+        const Titles: AtomHashMap<u32, &str> = |map| {};
 
         fn test(ctx: Context) {
             let title = Titles.select(&10).use_read(ctx);
@@ -155,6 +177,10 @@ mod selector {
     pub type Selector<T> = fn(&mut SelectorBuilder) -> T;
     impl<T: AtomValue> Readable<T> for &'static Selector<T> {
         fn static_id(self) -> u32 {
+            todo!()
+        }
+
+        fn initialize(self, api: &RecoilRoot) -> T {
             todo!()
         }
     }
@@ -184,6 +210,10 @@ mod selectorfamily {
         fn static_id(self) -> u32 {
             todo!()
         }
+
+        fn initialize(self, api: &RecoilRoot) -> V {
+            todo!()
+        }
     }
 
     /// Borrowed selector families are – surprisingly - discouraged.
@@ -196,32 +226,12 @@ mod selectorfamily {
     // impl<'a, K, V: 'a> SelectionSelector<K, V> for fn(&'a mut SelectorFamilyBuilder, K) -> V {}
 }
 
-mod api {
-    use super::*;
-
-    // pub struct RecoilApi {}
-    // impl RecoilApi {
-    //     pub fn get<T: AtomValue>(&self, t: &'static Atom<T>) -> Rc<T> {
-    //         todo!()
-    //     }
-    //     pub fn modify<T: PartialEq, O>(
-    //         &self,
-    //         t: &'static Atom<T>,
-    //         f: impl FnOnce(&mut T) -> O,
-    //     ) -> O {
-    //         todo!()
-    //     }
-    //     pub fn set<T: AtomValue>(&self, t: &'static Atom<T>, new: T) {
-    //         self.modify(t, move |old| *old = new);
-    //     }
-    // }
-}
-
 mod root {
     use std::{
         any::{Any, TypeId},
         collections::{HashSet, VecDeque},
         iter::FromIterator,
+        sync::atomic::{AtomicU32, AtomicUsize},
     };
 
     use super::*;
@@ -229,17 +239,7 @@ mod root {
     type AtomId = u32;
     type ConsumerId = u32;
 
-    pub struct RecoilContext {
-        pub(crate) inner: Rc<RefCell<RecoilRoot>>,
-    }
-
-    impl RecoilContext {
-        pub fn new() -> Self {
-            Self {
-                inner: Rc::new(RefCell::new(RecoilRoot::new())),
-            }
-        }
-    }
+    pub type RecoilContext = RefCell<RecoilRoot>;
 
     // Sometimes memoization means we don't need to re-render components that holds "correct values"
     // IE we consider re-render more expensive than keeping the old value around.
@@ -248,7 +248,8 @@ mod root {
     // Instead, we choose to let the hook itself hold onto the Rc<T> by not forcing a render when T is the same.
     // Whenever the component needs to be re-rendered for other reasons, the "get" method will automatically update the Rc<T> to the most recent one.
     pub struct RecoilRoot {
-        nodes: HashMap<AtomId, Slot>,
+        nodes: RefCell<HashMap<AtomId, Slot>>,
+        consumer_map: HashMap<ConsumerId, AtomId>,
     }
 
     struct Slot {
@@ -259,23 +260,40 @@ mod root {
         dependents: HashSet<AtomId>,
     }
 
+    static NEXT_ID: AtomicU32 = AtomicU32::new(0);
+    fn next_consumer_id() -> u32 {
+        NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
     impl RecoilRoot {
         pub(crate) fn new() -> Self {
             Self {
                 nodes: Default::default(),
+                consumer_map: Default::default(),
             }
         }
 
         pub fn subscribe<T: AtomValue>(
-            &self,
+            &mut self,
             readable: impl Readable<T>,
             receiver_fn: Rc<dyn Fn()>,
         ) -> ConsumerId {
-            todo!()
+            let consumer_id = next_consumer_id();
+            let atom_id = readable.static_id();
+            log::debug!("Subscribing consumer to atom {} {}", consumer_id, atom_id);
+
+            let mut nodes = self.nodes.borrow_mut();
+            let slot = nodes.get_mut(&atom_id).unwrap();
+            slot.consumers.insert(consumer_id, receiver_fn);
+            self.consumer_map.insert(consumer_id, atom_id);
+            consumer_id
         }
 
-        pub fn unsubscribe(&self, id: ConsumerId) {
-            todo!()
+        pub fn unsubscribe(&mut self, consumer_id: ConsumerId) {
+            let atom_id = self.consumer_map.get(&consumer_id).unwrap();
+            let mut nodes = self.nodes.borrow_mut();
+            let slot = nodes.get_mut(&atom_id).unwrap();
+            slot.consumers.remove(&consumer_id);
         }
 
         /// Directly get the *slot*
@@ -283,12 +301,28 @@ mod root {
         ///
         ///
         pub fn try_get_raw<T: AtomValue>(&self, readable: impl Readable<T>) -> Result<Rc<T>> {
-            todo!()
-        }
+            let atom_id = readable.static_id();
+            let mut nodes = self.nodes.borrow_mut();
+            if !nodes.contains_key(&atom_id) {
+                let value = Slot {
+                    type_id: TypeId::of::<T>(),
+                    source: atom_id,
+                    value: Rc::new(readable.initialize(self)),
+                    consumers: Default::default(),
+                    dependents: Default::default(),
+                };
+                nodes.insert(atom_id, value);
+            }
+            let out = nodes
+                .get(&atom_id)
+                .unwrap()
+                .value
+                .clone()
+                .downcast::<T>()
+                .unwrap();
 
-        // pub fn try_get<T: AtomValue>(&self, readable: impl Readable<T>) -> Result<&T> {
-        //     self.try_get_raw(readable).map(|f| f.as_ref())
-        // }
+            Ok(out)
+        }
 
         pub fn try_set<T: AtomValue>(
             &mut self,
@@ -297,7 +331,15 @@ mod root {
         ) -> crate::error::Result<()> {
             let atom_id = writable.static_id();
 
-            let consumers = match self.nodes.get_mut(&atom_id) {
+            self.set_by_id(atom_id, new_val);
+
+            Ok(())
+        }
+
+        // A slightly dangerous method to manually overwrite any slot given an AtomId
+        pub(crate) fn set_by_id<T: AtomValue>(&mut self, atom_id: AtomId, new_val: T) {
+            let mut nodes = self.nodes.borrow_mut();
+            let consumers = match nodes.get_mut(&atom_id) {
                 Some(slot) => {
                     slot.value = Rc::new(new_val);
                     &slot.consumers
@@ -306,44 +348,30 @@ mod root {
                     let value = Slot {
                         type_id: TypeId::of::<T>(),
                         source: atom_id,
-                        value: Rc::new(writable.initialize(self)),
+                        value: Rc::new(new_val),
+                        // value: Rc::new(writable.initialize(self)),
                         consumers: Default::default(),
                         dependents: Default::default(),
                     };
-                    self.nodes.insert(atom_id, value);
-                    &self.nodes.get(&atom_id).unwrap().consumers
+                    nodes.insert(atom_id, value);
+                    &nodes.get(&atom_id).unwrap().consumers
                 }
             };
 
-            for (_, consumer_fn) in consumers {
+            for (id, consumer_fn) in consumers {
+                log::debug!("triggering selector {}", id);
                 consumer_fn();
             }
-
-            // if it's a an atom or selector, update all the dependents
-
-            Ok(())
         }
-
-        pub fn get<T: AtomValue>(&self, readable: impl Readable<T>) -> Rc<T> {
-            todo!()
-            // self.try_get(readable).unwrap()
-        }
-
-        pub fn set<T: AtomValue>(&mut self, writable: impl Writable<T>, new_val: T) {
-            self.try_set(writable, new_val).unwrap();
-        }
-
-        /// A slightly dangerous method to manually overwrite any slot given an AtomId
-        pub(crate) fn set_by_id<T: AtomValue>(&self, id: AtomId, new_val: T) {}
     }
 }
 
 mod hooks {
     use super::*;
-    use dioxus_core::prelude::Context;
+    use dioxus_core::{hooks::use_ref, prelude::Context};
 
     pub fn use_init_recoil_root(ctx: Context, cfg: impl Fn(())) {
-        ctx.use_create_context(move || RecoilRoot::new())
+        ctx.use_create_context(move || RefCell::new(RecoilRoot::new()))
     }
 
     /// Gain access to the recoil API directly - set, get, modify, everything
@@ -353,25 +381,28 @@ mod hooks {
     ///
     /// You can use this method to create controllers that perform much more complex actions than set/get
     /// However, be aware that "getting" values through this hook will not subscribe the component to any updates.
-    pub fn use_recoil_api<'a, F: 'a>(
-        ctx: Context<'a>,
-        f: impl Fn(Rc<RecoilRoot>) -> F + 'static,
-    ) -> &F {
-        let g = ctx.use_context::<RecoilContext>();
-        let api = g.inner.clone();
-        todo!()
+    pub fn use_recoil_api<'a>(ctx: Context<'a>) -> &Rc<RecoilContext> {
+        ctx.use_context::<RecoilContext>()
     }
 
     pub fn use_write<'a, T: AtomValue>(
         ctx: Context<'a>,
+        // todo: this shouldn't need to be static
         writable: impl Writable<T>,
     ) -> &'a Rc<dyn Fn(T)> {
-        let api = use_recoil_api(ctx, |f| f);
+        let api = use_recoil_api(ctx);
         ctx.use_hook(
             move || {
                 let api = api.clone();
                 let raw_id = writable.static_id();
-                Rc::new(move |new_val| api.set_by_id(raw_id, new_val)) as Rc<dyn Fn(T)>
+                Rc::new(move |new_val| {
+                    //
+                    log::debug!("setting new value ");
+                    let mut api = api.as_ref().borrow_mut();
+
+                    // api.try_set(writable, new_val).expect("failed to set");
+                    api.set_by_id(raw_id, new_val);
+                }) as Rc<dyn Fn(T)>
             },
             move |hook| &*hook,
             |hook| {},
@@ -387,9 +418,11 @@ mod hooks {
             consumer_id: u32,
         }
 
-        let api = use_recoil_api(ctx, |api| api);
+        let api = use_recoil_api(ctx);
         ctx.use_hook(
             move || {
+                let mut api = api.as_ref().borrow_mut();
+
                 let update = ctx.schedule_update();
                 let val = api.try_get_raw(readable).unwrap();
                 let id = api.subscribe(readable, Rc::new(update));
@@ -399,11 +432,14 @@ mod hooks {
                 }
             },
             move |hook| {
+                let api = api.as_ref().borrow();
+
                 let val = api.try_get_raw(readable).unwrap();
                 hook.value = val;
                 &hook.value
             },
-            |hook| {
+            move |hook| {
+                let mut api = api.as_ref().borrow_mut();
                 api.unsubscribe(hook.consumer_id);
             },
         )
@@ -414,12 +450,16 @@ mod hooks {
         use_read_raw(ctx, readable).as_ref()
     }
 
-    /// Use an atom in both read and write modes - only available for atoms and family selections (not selectors)
+    /// # Use an atom in both read and write
+    ///
+    /// This method is only available for atoms and family selections (not selectors).
+    ///
     /// This is equivalent to calling both `use_read` and `use_write`, but saves you the hassle and repitition
+    ///
+    /// ## Example
     ///
     /// ```
     /// const Title: Atom<&str> = |_| "hello";
-    /// //...
     /// let (title, set_title) = use_read_write(ctx, &Title);
     ///
     /// // equivalent to:
@@ -432,13 +472,40 @@ mod hooks {
         (use_read(ctx, writable), use_write(ctx, writable))
     }
 
+    /// # Modify an atom without using `use_read`.
+    ///
+    /// Occasionally, a component might want to write to an atom without subscribing to its changes. `use_write` does not
+    /// provide this functionality, so `use_modify` exists to gain access to the current atom value while setting it.
+    ///
+    /// ## Notes
+    ///
+    /// Do note that this hook can only be used with Atoms where T: Clone since we actually clone the current atom to make
+    /// it mutable.
+    ///
+    /// Also note that you need to stack-borrow the closure since the modify closure expects an &dyn Fn. If we made it
+    /// a static type, it wouldn't be possible to use the `modify` closure more than once (two closures always are different)
+    ///
+    /// ## Example
+    ///
+    /// ```ignore
+    /// let modify_atom = use_modify(ctx, Atom);
+    ///
+    /// modify_atom(&|a| *a += 1)
+    /// ```
+    pub fn use_modify<'a, T: AtomValue + 'static + Clone>(
+        ctx: Context<'a>,
+        writable: impl Writable<T>,
+    ) -> impl Fn(&dyn Fn()) {
+        |_| {}
+    }
+
     /// Use a family collection directly
     /// !! Any changes to the family will cause this subscriber to update
     /// Try not to put this at the very top-level of your app.
-    pub fn use_read_family<'a, K, V, C: FamilyCollection<K, V>>(
+    pub fn use_read_family<'a, K, V>(
         ctx: Context<'a>,
-        t: &AtomFamily<K, V, C>,
-    ) -> &'a C {
+        t: &AtomHashMap<K, V>,
+    ) -> &'a im_rc::HashMap<K, V> {
         todo!()
     }
 }

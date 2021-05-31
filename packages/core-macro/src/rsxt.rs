@@ -1,6 +1,6 @@
 use syn::parse::{discouraged::Speculative, ParseBuffer};
 
-use crate::util::is_valid_html_tag;
+use crate::util::is_valid_tag;
 
 use {
     proc_macro::TokenStream,
@@ -23,12 +23,16 @@ pub struct RsxRender {
 
 impl Parse for RsxRender {
     fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(LitStr) {
+            return input.parse::<LitStr>()?.parse::<RsxRender>();
+        }
+
         // try to parse the first ident and comma
         let custom_context =
             if input.peek(Token![in]) && input.peek2(Ident) && input.peek3(Token![,]) {
                 let _ = input.parse::<Token![in]>()?;
                 let name = input.parse::<Ident>()?;
-                if is_valid_html_tag(&name.to_string()) {
+                if is_valid_tag(&name.to_string()) {
                     return Err(Error::new(
                         input.span(),
                         "Custom context cannot be an html element name",
@@ -114,7 +118,7 @@ impl Parse for AmbiguousElement {
         if let Ok(name) = input.fork().parse::<Ident>() {
             let name_str = name.to_string();
 
-            match is_valid_html_tag(&name_str) {
+            match is_valid_tag(&name_str) {
                 true => input
                     .parse::<Element>()
                     .map(|c| AmbiguousElement::Element(c)),
@@ -134,6 +138,9 @@ impl Parse for AmbiguousElement {
                 }
             }
         } else {
+            if input.peek(LitStr) {
+                panic!("it's actually a litstr");
+            }
             Err(Error::new(input.span(), "Not a valid Html tag"))
         }
     }
@@ -318,7 +325,7 @@ impl Parse for Element {
         //
         let name = Ident::parse(stream)?;
 
-        if !crate::util::is_valid_html_tag(&name.to_string()) {
+        if !crate::util::is_valid_tag(&name.to_string()) {
             return Err(Error::new(name.span(), "Not a valid Html tag"));
         }
 
@@ -495,12 +502,7 @@ impl ToTokens for &ElementAttr {
         match &self.ty {
             AttrType::BumpText(value) => {
                 tokens.append_all(quote! {
-                    .attr(#name, {
-                        use bumpalo::core_alloc::fmt::Write;
-                        let mut s = bumpalo::collections::String::new_in(bump);
-                        s.write_fmt(format_args_f!(#value)).unwrap();
-                        s.into_bump_str()
-                    })
+                    .attr(#name, format_args_f!(#value))
                 });
             }
             AttrType::Event(event) => {
@@ -540,10 +542,11 @@ impl ToTokens for TextNode {
         let token_stream = &self.0.to_token_stream();
         tokens.append_all(quote! {
             {
-                use bumpalo::core_alloc::fmt::Write;
-                let mut s = bumpalo::collections::String::new_in(bump);
-                s.write_fmt(format_args_f!(#token_stream)).unwrap();
-                dioxus::builder::text2(s)
+                // use bumpalo::core_alloc::fmt::Write;
+                // let mut s = bumpalo::collections::String::new_in(bump);
+                // s.write_fmt(format_args_f!(#token_stream)).unwrap();
+                dioxus::builder::text3(bump, format_args_f!(#token_stream))
+                // dioxus::builder::text2(s)
             }
         });
     }

@@ -482,7 +482,7 @@ pub struct Scope {
 
     // IDs of children that this scope has created
     // This enables us to drop the children and their children when this scope is destroyed
-    pub children: RefCell<HashSet<ScopeIdx>>,
+    children: RefCell<HashSet<ScopeIdx>>,
 
     // A reference to the list of components.
     // This lets us traverse the component list whenever we need to access our parent or children.
@@ -595,6 +595,14 @@ impl Scope {
         // This breaks any latent references, invalidating every pointer referencing into it.
         self.frames.next().bump.reset();
 
+        // Remove all the outdated listeners
+        //
+        self.listeners
+            .try_borrow_mut()
+            .ok()
+            .ok_or(Error::FatalInternal("Borrowing listener failed"))?
+            .drain(..);
+
         *self.hookidx.borrow_mut() = 0;
 
         let caller = self
@@ -621,7 +629,7 @@ impl Scope {
         let EventTrigger {
             listener_id, event, ..
         } = trigger;
-
+        //
         unsafe {
             // Convert the raw ptr into an actual object
             // This operation is assumed to be safe
@@ -637,15 +645,6 @@ impl Scope {
 
             // Run the callback with the user event
             listener_fn(event);
-
-            // drain all the event listeners
-            // if we don't, then they'll stick around and become invalid
-            // big big big big safety issue
-            self.listeners
-                .try_borrow_mut()
-                .ok()
-                .ok_or(Error::FatalInternal("Borrowing listener failed"))?
-                .drain(..);
         }
         Ok(())
     }
@@ -687,7 +686,7 @@ pub type Context<'src> = &'src Scope;
 
 impl Scope {
     /// Access the children elements passed into the component
-    pub fn children(&self) -> Vec<VNode> {
+    pub fn children(&self) -> &[VNode] {
         todo!("Children API not yet implemented for component Context")
     }
 
@@ -742,6 +741,17 @@ impl Scope {
                 std::mem::transmute::<VNode<'scope>, VNode<'static>>(lazy_nodes.into_vnode(&ctx))
             },
         }
+    }
+
+    pub fn render2<'scope, F: for<'b> FnOnce(&'b NodeCtx<'scope>) -> VNode<'scope> + 'scope>(
+        &'scope self,
+        lazy_nodes: LazyNodes<'scope, F>,
+    ) -> VNode<'scope> {
+        let ctx = NodeCtx {
+            scope_ref: self,
+            listener_id: 0.into(),
+        };
+        lazy_nodes.into_vnode(&ctx)
     }
 }
 
@@ -863,60 +873,66 @@ impl Scope {
     }
 
     /// There are hooks going on here!
-    pub fn use_context<T: 'static>(&self) -> Rc<T> {
+    pub fn use_context<'a, T: 'static>(&'a self) -> &'a Rc<T> {
         self.try_use_context().unwrap()
     }
 
-    ///
-    pub fn try_use_context<T: 'static>(&self) -> Result<Rc<T>> {
-        let ty = TypeId::of::<T>();
-
-        let mut scope = Some(self);
-        let cached_root = use_ref(self, || None as Option<Weak<T>>);
-
-        // Try to provide the cached version without having to re-climb the tree
-        if let Some(ptr) = cached_root.borrow().as_ref() {
-            if let Some(pt) = ptr.clone().upgrade() {
-                return Ok(pt);
-            } else {
-                /*
-                failed to upgrade the weak is strange
-                this means the root dropped the context (the scope was killed)
-
-                The main idea here is to prevent memory leaks where parents should be cleaning up their own memory.
-
-                However, this behavior allows receivers/providers to move around in the hierarchy.
-                This works because we climb the tree if upgrading the Rc failed.
-                */
-            }
+    /// Uses a context, storing the cached value around
+    pub fn try_use_context<T: 'static>(&self) -> Result<&Rc<T>> {
+        struct UseContextHook<C> {
+            par: Option<Rc<C>>,
+            we: Option<Weak<C>>,
         }
 
-        while let Some(inner) = scope {
-            log::debug!("Searching {:#?} for valid shared_context", inner.arena_idx);
-            let shared_contexts = inner.shared_contexts.borrow();
-            if let Some(shared_ctx) = shared_contexts.get(&ty) {
-                let rc = shared_ctx
-                    .downcast_ref()
-                    .expect("Should not fail, already validated the type from the hashmap");
+        self.use_hook(
+            move || UseContextHook {
+                par: None as Option<Rc<T>>,
+                we: None as Option<Weak<T>>,
+            },
+            move |hook| {
+                let mut scope = Some(self);
 
-                *cached_root.borrow_mut() = Some(Rc::downgrade(&rc));
-                return Ok(rc.clone());
-            } else {
-                match inner.parent {
-                    Some(parent_id) => {
-                        let parent = inner
-                            .arena_link
-                            .try_get(parent_id)
-                            .map_err(|_| Error::FatalInternal("Failed to find parent"))?;
-
-                        scope = Some(parent);
+                if let Some(we) = &hook.we {
+                    if let Some(re) = we.upgrade() {
+                        hook.par = Some(re);
+                        return Ok(hook.par.as_ref().unwrap());
                     }
-                    None => return Err(Error::MissingSharedContext),
                 }
-            }
-        }
 
-        Err(Error::MissingSharedContext)
+                let ty = TypeId::of::<T>();
+                while let Some(inner) = scope {
+                    log::debug!("Searching {:#?} for valid shared_context", inner.arena_idx);
+                    let shared_contexts = inner.shared_contexts.borrow();
+
+                    if let Some(shared_ctx) = shared_contexts.get(&ty) {
+                        log::debug!("found matching ctx");
+                        let rc = shared_ctx
+                            .clone()
+                            .downcast::<T>()
+                            .expect("Should not fail, already validated the type from the hashmap");
+
+                        hook.we = Some(Rc::downgrade(&rc));
+                        hook.par = Some(rc);
+                        return Ok(hook.par.as_ref().unwrap());
+                    } else {
+                        match inner.parent {
+                            Some(parent_id) => {
+                                let parent = inner
+                                    .arena_link
+                                    .try_get(parent_id)
+                                    .map_err(|_| Error::FatalInternal("Failed to find parent"))?;
+
+                                scope = Some(parent);
+                            }
+                            None => return Err(Error::MissingSharedContext),
+                        }
+                    }
+                }
+
+                Err(Error::MissingSharedContext)
+            },
+            |_| {},
+        )
     }
 }
 

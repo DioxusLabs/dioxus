@@ -9,10 +9,14 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.40"
 dioxus-core = { path = "../core" }
-generational-arena = "0.2.8"
 thiserror = "1.0.24"
+log = "0.4.14"
+im-rc = "15.0.0"
 
 [dev-dependencies]
-uuid = { version = "0.8.2", features = ["v4"] }
+uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
 dioxus-web = { path = "../web" }
 wasm-bindgen-futures = "*"
+
+wasm-logger = "0.2.0"
+console_error_panic_hook = "0.1.6"

@@ -276,8 +276,15 @@ impl PatchMachine {
             Edit::SetAttribute { name, value } => {
                 let node = self.stack.top();
 
-                if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
+                log::debug!("setting attribute for element");
+
+                if let Some(node) = node.dyn_ref::<web_sys::Element>() {
+                    // node.set_attribute(name, value).unwrap();
+                    log::info!("setting attr {} {}", name, value);
                     node.set_attribute(name, value).unwrap();
+                }
+                if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
+                    log::debug!("el is html input element");
 
                     // Some attributes are "volatile" and don't work through `setAttribute`.
                     if name == "value" {
@@ -289,18 +296,22 @@ impl PatchMachine {
                 }
 
                 if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
+                    log::debug!("el is html option element");
                     if name == "selected" {
                         node.set_selected(true);
                     }
                 }
+                log::debug!("el is none");
+                // if let Some(node) = node.dyn_ref::<web_sys::Namesp>() {}
             }
 
             // 4
             Edit::RemoveAttribute { name } => {
                 let node = self.stack.top();
-                if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
+                if let Some(node) = node.dyn_ref::<web_sys::Element>() {
                     node.remove_attribute(name).unwrap();
-
+                }
+                if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
                     // Some attributes are "volatile" and don't work through `removeAttribute`.
                     if name == "value" {
                         node.set_value("");
@@ -433,6 +444,7 @@ impl PatchMachine {
                     .unwrap()
                     .dyn_into::<Node>()
                     .unwrap();
+                log::debug!("Made NS element {} {}", ns, tag_name);
                 self.stack.push(el);
             }
 

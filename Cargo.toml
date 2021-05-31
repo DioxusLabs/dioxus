@@ -8,7 +8,8 @@ members = [
     "packages/recoil",
     "packages/docsite",
     "packages/ssr",
-] # "packages/webview",
+    "packages/webview",
+]
 
 # "packages/cli",
 # "packages/webview",

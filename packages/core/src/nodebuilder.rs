@@ -387,8 +387,17 @@ where
     /// // Create the `<div id="my-div"/>` element.
     /// let my_div = div(&b).attr("id", "my-div").finish();
     /// ```
-    #[inline]
-    pub fn attr(mut self, name: &'static str, value: &'a str) -> Self {
+    pub fn attr(mut self, name: &'static str, args: std::fmt::Arguments) -> Self {
+        let value = match args.as_str() {
+            Some(static_str) => static_str,
+            None => {
+                use bumpalo::core_alloc::fmt::Write;
+                let mut s = bumpalo::collections::String::new_in(self.ctx.bump());
+                s.write_fmt(args).unwrap();
+                s.into_bump_str()
+            }
+        };
+
         self.attributes.push(Attribute { name, value });
         self
     }
@@ -578,6 +587,12 @@ impl<'a> IntoDomTree<'a> for () {
     }
 }
 
+impl<'a> IntoDomTree<'a> for Option<()> {
+    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+        VNode::Suspended
+    }
+}
+
 /// Construct a text VNode.
 ///
 /// This is `dioxus`'s virtual DOM equivalent of `document.createTextVNode`.
@@ -597,6 +612,26 @@ pub fn text<'a>(contents: &'a str) -> VNode<'a> {
 pub fn text2<'a>(contents: bumpalo::collections::String<'a>) -> VNode<'a> {
     let f: &'a str = contents.into_bump_str();
     VNode::text(f)
+}
+
+pub fn text3<'a>(bump: &'a bumpalo::Bump, args: std::fmt::Arguments) -> VNode<'a> {
+    // This is a cute little optimization
+    //
+    // We use format_args! on everything. However, not all textnodes have dynamic content, and thus are completely static.
+    // we can just short-circuit to the &'static str version instead of having to allocate in the bump arena.
+    //
+    // In the most general case, this prevents the need for any string allocations for simple code IE:
+    //      div {"abc"}
+    //
+    match args.as_str() {
+        Some(static_str) => VNode::text(static_str),
+        None => {
+            use bumpalo::core_alloc::fmt::Write;
+            let mut s = bumpalo::collections::String::new_in(bump);
+            s.write_fmt(args).unwrap();
+            VNode::text(s.into_bump_str())
+        }
+    }
 }
 
 /// Construct an attribute for an element.

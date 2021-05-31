@@ -14,7 +14,7 @@ use std::{cell::RefCell, fmt::Debug, marker::PhantomData, rc::Rc};
 /// It's a placeholder over vnodes, to make working with lifetimes easier
 pub struct DomTree {
     // this should *never* be publicly accessible to external
-    pub(crate) root: VNode<'static>,
+    pub root: VNode<'static>,
 }
 
 /// Tools for the base unit of the virtual dom - the VNode
@@ -80,6 +80,9 @@ impl<'a> VNode<'a> {
             VNode::Suspended => {
                 todo!()
             }
+            // Self::PhantomChild { id } => {
+            //     todo!()
+            // }
             VNode::Component(c) => c.key,
         }
     }
@@ -218,6 +221,8 @@ pub struct VComponent<'src> {
     pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
     pub caller: Rc<dyn Fn(Context) -> DomTree + 'src>,
 
+    pub children: &'src [VNode<'src>],
+
     // a pointer into the bump arena (given by the 'src lifetime)
     raw_props: *const (),
 
@@ -266,6 +271,7 @@ impl<'a> VComponent<'a> {
             user_fc: caller_ref,
             raw_props: props as *const P as *const _,
             _p: PhantomData,
+            children: &[],
             caller,
             comparator: Rc::new(props_comparator),
             stable_addr: Rc::new(RefCell::new(None)),

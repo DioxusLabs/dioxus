@@ -2,7 +2,8 @@
 use once_cell::sync::Lazy;
 use std::collections::hash_set::HashSet;
 
-static VALID_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+/// rsx! and html! macros support the html namespace as well as svg namespace
+static HTML_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     [
         "a",
         "abbr",
@@ -117,9 +118,16 @@ static VALID_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "var",
         "video",
         "wbr",
+    ]
+    .iter()
+    .cloned()
+    .collect()
+});
+
+static SVG_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    [
         // SVTG
-        "svg",
-        "path",
+        "svg", "path", "g",
     ]
     .iter()
     .cloned()
@@ -135,6 +143,14 @@ static VALID_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 ///
 /// assert_eq!(is_valid_tag("random"), false);
 /// ```
+pub fn is_valid_tag(tag: &str) -> bool {
+    is_valid_html_tag(tag) || is_valid_svg_tag(tag)
+}
+
 pub fn is_valid_html_tag(tag: &str) -> bool {
-    VALID_TAGS.contains(tag)
+    HTML_TAGS.contains(tag)
+}
+
+pub fn is_valid_svg_tag(tag: &str) -> bool {
+    SVG_TAGS.contains(tag)
 }

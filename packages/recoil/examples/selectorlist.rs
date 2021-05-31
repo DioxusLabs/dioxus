@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use dioxus_core::prelude::*;
 use recoil::*;
 
-const A_ITEMS: AtomFamily<i32, i32> = |_| HashMap::new();
-const B_ITEMS: AtomFamily<i32, i32> = |_| HashMap::new();
+const A_ITEMS: AtomHashMap<i32, i32> = |_| HashMap::new();
+const B_ITEMS: AtomHashMap<i32, i32> = |_| HashMap::new();
 
 const C_SELECTOR: SelectorFamily<i32, i32> = |api, key| {
     let a = api.get(&A_ITEMS.select(&key));

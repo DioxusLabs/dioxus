@@ -1,27 +1,34 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use dioxus_core::prelude::*;
 use recoil::*;
 use uuid::Uuid;
 
-const TODOS: AtomFamily<Uuid, Todo> = |_| HashMap::new();
+const TODOS: AtomHashMap<Uuid, Rc<Todo>> = |map| {};
 
 #[derive(PartialEq)]
 struct Todo {
     checked: bool,
     title: String,
-    contents: String,
+    content: String,
 }
 
 static App: FC<()> = |ctx, _| {
-    use_init_recoil_root(ctx, |_| {});
+    use_init_recoil_root(ctx, move |cfg| {});
+
     let todos = use_read_family(ctx, &TODOS);
 
-    rsx! { in ctx,
-        div {
-            "Basic Todolist with AtomFamilies in Recoil.rs"
-        }
-    }
+    // rsx! { in ctx,
+    //     div {
+    //         h1 {"Basic Todolist with AtomFamilies in Recoil.rs"}
+    //         ul { { todos.keys().map(|id| rsx! { Child { id: *id } }) } }
+    //     }
+    // }
+    ctx.render(html! {
+        <a href="#" class="">
+            <img class="inline-block h-10 w-10 rounded-full object-cover ring-2 ring-white" src="/images/person/4.jpg" alt="Jade"/>
+        </a>
+    })
 };
 
 #[derive(Props, PartialEq)]
@@ -33,11 +40,11 @@ static Child: FC<ChildProps> = |ctx, props| {
     let (todo, set_todo) = use_read_write(ctx, &TODOS.select(&props.id));
 
     rsx! { in ctx,
-        div {
+        li {
             h1 {"{todo.title}"}
             input { type: "checkbox", name: "scales", checked: "{todo.checked}" }
-            label { "{todo.contents}", for: "scales" }
-            p {"{todo.contents}"}
+            label { "{todo.content}", for: "scales" }
+            p {"{todo.content}"}
         }
     }
 };

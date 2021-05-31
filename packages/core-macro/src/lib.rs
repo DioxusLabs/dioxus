@@ -2,12 +2,13 @@ use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::parse_macro_input;
 
-mod fc;
-mod htm;
-mod ifmt;
-mod props;
-mod rsxt;
-mod util;
+pub(crate) mod fc;
+pub(crate) mod htm;
+pub(crate) mod ifmt;
+pub(crate) mod props;
+pub(crate) mod rsxt;
+pub(crate) mod rsxtemplate;
+pub(crate) mod util;
 
 /// The html! macro makes it easy for developers to write jsx-style markup in their components.
 /// We aim to keep functional parity with html templates.
@@ -24,6 +25,16 @@ pub fn html(s: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
     match syn::parse::<rsxt::RsxRender>(s) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.to_token_stream().into(),
+    }
+}
+
+/// The html! macro makes it easy for developers to write jsx-style markup in their components.
+/// We aim to keep functional parity with html templates.
+#[proc_macro]
+pub fn rsx_template(s: TokenStream) -> TokenStream {
+    match syn::parse::<rsxtemplate::RsxTemplate>(s) {
         Err(e) => e.to_compile_error().into(),
         Ok(s) => s.to_token_stream().into(),
     }

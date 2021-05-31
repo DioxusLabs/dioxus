@@ -7,12 +7,12 @@
 
 fn main() {}
 
-use std::{borrow::Borrow, rc::Rc};
+use std::{borrow::Borrow, ops::Deref, rc::Rc};
 
 use dioxus_core::prelude::*;
 
 struct Props {
-    items: Vec<ListItem>,
+    items: Vec<Rc<ListItem>>,
 }
 
 #[derive(PartialEq)]
@@ -35,8 +35,8 @@ fn app<'a>(ctx: Context<'a>, props: &Props) -> DomTree {
                 ChildItem,
                 // create the props with nothing but the fc<T>
                 fc_to_builder(ChildItem)
-                    .item(child)
-                    .item_handler(set_val.clone())
+                    .item(child.clone())
+                    .item_handler(Callback(set_val.clone()))
                     .build(),
                 None,
             ));
@@ -46,19 +46,13 @@ fn app<'a>(ctx: Context<'a>, props: &Props) -> DomTree {
 }
 
 // props should derive a partialeq implementation automatically, but implement ptr compare for & fields
-#[derive(Props)]
-struct ChildProps<'a> {
+#[derive(Props, PartialEq)]
+struct ChildProps {
     // Pass down complex structs
-    item: &'a ListItem,
+    item: Rc<ListItem>,
 
     // Even pass down handlers!
-    item_handler: Rc<dyn Fn(i32)>,
-}
-
-impl PartialEq for ChildProps<'_> {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
+    item_handler: Callback<i32>,
 }
 
 fn ChildItem<'a>(ctx: Context<'a>, props: &ChildProps) -> DomTree {
@@ -74,4 +68,19 @@ fn ChildItem<'a>(ctx: Context<'a>, props: &ChildProps) -> DomTree {
             }
         }
     })
+}
+
+#[derive(Clone)]
+struct Callback<I, O = ()>(Rc<dyn Fn(I) -> O>);
+impl<I, O> Deref for Callback<I, O> {
+    type Target = Rc<dyn Fn(I) -> O>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<I, O> PartialEq for Callback<I, O> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
 }
