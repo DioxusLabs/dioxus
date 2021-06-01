@@ -1,4 +1,4 @@
-//! basic example that renders a simple domtree to the page :)
+//! basic example that renders a simple VNode to the page :)
 //!
 //!
 //!
@@ -9,7 +9,7 @@ fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, _| {
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx| {
         ctx.render(html! {
             <div>
                 <div class="flex items-center justify-center flex-col">

@@ -7,23 +7,19 @@ use dioxus_core::prelude::*;
 
 fn main() {}
 
-static Header: FC<()> = |ctx, props| {
-    let inner = use_ref(&ctx, || 0);
+static Header: FC<()> = |ctx| {
+    let inner = use_ref(ctx, || 0);
 
     let handler1 = move || println!("Value is {}", inner.borrow());
 
     ctx.render(dioxus::prelude::LazyNodes::new(|nodectx| {
         builder::ElementBuilder::new(nodectx, "div")
-            .child(VNode::Component(VComponent::new(
-                Bottom,
-                nodectx.bump().alloc(()),
-                None,
-            )))
+            .child(VNode::Component(VComponent::new(Bottom, (), None)))
             .finish()
     }))
 };
 
-static Bottom: FC<()> = |ctx, props| {
+static Bottom: FC<()> = |ctx| {
     ctx.render(html! {
         <div>
             <h1> "bruh 1" </h1>
@@ -32,7 +28,7 @@ static Bottom: FC<()> = |ctx, props| {
     })
 };
 
-fn Top(ctx: Context, a: &str, b: &i32, c: &impl Fn()) -> DomTree {
+fn Top(ctx: Context<()>) -> VNode {
     ctx.render(html! {
         <div>
             <h1> "bruh 1" </h1>
@@ -124,44 +120,44 @@ fn try_test() {
     // test_poc()
 }
 
-fn test_poc(ctx: Context) {
-    let b = Bump::new();
+// fn test_poc(ctx: Context) {
+//     let b = Bump::new();
 
-    let h = Args {
-        a: CuOpt::Some("ASD"),
-        b: CuOpt::Some(123),
-        c: CuOpt::Some(|| {}),
-        // c: CuOpt::Some(b.alloc(|| {})),
-        // c: CuOpt::Some(Box::new(|| {}) as Box<dyn Fn()>),
-    };
+//     let h = Args {
+//         a: CuOpt::Some("ASD"),
+//         b: CuOpt::Some(123),
+//         c: CuOpt::Some(|| {}),
+//         // c: CuOpt::Some(b.alloc(|| {})),
+//         // c: CuOpt::Some(Box::new(|| {}) as Box<dyn Fn()>),
+//     };
 
-    let h2 = Args {
-        a: CuOpt::Some("ASD"),
-        b: CuOpt::Some(123),
-        c: CuOpt::Some(|| {}),
-        // c: CuOpt::Some(b.alloc(|| {})),
-        // c: CuOpt::Some(Box::new(|| {}) as Box<dyn Fn()>),
-        // c: CuOpt::Some(Box::new(|| {}) as Box<dyn Fn()>),
-        // c: CuOpt::Some(Box::new(|| {}) as Box<dyn Fn()>),
-    };
+//     let h2 = Args {
+//         a: CuOpt::Some("ASD"),
+//         b: CuOpt::Some(123),
+//         c: CuOpt::Some(|| {}),
+//         // c: CuOpt::Some(b.alloc(|| {})),
+//         // c: CuOpt::Some(Box::new(|| {}) as Box<dyn Fn()>),
+//         // c: CuOpt::Some(Box::new(|| {}) as Box<dyn Fn()>),
+//         // c: CuOpt::Some(Box::new(|| {}) as Box<dyn Fn()>),
+//     };
 
-    // dbg!((&h.a).memo((&&h2.a)));
-    // dbg!((&h.b).memo((&&h2.b)));
-    // dbg!((&h.c).memo((&&h2.c)));
-    //
-    // ctx: Context
-    Top(ctx, &h.a.unwrap(), &h.b.unwrap(), &h.c.unwrap());
-}
+//     // dbg!((&h.a).memo((&&h2.a)));
+//     // dbg!((&h.b).memo((&&h2.b)));
+//     // dbg!((&h.c).memo((&&h2.c)));
+//     //
+//     // ctx: Context
+//     Top(ctx, &h.a.unwrap(), &h.b.unwrap(), &h.c.unwrap());
+// }
 
-fn test_realzies() {
-    let h = Args {
-        a: CuOpt::Some("ASD"),
-        b: CuOpt::Some(123),
-        c: CuOpt::Some(|| {}),
-    };
+// fn test_realzies() {
+//     let h = Args {
+//         a: CuOpt::Some("ASD"),
+//         b: CuOpt::Some(123),
+//         c: CuOpt::Some(|| {}),
+//     };
 
-    let g = |ctx: Context| {
-        //
-        Top(ctx, &h.a.unwrap(), &h.b.unwrap(), &h.c.unwrap())
-    };
-}
+//     let g = |ctx: Context| {
+//         //
+//         Top(ctx, &h.a.unwrap(), &h.b.unwrap(), &h.c.unwrap())
+//     };
+// }

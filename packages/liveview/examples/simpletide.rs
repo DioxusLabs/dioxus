@@ -27,7 +27,7 @@ mod client {
         Ok(dioxus_web::WebsysRenderer::start(APP).await)
     }
 
-    static APP: FC<()> = |ctx, props| {
+    static APP: FC<()> = |ctx| {
         todo!()
         // let (selected_stream, set_stream) = use_state(&ctx, || SelectedStream::Football);
 
@@ -102,9 +102,9 @@ mod server {
         selected_stream: SelectedStream,
     }
 
-    static STREAM_LIST: FC<SreamListProps> = |ctx, props| {
+    static STREAM_LIST: FC<SreamListProps> = |ctx| {
         //
-        let g = match props.selected_stream {
+        let g = match ctx.selected_stream {
             SelectedStream::Football => ctx.render(rsx! {
                 li {
                     "watch football!"

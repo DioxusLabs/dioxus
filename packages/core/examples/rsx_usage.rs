@@ -16,22 +16,22 @@ fn test() {
     // let g: FC<ButtonProps> = CustomButton;
 }
 
-trait Render {
-    fn render(ctx: Context, props: &Self) -> DomTree;
+trait Render: Sized {
+    fn render(ctx: Context<Self>) -> VNode;
 }
 // include as much as you might accept
-struct Button<'a> {
-    onhover: Option<&'a dyn Fn()>,
+struct Button {
+    onhover: Option<Box<dyn Fn()>>,
 }
 
-impl Render for Button<'_> {
-    fn render(ctx: Context, _props: &Self) -> DomTree {
+impl Render for Button {
+    fn render(ctx: Context<Self>) -> VNode {
         let _onfocus = move |_evt: ()| log::debug!("Focused");
 
         // todo!()
         ctx.render(rsx! {
             button {
-                // ..props.attrs,
+                // ..ctx.attrs,
                 class: "abc123",
                 // style: { a: 2, b: 3, c: 4 },
                 onclick: move |_evt| {
@@ -47,7 +47,7 @@ impl Render for Button<'_> {
 }
 
 // #[fc]
-// fn Button(ctx: Context, onhover: Option<&dyn Fn()>) -> DomTree {}
+// fn Button(ctx: Context, onhover: Option<&dyn Fn()>) -> VNode {}
 
 // h1 {
 //     tag: "type", abc: 123, class: "big small wide short",

@@ -113,11 +113,12 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
   - [ ] Re-exported through the `dioxus` crate (not core)
 - [ ] Hooks
   - [ ] Re-exported through the `dioxus` crate (not essential to core virtualdom)
+- [ ] fragments
+- [ ] pass-thru components
 
 ## Less-essential todos
 
 - [ ] HTML doesn't require strings between elements (copy-paste from internet)
-- [ ] Make events lazy (use traits + Box<dyn>) - not sure what this means anymore
 - [ ] Beef up the dioxus CLI tool to report build progress
 - [ ] Extract arena logic out for better safety guarantees
 - [ ] Extract BumpFrame logic out for better safety guarantees
@@ -130,8 +131,7 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
 
 lower priority features
 
-- [ ] Attributes on elements should implement format_args instead of string fmt
-- [ ] fragments
+- [x] Attributes on elements should implement format_args instead of string fmt
 - [ ] node refs (postpone for future release?)
 - [ ] styling built-in (future release?)
 - [ ] key handler?

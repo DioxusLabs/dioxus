@@ -5,17 +5,10 @@
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, Properties, ScopeIdx, FC},
+    innerlude::{Context, Properties, Scope, ScopeIdx, FC},
 };
 use bumpalo::Bump;
-use std::{cell::RefCell, fmt::Debug, marker::PhantomData, rc::Rc};
-
-/// A domtree represents the result of "Viewing" the context
-/// It's a placeholder over vnodes, to make working with lifetimes easier
-pub struct DomTree {
-    // this should *never* be publicly accessible to external
-    pub root: VNode<'static>,
-}
+use std::{any::Any, cell::RefCell, fmt::Debug, marker::PhantomData, rc::Rc};
 
 /// Tools for the base unit of the virtual dom - the VNode
 /// VNodes are intended to be quickly-allocated, lightweight enum values.
@@ -35,7 +28,19 @@ pub enum VNode<'src> {
     Suspended,
 
     /// A User-defined componen node (node type COMPONENT_NODE)
-    Component(VComponent<'src>),
+    Component(&'src VComponent<'src>),
+}
+
+// it's okay to clone because vnodes are just references to places into the bump
+impl<'a> Clone for VNode<'a> {
+    fn clone(&self) -> Self {
+        match self {
+            VNode::Element(el) => VNode::Element(el),
+            VNode::Text(origi) => VNode::Text(VText { text: origi.text }),
+            VNode::Suspended => VNode::Suspended,
+            VNode::Component(c) => VNode::Component(c),
+        }
+    }
 }
 
 impl<'a> VNode<'a> {
@@ -196,6 +201,12 @@ pub struct VText<'bump> {
     pub text: &'bump str,
 }
 
+impl<'b> Clone for VText<'b> {
+    fn clone(&self) -> Self {
+        Self { text: self.text }
+    }
+}
+
 impl<'a> VText<'a> {
     // / Create an new `VText` instance with the specified text.
     pub fn new(text: &'a str) -> Self {
@@ -218,13 +229,14 @@ pub struct VComponent<'src> {
     pub stable_addr: Rc<StableScopeAddres>,
     pub ass_scope: Rc<VCompAssociatedScope>,
 
-    pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
-    pub caller: Rc<dyn Fn(Context) -> DomTree + 'src>,
+    // pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
+    pub caller: Rc<dyn Fn(&Scope) -> VNode + 'src>,
 
     pub children: &'src [VNode<'src>],
 
     // a pointer into the bump arena (given by the 'src lifetime)
-    raw_props: *const (),
+    raw_props: Box<dyn Any>,
+    // raw_props: *const (),
 
     // a pointer to the raw fn typ
     pub user_fc: *const (),
@@ -237,28 +249,30 @@ impl<'a> VComponent<'a> {
     // - perform comparisons when diffing (memoization)
     // TODO: lift the requirement that props need to be static
     // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
-    pub fn new<P: Properties + 'a>(component: FC<P>, props: &'a P, key: Option<&'a str>) -> Self {
+    pub fn new<P: Properties>(component: FC<P>, props: P, key: Option<&'a str>) -> Self {
         let caller_ref = component as *const ();
 
-        let raw_props = props as *const P as *const ();
+        // let raw_props = props as *const P as *const ();
 
-        let props_comparator = move |other: &VComponent| {
-            // Safety:
-            // We are guaranteed that the props will be of the same type because
-            // there is no way to create a VComponent other than this `new` method.
-            //
-            // Therefore, if the render functions are identical (by address), then so will be
-            // props type paramter (because it is the same render function). Therefore, we can be
-            // sure
-            if caller_ref == other.user_fc {
-                let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
-                real_other == props
-            } else {
-                false
-            }
-        };
+        // let props_comparator = move |other: &VComponent| {
+        //     // Safety:
+        //     // We are guaranteed that the props will be of the same type because
+        //     // there is no way to create a VComponent other than this `new` method.
+        //     //
+        //     // Therefore, if the render functions are identical (by address), then so will be
+        //     // props type paramter (because it is the same render function). Therefore, we can be
+        //     // sure
+        //     if caller_ref == other.user_fc {
+        //         let g = other.raw_ctx.downcast_ref::<P>().unwrap();
+        //         // let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
+        //         &props == g
+        //     } else {
+        //         false
+        //     }
+        // };
 
-        let caller = Rc::new(create_closure(component, raw_props));
+        let caller: Rc<dyn Fn(&Scope) -> VNode + 'a> = Rc::new(move |scp| todo!());
+        // let caller = Rc::new(create_closure(component, raw_props));
 
         let key = match key {
             Some(key) => NodeKey::new(key),
@@ -269,23 +283,27 @@ impl<'a> VComponent<'a> {
             key,
             ass_scope: Rc::new(RefCell::new(None)),
             user_fc: caller_ref,
-            raw_props: props as *const P as *const _,
+            raw_props: Box::new(props),
             _p: PhantomData,
             children: &[],
             caller,
-            comparator: Rc::new(props_comparator),
+            // comparator: Rc::new(props_comparator),
             stable_addr: Rc::new(RefCell::new(None)),
         }
     }
 }
 
-fn create_closure<'a, P: Properties + 'a>(
-    component: FC<P>,
-    raw_props: *const (),
-) -> impl for<'r> Fn(Context<'r>) -> DomTree + 'a {
-    move |ctx: Context| -> DomTree {
-        // cast back into the right lifetime
-        let safe_props: &'a P = unsafe { &*(raw_props as *const P) };
-        component(ctx, safe_props)
-    }
-}
+// fn create_closure<P: Properties>(
+//     component: FC<P>,
+//     raw_props: *const (),
+// ) -> impl for<'r> Fn(&'r Scope) -> VNode<'r> {
+//     move |ctx| -> VNode {
+//         // cast back into the right lifetime
+//         let safe_props: &P = unsafe { &*(raw_props as *const P) };
+//         component(Context {
+//             props: safe_props,
+//             scope: ctx,
+//         })
+//         // component(ctx, safe_props)
+//     }
+// }

@@ -3,7 +3,7 @@
 //!
 //! Note - using the builder pattern does not required the Properties trait to be implemented - the only thing that matters is
 //! if the type suppports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
-//! that ensures compile-time required and optional fields on props.
+//! that ensures compile-time required and optional fields on ctx.
 
 use crate::innerlude::FC;
 

@@ -19,7 +19,7 @@ fn update_title(api: &RecoilApi) {
     }
 }
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     let title = use_read(ctx, &TITLE);
     let next_light = use_recoil_api(ctx, |api| move |_| update_title(&api));
 

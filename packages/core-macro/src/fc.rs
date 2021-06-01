@@ -5,9 +5,7 @@ use syn::{
     parse::{Parse, ParseStream},
     Signature,
 };
-use syn::{
-    Attribute, Block, FnArg, Ident, Item, ItemFn, ReturnType, Type, Visibility,
-};
+use syn::{Attribute, Block, FnArg, Ident, Item, ItemFn, ReturnType, Type, Visibility};
 
 /// A parsed version of the user's input
 pub struct FunctionComponent {
@@ -135,7 +133,7 @@ impl ToTokens for FunctionComponent {
             }
 
             impl<'a> FC for #function_name<'a> {
-                fn render(ctx: Context<'_>, props: &#function_name<'a>) -> DomTree {
+                fn render(ctx: Context<'_>, props: &#function_name<'a>) -> VNode {
                     let #function_name {
                         ..
                     } = props;
@@ -244,7 +242,7 @@ pub fn ensure_return_type(output: ReturnType) -> syn::Result<Box<Type>> {
     match output {
         ReturnType::Default => Err(syn::Error::new_spanned(
             output,
-            "function components must return a `DomTree`",
+            "function components must return a `VNode`",
         )),
         ReturnType::Type(_, ty) => Ok(ty),
     }

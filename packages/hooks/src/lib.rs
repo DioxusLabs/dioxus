@@ -40,7 +40,7 @@ uses the same memoization on top of the use_context API.
 
 Here's a fully-functional todo app using the use_map API:
 ```rust
-static TodoList: FC<()> = |ctx, props| {
+static TodoList: FC<()> = |ctx| {
     let todos = use_map(ctx, || HashMap::new());
     let input = use_ref(|| None);
 

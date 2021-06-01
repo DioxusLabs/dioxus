@@ -43,7 +43,7 @@ mod baller {
     use super::*;
     pub struct BallerProps {}
 
-    pub fn Baller(ctx: Context, props: &()) -> DomTree {
+    pub fn Baller(ctx: Context<()>) -> VNode {
         todo!()
     }
 }
@@ -53,7 +53,7 @@ pub struct TallerProps {
     a: &'static str,
 }
 
-pub fn Taller(ctx: Context, props: &TallerProps) -> DomTree {
+pub fn Taller(ctx: Context<TallerProps>) -> VNode {
     let b = true;
     todo!()
 }

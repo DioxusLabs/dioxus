@@ -17,7 +17,7 @@ fn main() {
     .expect("Webview finished");
 }
 
-static Example: FC<()> = |ctx, _props| {
+static Example: FC<()> = |ctx| {
     ctx.render(html! {
         <div>
         <svg class="octicon octicon-star v-align-text-bottom"
@@ -36,7 +36,7 @@ static Example: FC<()> = |ctx, _props| {
         </div>
     })
 };
-// static Example: FC<()> = |ctx, _props| {
+// static Example: FC<()> = |ctx| {
 //     ctx.render(rsx! {
 //         div  {
 //             class: "flex items-center justify-center flex-col"

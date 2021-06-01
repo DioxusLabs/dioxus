@@ -17,7 +17,7 @@ const D_SELECTOR: SelectorFamilyBorrowed<i32, i32> = |api, key| -> &i32 {
     a
 };
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     use_init_recoil_root(ctx, |_| {});
 
     let title = use_read(ctx, &C_SELECTOR);

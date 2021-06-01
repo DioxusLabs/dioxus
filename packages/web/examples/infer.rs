@@ -11,7 +11,7 @@ fn main() {
 }
 
 // this is a component
-static Example: FC<()> = |ctx, _props| {
+static Example: FC<()> = |ctx| {
     let (event, set_event) = use_state(&ctx, || None);
 
     let handler = move |evt: MouseEvent| {
@@ -48,10 +48,10 @@ struct ExampleProps {
     name: String
 }
 
-static Example2: FC<ExampleProps> = |ctx, props| {
+static Example2: FC<ExampleProps> = |ctx| {
     ctx.render(rsx!{
         div {
-            h1 {"hello {props.name}"}
+            h1 {"hello {ctx.name}"}
         }
     })
 };

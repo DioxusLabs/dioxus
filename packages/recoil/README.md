@@ -21,7 +21,7 @@ This atom of state is initialized with a value of `"Green"`. The atom that is re
 This is then later used in components like so:
 
 ```rust
-fn App(ctx: Context, props: &()) -> DomTree {
+fn App(ctx: Context<()>) -> VNode {
     // The recoil root must be initialized at the top of the application before any use_recoil hooks
     recoil::init_recoil_root(&ctx, |_| {});
 
@@ -36,7 +36,7 @@ fn App(ctx: Context, props: &()) -> DomTree {
 Atoms are considered "Writable" objects since any consumer may also set the Atom's value with their own:
 
 ```rust
-fn App(ctx: Context, props: &()) -> DomTree {
+fn App(ctx: Context<()>) -> VNode {
     let color = recoil::use_read(ctx, Light);
     let set_color = recoil::use_write(ctx, Light);
     rsx!{in ctx,
@@ -53,7 +53,7 @@ fn App(ctx: Context, props: &()) -> DomTree {
 "Reading" a value with use_read subscribes that component to any changes to that value while "Writing" a value does not. It's a good idea to use `write-only` whenever it makes sense to prevent unnecessary evaluations. Both `read` and `write` may be combined together to provide a `use_state` style hook.
 
 ```rust
-fn App(ctx: Context, props: &()) -> DomTree {
+fn App(ctx: Context<()>) -> VNode {
     let (color, set_color) = recoil::use_read_write(ctx, Light);
     rsx!{in ctx,
         div {
@@ -125,7 +125,7 @@ const CloudRatings: AtomFamily<&str, i32> = |api| {
 Whenever you `select` on a `Family`, the ID of the entry is tracked. Other subscribers will only be updated if they too select the same family with the same key and that value is updated. Otherwise, these subscribers will never re-render on an "insert", "remove", or "update" of the collection. You could easily implement this yourself with Atoms, immutable datastructures, and selectors, but our implementation is more efficient and first-class.
 
 ```rust
-fn App(ctx: Context, props: &()) -> DomTree {
+fn App(ctx: Context<()>) -> VNode {
     let (rating, set_rating) = recoil::use_read_write(ctx, CloudRatings.select("AWS"));
     rsx!{in ctx,
         div {

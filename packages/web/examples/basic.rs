@@ -1,4 +1,4 @@
-//! Basic example that renders a simple domtree to the browser.
+//! Basic example that renders a simple VNode to the browser.
 
 use dioxus_core::prelude::*;
 use dioxus_web::*;
@@ -12,7 +12,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     ctx.render(rsx! {
         div {
             h1 {"hello"}
@@ -22,7 +22,7 @@ static App: FC<()> = |ctx, _| {
     })
 };
 
-static C1: FC<()> = |ctx, props| {
+static C1: FC<()> = |ctx| {
     ctx.render(rsx! {
         button {
             "numba 1"
@@ -30,7 +30,7 @@ static C1: FC<()> = |ctx, props| {
     })
 };
 
-static C2: FC<()> = |ctx, props| {
+static C2: FC<()> = |ctx| {
     ctx.render(rsx! {
         button {
             "numba 2"

@@ -28,7 +28,7 @@ We have big goals for Dioxus. The final implementation must:
 ## Optimizations
 
 - Support a pluggable allocation strategy that makes VNode creation **very** fast
-- Support lazy DomTrees (ie DomTrees that are not actually created when the html! macro is used)
+- Support lazy VNodes (ie VNodes that are not actually created when the html! macro is used)
 - Support advanced diffing strategies (patience, Meyers, etc)
 
 ## Design Quirks

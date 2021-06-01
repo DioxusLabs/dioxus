@@ -31,7 +31,7 @@ mod traits {
 
     // Atoms, selectors, and their family variants are readable
     pub trait Readable<T: AtomValue>: Sized + Copy {
-        fn use_read<'a>(self, ctx: Context<'a>) -> &'a T {
+        fn use_read<'a, P: 'static>(self, ctx: Context<'a, P>) -> &'a T {
             hooks::use_read(ctx, self)
         }
 
@@ -39,7 +39,7 @@ mod traits {
         // If the atom is currently pending, that future will resolve to pending
         // If the atom is currently ready, the future will immediately resolve
         // if the atom switches from ready to pending, the component will re-run, returning a pending future
-        fn use_read_async<'a>(self, ctx: Context<'a>) -> &'a T {
+        fn use_read_async<'a, P>(self, ctx: Context<'a, P>) -> &'a T {
             todo!()
         }
 
@@ -53,11 +53,11 @@ mod traits {
     // Only atoms and atom families are writable
     // Selectors and selector families are not
     pub trait Writable<T: AtomValue>: Readable<T> + Sized {
-        fn use_read_write<'a>(self, ctx: Context<'a>) -> (&'a T, &'a Rc<dyn Fn(T)>) {
+        fn use_read_write<'a, P>(self, ctx: Context<'a, P>) -> (&'a T, &'a Rc<dyn Fn(T)>) {
             todo!()
         }
 
-        fn use_write<'a>(self, ctx: Context<'a>) -> &'a Rc<dyn Fn(T)> {
+        fn use_write<'a, P>(self, ctx: Context<'a, P>) -> &'a Rc<dyn Fn(T)> {
             todo!()
         }
     }
@@ -91,7 +91,7 @@ mod atoms {
         use super::*;
         use dioxus_core::prelude::Context;
 
-        fn _test(ctx: Context) {
+        fn _test(ctx: Context<()>) {
             const EXAMPLE_ATOM: Atom<i32> = |_| 10;
 
             // ensure that atoms are both read and write
@@ -159,7 +159,7 @@ mod atomfamily {
         use super::*;
         const Titles: AtomHashMap<u32, &str> = |map| {};
 
-        fn test(ctx: Context) {
+        fn test(ctx: Context<()>) {
             let title = Titles.select(&10).use_read(ctx);
             let t2 = use_read(ctx, &Titles.select(&10));
         }
@@ -370,7 +370,7 @@ mod hooks {
     use super::*;
     use dioxus_core::{hooks::use_ref, prelude::Context};
 
-    pub fn use_init_recoil_root(ctx: Context, cfg: impl Fn(())) {
+    pub fn use_init_recoil_root<P>(ctx: Context<P>, cfg: impl Fn(())) {
         ctx.use_create_context(move || RefCell::new(RecoilRoot::new()))
     }
 
@@ -381,12 +381,12 @@ mod hooks {
     ///
     /// You can use this method to create controllers that perform much more complex actions than set/get
     /// However, be aware that "getting" values through this hook will not subscribe the component to any updates.
-    pub fn use_recoil_api<'a>(ctx: Context<'a>) -> &Rc<RecoilContext> {
+    pub fn use_recoil_api<'a, P>(ctx: Context<'a, P>) -> &Rc<RecoilContext> {
         ctx.use_context::<RecoilContext>()
     }
 
-    pub fn use_write<'a, T: AtomValue>(
-        ctx: Context<'a>,
+    pub fn use_write<'a, T: AtomValue, P>(
+        ctx: Context<'a, P>,
         // todo: this shouldn't need to be static
         writable: impl Writable<T>,
     ) -> &'a Rc<dyn Fn(T)> {
@@ -412,7 +412,10 @@ mod hooks {
     /// Read the atom and get the Rc directly to the Atom's slot
     /// This is useful if you need the memoized Atom value. However, Rc<T> is not as easy to
     /// work with as
-    pub fn use_read_raw<'a, T: AtomValue>(ctx: Context<'a>, readable: impl Readable<T>) -> &Rc<T> {
+    pub fn use_read_raw<'a, T: AtomValue, P: 'static>(
+        ctx: Context<'a, P>,
+        readable: impl Readable<T>,
+    ) -> &Rc<T> {
         struct ReadHook<T> {
             value: Rc<T>,
             consumer_id: u32,
@@ -446,7 +449,10 @@ mod hooks {
     }
 
     ///
-    pub fn use_read<'a, T: AtomValue>(ctx: Context<'a>, readable: impl Readable<T>) -> &'a T {
+    pub fn use_read<'a, T: AtomValue, P: 'static>(
+        ctx: Context<'a, P>,
+        readable: impl Readable<T>,
+    ) -> &'a T {
         use_read_raw(ctx, readable).as_ref()
     }
 
@@ -465,8 +471,8 @@ mod hooks {
     /// // equivalent to:
     /// let (title, set_title) = (use_read(ctx, &Title), use_write(ctx, &Title));
     /// ```
-    pub fn use_read_write<'a, T: AtomValue + 'static>(
-        ctx: Context<'a>,
+    pub fn use_read_write<'a, T: AtomValue + 'static, P: 'static>(
+        ctx: Context<'a, P>,
         writable: impl Writable<T>,
     ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
         (use_read(ctx, writable), use_write(ctx, writable))
@@ -492,8 +498,8 @@ mod hooks {
     ///
     /// modify_atom(&|a| *a += 1)
     /// ```
-    pub fn use_modify<'a, T: AtomValue + 'static + Clone>(
-        ctx: Context<'a>,
+    pub fn use_modify<'a, T: AtomValue + 'static + Clone, P>(
+        ctx: Context<'a, P>,
         writable: impl Writable<T>,
     ) -> impl Fn(&dyn Fn()) {
         |_| {}
@@ -502,8 +508,8 @@ mod hooks {
     /// Use a family collection directly
     /// !! Any changes to the family will cause this subscriber to update
     /// Try not to put this at the very top-level of your app.
-    pub fn use_read_family<'a, K, V>(
-        ctx: Context<'a>,
+    pub fn use_read_family<'a, K, V, P>(
+        ctx: Context<'a, P>,
         t: &AtomHashMap<K, V>,
     ) -> &'a im_rc::HashMap<K, V> {
         todo!()
@@ -525,11 +531,11 @@ mod utils {
     /// This tiny util wraps your main component with the initializer for the recoil root.
     /// This is useful for small programs and the examples in this crate
     pub fn RecoilApp<T: 'static>(
-        root: impl for<'a> Fn(Context<'a>, &'a T) -> DomTree,
-    ) -> impl for<'a> Fn(Context<'a>, &'a T) -> DomTree {
-        move |ctx, props| {
+        root: impl for<'a> Fn(Context<'a, T>) -> VNode,
+    ) -> impl for<'a> Fn(Context<'a, T>) -> VNode {
+        move |ctx| {
             use_init_recoil_root(ctx, |_| {});
-            root(ctx, props)
+            root(ctx)
         }
     }
 }

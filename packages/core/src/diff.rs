@@ -65,22 +65,22 @@ pub struct DiffMachine<'a> {
 }
 pub enum LifeCycleEvent<'a> {
     Mount {
-        caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        caller: Weak<dyn Fn(&Scope) -> VNode + 'a>,
         stable_scope_addr: Weak<VCompAssociatedScope>,
         root_id: u32,
     },
     PropsChanged {
-        caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        caller: Weak<dyn Fn(&Scope) -> VNode + 'a>,
         stable_scope_addr: Weak<VCompAssociatedScope>,
         root_id: u32,
     },
     SameProps {
-        caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        caller: Weak<dyn Fn(&Scope) -> VNode + 'a>,
         stable_scope_addr: Weak<VCompAssociatedScope>,
         root_id: u32,
     },
     Replace {
-        caller: Weak<dyn for<'r> Fn(Context<'r>) -> DomTree + 'a>,
+        caller: Weak<dyn Fn(&Scope) -> VNode + 'a>,
         old_scope: Weak<VCompAssociatedScope>,
         new_scope: Weak<VCompAssociatedScope>,
         root_id: u32,

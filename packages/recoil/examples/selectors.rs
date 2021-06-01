@@ -5,7 +5,7 @@ const A: Atom<i32> = |_| 0;
 const B: Atom<i32> = |_| 0;
 const C: Selector<i32> = |api| api.get(&A) + api.get(&B);
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     use_init_recoil_root(ctx, |_| {});
     rsx! { in ctx,
         div {
@@ -16,12 +16,12 @@ static App: FC<()> = |ctx, _| {
     }
 };
 
-static Banner: FC<()> = |ctx, _| {
+static Banner: FC<()> = |ctx| {
     let count = use_read(ctx, &C);
     ctx.render(rsx! { h1 { "Count: {count}" } })
 };
 
-static BtnA: FC<()> = |ctx, _| {
+static BtnA: FC<()> = |ctx| {
     let (a, set) = use_read_write(ctx, &A);
     rsx! { in ctx,
         div { "a"
@@ -31,7 +31,7 @@ static BtnA: FC<()> = |ctx, _| {
     }
 };
 
-static BtnB: FC<()> = |ctx, _| {
+static BtnB: FC<()> = |ctx| {
     let (b, set) = use_read_write(ctx, &B);
     rsx! { in ctx,
         div { "b"

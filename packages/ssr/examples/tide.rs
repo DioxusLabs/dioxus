@@ -14,8 +14,8 @@ struct ExampleProps {
     initial_name: String,
 }
 
-static Example: FC<ExampleProps> = |ctx, props| {
-    let dispaly_name = use_state_new(&ctx, move || props.initial_name.clone());
+static Example: FC<ExampleProps> = |ctx| {
+    let dispaly_name = use_state_new(&ctx, move || ctx.initial_name.clone());
 
     let buttons = ["Jack", "Jill", "Bob"].iter().map(|name| {
         rsx!{

@@ -25,7 +25,7 @@ pub struct TodoItem {
     pub contents: String,
 }
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     let (draft, set_draft) = use_state(&ctx, || "".to_string());
     let (filter, set_filter) = use_state(&ctx, || FilterState::All);
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
@@ -143,7 +143,7 @@ static App: FC<()> = |ctx, _| {
     ))
 };
 
-pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
+pub fn FilterToggles(ctx: Context<()>) -> VNode {
     // let reducer = recoil::use_callback(&ctx, || ());
     // let items_left = recoil::use_atom_family(&ctx, &TODOS, uuid::Uuid::new_v4());
 

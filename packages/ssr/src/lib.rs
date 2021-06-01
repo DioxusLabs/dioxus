@@ -61,7 +61,7 @@ impl<T> TextRenderer<T> {
         todo!()
     }
 
-    /// Immediately render a DomTree to string
+    /// Immediately render a VNode to string
     pub fn to_text(root: VNode) -> String {
         todo!()
     }

@@ -16,7 +16,7 @@ fn main() {
     };
 }
 
-static Example: FC<()> = |ctx, props| {
+static Example: FC<()> = |ctx| {
     let nodes = ctx.children();
 
     //
@@ -26,43 +26,3 @@ static Example: FC<()> = |ctx, props| {
         }
     }
 };
-
-#[derive(Clone, Copy)]
-struct MyContext<'a, T> {
-    props: &'a T,
-    inner: &'a Scope,
-}
-impl<'a, T> MyContext<'a, T> {
-    fn children(&self) -> Vec<VNode<'a>> {
-        todo!()
-    }
-    pub fn render2<F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a>(
-        &self,
-        lazy_nodes: LazyNodes<'a, F>,
-    ) -> VNode<'a> {
-        self.inner.render2(lazy_nodes)
-    }
-}
-
-impl<'a, T> Deref for MyContext<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.props
-    }
-}
-
-struct MyProps {
-    title: String,
-}
-
-fn example(scope: MyContext<MyProps>) -> VNode {
-    let childs = scope.children();
-
-    scope.inner.render2(rsx! {
-        div {
-            "{scope.title}"
-            {childs}
-        }
-    })
-}

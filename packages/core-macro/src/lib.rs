@@ -40,6 +40,16 @@ pub fn rsx_template(s: TokenStream) -> TokenStream {
     }
 }
 
+/// The html! macro makes it easy for developers to write jsx-style markup in their components.
+/// We aim to keep functional parity with html templates.
+#[proc_macro]
+pub fn html_template(s: TokenStream) -> TokenStream {
+    match syn::parse::<rsxtemplate::RsxTemplate>(s) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.to_token_stream().into(),
+    }
+}
+
 // #[proc_macro_attribute]
 // pub fn fc(attr: TokenStream, item: TokenStream) -> TokenStream {
 
@@ -51,7 +61,7 @@ pub fn rsx_template(s: TokenStream) -> TokenStream {
 /// ```ignore
 ///
 /// #[fc]
-/// fn Example(ctx: Context, name: &str) -> DomTree {
+/// fn Example(ctx: Context, name: &str) -> VNode {
 ///     ctx.render(rsx! { h1 {"hello {name}"} })
 /// }
 /// ```

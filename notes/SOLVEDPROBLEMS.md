@@ -1,17 +1,18 @@
 # Solved problems while building Dioxus
 
 focuses:
+
 - ergonomics
 - render agnostic
 - remote coupling
 - memory efficient
-- concurrent 
+- concurrent
 - global context
 - scheduled updates
-- 
-
+-
 
 ## FC Macro for more elegant components
+
 Originally the syntax of the FC macro was meant to look like:
 
 ```rust
@@ -21,7 +22,7 @@ fn example(ctx: &Context<{ name: String }>) -> VNode {
 }
 ```
 
-`Context` was originally meant to be more obviously parameterized around a struct definition. However, while this works with rustc, this does not work well with Rust Analyzer. Instead, the new form was chosen which works with Rust Analyzer and happens to be more ergonomic. 
+`Context` was originally meant to be more obviously parameterized around a struct definition. However, while this works with rustc, this does not work well with Rust Analyzer. Instead, the new form was chosen which works with Rust Analyzer and happens to be more ergonomic.
 
 ```rust
 #[fc]
@@ -51,7 +52,8 @@ impl FunctionProvider for SomeComponent {
 
 pub type SomeComponent = FunctionComponent<function_name>;
 ```
-By default, the underlying component is defined as a "functional" implementation of the `Component` trait with all the lifecycle methods. In Dioxus, we don't allow components as structs, and instead take a "hooks-only" approach. However, we still need props. To get these without dealing with traits, we just assume functional components are modules. This lets the macros assume an FC is a module, and `FC::Props` is its props and `FC::component` is the component. Yew's method does a similar thing, but with associated types on traits.
+
+By default, the underlying component is defined as a "functional" implementation of the `Component` trait with all the lifecycle methods. In Dioxus, we don't allow components as structs, and instead take a "hooks-only" approach. However, we still need ctx. To get these without dealing with traits, we just assume functional components are modules. This lets the macros assume an FC is a module, and `FC::Props` is its props and `FC::component` is the component. Yew's method does a similar thing, but with associated types on traits.
 
 Perhaps one day we might use traits instead.
 
@@ -68,7 +70,7 @@ mod Example {
     struct Props {
         name: String
     }
-    
+
     fn component(ctx: &Context<Props>) -> VNode {
         html! { <div> "Hello, {name}!" </div> }
     }
@@ -95,24 +97,23 @@ fn example(ctx: &Context, name: String) -> VNode {
     html! { <div> "Hello, {name}!" </div> }
 }
 
-// .. expands to 
+// .. expands to
 
 mod Example {
     use super::*;
     static NAME: &'static str = "Example";
     struct Props {
         name: String
-    }    
+    }
     fn component(ctx: &Context<Props>) -> VNode {
         html! { <div> "Hello, {name}!" </div> }
     }
 }
 ```
 
-
-
 ## Live Components
-Live components are a very important part of the Dioxus ecosystem. However, the goal with live components was to constrain their implementation purely to APIs available through Context (concurrency, context, subscription). 
+
+Live components are a very important part of the Dioxus ecosystem. However, the goal with live components was to constrain their implementation purely to APIs available through Context (concurrency, context, subscription).
 
 From a certain perspective, live components are simply server-side-rendered components that update when their props change. Here's more-or-less how live components work:
 
@@ -143,10 +144,12 @@ static LiveFc: FC = |ctx, refresh_handler: impl FnOnce| {
 }
 ```
 
-Notice that LiveComponent receivers (the client-side interpretation of a LiveComponent) are simply suspended components waiting for updates from the LiveContext (the context that wraps the app to make it "live"). 
+Notice that LiveComponent receivers (the client-side interpretation of a LiveComponent) are simply suspended components waiting for updates from the LiveContext (the context that wraps the app to make it "live").
 
 ## Allocation Strategy (ie incorporating Dodrio research)
-----
+
+---
+
 The `VNodeTree` type is a very special type that allows VNodes to be created using a pluggable allocator. The html! macro creates something that looks like:
 
 ```rust
@@ -157,7 +160,7 @@ static Example: FC<()> = |ctx| {
 // expands to...
 
 static Example: FC<()> = |ctx| {
-    // This function converts a Fn(allocator) -> VNode closure to a DomTree struct that will later be evaluated.
+    // This function converts a Fn(allocator) -> VNode closure to a VNode struct that will later be evaluated.
     html_macro_to_vnodetree(move |allocator| {
         let mut node0 = allocator.alloc(VElement::div);
         let node1 = allocator.alloc_text("blah");
@@ -166,9 +169,8 @@ static Example: FC<()> = |ctx| {
     })
 };
 ```
+
 At runtime, the new closure is created that captures references to `ctx`. Therefore, this closure can only be evaluated while `ctx` is borrowed and in scope. However, this closure can only be evaluated with an `allocator`. Currently, the global and Bumpalo allocators are available, though in the future we will add support for creating a VDom with any allocator or arena system (IE Jemalloc, wee-alloc, etc). The intention here is to allow arena allocation of VNodes (no need to box nested VNodes). Between diffing phases, the arena will be overwritten as old nodes are replaced with new nodes. This saves allocation time and enables bump allocators.
-
-
 
 ## Context and lifetimes
 
@@ -176,35 +178,36 @@ We want components to be able to fearlessly "use_context" for use in state manag
 
 However, we cannot provide these guarantees without compromising the references. If a context mutates, it cannot lend out references.
 
-Functionally, this can be solved with UnsafeCell and runtime dynamics. Essentially, if a context mutates, then any affected components would need to be updated, even if they themselves aren't updated. Otherwise, a reference would be pointing at data that could have potentially been moved. 
+Functionally, this can be solved with UnsafeCell and runtime dynamics. Essentially, if a context mutates, then any affected components would need to be updated, even if they themselves aren't updated. Otherwise, a reference would be pointing at data that could have potentially been moved.
 
 To do this safely is a pretty big challenge. We need to provide a method of sharing data that is safe, ergonomic, and that fits the abstraction model.
 
 Enter, the "ContextGuard".
 
-The "ContextGuard" is very similar to a Ref/RefMut from the RefCell implementation, but one that derefs into actual underlying value. 
+The "ContextGuard" is very similar to a Ref/RefMut from the RefCell implementation, but one that derefs into actual underlying value.
 
-However, derefs of the ContextGuard are a bit more sophisticated than the Ref model. 
+However, derefs of the ContextGuard are a bit more sophisticated than the Ref model.
 
 For RefCell, when a Ref is taken, the RefCell is now "locked." This means you cannot take another `borrow_mut` instance while the Ref is still active. For our purposes, our modification phase is very limited, so we can make more assumptions about what is safe.
 
 1. We can pass out ContextGuards from any use of use_context. These don't actually lock the value until used.
 2. The ContextGuards only lock the data while the component is executing and when a callback is running.
 3. Modifications of the underlying context occur after a component is rendered and after the event has been run.
-   
+
 With the knowledge that usage of ContextGuard can only be achieved in a component context and the above assumptions, we can design a guard that prevents any poor usage but also is ergonomic.
 
 As such, the design of the ContextGuard must:
+
 - be /copy/ for easy moves into closures
 - never point to invalid data (no dereferencing of raw pointers after movable data has been changed (IE a vec has been resized))
 - not allow references of underlying data to leak into closures
 
 To solve this, we can be clever with lifetimes to ensure that any data is protected, but context is still ergonomic.
 
-1. As such, deref context guard returns an element with a lifetime bound to the borrow of the guard. 
-2. Because we cannot return locally borrowed data AND we consume context, this borrow cannot be moved into a closure. 
-3. ContextGuard is *copy* so the guard itself can be moved into closures
-4. ContextGuard derefs with its unique lifetime *inside* closures
+1. As such, deref context guard returns an element with a lifetime bound to the borrow of the guard.
+2. Because we cannot return locally borrowed data AND we consume context, this borrow cannot be moved into a closure.
+3. ContextGuard is _copy_ so the guard itself can be moved into closures
+4. ContextGuard derefs with its unique lifetime _inside_ closures
 5. Derefing a ContextGuard evaluates the underlying selector to ensure safe temporary access to underlying data
 
 ```rust
@@ -235,34 +238,38 @@ fn Example<'src>(ctx: Context<'src, ()>) -> VNode<'src> {
 ```
 
 A few notes:
-- this does *not* protect you from data races!!!
-- this does *not* force rendering of components
-- this *does* protect you from invalid + UB use of data
+
+- this does _not_ protect you from data races!!!
+- this does _not_ force rendering of components
+- this _does_ protect you from invalid + UB use of data
 - this approach leaves lots of room for fancy state management libraries
 - this approach is fairly quick, especially if borrows can be cached during usage phases
-
 
 ## Concurrency
 
 For Dioxus, concurrency is built directly into the VirtualDOM lifecycle and event system. Suspended components prove "no changes" while diffing, and will cause a lifecycle update later. This is considered a "trigger" and will cause targeted diffs and re-renders. Renderers will need to await the Dioxus suspense queue if they want to process these updates. This will typically involve joining the suspense queue and event listeners together like:
+
 ```rust
 // wait for an even either from the suspense queue or our own custom listener system
 let (left, right) = join!(vdom.suspense_queue, self.custom_event_listener);
 ```
+
 LiveView is built on this model, and updates from the WebSocket connection to the host server are treated as external updates. This means any renderer can feed targeted EditLists (the underlying message of this event) directly into the VirtualDOM.
 
 ## Execution Model
+
 <!-- todo -->
 
 ## Diffing
 
-Diffing is an interesting story. Since we don't re-render the entire DOM, we need a way to patch up the DOM without visiting every component. To get this working, we need to think in cycles, queues, and stacks. Most of the original logic is pulled from Dodrio as Dioxus and Dodrio share much of the same DNA. 
+Diffing is an interesting story. Since we don't re-render the entire DOM, we need a way to patch up the DOM without visiting every component. To get this working, we need to think in cycles, queues, and stacks. Most of the original logic is pulled from Dodrio as Dioxus and Dodrio share much of the same DNA.
 
-When an event is triggered, we find the callback that installed the listener and run it. We then record all components affected by the running of the "subscription" primitive. In practice, many hooks will initiate a subscription, so it is likely that many components throughout the entire tree will need to be re-rendered. For each component, we attach its index and the type of update it needs. 
+When an event is triggered, we find the callback that installed the listener and run it. We then record all components affected by the running of the "subscription" primitive. In practice, many hooks will initiate a subscription, so it is likely that many components throughout the entire tree will need to be re-rendered. For each component, we attach its index and the type of update it needs.
 
-In practice, removals trump prop updates which trump subscription updates. Therefore, we only process updates where props are directly changed first, as this will likely flow into child components. 
+In practice, removals trump prop updates which trump subscription updates. Therefore, we only process updates where props are directly changed first, as this will likely flow into child components.
 
 Roughly, the flow looks like:
+
 - Process the initiating event
 - Mark components affected by the subscription API (the only way of causing forward updates)
 - Descend from the root into children, ignoring those not affected by the subscription API. (walking the tree until we hit the first affected component, or choosing the highest component)
@@ -281,13 +288,9 @@ struct DiffMachine {
 
 On the actual diffing level, we're using the diffing algorithm pulled from Dodrio, but plan to move to a dedicated crate that implements Meyers/Patience for us. During the diffing phase, we track our current position using a "Traversal" which implements the "MoveTo". When "MoveTo" is combined with "Edit", it is possible for renderers to fully interpret a series of Moves and Edits together to update their internal node structures for rendering.
 
-
-
-
 ## Patch Stream
 
-One of the most important parts of Dioxus is the ability to stream patches from server to client. However, this inherently has challenges where raw VNodes attach listeners to themselves, and are therefore not serializable. 
-
+One of the most important parts of Dioxus is the ability to stream patches from server to client. However, this inherently has challenges where raw VNodes attach listeners to themselves, and are therefore not serializable.
 
 ### How do properties work?
 
@@ -295,16 +298,13 @@ How should properties passing work? Should we directly call the child? Should we
 
 Here's (generally) my head is at:
 
-Components need to store their props on them if they want to be updated remotely. These props *can* be updated after the fact.
+Components need to store their props on them if they want to be updated remotely. These props _can_ be updated after the fact.
 
 Perf concerns:
-unnecessary function runs
-    - list-y components
-    - hook calls?
-    - making vnodes?
-  
+unnecessary function runs - list-y components - hook calls? - making vnodes?
+
 Does any of this matter?
-Should we just run any component we see, immediately and imperatively? That will cause checks throughout the whole tree, no matter where the update occurred 
+Should we just run any component we see, immediately and imperatively? That will cause checks throughout the whole tree, no matter where the update occurred
 
 https://calendar.perfplanet.com/2013/diff/
 
@@ -313,7 +313,7 @@ Here's how react does it:
 Any "dirty" node causes an entire subtree render. Calling "setState" at the very top will cascade all the way down. This is particularly bad for this component design:
 
 ```rust
-static APP: FC<()> = |ctx, props| {
+static APP: FC<()> = |ctx| {
     let title = use_context(Title);
     ctx.render(html!{
         <div>
@@ -321,7 +321,7 @@ static APP: FC<()> = |ctx, props| {
             <HeavyList /> // VComponent::new(|| (FC, PropsForFc)) -> needs a context to immediately update the component's props imperatively? store the props in a box on bump? store the props on the child?
             // if props didnt change, then let the refernece stay invalid?.... no, cant do that, bump gets reset
             // immediately update props on the child component if it can be found? -> interesting, feels wrong, but faster, at the very least.
-            // can box on bump for the time being (fast enough), and then move it over? during the comparison phase? props only need to matter 
+            // can box on bump for the time being (fast enough), and then move it over? during the comparison phase? props only need to matter
             // cant downcast (can with transmute, but yikes)
             // how does chain borrowing work? a -> b -> c -> d
             // if b gets marked as dirty, then c and d are invalidated (semantically, UB, but not *bad* UB, just data races)
@@ -330,11 +330,11 @@ static APP: FC<()> = |ctx, props| {
             // treat like a context selector?
             // use_props::<P>(2)
             // child_props: Map<Scope, Box<dyn Props>>
-            // vs children: BTreeSet<Scope> -> to get nth 
+            // vs children: BTreeSet<Scope> -> to get nth
         </div>
     })
 };
-static HEAVY_LIST: FC<()> = |ctx, props| {
+static HEAVY_LIST: FC<()> = |ctx| {
     ctx.render({
         {0.100.map(i => <BigElement >)}
     })
@@ -345,25 +345,23 @@ An update to the use_context subscription will mark the node as dirty. The node 
 
 ## FC Layout
 
-The FC layout was altered to make life easier for us inside the VirtualDom. The "view" function returns an unbounded DomTree object. Calling the "view" function is unsafe under the hood, but prevents lifetimes from leaking out of the function call. Plus, it's easier to write. Because there are no lifetimes on the output (occur purely under the hood), we can escape needing to annotate them.
+The FC layout was altered to make life easier for us inside the VirtualDom. The "view" function returns an unbounded VNode object. Calling the "view" function is unsafe under the hood, but prevents lifetimes from leaking out of the function call. Plus, it's easier to write. Because there are no lifetimes on the output (occur purely under the hood), we can escape needing to annotate them.
 
 ```rust
-fn component(ctx: Context, props: &Props) -> DomTree {
+fn component(ctx: Context, props: &Props) -> VNode {
 
 }
 ```
 
-The DomTree object purely represents a viewable "key". It also forces components to use the "view" function as there is no other way to generate the DomTree object. Because the DomTree is a required type of FC, we can guarantee the same usage and flow patterns for all components.
+The VNode object purely represents a viewable "key". It also forces components to use the "view" function as there is no other way to generate the VNode object. Because the VNode is a required type of FC, we can guarantee the same usage and flow patterns for all components.
 
+## Events
 
-## Events 
-
-Events are finally in! To do events properly, we are abstracting over the event source with synthetic events. This forces 3rd party renderers to create the appropriate cross-platform event 
-
+Events are finally in! To do events properly, we are abstracting over the event source with synthetic events. This forces 3rd party renderers to create the appropriate cross-platform event
 
 ## Optional Props on Components
 
-A major goal here is ergonomics. Any field that is Option<T> should default to none. 
+A major goal here is ergonomics. Any field that is Option<T> should default to none.
 
 ```rust
 
@@ -380,7 +378,7 @@ struct Props {
 
 }
 
-static Component: FC<Props> = |ctx, props| {
+static Component: FC<Props> = |ctx| {
 
 }
 ```

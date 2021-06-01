@@ -31,7 +31,7 @@ const TODOS: EcsModel<u32, TodoModel> = |builder| {};
 // const SELECT_TITLE: SelectorBorrowed<u32, &str> = |s, k| TODOS.field(0).select(k);
 // const SELECT_SUBTITLE: SelectorBorrowed<u32, &str> = |s, k| TODOS.field(1).select(k);
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     use_init_recoil_root(ctx, |_| {});
 
     // let title = use_recoil_value(ctx, &C_SELECTOR);

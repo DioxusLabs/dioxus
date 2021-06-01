@@ -28,7 +28,7 @@ impl TitleController {
 }
 
 fn main() {
-    wasm_bindgen_futures::spawn_local(dioxus_web::WebsysRenderer::start(|ctx, _| {
+    wasm_bindgen_futures::spawn_local(dioxus_web::WebsysRenderer::start(|ctx| {
         let title = use_read(ctx, &TITLE);
         let subtitle = use_read(ctx, &SUBTITLE);
         let controller = use_recoil_api(ctx, TitleController::new);

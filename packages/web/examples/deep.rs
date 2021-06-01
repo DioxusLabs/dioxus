@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use dioxus_web::{dioxus::prelude::*, WebsysRenderer};
 
 fn main() {
@@ -7,8 +9,8 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(CustomA))
 }
 
-fn CustomA<'a>(ctx: Context<'a>, props: &'a ()) -> DomTree {
-    let (val, set_val) = use_state(&ctx, || "abcdef".to_string());
+fn CustomA(ctx: Context<()>) -> VNode {
+    let (val, set_val) = use_state(&ctx, || "abcdef".to_string() as String);
 
     ctx.render(rsx! {
         div {
@@ -23,46 +25,48 @@ fn CustomA<'a>(ctx: Context<'a>, props: &'a ()) -> DomTree {
                 onclick: move |_| set_val(val.to_ascii_lowercase())
             }
             components::CustomB {
-                val: val.as_ref()
+                val: val.clone()
             }
         }
     })
 }
 
 mod components {
+    use std::rc::Rc;
+
     use super::*;
 
     #[derive(Debug, Props, PartialEq)]
-    pub struct PropsB<'src> {
-        val: &'src str,
+    pub struct PropsB {
+        val: String,
     }
 
-    pub fn CustomB<'a>(ctx: Context<'a>, props: &'a PropsB<'a>) -> DomTree {
-        let (first, last) = props.val.split_at(3);
+    pub fn CustomB(ctx: Context<PropsB>) -> VNode {
+        let (first, last) = ctx.val.split_at(3);
         ctx.render(rsx! {
             div {
                 class: "m-8"
-                "CustomB {props.val}"
+                "CustomB {ctx.val}"
                 CustomC {
-                    val: first
+                    val: first.to_string()
                 }
                 CustomC {
-                    val: last
+                    val: last.to_string()
                 }
             }
         })
     }
 
     #[derive(Debug, Props, PartialEq)]
-    struct PropsC<'src> {
-        val: &'src str,
+    struct PropsC {
+        val: String,
     }
 
-    fn CustomC<'a>(ctx: Context<'a>, props: &'a PropsC<'a>) -> DomTree {
+    fn CustomC(ctx: Context<PropsC>) -> VNode {
         ctx.render(rsx! {
             div {
                 class: "m-8"
-                "CustomC {props.val}"
+                "CustomC {ctx.val}"
             }
         })
     }

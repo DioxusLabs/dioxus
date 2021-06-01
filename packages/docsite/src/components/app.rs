@@ -37,7 +37,7 @@ impl SomeState {
     }
 }
 
-pub static ExampleReducer: FC<()> = |ctx, props| {
+pub static ExampleReducer: FC<()> = |ctx| {
     let (state, reduce) = use_reducer(&ctx, SomeState::new, SomeState::reduce);
 
     let is_playing = state.is_playing();
@@ -85,7 +85,7 @@ enum KindaState {
     Erred,
 }
 
-static EnumReducer: FC<()> = |ctx, props| {
+static EnumReducer: FC<()> = |ctx| {
     let (state, reduce) = use_reducer(&ctx, || KindaState::Ready, |cur, new| *cur = new);
 
     let contents = helper(&ctx);
@@ -126,7 +126,7 @@ static EnumReducer: FC<()> = |ctx, props| {
     })
 };
 
-fn helper(ctx: &Context) -> DomTree {
+fn helper(ctx: &Context) -> VNode {
     ctx.render(rsx! {
         div {}
     })

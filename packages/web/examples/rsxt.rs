@@ -21,8 +21,8 @@ struct ExampleProps {
     initial_name: &'static str,
 }
 
-static Example: FC<ExampleProps> = |ctx, props| {
-    let name = use_state_new(&ctx, move || props.initial_name);
+static Example: FC<ExampleProps> = |ctx| {
+    let name = use_state_new(&ctx, move || ctx.initial_name);
 
     ctx.render(rsx! {
         div { 
@@ -53,12 +53,12 @@ struct ButtonProps<'src, F: Fn(MouseEvent)> {
     handler: F
 }
 
-fn CustomButton<'b, 'a, F: Fn(MouseEvent)>(ctx: Context<'a>, props: &'b ButtonProps<'b, F>) -> DomTree {
+fn CustomButton<'b, 'a, F: Fn(MouseEvent)>(ctx: Context<'a>, props: &'b ButtonProps<'b, F>) -> VNode {
     ctx.render(rsx!{
         button {  
             class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-            onmouseover: {&props.handler}
-            "{props.name}"
+            onmouseover: {&ctx.handler}
+            "{ctx.name}"
         }
     })
 }
@@ -74,10 +74,10 @@ impl<F: Fn(MouseEvent)> PartialEq for ButtonProps<'_, F> {
 struct PlaceholderProps {
     val: &'static str
 }
-fn Placeholder(ctx: Context, props: &PlaceholderProps) -> DomTree {
+fn Placeholder(ctx: Context, props: &PlaceholderProps) -> VNode {
     ctx.render(rsx!{
         div {
-            "child: {props.val}"
+            "child: {ctx.val}"
         }
     })
 }

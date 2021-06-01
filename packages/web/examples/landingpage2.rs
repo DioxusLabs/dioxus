@@ -1,4 +1,4 @@
-//! Basic example that renders a simple domtree to the browser.
+//! Basic example that renders a simple VNode to the browser.
 
 use std::rc::Rc;
 
@@ -12,7 +12,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     let (contents, set_contents) = use_state(&ctx, || "asd");
 
     ctx.render(rsx! {

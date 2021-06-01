@@ -21,12 +21,12 @@ struct ListItem {
     age: u32,
 }
 
-fn app<'a>(ctx: Context<'a>, props: &Props) -> DomTree {
+fn app(ctx: Context<Props>) -> VNode {
     let (val, set_val) = use_state(&ctx, || 0);
 
     ctx.render(dioxus::prelude::LazyNodes::new(move |c| {
         let mut root = builder::ElementBuilder::new(c, "div");
-        for child in &props.items {
+        for child in &ctx.items {
             // notice that the child directly borrows from our vec
             // this makes lists very fast (simply views reusing lifetimes)
             // <ChildItem item=child hanldler=setter />
@@ -55,11 +55,11 @@ struct ChildProps {
     item_handler: Callback<i32>,
 }
 
-fn ChildItem<'a>(ctx: Context<'a>, props: &ChildProps) -> DomTree {
+fn ChildItem<'a>(ctx: Context<ChildProps>) -> VNode {
     ctx.render(rsx! {
         div {
-            onclick: move |evt| (props.item_handler)(10)
-            h1 { "abcd123" }
+            // onclick: move |evt| (ctx.item_handler)(10)
+            h1 { "abcd123 {ctx.item.name}" }
             h2 { "abcd123" }
             div {
                 "abcd123"

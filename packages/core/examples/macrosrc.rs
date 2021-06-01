@@ -90,7 +90,7 @@ fn main() {}
 //         div(bump)
 //             .attr("class", "edit")
 //             .child(text("Hello"))
-//             .child(text(ctx.props.text.as_ref()))
+//             .child(text(ctx.ctx.text.as_ref()))
 //             .finish()
 //     })
 // }
@@ -123,7 +123,7 @@ fn main() {}
 //             _ => html! { <div> </div> },
 //         };
 
-//         if ctx.props.blah {
+//         if ctx.ctx.blah {
 //             html! { <div> </div> }
 //         } else {
 //             tex

@@ -7,9 +7,9 @@ pub struct TodoEntryProps {
     id: uuid::Uuid,
 }
 
-pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
+pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> VNode {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    let todo = use_atom_family(&ctx, &TODOS, props.id);
+    let todo = use_atom_family(&ctx, &TODOS, ctx.id);
 
     ctx.render(rsx! (
         li {

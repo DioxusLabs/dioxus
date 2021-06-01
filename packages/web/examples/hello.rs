@@ -9,7 +9,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
 
-static Example: FC<()> = |ctx, _props| {
+static Example: FC<()> = |ctx| {
     ctx.render(rsx! {
         div {
             span {

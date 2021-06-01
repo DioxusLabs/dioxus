@@ -72,7 +72,7 @@ impl TodoManager {
     }
 }
 
-pub fn TodoList(ctx: Context, _props: &()) -> DomTree {
+pub fn TodoList(ctx: Context<()>) -> VNode {
     let draft = use_state_new(&ctx, || "".to_string());
     let todos = use_read(&ctx, &TODO_LIST);
     let filter = use_read(&ctx, &FILTER);
@@ -116,9 +116,9 @@ pub struct TodoEntryProps {
     id: Uuid,
 }
 
-pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
+pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> VNode {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    let todo = use_read(&ctx, &TODO_LIST).get(&props.id).unwrap();
+    let todo = use_read(&ctx, &TODO_LIST).get(&ctx.id).unwrap();
 
     ctx.render(rsx! (
         li {
@@ -137,7 +137,7 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
     ))
 }
 
-pub fn FilterToggles(ctx: Context, _props: &()) -> DomTree {
+pub fn FilterToggles(ctx: Context<()>) -> VNode {
     let reducer = TodoManager(use_recoil_api(ctx));
     let items_left = use_read(ctx, &TODOS_LEFT);
 
@@ -178,7 +178,7 @@ pub fn FilterToggles(ctx: Context, _props: &()) -> DomTree {
     }
 }
 
-pub fn Footer(ctx: Context, _props: &()) -> DomTree {
+pub fn Footer(ctx: Context<()>) -> VNode {
     rsx! { in ctx,
         footer {
             class: "info"
@@ -197,7 +197,7 @@ pub fn Footer(ctx: Context, _props: &()) -> DomTree {
 
 const APP_STYLE: &'static str = include_str!("./todomvc/style.css");
 
-fn App(ctx: Context, _props: &()) -> DomTree {
+fn App(ctx: Context<()>) -> VNode {
     use_init_recoil_root(ctx, |_| {});
     rsx! { in ctx,
         div { id: "app"

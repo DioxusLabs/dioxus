@@ -21,12 +21,12 @@ struct RootProps {
     navigator: Receiver<&'static str>,
 }
 
-fn App(ctx: Context, props: &RootProps) -> DomTree {
+fn App(ctx: Context, props: &RootProps) -> VNode {
     let router = use_router(&ctx, |router| {});
 
     let navigator = use_history(&ctx);
 
-    use_receiver(&ctx, || props.recv.clone(), |to| navigator.navigate(to));
+    use_receiver(&ctx, || ctx.recv.clone(), |to| navigator.navigate(to));
 
     ctx.render(rsx! {
         div {

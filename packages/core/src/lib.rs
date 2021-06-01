@@ -16,8 +16,8 @@
 //! #[derive(Properties)]
 //! struct Props { name: String }
 //!
-//! fn Example(ctx: Context, props: &Props) -> DomTree {
-//!     html! { <div> "Hello {props.name}!" </div> }
+//! fn Example(ctx: Context, props: &Props) -> VNode {
+//!     html! { <div> "Hello {ctx.name}!" </div> }
 //! }
 //! ```
 //! Components need to take a "Context" parameter which is generic over some properties. This defines how the component can be used
@@ -31,8 +31,8 @@
 //! #[derive(Properties)]
 //! struct Props { name: String }
 //!
-//! static Example: FC<Props> = |ctx, props| {
-//!     html! { <div> "Hello {props.name}!" </div> }
+//! static Example: FC<Props> = |ctx| {
+//!     html! { <div> "Hello {ctx.name}!" </div> }
 //! }
 //! ```
 //!
@@ -101,7 +101,7 @@ pub(crate) mod innerlude {
     pub use crate::patch::*;
     pub use crate::virtual_dom::*;
 
-    pub type FC<P> = for<'scope> fn(Context<'scope>, &'scope P) -> DomTree;
+    pub type FC<P> = fn(Context<P>) -> VNode;
 
     // Re-export the FC macro
     pub use crate as dioxus;

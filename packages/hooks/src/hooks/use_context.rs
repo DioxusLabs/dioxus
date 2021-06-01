@@ -112,8 +112,8 @@ impl<T: Clone + PartialEq + 'static> Component for ContextProvider<T> {
 
     fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
         Self {
-            children: props.children,
-            context: Rc::new(props.context),
+            children: ctx.children,
+            context: Rc::new(ctx.context),
             consumers: RefCell::new(Vec::new()),
         }
     }
@@ -123,14 +123,14 @@ impl<T: Clone + PartialEq + 'static> Component for ContextProvider<T> {
     }
 
     fn change(&mut self, props: Self::Properties) -> bool {
-        let should_render = if self.children == props.children {
+        let should_render = if self.children == ctx.children {
             false
         } else {
-            self.children = props.children;
+            self.children = ctx.children;
             true
         };
 
-        let new_context = Rc::new(props.context);
+        let new_context = Rc::new(ctx.context);
         if self.context != new_context {
             self.context = new_context;
             self.notify_consumers();
@@ -357,10 +357,10 @@ mod tests {
                 log::info!("Render counter {:?}", counter);
                 return html! {
                     <>
-                        <div id=props.id.clone()>
+                        <div id=ctx.id.clone()>
                             { format!("total: {}", counter.borrow()) }
                         </div>
-                        { props.children.clone() }
+                        { ctx.children.clone() }
                     </>
                 };
             }
@@ -384,14 +384,14 @@ mod tests {
                 let ctx = use_context::<Rc<MyContext>>().expect("context not passed down");
                 log::info!("============");
                 log::info!("ctx is {:#?}", ctx);
-                log::info!("magic is {:#?}", props.magic);
+                log::info!("magic is {:#?}", ctx.magic);
                 log::info!("outlet counter is {:#?}", ctx);
                 log::info!("============");
 
                 return html! {
                     <>
-                        <div>{ format!("magic: {}\n", props.magic) }</div>
-                        <div id=props.id.clone()>
+                        <div>{ format!("magic: {}\n", ctx.magic) }</div>
+                        <div id=ctx.id.clone()>
                             { format!("current: {}, total: {}", ctx.0, counter.borrow()) }
                         </div>
                     </>

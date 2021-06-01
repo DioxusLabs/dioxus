@@ -12,7 +12,7 @@ struct Todo {
     contents: String,
 }
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     use_init_recoil_root(ctx, |_| {});
     let todos = use_read(ctx, &TODOS);
 
@@ -28,8 +28,8 @@ struct ChildProps {
     id: Uuid,
 }
 
-static Child: FC<ChildProps> = |ctx, props| {
-    let todo = use_read(ctx, &TODOS).get(&props.id).unwrap();
+static Child: FC<ChildProps> = |ctx| {
+    let todo = use_read(ctx, &TODOS).get(&ctx.id).unwrap();
     // let (todo, set_todo) = use_read_write(ctx, &TODOS);
 
     rsx! { in ctx,

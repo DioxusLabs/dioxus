@@ -5,7 +5,7 @@
 //     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 // }
 
-// fn Example(ctx: Context, props: ()) -> DomTree {
+// fn Example(ctx: Context, props: ()) -> VNode {
 //     let user_data = use_sql_query(&ctx, USER_DATA_QUERY);
 
 //     ctx.render(rsx! {

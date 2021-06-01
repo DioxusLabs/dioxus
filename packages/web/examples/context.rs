@@ -24,7 +24,7 @@ fn main() {
 #[derive(Debug)]
 struct CustomContext([&'static str; 3]);
 
-static Example: FC<()> = |ctx, props| {
+static Example: FC<()> = |ctx| {
     ctx.use_create_context(|| CustomContext(["Jack", "Jill", "Bob"]));
 
     ctx.render(rsx! {
@@ -52,9 +52,9 @@ struct ButtonProps {
     id: u8,
 }
 
-fn CustomButton(ctx: Context, props: &ButtonProps) -> DomTree {
+fn CustomButton(ctx: Context, props: &ButtonProps) -> VNode {
     let names = ctx.use_context::<CustomContext>();
-    let name = names.0[props.id as usize];
+    let name = names.0[ctx.id as usize];
 
     ctx.render(rsx!{
         button {  

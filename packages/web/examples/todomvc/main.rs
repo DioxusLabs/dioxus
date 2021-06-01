@@ -9,7 +9,7 @@ mod todolist;
 static APP_STYLE: &'static str = include_str!("./style.css");
 
 fn main() {
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx, _| {
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx| {
         ctx.render(rsx! {
             div {
                 id: "app"

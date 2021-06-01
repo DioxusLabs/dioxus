@@ -1,5 +1,5 @@
-
 ## Components
+
 Dioxus should look and feel just like writing functional React components. In Dioxus, there are no class components with lifecycles. All state management is done via hooks. This encourages logic reusability and lessens the burden on Dioxus to maintain a non-breaking lifecycle API.
 
 ```rust
@@ -9,7 +9,7 @@ struct MyProps {
 }
 
 fn Example(ctx: Context<MyProps>) -> VNode {
-    html! { <div> "Hello {ctx.props.name}!" </div> }
+    html! { <div> "Hello {ctx.ctx.name}!" </div> }
 }
 ```
 
@@ -25,8 +25,7 @@ fn Example(ctx: Context, name: String) -> VNode {
 // or
 
 #[functional_component]
-static Example: FC = |ctx, name: String| html! { <div> "Hello {name}!" </div> }; 
+static Example: FC = |ctx, name: String| html! { <div> "Hello {name}!" </div> };
 ```
 
-The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, templating engine, or the constructors directly. 
-
+The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, templating engine, or the constructors directly.

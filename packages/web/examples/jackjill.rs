@@ -9,7 +9,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example))
 }
 
-static Example: FC<()> = |ctx, props| {
+static Example: FC<()> = |ctx| {
     let (name, set_name) = use_state(&ctx, || "...?");
 
     log::debug!("Running component....");

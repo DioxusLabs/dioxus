@@ -12,7 +12,7 @@ fn main() {
     diouxs_webview::launch(App).run().await
 }
 
-fn App(ctx: Context, props: &()) -> DomTree {
+fn App(ctx: Context<()>) -> VNode {
     let router = use_router(&ctx, |router| {
         //
         router.get("/dogs/:dogId/").render(|ctx, request| {

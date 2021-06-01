@@ -3,7 +3,7 @@ use recoil::*;
 
 const COUNT: Atom<i32> = |_| 0;
 
-static App: FC<()> = |ctx, _| {
+static App: FC<()> = |ctx| {
     use_init_recoil_root(ctx, |_| {});
 
     let (count, set_count) = use_read_write(ctx, &COUNT);

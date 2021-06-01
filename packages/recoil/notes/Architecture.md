@@ -93,8 +93,8 @@ const ContentCards: SelectorFamily<Uuid, ContentCard> = |api, key| api.on_get_as
     data
 })
 
-static ContentCard: FC<()> = |ctx, props| {
-    let body =  async match use_recoil_value()(props.id).await {
+static ContentCard: FC<()> = |ctx| {
+    let body =  async match use_recoil_value()(ctx.id).await {
         Ok(content) => rsx!{in ctx, p {"{content}"} }
         Err(e) => rsx!{in ctx, p {"Failed to load"}}
     };

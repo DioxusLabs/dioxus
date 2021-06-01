@@ -51,7 +51,7 @@ fn html_render(
 
 #[test]
 fn test_serialize() {
-    let mut dom = VirtualDom::new(|ctx, props| {
+    let mut dom = VirtualDom::new(|ctx| {
         //
         //
         //

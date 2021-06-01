@@ -4,7 +4,7 @@ use std::{any::Any, borrow::BorrowMut, intrinsics::transmute, u128};
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{DomTree, Properties, VComponent, FC},
+    innerlude::{Properties, VComponent, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::VElement,
     virtual_dom::NodeCtx,
@@ -477,7 +477,7 @@ where
     ///     .iter_child((0..10).map(|f| span(&b).finish())
     ///     .finish();
     /// ```    
-    pub fn iter_child(mut self, nodes: impl IntoIterator<Item = impl IntoDomTree<'a>>) -> Self {
+    pub fn iter_child(mut self, nodes: impl IntoIterator<Item = impl IntoVNode<'a>>) -> Self {
         for item in nodes {
             let child = item.into_vnode(&self.ctx);
             self.children.push(child);
@@ -486,13 +486,13 @@ where
     }
 }
 
-impl IntoIterator for DomTree {
-    type Item = DomTree;
-    type IntoIter = std::iter::Once<Self::Item>;
-    fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(self)
-    }
-}
+// impl IntoIterator for VNode {
+//     type Item = VNode;
+//     type IntoIter = std::iter::Once<Self::Item>;
+//     fn into_iter(self) -> Self::IntoIter {
+//         std::iter::once(self)
+//     }
+// }
 
 impl<'a> IntoIterator for VNode<'a> {
     type Item = VNode<'a>;
@@ -501,23 +501,30 @@ impl<'a> IntoIterator for VNode<'a> {
         std::iter::once(self)
     }
 }
-impl<'a> IntoDomTree<'a> for VNode<'a> {
+impl<'a> IntoVNode<'a> for VNode<'a> {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
         self
     }
 }
 
-pub trait IntoDomTree<'a> {
+impl<'a> IntoVNode<'a> for &VNode<'a> {
+    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+        // cloning is cheap since vnodes are just references into bump arenas
+        self.clone()
+    }
+}
+
+pub trait IntoVNode<'a> {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a>;
 }
 
-pub trait DomTreeBuilder<'a, G>: IntoIterator<Item = G>
+pub trait VNodeBuilder<'a, G>: IntoIterator<Item = G>
 where
-    G: IntoDomTree<'a>,
+    G: IntoVNode<'a>,
 {
 }
 
-impl<'a, F> DomTreeBuilder<'a, LazyNodes<'a, F>> for LazyNodes<'a, F> where
+impl<'a, F> VNodeBuilder<'a, LazyNodes<'a, F>> for LazyNodes<'a, F> where
     F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a
 {
 }
@@ -527,15 +534,15 @@ impl<'a, F> DomTreeBuilder<'a, LazyNodes<'a, F>> for LazyNodes<'a, F> where
 // ----
 //  let nodes = ctx.render(rsx!{ ... };
 //  rsx! { {nodes } }
-impl<'a> IntoDomTree<'a> for DomTree {
-    fn into_vnode(self, _ctx: &NodeCtx<'a>) -> VNode<'a> {
-        self.root
-    }
-}
+// impl<'a> IntoVNode<'a> for VNode {
+//     fn into_vnode(self, _ctx: &NodeCtx<'a>) -> VNode<'a> {
+//         self.root
+//     }
+// }
 
 // Wrap the the node-builder closure in a concrete type.
 // ---
-// This is a bit of a hack to implement the IntoDomTree trait for closure types.
+// This is a bit of a hack to implement the IntoVNode trait for closure types.
 pub struct LazyNodes<'a, G>
 where
     G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
@@ -561,7 +568,7 @@ where
 // ---
 //  let nodes = rsx!{ ... };
 //  rsx! { {nodes } }
-impl<'a, G> IntoDomTree<'a> for LazyNodes<'a, G>
+impl<'a, G> IntoVNode<'a> for LazyNodes<'a, G>
 where
     G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
 {
@@ -581,13 +588,13 @@ where
         std::iter::once(self)
     }
 }
-impl<'a> IntoDomTree<'a> for () {
+impl<'a> IntoVNode<'a> for () {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
         VNode::Suspended
     }
 }
 
-impl<'a> IntoDomTree<'a> for Option<()> {
+impl<'a> IntoVNode<'a> for Option<()> {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
         VNode::Suspended
     }
@@ -650,15 +657,16 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
     Attribute { name, value }
 }
 
-pub fn virtual_child<'a, T: Properties + 'a>(
+pub fn virtual_child<'a, T: Properties>(
     ctx: &NodeCtx<'a>,
     f: FC<T>,
-    p: T,
+    props: T,
     key: Option<&'a str>, // key: NodeKey<'a>,
 ) -> VNode<'a> {
     // currently concerned about if props have a custom drop implementation
     // might override it with the props macro
-    let bump = &ctx.bump();
-    let propsd: &'a mut _ = bump.alloc(p);
-    VNode::Component(crate::nodes::VComponent::new(f, propsd, key))
+    VNode::Component(
+        ctx.bump()
+            .alloc(crate::nodes::VComponent::new(f, props, key)),
+    )
 }

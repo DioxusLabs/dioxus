@@ -1,3 +1,3 @@
 # Dioxus for iOS
 
-This crate implements a renderer of the Dioxus DomTree to an iOS app 
+This crate implements a renderer of the Dioxus VNode to an iOS app

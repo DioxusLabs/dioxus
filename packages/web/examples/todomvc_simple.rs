@@ -26,7 +26,7 @@ pub struct TodoItem {
 // =======================
 // Components
 // =======================
-pub fn App(ctx: Context, props: &()) -> DomTree {
+pub fn App(ctx: Context<()>) -> VNode {
     ctx.render(rsx! {
         div {
             id: "app"
@@ -51,7 +51,7 @@ pub fn App(ctx: Context, props: &()) -> DomTree {
     })
 }
 
-pub fn TodoList(ctx: Context, props: &()) -> DomTree {
+pub fn TodoList(ctx: Context<()>) -> VNode {
     let (draft, set_draft) = use_state(&ctx, || "".to_string());
     let (todos, set_todos) = use_state(&ctx, || HashMap::<uuid::Uuid, Rc<TodoItem>>::new());
     let (filter, set_filter) = use_state(&ctx, || FilterState::All);
@@ -100,17 +100,17 @@ pub struct TodoEntryProps {
     item: Rc<TodoItem>,
 }
 
-pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> DomTree {
+pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> VNode {
 // #[inline_props]
 pub fn TodoEntry(
     ctx: Context,
     baller: &impl Fn() -> (),
     caller: &impl Fn() -> (),
     todo: &Rc<TodoItem>,
-) -> DomTree {
-    // pub fn TodoEntry(ctx: Context, todo: &Rc<TodoItem>) -> DomTree {
+) -> VNode {
+    // pub fn TodoEntry(ctx: Context, todo: &Rc<TodoItem>) -> VNode {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    // let todo = &props.item;
+    // let todo = &ctx.item;
 
     ctx.render(rsx! (
         li {
@@ -129,7 +129,7 @@ pub fn TodoEntry(
     ))
 }
 
-pub fn FilterToggles(ctx: Context, props: &()) -> DomTree {
+pub fn FilterToggles(ctx: Context<()>) -> VNode {
     let toggles = [
         ("All", "", FilterState::All),
         ("Active", "active", FilterState::Active),

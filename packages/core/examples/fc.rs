@@ -1,7 +1,7 @@
 use dioxus_core::component::fc_to_builder;
 use dioxus_core::prelude::*;
 
-static BLAH: FC<()> = |ctx, _props| {
+static BLAH: FC<()> = |ctx| {
     let g = "asd".to_string();
     ctx.render(rsx! {
         div {
@@ -17,7 +17,7 @@ pub struct ExampleProps {
     some_field: String,
 }
 
-static SomeComponent: FC<ExampleProps> = |ctx, _props| {
+static SomeComponent: FC<ExampleProps> = |ctx| {
     let blah = rsx! {
         div {}
     };

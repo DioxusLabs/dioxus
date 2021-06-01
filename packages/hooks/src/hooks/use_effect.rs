@@ -277,8 +277,8 @@ mod tests {
             type TProps = FunctionProps;
 
             fn run(props: &Self::TProps) -> Html {
-                let effect_called = props.effect_called.clone();
-                let destroy_called = props.destroy_called.clone();
+                let effect_called = ctx.effect_called.clone();
+                let destroy_called = ctx.destroy_called.clone();
                 use_effect_with_deps(
                     move |_| {
                         effect_called();
@@ -297,7 +297,7 @@ mod tests {
                 if *show {
                     let effect_called: Rc<dyn Fn()> = Rc::new(move || set_show(false));
                     return html! {
-                        <UseEffectComponent destroy_called=props.destroy_called.clone() effect_called=effect_called />
+                        <UseEffectComponent destroy_called=ctx.destroy_called.clone() effect_called=effect_called />
                     };
                 } else {
                     return html! {

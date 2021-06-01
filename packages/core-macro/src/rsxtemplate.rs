@@ -22,7 +22,19 @@ impl Parse for RsxTemplate {
     fn parse(s: ParseStream) -> Result<Self> {
         if s.peek(LitStr) {
             use std::str::FromStr;
+
             let lit = s.parse::<LitStr>()?;
+            let g = lit.span();
+            let mut value = lit.value();
+            if value.ends_with('\n') {
+                value.pop();
+                if value.ends_with('\r') {
+                    value.pop();
+                }
+            }
+            let lit = LitStr::new(&value, lit.span());
+
+            // panic!("{:#?}", lit);
             match lit.parse::<crate::rsxt::RsxRender>() {
                 Ok(r) => Ok(Self { inner: r }),
                 Err(e) => Err(e),
