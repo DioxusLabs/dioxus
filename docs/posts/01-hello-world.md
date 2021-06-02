@@ -9,8 +9,8 @@ struct MyProps {
 }
 
 fn Example(ctx: Context<MyProps>) -> VNode {
-    ctx.render(html! { 
-        <div> "Hello {ctx.props().name}!" </div> 
+    ctx.render(html! {
+        <div> "Hello {ctx.name}!" </div>
     })
 }
 ```

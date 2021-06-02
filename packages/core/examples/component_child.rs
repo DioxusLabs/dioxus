@@ -22,6 +22,7 @@ static Example: FC<()> = |ctx| {
     //
     rsx! { in ctx,
         div {
+            h1 {"these are children nodes: "}
             {nodes}
         }
     }

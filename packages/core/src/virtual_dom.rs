@@ -137,12 +137,11 @@ impl VirtualDom {
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
         // Here, we need to make it manually, using an RC to force the Weak reference to stick around for the main scope.
-        let _root_caller: Rc<OpaqueComponent> = Rc::new(move |ctx| {
-            todo!()
-            // root(Context {
-            //     props: &root_props,
-            //     scope: ctx,
-            // })
+        let _root_caller: Rc<OpaqueComponent<'static>> = Rc::new(move |scope| {
+            // the lifetime of this closure is just as long as the lifetime on the scope reference
+            // this closure moves root props (which is static) into this closure
+            let props = unsafe { &*(&root_props as *const _) };
+            root(Context { props, scope })
         });
 
         // Create a weak reference to the OpaqueComponent for the root scope to use as its render function
@@ -618,16 +617,21 @@ impl Scope {
             .ok_or(Error::FatalInternal("Failed to get caller"))?;
 
         // Cast the caller ptr from static to one with our own reference
-        let new_head = unsafe {
-            std::mem::transmute::<&OpaqueComponent<'static>, &OpaqueComponent<'sel>>(
-                caller.as_ref(),
-            )
-        }(&self);
+        let c2: &OpaqueComponent<'static> = caller.as_ref();
+        let c3: &OpaqueComponent<'sel> = unsafe { std::mem::transmute(c2) };
 
-        todo!();
-        // self.frames.cur_frame_mut().head_node = new_head;
+        let unsafe_head = unsafe { self.own_vnodes(c3) };
+
+        self.frames.cur_frame_mut().head_node = unsafe_head;
 
         Ok(())
+    }
+
+    // this is its own function so we can preciesly control how lifetimes flow
+    unsafe fn own_vnodes<'a>(&'a self, f: &OpaqueComponent<'a>) -> VNode<'static> {
+        let new_head: VNode<'a> = f(self);
+        let out: VNode<'static> = std::mem::transmute(new_head);
+        out
     }
 
     // A safe wrapper around calling listeners

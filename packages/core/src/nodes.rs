@@ -235,7 +235,7 @@ pub struct VComponent<'src> {
     pub children: &'src [VNode<'src>],
 
     // a pointer into the bump arena (given by the 'src lifetime)
-    raw_props: Box<dyn Any>,
+    // raw_props: Box<dyn Any>,
     // raw_props: *const (),
 
     // a pointer to the raw fn typ
@@ -243,13 +243,24 @@ pub struct VComponent<'src> {
     _p: PhantomData<&'src ()>,
 }
 
+unsafe fn transmogrify<'a>(p: impl Properties + 'a) -> impl Properties + 'static {
+    todo!()
+}
 impl<'a> VComponent<'a> {
     // use the type parameter on props creation and move it into a portable context
     // this lets us keep scope generic *and* downcast its props when we need to:
     // - perform comparisons when diffing (memoization)
     // TODO: lift the requirement that props need to be static
     // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
-    pub fn new<P: Properties>(component: FC<P>, props: P, key: Option<&'a str>) -> Self {
+
+    pub fn new<P: Properties>(
+        component: FC<P>,
+        // props: bumpalo::boxed::Box<'a, P>,
+        props: P,
+        key: Option<&'a str>,
+    ) -> Self {
+        // pub fn new<P: Properties + 'a>(component: FC<P>, props: P, key: Option<&'a str>) -> Self {
+        // let bad_props = unsafe { transmogrify(props) };
         let caller_ref = component as *const ();
 
         // let raw_props = props as *const P as *const ();
@@ -271,7 +282,19 @@ impl<'a> VComponent<'a> {
         //     }
         // };
 
-        let caller: Rc<dyn Fn(&Scope) -> VNode + 'a> = Rc::new(move |scp| todo!());
+        // let prref: &'a P = props.as_ref();
+
+        let caller: Rc<dyn Fn(&Scope) -> VNode> = Rc::new(move |scope| {
+            //
+            // let props2 = bad_props;
+            // props.as_ref()
+            // let ctx = Context {
+            //     props: prref,
+            //     scope,
+            // };
+            todo!()
+            // component(ctx)
+        });
         // let caller = Rc::new(create_closure(component, raw_props));
 
         let key = match key {
@@ -283,7 +306,7 @@ impl<'a> VComponent<'a> {
             key,
             ass_scope: Rc::new(RefCell::new(None)),
             user_fc: caller_ref,
-            raw_props: Box::new(props),
+            // raw_props: Box::new(props),
             _p: PhantomData,
             children: &[],
             caller,
@@ -292,18 +315,3 @@ impl<'a> VComponent<'a> {
         }
     }
 }
-
-// fn create_closure<P: Properties>(
-//     component: FC<P>,
-//     raw_props: *const (),
-// ) -> impl for<'r> Fn(&'r Scope) -> VNode<'r> {
-//     move |ctx| -> VNode {
-//         // cast back into the right lifetime
-//         let safe_props: &P = unsafe { &*(raw_props as *const P) };
-//         component(Context {
-//             props: safe_props,
-//             scope: ctx,
-//         })
-//         // component(ctx, safe_props)
-//     }
-// }

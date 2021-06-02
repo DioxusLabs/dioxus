@@ -486,14 +486,6 @@ where
     }
 }
 
-// impl IntoIterator for VNode {
-//     type Item = VNode;
-//     type IntoIter = std::iter::Once<Self::Item>;
-//     fn into_iter(self) -> Self::IntoIter {
-//         std::iter::once(self)
-//     }
-// }
-
 impl<'a> IntoIterator for VNode<'a> {
     type Item = VNode<'a>;
     type IntoIter = std::iter::Once<Self::Item>;
@@ -665,8 +657,9 @@ pub fn virtual_child<'a, T: Properties>(
 ) -> VNode<'a> {
     // currently concerned about if props have a custom drop implementation
     // might override it with the props macro
-    VNode::Component(
-        ctx.bump()
-            .alloc(crate::nodes::VComponent::new(f, props, key)),
-    )
+    todo!()
+    // VNode::Component(
+    //     ctx.bump()
+    //         .alloc(crate::nodes::VComponent::new(f, props, key)),
+    // )
 }

@@ -35,7 +35,7 @@ struct ExampleProps {
 fn Example(ctx: &mut Context<ExampleProps>) -> VNode {
     let ExampleProps {
         name, pending, count
-    } = ctx.props();
+    } = ctx.props;
 
     rsx! {
         <div>
