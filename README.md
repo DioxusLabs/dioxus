@@ -8,13 +8,8 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-//! A complete dioxus web app
-use dioxus_web::*;
-
-struct Props { initial_text: &'static str }
-
-fn Example(ctx: Context<Props>) -> VNode {
-    let selection = use_state(ctx, move || ctx.initial_text);
+fn Example(ctx: Context<()>) -> VNode {
+    let selection = use_state(ctx, move || "..?");
 
     ctx.render(rsx! {
         div {
@@ -24,10 +19,6 @@ fn Example(ctx: Context<Props>) -> VNode {
         }
     })
 };
-
-fn main() {
-    dioxus_web::start_with_props(Example, Props { initial_text: "..?" }).block_on();
-}
 ```
 
 Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, Android apps, iOS Apps, and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
