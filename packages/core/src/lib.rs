@@ -86,6 +86,8 @@ pub mod virtual_dom; // Most fun logic starts here, manages the lifecycle and su
 pub mod builder {
     pub use super::nodebuilder::*;
 }
+pub mod scope;
+pub mod support;
 
 // types used internally that are important
 pub(crate) mod innerlude {

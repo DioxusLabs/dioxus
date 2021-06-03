@@ -58,37 +58,7 @@ use std::{
 /// that were modified by the eventtrigger. This prevents doubly evaluating components if they were both updated via
 /// subscriptions and props changes.
 pub struct DiffMachine<'a> {
-    pub create_diffs: bool,
     pub change_list: EditMachine<'a>,
-    pub diffed: FxHashSet<ScopeIdx>,
-    pub lifecycle_events: VecDeque<LifeCycleEvent<'a>>,
-}
-pub enum LifeCycleEvent<'a> {
-    Mount {
-        caller: Weak<dyn Fn(&Scope) -> VNode + 'a>,
-        stable_scope_addr: Weak<VCompAssociatedScope>,
-        root_id: u32,
-    },
-    PropsChanged {
-        caller: Weak<dyn Fn(&Scope) -> VNode + 'a>,
-        stable_scope_addr: Weak<VCompAssociatedScope>,
-        root_id: u32,
-    },
-    SameProps {
-        caller: Weak<dyn Fn(&Scope) -> VNode + 'a>,
-        stable_scope_addr: Weak<VCompAssociatedScope>,
-        root_id: u32,
-    },
-    Replace {
-        caller: Weak<dyn Fn(&Scope) -> VNode + 'a>,
-        old_scope: Weak<VCompAssociatedScope>,
-        new_scope: Weak<VCompAssociatedScope>,
-        root_id: u32,
-    },
-    Remove {
-        stable_scope_addr: Weak<VCompAssociatedScope>,
-        root_id: u32,
-    },
 }
 
 static COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -99,10 +69,7 @@ fn get_id() -> u32 {
 impl<'a> DiffMachine<'a> {
     pub fn new() -> Self {
         Self {
-            create_diffs: true,
-            lifecycle_events: VecDeque::new(),
             change_list: EditMachine::new(),
-            diffed: FxHashSet::default(),
         }
     }
 
