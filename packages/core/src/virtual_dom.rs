@@ -154,10 +154,11 @@ impl VirtualDom {
         // Make the first scope
         // We don't run the component though, so renderers will need to call "rebuild" when they initialize their DOM
         let link = components.clone();
+        let event_channel = Rc::new(move || {});
         let base_scope = components
             .with(|arena| {
                 arena.insert_with(move |myidx| {
-                    Scope::new(caller_ref, myidx, None, 0, _event_queue, link)
+                    Scope::new(caller_ref, myidx, None, 0, event_channel, link, &[])
                 })
             })
             .unwrap();
@@ -172,6 +173,7 @@ impl VirtualDom {
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
+    /// Currently this doesn't do what we want it to do
     pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
         let mut diff_machine = DiffMachine::new();
 
@@ -180,8 +182,9 @@ impl VirtualDom {
         // Instead, this is done on top-level component
 
         let base = self.components.try_get(self.base_scope)?;
-        let immediate_update = self.event_queue.schedule_update(base);
-        immediate_update();
+
+        let update = &base.event_channel;
+        update();
 
         self.progress_completely(&mut diff_machine)?;
 
@@ -319,21 +322,23 @@ impl VirtualDom {
 
                         // Insert a new scope into our component list
                         let idx = self.components.with(|components| {
-                            components.insert_with(|f| {
+                            components.insert_with(|new_idx| {
+                                let height = cur_height + 1;
                                 Scope::new(
                                     caller,
-                                    f,
+                                    new_idx,
                                     Some(cur_component.arena_idx),
-                                    cur_height + 1,
-                                    self.event_queue.clone(),
+                                    height,
+                                    self.event_queue.new_channel(height, new_idx),
                                     self.components.clone(),
+                                    &[],
                                 )
                             })
                         })?;
 
                         {
                             let cur_component = self.components.try_get_mut(update.idx).unwrap();
-                            let mut ch = cur_component.children.borrow_mut();
+                            let mut ch = cur_component.descendents.borrow_mut();
                             ch.insert(idx);
                             std::mem::drop(ch);
                         }
@@ -444,7 +449,7 @@ impl VirtualDom {
                         // Accumulate all the child components that need to be removed
                         while let Some(child_id) = children_to_remove.pop_back() {
                             let comp = self.components.try_get(child_id).unwrap();
-                            let children = comp.children.borrow();
+                            let children = comp.descendents.borrow();
                             for child in children.iter() {
                                 children_to_remove.push_front(*child);
                             }
@@ -471,7 +476,6 @@ impl VirtualDom {
 }
 
 // TODO!
-//
 // These impls are actually wrong. The DOM needs to have a mutex implemented.
 unsafe impl Sync for VirtualDom {}
 unsafe impl Send for VirtualDom {}
@@ -488,7 +492,9 @@ pub struct Scope {
 
     // IDs of children that this scope has created
     // This enables us to drop the children and their children when this scope is destroyed
-    children: RefCell<HashSet<ScopeIdx>>,
+    descendents: RefCell<HashSet<ScopeIdx>>,
+
+    child_nodes: &'static [VNode<'static>],
 
     // A reference to the list of components.
     // This lets us traverse the component list whenever we need to access our parent or children.
@@ -501,8 +507,9 @@ pub struct Scope {
 
     pub height: u32,
 
-    pub event_queue: EventQueue,
+    pub event_channel: Rc<dyn Fn() + 'static>,
 
+    // pub event_queue: EventQueue,
     pub caller: Weak<OpaqueComponent<'static>>,
 
     pub hookidx: RefCell<usize>,
@@ -528,6 +535,7 @@ pub struct Scope {
 
 // We need to pin the hook so it doesn't move as we initialize the list of hooks
 type Hook = Pin<Box<dyn std::any::Any>>;
+type EventChannel = Rc<dyn Fn()>;
 
 impl Scope {
     // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
@@ -542,8 +550,9 @@ impl Scope {
         arena_idx: ScopeIdx,
         parent: Option<ScopeIdx>,
         height: u32,
-        event_queue: EventQueue,
+        event_channel: EventChannel,
         arena_link: ScopeArena,
+        child_nodes: &'creator_node [VNode<'creator_node>],
     ) -> Self {
         log::debug!(
             "New scope created, height is {}, idx is {:?}",
@@ -569,18 +578,19 @@ impl Scope {
         };
 
         Self {
+            child_nodes: &[],
             caller,
             parent,
             arena_idx,
             height,
-            event_queue,
+            event_channel,
             arena_link,
             frames: ActiveFrame::new(),
             hooks: Default::default(),
             shared_contexts: Default::default(),
             listeners: Default::default(),
             hookidx: Default::default(),
-            children: Default::default(),
+            descendents: Default::default(),
         }
     }
 
@@ -732,14 +742,18 @@ pub trait Scoped<'src>: Sized {
 
     /// Access the children elements passed into the component
     fn children(&self) -> &'src [VNode<'src>] {
-        todo!("Children API not yet implemented for component Context")
+        // We're re-casting the nodes back out
+        // They don't really have a static lifetime
+        unsafe {
+            let scope = self.get_scope();
+            let nodes = scope.child_nodes;
+            nodes
+        }
     }
 
     /// Create a subscription that schedules a future render for the reference component
     fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
-        todo!()
-        // pub fn schedule_update(self) -> impl Fn() + 'static {
-        // self.scope.event_queue.schedule_update(&self.scope)
+        self.get_scope().event_channel.clone()
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -759,22 +773,12 @@ pub trait Scoped<'src>: Sized {
     ///```
     fn render<'a, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a>(
         self,
-        // &'a/ self,
         lazy_nodes: LazyNodes<'src, F>,
-        // lazy_nodes: LazyNodes<'src, F>,
     ) -> VNode<'src> {
-        let scope_ref = self.get_scope();
-        let ctx = NodeCtx {
-            scope_ref,
+        lazy_nodes.into_vnode(&NodeCtx {
+            scope_ref: self.get_scope(),
             listener_id: 0.into(),
-        };
-
-        todo!()
-        // VNode {
-        //     root: unsafe {
-        //         std::mem::transmute::<VNode<'scope>, VNode<'static>>(lazy_nodes.into_vnode(&ctx))
-        //     },
-        // }
+        })
     }
 
     // impl<'scope> Context<'scope> {
@@ -957,17 +961,14 @@ Any function prefixed with "use" should not be called conditionally.
 // We then expose a handle to use those props for render in the form of "OpaqueComponent"
 pub(crate) type OpaqueComponent<'e> = dyn for<'b> Fn(&'b Scope) -> VNode<'b> + 'e;
 
-#[derive(Debug, Default, Clone)]
-pub struct EventQueue(pub(crate) Rc<RefCell<Vec<HeightMarker>>>);
+#[derive(PartialEq, Debug, Clone, Default)]
+pub(crate) struct EventQueue(pub Rc<RefCell<Vec<HeightMarker>>>);
 
 impl EventQueue {
-    pub fn schedule_update(&self, source: &Scope) -> impl Fn() {
+    pub fn new_channel(&self, height: u32, idx: ScopeIdx) -> Rc<dyn Fn()> {
         let inner = self.clone();
-        let marker = HeightMarker {
-            height: source.height,
-            idx: source.arena_idx,
-        };
-        move || inner.0.as_ref().borrow_mut().push(marker)
+        let marker = HeightMarker { height, idx };
+        Rc::new(move || inner.0.as_ref().borrow_mut().push(marker))
     }
 }
 
@@ -1105,37 +1106,5 @@ impl ActiveFrame {
         } else {
             &mut self.frames[1]
         }
-    }
-}
-
-mod tests {
-    use super::*;
-
-    #[test]
-    fn simulate() {
-        let dom = VirtualDom::new(|ctx| {
-            //
-            ctx.render(rsx! {
-                div {
-
-                }
-            })
-        });
-        // let root = dom.components.get(dom.base_scope).unwrap();
-    }
-
-    // ensure the virtualdom is send + sync
-    // needed for use in async/await contexts
-    #[test]
-    fn is_send_sync() {
-        fn check_send<T: Send>(_a: T) -> T {
-            todo!()
-        }
-        fn check_sync<T: Sync>(_a: T) -> T {
-            todo!()
-        }
-
-        let _ = check_send(VirtualDom::new(|ctx| ctx.render(rsx! { div {}})));
-        let _ = check_sync(VirtualDom::new(|ctx| ctx.render(rsx! { div {}})));
     }
 }

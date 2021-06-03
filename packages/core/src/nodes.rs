@@ -6,6 +6,7 @@
 use crate::{
     events::VirtualEvent,
     innerlude::{Context, Properties, Scope, ScopeIdx, FC},
+    nodebuilder::text3,
 };
 use bumpalo::Bump;
 use std::{
@@ -28,6 +29,8 @@ pub enum VNode<'src> {
     /// A text node (node type `TEXT_NODE`).
     Text(VText<'src>),
 
+    /// A fragment is a "virtual position" in the DOM
+    /// Fragments may have children and keys
     Fragment(&'src VFragment<'src>),
 
     /// A "suspended component"
@@ -86,8 +89,8 @@ impl<'a> VNode<'a> {
         VNode::Text(VText { text })
     }
 
-    pub fn text_args(b: &'a Bump, f: Arguments) -> VNode<'a> {
-        todo!()
+    pub fn text_args(bump: &'a Bump, args: Arguments) -> VNode<'a> {
+        text3(bump, args)
     }
 
     #[inline]
@@ -95,11 +98,11 @@ impl<'a> VNode<'a> {
         match &self {
             VNode::Text(_) => NodeKey::NONE,
             VNode::Element(e) => e.key,
-            VNode::Suspended => {
-                todo!()
-            }
             VNode::Fragment(frag) => frag.key,
             VNode::Component(c) => c.key,
+
+            // todo suspend should be allowed to have keys
+            VNode::Suspended => NodeKey::NONE,
         }
     }
 }
@@ -254,9 +257,6 @@ pub struct VComponent<'src> {
     _p: PhantomData<&'src ()>,
 }
 
-unsafe fn transmogrify<'a>(p: impl Properties + 'a) -> impl Properties + 'static {
-    todo!()
-}
 impl<'a> VComponent<'a> {
     // use the type parameter on props creation and move it into a portable context
     // this lets us keep scope generic *and* downcast its props when we need to:

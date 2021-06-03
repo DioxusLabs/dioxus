@@ -85,6 +85,7 @@ TypeScript is a great addition to JavaScript, but comes with a lot of tweaking f
 - inline built-in unit/integration testing
 - best-in-class error handling
 - simple and fast build system
+- powerful standard library (no need for lodash or underscore)
 - include_str! for integrating html/css/svg templates directly
 - various macros (`html!`, `rsx!`) for fast template iteration
 
