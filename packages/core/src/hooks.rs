@@ -29,7 +29,7 @@ mod use_state_def {
     /// Usage:
     /// ```ignore
     /// static Example: FC<()> = |ctx| {
-    ///     let (counter, set_counter) = use_state(ctx, || 0);
+    ///     let (counter, set_counter) = use_state(&ctx, || 0);
     ///     let increment = |_| set_couter(counter + 1);
     ///     let decrement = |_| set_couter(counter + 1);
     ///
@@ -42,8 +42,8 @@ mod use_state_def {
     ///     }
     /// }
     /// ```
-    pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P: 'a>(
-        ctx: Context<'a, P>,
+    pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
+        ctx: &impl Scoped<'a>,
         initial_state_fn: F,
     ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
         struct UseState<T: 'static> {
@@ -156,7 +156,7 @@ mod new_use_state_def {
     /// Usage:
     /// ```ignore
     /// static Example: FC<()> = |ctx| {
-    ///     let (counter, set_counter) = use_state(ctx, || 0);
+    ///     let (counter, set_counter) = use_state(&ctx, || 0);
     ///     let increment = |_| set_couter(counter + 1);
     ///     let decrement = |_| set_couter(counter + 1);
     ///
@@ -169,8 +169,8 @@ mod new_use_state_def {
     ///     }
     /// }
     /// ```
-    pub fn use_state_new<'a, 'c, T: 'static, F: FnOnce() -> T, P: 'static>(
-        ctx: Context<'a, P>,
+    pub fn use_state_new<'a, 'c, T: 'static, F: FnOnce() -> T>(
+        ctx: &impl Scoped<'a>,
         initial_state_fn: F,
     ) -> &'a UseState<T> {
         ctx.use_hook(
@@ -246,8 +246,8 @@ mod use_ref_def {
     /// To change it, use modify.
     /// Modifications to this value do not cause updates to the component
     /// Attach to inner context reference, so context can be consumed
-    pub fn use_ref<'a, T: 'static, P>(
-        ctx: Context<'a, P>,
+    pub fn use_ref<'a, T: 'static>(
+        ctx: &impl Scoped<'a>,
         initial_state_fn: impl FnOnce() -> T + 'static,
     ) -> &'a RefCell<T> {
         ctx.use_hook(|| RefCell::new(initial_state_fn()), |state| &*state, |_| {})
@@ -270,8 +270,8 @@ mod use_reducer_def {
     ///
     /// This is behaves almost exactly the same way as React's "use_state".
     ///
-    pub fn use_reducer<'a, 'c, State: 'static, Action: 'static, P: 'static>(
-        ctx: Context<'a, P>,
+    pub fn use_reducer<'a, 'c, State: 'static, Action: 'static>(
+        ctx: &impl Scoped<'a>,
         initial_state_fn: impl FnOnce() -> State,
         _reducer: impl Fn(&mut State, Action),
     ) -> (&'a State, &'a Box<dyn Fn(Action)>) {
@@ -348,7 +348,7 @@ mod use_reducer_def {
 }
 
 pub fn use_is_initialized<P>(ctx: Context<P>) -> bool {
-    let val = use_ref(ctx, || false);
+    let val = use_ref(&ctx, || false);
     match *val.borrow() {
         true => true,
         false => {

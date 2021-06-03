@@ -115,6 +115,7 @@ pub mod prelude {
     pub use crate::component::{fc_to_builder, Properties};
     use crate::nodes;
     pub use crate::virtual_dom::Context;
+    pub use crate::virtual_dom::Scoped;
     pub use nodes::*;
 
     pub use crate::nodebuilder::LazyNodes;

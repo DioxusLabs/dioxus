@@ -1,6 +1,6 @@
 # Dioxus-webview
 
-Dioxus-webview bridges virtual and Webview DOMs together to make simple, portable, desktop applications. 
+Dioxus-webview bridges virtual and Webview DOMs together to make simple, portable, desktop applications.
 
 Dioxus-webview is an attempt at making a simpler "Tauri" where creating desktop applications is as simple as:
 
@@ -9,7 +9,7 @@ Dioxus-webview is an attempt at making a simpler "Tauri" where creating desktop 
 #[async_std::main]
 async fn main() {
    dioxus_webview::new(|ctx| {
-       let (count, set_count) = use_state(ctx, || 0);
+       let (count, set_count) = use_state(&ctx, || 0);
        html! {
             <div>
                 <h1> "Dioxus Desktop Demo" </h1>
@@ -21,7 +21,7 @@ async fn main() {
        }
    })
    .configure_webview(|view| {
-      // custom webview config options 
+      // custom webview config options
    })
    .launch()
    .await;
@@ -44,4 +44,4 @@ By bridging the native process, desktop apps can access full multithreading powe
 
 Dioxus-desktop is a pure liveview application where all of the state and event handlers are proxied through the liveview and into the native process. For pure server-based liveview, this would normally be too slow (in both render performance and latency), but because the VDom is local, desktop apps are just as fast as Electron.
 
-Dioxus-desktop leverages dioxus-liveview under the hood, but with convenience wrappers around setting up the VDom bridge, proxying events, and serving the initial WebSys-Renderer. The backend is served by Tide, so an async runtime *is* needed - we recommend async-std in tokio mode.
+Dioxus-desktop leverages dioxus-liveview under the hood, but with convenience wrappers around setting up the VDom bridge, proxying events, and serving the initial WebSys-Renderer. The backend is served by Tide, so an async runtime _is_ needed - we recommend async-std in tokio mode.

@@ -8,7 +8,7 @@ use dioxus_core::prelude::*;
 fn main() {}
 
 static Header: FC<()> = |ctx| {
-    let inner = use_ref(ctx, || 0);
+    let inner = use_ref(&ctx, || 0);
 
     let handler1 = move || println!("Value is {}", inner.borrow());
 

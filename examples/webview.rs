@@ -11,7 +11,7 @@ use dioxus::prelude::*;
 
 async fn main() {
     dioxus_webview::launch(|ctx| {
-        let (count, set_count) = use_state(ctx, || 0);
+        let (count, set_count) = use_state(&ctx, || 0);
 
         ctx.render(rsx! {
             div {

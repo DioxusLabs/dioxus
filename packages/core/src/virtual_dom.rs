@@ -526,6 +526,9 @@ pub struct Scope {
     pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
 }
 
+// We need to pin the hook so it doesn't move as we initialize the list of hooks
+type Hook = Pin<Box<dyn std::any::Any>>;
+
 impl Scope {
     // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
     // we are going to break this lifetime by force in order to save it on ourselves.
@@ -718,36 +721,27 @@ impl<'a, T> Deref for Context<'a, T> {
     }
 }
 
-impl<'src, T> Context<'src, T> {
+impl<'src, T> Scoped<'src> for Context<'src, T> {
+    fn get_scope(&self) -> &'src Scope {
+        self.scope
+    }
+}
+
+pub trait Scoped<'src>: Sized {
+    fn get_scope(&self) -> &'src Scope;
+
     /// Access the children elements passed into the component
-    pub fn children(&self) -> &'src [VNode<'src>] {
+    fn children(&self) -> &'src [VNode<'src>] {
         todo!("Children API not yet implemented for component Context")
     }
 
     /// Create a subscription that schedules a future render for the reference component
-    pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
+    fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
         todo!()
         // pub fn schedule_update(self) -> impl Fn() + 'static {
         // self.scope.event_queue.schedule_update(&self.scope)
     }
 
-    // /// Create a suspended component from a future.
-    // ///
-    // /// When the future completes, the component will be renderered
-    // pub fn suspend<'a, F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a>(
-    //     &'a self,
-    //     _fut: impl Future<Output = LazyNodes<'a, F>>,
-    // ) -> VNode<'src> {
-    //     todo!()
-    // }
-}
-
-// ================================================
-//       Render Implementation for Components
-// ================================================
-//
-impl<'src, T> Context<'src, T> {
-    // impl<'scope> Context<'scope> {
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
     ///
     /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
@@ -763,14 +757,15 @@ impl<'src, T> Context<'src, T> {
     ///     ctx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'a, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a>(
+    fn render<'a, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a>(
         self,
         // &'a/ self,
         lazy_nodes: LazyNodes<'src, F>,
         // lazy_nodes: LazyNodes<'src, F>,
     ) -> VNode<'src> {
+        let scope_ref = self.get_scope();
         let ctx = NodeCtx {
-            scope_ref: self.scope,
+            scope_ref,
             listener_id: 0.into(),
         };
 
@@ -781,16 +776,7 @@ impl<'src, T> Context<'src, T> {
         //     },
         // }
     }
-}
 
-// ================================================
-//       Hooks Implementation for Components
-// ================================================
-
-// We need to pin the hook so it doesn't move as we initialize the list of hooks
-type Hook = Pin<Box<dyn std::any::Any>>;
-
-impl<'src, T> Context<'src, T> {
     // impl<'scope> Context<'scope> {
     /// Store a value between renders
     ///
@@ -808,7 +794,7 @@ impl<'src, T> Context<'src, T> {
     ///     )
     /// }
     /// ```
-    pub fn use_hook<InternalHookState: 'static, Output: 'src>(
+    fn use_hook<InternalHookState: 'static, Output: 'src>(
         &self,
 
         // The closure that builds the hook state
@@ -821,10 +807,12 @@ impl<'src, T> Context<'src, T> {
         // TODO: add this to the "clean up" group for when the component is dropped
         _cleanup: impl FnOnce(InternalHookState),
     ) -> Output {
-        let idx = *self.scope.hookidx.borrow();
+        let scope = self.get_scope();
+
+        let idx = *scope.hookidx.borrow();
 
         // Grab out the hook list
-        let mut hooks = self.scope.hooks.borrow_mut();
+        let mut hooks = scope.hooks.borrow_mut();
 
         // If the idx is the same as the hook length, then we need to add the current hook
         if idx >= hooks.len() {
@@ -832,7 +820,7 @@ impl<'src, T> Context<'src, T> {
             hooks.push(Box::pin(new_state));
         }
 
-        *self.scope.hookidx.borrow_mut() += 1;
+        *scope.hookidx.borrow_mut() += 1;
 
         let stable_ref = hooks
             .get_mut(idx)
@@ -854,12 +842,7 @@ Any function prefixed with "use" should not be called conditionally.
         // We extend the lifetime of the internal state
         runner(unsafe { &mut *(internal_state as *mut _) })
     }
-}
 
-// ================================================
-//   Context API Implementation for Components
-// ================================================
-impl<'src, P> Context<'src, P> {
     /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
     ///
     /// This is a hook, so it may not be called conditionally!
@@ -872,8 +855,9 @@ impl<'src, P> Context<'src, P> {
     ///
     ///
     ///
-    pub fn use_create_context<T: 'static>(&self, init: impl Fn() -> T) {
-        let mut ctxs = self.scope.shared_contexts.borrow_mut();
+    fn use_create_context<T: 'static>(&self, init: impl Fn() -> T) {
+        let scope = self.get_scope();
+        let mut ctxs = scope.shared_contexts.borrow_mut();
         let ty = TypeId::of::<T>();
 
         let is_initialized = self.use_hook(
@@ -901,12 +885,12 @@ impl<'src, P> Context<'src, P> {
     }
 
     /// There are hooks going on here!
-    pub fn use_context<T: 'static>(&self) -> &'src Rc<T> {
+    fn use_context<T: 'static>(&self) -> &'src Rc<T> {
         self.try_use_context().unwrap()
     }
 
     /// Uses a context, storing the cached value around
-    pub fn try_use_context<T: 'static>(&self) -> Result<&'src Rc<T>> {
+    fn try_use_context<T: 'static>(&self) -> Result<&'src Rc<T>> {
         struct UseContextHook<C> {
             par: Option<Rc<C>>,
             we: Option<Weak<C>>,
@@ -918,7 +902,8 @@ impl<'src, P> Context<'src, P> {
                 we: None as Option<Weak<T>>,
             },
             move |hook| {
-                let mut scope = Some(self.scope);
+                let scope = self.get_scope();
+                let mut scope = Some(scope);
 
                 if let Some(we) = &hook.we {
                     if let Some(re) = we.upgrade() {
@@ -962,10 +947,6 @@ impl<'src, P> Context<'src, P> {
             |_| {},
         )
     }
-}
-
-pub trait OpaqueScope {
-    fn get_scope(&self) -> &Scope;
 }
 
 // ==================================================================================
