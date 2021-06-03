@@ -11,7 +11,7 @@ static HelloMessage: FC<Props> = |ctx| {
 }
 ```
 
-# Any syntax you like
+# Two syntaxes: html! and rsx!
 
 Choose from a close-to-html syntax or the standard rsx! syntax
 
@@ -43,7 +43,7 @@ static HelloMessage: FC<()> = |ctx| {
     };
 
     ctx.render(rsx!{
-        h1 {"{title}"}
+        h1 { "{title}" }
         button { "tick"
             onclick: move |_| set_color(match color {
                 Green => Yellow,

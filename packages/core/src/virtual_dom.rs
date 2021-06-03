@@ -725,8 +725,10 @@ impl<'src, T> Context<'src, T> {
     }
 
     /// Create a subscription that schedules a future render for the reference component
-    pub fn schedule_update(&self) -> impl Fn() -> () + 'static {
-        self.scope.event_queue.schedule_update(&self.scope)
+    pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
+        todo!()
+        // pub fn schedule_update(self) -> impl Fn() + 'static {
+        // self.scope.event_queue.schedule_update(&self.scope)
     }
 
     // /// Create a suspended component from a future.
@@ -765,6 +767,7 @@ impl<'src, T> Context<'src, T> {
         self,
         // &'a/ self,
         lazy_nodes: LazyNodes<'src, F>,
+        // lazy_nodes: LazyNodes<'src, F>,
     ) -> VNode<'src> {
         let ctx = NodeCtx {
             scope_ref: self.scope,
@@ -959,6 +962,10 @@ impl<'src, P> Context<'src, P> {
             |_| {},
         )
     }
+}
+
+pub trait OpaqueScope {
+    fn get_scope(&self) -> &Scope;
 }
 
 // ==================================================================================

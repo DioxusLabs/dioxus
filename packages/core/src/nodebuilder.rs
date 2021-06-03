@@ -580,6 +580,7 @@ where
         std::iter::once(self)
     }
 }
+
 impl<'a> IntoVNode<'a> for () {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
         VNode::Suspended

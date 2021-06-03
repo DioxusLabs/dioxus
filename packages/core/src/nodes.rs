@@ -8,7 +8,13 @@ use crate::{
     innerlude::{Context, Properties, Scope, ScopeIdx, FC},
 };
 use bumpalo::Bump;
-use std::{any::Any, cell::RefCell, fmt::Debug, marker::PhantomData, rc::Rc};
+use std::{
+    any::Any,
+    cell::RefCell,
+    fmt::{Arguments, Debug},
+    marker::PhantomData,
+    rc::Rc,
+};
 
 /// Tools for the base unit of the virtual dom - the VNode
 /// VNodes are intended to be quickly-allocated, lightweight enum values.
@@ -21,6 +27,8 @@ pub enum VNode<'src> {
 
     /// A text node (node type `TEXT_NODE`).
     Text(VText<'src>),
+
+    Fragment(&'src VFragment<'src>),
 
     /// A "suspended component"
     /// This is a masqeurade over an underlying future that needs to complete
@@ -37,6 +45,7 @@ impl<'a> Clone for VNode<'a> {
         match self {
             VNode::Element(el) => VNode::Element(el),
             VNode::Text(origi) => VNode::Text(VText { text: origi.text }),
+            VNode::Fragment(frag) => VNode::Fragment(frag),
             VNode::Suspended => VNode::Suspended,
             VNode::Component(c) => VNode::Component(c),
         }
@@ -77,6 +86,10 @@ impl<'a> VNode<'a> {
         VNode::Text(VText { text })
     }
 
+    pub fn text_args(b: &'a Bump, f: Arguments) -> VNode<'a> {
+        todo!()
+    }
+
     #[inline]
     pub(crate) fn key(&self) -> NodeKey {
         match &self {
@@ -85,9 +98,7 @@ impl<'a> VNode<'a> {
             VNode::Suspended => {
                 todo!()
             }
-            // Self::PhantomChild { id } => {
-            //     todo!()
-            // }
+            VNode::Fragment(frag) => frag.key,
             VNode::Component(c) => c.key,
         }
     }
@@ -314,4 +325,9 @@ impl<'a> VComponent<'a> {
             stable_addr: Rc::new(RefCell::new(None)),
         }
     }
+}
+
+pub struct VFragment<'src> {
+    pub key: NodeKey<'src>,
+    pub children: &'src [VNode<'src>],
 }

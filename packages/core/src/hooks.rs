@@ -20,12 +20,6 @@ mod use_state_def {
         rc::Rc,
     };
 
-    struct UseState<T: 'static> {
-        new_val: Rc<RefCell<Option<T>>>,
-        current_val: T,
-        caller: Rc<dyn Fn(T) + 'static>,
-    }
-
     /// Store state between component renders!
     /// When called, this hook retrives a stored value and provides a setter to update that value.
     /// When the setter is called, the component is re-ran with the new value.
@@ -48,10 +42,16 @@ mod use_state_def {
     ///     }
     /// }
     /// ```
-    pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P: 'static>(
-        ctx: &'c Context<'a, P>,
+    pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P: 'a>(
+        ctx: Context<'a, P>,
         initial_state_fn: F,
     ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
+        struct UseState<T: 'static> {
+            new_val: Rc<RefCell<Option<T>>>,
+            current_val: T,
+            caller: Rc<dyn Fn(T) + 'static>,
+        }
+
         ctx.use_hook(
             move || UseState {
                 new_val: Rc::new(RefCell::new(None)),
@@ -170,7 +170,7 @@ mod new_use_state_def {
     /// }
     /// ```
     pub fn use_state_new<'a, 'c, T: 'static, F: FnOnce() -> T, P: 'static>(
-        ctx: &'c Context<'a, P>,
+        ctx: Context<'a, P>,
         initial_state_fn: F,
     ) -> &'a UseState<T> {
         ctx.use_hook(
@@ -271,7 +271,7 @@ mod use_reducer_def {
     /// This is behaves almost exactly the same way as React's "use_state".
     ///
     pub fn use_reducer<'a, 'c, State: 'static, Action: 'static, P: 'static>(
-        ctx: &'c Context<'a, P>,
+        ctx: Context<'a, P>,
         initial_state_fn: impl FnOnce() -> State,
         _reducer: impl Fn(&mut State, Action),
     ) -> (&'a State, &'a Box<dyn Fn(Action)>) {

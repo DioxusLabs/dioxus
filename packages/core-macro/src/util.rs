@@ -1,6 +1,13 @@
 // use lazy_static::lazy_static;
 use once_cell::sync::Lazy;
 use std::collections::hash_set::HashSet;
+use syn::{parse::ParseBuffer, Expr};
+
+pub fn try_parse_bracketed(stream: &ParseBuffer) -> syn::Result<Expr> {
+    let content;
+    syn::braced!(content in stream);
+    content.parse()
+}
 
 /// rsx! and html! macros support the html namespace as well as svg namespace
 static HTML_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
@@ -134,6 +141,18 @@ static SVG_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     .collect()
 });
 
+// these tags are reserved by dioxus for any reason
+// They might not all be used
+static RESERVED_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    [
+        // a fragment
+        "fragment",
+    ]
+    .iter()
+    .cloned()
+    .collect()
+});
+
 /// Whether or not this tag is valid
 ///
 /// ```
@@ -144,7 +163,7 @@ static SVG_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 /// assert_eq!(is_valid_tag("random"), false);
 /// ```
 pub fn is_valid_tag(tag: &str) -> bool {
-    is_valid_html_tag(tag) || is_valid_svg_tag(tag)
+    is_valid_html_tag(tag) || is_valid_svg_tag(tag) || is_valid_reserved_tag(tag)
 }
 
 pub fn is_valid_html_tag(tag: &str) -> bool {
@@ -153,4 +172,8 @@ pub fn is_valid_html_tag(tag: &str) -> bool {
 
 pub fn is_valid_svg_tag(tag: &str) -> bool {
     SVG_TAGS.contains(tag)
+}
+
+pub fn is_valid_reserved_tag(tag: &str) -> bool {
+    RESERVED_TAGS.contains(tag)
 }

@@ -428,7 +428,7 @@ mod hooks {
 
                 let update = ctx.schedule_update();
                 let val = api.try_get_raw(readable).unwrap();
-                let id = api.subscribe(readable, Rc::new(update));
+                let id = api.subscribe(readable, update);
                 ReadHook {
                     value: val,
                     consumer_id: id,

@@ -194,6 +194,12 @@ impl<'a> DiffMachine<'a> {
             (VNode::Suspended, _) | (_, VNode::Suspended) => {
                 todo!("Suspended components not currently available")
             }
+
+            (VNode::Fragment(_), VNode::Fragment(_)) => {
+                todo!("Fragments not currently supported in diffing")
+            }
+            (_, VNode::Fragment(_)) => todo!("Fragments not currently supported in diffing"),
+            (VNode::Fragment(_), _) => todo!("Fragments not currently supported in diffing"),
         }
     }
 
@@ -275,6 +281,10 @@ impl<'a> DiffMachine<'a> {
             }
             VNode::Suspended => {
                 todo!("Creation of VNode::Suspended not yet supported")
+            }
+            VNode::Fragment(frag) => {
+                //
+                todo!("Cannot current create fragments")
             }
         }
     }

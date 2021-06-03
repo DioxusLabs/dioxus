@@ -6,7 +6,7 @@ pub(crate) mod fc;
 pub(crate) mod htm;
 pub(crate) mod ifmt;
 pub(crate) mod props;
-pub(crate) mod rsxt;
+pub(crate) mod rsx;
 pub(crate) mod rsxtemplate;
 pub(crate) mod util;
 
@@ -24,7 +24,7 @@ pub fn html(s: TokenStream) -> TokenStream {
 /// We aim to keep functional parity with html templates.
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsxt::RsxRender>(s) {
+    match syn::parse::<rsx::RsxRender>(s) {
         Err(e) => e.to_compile_error().into(),
         Ok(s) => s.to_token_stream().into(),
     }

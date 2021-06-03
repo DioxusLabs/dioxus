@@ -9,7 +9,7 @@ use crate::innerlude::FC;
 
 pub type ScopeIdx = generational_arena::Index;
 
-pub trait Properties: PartialEq + 'static {
+pub trait Properties: PartialEq {
     type Builder;
     fn builder() -> Self::Builder;
 }

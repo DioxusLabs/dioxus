@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 dioxus-ssr = { path = "../ssr" }
+pulldown-cmark = "0.8.0"
+recoil = { path = "../recoil" }
+codeblocks = { path = "../../../ecosystem-dioxus/syntec-dioxus/" }

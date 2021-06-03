@@ -1,4 +1,4 @@
-use crate::{rsxt::RsxRender, util::is_valid_svg_tag};
+use crate::{rsx::RsxRender, util::is_valid_svg_tag};
 
 use {
     proc_macro::TokenStream,
@@ -35,7 +35,7 @@ impl Parse for RsxTemplate {
             let lit = LitStr::new(&value, lit.span());
 
             // panic!("{:#?}", lit);
-            match lit.parse::<crate::rsxt::RsxRender>() {
+            match lit.parse::<crate::rsx::RsxRender>() {
                 Ok(r) => Ok(Self { inner: r }),
                 Err(e) => Err(e),
             }
