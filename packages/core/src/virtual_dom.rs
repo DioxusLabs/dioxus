@@ -356,7 +356,7 @@ impl VirtualDom {
                 let id = next_id();
 
                 log::debug!("Mounting a new component");
-                let caller = Rc::downgrade(&component.caller);
+                let caller: Weak<OpaqueComponent> = Rc::downgrade(&component.caller);
 
                 // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
                 // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
@@ -370,6 +370,7 @@ impl VirtualDom {
                             // let height = cur_height + 1;
                             let cur_idx = self.cur_idx.unwrap();
                             let cur_scope = self.components.try_get(cur_idx).unwrap();
+                            // todo!()
                             Scope::new(
                                 caller,
                                 new_idx,

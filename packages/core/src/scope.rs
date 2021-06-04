@@ -163,7 +163,7 @@ impl Scope {
 
         // Cast the caller ptr from static to one with our own reference
         let c2: &OpaqueComponent<'static> = caller.as_ref();
-        let c3: &OpaqueComponent<'sel> = unsafe { std::mem::transmute(c2) };
+        let c3: &OpaqueComponent<'_> = unsafe { std::mem::transmute(c2) };
 
         let unsafe_head = unsafe { self.own_vnodes(c3) };
 
@@ -278,8 +278,10 @@ pub trait Scoped<'src>: Sized {
         // They don't really have a static lifetime
         unsafe {
             let scope = self.get_scope();
-            let nodes = scope.child_nodes;
-            nodes
+            let nodes: &'src [VNode<'static>] = scope.child_nodes;
+
+            // cast the lifetime back correctly
+            std::mem::transmute(nodes)
         }
     }
 

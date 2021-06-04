@@ -14,7 +14,8 @@ use std::{
 };
 // We actually allocate the properties for components in their parent's properties
 // We then expose a handle to use those props for render in the form of "OpaqueComponent"
-pub(crate) type OpaqueComponent<'e> = dyn for<'b> Fn(&'b Scope) -> VNode<'b> + 'e;
+pub(crate) type OpaqueComponent<'e> = dyn Fn(&'e Scope) -> VNode<'e> + 'e;
+// pub(crate) type OpaqueComponent<'e> = dyn for<'b> Fn(&'b Scope) -> VNode<'b> + 'e;
 
 #[derive(PartialEq, Debug, Clone, Default)]
 pub(crate) struct EventQueue(pub Rc<RefCell<Vec<HeightMarker>>>);

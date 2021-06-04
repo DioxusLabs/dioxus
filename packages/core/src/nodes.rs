@@ -5,7 +5,7 @@
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, Properties, Scope, ScopeIdx, FC},
+    innerlude::{Context, OpaqueComponent, Properties, Scope, ScopeIdx, FC},
     nodebuilder::text3,
 };
 use bumpalo::Bump;
@@ -226,8 +226,8 @@ pub struct VComponent<'src> {
     pub ass_scope: RefCell<VCompAssociatedScope>,
 
     // pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
-    pub caller: Rc<dyn Fn(&Scope) -> VNode + 'src>,
-
+    pub caller: Rc<OpaqueComponent<'src>>,
+    // pub caller: Rc<dyn Fn(&'src Scope) -> VNode<'src> + 'src>,
     pub children: &'src [VNode<'src>],
 
     pub comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
@@ -252,52 +252,42 @@ impl<'a> VComponent<'a> {
         bump: &'a Bump,
         component: FC<P>,
         // props: bumpalo::boxed::Box<'a, P>,
-        props: P,
+        props: &'a P,
         key: Option<&'a str>,
     ) -> Self {
         // pub fn new<P: Properties + 'a>(component: FC<P>, props: P, key: Option<&'a str>) -> Self {
         // let bad_props = unsafe { transmogrify(props) };
         let caller_ref = component as *const ();
-        let props = bump.alloc(props);
+        // let props = bump.alloc(props);
 
         let raw_props = props as *const P as *const ();
 
-        let comparator: Option<&dyn Fn(&VComponent) -> bool> = {
-            if P::CAN_BE_MEMOIZED {
-                Some(bump.alloc(move |other: &VComponent| {
-                    // Safety:
-                    // We are guaranteed that the props will be of the same type because
-                    // there is no way to create a VComponent other than this `new` method.
-                    //
-                    // Therefore, if the render functions are identical (by address), then so will be
-                    // props type paramter (because it is the same render function). Therefore, we can be
-                    // sure
-                    if caller_ref == other.user_fc {
-                        // let g = other.raw_ctx.downcast_ref::<P>().unwrap();
-                        let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
-                        &props == &real_other
-                    } else {
-                        false
-                    }
-                }))
-            } else {
-                None
-            }
-        };
-
-        // let prref: &'a P = props.as_ref();
-
-        let caller: Rc<dyn Fn(&Scope) -> VNode> = Rc::new(move |scope| {
-            //
-            // let props2 = bad_props;
-            // props.as_ref()
-            // let ctx = Context {
-            //     props: prref,
-            //     scope,
-            // };
-            todo!()
-            // component(ctx)
+        let comparator = P::CAN_BE_MEMOIZED.then(|| {
+            bump.alloc(move |other: &VComponent| {
+                // Safety:
+                // We are guaranteed that the props will be of the same type because
+                // there is no way to create a VComponent other than this `new` method.
+                //
+                // Therefore, if the render functions are identical (by address), then so will be
+                // props type paramter (because it is the same render function).
+                if caller_ref == other.user_fc {
+                    let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
+                    &props == &real_other
+                } else {
+                    false
+                }
+            }) as &dyn Fn(&VComponent) -> bool
         });
+
+        let caller = Rc::new(create_closure(component, raw_props));
+        // let caller: Rc<dyn Fn(&'a Scope) -> VNode> = Rc::new(move |scope| {
+        //     create_closure(component, raw_props)(scope)
+        // todo!()
+        // let props: &P = unsafe { &*(raw_props as *const _ as *const P) };
+
+        // let ctx = Context { props, scope };
+        // component(ctx)
+        // });
         // let caller = Rc::new(create_closure(component, raw_props));
 
         let key = match key {
@@ -318,6 +308,22 @@ impl<'a> VComponent<'a> {
             caller,
             stable_addr: RefCell::new(None),
         }
+    }
+}
+
+fn create_closure<'a, P: Properties + 'a>(
+    component: FC<P>,
+    raw_props: *const (),
+) -> impl Fn(&'a Scope) -> VNode<'a> + 'a {
+    move |scope: &'a Scope| -> VNode {
+        // cast back into the right lifetime
+        let safe_props: &'a P = unsafe { &*(raw_props as *const P) };
+        let ctx = Context {
+            // let ctx: Context<'a, P> = Context {
+            props: safe_props,
+            scope,
+        };
+        component(ctx)
     }
 }
 
