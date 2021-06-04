@@ -64,7 +64,9 @@ pub struct VirtualDom {
     #[doc(hidden)]
     _root_prop_type: std::any::TypeId,
 
+    // state for the diffing process
     seen_nodes: HashSet<ScopeIdx>,
+    cur_idx: Option<ScopeIdx>,
 }
 
 // These impls are actually wrong. The DOM needs to have a mutex implemented.
@@ -117,6 +119,7 @@ impl VirtualDom {
             components,
             _root_prop_type: TypeId::of::<P>(),
             seen_nodes: Default::default(),
+            cur_idx: None,
         }
     }
 }
@@ -124,32 +127,26 @@ impl VirtualDom {
 impl VirtualDom {
     pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList> {
         todo!()
-        // let id = event.component_id.clone();
-
-        // self.components.try_get_mut(id)?.call_listener(event)?;
-
-        // let mut diff_machine = DiffMachine::new();
-        // self.progress_completely(&mut diff_machine)?;
-
-        // Ok(diff_machine.consume())
     }
 
-    pub(crate) fn progress_completely<'s>(
-        &'s mut self,
-        // diff_machine: &'_ mut DiffMachine<'s>,
-    ) -> Result<()> {
+    pub(crate) fn progress_completely<'s>(&'s mut self) -> Result<()> {
         // Add this component to the list of components that need to be difed
         #[allow(unused_assignments)]
         let mut cur_height: u32 = 0;
 
-        let mut updates = self.event_queue.0.as_ref().borrow_mut();
-
         // Order the nodes by their height, we want the biggest nodes on the top
         // This prevents us from running the same component multiple times
-        updates.sort_unstable();
 
+        {
+            self.event_queue.0.as_ref().borrow_mut().sort_unstable();
+        }
+        // let d = updates.drain(..);
+
+        let updates = self.event_queue.clone();
+
+        // drop(updates);
         // Iterate through the triggered nodes (sorted by height) and begin to diff them
-        for update in updates.drain(..) {
+        while let Some(update) = updates.0.as_ref().borrow_mut().pop() {
             // Make sure this isn't a node we've already seen, we don't want to double-render anything
             // If we double-renderer something, this would cause memory safety issues
             if self.seen_nodes.contains(&update.idx) {
@@ -162,10 +159,15 @@ impl VirtualDom {
             // Start a new mutable borrow to components
             // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
 
-            let cur_component = self.components.try_get_mut(update.idx).unwrap();
+            let arena = unsafe { &mut *self.components.0.borrow_mut().arena.get() };
+            let cur_component = arena.get_mut(update.idx).unwrap();
+            // let cur_component = self.components.try_get_mut(update.idx).unwrap();
 
             cur_component.run_scope()?;
-            let change_list = EditMachine::new();
+
+            let mut change_list = EditMachine::new();
+
+            // change_list.load_known_root(id)
 
             self.diff_node(
                 &mut change_list,
@@ -188,8 +190,8 @@ impl VirtualDom {
     pub fn diff_node<'a>(
         &mut self,
         change_list: &mut EditMachine<'a>,
-        old: &VNode<'a>,
-        new: &VNode<'a>,
+        old_node: &VNode<'a>,
+        new_node: &VNode<'a>,
     ) {
         // pub fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
         /*
@@ -197,8 +199,8 @@ impl VirtualDom {
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
         When re-entering, we reuse the EditList in DiffState
         */
-        match (old, new) {
-            (VNode::Text(VText { text: old_text }), VNode::Text(VText { text: new_text })) => {
+        match (old_node, new_node) {
+            (VNode::Text(old_text), VNode::Text(new_text)) => {
                 if old_text != new_text {
                     change_list.commit_traversal();
                     change_list.set_text(new_text);
@@ -207,13 +209,13 @@ impl VirtualDom {
 
             (VNode::Text(_), VNode::Element(_)) => {
                 change_list.commit_traversal();
-                self.create(change_list, new);
+                self.create(change_list, new_node);
                 change_list.replace_with();
             }
 
             (VNode::Element(_), VNode::Text(_)) => {
                 change_list.commit_traversal();
-                self.create(change_list, new);
+                self.create(change_list, new_node);
                 change_list.replace_with();
             }
 
@@ -232,62 +234,78 @@ impl VirtualDom {
             }
 
             (VNode::Component(cold), VNode::Component(cnew)) => {
-                // todo!("should not happen")
-                // change_list.commit_traversal();
+                // Make sure we're dealing with the same component (by function pointer)
                 if cold.user_fc == cnew.user_fc {
-                    // todo: create a stable addr
-                    let caller = Rc::downgrade(&cnew.caller);
-                    let id = cold.stable_addr.borrow().unwrap();
-                    *cnew.stable_addr.borrow_mut() = Some(id);
-                    *cnew.ass_scope.borrow_mut() = *cold.ass_scope.borrow();
+                    // Make sure the new component vnode is referencing the right scope id
+                    *cnew.ass_scope.borrow_mut() = cold.ass_scope.borrow().clone();
 
-                    let scope = Rc::downgrade(&cold.ass_scope);
-                    // self.lifecycle_events
-                    //     .push_back(LifeCycleEvent::PropsChanged {
-                    //         caller,
-                    //         root_id: id,
-                    //         stable_scope_addr: scope,
-                    //     });
+                    // React doesn't automatically memoize, but we do
+                    // The cost is low enough to make it worth checking
+                    let should_render = match cold.comparator {
+                        Some(comparator) => comparator(cnew),
+                        None => true,
+                    };
+                    if should_render {
+                        // diff_machine.change_list.load_known_root(root_id);
+                        change_list.commit_traversal();
+                        // run the scope
+                        //
+                    } else {
+                        // Component has memoized itself and doesn't need to be re-rendered.
+                        // We still need to make sure the child's props are up-to-date.
+                        //
+                        // Don't commit traversal
+                    }
                 } else {
-                    let caller = Rc::downgrade(&cnew.caller);
-                    let id = cold.stable_addr.borrow().unwrap();
-                    let old_scope = Rc::downgrade(&cold.ass_scope);
-                    let new_scope = Rc::downgrade(&cnew.ass_scope);
+                    // A new component has shown up! We need to destroy the old node
 
-                    // self.lifecycle_events.push_back(LifeCycleEvent::Replace {
-                    //     caller,
-                    //     root_id: id,
-                    //     old_scope,
-                    //     new_scope,
-                    // });
+                    // Wipe the old one and plant the new one
+                    change_list.commit_traversal();
+                    self.create(change_list, new_node);
+                    change_list.replace_with();
+
+                    // Now we need to remove the old scope and all of its descendents
+                    let old_scope = cold.ass_scope.borrow().as_ref().unwrap().clone();
+                    self.destroy_scopes(old_scope);
                 }
             }
 
             // todo: knock out any listeners
-            (_, VNode::Component(_new)) => {
+            (_, VNode::Component(_)) => {
                 change_list.commit_traversal();
+                self.create(change_list, new_node);
+                change_list.replace_with();
             }
 
+            // A component is being torn down in favor of a non-component node
             (VNode::Component(_old), _) => {
-                todo!("Usage of component VNode not currently supported");
+                change_list.commit_traversal();
+                self.create(change_list, new_node);
+                change_list.replace_with();
+
+                // Destroy the original scope and any of its children
+                self.destroy_scopes(_old.ass_scope.borrow().unwrap());
             }
 
+            // Anything suspended is not enabled ATM
             (VNode::Suspended, _) | (_, VNode::Suspended) => {
                 todo!("Suspended components not currently available")
             }
 
-            (VNode::Fragment(_), VNode::Fragment(_)) => {
+            // (VNode::Fragment(_), VNode::Fragment(_)) => {
+            //     todo!("Fragments not currently supported in diffing")
+            // }
+            // Fragments are special
+            (VNode::Fragment(_), _) | (_, VNode::Fragment(_)) => {
                 todo!("Fragments not currently supported in diffing")
             }
-            (_, VNode::Fragment(_)) => todo!("Fragments not currently supported in diffing"),
-            (VNode::Fragment(_), _) => todo!("Fragments not currently supported in diffing"),
         }
     }
 
     fn create<'a>(&mut self, change_list: &mut EditMachine<'a>, node: &VNode<'a>) {
         debug_assert!(change_list.traversal_is_committed());
         match node {
-            VNode::Text(VText { text }) => {
+            VNode::Text(text) => {
                 change_list.create_text_node(text);
             }
             VNode::Element(&VElement {
@@ -320,7 +338,7 @@ impl VirtualDom {
                 // text content, and finally (3) append the text node to this
                 // parent.
                 if children.len() == 1 {
-                    if let VNode::Text(VText { text }) = children[0] {
+                    if let VNode::Text(text) = children[0] {
                         change_list.set_text(text);
                         return;
                     }
@@ -332,29 +350,112 @@ impl VirtualDom {
                 }
             }
 
-            /*
-            todo: integrate re-entrace
-            */
             VNode::Component(component) => {
                 change_list.create_text_node("placeholder for vcomponent");
 
                 let id = next_id();
-                *component.stable_addr.as_ref().borrow_mut() = Some(id);
-                change_list.save_known_root(id);
-                let scope = Rc::downgrade(&component.ass_scope);
-                // self.lifecycle_events.push_back(LifeCycleEvent::Mount {
-                //     caller: Rc::downgrade(&component.caller),
-                //     root_id: id,
-                //     stable_scope_addr: scope,
-                // });
+
+                log::debug!("Mounting a new component");
+                let caller = Rc::downgrade(&component.caller);
+
+                // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
+                // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
+                // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
+
+                // Insert a new scope into our component list
+                let idx = self
+                    .components
+                    .with(|components| {
+                        components.insert_with(|new_idx| {
+                            // let height = cur_height + 1;
+                            let cur_idx = self.cur_idx.unwrap();
+                            let cur_scope = self.components.try_get(cur_idx).unwrap();
+                            Scope::new(
+                                caller,
+                                new_idx,
+                                Some(cur_idx),
+                                cur_scope.height,
+                                self.event_queue.new_channel(cur_scope.height, new_idx),
+                                self.components.clone(),
+                                &[],
+                            )
+                        })
+                    })
+                    .unwrap();
+
+                {
+                    let cur_component = self.components.try_get_mut(idx).unwrap();
+                    let mut ch = cur_component.descendents.borrow_mut();
+                    ch.insert(idx);
+                    std::mem::drop(ch);
+                }
+
+                // Grab out that component
+                let new_component = self.components.try_get_mut(idx).unwrap();
+
+                // Actually initialize the caller's slot with the right address
+                *component.ass_scope.borrow_mut() = Some(idx);
+                // component.stable_addr = Some(idx);
+
+                // Run the scope for one iteration to initialize it
+                new_component.run_scope().unwrap();
+
+                // Navigate the diff machine to the right point in the output dom
+                change_list.load_known_root(id);
+
+                // And then run the diff algorithm
+                // self.diff_node(
+                //     change_list,
+                //     new_component.old_frame(),
+                //     new_component.next_frame(),
+                // );
+
+                // Finally, insert this node as a seen node.
+                self.seen_nodes.insert(idx);
+
+                // todo!()
             }
             VNode::Suspended => {
                 todo!("Creation of VNode::Suspended not yet supported")
             }
+
+            // we go the the "known root" but only operate on a sibling basis
             VNode::Fragment(frag) => {
                 //
                 todo!("Cannot current create fragments")
             }
+        }
+    }
+
+    /// Destroy a scope and all of its descendents.
+    ///
+    /// Calling this will run the destuctors on all hooks in the tree.
+    /// It will also add the destroyed nodes to the `seen_nodes` cache to prevent them from being renderered.
+    fn destroy_scopes(&mut self, old_scope: ScopeIdx) {
+        let mut nodes_to_delete = vec![old_scope];
+        let mut scopes_to_explore = vec![old_scope];
+
+        // explore the scope tree breadth first
+        while let Some(scope_id) = scopes_to_explore.pop() {
+            // If we're planning on deleting this node, then we don't need to both rendering it
+            self.seen_nodes.insert(scope_id);
+            let scope = self.components.try_get(scope_id).unwrap();
+            for child in scope.descendents.borrow().iter() {
+                // Add this node to be explored
+                scopes_to_explore.push(child.clone());
+
+                // Also add it for deletion
+                nodes_to_delete.push(child.clone());
+            }
+        }
+
+        // Delete all scopes that we found as part of this subtree
+        for node in nodes_to_delete {
+            log::debug!("Removing scope {:#?}", node);
+            let _scope = self.components.try_remove(node).unwrap();
+            // do anything we need to do to delete the scope
+            // I think we need to run the destructors on the hooks
+            // TODO
         }
     }
 }
@@ -369,62 +470,6 @@ fn next_id() -> u32 {
 //             // any updates that the diff machine has proprogated into the component lifecycle queue
 //             while let Some(event) = diff_machine.lifecycle_events.pop_front() {
 //                 match event {
-//                     // A new component has been computed from the diffing algorithm
-//                     // create a new component in the arena, run it, move the diffing machine to this new spot, and then diff it
-//                     // this will flood the lifecycle queue with new updates to build up the subtree
-//                     LifeCycleEvent::Mount {
-//                         caller,
-//                         root_id: id,
-//                         stable_scope_addr,
-//                     } => {
-//                         log::debug!("Mounting a new component");
-
-//                         // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
-//                         // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
-//                         // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
-
-//                         // Insert a new scope into our component list
-//                         let idx = self.components.with(|components| {
-//                             components.insert_with(|new_idx| {
-//                                 let height = cur_height + 1;
-//                                 Scope::new(
-//                                     caller,
-//                                     new_idx,
-//                                     Some(cur_component.arena_idx),
-//                                     height,
-//                                     self.event_queue.new_channel(height, new_idx),
-//                                     self.components.clone(),
-//                                     &[],
-//                                 )
-//                             })
-//                         })?;
-
-//                         {
-//                             let cur_component = self.components.try_get_mut(update.idx).unwrap();
-//                             let mut ch = cur_component.descendents.borrow_mut();
-//                             ch.insert(idx);
-//                             std::mem::drop(ch);
-//                         }
-
-//                         // Grab out that component
-//                         let new_component = self.components.try_get_mut(idx).unwrap();
-
-//                         // Actually initialize the caller's slot with the right address
-//                         *stable_scope_addr.upgrade().unwrap().as_ref().borrow_mut() = Some(idx);
-
-//                         // Run the scope for one iteration to initialize it
-//                         new_component.run_scope()?;
-
-//                         // Navigate the diff machine to the right point in the output dom
-//                         diff_machine.change_list.load_known_root(id);
-
-//                         // And then run the diff algorithm
-//                         diff_machine
-//                             .diff_node(new_component.old_frame(), new_component.next_frame());
-
-//                         // Finally, insert this node as a seen node.
-//                         seen_nodes.insert(idx);
-//                     }
 
 //                     // A component has remained in the same location but its properties have changed
 //                     // We need to process this component and then dump the output lifecycle events into the queue
@@ -463,74 +508,38 @@ fn next_id() -> u32 {
 //                         seen_nodes.insert(idx);
 //                     }
 
-//                     // A component's parent has updated, but its properties did not change.
-//                     // This means the caller ptr is invalidated and needs to be updated, but the component itself does not need to be re-ran
-//                     LifeCycleEvent::SameProps {
-//                         caller,
-//                         stable_scope_addr,
-//                         ..
-//                     } => {
-//                         // In this case, the parent made a new VNode that resulted in the same props for us
-//                         // However, since our caller is located in a Bump frame, we need to update the caller pointer (which is now invalid)
-//                         log::debug!("Received the same props");
+// A more interesting case: generic over a *type*
+// struct MyPropsGeneric<T, U>(T, U);
 
-//                         // Get the stable index to the target component
-//                         // This *should* exist due to guarantees in the diff algorithm
-//                         let idx = stable_scope_addr
-//                             .upgrade()
-//                             .unwrap()
-//                             .as_ref()
-//                             .borrow()
-//                             .unwrap();
-
-//                         // Grab out that component
-//                         let component = self.components.try_get_mut(idx).unwrap();
-
-//                         // We have to move the caller over or running the scope will fail
-//                         component.update_caller(caller);
-
-//                         // This time, we will not add it to our seen nodes since we did not actually run it
-//                     }
-
-//                     LifeCycleEvent::Remove {
-//                         root_id,
-//                         stable_scope_addr,
-//                     } => {
-//                         let id = stable_scope_addr
-//                             .upgrade()
-//                             .unwrap()
-//                             .as_ref()
-//                             .borrow()
-//                             .unwrap();
-
-//                         log::warn!("Removing node {:#?}", id);
-
-//                         // This would normally be recursive but makes sense to do linear to
-//                         let mut children_to_remove = VecDeque::new();
-//                         children_to_remove.push_back(id);
-
-//                         // Accumulate all the child components that need to be removed
-//                         while let Some(child_id) = children_to_remove.pop_back() {
-//                             let comp = self.components.try_get(child_id).unwrap();
-//                             let children = comp.descendents.borrow();
-//                             for child in children.iter() {
-//                                 children_to_remove.push_front(*child);
-//                             }
-//                             log::debug!("Removing component: {:#?}", child_id);
-//                             self.components
-//                                 .with(|components| components.remove(child_id).unwrap())
-//                                 .unwrap();
-//                         }
-//                     }
-
-//                     LifeCycleEvent::Replace {
-//                         caller,
-//                         root_id: id,
-//                         ..
-//                     } => {
-//                         unimplemented!("This feature (Replace) is unimplemented")
-//                     }
-//                 }
-//             }
-
+// unsafe
+// impl<T, U> Props for MyPropsGeneric<T, U>
+// where
+//     T : Props,
+//     U : Props,
+// {
+//     const IS_STATIC: bool =
+//         <T as Props>::IS_STATIC
+//         &
+//         <U as Props>::IS_STATIC
+//     ;
 // }
+
+// make sure we navigate the edit machine to this place in the dom
+// the edit machine will be coming from a previous place on the dom
+// I think react keeps a map instead of doing the traversal thing
+// we should look into that if it makes our pages more resilient
+//
+// maintaining such a map would rely on GC, moresoe than we do now
+// -> right now only roots have DOM-mapped IDs
+// -> React provides a dom-mapped ID for every node
+// however, if we hook up a mutation observer, we can make sure that nothing bad has happened between event handles(!)
+// a mutation observer would let us track which nodes are potentially harmful
+//
+// it's *okay* if the host deletes an element
+// -> or is it with adblockers?
+// -> it's bad if the host *adds* an element
+// -> just delete it to maintain consistency?
+//
+// Mostly, the issue will be with extensions adding and removing nodes
+// -> adblocking
+// -> buttons/tags/overlays
