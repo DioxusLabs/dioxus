@@ -175,20 +175,21 @@ impl VirtualDom {
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     /// Currently this doesn't do what we want it to do
     pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
-        let mut diff_machine = DiffMachine::new();
+        todo!()
+        // let mut diff_machine = DiffMachine::new();
 
-        // Schedule an update and then immediately call it on the root component
-        // This is akin to a hook being called from a listener and requring a re-render
-        // Instead, this is done on top-level component
+        // // Schedule an update and then immediately call it on the root component
+        // // This is akin to a hook being called from a listener and requring a re-render
+        // // Instead, this is done on top-level component
 
-        let base = self.components.try_get(self.base_scope)?;
+        // let base = self.components.try_get(self.base_scope)?;
 
-        let update = &base.event_channel;
-        update();
+        // let update = &base.event_channel;
+        // update();
 
-        self.progress_completely(&mut diff_machine)?;
+        // self.progress_completely(&mut diff_machine)?;
 
-        Ok(diff_machine.consume())
+        // Ok(diff_machine.consume())
     }
 
     pub fn base_scope(&self) -> &Scope {
@@ -248,7 +249,7 @@ impl VirtualDom {
 
         self.components.try_get_mut(id)?.call_listener(event)?;
 
-        let mut diff_machine = DiffMachine::new();
+        let mut diff_machine = DiffMachine::new(self.components.clone());
         self.progress_completely(&mut diff_machine)?;
 
         Ok(diff_machine.consume())

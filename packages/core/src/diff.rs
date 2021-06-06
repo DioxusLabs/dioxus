@@ -32,7 +32,7 @@
 //!
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
-use crate::innerlude::*;
+use crate::{arena::ScopeArena, innerlude::*};
 use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
 use generational_arena::Arena;
@@ -62,6 +62,7 @@ pub struct DiffMachine<'a> {
     pub change_list: EditMachine<'a>,
     pub diffed: FxHashSet<ScopeIdx>,
     pub lifecycle_events: VecDeque<LifeCycleEvent<'a>>,
+    pub vdom: ScopeArena,
 }
 pub enum LifeCycleEvent<'a> {
     Mount {
@@ -97,8 +98,9 @@ fn get_id() -> u32 {
 }
 
 impl<'a> DiffMachine<'a> {
-    pub fn new() -> Self {
+    pub fn new(vdom: ScopeArena) -> Self {
         Self {
+            vdom,
             create_diffs: true,
             lifecycle_events: VecDeque::new(),
             change_list: EditMachine::new(),
