@@ -9,8 +9,9 @@ use crate::innerlude::FC;
 
 pub type ScopeIdx = generational_arena::Index;
 
-pub trait Properties: PartialEq {
+pub unsafe trait Properties: PartialEq {
     type Builder;
+    const CAN_BE_MEMOIZED: bool;
     fn builder() -> Self::Builder;
 }
 
@@ -21,7 +22,8 @@ impl EmptyBuilder {
     }
 }
 
-impl Properties for () {
+unsafe impl Properties for () {
+    const CAN_BE_MEMOIZED: bool = true;
     type Builder = EmptyBuilder;
 
     fn builder() -> Self::Builder {

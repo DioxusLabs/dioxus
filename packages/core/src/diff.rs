@@ -120,7 +120,7 @@ impl<'a> DiffMachine<'a> {
         When re-entering, we reuse the EditList in DiffState
         */
         match (old, new) {
-            (VNode::Text(VText { text: old_text }), VNode::Text(VText { text: new_text })) => {
+            (VNode::Text(old_text), VNode::Text(new_text)) => {
                 if old_text != new_text {
                     self.change_list.commit_traversal();
                     self.change_list.set_text(new_text);
@@ -157,30 +157,32 @@ impl<'a> DiffMachine<'a> {
                 // self.change_list.commit_traversal();
                 if cold.user_fc == cnew.user_fc {
                     // todo: create a stable addr
-                    let caller = Rc::downgrade(&cnew.caller);
-                    let id = cold.stable_addr.borrow().unwrap();
-                    *cnew.stable_addr.borrow_mut() = Some(id);
-                    *cnew.ass_scope.borrow_mut() = *cold.ass_scope.borrow();
+                    // let caller = Rc::downgrade(&cnew.caller);
+                    // let id = cold.stable_addr.borrow().unwrap();
+                    // *cnew.stable_addr.borrow_mut() = Some(id);
+                    // *cnew.ass_scope.borrow_mut() = *cold.ass_scope.borrow();
 
-                    let scope = Rc::downgrade(&cold.ass_scope);
-                    self.lifecycle_events
-                        .push_back(LifeCycleEvent::PropsChanged {
-                            caller,
-                            root_id: id,
-                            stable_scope_addr: scope,
-                        });
+                    // let scope = Rc::downgrade(&cold.ass_scope);
+                    todo!()
+                    // self.lifecycle_events
+                    //     .push_back(LifeCycleEvent::PropsChanged {
+                    //         caller,
+                    //         root_id: id,
+                    //         stable_scope_addr: scope,
+                    //     });
                 } else {
-                    let caller = Rc::downgrade(&cnew.caller);
-                    let id = cold.stable_addr.borrow().unwrap();
-                    let old_scope = Rc::downgrade(&cold.ass_scope);
-                    let new_scope = Rc::downgrade(&cnew.ass_scope);
+                    // let caller = Rc::downgrade(&cnew.caller);
+                    // let id = cold.stable_addr.borrow().unwrap();
+                    // let old_scope = Rc::downgrade(&cold.ass_scope);
+                    // let new_scope = Rc::downgrade(&cnew.ass_scope);
 
-                    self.lifecycle_events.push_back(LifeCycleEvent::Replace {
-                        caller,
-                        root_id: id,
-                        old_scope,
-                        new_scope,
-                    });
+                    todo!()
+                    // self.lifecycle_events.push_back(LifeCycleEvent::Replace {
+                    //     caller,
+                    //     root_id: id,
+                    //     old_scope,
+                    //     new_scope,
+                    // });
                 }
             }
 
@@ -217,7 +219,7 @@ impl<'a> DiffMachine<'a> {
     fn create(&mut self, node: &VNode<'a>) {
         debug_assert!(self.change_list.traversal_is_committed());
         match node {
-            VNode::Text(VText { text }) => {
+            VNode::Text(text) => {
                 self.change_list.create_text_node(text);
             }
             VNode::Element(&VElement {
@@ -252,7 +254,7 @@ impl<'a> DiffMachine<'a> {
                 // text content, and finally (3) append the text node to this
                 // parent.
                 if children.len() == 1 {
-                    if let VNode::Text(VText { text }) = children[0] {
+                    if let VNode::Text(text) = children[0] {
                         self.change_list.set_text(text);
                         return;
                     }
@@ -268,18 +270,20 @@ impl<'a> DiffMachine<'a> {
             todo: integrate re-entrace
             */
             VNode::Component(component) => {
-                self.change_list
-                    .create_text_node("placeholder for vcomponent");
+                todo!()
+                // self.change_list
+                //     .create_text_node("placeholder for vcomponent");
 
-                let id = get_id();
-                *component.stable_addr.as_ref().borrow_mut() = Some(id);
-                self.change_list.save_known_root(id);
-                let scope = Rc::downgrade(&component.ass_scope);
-                self.lifecycle_events.push_back(LifeCycleEvent::Mount {
-                    caller: Rc::downgrade(&component.caller),
-                    root_id: id,
-                    stable_scope_addr: scope,
-                });
+                // let id = get_id();
+                // *component.stable_addr.as_ref().borrow_mut() = Some(id);
+                // self.change_list.save_known_root(id);
+                // let scope = Rc::downgrade(&component.ass_scope);
+                // todo!()
+                // self.lifecycle_events.push_back(LifeCycleEvent::Mount {
+                //     caller: Rc::downgrade(&component.caller),
+                //     root_id: id,
+                //     stable_scope_addr: scope,
+                // });
             }
             VNode::Suspended => {
                 todo!("Creation of VNode::Suspended not yet supported")
@@ -422,14 +426,11 @@ impl<'a> DiffMachine<'a> {
 
         if new.len() == 1 {
             match (old.first(), &new[0]) {
-                (
-                    Some(&VNode::Text(VText { text: old_text })),
-                    &VNode::Text(VText { text: new_text }),
-                ) if old_text == new_text => {
+                (Some(&VNode::Text(old_text)), &VNode::Text(new_text)) if old_text == new_text => {
                     // Don't take this fast path...
                 }
 
-                (_, &VNode::Text(VText { text })) => {
+                (_, &VNode::Text(text)) => {
                     self.change_list.commit_traversal();
                     self.change_list.set_text(text);
                     // for o in old {
@@ -979,11 +980,12 @@ impl<'a> DiffMachine<'a> {
                 // self.change_list
                 //     .create_text_node("placeholder for vcomponent");
 
-                let root_id = vcomp.stable_addr.as_ref().borrow().unwrap();
-                self.lifecycle_events.push_back(LifeCycleEvent::Remove {
-                    root_id,
-                    stable_scope_addr: Rc::downgrade(&vcomp.ass_scope),
-                })
+                todo!()
+                // let root_id = vcomp.stable_addr.as_ref().borrow().unwrap();
+                // self.lifecycle_events.push_back(LifeCycleEvent::Remove {
+                //     root_id,
+                //     stable_scope_addr: Rc::downgrade(&vcomp.ass_scope),
+                // })
                 // let id = get_id();
                 // *component.stable_addr.as_ref().borrow_mut() = Some(id);
                 // self.change_list.save_known_root(id);

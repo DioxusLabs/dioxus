@@ -191,10 +191,6 @@ impl VirtualDom {
 
         // Ok(diff_machine.consume())
     }
-
-    pub fn base_scope(&self) -> &Scope {
-        todo!()
-    }
 }
 
 // ======================================

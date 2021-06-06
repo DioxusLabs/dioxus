@@ -146,6 +146,7 @@ pub struct EditMachine<'lock> {
     pub traversal: Traversal,
     next_temporary: u32,
     forcing_new_listeners: bool,
+    pub cur_height: u32,
 
     // // if the current node is a "known" node
     // // any actions that modify this node should update the mapping
@@ -158,6 +159,7 @@ impl<'lock> EditMachine<'lock> {
         Self {
             // current_known: None,
             traversal: Traversal::new(),
+            cur_height: 0,
             next_temporary: 0,
             forcing_new_listeners: false,
             emitter: EditList::<'lock>::default(),
