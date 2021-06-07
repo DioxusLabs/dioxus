@@ -9,7 +9,7 @@ use crate::innerlude::FC;
 
 pub type ScopeIdx = generational_arena::Index;
 
-pub unsafe trait Properties: PartialEq {
+pub unsafe trait Properties: PartialEq + Sized {
     type Builder;
     const CAN_BE_MEMOIZED: bool;
     fn builder() -> Self::Builder;
@@ -36,7 +36,9 @@ pub fn fc_to_builder<T: Properties>(_f: FC<T>) -> T::Builder {
 }
 
 mod testing {
-    use std::any::Any;
+    use std::{any::Any, ops::Deref};
+
+    use crate::innerlude::VNode;
 
     // trait PossibleProps {
     //     type POut: PartialEq;
@@ -137,6 +139,43 @@ mod testing {
             // blah(10, "asd");
         }
     }
+
+    struct Inner<'a> {
+        a: String,
+        b: i32,
+        c: &'a str,
+    }
+
+    struct Custom<'a, P: 'a> {
+        inner: &'a P,
+        // inner: *const (),
+        _p: std::marker::PhantomData<&'a P>,
+    }
+
+    impl<'a, P> Custom<'a, P> {
+        fn props(&self) -> &P {
+            todo!()
+        }
+    }
+
+    // impl<P> Deref for Custom<P> {
+    //     type Target = Inner;
+
+    //     fn deref(&self) -> &Self::Target {
+    //         unsafe { &*self.inner }
+    //     }
+    // }
+
+    fn test2<'a>(a: Custom<'a, Inner<'a>>) -> VNode {
+        let r = a.inner;
+
+        todo!()
+        // let g = a.props();
+        // todo!()
+        // let g = &a.a;
+    }
+
+    fn is_comp() {}
 }
 
 mod style {}

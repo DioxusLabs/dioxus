@@ -226,7 +226,7 @@ pub struct VComponent<'src> {
     pub ass_scope: RefCell<VCompAssociatedScope>,
 
     // pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
-    pub caller: Rc<dyn Fn(&Scope) -> VNode + 'src>,
+    pub caller: Rc<dyn Fn(&Scope) -> VNode>,
 
     pub children: &'src [VNode<'src>],
 
@@ -287,18 +287,24 @@ impl<'a> VComponent<'a> {
 
         // let prref: &'a P = props.as_ref();
 
-        let caller: Rc<dyn Fn(&Scope) -> VNode> = Rc::new(move |scope| {
-            //
-            // let props2 = bad_props;
-            // props.as_ref()
-            // let ctx = Context {
-            //     props: prref,
-            //     scope,
-            // };
-            todo!()
-            // component(ctx)
-        });
-        // let caller = Rc::new(create_closure(component, raw_props));
+        // let r = create_closure(component, raw_props);
+        // let caller: Rc<dyn for<'g> Fn(&'g Scope) -> VNode<'g>> = Rc::new(move |scope| {
+        //     // r(scope);
+        //     //
+        //     // let props2 = bad_props;
+        //     // props.as_ref();
+        //     // let ctx = Context {
+        //     //     props: prref,
+        //     //     scope,
+        //     // };
+        //     // let ctx: Context<'g, P> = todo!();
+        //     // todo!()
+        //     // let r = component(ctx);
+        //     todo!()
+        // });
+        let caller = create_closure(component, raw_props);
+
+        // let caller: Rc<dyn Fn(&Scope) -> VNode> = Rc::new(create_closure(component, raw_props));
 
         let key = match key {
             Some(key) => NodeKey::new(key),
@@ -319,6 +325,30 @@ impl<'a> VComponent<'a> {
             stable_addr: RefCell::new(None),
         }
     }
+}
+
+type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r> + 'a>;
+
+fn create_closure<'a, P: Properties + 'a>(
+    component: FC<P>,
+    raw_props: *const (),
+) -> Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r>> {
+    // ) -> impl for<'r> Fn(&'r Scope) -> VNode<'r> {
+    let g: Captured = Rc::new(move |scp: &Scope| -> VNode {
+        // cast back into the right lifetime
+        let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
+        // let ctx: Context<P2> = todo!();
+        let ctx: Context<P> = Context {
+            props: safe_props,
+            scope: scp,
+        };
+
+        let g = component(ctx);
+        let g2 = unsafe { std::mem::transmute(g) };
+        g2
+    });
+    let r: Captured<'static> = unsafe { std::mem::transmute(g) };
+    r
 }
 
 pub struct VFragment<'src> {

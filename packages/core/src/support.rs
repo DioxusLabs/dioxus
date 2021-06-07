@@ -1,4 +1,3 @@
-pub use crate::scope::*;
 use crate::{arena::ScopeArena, innerlude::*};
 use bumpalo::Bump;
 use generational_arena::Arena;

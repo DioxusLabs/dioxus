@@ -52,8 +52,8 @@ pub struct VirtualDom {
 
     /// a strong allocation to the "caller" for the original component and its props
     #[doc(hidden)]
-    _root_caller: Rc<OpaqueComponent<'static>>,
-
+    _root_caller: Rc<OpaqueComponent>,
+    // _root_caller: Rc<OpaqueComponent<'static>>,
     /// Type of the original ctx. This is stored as TypeId so VirtualDom does not need to be generic.
     ///
     /// Whenver props need to be updated, an Error will be thrown if the new props do not
@@ -137,7 +137,8 @@ impl VirtualDom {
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
         // Here, we need to make it manually, using an RC to force the Weak reference to stick around for the main scope.
-        let _root_caller: Rc<OpaqueComponent<'static>> = Rc::new(move |scope| {
+        let _root_caller: Rc<OpaqueComponent> = Rc::new(move |scope| {
+            // let _root_caller: Rc<OpaqueComponent<'static>> = Rc::new(move |scope| {
             // the lifetime of this closure is just as long as the lifetime on the scope reference
             // this closure moves root props (which is static) into this closure
             let props = unsafe { &*(&root_props as *const _) };
@@ -154,10 +155,11 @@ impl VirtualDom {
         // Make the first scope
         // We don't run the component though, so renderers will need to call "rebuild" when they initialize their DOM
         let link = components.clone();
-        let event_channel = Rc::new(move || {});
+
         let base_scope = components
             .with(|arena| {
                 arena.insert_with(move |myidx| {
+                    let event_channel = _event_queue.new_channel(0, myidx);
                     Scope::new(caller_ref, myidx, None, 0, event_channel, link, &[])
                 })
             })
@@ -175,21 +177,24 @@ impl VirtualDom {
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     /// Currently this doesn't do what we want it to do
     pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
-        todo!()
-        // let mut diff_machine = DiffMachine::new();
+        let mut diff_machine = DiffMachine::new(
+            self.components.clone(),
+            self.base_scope,
+            self.event_queue.clone(),
+        );
 
-        // // Schedule an update and then immediately call it on the root component
-        // // This is akin to a hook being called from a listener and requring a re-render
-        // // Instead, this is done on top-level component
+        // Schedule an update and then immediately call it on the root component
+        // This is akin to a hook being called from a listener and requring a re-render
+        // Instead, this is done on top-level component
 
-        // let base = self.components.try_get(self.base_scope)?;
+        let base = self.components.try_get(self.base_scope)?;
 
-        // let update = &base.event_channel;
-        // update();
+        let update = &base.event_channel;
+        update();
 
-        // self.progress_completely(&mut diff_machine)?;
+        self.progress_completely(&mut diff_machine)?;
 
-        // Ok(diff_machine.consume())
+        Ok(diff_machine.consume())
     }
 }
 
@@ -245,7 +250,9 @@ impl VirtualDom {
 
         self.components.try_get_mut(id)?.call_listener(event)?;
 
-        let mut diff_machine = DiffMachine::new(self.components.clone());
+        let mut diff_machine =
+            DiffMachine::new(self.components.clone(), id, self.event_queue.clone());
+
         self.progress_completely(&mut diff_machine)?;
 
         Ok(diff_machine.consume())
@@ -260,212 +267,48 @@ impl VirtualDom {
         diff_machine: &'_ mut DiffMachine<'s>,
     ) -> Result<()> {
         // Add this component to the list of components that need to be difed
-        #[allow(unused_assignments)]
-        let mut cur_height: u32 = 0;
+        // #[allow(unused_assignments)]
+        // let mut cur_height: u32 = 0;
 
         // Now, there are events in the queue
-        let mut seen_nodes = HashSet::<ScopeIdx>::new();
         let mut updates = self.event_queue.0.as_ref().borrow_mut();
 
         // Order the nodes by their height, we want the biggest nodes on the top
         // This prevents us from running the same component multiple times
         updates.sort_unstable();
 
+        log::debug!("There are: {:#?} updates to be processed", updates.len());
+
         // Iterate through the triggered nodes (sorted by height) and begin to diff them
         for update in updates.drain(..) {
+            log::debug!("Running updates for: {:#?}", update);
             // Make sure this isn't a node we've already seen, we don't want to double-render anything
             // If we double-renderer something, this would cause memory safety issues
-            if seen_nodes.contains(&update.idx) {
+            if diff_machine.seen_nodes.contains(&update.idx) {
                 continue;
             }
 
             // Now, all the "seen nodes" are nodes that got notified by running this listener
-            seen_nodes.insert(update.idx.clone());
+            diff_machine.seen_nodes.insert(update.idx.clone());
 
             // Start a new mutable borrow to components
             // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
 
             let cur_component = self.components.try_get_mut(update.idx).unwrap();
+            // let inner: &'s mut _ = unsafe { &mut *self.components.0.borrow().arena.get() };
+            // let cur_component = inner.get_mut(update.idx).unwrap();
 
             cur_component.run_scope()?;
 
             diff_machine.diff_node(cur_component.old_frame(), cur_component.next_frame());
 
-            cur_height = cur_component.height;
+            // cur_height = cur_component.height;
 
-            log::debug!(
-                "Processing update: {:#?} with height {}",
-                &update.idx,
-                cur_height
-            );
-
-            // Now, the entire subtree has been invalidated. We need to descend depth-first and process
-            // any updates that the diff machine has proprogated into the component lifecycle queue
-            while let Some(event) = diff_machine.lifecycle_events.pop_front() {
-                match event {
-                    // A new component has been computed from the diffing algorithm
-                    // create a new component in the arena, run it, move the diffing machine to this new spot, and then diff it
-                    // this will flood the lifecycle queue with new updates to build up the subtree
-                    LifeCycleEvent::Mount {
-                        caller,
-                        root_id: id,
-                        stable_scope_addr,
-                    } => {
-                        log::debug!("Mounting a new component");
-
-                        // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
-                        // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
-                        // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
-
-                        // Insert a new scope into our component list
-                        let idx = self.components.with(|components| {
-                            components.insert_with(|new_idx| {
-                                let height = cur_height + 1;
-                                Scope::new(
-                                    caller,
-                                    new_idx,
-                                    Some(cur_component.arena_idx),
-                                    height,
-                                    self.event_queue.new_channel(height, new_idx),
-                                    self.components.clone(),
-                                    &[],
-                                )
-                            })
-                        })?;
-
-                        {
-                            let cur_component = self.components.try_get_mut(update.idx).unwrap();
-                            let mut ch = cur_component.descendents.borrow_mut();
-                            ch.insert(idx);
-                            std::mem::drop(ch);
-                        }
-
-                        // Grab out that component
-                        let new_component = self.components.try_get_mut(idx).unwrap();
-
-                        // Actually initialize the caller's slot with the right address
-                        *stable_scope_addr.upgrade().unwrap().as_ref().borrow_mut() = Some(idx);
-
-                        // Run the scope for one iteration to initialize it
-                        new_component.run_scope()?;
-
-                        // Navigate the diff machine to the right point in the output dom
-                        diff_machine.change_list.load_known_root(id);
-
-                        // And then run the diff algorithm
-                        diff_machine
-                            .diff_node(new_component.old_frame(), new_component.next_frame());
-
-                        // Finally, insert this node as a seen node.
-                        seen_nodes.insert(idx);
-                    }
-
-                    // A component has remained in the same location but its properties have changed
-                    // We need to process this component and then dump the output lifecycle events into the queue
-                    LifeCycleEvent::PropsChanged {
-                        caller,
-                        root_id,
-                        stable_scope_addr,
-                    } => {
-                        log::debug!("Updating a component after its props have changed");
-
-                        // Get the stable index to the target component
-                        // This *should* exist due to guarantees in the diff algorithm
-                        let idx = stable_scope_addr
-                            .upgrade()
-                            .unwrap()
-                            .as_ref()
-                            .borrow()
-                            .unwrap();
-
-                        // Grab out that component
-                        let component = self.components.try_get_mut(idx).unwrap();
-
-                        // We have to move the caller over or running the scope will fail
-                        component.update_caller(caller);
-
-                        // Run the scope
-                        component.run_scope()?;
-
-                        // Navigate the diff machine to the right point in the output dom
-                        diff_machine.change_list.load_known_root(root_id);
-
-                        // And then run the diff algorithm
-                        diff_machine.diff_node(component.old_frame(), component.next_frame());
-
-                        // Finally, insert this node as a seen node.
-                        seen_nodes.insert(idx);
-                    }
-
-                    // A component's parent has updated, but its properties did not change.
-                    // This means the caller ptr is invalidated and needs to be updated, but the component itself does not need to be re-ran
-                    LifeCycleEvent::SameProps {
-                        caller,
-                        stable_scope_addr,
-                        ..
-                    } => {
-                        // In this case, the parent made a new VNode that resulted in the same props for us
-                        // However, since our caller is located in a Bump frame, we need to update the caller pointer (which is now invalid)
-                        log::debug!("Received the same props");
-
-                        // Get the stable index to the target component
-                        // This *should* exist due to guarantees in the diff algorithm
-                        let idx = stable_scope_addr
-                            .upgrade()
-                            .unwrap()
-                            .as_ref()
-                            .borrow()
-                            .unwrap();
-
-                        // Grab out that component
-                        let component = self.components.try_get_mut(idx).unwrap();
-
-                        // We have to move the caller over or running the scope will fail
-                        component.update_caller(caller);
-
-                        // This time, we will not add it to our seen nodes since we did not actually run it
-                    }
-
-                    LifeCycleEvent::Remove {
-                        root_id,
-                        stable_scope_addr,
-                    } => {
-                        let id = stable_scope_addr
-                            .upgrade()
-                            .unwrap()
-                            .as_ref()
-                            .borrow()
-                            .unwrap();
-
-                        log::warn!("Removing node {:#?}", id);
-
-                        // This would normally be recursive but makes sense to do linear to
-                        let mut children_to_remove = VecDeque::new();
-                        children_to_remove.push_back(id);
-
-                        // Accumulate all the child components that need to be removed
-                        while let Some(child_id) = children_to_remove.pop_back() {
-                            let comp = self.components.try_get(child_id).unwrap();
-                            let children = comp.descendents.borrow();
-                            for child in children.iter() {
-                                children_to_remove.push_front(*child);
-                            }
-                            log::debug!("Removing component: {:#?}", child_id);
-                            self.components
-                                .with(|components| components.remove(child_id).unwrap())
-                                .unwrap();
-                        }
-                    }
-
-                    LifeCycleEvent::Replace {
-                        caller,
-                        root_id: id,
-                        ..
-                    } => {
-                        unimplemented!("This feature (Replace) is unimplemented")
-                    }
-                }
-            }
+            // log::debug!(
+            //     "Processing update: {:#?} with height {}",
+            //     &update.idx,
+            //     cur_height
+            // );
         }
 
         Ok(())
@@ -489,7 +332,7 @@ pub struct Scope {
 
     // IDs of children that this scope has created
     // This enables us to drop the children and their children when this scope is destroyed
-    descendents: RefCell<HashSet<ScopeIdx>>,
+    pub(crate) descendents: RefCell<HashSet<ScopeIdx>>,
 
     child_nodes: &'static [VNode<'static>],
 
@@ -507,8 +350,8 @@ pub struct Scope {
     pub event_channel: Rc<dyn Fn() + 'static>,
 
     // pub event_queue: EventQueue,
-    pub caller: Weak<OpaqueComponent<'static>>,
-
+    pub caller: Weak<OpaqueComponent>,
+    // pub caller: Weak<OpaqueComponent<'static>>,
     pub hookidx: RefCell<usize>,
 
     // ==========================
@@ -542,8 +385,9 @@ impl Scope {
     //
     // Scopes cannot be made anywhere else except for this file
     // Therefore, their lifetimes are connected exclusively to the virtual dom
-    fn new<'creator_node>(
-        caller: Weak<OpaqueComponent<'creator_node>>,
+    pub fn new<'creator_node>(
+        caller: Weak<OpaqueComponent>,
+        // caller: Weak<OpaqueComponent<'creator_node>>,
         arena_idx: ScopeIdx,
         parent: Option<ScopeIdx>,
         height: u32,
@@ -569,8 +413,10 @@ impl Scope {
         // Not the best solution, so TODO on removing this in favor of a dedicated resource abstraction.
         let caller = unsafe {
             std::mem::transmute::<
-                Weak<OpaqueComponent<'creator_node>>,
-                Weak<OpaqueComponent<'static>>,
+                Weak<OpaqueComponent>,
+                Weak<OpaqueComponent>,
+                // Weak<OpaqueComponent<'creator_node>>,
+                // Weak<OpaqueComponent<'static>>,
             >(caller)
         };
 
@@ -591,11 +437,14 @@ impl Scope {
         }
     }
 
-    pub fn update_caller<'creator_node>(&mut self, caller: Weak<OpaqueComponent<'creator_node>>) {
+    pub fn update_caller<'creator_node>(&mut self, caller: Weak<OpaqueComponent>) {
+        // pub fn update_caller<'creator_node>(&mut self, caller: Weak<OpaqueComponent<'creator_node>>) {
         let broken_caller = unsafe {
             std::mem::transmute::<
-                Weak<OpaqueComponent<'creator_node>>,
-                Weak<OpaqueComponent<'static>>,
+                Weak<OpaqueComponent>,
+                Weak<OpaqueComponent>,
+                // Weak<OpaqueComponent<'creator_node>>,
+                // Weak<OpaqueComponent<'static>>,
             >(caller)
         };
 
@@ -627,8 +476,10 @@ impl Scope {
             .ok_or(Error::FatalInternal("Failed to get caller"))?;
 
         // Cast the caller ptr from static to one with our own reference
-        let c2: &OpaqueComponent<'static> = caller.as_ref();
-        let c3: &OpaqueComponent<'sel> = unsafe { std::mem::transmute(c2) };
+        let c2: &OpaqueComponent = caller.as_ref();
+        let c3: &OpaqueComponent = unsafe { std::mem::transmute(c2) };
+        // let c2: &OpaqueComponent<'static> = caller.as_ref();
+        // let c3: &OpaqueComponent<'sel> = unsafe { std::mem::transmute(c2) };
 
         let unsafe_head = unsafe { self.own_vnodes(c3) };
 
@@ -638,7 +489,7 @@ impl Scope {
     }
 
     // this is its own function so we can preciesly control how lifetimes flow
-    unsafe fn own_vnodes<'a>(&'a self, f: &OpaqueComponent<'a>) -> VNode<'static> {
+    unsafe fn own_vnodes<'a>(&'a self, f: &OpaqueComponent) -> VNode<'static> {
         let new_head: VNode<'a> = f(self);
         let out: VNode<'static> = std::mem::transmute(new_head);
         out
@@ -956,22 +807,25 @@ Any function prefixed with "use" should not be called conditionally.
 
 // We actually allocate the properties for components in their parent's properties
 // We then expose a handle to use those props for render in the form of "OpaqueComponent"
-pub(crate) type OpaqueComponent<'e> = dyn for<'b> Fn(&'b Scope) -> VNode<'b> + 'e;
+pub type OpaqueComponent = dyn for<'b> Fn(&'b Scope) -> VNode<'b>;
 
 #[derive(PartialEq, Debug, Clone, Default)]
-pub(crate) struct EventQueue(pub Rc<RefCell<Vec<HeightMarker>>>);
+pub struct EventQueue(pub Rc<RefCell<Vec<HeightMarker>>>);
 
 impl EventQueue {
     pub fn new_channel(&self, height: u32, idx: ScopeIdx) -> Rc<dyn Fn()> {
         let inner = self.clone();
         let marker = HeightMarker { height, idx };
-        Rc::new(move || inner.0.as_ref().borrow_mut().push(marker))
+        Rc::new(move || {
+            log::debug!("channel updated {:#?}", marker);
+            inner.0.as_ref().borrow_mut().push(marker)
+        })
     }
 }
 
 /// A helper type that lets scopes be ordered by their height
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct HeightMarker {
+pub struct HeightMarker {
     pub idx: ScopeIdx,
     pub height: u32,
 }
@@ -1047,20 +901,20 @@ impl ActiveFrame {
         )
     }
 
-    fn from_frames(a: BumpFrame, b: BumpFrame) -> Self {
+    pub fn from_frames(a: BumpFrame, b: BumpFrame) -> Self {
         Self {
             generation: 0.into(),
             frames: [a, b],
         }
     }
 
-    fn cur_frame(&self) -> &BumpFrame {
+    pub fn cur_frame(&self) -> &BumpFrame {
         match *self.generation.borrow() & 1 == 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         }
     }
-    fn cur_frame_mut(&mut self) -> &mut BumpFrame {
+    pub fn cur_frame_mut(&mut self) -> &mut BumpFrame {
         match *self.generation.borrow() & 1 == 0 {
             true => &mut self.frames[0],
             false => &mut self.frames[1],
@@ -1095,7 +949,7 @@ impl ActiveFrame {
         }
     }
 
-    fn next(&mut self) -> &mut BumpFrame {
+    pub fn next(&mut self) -> &mut BumpFrame {
         *self.generation.borrow_mut() += 1;
 
         if *self.generation.borrow() % 2 == 0 {

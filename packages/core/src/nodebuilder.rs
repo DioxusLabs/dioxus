@@ -650,7 +650,7 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
     Attribute { name, value }
 }
 
-pub fn virtual_child<'a, T: Properties>(
+pub fn virtual_child<'a, T: Properties + 'a>(
     ctx: &NodeCtx<'a>,
     f: FC<T>,
     props: T,
@@ -658,9 +658,11 @@ pub fn virtual_child<'a, T: Properties>(
 ) -> VNode<'a> {
     // currently concerned about if props have a custom drop implementation
     // might override it with the props macro
-    todo!()
-    // VNode::Component(
-    //     ctx.bump()
-    //         .alloc(crate::nodes::VComponent::new(f, props, key)),
-    // )
+    // todo!()
+    VNode::Component(
+        ctx.bump()
+            .alloc(crate::nodes::VComponent::new(ctx.bump(), f, props, key)),
+        // ctx.bump()
+        //     .alloc(crate::nodes::VComponent::new(f, props, key)),
+    )
 }

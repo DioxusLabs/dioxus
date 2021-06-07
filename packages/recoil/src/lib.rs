@@ -368,7 +368,7 @@ mod root {
 
 mod hooks {
     use super::*;
-    use dioxus_core::{hooks::use_ref, prelude::Context, scope::Scoped};
+    use dioxus_core::{hooks::use_ref, prelude::Context, virtual_dom::Scoped};
 
     pub fn use_init_recoil_root<P>(ctx: Context<P>, cfg: impl Fn(())) {
         ctx.use_create_context(move || RefCell::new(RecoilRoot::new()))
