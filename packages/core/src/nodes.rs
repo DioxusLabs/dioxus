@@ -7,6 +7,8 @@ use crate::{
     events::VirtualEvent,
     innerlude::{Context, Properties, Scope, ScopeIdx, FC},
     nodebuilder::text3,
+    virtual_dom::NodeCtx,
+    // support::NodeCtx,
 };
 use bumpalo::Bump;
 use std::{
@@ -238,7 +240,6 @@ pub struct VComponent<'src> {
 
     // a pointer to the raw fn typ
     pub user_fc: *const (),
-    _p: PhantomData<&'src ()>,
 }
 
 impl<'a> VComponent<'a> {
@@ -249,14 +250,17 @@ impl<'a> VComponent<'a> {
     // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
 
     pub fn new<P: Properties + 'a>(
-        bump: &'a Bump,
+        // bump: &'a Bump,
+        ctx: &NodeCtx<'a>,
         component: FC<P>,
         // props: bumpalo::boxed::Box<'a, P>,
         props: P,
         key: Option<&'a str>,
+        children: &'a [VNode<'a>],
     ) -> Self {
         // pub fn new<P: Properties + 'a>(component: FC<P>, props: P, key: Option<&'a str>) -> Self {
         // let bad_props = unsafe { transmogrify(props) };
+        let bump = ctx.bump();
         let caller_ref = component as *const ();
         let props = bump.alloc(props);
 
@@ -319,8 +323,7 @@ impl<'a> VComponent<'a> {
             user_fc: caller_ref,
             comparator,
             raw_props,
-            _p: PhantomData,
-            children: &[],
+            children,
             caller,
             stable_addr: RefCell::new(None),
         }
@@ -354,4 +357,15 @@ fn create_closure<'a, P: Properties + 'a>(
 pub struct VFragment<'src> {
     pub key: NodeKey<'src>,
     pub children: &'src [VNode<'src>],
+}
+
+impl<'a> VFragment<'a> {
+    pub fn new(key: Option<&'a str>, children: &'a [VNode<'a>]) -> Self {
+        let key = match key {
+            Some(key) => NodeKey::new(key),
+            None => NodeKey(None),
+        };
+
+        Self { key, children }
+    }
 }

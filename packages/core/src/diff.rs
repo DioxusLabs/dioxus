@@ -201,11 +201,13 @@ impl<'a> DiffMachine<'a> {
                 todo!("Suspended components not currently available")
             }
 
-            // (VNode::Fragment(_), VNode::Fragment(_)) => {
-            //     todo!("Fragments not currently supported in diffing")
-            // }
             // Fragments are special
-            (VNode::Fragment(_), _) | (_, VNode::Fragment(_)) => {
+            // we actually have to remove a bunch of nodes
+            (VNode::Fragment(_), _) => {
+                todo!("Fragments not currently supported in diffing")
+            }
+
+            (_, VNode::Fragment(_)) => {
                 todo!("Fragments not currently supported in diffing")
             }
         }
@@ -227,7 +229,7 @@ impl<'a> DiffMachine<'a> {
                 self.change_list.create_text_node(text);
             }
             VNode::Element(&VElement {
-                key: _,
+                key,
                 tag_name,
                 listeners,
                 attributes,
@@ -266,7 +268,12 @@ impl<'a> DiffMachine<'a> {
 
                 for child in children {
                     self.create(child);
-                    self.change_list.append_child();
+                    if let VNode::Fragment(_) = child {
+                        // do nothing
+                        // fragments append themselves
+                    } else {
+                        self.change_list.append_child();
+                    }
                 }
             }
 
@@ -284,22 +291,23 @@ impl<'a> DiffMachine<'a> {
                 // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
                 // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
 
+                let parent_idx = self.cur_idx;
+
                 // Insert a new scope into our component list
                 let idx = self
                     .components
                     .with(|components| {
                         components.insert_with(|new_idx| {
-                            let cur_idx = self.cur_idx;
-                            let cur_scope = self.components.try_get(cur_idx).unwrap();
-                            let height = cur_scope.height + 1;
+                            let parent_scope = self.components.try_get(parent_idx).unwrap();
+                            let height = parent_scope.height + 1;
                             Scope::new(
                                 caller,
                                 new_idx,
-                                Some(cur_idx),
+                                Some(parent_idx),
                                 height,
                                 self.event_queue.new_channel(height, new_idx),
                                 self.components.clone(),
-                                &[],
+                                component.children,
                             )
                         })
                     })
@@ -323,24 +331,24 @@ impl<'a> DiffMachine<'a> {
                 // Run the scope for one iteration to initialize it
                 new_component.run_scope().unwrap();
 
-                // // Navigate the diff machine to the right point in the output dom
-                // self.change_list.load_known_root(id);
-                // let root_id = component.stable_addr
-
                 // And then run the diff algorithm
                 self.diff_node(new_component.old_frame(), new_component.next_frame());
 
                 // Finally, insert this node as a seen node.
                 self.seen_nodes.insert(idx);
             }
-            VNode::Suspended => {
-                todo!("Creation of VNode::Suspended not yet supported")
-            }
 
             // we go the the "known root" but only operate on a sibling basis
             VNode::Fragment(frag) => {
-                //
-                todo!("Cannot current create fragments")
+                // create the children directly in the space
+                for child in frag.children {
+                    self.create(child);
+                    self.change_list.append_child();
+                }
+            }
+
+            VNode::Suspended => {
+                todo!("Creation of VNode::Suspended not yet supported")
             }
         }
     }

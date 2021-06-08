@@ -84,7 +84,7 @@ fn use_map() {}
 // Elements are received as Rc<T> in case the underlying collection is shuffled around
 // Setters/getters can be generated
 fn use_collection<'a, T: Collection>(
-    ctx: &Context<'a>,
+    ctx: &impl Scoped<'a>,
     f: impl Fn() -> T,
 ) -> CollectionHandle<'a, T> {
     ctx.use_hook(

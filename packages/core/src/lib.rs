@@ -87,8 +87,6 @@ pub mod builder {
     pub use super::nodebuilder::*;
 }
 
-pub mod support;
-
 // types used internally that are important
 pub(crate) mod innerlude {
     pub use crate::component::*;
@@ -122,13 +120,11 @@ pub mod prelude {
 
     pub use crate::nodebuilder::LazyNodes;
 
+    pub use crate::nodebuilder::ChildrenList;
     pub use crate::virtual_dom::NodeCtx;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
     pub use crate::innerlude::FC;
-
-    // TODO @Jon, fix this
-    // hack the VNode type until VirtualNode is fixed in the macro crate
 
     // expose our bumpalo type
     pub use bumpalo;
@@ -141,19 +137,9 @@ pub mod prelude {
 
     pub use dioxus_core_macro::{format_args_f, html, rsx, Props};
 
-    pub use crate::component::ScopeIdx;
     pub use crate::diff::DiffMachine;
+    pub use crate::virtual_dom::ScopeIdx;
 
     pub use crate::debug_renderer::DebugRenderer;
-    pub use crate::dioxus_main;
     pub use crate::hooks::*;
-}
-
-#[macro_export]
-macro_rules! dioxus_main {
-    ($i:ident) => {
-        fn main() {
-            todo!("this macro is a placeholder for launching a dioxus app on different platforms. \nYou probably don't want to use this, but it's okay for small apps.")
-        }
-    };
 }

@@ -5,11 +5,11 @@ members = [
     "packages/core",
     "packages/web",
     "packages/dioxus",
-    "packages/recoil",
-    "packages/docsite",
     "packages/ssr",
-    "packages/webview",
 ]
+# "packages/recoil",
+# "packages/docsite",
+# "packages/webview",
 
 # "packages/cli",
 # "packages/webview",

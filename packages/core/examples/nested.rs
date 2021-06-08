@@ -15,6 +15,7 @@ static Header: FC<()> = |ctx| {
     ctx.render(dioxus::prelude::LazyNodes::new(|nodectx| {
         builder::ElementBuilder::new(nodectx, "div")
             .child(VNode::Component(nodectx.bump().alloc(VComponent::new(
+                nodectx,
                 Bottom,
                 (),
                 None,

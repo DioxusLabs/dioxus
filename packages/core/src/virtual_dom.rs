@@ -32,6 +32,7 @@ use std::{
     pin::Pin,
     rc::{Rc, Weak},
 };
+pub type ScopeIdx = generational_arena::Index;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -420,8 +421,10 @@ impl Scope {
             >(caller)
         };
 
+        let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+
         Self {
-            child_nodes: &[],
+            child_nodes: child_nodes,
             caller,
             parent,
             arena_idx,
