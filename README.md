@@ -9,7 +9,7 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 fn Example(ctx: Context<()>) -> VNodes {
-    let (selection, set_selection) = use_state(&ctx, move || "..?");
+    let (selection, set_selection) = use_state(&ctx, || "..?");
 
     ctx.render(rsx! {
         h1 { "Hello, {selection}" }
