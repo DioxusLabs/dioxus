@@ -9,9 +9,9 @@ use generational_arena::Arena;
 use crate::innerlude::*;
 
 #[derive(Clone)]
-pub struct ScopeArena(Rc<RefCell<ScopeArenaInner>>);
+pub struct ScopeArena(pub Rc<RefCell<ScopeArenaInner>>);
 
-struct ScopeArenaInner {
+pub struct ScopeArenaInner {
     pub(crate) arena: UnsafeCell<Arena<Scope>>,
     locks: HashMap<ScopeIdx, MutStatus>,
 }
@@ -59,6 +59,31 @@ impl ScopeArena {
         let inner = unsafe { &mut *self.0.borrow().arena.get() };
         Ok(f(inner))
         // todo!()
+    }
+
+    pub fn with_scope<'b, O: 'static>(
+        &'b self,
+        id: ScopeIdx,
+        f: impl FnOnce(&'b mut Scope) -> O,
+    ) -> Result<O> {
+        todo!()
+    }
+
+    // return a bumpframe with a lifetime attached to the arena borrow
+    // this is useful for merging lifetimes
+    pub fn with_scope_vnode<'b>(
+        &self,
+        id: ScopeIdx,
+        f: impl FnOnce(&mut Scope) -> &VNode<'b>,
+    ) -> Result<&VNode<'b>> {
+        todo!()
+    }
+
+    pub fn try_remove(&mut self, id: ScopeIdx) -> Result<Scope> {
+        let inner = unsafe { &mut *self.0.borrow().arena.get() };
+        inner
+            .remove(id)
+            .ok_or_else(|| Error::FatalInternal("Scope not found"))
     }
 
     unsafe fn inner_unchecked<'s>() -> &'s mut Arena<Scope> {

@@ -679,8 +679,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                     }
                 }
 
-                impl #impl_generics dioxus::prelude::Properties for #name #ty_generics{
+                unsafe impl #impl_generics dioxus::prelude::Properties for #name #ty_generics{
                     type Builder = #builder_name #generics_with_empty;
+                    const CAN_BE_MEMOIZED: bool = true;
                     fn builder() -> Self::Builder {
                         #name::builder()
                     }

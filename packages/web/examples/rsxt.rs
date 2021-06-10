@@ -53,7 +53,7 @@ struct ButtonProps<'src, F: Fn(MouseEvent)> {
     handler: F
 }
 
-fn CustomButton<'b, 'a, F: Fn(MouseEvent)>(ctx: Context<'a>, props: &'b ButtonProps<'b, F>) -> VNode {
+fn CustomButton<'a, F: Fn(MouseEvent)>(ctx: Context<'a, ButtonProps<'a, F>>) -> VNode {
     ctx.render(rsx!{
         button {  
             class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
@@ -74,7 +74,7 @@ impl<F: Fn(MouseEvent)> PartialEq for ButtonProps<'_, F> {
 struct PlaceholderProps {
     val: &'static str
 }
-fn Placeholder(ctx: Context, props: &PlaceholderProps) -> VNode {
+fn Placeholder(ctx: Context<PlaceholderProps>) -> VNode {
     ctx.render(rsx!{
         div {
             "child: {ctx.val}"

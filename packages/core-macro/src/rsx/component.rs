@@ -26,7 +26,7 @@ pub struct Component {
     // accept any path-like argument
     name: syn::Path,
     body: Vec<ComponentField>,
-    _children: Vec<Node>,
+    children: Vec<Node>,
 }
 
 impl Parse for Component {
@@ -41,7 +41,7 @@ impl Parse for Component {
         syn::braced!(content in s);
 
         let mut body: Vec<ComponentField> = Vec::new();
-        let _children: Vec<Node> = Vec::new();
+        let mut children: Vec<Node> = Vec::new();
 
         'parsing: loop {
             // [1] Break if empty
@@ -49,7 +49,7 @@ impl Parse for Component {
                 break 'parsing;
             }
 
-            if content.peek(token::Brace) {
+            if content.peek(token::Brace) && content.peek2(Token![...]) {
                 let inner: ParseBuffer;
                 syn::braced!(inner in content);
                 if inner.peek(Token![...]) {
@@ -57,7 +57,11 @@ impl Parse for Component {
                 }
             }
 
-            body.push(content.parse::<ComponentField>()?);
+            if content.peek(Ident) && content.peek2(Token![:]) {
+                body.push(content.parse::<ComponentField>()?);
+            } else {
+                children.push(content.parse::<Node>()?);
+            }
 
             // consume comma if it exists
             // we don't actually care if there *are* commas between attrs
@@ -66,13 +70,10 @@ impl Parse for Component {
             }
         }
 
-        // todo: add support for children
-        let children: Vec<Node> = vec![];
-
         Ok(Self {
             name,
             body,
-            _children: children,
+            children,
         })
     }
 }
@@ -109,9 +110,22 @@ impl ToTokens for Component {
             None => quote! {None},
         };
 
-        let _toks = tokens.append_all(quote! {
-            dioxus::builder::virtual_child(__ctx, #name, #builder, #key_token)
-        });
+        let childs = &self.children;
+        let children = quote! {
+            ChildrenList::new(__ctx)
+                #( .add_child(#childs) )*
+                .finish()
+        };
+
+        tokens.append_all(quote! {
+            dioxus::builder::virtual_child(
+                __ctx,
+                #name,
+                #builder,
+                #key_token,
+                #children
+            )
+        })
     }
 }
 

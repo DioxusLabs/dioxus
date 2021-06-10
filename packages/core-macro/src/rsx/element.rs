@@ -133,6 +133,10 @@ impl Parse for ElementAttr {
             }
         } else {
             match name_str.as_str() {
+                "key" => {
+                    // todo: better error here
+                    AttrType::BumpText(s.parse::<LitStr>()?)
+                }
                 "style" => {
                     //
                     todo!("inline style not yet supported")
@@ -196,10 +200,23 @@ impl ToTokens for ElementAttr {
         let name = self.name.to_string();
         let nameident = &self.name;
         let _attr_stream = TokenStream2::new();
+
         match &self.ty {
-            AttrType::BumpText(value) => {
+            AttrType::BumpText(value) => match name.as_str() {
+                "key" => {
+                    tokens.append_all(quote! {
+                        .key2(format_args_f!(#value))
+                    });
+                }
+                _ => {
+                    tokens.append_all(quote! {
+                        .attr(#name, format_args_f!(#value))
+                    });
+                }
+            },
+            AttrType::FieldTokens(exp) => {
                 tokens.append_all(quote! {
-                    .attr(#name, format_args_f!(#value))
+                    .attr(#name, #exp)
                 });
             }
             AttrType::Event(event) => {
@@ -207,16 +224,11 @@ impl ToTokens for ElementAttr {
                     .add_listener(dioxus::events::on::#nameident(__ctx, #event))
                 });
             }
-            AttrType::FieldTokens(exp) => {
-                tokens.append_all(quote! {
-                    .attr(#name, #exp)
-                });
-            }
             AttrType::EventTokens(event) => {
                 //
                 tokens.append_all(quote! {
                     .add_listener(dioxus::events::on::#nameident(__ctx, #event))
-                })
+                });
             }
         }
     }

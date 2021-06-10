@@ -149,11 +149,11 @@ pub fn FilterToggles(ctx: Context<()>) -> VNode {
     .iter()
     .map(|(name, path, filter)| {
         rsx!(
-            li {
-                class: "{name}"
-                a { "{name}",
+            li { class: "{name}"
+                a {
                     href: "{path}",
                     onclick: move |_| reducer.set_filter(&filter),
+                    "{name}",
                 }
             }
         )
@@ -168,7 +168,7 @@ pub fn FilterToggles(ctx: Context<()>) -> VNode {
         footer {
             span {
                 strong {"{items_left}"}
-                span {"{item_text} left"}
+                span { "{item_text} left" }
             }
             ul {
                 class: "filters"
@@ -180,8 +180,7 @@ pub fn FilterToggles(ctx: Context<()>) -> VNode {
 
 pub fn Footer(ctx: Context<()>) -> VNode {
     rsx! { in ctx,
-        footer {
-            class: "info"
+        footer { class: "info"
             p {"Double-click to edit a todo"}
             p {
                 "Created by "

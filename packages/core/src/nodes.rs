@@ -7,6 +7,8 @@ use crate::{
     events::VirtualEvent,
     innerlude::{Context, Properties, Scope, ScopeIdx, FC},
     nodebuilder::text3,
+    virtual_dom::NodeCtx,
+    // support::NodeCtx,
 };
 use bumpalo::Bump;
 use std::{
@@ -27,7 +29,7 @@ pub enum VNode<'src> {
     Element(&'src VElement<'src>),
 
     /// A text node (node type `TEXT_NODE`).
-    Text(VText<'src>),
+    Text(&'src str),
 
     /// A fragment is a "virtual position" in the DOM
     /// Fragments may have children and keys
@@ -46,11 +48,11 @@ pub enum VNode<'src> {
 impl<'a> Clone for VNode<'a> {
     fn clone(&self) -> Self {
         match self {
-            VNode::Element(el) => VNode::Element(el),
-            VNode::Text(origi) => VNode::Text(VText { text: origi.text }),
-            VNode::Fragment(frag) => VNode::Fragment(frag),
+            VNode::Element(element) => VNode::Element(element),
+            VNode::Text(text) => VNode::Text(text),
+            VNode::Fragment(fragment) => VNode::Fragment(fragment),
+            VNode::Component(component) => VNode::Component(component),
             VNode::Suspended => VNode::Suspended,
-            VNode::Component(c) => VNode::Component(c),
         }
     }
 }
@@ -86,7 +88,7 @@ impl<'a> VNode<'a> {
     /// Construct a new text node with the given text.
     #[inline]
     pub fn text(text: &'a str) -> VNode<'a> {
-        VNode::Text(VText { text })
+        VNode::Text(text)
     }
 
     pub fn text_args(bump: &'a Bump, args: Arguments) -> VNode<'a> {
@@ -210,51 +212,34 @@ impl<'a> NodeKey<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct VText<'bump> {
-    pub text: &'bump str,
-}
-
-impl<'b> Clone for VText<'b> {
-    fn clone(&self) -> Self {
-        Self { text: self.text }
-    }
-}
-
-impl<'a> VText<'a> {
-    // / Create an new `VText` instance with the specified text.
-    pub fn new(text: &'a str) -> Self {
-        VText { text: text.into() }
-    }
-}
-
 // ==============================
 //   Custom components
 // ==============================
 
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
-pub type StableScopeAddres = RefCell<Option<u32>>;
-pub type VCompAssociatedScope = RefCell<Option<ScopeIdx>>;
+pub type StableScopeAddres = Option<u32>;
+pub type VCompAssociatedScope = Option<ScopeIdx>;
 
 pub struct VComponent<'src> {
     pub key: NodeKey<'src>,
 
-    pub stable_addr: Rc<StableScopeAddres>,
-    pub ass_scope: Rc<VCompAssociatedScope>,
+    pub stable_addr: RefCell<StableScopeAddres>,
+    pub ass_scope: RefCell<VCompAssociatedScope>,
 
     // pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
-    pub caller: Rc<dyn Fn(&Scope) -> VNode + 'src>,
+    pub caller: Rc<dyn Fn(&Scope) -> VNode>,
 
     pub children: &'src [VNode<'src>],
 
+    pub comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
+
     // a pointer into the bump arena (given by the 'src lifetime)
     // raw_props: Box<dyn Any>,
-    // raw_props: *const (),
+    raw_props: *const (),
 
     // a pointer to the raw fn typ
     pub user_fc: *const (),
-    _p: PhantomData<&'src ()>,
 }
 
 impl<'a> VComponent<'a> {
@@ -264,70 +249,123 @@ impl<'a> VComponent<'a> {
     // TODO: lift the requirement that props need to be static
     // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
 
-    pub fn new<P: Properties>(
+    pub fn new<P: Properties + 'a>(
+        // bump: &'a Bump,
+        ctx: &NodeCtx<'a>,
         component: FC<P>,
         // props: bumpalo::boxed::Box<'a, P>,
         props: P,
         key: Option<&'a str>,
+        children: &'a [VNode<'a>],
     ) -> Self {
         // pub fn new<P: Properties + 'a>(component: FC<P>, props: P, key: Option<&'a str>) -> Self {
         // let bad_props = unsafe { transmogrify(props) };
+        let bump = ctx.bump();
         let caller_ref = component as *const ();
+        let props = bump.alloc(props);
 
-        // let raw_props = props as *const P as *const ();
+        let raw_props = props as *const P as *const ();
 
-        // let props_comparator = move |other: &VComponent| {
-        //     // Safety:
-        //     // We are guaranteed that the props will be of the same type because
-        //     // there is no way to create a VComponent other than this `new` method.
-        //     //
-        //     // Therefore, if the render functions are identical (by address), then so will be
-        //     // props type paramter (because it is the same render function). Therefore, we can be
-        //     // sure
-        //     if caller_ref == other.user_fc {
-        //         let g = other.raw_ctx.downcast_ref::<P>().unwrap();
-        //         // let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
-        //         &props == g
-        //     } else {
-        //         false
-        //     }
-        // };
+        let comparator: Option<&dyn Fn(&VComponent) -> bool> = {
+            if P::CAN_BE_MEMOIZED {
+                Some(bump.alloc(move |other: &VComponent| {
+                    // Safety:
+                    // We are guaranteed that the props will be of the same type because
+                    // there is no way to create a VComponent other than this `new` method.
+                    //
+                    // Therefore, if the render functions are identical (by address), then so will be
+                    // props type paramter (because it is the same render function). Therefore, we can be
+                    // sure
+                    if caller_ref == other.user_fc {
+                        // let g = other.raw_ctx.downcast_ref::<P>().unwrap();
+                        let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
+                        &props == &real_other
+                    } else {
+                        false
+                    }
+                }))
+            } else {
+                None
+            }
+        };
 
         // let prref: &'a P = props.as_ref();
 
-        let caller: Rc<dyn Fn(&Scope) -> VNode> = Rc::new(move |scope| {
-            //
-            // let props2 = bad_props;
-            // props.as_ref()
-            // let ctx = Context {
-            //     props: prref,
-            //     scope,
-            // };
-            todo!()
-            // component(ctx)
-        });
-        // let caller = Rc::new(create_closure(component, raw_props));
+        // let r = create_closure(component, raw_props);
+        // let caller: Rc<dyn for<'g> Fn(&'g Scope) -> VNode<'g>> = Rc::new(move |scope| {
+        //     // r(scope);
+        //     //
+        //     // let props2 = bad_props;
+        //     // props.as_ref();
+        //     // let ctx = Context {
+        //     //     props: prref,
+        //     //     scope,
+        //     // };
+        //     // let ctx: Context<'g, P> = todo!();
+        //     // todo!()
+        //     // let r = component(ctx);
+        //     todo!()
+        // });
+        let caller = create_closure(component, raw_props);
+
+        // let caller: Rc<dyn Fn(&Scope) -> VNode> = Rc::new(create_closure(component, raw_props));
 
         let key = match key {
             Some(key) => NodeKey::new(key),
             None => NodeKey(None),
         };
 
+        // raw_props: Box::new(props),
+        // comparator: Rc::new(props_comparator),
         Self {
             key,
-            ass_scope: Rc::new(RefCell::new(None)),
+            ass_scope: RefCell::new(None),
             user_fc: caller_ref,
-            // raw_props: Box::new(props),
-            _p: PhantomData,
-            children: &[],
+            comparator,
+            raw_props,
+            children,
             caller,
-            // comparator: Rc::new(props_comparator),
-            stable_addr: Rc::new(RefCell::new(None)),
+            stable_addr: RefCell::new(None),
         }
     }
+}
+
+type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r> + 'a>;
+
+fn create_closure<'a, P: Properties + 'a>(
+    component: FC<P>,
+    raw_props: *const (),
+) -> Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r>> {
+    // ) -> impl for<'r> Fn(&'r Scope) -> VNode<'r> {
+    let g: Captured = Rc::new(move |scp: &Scope| -> VNode {
+        // cast back into the right lifetime
+        let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
+        // let ctx: Context<P2> = todo!();
+        let ctx: Context<P> = Context {
+            props: safe_props,
+            scope: scp,
+        };
+
+        let g = component(ctx);
+        let g2 = unsafe { std::mem::transmute(g) };
+        g2
+    });
+    let r: Captured<'static> = unsafe { std::mem::transmute(g) };
+    r
 }
 
 pub struct VFragment<'src> {
     pub key: NodeKey<'src>,
     pub children: &'src [VNode<'src>],
+}
+
+impl<'a> VFragment<'a> {
+    pub fn new(key: Option<&'a str>, children: &'a [VNode<'a>]) -> Self {
+        let key = match key {
+            Some(key) => NodeKey::new(key),
+            None => NodeKey(None),
+        };
+
+        Self { key, children }
+    }
 }

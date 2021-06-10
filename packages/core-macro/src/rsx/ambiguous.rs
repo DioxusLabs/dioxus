@@ -50,14 +50,13 @@ impl Parse for AmbiguousElement {
                 false => {
                     let first_char = name_str.chars().next().unwrap();
                     if first_char.is_ascii_uppercase() {
-                        if name_str == "Fragment" {
-                            input
+                        match name_str.as_str() {
+                            "Fragment" => input
                                 .parse::<Fragment>()
-                                .map(|c| AmbiguousElement::Fragment(c))
-                        } else {
-                            input
+                                .map(|c| AmbiguousElement::Fragment(c)),
+                            _ => input
                                 .parse::<Component>()
-                                .map(|c| AmbiguousElement::Component(c))
+                                .map(|c| AmbiguousElement::Component(c)),
                         }
                     } else {
                         let name = input.parse::<Ident>().unwrap();

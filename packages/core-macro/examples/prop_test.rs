@@ -2,8 +2,9 @@ fn main() {}
 
 pub mod dioxus {
     pub mod prelude {
-        pub trait Properties {
+        pub unsafe trait Properties {
             type Builder;
+            const CAN_BE_MEMOIZED: bool;
             fn builder() -> Self::Builder;
         }
     }

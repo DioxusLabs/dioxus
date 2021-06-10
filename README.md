@@ -8,15 +8,13 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn Example(ctx: Context<()>) -> VNode {
+fn Example(ctx: Context<()>) -> VNodes {
     let (selection, set_selection) = use_state(&ctx, move || "..?");
 
     ctx.render(rsx! {
-        div {
-            h1 { "Hello, {selection}" }
-            button { "?", onclick: move |_| set_selection("world!")}
-            button { "?", onclick: move |_| set_selection("Dioxus 🎉")}
-        }
+        h1 { "Hello, {selection}" }
+        button { "?", onclick: move |_| set_selection("world!")}
+        button { "?", onclick: move |_| set_selection("Dioxus 🎉")}
     })
 };
 ```

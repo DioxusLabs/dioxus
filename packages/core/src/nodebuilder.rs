@@ -1,12 +1,12 @@
 //! Helpers for building virtual DOM VNodes.
 
-use std::{any::Any, borrow::BorrowMut, intrinsics::transmute, u128};
+use std::{any::Any, borrow::BorrowMut, fmt::Arguments, intrinsics::transmute, u128};
 
 use crate::{
     events::VirtualEvent,
     innerlude::{Properties, VComponent, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
-    prelude::VElement,
+    prelude::{VElement, VFragment},
     virtual_dom::NodeCtx,
 };
 
@@ -265,6 +265,20 @@ where
     /// ```
     #[inline]
     pub fn key(mut self, key: &'a str) -> Self {
+        self.key = NodeKey(Some(key));
+        self
+    }
+
+    pub fn key2(mut self, args: Arguments) -> Self {
+        let key = match args.as_str() {
+            Some(static_str) => static_str,
+            None => {
+                use bumpalo::core_alloc::fmt::Write;
+                let mut s = bumpalo::collections::String::new_in(self.ctx.bump());
+                s.write_fmt(args).unwrap();
+                s.into_bump_str()
+            }
+        };
         self.key = NodeKey(Some(key));
         self
     }
@@ -650,17 +664,54 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
     Attribute { name, value }
 }
 
-pub fn virtual_child<'a, T: Properties>(
+pub fn virtual_child<'a, T: Properties + 'a>(
     ctx: &NodeCtx<'a>,
     f: FC<T>,
     props: T,
     key: Option<&'a str>, // key: NodeKey<'a>,
+    children: &'a [VNode<'a>],
 ) -> VNode<'a> {
     // currently concerned about if props have a custom drop implementation
     // might override it with the props macro
-    todo!()
-    // VNode::Component(
-    //     ctx.bump()
-    //         .alloc(crate::nodes::VComponent::new(f, props, key)),
-    // )
+    // todo!()
+    VNode::Component(
+        ctx.bump()
+            .alloc(crate::nodes::VComponent::new(ctx, f, props, key, children)),
+        // ctx.bump()
+        //     .alloc(crate::nodes::VComponent::new(f, props, key)),
+    )
+}
+
+pub fn vfragment<'a>(
+    ctx: &NodeCtx<'a>,
+    key: Option<&'a str>, // key: NodeKey<'a>,
+    children: &'a [VNode<'a>],
+) -> VNode<'a> {
+    VNode::Fragment(ctx.bump().alloc(VFragment::new(key, children)))
+}
+
+pub struct ChildrenList<'a, 'b> {
+    ctx: &'b NodeCtx<'a>,
+    children: bumpalo::collections::Vec<'a, VNode<'a>>,
+}
+
+impl<'a, 'b> ChildrenList<'a, 'b> {
+    pub fn new(ctx: &'b NodeCtx<'a>) -> Self {
+        Self {
+            ctx,
+            children: bumpalo::collections::Vec::new_in(ctx.bump()),
+        }
+    }
+
+    pub fn add_child(mut self, nodes: impl IntoIterator<Item = impl IntoVNode<'a>>) -> Self {
+        for item in nodes {
+            let child = item.into_vnode(&self.ctx);
+            self.children.push(child);
+        }
+        self
+    }
+
+    pub fn finish(self) -> &'a [VNode<'a>] {
+        self.children.into_bump_slice()
+    }
 }
