@@ -15,13 +15,11 @@ fn main() {
 static App: FC<()> = |ctx| {
     ctx.render(rsx! {
         h2 { "abc 1" }
-        h2 { "abc 1" }
-        h2 { "abc 1" }
-        h2 { "abc 1" }
-        h2 { "abc 1" }
-        h2 { "abc 1" }
         div {
             "hello world!"
+        }
+        Fragment {
+            h2 { "abc 2"}
         }
     })
 };

@@ -116,26 +116,16 @@ impl ToTokens for Component {
                 #( .add_child(#childs) )*
                 .finish()
         };
-        let name_str = name.segments.last().unwrap().ident.to_string();
-        match name_str.as_str() {
-            "Fragment" => tokens.append_all(quote! {
-                dioxus::builder::vfragment(
-                    __ctx,
-                    #key_token,
-                    #children
-                )
-            }),
-            _ => tokens.append_all(quote! {
-                dioxus::builder::virtual_child(
-                    __ctx,
-                    #name,
-                    #builder,
-                    #key_token,
-                    #children
-                )
-            }),
-        }
-        // }
+
+        tokens.append_all(quote! {
+            dioxus::builder::virtual_child(
+                __ctx,
+                #name,
+                #builder,
+                #key_token,
+                #children
+            )
+        })
     }
 }
 

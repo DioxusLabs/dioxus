@@ -39,6 +39,7 @@ fn app(ctx: Context<Props>) -> VNode {
                     .item_handler(Callback(set_val.clone()))
                     .build(),
                 None,
+                &[],
             ));
         }
         root.finish()

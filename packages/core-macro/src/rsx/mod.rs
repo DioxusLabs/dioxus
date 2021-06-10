@@ -26,7 +26,7 @@ pub use node::*;
 
 use crate::util::is_valid_tag;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     Error, Ident, LitStr, Result, Token,
@@ -34,7 +34,7 @@ use syn::{
 
 pub struct RsxRender {
     custom_context: Option<Ident>,
-    root: AmbiguousElement,
+    roots: Vec<AmbiguousElement>,
 }
 
 impl Parse for RsxRender {
@@ -61,16 +61,13 @@ impl Parse for RsxRender {
                 None
             };
 
-        let root = { input.parse::<AmbiguousElement>() }?;
-        if !input.is_empty() {
-            return Err(Error::new(
-                input.span(),
-                "Currently only one element is allowed per component. Try wrapping your list of components in a `Fragment` tag",
-            ));
+        let mut roots = Vec::new();
+        while !input.is_empty() {
+            roots.push(input.parse::<AmbiguousElement>()?);
         }
 
         Ok(Self {
-            root,
+            roots,
             custom_context,
         })
     }
@@ -78,27 +75,41 @@ impl Parse for RsxRender {
 
 impl ToTokens for RsxRender {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let inner = &self.root;
-        let output = match &self.custom_context {
-            // The `in ctx` pattern allows directly rendering
-            Some(ident) => {
-                quote! {
-                    #ident.render(dioxus::prelude::LazyNodes::new(move |__ctx|{
-                        let bump = &__ctx.bump();
-                        #inner
-                    }))
-                }
-            }
-            // Otherwise we just build the LazyNode wrapper
-            None => {
-                quote! {
-                    dioxus::prelude::LazyNodes::new(move |__ctx|{
-                        let bump = &__ctx.bump();
-                        #inner
-                     })
-                }
+        let inner = if self.roots.len() == 1 {
+            let inner = &self.roots[0];
+            quote! {#inner}
+        } else {
+            let childs = &self.roots;
+            let children = quote! {
+                ChildrenList::new(__ctx)
+                    #( .add_child(#childs) )*
+                    .finish()
+            };
+            quote! {
+                // #key_token,
+                dioxus::builder::vfragment(
+                    __ctx,
+                    None,
+                    #children
+                )
             }
         };
-        output.to_tokens(out_tokens)
+
+        match &self.custom_context {
+            // The `in ctx` pattern allows directly rendering
+            Some(ident) => out_tokens.append_all(quote! {
+                #ident.render(dioxus::prelude::LazyNodes::new(move |__ctx|{
+                    let bump = &__ctx.bump();
+                    #inner
+                }))
+            }),
+            // Otherwise we just build the LazyNode wrapper
+            None => out_tokens.append_all(quote! {
+                dioxus::prelude::LazyNodes::new(move |__ctx|{
+                    let bump = &__ctx.bump();
+                    #inner
+                 })
+            }),
+        };
     }
 }
