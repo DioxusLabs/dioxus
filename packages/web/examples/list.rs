@@ -28,17 +28,10 @@ pub struct TodoItem {
 static App: FC<()> = |ctx| {
     let (draft, set_draft) = use_state(&ctx, || "".to_string());
     let (filter, set_filter) = use_state(&ctx, || FilterState::All);
-    let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    // let (todos, set_todos) = use_state(&ctx, || BTreeMap::<String, TodoItem>::new());
-
-    // let todos = use_ref(&ctx, || BTreeMap::<String, TodoItem>::new());
     let todos = use_state_new(&ctx, || BTreeMap::<uuid::Uuid, TodoItem>::new());
-
-    // let blah = "{draft}"
     ctx.render(rsx!(
         div {
             id: "app"
-
             div {
                 header {
                     class: "header"
@@ -60,7 +53,6 @@ static App: FC<()> = |ctx| {
                     input {
                         class: "new-todo"
                         placeholder: "What needs to be done?"
-                        // value: "{draft}"
                         oninput: move |evt| set_draft(evt.value)
                     }
                 }
@@ -76,17 +68,13 @@ static App: FC<()> = |ctx| {
                     .map(|(id, todo)| {
                         rsx!{
                             li {
+                                key: "{id}"
                                 "{todo.contents}"
                                 input {
                                     class: "toggle"
                                     type: "checkbox"
                                     "{todo.checked}"
                                 }
-                                // {is_editing.then(|| rsx!(
-                                //     input {
-                                //         value: "{contents}"
-                                //     }
-                                // ))}
                             }
                         }
                     })

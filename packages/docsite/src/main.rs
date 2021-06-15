@@ -1,97 +1,152 @@
 #![allow(non_upper_case_globals)]
 
-use dioxus_ssr::{
-    prelude::*,
-    prelude::{builder::IntoVNode, dioxus::events::on::MouseEvent},
-    TextRenderer,
-};
-mod utils;
+use dioxus_ssr::{prelude::*, TextRenderer};
+pub mod utils;
+mod components {
+    mod community;
+    pub use community::*;
+    mod docs;
+    pub use docs::*;
+    mod blog;
+    pub use blog::*;
+    mod homepage;
+    pub use homepage::*;
+    mod tutorial;
+    pub use tutorial::*;
+}
+use components::*;
 
 fn main() {
     let renderer = TextRenderer::new(App);
+    /*
+    renderer.render_at("community")
+
+    */
 }
 
 static App: FC<()> = |ctx| {
-    rsx! { in ctx,
+    let (url, set_url) = use_state(&ctx, || "");
+
+    let body = match *url {
+        "community" => rsx!(in ctx, Community {}),
+        "tutorial" => rsx!(in ctx, Tutorial {}),
+        "blog" => rsx!(in ctx, Blog {}),
+        "docs" => rsx!(in ctx, Docs {}),
+        _ => rsx!(in ctx, Home {}),
+    };
+
+    ctx.render(rsx! {
         div {
-            Home {}
-            Docs {}
-            Tutorial {}
-            Blog {}
-            Community {}
+            NavBar {}
+            {body}
+            Footer {}
         }
-    }
+    })
 };
 
-const HeroContent: [(&'static str, &'static str); 3] = [
-    ("Declarative", 
-    "React makes it painless to create interactive UIs. Design simple views for each state in your application, and React will efficiently update and render just the right components when your data changes.\nDeclarative views make your code more predictable and easier to debug."),
+static NavBar: FC<()> = |ctx| {
+    ctx.render(rsx! {
+        header {
+            a {
+                href: "/"
+                img { /*logo*/ }
+                span {}
+            }
+            nav {
+                a { href: "/community/support", "Community" }
+                a { href: "/docs/getting-started", "Docs" }
+                a { href: "/tutorial/tutorial", "Tutorial" }
+                a { href: "/blog/", "Blog" }
+            }
+            form {}
+            div {}
+        }
+    })
+};
 
-    ("Component-Based", "Build encapsulated components that manage their own state, then compose them to make complex UIs.\nSince component logic is written in JavaScript instead of templates, you can easily pass rich data through your app and keep state out of the DOM."),
-
-    ("Learn Once, Write Anywhere", "We don’t make assumptions about the rest of your technology stack, so you can develop new features in React without rewriting existing code.\nReact can also render on the server using Node and power mobile apps using React Native."),
+static SECTIONS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "Docs",
+        &[
+            ("Installation", "docs/installation"),
+            ("Main Concepts", "docs/main"),
+            ("Advanced Guides", "docs/advanced"),
+            ("Hooks", "docs/hooks"),
+            ("Testing", "docs/testing"),
+            ("Contributing", "docs/contributing"),
+            ("FAQ", "docs/faq"),
+        ],
+    ),
+    (
+        "Channels",
+        &[("Github", "https://github.com/jkelleyrtp/dioxus")],
+    ),
+    (
+        "Community",
+        &[
+            ("Code of Conduct", "docs/installation"),
+            ("Community Resources", "docs/main"),
+        ],
+    ),
+    (
+        "More",
+        &[
+            ("Tutorial", "docs/installation"),
+            ("Blog", "docs/main"),
+            ("Privacy", "docs/advanced"),
+            ("Terms", "docs/hooks"),
+        ],
+    ),
 ];
 
-const SnippetHighlights: &'static str = include_str!("./snippets.md");
-
-static Home: FC<()> = |ctx| {
-    let hero = HeroContent.iter().map(|(title, body)| {
+fn Footer(ctx: Context<()>) -> VNode {
+    let sections = SECTIONS.iter().map(|(section, raw_links)| {
+        let links = raw_links.iter().map(|(link_name, href)| {
+            rsx! (
+                a { href: "{href}",
+                    "{link_name}",
+                    {href.starts_with("http").then(|| rsx!( ExternalLinkIcon {} ))}
+                }
+            )
+        });
         rsx! {
             div {
-                h3 { "{title}" }
-                div { {body.split("\n").map(|paragraph| rsx!( p{"{paragraph}"} ))} }
+                div { "{section}" }
+                {links}
             }
         }
     });
-    let snippets: Vec<VNode> = utils::markdown_to_snippet(ctx, SnippetHighlights);
 
-    rsx! { in ctx,
-        div {
-            header {
-                // Hero
-                section {
-                    div { {hero} }
-                }
-                hr {}
-                // Highlighted Snippets
-                section {
-                    {snippets}
+    ctx.render(rsx! {
+        footer {
+            div {
+                div {
+                    div {
+                        {sections}
+                    }
+                    section {
+                        a {
+                            img {}
+                        }
+                        p {}
+                    }
                 }
             }
-            div {}
-            section {}
         }
-    }
-};
+    })
+}
 
-static Docs: FC<()> = |ctx| {
-    rsx! { in ctx,
-        div {
-
-        }
-    }
-};
-
-static Tutorial: FC<()> = |ctx| {
-    rsx! { in ctx,
-        div {
-
-        }
-    }
-};
-
-static Blog: FC<()> = |ctx| {
-    rsx! { in ctx,
-        div {
-
-        }
-    }
-};
-
-static Community: FC<()> = |ctx| {
-    rsx! { in ctx,
-        div {
-
-        }
-    }
+const ExternalLinkIcon: FC<()> = |ctx| {
+    ctx.render(html! {
+        <svg x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15">
+            <path
+                fill="currentColor"
+                d="M18.8,85.1h56l0,0c2.2,0,4-1.8,4-4v-32h-8v28h-48v-48h28v-8h-32l0, 0c-2.2,0-4,1.8-4,4v56C14.8,83.3,16.6,85.1,18.8,85.1z"
+            ></path>
+            <polygon
+                fill="currentColor"
+                points="45.7,48.7 51.3,54.3 77.2,28.5 77.2,37.2 85.2,37.2 85.2,14.9 62.8,14.9 62.8,22.9 71.5,22.9"
+            ></polygon>
+        </svg>
+    })
 };

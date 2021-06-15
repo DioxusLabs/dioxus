@@ -34,10 +34,11 @@ fn html_render(
             write!(f, "\n</{}>", el.tag_name)?;
             Ok(())
         }
-        VNode::Text(t) => write!(f, "{}", t.text),
+        VNode::Text(text) => write!(f, "{}", text),
         VNode::Suspended => todo!(),
         VNode::Component(vcomp) => {
-            let id = vcomp.ass_scope.as_ref().borrow().unwrap();
+            let id = vcomp.ass_scope.borrow().unwrap();
+            // let id = vcomp.ass_scope.as_ref().borrow().unwrap();
             let new_node = dom
                 .components
                 .try_get(id)
@@ -46,6 +47,7 @@ fn html_render(
                 .current_head_node();
             html_render(&dom, new_node, f)
         }
+        VNode::Fragment(_) => todo!(),
     }
 }
 
@@ -61,7 +63,7 @@ fn test_serialize() {
                 {(0..20).map(|f| rsx!{
                     div {
                         title: "About W3Schools"
-                        style: "color:blue;text-align:center"
+                        // style: "color:blue;text-align:center"
                         class: "About W3Schools"
                         p {
                             title: "About W3Schools"

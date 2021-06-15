@@ -28,6 +28,7 @@ recoil = { path = "../recoil" }
 # html-validation = { path = "../html-validation", version = "0.1.1" }
 
 async-channel = "1.6.1"
+wee_alloc = "0.4.5"
 # futures-lite = "1.11.3"
 
 [dependencies.web-sys]
@@ -62,7 +63,13 @@ features = [
 ]
 
 [profile.release]
-debug = true
+lto = true
+opt-level = 's'
+
+# debug = true
+
+# [profile.release]
+
 
 [lib]
 crate-type = ["cdylib", "rlib"]

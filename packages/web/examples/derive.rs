@@ -8,14 +8,17 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
+// Use `wee_alloc` as the global allocator.
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
 fn App(ctx: Context<()>) -> VNode {
     let cansee = use_state_new(&ctx, || false);
     rsx! { in ctx,
         div {
             "Shadow of the child:"
-            button {
+            button { onclick: move |_| cansee.set(!**cansee)
                 "Gaze into the void"
-                onclick: move |_| cansee.set(!**cansee)
             }
             {cansee.then(|| rsx!{ Child {} })}
         }

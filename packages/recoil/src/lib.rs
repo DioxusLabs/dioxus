@@ -525,6 +525,8 @@ mod utils {
     use super::*;
     use dioxus_core::prelude::*;
 
+    pub struct RecoilApi {}
+
     /// This tiny util wraps your main component with the initializer for the recoil root.
     /// This is useful for small programs and the examples in this crate
     pub fn RecoilApp<T: 'static>(

@@ -14,7 +14,7 @@ struct Todo {
 
 static App: FC<()> = |ctx| {
     use_init_recoil_root(ctx, |_| {});
-    let todos = use_read(ctx, &TODOS);
+    let todos = use_read(&ctx, &TODOS);
 
     rsx! { in ctx,
         div {

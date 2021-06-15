@@ -8,7 +8,7 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn Example(ctx: Context<()>) -> VNodes {
+fn Example(ctx: Context<()>) -> VNode {
     let (selection, set_selection) = use_state(&ctx, || "..?");
 
     ctx.render(rsx! {
@@ -41,7 +41,7 @@ If you know React, then you already know Dioxus.
         <th><a href="http://github.com/jkelleyrtp/dioxus">Web</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Desktop</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Mobile</a></th>
-        <th><a href="http://github.com/jkelleyrtp/dioxus">State Management</a></th>
+        <th><a href="http://github.com/jkelleyrtp/dioxus">State</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Docs</a></th>
         <th><a href="http://github.com/jkelleyrtp/dioxus">Tools</a></th>
     <tr>

@@ -314,6 +314,10 @@ impl VirtualDom {
 
         Ok(())
     }
+
+    pub fn base_scope(&self) -> &Scope {
+        todo!()
+    }
 }
 
 // TODO!
@@ -801,6 +805,14 @@ Any function prefixed with "use" should not be called conditionally.
             },
             |_| {},
         )
+    }
+
+    fn suspend<O>(
+        &self,
+        f: impl Future<Output = O>,
+        g: impl FnOnce(O) -> VNode<'src> + 'src,
+    ) -> VNode<'src> {
+        todo!()
     }
 }
 

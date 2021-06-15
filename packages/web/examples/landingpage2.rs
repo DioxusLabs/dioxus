@@ -1,13 +1,14 @@
 //! Basic example that renders a simple VNode to the browser.
 
-use std::rc::Rc;
+use std::{future::Future, pin::Pin, rc::Rc};
 
 use dioxus_core::prelude::*;
 use dioxus_web::*;
 fn main() {
-    // Setup logging
+    // Setup logging and panic handling
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
+
     // Run the app
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
@@ -16,23 +17,16 @@ static App: FC<()> = |ctx| {
     let (contents, set_contents) = use_state(&ctx, || "asd");
 
     ctx.render(rsx! {
-        div  {
-            class: "flex items-center justify-center flex-col"
-            div {
-                class: "flex items-center justify-center"
-                div {
-                    class: "flex flex-col bg-white rounded p-4 w-full max-w-xs"
+        div  { class: "flex items-center justify-center flex-col"
+            div { class: "flex items-center justify-center"
+                div { class: "flex flex-col bg-white rounded p-4 w-full max-w-xs"
                     div { class: "font-bold text-xl", "Example Web app" }
                     div { class: "text-sm text-gray-500", "This is running in your browser!" }
-                    div {
-                        class: "flex flex-row items-center justify-center mt-6"
+                    div { class: "flex flex-row items-center justify-center mt-6"
                         div { class: "font-medium text-6xl", "100%" }
                     }
-                    div {
-                        class: "flex flex-row justify-between mt-6"
-                        a {
-                            href: "https://www.dioxuslabs.com"
-                            class: "underline"
+                    div { class: "flex flex-row justify-between mt-6"
+                        a { href: "https://www.dioxuslabs.com", class: "underline"
                             "Made with dioxus"
                         }
                     }

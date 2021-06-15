@@ -17,12 +17,12 @@ static App: FC<()> = |ctx| {
 };
 
 static Banner: FC<()> = |ctx| {
-    let count = use_read(ctx, &C);
+    let count = use_read(&ctx, &C);
     ctx.render(rsx! { h1 { "Count: {count}" } })
 };
 
 static BtnA: FC<()> = |ctx| {
-    let (a, set) = use_read_write(ctx, &A);
+    let (a, set) = use_read_write(&ctx, &A);
     rsx! { in ctx,
         div { "a"
             button { "+", onclick: move |_| set(a + 1) }
@@ -32,7 +32,7 @@ static BtnA: FC<()> = |ctx| {
 };
 
 static BtnB: FC<()> = |ctx| {
-    let (b, set) = use_read_write(ctx, &B);
+    let (b, set) = use_read_write(&ctx, &B);
     rsx! { in ctx,
         div { "b"
             button { "+", onclick: move |_| set(b + 1) }

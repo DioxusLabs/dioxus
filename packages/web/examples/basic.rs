@@ -37,3 +37,32 @@ static C2: FC<()> = |ctx| {
         }
     })
 };
+
+static DocExamples: FC<()> = |ctx| {
+    //
+
+    let is_ready = false;
+
+    let items = (0..10).map(|i| rsx! { li {"{i}"} });
+    let _ = rsx! {
+        ul {
+            {items}
+        }
+    };
+
+    rsx! {
+        div {}
+        h1 {}
+        {""}
+        "asbasd"
+        dioxus::Fragment {
+            //
+        }
+    }
+
+    ctx.render(rsx! {
+        div {
+            { is_ready.then(|| rsx!{ h1 {"We are ready!"} }) }
+        }
+    })
+};
