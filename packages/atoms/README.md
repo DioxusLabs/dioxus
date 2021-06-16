@@ -1,10 +1,10 @@
-# Recoil.rs - Official global state management solution for Dioxus Apps
+# Atom.rs - Official global state management solution for Dioxus Apps
 
-Recoil.rs provides a global state management API for Dioxus apps built on the concept of "atomic state." Instead of grouping state together into a single bundle ALA Redux, Recoil provides individual building blocks of state called Atoms. These atoms can be set/get anywhere in the app and combined to craft complex state. Recoil should be easier to learn and more efficient than Redux. Recoil.rs is modeled after the Recoil.JS project.
+Atom.rs provides a global state management API for Dioxus apps built on the concept of "atomic state." Instead of grouping state together into a single bundle ALA Redux, Atom provides individual building blocks of state called Atoms. These atoms can be set/get anywhere in the app and combined to craft complex state. Atom should be easier to learn and more efficient than Redux. Atom.rs is modeled after the Atom.JS project.
 
-Recoil.rs is officially supported by the Dioxus team. By doing so, are are "planting our flag in the stand" for atomic state management instead of bundled (Redux-style) state management. Atomic state management fits well with the internals of Dioxus, meaning Recoil.rs state management will be faster, more efficient, and less sensitive to data races than Redux-style apps.
+Atom.rs is officially supported by the Dioxus team. By doing so, we are "planting our flag in the sand" for atomic state management instead of bundled (Redux-style) state management. Atomic state management fits well with the internals of Dioxus and idiomatic Rust, meaning Atom.rs state management will be faster, more efficient, and less sensitive to data races than Redux-style apps.
 
-Internally, Dioxus uses batching to speed up linear-style operations. Recoil.rs integrates with this batching optimization, making app-wide changes extremely fast. This way, Recoil.rs can be pushed significantly harder than Redux without the need to enable/disable debug flags to prevent performance slowdowns.
+Internally, Dioxus uses batching to speed up linear-style operations. Atom.rs integrates with this batching optimization, making app-wide state changes extremely fast. This way, Atom.rs can be pushed significantly harder than Redux without the need to enable/disable debug flags to prevent performance slowdowns.
 
 # Guide
 
@@ -16,16 +16,16 @@ A simple atom of state is defined globally as a const:
 const Light: Atom<&str> = |_| "Green";
 ```
 
-This atom of state is initialized with a value of `"Green"`. The atom that is returned does not actually contain any values. Instead, the atom's key - which is automatically generated in this instance - is used in the context of a Recoil App.
+This atom of state is initialized with a value of `"Green"`. The atom that is returned does not actually contain any values. Instead, the atom's key - which is automatically generated in this instance - is used in the context of a Atom App.
 
 This is then later used in components like so:
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
-    // The recoil root must be initialized at the top of the application before any use_recoil hooks
-    recoil::init_recoil_root(&ctx, |_| {});
+    // The Atom root must be initialized at the top of the application before any use_Atom hooks
+    Atoms::init_Atom_root(&ctx, |_| {});
 
-    let color = recoil::use_read(ctx, Light);
+    let color = Atoms::use_read(ctx, Light);
 
     ctx.render(rsx!{
         h1 {"Color of light: {color}"}
@@ -37,8 +37,8 @@ Atoms are considered "Writable" objects since any consumer may also set the Atom
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
-    let color = recoil::use_read(ctx, Light);
-    let set_color = recoil::use_write(ctx, Light);
+    let color = Atoms::use_read(ctx, Light);
+    let set_color = Atoms::use_write(ctx, Light);
     rsx!{in ctx,
         div {
             h1{"Color: {color}"}
@@ -54,7 +54,7 @@ fn App(ctx: Context<()>) -> VNode {
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
-    let (color, set_color) = recoil::use_read_write(ctx, Light);
+    let (color, set_color) = Atoms::use_read_write(ctx, Light);
     rsx!{in ctx,
         div {
             h1{"Color: {color}"}
@@ -68,9 +68,9 @@ fn App(ctx: Context<()>) -> VNode {
 
 Selectors are a concept popular in the JS world as a way of narrowing down a selection of state outside the VDOM lifecycle. Selectors have two functions: 1) summarize/narrow down some complex state and 2) memoize calculations.
 
-Selectors are only `readable` - they cannot be set. This differs from RecoilJS where selectors _are_ `writable`. Selectors, as you might've guessed, "select" some data from atoms and other selectors.
+Selectors are only `readable` - they cannot be set. This differs from AtomJS where selectors _are_ `writable`. Selectors, as you might've guessed, "select" some data from atoms and other selectors.
 
-Selectors provide a `SelectorApi` which essentially exposes a read-only `RecoilApi`. They have the `get` method which allows any readable valued to be obtained for the purpose of generating a new value. A `Selector` may only return `'static` data, however `SelectorBorrowed` may return borrowed data.
+Selectors provide a `SelectorApi` which essentially exposes a read-only `AtomApi`. They have the `get` method which allows any readable valued to be obtained for the purpose of generating a new value. A `Selector` may only return `'static` data, however `SelectorBorrowed` may return borrowed data.
 
 returning static data:
 
@@ -104,7 +104,7 @@ Returning borrowed data is generally frowned upon, but may be useful when used w
 - If a selected value equals its previous selection (via PartialEq), the old value must be kept around to avoid evaluating subscribed components.
 - It's unlikely that a change in a dependency's data will not change the selector's output.
 
-In general, borrowed selectors introduce a slight memory overhead as they need to retain previous state to safely memoize downstream subscribers. The amount of state kept around scales with the amount of `gets` in a selector - though as the number of dependencies increase, the less likely the selector actually stays memoized. Recoil tries to optimize this behavior the best it can to balance component evaluations with memory overhead.
+In general, borrowed selectors introduce a slight memory overhead as they need to retain previous state to safely memoize downstream subscribers. The amount of state kept around scales with the amount of `gets` in a selector - though as the number of dependencies increase, the less likely the selector actually stays memoized. Atom tries to optimize this behavior the best it can to balance component evaluations with memory overhead.
 
 ## Families
 
@@ -126,7 +126,7 @@ Whenever you `select` on a `Family`, the ID of the entry is tracked. Other subsc
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
-    let (rating, set_rating) = recoil::use_read_write(ctx, CloudRatings.select("AWS"));
+    let (rating, set_rating) = Atoms::use_read_write(ctx, CloudRatings.select("AWS"));
     rsx!{in ctx,
         div {
             h1{ "AWS rating: {rating}" }

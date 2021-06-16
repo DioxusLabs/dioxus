@@ -1,5 +1,5 @@
 [package]
-name = "recoil"
+name = "atoms"
 version = "0.0.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"
@@ -8,15 +8,15 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.40"
-dioxus-core = { path = "../core" }
+dioxus-core = { path="../core" }
 thiserror = "1.0.24"
 log = "0.4.14"
 im-rc = "15.0.0"
 futures = "0.3.15"
 
 [dev-dependencies]
-uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
-dioxus-web = { path = "../web" }
+uuid = { version="0.8.2", features=["v4", "wasm-bindgen"] }
+dioxus-web = { path="../web" }
 wasm-bindgen-futures = "*"
 
 wasm-logger = "0.2.0"

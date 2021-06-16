@@ -251,87 +251,61 @@ impl<'a> EditMachine<'a> {
 
     pub fn push_temporary(&mut self, temp: u32) {
         debug_assert!(self.traversal_is_committed());
-        // debug!("emit: push_temporary({})", temp);
+
         self.emitter.push(Edit::PushTemporary { temp });
-        // self.emitter.push_temporary(temp);
     }
 
     pub fn remove_child(&mut self, child: usize) {
         debug_assert!(self.traversal_is_committed());
-        // debug!("emit: remove_child({})", child);
-        // self.emitter.remove_child(child as u32);
+
         self.emitter.push(Edit::RemoveChild { n: child as u32 })
     }
 
     pub fn insert_before(&mut self) {
         debug_assert!(self.traversal_is_committed());
-        // debug!("emit: insert_before()");
-        // self.emitter.insert_before();
+
         self.emitter.push(Edit::InsertBefore {})
     }
 
     pub fn set_text(&mut self, text: &'a str) {
         debug_assert!(self.traversal_is_committed());
-        // debug!("emit: set_text({:?})", text);
-        // self.emitter.set_text(text);
         self.emitter.push(Edit::SetText { text });
-        // .set_text(text.as_ptr() as u32, text.len() as u32);
     }
 
     pub fn remove_self_and_next_siblings(&mut self) {
         debug_assert!(self.traversal_is_committed());
-        // debug!("emit: remove_self_and_next_siblings()");
         self.emitter.push(Edit::RemoveSelfAndNextSiblings {});
-        // self.emitter.remove_self_and_next_siblings();
     }
 
     pub fn replace_with(&mut self) {
         debug_assert!(self.traversal_is_committed());
         // debug!("emit: replace_with()");
-        self.emitter.push(Edit::ReplaceWith {});
         // if let Some(id) = self.current_known {
         //     // update mapping
         //     self.emitter.push(Edit::MakeKnown{node: id});
         //     self.current_known = None;
         // }
         // self.emitter.replace_with();
+        self.emitter.push(Edit::ReplaceWith {});
     }
 
     pub fn set_attribute(&mut self, name: &'a str, value: &'a str, is_namespaced: bool) {
         debug_assert!(self.traversal_is_committed());
-        // todo!()
+
         if name == "class" && !is_namespaced {
-            // let class_id = self.ensure_string(value);
-            // let class_id = self.ensure_string(value);
-            // debug!("emit: set_class({:?})", value);
-            // self.emitter.set_class(class_id.into());
             self.emitter.push(Edit::SetClass { class_name: value });
         } else {
             self.emitter.push(Edit::SetAttribute { name, value });
-            // let name_id = self.ensure_string(name);
-            // let value_id = self.ensure_string(value);
-            // debug!("emit: set_attribute({:?}, {:?})", name, value);
-            // self.state
-            //     .emitter
-            //     .set_attribute(name_id.into(), value_id.into());
         }
     }
 
     pub fn remove_attribute(&mut self, name: &'a str) {
-        // todo!("figure out how to get this working with ensure string");
         self.emitter.push(Edit::RemoveAttribute { name });
-        // self.emitter.remove_attribute(name);
-        // debug_assert!(self.traversal_is_committed());
-        // // debug!("emit: remove_attribute({:?})", name);
-        // let name_id = self.ensure_string(name);
-        // self.emitter.remove_attribute(name_id.into());
     }
 
     pub fn append_child(&mut self) {
         debug_assert!(self.traversal_is_committed());
-        // debug!("emit: append_child()");
         self.emitter.push(Edit::AppendChild {});
-        // self.emitter.append_child();
     }
 
     pub fn create_text_node(&mut self, text: &'a str) {
@@ -378,7 +352,6 @@ impl<'a> EditMachine<'a> {
     pub fn remove_event_listener(&mut self, event: &'a str) {
         debug_assert!(self.traversal_is_committed());
         self.emitter.push(Edit::RemoveListener { event });
-        // debug!("emit: remove_event_listener({:?})", event);
     }
 
     pub fn save_known_root(&mut self, id: u32) {
@@ -388,7 +361,6 @@ impl<'a> EditMachine<'a> {
 
     pub fn load_known_root(&mut self, id: u32) {
         log::debug!("emit: TraverseToKnown({:?})", id);
-        // self.current_known = Some(id);
         self.emitter.push(Edit::TraverseToKnown { node: id })
     }
 }

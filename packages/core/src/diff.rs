@@ -1,3 +1,14 @@
+//! This module contains the stateful DiffMachine and all methods to diff VNodes, their properties, and their children.
+//!
+//! Notice:
+//! ------
+//!
+//! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and modified to support Components,
+//! Fragments, Suspense, and additional batching operations.
+//!
+//! Implementation Details:
+//! -----------------------
+//!
 //! Diff the `old` node with the `new` node. Emits instructions to modify a
 //! physical DOM node that reflects `old` into something that reflects `new`.
 //!
@@ -8,39 +19,18 @@
 //!
 //! The change list stack is in the same state when this function exits.
 //!
-//! ----
+//! Further Reading and Thoughts
+//! ----------------------------
 //!
 //! There are more ways of increasing diff performance here that are currently not implemented.
-//! Additionally, the caching mechanism has also been tweaked.
-//!
-//! Instead of having "cached" nodes, each component is, by default, a cached node. This leads to increased
-//! memory overhead for large numbers of small components, but we can optimize this by tracking alloc size over time
-//! and shrinking bumps down if possible.
-//!
-//! Additionally, clean up of these components is not done at diff time (though it should), but rather, the diffing
-//! proprogates removal lifecycle events for affected components into the event queue. It's not imperative that these
-//! are ran immediately, but it should be noted that cleanup of components might be able to emit changes.
-//!
-//! This diffing only ever occurs on a component-by-component basis (not entire trees at once).
-//!
-//! Currently, the listener situation is a bit broken.
-//! We aren't removing listeners (choosing to leak them instead) :(
-//! Eventually, we'll set things up so add/remove listener is an instruction again
-//!
-//! A major assumption of this diff algorithm when combined with the ChangeList is that the Changelist will be
-//! fresh and the event queue is clean. This lets us continue to batch edits together under the same ChangeList
-//!
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
+
 use crate::{arena::ScopeArena, innerlude::*};
-use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
-use generational_arena::Arena;
 
 use std::{
-    cell::{RefCell, RefMut},
     cmp::Ordering,
-    collections::VecDeque,
     rc::{Rc, Weak},
     sync::atomic::AtomicU32,
 };
@@ -207,7 +197,18 @@ impl<'a> DiffMachine<'a> {
                 todo!("Fragments not currently supported in diffing")
             }
 
-            (_, VNode::Fragment(_)) => {
+            (VNode::Fragment(_), VNode::Fragment(_)) => {
+                todo!("Fragments not currently supported in diffing")
+            }
+
+            (old_n, VNode::Fragment(_)) => {
+                match old_n {
+                    VNode::Element(_) => todo!(),
+                    VNode::Text(_) => todo!(),
+                    VNode::Fragment(_) => todo!(),
+                    VNode::Suspended => todo!(),
+                    VNode::Component(_) => todo!(),
+                }
                 todo!("Fragments not currently supported in diffing")
             }
         }

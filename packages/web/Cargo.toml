@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "0.1.2" }
+dioxus-core = { path="../core", version="0.1.2" }
 js-sys = "0.3"
 wasm-bindgen = "0.2.71"
 lazy_static = "1.4.0"
@@ -21,7 +21,7 @@ console_error_panic_hook = "0.1.6"
 generational-arena = "0.2.8"
 wasm-bindgen-test = "0.3.21"
 once_cell = "1.7.2"
-recoil = { path = "../recoil" }
+atoms = { path="../atoms" }
 
 # wasm-bindgen = "0.2.70"
 # futures = "0.3.12"
@@ -75,7 +75,7 @@ opt-level = 's'
 crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
-uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
+uuid = { version="0.8.2", features=["v4", "wasm-bindgen"] }
 
 [[example]]
 name = "todomvc"

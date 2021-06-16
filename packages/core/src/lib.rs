@@ -1,72 +1,11 @@
-//! <div align="center">
-//!   <h1>🌗🚀 📦 Dioxus</h1>
-//!   <p>
-//!     <strong>A concurrent, functional, virtual DOM for Rust</strong>
-//!   </p>
-//! </div>
-//! Dioxus: a concurrent, functional, reactive virtual dom for any renderer in Rust.
+//! Dioxus Core
+//! ----------
 //!
-//! This crate aims to maintain a hook-based, renderer-agnostic framework for cross-platform UI development.
 //!
-//! ## Components
-//! The base unit of Dioxus is the `component`. Components can be easily created from just a function - no traits required:
-//! ```
-//! use dioxus_core::prelude::*;
 //!
-//! #[derive(Properties)]
-//! struct Props { name: String }
 //!
-//! fn Example(ctx: Context, props: &Props) -> VNode {
-//!     html! { <div> "Hello {ctx.name}!" </div> }
-//! }
-//! ```
-//! Components need to take a "Context" parameter which is generic over some properties. This defines how the component can be used
-//! and what properties can be used to specify it in the VNode output. Component state in Dioxus is managed by hooks - if you're new
-//! to hooks, check out the hook guide in the official guide.
 //!
-//! Components can also be crafted as static closures, enabling type inference without all the type signature noise:
-//! ```
-//! use dioxus_core::prelude::*;
 //!
-//! #[derive(Properties)]
-//! struct Props { name: String }
-//!
-//! static Example: FC<Props> = |ctx| {
-//!     html! { <div> "Hello {ctx.name}!" </div> }
-//! }
-//! ```
-//!
-//! If the properties struct is too noisy for you, we also provide a macro that converts variadic functions into components automatically.
-//! Many people don't like the magic of proc macros, so this is entirely optional. Under-the-hood, we simply transplant the
-//! function arguments into a struct, so there's very little actual magic happening.
-//!
-//! ```
-//! use dioxus_core::prelude::*;
-//!
-//! #[derive_props]
-//! static Example: FC = |ctx, name: &String| {
-//!     html! { <div> "Hello {name}!" </div> }
-//! }
-//! ```
-//!
-//! ## Hooks
-//! Dioxus uses hooks for state management. Hooks are a form of state persisted between calls of the function component. Instead of
-//! using a single struct to store data, hooks use the "use_hook" building block which allows the persistence of data between
-//! function component renders. Each hook stores some data in a "memory cell" and needs to be called in a consistent order.
-//! This means hooks "anything with `use_x`" may not be called conditionally.
-//!
-//! This allows functions to reuse stateful logic between components, simplify large complex components, and adopt more clear context
-//! subscription patterns to make components easier to read.
-//!
-//! ## Supported Renderers
-//! Instead of being tightly coupled to a platform, browser, or toolkit, Dioxus implements a VirtualDOM object which
-//! can be consumed to draw the UI. The Dioxus VDOM is reactive and easily consumable by 3rd-party renderers via
-//! the `Patch` object. See [Implementing a Renderer](docs/8-custom-renderer.md) and the `StringRenderer` classes for information
-//! on how to implement your own custom renderer. We provide 1st-class support for these renderers:
-//! - dioxus-desktop (via WebView)
-//! - dioxus-web (via WebSys)
-//! - dioxus-ssr (via StringRenderer)
-//! - dioxus-liveview (SSR + StringRenderer)
 //!
 
 pub mod arena;
@@ -104,7 +43,6 @@ pub(crate) mod innerlude {
     pub type FC<P> = fn(Context<P>) -> VNode;
 
     // Re-export the FC macro
-    pub use crate as dioxus;
     pub use crate::nodebuilder as builder;
     pub use dioxus_core_macro::{html, rsx};
 }
@@ -131,7 +69,6 @@ pub mod prelude {
     pub use bumpalo::Bump;
 
     // Re-export the FC macro
-    pub use crate as dioxus;
     pub use crate::nodebuilder as builder;
     // pub use dioxus_core_macro::fc;
 

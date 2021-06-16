@@ -6,7 +6,6 @@ use dioxus_core::{
     prelude::ScopeIdx,
 };
 use fxhash::FxHashMap;
-use log::debug;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{window, Document, Element, Event, HtmlInputElement, HtmlOptionElement, Node};
 
@@ -38,6 +37,16 @@ pub(crate) struct PatchMachine {
     pub(crate) events: EventDelegater,
 
     pub(crate) current_known: Option<u32>,
+
+    // We need to make sure to add comments between text nodes
+    // We ensure that the text siblings are patched by preventing the browser from merging
+    // neighboring text nodes. Originally inspired by some of React's work from 2016.
+    //  -> https://reactjs.org/blog/2016/04/07/react-v15.html#major-changes
+    //  -> https://github.com/facebook/react/pull/5753
+    //
+    // `ptns` = Percy text node separator
+    // TODO
+    pub(crate) last_node_was_text: bool,
 }
 
 #[derive(Debug)]
@@ -146,8 +155,6 @@ impl Stack {
 
     pub fn pop(&mut self) -> Node {
         let res = self.list.pop().unwrap();
-        // debug!("stack-pop: {:?}", res);
-
         res
     }
 
@@ -156,10 +163,6 @@ impl Stack {
     }
 
     pub fn top(&self) -> &Node {
-        // log::info!(
-        //     "Called top of stack with {} items remaining",
-        //     self.list.len()
-        // );
         match self.list.last() {
             Some(a) => a,
             None => panic!("Called 'top' of an empty stack, make sure to push the root first"),
@@ -185,13 +188,13 @@ impl PatchMachine {
             stack: Stack::with_capacity(20),
             temporaries: Default::default(),
             document,
+            last_node_was_text: false,
         }
     }
 
     pub fn unmount(&mut self) {
         self.stack.clear();
         self.temporaries.clear();
-        // self.templates.clear();
     }
 
     pub fn start(&mut self) {
@@ -203,11 +206,6 @@ impl PatchMachine {
     pub fn reset(&mut self) {
         self.stack.clear();
         self.temporaries.clear();
-    }
-
-    pub fn get_template(&self, id: CacheId) -> Option<&Node> {
-        todo!()
-        // self.templates.get(&id)
     }
 
     pub fn handle_edit(&mut self, edit: &Edit) {
@@ -276,11 +274,7 @@ impl PatchMachine {
             Edit::SetAttribute { name, value } => {
                 let node = self.stack.top();
 
-                log::debug!("setting attribute for element");
-
                 if let Some(node) = node.dyn_ref::<web_sys::Element>() {
-                    // node.set_attribute(name, value).unwrap();
-                    log::info!("setting attr {} {}", name, value);
                     node.set_attribute(name, value).unwrap();
                 }
                 if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
@@ -296,13 +290,10 @@ impl PatchMachine {
                 }
 
                 if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
-                    log::debug!("el is html option element");
                     if name == "selected" {
                         node.set_selected(true);
                     }
                 }
-                log::debug!("el is none");
-                // if let Some(node) = node.dyn_ref::<web_sys::Namesp>() {}
             }
 
             // 4
@@ -357,15 +348,35 @@ impl PatchMachine {
             }
 
             // 9
-            Edit::CreateTextNode { text } => self.stack.push(
-                self.document
-                    .create_text_node(text)
-                    .dyn_into::<Node>()
-                    .unwrap(),
-            ),
+            Edit::CreateTextNode { text } => {
+                //
+                // We ensure that the text siblings are patched by preventing the browser from merging
+                // neighboring text nodes. Originally inspired by some of React's work from 2016.
+                //  -> https://reactjs.org/blog/2016/04/07/react-v15.html#major-changes
+                //  -> https://github.com/facebook/react/pull/5753
+                //
+                // `ptns` = Percy text node separator
+                // TODO
+                if self.last_node_was_text {
+                    let n = self
+                        .document
+                        .create_comment("ptns")
+                        .dyn_into::<Node>()
+                        .unwrap();
+                }
+
+                self.stack.push(
+                    self.document
+                        .create_text_node(text)
+                        .dyn_into::<Node>()
+                        .unwrap(),
+                );
+                self.last_node_was_text = true;
+            }
 
             // 10
             Edit::CreateElement { tag_name } => {
+                self.last_node_was_text = false;
                 let el = self
                     .document
                     .create_element(tag_name)
@@ -438,6 +449,7 @@ impl PatchMachine {
 
             // 14
             Edit::CreateElementNs { tag_name, ns } => {
+                self.last_node_was_text = false;
                 let el = self
                     .document
                     .create_element_ns(Some(ns), tag_name)
