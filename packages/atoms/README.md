@@ -1,27 +1,23 @@
 <div align="center">
   <h1>⚛ Atoms</h1>
   <p>
-    <strong>Official global state management for Dioxus</strong>
+    <strong>Global state for Dioxus</strong>
   </p>
 </div>
 
-Manage global state in Dioxus apps with composable atoms:
+Atoms is a global state management toolkit for Dioxus, built on the concept of composable atoms of state:
 
 ```rust
 const COUNT: Atom<u32> = |_| 0;
 
 const Incr: FC<()> = |cx| {
     let (count, set_count) = Atoms::use_read_write(&cx, &COUNT);
-    cx.render(rsx!(
-        button { onclick: move |_| set_count(count + 1), "+" }
-    ))
+    cx.render(rsx!( button { onclick: move |_| set_count(count + 1), "+" } ))
 }
 
 const Decr: FC<()> = |cx| {
     let (count, set_count) = Atoms::use_read_write(&cx, &COUNT);
-    cx.render(rsx!(
-        button { onclick: move |_| set_count(count + 1), "-" }
-    ))
+    cx.render(rsx!( button { onclick: move |_| set_count(count - 1), "-" } ))
 }
 
 const App: FC<()> = |cx| {
