@@ -1,10 +1,46 @@
-# Atom.rs - Official global state management solution for Dioxus Apps
+<div align="center">
+  <h1>⚛ Atoms</h1>
+  <p>
+    <strong>Official global state management for Dioxus</strong>
+  </p>
+</div>
 
-Atom.rs provides a global state management API for Dioxus apps built on the concept of "atomic state." Instead of grouping state together into a single bundle ALA Redux, Atom provides individual building blocks of state called Atoms. These atoms can be set/get anywhere in the app and combined to craft complex state. Atom should be easier to learn and more efficient than Redux. Atom.rs is modeled after the Recoil.js project.
+Manage global state in Dioxus apps with composable atoms:
 
-Atom.rs is officially supported by the Dioxus team. By doing so, we are "planting our flag in the sand" for atomic state management instead of bundled (Redux-style) state management. Atomic state management fits well with the internals of Dioxus and idiomatic Rust, meaning Atom.rs state management will be faster, more efficient, and less sensitive to data races than Redux-style apps.
+```rust
+const COUNT: Atom<u32> = |_| 0;
 
-Internally, Dioxus uses batching to speed up linear-style operations. Atom.rs integrates with this batching optimization, making app-wide state changes extremely fast. This way, Atom.rs can be pushed significantly harder than Redux without the need to enable/disable debug flags to prevent performance slowdowns.
+const Incr: FC<()> = |cx| {
+    let (count, set_count) = Atoms::use_read_write(&cx, &COUNT);
+    cx.render(rsx!(
+        button { onclick: move |_| set_count(count + 1), "+" }
+    ))
+}
+
+const Decr: FC<()> = |cx| {
+    let (count, set_count) = Atoms::use_read_write(&cx, &COUNT);
+    cx.render(rsx!(
+        button { onclick: move |_| set_count(count + 1), "-" }
+    ))
+}
+
+const App: FC<()> = |cx| {
+    let count = Atoms::use_read(&cx, &COUNT);
+    cx.render(rsx!{
+        div {
+            "Count is {count}"
+            Incr {}
+            Decr {}
+        }
+    })
+}
+```
+
+Atoms.rs provides a global state management API for Dioxus apps built on the concept of "atomic state." Instead of grouping state together into a single bundle ALA Redux, Atom provides individual building blocks of state called Atoms. These atoms can be set/get anywhere in the app and combined to craft complex state. Atom should be easier to learn and more efficient than Redux.
+
+Atoms.rs is officially supported by the Dioxus team. By doing so, we are "planting our flag in the sand" for atomic state management instead of bundled (Redux-style) state management. Atomic state management fits well with the internals of Dioxus and idiomatic Rust, meaning Atoms.rs state management will be faster, more efficient, and less sensitive to data races than Redux-style apps.
+
+Internally, Dioxus uses batching to speed up linear-style operations. Atoms.rs integrates with this batching optimization, making app-wide state changes extremely fast. This way, Atoms.rs can be pushed significantly harder than Redux without the need to enable/disable debug flags to prevent performance slowdowns.
 
 # Guide
 
