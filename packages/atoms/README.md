@@ -1,6 +1,6 @@
 # Atom.rs - Official global state management solution for Dioxus Apps
 
-Atom.rs provides a global state management API for Dioxus apps built on the concept of "atomic state." Instead of grouping state together into a single bundle ALA Redux, Atom provides individual building blocks of state called Atoms. These atoms can be set/get anywhere in the app and combined to craft complex state. Atom should be easier to learn and more efficient than Redux. Atom.rs is modeled after the Atom.JS project.
+Atom.rs provides a global state management API for Dioxus apps built on the concept of "atomic state." Instead of grouping state together into a single bundle ALA Redux, Atom provides individual building blocks of state called Atoms. These atoms can be set/get anywhere in the app and combined to craft complex state. Atom should be easier to learn and more efficient than Redux. Atom.rs is modeled after the Recoil.js project.
 
 Atom.rs is officially supported by the Dioxus team. By doing so, we are "planting our flag in the sand" for atomic state management instead of bundled (Redux-style) state management. Atomic state management fits well with the internals of Dioxus and idiomatic Rust, meaning Atom.rs state management will be faster, more efficient, and less sensitive to data races than Redux-style apps.
 
@@ -23,13 +23,11 @@ This is then later used in components like so:
 ```rust
 fn App(ctx: Context<()>) -> VNode {
     // The Atom root must be initialized at the top of the application before any use_Atom hooks
-    Atoms::init_Atom_root(&ctx, |_| {});
+    Atoms::init_root(&ctx, |_| {});
 
-    let color = Atoms::use_read(ctx, Light);
+    let color = Atoms::use_read(&ctx, Light);
 
-    ctx.render(rsx!{
-        h1 {"Color of light: {color}"}
-    })
+    ctx.render(rsx!( h1 {"Color of light: {color}"} ))
 }
 ```
 
@@ -37,16 +35,16 @@ Atoms are considered "Writable" objects since any consumer may also set the Atom
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
-    let color = Atoms::use_read(ctx, Light);
-    let set_color = Atoms::use_write(ctx, Light);
-    rsx!{in ctx,
+    let color = Atoms::use_read(&ctx, Light);
+    let set_color = Atoms::use_write(&ctx, Light);
+    ctx.render(rsx!(
         div {
-            h1{"Color: {color}"}
-            button {onclick: move |_| set_color("red"), "red"}
-            button {onclick: move |_| set_color("yellow"), "yellow"}
-            button {onclick: move |_| set_color("green"), "green"}
+            h1 { "Color: {color}" }
+            button { onclick: move |_| set_color("red"), "red" }
+            button { onclick: move |_| set_color("yellow"), "yellow" }
+            button { onclick: move |_| set_color("green"), "green" }
         }
-    }
+    ))
 }
 ```
 
@@ -55,18 +53,18 @@ fn App(ctx: Context<()>) -> VNode {
 ```rust
 fn App(ctx: Context<()>) -> VNode {
     let (color, set_color) = Atoms::use_read_write(ctx, Light);
-    rsx!{in ctx,
+    ctx.render(rsx!(
         div {
-            h1{"Color: {color}"}
-            button {onclick: move |_| set_color("red"), "red"}
+            h1 { "Color: {color}" }
+            button { onclick: move |_| set_color("red"), "red" }
         }
-    }
+    ))
 }
 ```
 
 ## Selectors
 
-Selectors are a concept popular in the JS world as a way of narrowing down a selection of state outside the VDOM lifecycle. Selectors have two functions: 1) summarize/narrow down some complex state and 2) memoize calculations.
+Selectors are a concept popular in the JS world as a way of narrowing down a selection of state outside the VDOM lifecycle. Selectors have two functions: 1 summarize/narrow down some complex state and 2) memoize calculations.
 
 Selectors are only `readable` - they cannot be set. This differs from AtomJS where selectors _are_ `writable`. Selectors, as you might've guessed, "select" some data from atoms and other selectors.
 
@@ -127,11 +125,11 @@ Whenever you `select` on a `Family`, the ID of the entry is tracked. Other subsc
 ```rust
 fn App(ctx: Context<()>) -> VNode {
     let (rating, set_rating) = Atoms::use_read_write(ctx, CloudRatings.select("AWS"));
-    rsx!{in ctx,
+    ctx.render(rsx!(
         div {
-            h1{ "AWS rating: {rating}" }
+            h1 { "AWS rating: {rating}" }
             button { onclick: move |_| set_rating((rating + 1) % 5), "incr" }
         }
-    }
+    ))
 }
 ```
