@@ -36,9 +36,12 @@ version = "0.3.50"
 features = [
     "Comment",
     "Document",
+    # "DataTransfer",
     "Element",
     "HtmlElement",
     "HtmlInputElement",
+    "HtmlSelectElement",
+    "HtmlTextAreaElement",
     "EventTarget",
     "HtmlCollection",
     "Node",
@@ -60,6 +63,7 @@ features = [
     "DocumentType",
     "CharacterData",
     "HtmlOptionElement",
+
 ]
 
 [profile.release]

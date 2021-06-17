@@ -1,9 +1,8 @@
-//! Virtual Events
-//! This module provides a wrapping of platform-specific events with a list of events easier to work with.
-//! 3rd party renderers are responsible for forming this virtual events from events.
-//! The goal here is to provide a consistent event interface across all renderer types.
+//! This module provides a set of common events for all Dioxus apps to target, regardless of host platform.
+//! -------------------------------------------------------------------------------------------------------
 //!
-//! also... websys integerates poorly with rust analyzer, so we handle that for you automatically.
+//! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
+//! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
 use crate::innerlude::ScopeIdx;
 
@@ -46,15 +45,13 @@ pub enum VirtualEvent {
     MouseEvent(on::MouseEvent),
     PointerEvent(on::PointerEvent),
 
-    // todo
-
     // ImageEvent(event_data::ImageEvent),
     OtherEvent,
 }
 
 pub mod on {
     #![allow(unused)]
-    use std::ops::Deref;
+    use std::{ops::Deref, rc::Rc};
 
     use crate::{
         builder::ElementBuilder,
@@ -64,15 +61,10 @@ pub mod on {
 
     use super::VirtualEvent;
 
-    macro_rules! event_builder {
-            (
-                $eventdata:ident;
+    macro_rules! event_directory {
+        ( $( $eventdata:ident: [ $( $name:ident )* ]; )* ) => {
             $(
-                $(#[$attr:meta])*
-                $name:ident
-            )* ) => {
                 $(
-                    $(#[$attr])*
                     pub fn $name<'a>(
                         c: &'_ NodeCtx<'a>,
                         callback: impl Fn($eventdata) + 'a,
@@ -84,40 +76,60 @@ pub mod on {
                             scope: c.scope_ref.arena_idx,
                             callback: bump.alloc(move |evt: VirtualEvent| match evt {
                                 VirtualEvent::$eventdata(event) => callback(event),
-                                _ => {
-                                    unreachable!("Downcasted VirtualEvent to wrong event type - this is a bug!")
-                                }
+                                _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
                             }),
                         }
                     }
                 )*
-            };
-        }
+            )*
+        };
+    }
+
+    event_directory! {
+        ClipboardEvent: [copy cut paste];
+        CompositionEvent: [compositionend compositionstart compositionupdate];
+        KeyboardEvent: [keydown keypress keyup];
+        FocusEvent: [focus blur];
+        FormEvent: [change input invalid reset submit];
+        GenericEvent: [];
+        MouseEvent: [
+            click contextmenu doubleclick drag dragend dragenter dragexit
+            dragleave dragover dragstart drop mousedown mouseenter mouseleave
+            mousemove mouseout mouseover mouseup
+        ];
+        PointerEvent: [
+            pointerdown pointermove pointerup pointercancel gotpointercapture
+            lostpointercapture pointerenter pointerleave pointerover pointerout
+        ];
+        SelectionEvent: [select];
+        TouchEvent: [touchcancel touchend touchmove touchstart];
+        UIEvent: [scroll];
+        WheelEvent: [wheel];
+        MediaEvent: [
+            abort canplay canplaythrough durationchange emptied encrypted
+            ended error loadeddata loadedmetadata loadstart pause play
+            playing progress ratechange seeked seeking stalled suspend
+            timeupdate volumechange waiting
+        ];
+        AnimationEvent: [animationstart animationend animationiteration];
+        TransitionEvent: [transitionend];
+        ToggleEvent: [toggle];
+    }
 
     pub struct GetModifierKey(pub Box<dyn Fn(usize) -> bool>);
     impl std::fmt::Debug for GetModifierKey {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            // just skip for now
-            Ok(())
+            Ok(()) // just skip for now
         }
     }
 
     // DOMDataTransfer clipboardData
     #[derive(Debug)]
     pub struct ClipboardEvent {}
-    event_builder! {
-        ClipboardEvent;
-        copy cut paste
-    }
 
-    // string data
     #[derive(Debug)]
     pub struct CompositionEvent {
         data: String,
-    }
-    event_builder! {
-        CompositionEvent;
-        compositionend compositionstart compositionupdate
     }
 
     #[derive(Debug)]
@@ -134,12 +146,11 @@ pub mod on {
         which: usize,
         get_modifier_state: GetModifierKey,
     }
-    pub struct KeyboardEvent2(pub Box<dyn KeyboardEventT>);
+    pub struct KeyboardEvent2(pub Rc<dyn KeyboardEventT>);
     impl std::ops::Deref for KeyboardEvent2 {
-        type Target = Box<dyn KeyboardEventT>;
-
+        type Target = dyn KeyboardEventT;
         fn deref(&self) -> &Self::Target {
-            &self.0
+            self.0.as_ref()
         }
     }
 
@@ -157,32 +168,16 @@ pub mod on {
         fn get_modifier_state(&self) -> GetModifierKey;
     }
 
-    event_builder! {
-        KeyboardEvent;
-        keydown keypress keyup
-    }
-
     #[derive(Debug)]
     pub struct FocusEvent {/* DOMEventTarget relatedTarget */}
-    event_builder! {
-        FocusEvent;
-        focus blur
-    }
 
     #[derive(Debug)]
     pub struct FormEvent {
         pub value: String,
     }
-    event_builder! {
-        FormEvent;
-        change input invalid reset submit
-    }
 
     #[derive(Debug)]
     pub struct GenericEvent {/* Error Load */}
-    event_builder! {
-        GenericEvent;
-    }
 
     #[derive(Debug)]
     pub struct MouseEvent(pub Box<RawMouseEvent>);
@@ -209,12 +204,6 @@ pub mod on {
         fn deref(&self) -> &Self::Target {
             self.0.as_ref()
         }
-    }
-    event_builder! {
-        MouseEvent;
-        click contextmenu doubleclick drag dragend dragenter dragexit
-        dragleave dragover dragstart drop mousedown mouseenter mouseleave
-        mousemove mouseout mouseover mouseup
     }
 
     #[derive(Debug)]
@@ -255,18 +244,9 @@ pub mod on {
         pointer_type: String,
         is_primary: bool,
     }
-    event_builder! {
-        PointerEvent;
-        pointerdown pointermove pointerup pointercancel gotpointercapture
-        lostpointercapture pointerenter pointerleave pointerover pointerout
-    }
 
     #[derive(Debug)]
     pub struct SelectionEvent {}
-    event_builder! {
-        SelectionEvent;
-        select
-    }
 
     #[derive(Debug)]
     pub struct TouchEvent {
@@ -282,19 +262,11 @@ pub mod on {
         // touches: DOMTouchList,
         //  getModifierState(key): boolean
     }
-    event_builder! {
-        TouchEvent;
-        touchcancel touchend touchmove touchstart
-    }
 
     #[derive(Debug)]
     pub struct UIEvent {
         // DOMAbstractView view
         detail: i32,
-    }
-    event_builder! {
-        UIEvent;
-        scroll
     }
 
     #[derive(Debug)]
@@ -304,20 +276,9 @@ pub mod on {
         delta_y: i32,
         delta_z: i32,
     }
-    event_builder! {
-        WheelEvent;
-        wheel
-    }
 
     #[derive(Debug)]
     pub struct MediaEvent {}
-    event_builder! {
-        MediaEvent;
-        abort canplay canplaythrough durationchange emptied encrypted
-        ended error loadeddata loadedmetadata loadstart pause play
-        playing progress ratechange seeked seeking stalled suspend
-        timeupdate volumechange waiting
-    }
 
     // todo!
     // imageevent clashes with media event
@@ -336,10 +297,6 @@ pub mod on {
         pseudo_element: String,
         elapsed_time: f32,
     }
-    event_builder! {
-        AnimationEvent;
-        animationstart animationend animationiteration
-    }
 
     #[derive(Debug)]
     pub struct TransitionEvent {
@@ -347,15 +304,7 @@ pub mod on {
         pseudo_element: String,
         elapsed_time: f32,
     }
-    event_builder! {
-        TransitionEvent;
-        transitionend
-    }
 
     #[derive(Debug)]
     pub struct ToggleEvent {}
-    event_builder! {
-        ToggleEvent;
-        toggle
-    }
 }

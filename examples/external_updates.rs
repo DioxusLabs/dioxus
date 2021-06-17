@@ -1,5 +1,6 @@
 //! Example: External Updates
 //! -------------------------
+//!
 //! Cause updates to the VirtualDOM state from outside the component lifecycle.
 //! The root props could be changed or the use_receiver hook could be used.
 //!
@@ -30,8 +31,8 @@ fn App(ctx: Context, props: &RootProps) -> VNode {
 
     ctx.render(rsx! {
         div {
-            a { href="/dogs/"}
-            a { href="/cats/"}
+            a { href: "/dogs/"}
+            a { href: "/cats/"}
             {content}
         }
     })

@@ -34,8 +34,8 @@ fn App(ctx: Context<()>) -> VNode {
 
     ctx.render(rsx! {
         div {
-            a { href="/dogs/"}
-            a { href="/cats/"}
+            a { href: "/dogs/"}
+            a { href: "/cats/"}
             {router.render()}
         }
     })

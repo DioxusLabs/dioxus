@@ -177,6 +177,11 @@
 //! };
 //! ```
 
+pub mod prelude {
+    //! A glob import that includes helper types like FC, rsx!, html!, and required traits
+    pub use dioxus_core::prelude::*;
+    pub use dioxus_core_macro::fc;
+}
 // Just a heads-up, the core functionality of dioxus rests in Dioxus-Core. This crate just wraps a bunch of utilities
 // together and exports their namespaces to something predicatble.
 #[cfg(feature = "core")]
@@ -186,12 +191,12 @@ pub mod core {
     // Re-export core completely
     pub use dioxus_core::*;
 }
-pub mod prelude {
-    //! A glob import that includes helper types like FC, rsx!, html!, and required traits
-    pub use dioxus_core::prelude::*;
-    pub use dioxus_core_macro::fc;
-}
 
+// Input elements work differently on different platforms.
+// This module helps abstract over Selects, TextInputs, TextAreas, Radios, etc for a cross-platform input experience
+pub mod inputs {
+    //! Cross-platform abstractions over user inputs
+}
 #[cfg(feature = "web")]
 pub mod web {
     //! A web-sys based renderer for building fast and interactive web applications
@@ -214,6 +219,7 @@ pub mod testing {
 }
 #[cfg(feature = "atoms")]
 pub mod atoms {}
+
 #[cfg(feature = "desktop")]
 pub mod desktop {
     //! A webview based renderer for building desktop applications with Dioxus

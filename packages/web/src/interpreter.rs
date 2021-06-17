@@ -7,7 +7,9 @@ use dioxus_core::{
 };
 use fxhash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{window, Document, Element, Event, HtmlInputElement, HtmlOptionElement, Node};
+use web_sys::{
+    window, Document, Element, Event, HtmlElement, HtmlInputElement, HtmlOptionElement, Node,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct CacheId(u32);
@@ -564,11 +566,38 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
             todo!()
         }
 
-        "change" | "input" | "invalid" | "reset" | "submit" => {
+        "change" => {
+            let evt: web_sys::Event = event.clone().dyn_into().expect("wrong error typ");
+            todo!()
+            // VirtualEvent::FormEvent(FormEvent {value:})
+        }
+
+        "input" | "invalid" | "reset" | "submit" => {
             // is a special react events
             let evt: web_sys::InputEvent = event.clone().dyn_into().expect("wrong event type");
-            let value: Option<String> = (&evt).data();
-            let value = value.unwrap_or_default();
+            let this: web_sys::EventTarget = evt.target().unwrap();
+
+            let value = (&this)
+                .dyn_ref()
+                .map(|input: &web_sys::HtmlInputElement| input.value())
+                .or_else(|| {
+                    (&this)
+                        .dyn_ref()
+                        .map(|input: &web_sys::HtmlTextAreaElement| input.value())
+                })
+                .or_else(|| {
+                    (&this)
+                        .dyn_ref::<web_sys::HtmlElement>()
+                        .unwrap()
+                        .text_content()
+                })
+                .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
+
+            // let p2 = evt.data_transfer();
+
+            // let value: Option<String> = (&evt).data();
+            // let value = val;
+            // let value = value.unwrap_or_default();
             // let value = (&evt).data().expect("No data to unwrap");
 
             // todo - this needs to be a "controlled" event

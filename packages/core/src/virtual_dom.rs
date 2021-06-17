@@ -274,7 +274,7 @@ impl VirtualDom {
         // Now, there are events in the queue
         let mut updates = self.event_queue.0.as_ref().borrow_mut();
 
-        // Order the nodes by their height, we want the biggest nodes on the top
+        // Order the nodes by their height, we want the nodes with the smallest depth on top
         // This prevents us from running the same component multiple times
         updates.sort_unstable();
 
@@ -300,6 +300,7 @@ impl VirtualDom {
             // let cur_component = inner.get_mut(update.idx).unwrap();
 
             cur_component.run_scope()?;
+            // diff_machine.change_list.load_known_root(1);
 
             diff_machine.diff_node(cur_component.old_frame(), cur_component.next_frame());
 

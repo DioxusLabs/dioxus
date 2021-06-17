@@ -23,41 +23,38 @@ router = []
 web = []
 desktop = []
 
-[workspace]
-# members = ["packages/core-macro"]
-members = [
-    "packages/core-macro",
-    "packages/core",
-    "packages/web",
-    "packages/ssr",
-    "packages/docsite",
-    "packages/atoms",
-    "packages/router",
-]
-# "packages/webview",
-
-# "packages/cli",
-# "packages/webview",
-# "packages/hooks",
-# "packages/ios",
 
 [profile.dev]
 split-debuginfo = "unpacked"
 
-# "packages/liveview",
-# "packages/3d",
 
-# Built-in
-# "packages/webview/client",
-# "packages/router",
-# "packages/webview",
-# "packages/livehost",
-# "packages/vscode-ext",
-# "packages/recoil",
-# "packages/redux",
-# "packages/macro",
-# TODO @Jon, share the validation code
-# "packages/web",
-# "packages/cli",
-# "examples",
-# "packages/html-macro",
+[dev-dependencies]
+# For the tide ssr examples
+async-std = { version="1.9.0", features=["attributes"] }
+tide = { version="0.16.0" }
+
+# For the livewview example
+tide-websockets = "0.4.0"
+serde_millis = "0.1"
+serde_json = "1"
+serde = { version="1", features=['derive'] }
+
+# For the doc generator
+pulldown-cmark = { version="0.8.0", default-features=false }
+
+dioxus-webview = { path="./packages/webview", version="0.0.0" }
+dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
+rand = "0.8.4"
+
+
+[workspace]
+members = [
+    "packages/core-macro",
+    "packages/core",
+    "packages/web",
+    # "packages/ssr",
+    # "packages/docsite",
+    # "packages/atoms",
+    # "packages/router",
+    # "packages/inputs",
+]
