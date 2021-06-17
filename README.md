@@ -8,10 +8,10 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn Example(ctx: Context<()>) -> VNode {
-    let (selection, set_selection) = use_state(&ctx, || "..?");
+fn Example(cx: Context<()>) -> VNode {
+    let (selection, set_selection) = use_state(&cx, || "..?");
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         h1 { "Hello, {selection}" }
         button { "?", onclick: move |_| set_selection("world!")}
         button { "?", onclick: move |_| set_selection("Dioxus 🎉")}
@@ -19,7 +19,7 @@ fn Example(ctx: Context<()>) -> VNode {
 };
 ```
 
-Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, Android apps, iOS Apps, and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
+Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, eventually mobile apps (WIP), and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
 
 If you know React, then you already know Dioxus.
 
@@ -29,6 +29,7 @@ If you know React, then you already know Dioxus.
 - Minimal boilerplate
 - Familiar design and semantics
 - Simple build, test, and deploy
+- Compile-time correct templating
 - Support for html! and rsx! templating
 - SSR, WASM, desktop, and mobile support
 - Powerful and simple integrated state management

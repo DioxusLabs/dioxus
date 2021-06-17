@@ -1,42 +1,42 @@
 <div align="center">
-  <h1>⚛ Atoms</h1>
+  <h1>⚛ Dirac</h1>
   <p>
     <strong>Global state for Dioxus</strong>
   </p>
 </div>
 
-Atoms is a global state management toolkit for Dioxus, built on the concept of composable atoms of state:
+Dirac is a global state management toolkit for Dioxus, built on the concept of composable atoms of state:
 
 ```rust
 const COUNT: Atom<u32> = |_| 0;
 
 const Incr: FC<()> = |cx| {
-    let (count, set_count) = Atoms::use_read_write(&cx, &COUNT);
-    cx.render(rsx!( button { onclick: move |_| set_count(count + 1), "+" } ))
+    let (count, set_count) = dirac::use_read_write(&cx, &COUNT);
+    rsx!(in cx, button { onclick: move |_| set_count(count + 1), "+" } )
 }
 
 const Decr: FC<()> = |cx| {
-    let (count, set_count) = Atoms::use_read_write(&cx, &COUNT);
-    cx.render(rsx!( button { onclick: move |_| set_count(count - 1), "-" } ))
+    let (count, set_count) = dirac::use_read_write(&cx, &COUNT);
+    rsx!(in cx, button { onclick: move |_| set_count(count - 1), "-" } )
 }
 
 const App: FC<()> = |cx| {
-    let count = Atoms::use_read(&cx, &COUNT);
+    let count = dirac::use_read(&cx, &COUNT);
     cx.render(rsx!{
-        div {
-            "Count is {count}"
-            Incr {}
-            Decr {}
-        }
+        "Count is {count}"
+        Incr {}
+        Decr {}
     })
 }
 ```
 
-Atoms.rs provides a global state management API for Dioxus apps built on the concept of "atomic state." Instead of grouping state together into a single bundle ALA Redux, Atom provides individual building blocks of state called Atoms. These atoms can be set/get anywhere in the app and combined to craft complex state. Atom should be easier to learn and more efficient than Redux.
+Dirac provides a global state management API for Dioxus apps built on the concept of "atomic state." Instead of grouping state together into a single bundle like Redux, Dyon provides individual building blocks of state called atoms. These atoms can be set/get anywhere in the app and combined to craft complex state. Dyon should be easier to learn, more efficient than Redux, and allow you to build complex Dioxus apps with relative ease.
 
-Atoms.rs is officially supported by the Dioxus team. By doing so, we are "planting our flag in the sand" for atomic state management instead of bundled (Redux-style) state management. Atomic state management fits well with the internals of Dioxus and idiomatic Rust, meaning Atoms.rs state management will be faster, more efficient, and less sensitive to data races than Redux-style apps.
+## Support
 
-Internally, Dioxus uses batching to speed up linear-style operations. Atoms.rs integrates with this batching optimization, making app-wide state changes extremely fast. This way, Atoms.rs can be pushed significantly harder than Redux without the need to enable/disable debug flags to prevent performance slowdowns.
+Dyon is officially supported by the Dioxus team. By doing so, we are "planting our flag in the sand" for atomic state management instead of bundled (Redux-style) state management. Atomic state management fits well with the internals of Dioxus and idiomatic Rust, meaning Dirac state management will be faster, more efficient, and less sensitive to data races than Redux-style apps.
+
+Internally, Dioxus uses batching to speed up linear-style operations. Dirac integrates with this batching optimization, making app-wide state changes extremely fast. This way, Dirac can be pushed significantly harder than Redux without the need to enable/disable debug flags to prevent performance slowdowns.
 
 # Guide
 
@@ -45,19 +45,19 @@ Internally, Dioxus uses batching to speed up linear-style operations. Atoms.rs i
 A simple atom of state is defined globally as a const:
 
 ```rust
-const Light: Atom<&str> = |_| "Green";
+const LightColor: Atom<&str> = |_| "Green";
 ```
 
-This atom of state is initialized with a value of `"Green"`. The atom that is returned does not actually contain any values. Instead, the atom's key - which is automatically generated in this instance - is used in the context of a Atom App.
+This atom of state is initialized with a value of `"Green"`. The atom that is returned does not actually contain any values. Instead, the atom's key - which is automatically generated in this instance - is used in the context of a Dioxus App.
 
 This is then later used in components like so:
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
     // The Atom root must be initialized at the top of the application before any use_Atom hooks
-    Atoms::init_root(&ctx, |_| {});
+    dirac::intialize_root(&ctx, |_| {});
 
-    let color = Atoms::use_read(&ctx, Light);
+    let color = dirac::use_read(&ctx, &LightColor);
 
     ctx.render(rsx!( h1 {"Color of light: {color}"} ))
 }
@@ -67,15 +67,13 @@ Atoms are considered "Writable" objects since any consumer may also set the Atom
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
-    let color = Atoms::use_read(&ctx, Light);
-    let set_color = Atoms::use_write(&ctx, Light);
+    let color = dirac::use_read(&ctx, &LightColor);
+    let set_color = dirac::use_write(&ctx, &LightColor);
     ctx.render(rsx!(
-        div {
-            h1 { "Color: {color}" }
-            button { onclick: move |_| set_color("red"), "red" }
-            button { onclick: move |_| set_color("yellow"), "yellow" }
-            button { onclick: move |_| set_color("green"), "green" }
-        }
+        h1 { "Color: {color}" }
+        button { onclick: move |_| set_color("red"), "red" }
+        button { onclick: move |_| set_color("yellow"), "yellow" }
+        button { onclick: move |_| set_color("green"), "green" }
     ))
 }
 ```
@@ -84,12 +82,10 @@ fn App(ctx: Context<()>) -> VNode {
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
-    let (color, set_color) = Atoms::use_read_write(ctx, Light);
+    let (color, set_color) = dirac::use_read_write(&ctx, &Light);
     ctx.render(rsx!(
-        div {
-            h1 { "Color: {color}" }
-            button { onclick: move |_| set_color("red"), "red" }
-        }
+        h1 { "Color: {color}" }
+        button { onclick: move |_| set_color("red"), "red" }
     ))
 }
 ```
@@ -98,7 +94,7 @@ fn App(ctx: Context<()>) -> VNode {
 
 Selectors are a concept popular in the JS world as a way of narrowing down a selection of state outside the VDOM lifecycle. Selectors have two functions: 1 summarize/narrow down some complex state and 2) memoize calculations.
 
-Selectors are only `readable` - they cannot be set. This differs from AtomJS where selectors _are_ `writable`. Selectors, as you might've guessed, "select" some data from atoms and other selectors.
+Selectors are only `readable` - they cannot be set. This differs from RecoilJS where selectors _are_ `writable`. Selectors, as you might've guessed, "select" some data from atoms and other selectors.
 
 Selectors provide a `SelectorApi` which essentially exposes a read-only `AtomApi`. They have the `get` method which allows any readable valued to be obtained for the purpose of generating a new value. A `Selector` may only return `'static` data, however `SelectorBorrowed` may return borrowed data.
 
@@ -121,9 +117,12 @@ const ThreeChars: SelectorBorrowed<str> = |api| api.get(&Light).chars().take(3).
 Unfortunately, Rust tries to coerce `T` (the type in the Selector generics) to the `'static` lifetime because we defined it as a static. `SelectorBorrowed` defines a type for a function that returns `&T` and provides the right lifetime for `T`. If you don't like having to use a dedicated `Borrowed` type, regular functions work too:
 
 ```rust
+// An atom
 fn Light(api: &mut AtomBuilder) -> &'static str {
     "Green"
 }
+
+// A selector
 fn ThreeChars(api: &mut SelectorApi) -> &'static str {
     api.get(&Light).chars().take(3).unwrap()
 }
@@ -134,7 +133,7 @@ Returning borrowed data is generally frowned upon, but may be useful when used w
 - If a selected value equals its previous selection (via PartialEq), the old value must be kept around to avoid evaluating subscribed components.
 - It's unlikely that a change in a dependency's data will not change the selector's output.
 
-In general, borrowed selectors introduce a slight memory overhead as they need to retain previous state to safely memoize downstream subscribers. The amount of state kept around scales with the amount of `gets` in a selector - though as the number of dependencies increase, the less likely the selector actually stays memoized. Atom tries to optimize this behavior the best it can to balance component evaluations with memory overhead.
+In general, borrowed selectors introduce a slight memory overhead as they need to retain previous state to safely memoize downstream subscribers. The amount of state kept around scales with the amount of `gets` in a selector - though as the number of dependencies increase, the less likely the selector actually stays memoized. Dirac tries to optimize this behavior the best it can to balance component evaluations with memory overhead.
 
 ## Families
 
@@ -156,12 +155,10 @@ Whenever you `select` on a `Family`, the ID of the entry is tracked. Other subsc
 
 ```rust
 fn App(ctx: Context<()>) -> VNode {
-    let (rating, set_rating) = Atoms::use_read_write(ctx, CloudRatings.select("AWS"));
+    let (rating, set_rating) = dirac::use_read_write(ctx, CloudRatings.select("AWS"));
     ctx.render(rsx!(
-        div {
-            h1 { "AWS rating: {rating}" }
-            button { onclick: move |_| set_rating((rating + 1) % 5), "incr" }
-        }
+        h1 { "AWS rating: {rating}" }
+        button { onclick: move |_| set_rating((rating + 1) % 5), "incr" }
     ))
 }
 ```

@@ -602,31 +602,34 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
 
             // todo - this needs to be a "controlled" event
             // these events won't carry the right data with them
-            VirtualEvent::FormEvent(FormEvent { value })
+            todo!()
+            // VirtualEvent::FormEvent(FormEvent { value })
         }
 
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             let evt: web_sys::MouseEvent = event.clone().dyn_into().unwrap();
-            VirtualEvent::MouseEvent(MouseEvent(Box::new(RawMouseEvent {
-                alt_key: evt.alt_key(),
-                button: evt.button() as i32,
-                buttons: evt.buttons() as i32,
-                client_x: evt.client_x(),
-                client_y: evt.client_y(),
-                ctrl_key: evt.ctrl_key(),
-                meta_key: evt.meta_key(),
-                page_x: evt.page_x(),
-                page_y: evt.page_y(),
-                screen_x: evt.screen_x(),
-                screen_y: evt.screen_y(),
-                shift_key: evt.shift_key(),
-                get_modifier_state: GetModifierKey(Box::new(|f| {
-                    // evt.get_modifier_state(f)
-                    todo!("This is not yet implemented properly, sorry :(");
-                })),
-            })))
+            // MouseEvent(Box::new(RawMouseEvent {
+            //                 alt_key: evt.alt_key(),
+            //                 button: evt.button() as i32,
+            //                 buttons: evt.buttons() as i32,
+            //                 client_x: evt.client_x(),
+            //                 client_y: evt.client_y(),
+            //                 ctrl_key: evt.ctrl_key(),
+            //                 meta_key: evt.meta_key(),
+            //                 page_x: evt.page_x(),
+            //                 page_y: evt.page_y(),
+            //                 screen_x: evt.screen_x(),
+            //                 screen_y: evt.screen_y(),
+            //                 shift_key: evt.shift_key(),
+            //                 get_modifier_state: GetModifierKey(Box::new(|f| {
+            //                     // evt.get_modifier_state(f)
+            //                     todo!("This is not yet implemented properly, sorry :(");
+            //                 })),
+            //             }))
+            todo!()
+            // VirtualEvent::MouseEvent()
         }
 
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"

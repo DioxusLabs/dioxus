@@ -4,6 +4,8 @@
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
+use std::rc::Rc;
+
 use crate::innerlude::ScopeIdx;
 
 #[derive(Debug)]
@@ -26,24 +28,21 @@ impl EventTrigger {
 #[derive(Debug)]
 pub enum VirtualEvent {
     // Real events
-    ClipboardEvent(on::ClipboardEvent),
-    CompositionEvent(on::CompositionEvent),
-    KeyboardEvent(on::KeyboardEvent),
-    FocusEvent(on::FocusEvent),
-    FormEvent(on::FormEvent),
-    GenericEvent(on::GenericEvent),
-    SelectionEvent(on::SelectionEvent),
-    TouchEvent(on::TouchEvent),
-    UIEvent(on::UIEvent),
-    WheelEvent(on::WheelEvent),
-    MediaEvent(on::MediaEvent),
-    AnimationEvent(on::AnimationEvent),
-    TransitionEvent(on::TransitionEvent),
-    ToggleEvent(on::ToggleEvent),
-
-    // TODO these events are particularly heavy, so we box them
-    MouseEvent(on::MouseEvent),
-    PointerEvent(on::PointerEvent),
+    ClipboardEvent(Rc<dyn on::ClipboardEvent>),
+    CompositionEvent(Rc<dyn on::CompositionEvent>),
+    KeyboardEvent(Rc<dyn on::KeyboardEvent>),
+    FocusEvent(Rc<dyn on::FocusEvent>),
+    FormEvent(Rc<dyn on::FormEvent>),
+    SelectionEvent(Rc<dyn on::SelectionEvent>),
+    TouchEvent(Rc<dyn on::TouchEvent>),
+    UIEvent(Rc<dyn on::UIEvent>),
+    WheelEvent(Rc<dyn on::WheelEvent>),
+    MediaEvent(Rc<dyn on::MediaEvent>),
+    AnimationEvent(Rc<dyn on::AnimationEvent>),
+    TransitionEvent(Rc<dyn on::TransitionEvent>),
+    ToggleEvent(Rc<dyn on::ToggleEvent>),
+    MouseEvent(Rc<dyn on::MouseEvent>),
+    PointerEvent(Rc<dyn on::PointerEvent>),
 
     // ImageEvent(event_data::ImageEvent),
     OtherEvent,
@@ -51,7 +50,7 @@ pub enum VirtualEvent {
 
 pub mod on {
     #![allow(unused)]
-    use std::{ops::Deref, rc::Rc};
+    use std::{fmt::Debug, ops::Deref, rc::Rc};
 
     use crate::{
         builder::ElementBuilder,
@@ -64,10 +63,13 @@ pub mod on {
     macro_rules! event_directory {
         ( $( $eventdata:ident: [ $( $name:ident )* ]; )* ) => {
             $(
+
+
+
                 $(
                     pub fn $name<'a>(
                         c: &'_ NodeCtx<'a>,
-                        callback: impl Fn($eventdata) + 'a,
+                        callback: impl Fn(Rc<dyn $eventdata>) + 'a,
                     ) -> Listener<'a> {
                         let bump = &c.bump();
                         Listener {
@@ -91,7 +93,6 @@ pub mod on {
         KeyboardEvent: [keydown keypress keyup];
         FocusEvent: [focus blur];
         FormEvent: [change input invalid reset submit];
-        GenericEvent: [];
         MouseEvent: [
             click contextmenu doubleclick drag dragend dragenter dragexit
             dragleave dragover dragstart drop mousedown mouseenter mouseleave
@@ -116,45 +117,46 @@ pub mod on {
         ToggleEvent: [toggle];
     }
 
-    pub struct GetModifierKey(pub Box<dyn Fn(usize) -> bool>);
-    impl std::fmt::Debug for GetModifierKey {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            Ok(()) // just skip for now
-        }
+    trait GenericEvent {
+        /// Returns whether or not a specific event is a bubbling event
+        fn bubbles(&self) -> bool;
+        /// Sets or returns whether the event should propagate up the hierarchy or not
+        fn cancelBubble(&self) -> ();
+        /// Returns whether or not an event can have its default action prevented
+        fn cancelable(&self) -> bool;
+        /// Returns whether the event is composed or not
+        fn composed(&self) -> bool;
+        /// Returns the event's path
+        fn composedPath(&self) -> ();
+        /// Returns the element whose event listeners triggered the event
+        fn currentTarget(&self) -> ();
+        /// Returns whether or not the preventDefault method was called for the event
+        fn defaultPrevented(&self) -> ();
+        /// Returns which phase of the event flow is currently being evaluated
+        fn eventPhase(&self) -> ();
+        /// Returns whether or not an event is trusted
+        fn isTrusted(&self) -> ();
+        /// Cancels the event if it is cancelable, meaning that the default action that belongs to the event will
+        fn preventDefault(&self) -> ();
+        /// Prevents other listeners of the same event from being called
+        fn stopImmediatePropagation(&self) -> ();
+        /// Prevents further propagation of an event during event flow
+        fn stopPropagation(&self) -> ();
+        /// Returns the element that triggered the event
+        fn target(&self) -> ();
+        /// Returns the time (in milliseconds relative to the epoch) at which the event was created
+        fn timeStamp(&self) -> usize;
     }
 
-    // DOMDataTransfer clipboardData
-    #[derive(Debug)]
-    pub struct ClipboardEvent {}
-
-    #[derive(Debug)]
-    pub struct CompositionEvent {
-        data: String,
+    pub trait ClipboardEvent: Debug {
+        // DOMDataTransfer clipboardData
     }
 
-    #[derive(Debug)]
-    pub struct KeyboardEvent {
-        char_code: usize,
-        ctrl_key: bool,
-        key: String,
-        key_code: usize,
-        locale: String,
-        location: usize,
-        meta_key: bool,
-        repeat: bool,
-        shift_key: bool,
-        which: usize,
-        get_modifier_state: GetModifierKey,
-    }
-    pub struct KeyboardEvent2(pub Rc<dyn KeyboardEventT>);
-    impl std::ops::Deref for KeyboardEvent2 {
-        type Target = dyn KeyboardEventT;
-        fn deref(&self) -> &Self::Target {
-            self.0.as_ref()
-        }
+    pub trait CompositionEvent: Debug {
+        fn data(&self) -> String;
     }
 
-    pub trait KeyboardEventT {
+    pub trait KeyboardEvent: Debug {
         fn char_code(&self) -> usize;
         fn ctrl_key(&self) -> bool;
         fn key(&self) -> String;
@@ -165,146 +167,125 @@ pub mod on {
         fn repeat(&self) -> bool;
         fn shift_key(&self) -> bool;
         fn which(&self) -> usize;
-        fn get_modifier_state(&self) -> GetModifierKey;
+        fn get_modifier_state(&self, key_code: usize) -> bool;
     }
 
-    #[derive(Debug)]
-    pub struct FocusEvent {/* DOMEventTarget relatedTarget */}
-
-    #[derive(Debug)]
-    pub struct FormEvent {
-        pub value: String,
+    pub trait FocusEvent: Debug {
+        /* DOMEventTarget relatedTarget */
     }
 
-    #[derive(Debug)]
-    pub struct GenericEvent {/* Error Load */}
-
-    #[derive(Debug)]
-    pub struct MouseEvent(pub Box<RawMouseEvent>);
-
-    #[derive(Debug)]
-    pub struct RawMouseEvent {
-        pub alt_key: bool,
-        pub button: i32,
-        pub buttons: i32,
-        pub client_x: i32,
-        pub client_y: i32,
-        pub ctrl_key: bool,
-        pub meta_key: bool,
-        pub page_x: i32,
-        pub page_y: i32,
-        pub screen_x: i32,
-        pub screen_y: i32,
-        pub shift_key: bool,
-        pub get_modifier_state: GetModifierKey,
-        // relatedTarget: DOMEventTarget,
-    }
-    impl Deref for MouseEvent {
-        type Target = RawMouseEvent;
-        fn deref(&self) -> &Self::Target {
-            self.0.as_ref()
-        }
+    pub trait FormEvent: Debug {
+        fn value(&self) -> String;
     }
 
-    #[derive(Debug)]
-    pub struct PointerEvent(Box<RawPointerEvent>);
-    impl Deref for PointerEvent {
-        type Target = RawPointerEvent;
-        fn deref(&self) -> &Self::Target {
-            self.0.as_ref()
-        }
+    pub trait MouseEvent: Debug {
+        fn alt_key(&self) -> bool;
+        fn button(&self) -> i32;
+        fn buttons(&self) -> i32;
+        fn client_x(&self) -> i32;
+        fn client_y(&self) -> i32;
+        fn ctrl_key(&self) -> bool;
+        fn meta_key(&self) -> bool;
+        fn page_x(&self) -> i32;
+        fn page_y(&self) -> i32;
+        fn screen_x(&self) -> i32;
+        fn screen_y(&self) -> i32;
+        fn shift_key(&self) -> bool;
+        fn get_modifier_state(&self, key_code: usize) -> bool;
     }
 
-    #[derive(Debug)]
-    pub struct RawPointerEvent {
+    pub trait PointerEvent: Debug {
         // Mouse only
-        alt_key: bool,
-        button: usize,
-        buttons: usize,
-        client_x: i32,
-        client_y: i32,
-        ctrl_key: bool,
-        meta_key: bool,
-        page_x: i32,
-        page_y: i32,
-        screen_x: i32,
-        screen_y: i32,
-        shift_key: bool,
-        get_modifier_state: GetModifierKey,
-
-        // Pointer-specific
-        pointer_id: usize,
-        width: usize,
-        height: usize,
-        pressure: usize,
-        tangential_pressure: usize,
-        tilt_x: i32,
-        tilt_y: i32,
-        twist: i32,
-        pointer_type: String,
-        is_primary: bool,
+        fn alt_key(&self) -> bool;
+        fn button(&self) -> usize;
+        fn buttons(&self) -> usize;
+        fn client_x(&self) -> i32;
+        fn client_y(&self) -> i32;
+        fn ctrl_key(&self) -> bool;
+        fn meta_key(&self) -> bool;
+        fn page_x(&self) -> i32;
+        fn page_y(&self) -> i32;
+        fn screen_x(&self) -> i32;
+        fn screen_y(&self) -> i32;
+        fn shift_key(&self) -> bool;
+        fn get_modifier_state(&self, key_code: usize) -> bool;
+        fn pointer_id(&self) -> usize;
+        fn width(&self) -> usize;
+        fn height(&self) -> usize;
+        fn pressure(&self) -> usize;
+        fn tangential_pressure(&self) -> usize;
+        fn tilt_x(&self) -> i32;
+        fn tilt_y(&self) -> i32;
+        fn twist(&self) -> i32;
+        fn pointer_type(&self) -> String;
+        fn is_primary(&self) -> bool;
     }
 
-    #[derive(Debug)]
-    pub struct SelectionEvent {}
+    pub trait SelectionEvent: Debug {}
 
-    #[derive(Debug)]
-    pub struct TouchEvent {
-        alt_key: bool,
-        ctrl_key: bool,
-        meta_key: bool,
-        shift_key: bool,
-        get_modifier_state: GetModifierKey,
-        //
+    pub trait TouchEvent: Debug {
+        fn alt_key(&self) -> bool;
+        fn ctrl_key(&self) -> bool;
+        fn meta_key(&self) -> bool;
+        fn shift_key(&self) -> bool;
+        fn get_modifier_state(&self, key_code: usize) -> bool;
         // changedTouches: DOMTouchList,
-        // todo
         // targetTouches: DOMTouchList,
         // touches: DOMTouchList,
-        //  getModifierState(key): boolean
     }
 
-    #[derive(Debug)]
-    pub struct UIEvent {
+    pub trait UIEvent: Debug {
         // DOMAbstractView view
-        detail: i32,
+        fn detail(&self) -> i32;
     }
 
-    #[derive(Debug)]
-    pub struct WheelEvent {
-        delta_mode: i32,
-        delta_x: i32,
-        delta_y: i32,
-        delta_z: i32,
+    pub trait WheelEvent: Debug {
+        fn delta_mode(&self) -> i32;
+        fn delta_x(&self) -> i32;
+        fn delta_y(&self) -> i32;
+        fn delta_z(&self) -> i32;
     }
 
-    #[derive(Debug)]
-    pub struct MediaEvent {}
+    pub trait MediaEvent: Debug {}
 
-    // todo!
-    // imageevent clashes with media event
-    // might need to derive this e manually
-    //
-    // #[derive(Debug)]
-    // pub struct ImageEvent {}
-    // event_builder! {
-    //     ImageEvent;
-    //     load error
-    // }
-
-    #[derive(Debug)]
-    pub struct AnimationEvent {
-        animation_name: String,
-        pseudo_element: String,
-        elapsed_time: f32,
+    pub trait ImageEvent: Debug {
+        //     load error
     }
 
-    #[derive(Debug)]
-    pub struct TransitionEvent {
-        property_name: String,
-        pseudo_element: String,
-        elapsed_time: f32,
+    pub trait AnimationEvent: Debug {
+        fn animation_name(&self) -> String;
+        fn pseudo_element(&self) -> String;
+        fn elapsed_time(&self) -> f32;
     }
 
-    #[derive(Debug)]
-    pub struct ToggleEvent {}
+    pub trait TransitionEvent: Debug {
+        fn property_name(&self) -> String;
+        fn pseudo_element(&self) -> String;
+        fn elapsed_time(&self) -> f32;
+    }
+
+    pub trait ToggleEvent: Debug {}
+}
+
+mod tests {
+
+    use std::rc::Rc;
+
+    use crate as dioxus;
+    use crate::events::on::MouseEvent;
+    use crate::prelude::*;
+
+    fn autocomplete() {
+        // let v = move |evt| {
+        //     let r = evt.alt_key();
+        // };
+
+        let g = rsx! {
+            button {
+                onclick: move |evt| {
+                    let r = evt.alt_key();
+                }
+            }
+        };
+    }
 }

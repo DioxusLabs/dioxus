@@ -1,14 +1,14 @@
+#![allow(unused)]
 /*
 This example shows how to encapsulate sate in dioxus components with the reducer pattern.
 This pattern is very useful when a single component can handle many types of input that can
 be represented by an enum. This particular pattern is very powerful in rust where ADTs can simplify
 much of the traditional reducer boilerplate.
 */
-#![allow(unused)]
-use std::future::Future;
 
-use dioxus::hooks::use_reducer;
-use dioxus_ssr::prelude::*;
+fn main() {}
+use dioxus::prelude::*;
+use std::future::Future;
 
 enum Actions {
     Pause,
@@ -88,8 +88,6 @@ enum KindaState {
 static EnumReducer: FC<()> = |ctx| {
     let (state, reduce) = use_reducer(&ctx, || KindaState::Ready, |cur, new| *cur = new);
 
-    let contents = helper(&ctx);
-
     let status = match state {
         KindaState::Ready => "Ready",
         KindaState::Complete => "Complete",
@@ -99,7 +97,6 @@ static EnumReducer: FC<()> = |ctx| {
     ctx.render(rsx! {
         div {
             h1 {"{status}"}
-            {contents}
             button {
                 "Set Ready"
                 onclick: move |_| reduce(KindaState::Ready)
@@ -125,12 +122,6 @@ static EnumReducer: FC<()> = |ctx| {
         }
     })
 };
-
-fn helper(ctx: &Context) -> VNode {
-    ctx.render(rsx! {
-        div {}
-    })
-}
 
 /// Demonstrate how the DebugRenderer can be used to unit test components without needing a browser
 /// These tests can run locally.

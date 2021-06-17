@@ -9,8 +9,8 @@
 
 use dioxus::prelude::*;
 
-async fn main() {
-    dioxus_webview::launch(|ctx| {
+fn main() {
+    dioxus::webview::launch(|ctx| {
         let (count, set_count) = use_state(&ctx, || 0);
 
         ctx.render(rsx! {
@@ -23,5 +23,5 @@ async fn main() {
                 }
             }
         })
-    }).await;
+    });
 }

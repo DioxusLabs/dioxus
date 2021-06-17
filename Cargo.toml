@@ -10,7 +10,7 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 [dependencies]
 dioxus-core = { path="./packages/core", version="0.1.0" }
 dioxus-core-macro = { path="./packages/core-macro", version="0.1.0" }
-dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
+# dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
 
 
 [features]
@@ -30,20 +30,20 @@ split-debuginfo = "unpacked"
 
 [dev-dependencies]
 # For the tide ssr examples
-async-std = { version="1.9.0", features=["attributes"] }
-tide = { version="0.16.0" }
+# async-std = { version="1.9.0", features=["attributes"] }
+# tide = { version="0.16.0" }
 
 # For the livewview example
-tide-websockets = "0.4.0"
-serde_millis = "0.1"
-serde_json = "1"
-serde = { version="1", features=['derive'] }
+# tide-websockets = "0.4.0"
+# serde_millis = "0.1"
+# serde_json = "1"
+# serde = { version="1", features=['derive'] }
 
 # For the doc generator
-pulldown-cmark = { version="0.8.0", default-features=false }
+# pulldown-cmark = { version="0.8.0", default-features=false }
 
-dioxus-webview = { path="./packages/webview", version="0.0.0" }
-dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
+# dioxus-webview = { path="./packages/webview", version="0.0.0" }
+# dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
 rand = "0.8.4"
 
 
@@ -51,10 +51,11 @@ rand = "0.8.4"
 members = [
     "packages/core-macro",
     "packages/core",
-    "packages/web",
+    "packages/html-namespace",
+    # "packages/web",
+    # "packages/atoms",
     # "packages/ssr",
     # "packages/docsite",
-    # "packages/atoms",
     # "packages/router",
     # "packages/inputs",
 ]

@@ -13,20 +13,20 @@ Sorted by priority
 | Context                | ✅     | ✅    | share state through the tree                     |
 | Hook                   | ✅     | ✅    | memory cells in components                       |
 | SSR                    | ✅     | ✅    | render directly to string                        |
-| Runs natively          | ✅     | 👀    | runs as a sharable binary                        |
-| Component Children     | ✅     | ✅    | ctx.children() as a list of nodes                |
+| Runs natively          | ✅     | 👀    | runs as a portable binary w/ extra tooling       |
+| Component Children     | ✅     | ✅    | cx.children() as a list of nodes                 |
 | Null components        | ✅     | ✅    | allow returning no components                    |
 | No-div components      | ✅     | ✅    | components that render components                |
 | Fragments              | ✅     | ✅    | rsx! can return multiple elements without a root |
 | NodeRef                | 👀     | ✅    | gain direct access to nodes                      |
-| Controlled Inputs      | 👀     | ✅    | stateful wrappers around inputs                  |
+| Controlled Inputs      | ✅     | ✅    | stateful wrappers around inputs                  |
 | CSS/Inline Styles      | 🛠      | ✅    | syntax for inline/conditional styles             |
 | 1st class global state | 🛠      | ✅    | redux/recoil/mobx on top of context              |
 | ----- Phase 2 -----    | -----  | ----- | -----                                            |
 | 1st class router       | 👀     | ✅    | Hook built on top of history                     |
 | Assets                 | 👀     | ✅    | include css/svg/img url statically               |
 | Integrated classnames  | 🛠      | 👀    | built-in `classnames`                            |
-| Suspense               | 👀     | 👀    | schedule future render from future               |
+| Suspense               | 👀     | 👀    | schedule future render from future/promise       |
 | Transition             | 👀     | 👀    | High-level control over suspense                 |
 | Animation              | 👀     | ✅    | Spring-style animations                          |
 | Mobile                 | 👀     | ✅    | Render with cacao                                |
@@ -34,7 +34,7 @@ Sorted by priority
 | 3D Renderer            | 👀     | ✅    | react-three-fiber                                |
 | ----- Phase 3 -----    | -----  | ----- | -----                                            |
 | Portal                 | 👀     | ✅    | cast elements through tree                       |
-| Error/Panic boundary   | 👀     | ✅    | catch panics and display BSOD                    |
+| Error/Panic boundary   | 👀     | ✅    | catch panics and display custom BSOD             |
 | Code-splitting         | 👀     | ✅    | Make bundle smaller/lazy                         |
 | LiveView               | 👀     | 👀    | Example for SSR + WASM apps                      |
 

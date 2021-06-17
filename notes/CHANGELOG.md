@@ -113,8 +113,8 @@ Welcome to the first iteration of the Dioxus Virtual DOM! This release brings su
   - [ ] Re-exported through the `dioxus` crate (not core)
 - [ ] Hooks
   - [ ] Re-exported through the `dioxus` crate (not essential to core virtualdom)
-- [ ] fragments
-- [ ] pass-thru components
+- [x] fragments
+- [x] pass-thru components
 
 ## Less-essential todos
 
