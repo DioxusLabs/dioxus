@@ -34,30 +34,16 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
     T::builder()
 }
 
-mod eliminate_bounds {
-
-    struct BNode<'a> {
-        _p: &'a (),
-    }
-
-    trait Broper {}
-    impl Broper for () {}
-
-    struct Bontext<'a, P: Broper + 'a> {
-        inner: &'a (),
-        props: P,
-    }
-
-    fn Bexample(c: Bontext<()>) -> BNode {
-        todo!()
-    }
-
-    struct MyBrops<'a> {
-        _i: &'a (),
-    }
-    impl<'a> Broper for MyBrops<'a> {}
-
-    fn Bexample2<'a>(c: Bontext<'a, MyBrops<'a>>) -> BNode {
-        todo!()
-    }
-}
+/// Create inline fragments
+/// --
+///
+/// Fragments capture a series of children without rendering extra nodes.
+///
+///
+///
+pub static Fragment: FC<()> = |ctx| {
+    use crate::prelude::*;
+    ctx.render(LazyNodes::new(move |c| {
+        crate::nodebuilder::vfragment(c, None, ctx.children())
+    }))
+};

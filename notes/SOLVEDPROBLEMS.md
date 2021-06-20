@@ -391,3 +391,101 @@ static Component: FC = |ctx, name: &str| {
 
 }
 ```
+
+## Noderefs
+
+How do we resolve noderefs in a world of patches? Patches _must_ be serializable, so if we do something like `Option<&RefCell<Slot>>`, then that must serialize as _something_ to indicate to a remote host that access to the node itself is desired. Our `Slot` type will need to be somewhat abstract.
+
+If we add a new patch type called "BindRef" we could do something like:
+
+```rust
+enum Patch {
+    //...
+    BindAsRef { raw_node: &RefCell<Option<Slot>> }
+}
+```
+
+```rust
+let node_ref = use_node_ref(&ctx);
+use_effect(&ctx, || {
+
+}, []);
+div { ref: node_ref,
+    "hello me"
+    h3 {"yo dom"}
+}
+```
+
+refs only work when you're native to the platform. it doesn't make sense to gain a ref when you're not native.
+
+## In-sync or separate?
+
+React makes refs - and protection against dom manipulation - work by modifying the real dom while diffing the virtual dom. This lets it bind real dom elements to the virtual dom elements. Dioxus currently does not do this, instead creating a list of changes for an interpreter to apply once diffing has completed.
+
+This behavior fit dodrio well as all dom manipulations would occur batched. The original intention for this approach was to make it faster to read out of wasm and into JS. Dodrio is essentially performing the wasm job that wasm<->js for strings does. In theory, this particular optimization is not necessary.
+
+https://github.com/fitzgen/dodrio/issues/77
+
+This issue/pr on the dodrio repository points to a future where elements are held on to by the virtualdom.
+
+Can we solve events, refs, and protection against 3rd party dom mutation all in one shot?
+
+I think we can....
+
+every node gets a globally unique ID
+
+abstract the real dom
+
+```rust
+
+trait RealDom {
+    type Node: RealNode;
+    fn get_node(&self, id: u32) -> &Self::Node;
+    fn get_node_mut(&mut self, id: u32) -> &mut Self::Node;
+    fn replace_node();
+    fn create_text_node();
+    fn create_element();
+    fn create_element_ns();
+}
+
+trait RealNode {
+    fn add_listener(&mut self, event: &str);
+    fn set_inner_text(&mut self, text: &str);
+    fn set_attr(&mut self, name, value);
+    fn set_class(&mut self);
+    fn remove_attr(&mut self);
+    fn downcast_mut<T>(&mut self) -> Option<&mut T>;
+}
+
+impl VirtualDom<Dom: RealDom> {
+    fn diff<Dom: RealDom>() {
+
+    }
+}
+enum VNode<'bump, 'realdom, RealDom> {
+    VElement {
+        real: &RealDom::Node
+    }
+    VText {
+        real: &RealDom::Node
+    }
+}
+
+
+fn main() {
+    let mut real_dom = websys::Document();
+    let virtual_dom = Dioxus::VirtualDom::new();
+
+    virtual_dom.rebuild(&mut real_dom);
+
+    loop {
+        let event = switch! {
+            real_dom.events.await => event,
+            virtual_dom.inner_events.await => event
+        };
+
+        virtual_dom.apply_event(&mut real_dom, event);
+    }
+}
+
+```
