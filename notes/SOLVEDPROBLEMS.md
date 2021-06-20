@@ -438,6 +438,8 @@ abstract the real dom
 
 ```rust
 
+struct VirtualDom<Dom: RealDom>
+
 trait RealDom {
     type Node: RealNode;
     fn get_node(&self, id: u32) -> &Self::Node;
@@ -454,7 +456,8 @@ trait RealNode {
     fn set_attr(&mut self, name, value);
     fn set_class(&mut self);
     fn remove_attr(&mut self);
-    fn downcast_mut<T>(&mut self) -> Option<&mut T>;
+    // We can't have a generic type in trait objects, so instead we provide the inner as Any
+    fn raw_node_as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 impl VirtualDom<Dom: RealDom> {
