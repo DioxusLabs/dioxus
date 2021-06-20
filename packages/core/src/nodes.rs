@@ -7,13 +7,12 @@ use crate::{
     events::VirtualEvent,
     innerlude::{Context, Properties, Scope, ScopeIdx, FC},
     nodebuilder::text3,
-    virtual_dom::NodeCtx,
-    // support::NodeCtx,
+    virtual_dom::{NodeCtx, RealDomNode},
 };
 use bumpalo::Bump;
 use std::{
     any::Any,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     fmt::{Arguments, Debug},
     marker::PhantomData,
     rc::Rc,
@@ -29,7 +28,7 @@ pub enum VNode<'src> {
     Element(&'src VElement<'src>),
 
     /// A text node (node type `TEXT_NODE`).
-    Text(&'src str),
+    Text(VText<'src>),
 
     /// A fragment is a "virtual position" in the DOM
     /// Fragments may have children and keys
@@ -49,7 +48,7 @@ impl<'a> Clone for VNode<'a> {
     fn clone(&self) -> Self {
         match self {
             VNode::Element(element) => VNode::Element(element),
-            VNode::Text(text) => VNode::Text(text),
+            VNode::Text(old) => VNode::Text(old.clone()),
             VNode::Fragment(fragment) => VNode::Fragment(fragment),
             VNode::Component(component) => VNode::Component(component),
             VNode::Suspended => VNode::Suspended,
@@ -81,6 +80,7 @@ impl<'a> VNode<'a> {
             attributes,
             children,
             namespace,
+            dom_id: Cell::new(RealDomNode::empty()),
         });
         VNode::Element(element)
     }
@@ -88,7 +88,10 @@ impl<'a> VNode<'a> {
     /// Construct a new text node with the given text.
     #[inline]
     pub fn text(text: &'a str) -> VNode<'a> {
-        VNode::Text(text)
+        VNode::Text(VText {
+            text,
+            dom_id: Cell::new(RealDomNode::empty()),
+        })
     }
 
     pub fn text_args(bump: &'a Bump, args: Arguments) -> VNode<'a> {
@@ -98,7 +101,7 @@ impl<'a> VNode<'a> {
     #[inline]
     pub(crate) fn key(&self) -> NodeKey {
         match &self {
-            VNode::Text(_) => NodeKey::NONE,
+            VNode::Text { .. } => NodeKey::NONE,
             VNode::Element(e) => e.key,
             VNode::Fragment(frag) => frag.key,
             VNode::Component(c) => c.key,
@@ -107,6 +110,12 @@ impl<'a> VNode<'a> {
             VNode::Suspended => NodeKey::NONE,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct VText<'src> {
+    pub text: &'src str,
+    pub dom_id: Cell<RealDomNode>,
 }
 
 // ========================================================
@@ -120,6 +129,7 @@ pub struct VElement<'a> {
     pub attributes: &'a [Attribute<'a>],
     pub children: &'a [VNode<'a>],
     pub namespace: Option<&'a str>,
+    pub dom_id: Cell<RealDomNode>,
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or
@@ -224,7 +234,7 @@ pub type VCompAssociatedScope = Option<ScopeIdx>;
 pub struct VComponent<'src> {
     pub key: NodeKey<'src>,
 
-    pub stable_addr: RefCell<StableScopeAddres>,
+    pub mounted_root: RealDomNode,
     pub ass_scope: RefCell<VCompAssociatedScope>,
 
     // pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
@@ -325,7 +335,7 @@ impl<'a> VComponent<'a> {
             raw_props,
             children,
             caller,
-            stable_addr: RefCell::new(None),
+            mounted_root: RealDomNode::empty(),
         }
     }
 }

@@ -9,15 +9,10 @@
 //! Implementation Details:
 //! -----------------------
 //!
-//! Diff the `old` node with the `new` node. Emits instructions to modify a
-//! physical DOM node that reflects `old` into something that reflects `new`.
+//! All nodes are addressed by their IDs. The RealDom provides an imperative interface for making changes to these nodes.
+//! We don't necessarily intend for changes to happen exactly during the diffing process, so the implementor may choose
+//! to batch nodes if it is more performant for their application. The u32 should be a no-op to hash,
 //!
-//! Upon entry to this function, the physical DOM node must be on the top of the
-//! change list stack:
-//!
-//!     [... node]
-//!
-//! The change list stack is in the same state when this function exits.
 //!
 //! Further Reading and Thoughts
 //! ----------------------------
@@ -30,10 +25,57 @@ use crate::{arena::ScopeArena, innerlude::*};
 use fxhash::{FxHashMap, FxHashSet};
 
 use std::{
+    any::Any,
+    cell::Cell,
     cmp::Ordering,
     rc::{Rc, Weak},
-    sync::atomic::AtomicU32,
 };
+
+/// The accompanying "real dom" exposes an imperative API for controlling the UI layout
+///
+/// Instead of having handles directly over nodes, Dioxus uses simple u32s as node IDs.
+/// This allows layouts with up to 4,294,967,295 nodes. If we
+pub trait RealDom {
+    fn delete_root(&mut self, root: RealDomNode);
+
+    // ===========
+    //  Create
+    // ===========
+    /// Create a new text node and push it on to the top of the stack
+    fn create_text_node(&mut self, text: &str) -> RealDomNode;
+
+    /// Create a new text node and push it on to the top of the stack
+    fn create_element(&mut self, tag: &str) -> RealDomNode;
+
+    /// Create a new namespaced element and push it on to the top of the stack
+    fn create_element_ns(&mut self, tag: &str, namespace: &str) -> RealDomNode;
+
+    fn append_node(&self, child: RealDomNode, parent: RealDomNode);
+
+    // ===========
+    //  Remove
+    // ===========
+    fn remove_node(&mut self, node: RealDomNode);
+
+    fn remove_all_children(&mut self, node: RealDomNode);
+
+    // ===========
+    //  Replace
+    // ===========
+    fn replace_node_with(&mut self, old: RealDomNode, new: RealDomNode);
+
+    fn new_event_listener(&mut self, node: RealDomNode, event: &str);
+
+    fn set_inner_text(&mut self, node: RealDomNode, text: &str);
+
+    fn set_class(&mut self, node: RealDomNode);
+
+    fn set_attr(&mut self, node: RealDomNode, name: &str, value: &str);
+
+    fn remove_attr(&mut self, node: RealDomNode);
+
+    fn raw_node_as_any_mut(&mut self) -> &mut dyn Any;
+}
 
 /// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
 /// diffing trees of components. This means we can "re-enter" a subtree of a component by queuing a "NeedToDiff" event.
@@ -47,39 +89,39 @@ use std::{
 /// The order of these re-entrances is stored in the DiffState itself. The DiffState comes pre-loaded with a set of components
 /// that were modified by the eventtrigger. This prevents doubly evaluating components if they were both updated via
 /// subscriptions and props changes.
-pub struct DiffMachine<'a> {
-    pub create_diffs: bool,
+pub struct DiffMachine {
     pub cur_idx: ScopeIdx,
-    pub change_list: EditMachine<'a>,
     pub diffed: FxHashSet<ScopeIdx>,
     pub components: ScopeArena,
     pub event_queue: EventQueue,
     pub seen_nodes: FxHashSet<ScopeIdx>,
 }
 
-static COUNTER: AtomicU32 = AtomicU32::new(1);
+// todo: see if unsafe works better
+static COUNTER: Cell<u32> = Cell::new(1);
 fn next_id() -> u32 {
-    COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    let out = COUNTER.get();
+    COUNTER.set(out + 1);
+    out
 }
 
-impl<'a> DiffMachine<'a> {
+impl DiffMachine {
     pub fn new(components: ScopeArena, cur_idx: ScopeIdx, event_queue: EventQueue) -> Self {
         Self {
             components,
             cur_idx,
             event_queue,
-            create_diffs: true,
-            change_list: EditMachine::new(),
             diffed: FxHashSet::default(),
             seen_nodes: FxHashSet::default(),
         }
     }
 
-    pub fn consume(self) -> EditList<'a> {
-        self.change_list.emitter
-    }
-
-    pub fn diff_node(&mut self, old_node: &VNode<'a>, new_node: &VNode<'a>) {
+    pub fn diff_node<'a, Dom: RealDom>(
+        &mut self,
+        dom: &mut Dom,
+        old_node: &mut VNode<'a>,
+        new_node: &mut VNode<'a>,
+    ) {
         // pub fn diff_node(&mut self, old: &VNode<'a>, new: &VNode<'a>) {
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
@@ -87,61 +129,64 @@ impl<'a> DiffMachine<'a> {
         When re-entering, we reuse the EditList in DiffState
         */
         match (old_node, new_node) {
-            (VNode::Text(old_text), VNode::Text(new_text)) => {
-                if old_text != new_text {
-                    self.change_list.commit_traversal();
-                    self.change_list.set_text(new_text);
+            (VNode::Text(old), VNode::Text(new)) => {
+                new.dom_id = old.dom_id;
+                if old.text != new.text {
+                    self.realdom.set_inner_text(new.dom_id, new.text);
                 }
             }
 
-            (VNode::Text(_), VNode::Element(_)) => {
-                self.change_list.commit_traversal();
+            (VNode::Text(old), VNode::Element(new)) => {
+                // // self.realdom.commit_traversal();
                 self.create(new_node);
-                self.change_list.replace_with();
+                self.realdom.replace_node_with(old.dom_id, old.dom_id);
+                // self.realdom.replace_with();
             }
 
-            (VNode::Element(_), VNode::Text(_)) => {
-                self.change_list.commit_traversal();
+            (VNode::Element(old), VNode::Text(new)) => {
+                // // self.realdom.commit_traversal();
                 self.create(new_node);
-                self.change_list.replace_with();
+                self.realdom.replace_node_with(old.dom_id, new.dom_id);
+                // self.realdom.replace_with();
             }
 
-            (VNode::Element(eold), VNode::Element(enew)) => {
+            (VNode::Element(old), VNode::Element(new)) => {
                 // If the element type is completely different, the element needs to be re-rendered completely
-                if enew.tag_name != eold.tag_name || enew.namespace != eold.namespace {
-                    self.change_list.commit_traversal();
-                    self.change_list.replace_with();
+                if new.tag_name != old.tag_name || new.namespace != old.namespace {
+                    // // self.realdom.commit_traversal();
+                    // self.realdom.replace_with();
+                    self.realdom.replace_node_with(old.dom_id, new.dom_id);
                     return;
                 }
 
-                self.diff_listeners(eold.listeners, enew.listeners);
-                self.diff_attr(eold.attributes, enew.attributes, enew.namespace.is_some());
-                self.diff_children(eold.children, enew.children);
+                self.diff_listeners(old.listeners, new.listeners);
+                self.diff_attr(old.attributes, new.attributes, new.namespace.is_some());
+                self.diff_children(old.children, new.children);
             }
 
-            (VNode::Component(cold), VNode::Component(cnew)) => {
+            (VNode::Component(old), VNode::Component(new)) => {
                 // Make sure we're dealing with the same component (by function pointer)
-                if cold.user_fc == cnew.user_fc {
+                if old.user_fc == new.user_fc {
                     // Make sure the new component vnode is referencing the right scope id
-                    let scope_id = cold.ass_scope.borrow().clone();
-                    *cnew.ass_scope.borrow_mut() = scope_id;
+                    let scope_id = old.ass_scope.borrow().clone();
+                    *new.ass_scope.borrow_mut() = scope_id;
 
                     // make sure the component's caller function is up to date
                     self.components
                         .with_scope(scope_id.unwrap(), |scope| {
-                            scope.caller = Rc::downgrade(&cnew.caller)
+                            scope.caller = Rc::downgrade(&new.caller)
                         })
                         .unwrap();
 
                     // React doesn't automatically memoize, but we do.
                     // The cost is low enough to make it worth checking
-                    let should_render = match cold.comparator {
-                        Some(comparator) => comparator(cnew),
+                    let should_render = match old.comparator {
+                        Some(comparator) => comparator(new),
                         None => true,
                     };
 
                     if should_render {
-                        self.change_list.commit_traversal();
+                        // // self.realdom.commit_traversal();
                         self.components
                             .with_scope(scope_id.unwrap(), |f| {
                                 f.run_scope().unwrap();
@@ -159,28 +204,29 @@ impl<'a> DiffMachine<'a> {
                     // A new component has shown up! We need to destroy the old node
 
                     // Wipe the old one and plant the new one
-                    self.change_list.commit_traversal();
+                    // self.realdom.commit_traversal();
                     self.create(new_node);
-                    self.change_list.replace_with();
+                    // self.realdom.replace_node_with(old.dom_id, new.dom_id);
+                    self.realdom.replace_with();
 
                     // Now we need to remove the old scope and all of its descendents
-                    let old_scope = cold.ass_scope.borrow().as_ref().unwrap().clone();
+                    let old_scope = old.ass_scope.borrow().as_ref().unwrap().clone();
                     self.destroy_scopes(old_scope);
                 }
             }
 
             // todo: knock out any listeners
             (_, VNode::Component(_)) => {
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 self.create(new_node);
-                self.change_list.replace_with();
+                self.realdom.replace_with();
             }
 
             // A component is being torn down in favor of a non-component node
             (VNode::Component(_old), _) => {
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 self.create(new_node);
-                self.change_list.replace_with();
+                self.realdom.replace_with();
 
                 // Destroy the original scope and any of its children
                 self.destroy_scopes(_old.ass_scope.borrow().unwrap());
@@ -223,35 +269,46 @@ impl<'a> DiffMachine<'a> {
     // When this function returns, the new node is on top of the change list stack:
     //
     //     [... node]
-    fn create(&mut self, node: &VNode<'a>) {
-        debug_assert!(self.change_list.traversal_is_committed());
+    fn create<'a, Dom: RealDom>(
+        &mut self,
+        dom: &mut Dom,
+        node: &mut VNode<'a>,
+        parent: RealDomNode,
+    ) {
+        // debug_assert!(self.realdom.traversal_is_committed());
         match node {
             VNode::Text(text) => {
-                self.change_list.create_text_node(text);
+                let real_id = self.realdom.create_text_node(text.text);
+                text.dom_id = real_id;
             }
-            VNode::Element(&VElement {
-                key,
-                tag_name,
-                listeners,
-                attributes,
-                children,
-                namespace,
-            }) => {
+            VNode::Element(&el) => {
+                let VElement {
+                    key,
+                    tag_name,
+                    listeners,
+                    attributes,
+                    children,
+                    namespace,
+                    dom_id,
+                } = el;
                 // log::info!("Creating {:#?}", node);
-                if let Some(namespace) = namespace {
-                    self.change_list.create_element_ns(tag_name, namespace);
+                let real_id = if let Some(namespace) = namespace {
+                    self.realdom.create_element_ns(tag_name, namespace)
                 } else {
-                    self.change_list.create_element(tag_name);
-                }
+                    self.realdom.create_element(tag_name)
+                };
+                el.dom_id = real_id;
 
                 listeners.iter().enumerate().for_each(|(_id, listener)| {
-                    self.change_list
-                        .new_event_listener(listener.event, listener.scope, listener.id)
+                    todo!()
+                    // self.realdom
+                    //     .new_event_listener(listener.event, listener.scope, listener.id)
                 });
 
                 for attr in attributes {
-                    self.change_list
-                        .set_attribute(&attr.name, &attr.value, namespace.is_some());
+                    todo!()
+                    // self.realdom
+                    //     .set_attribute(&attr.name, &attr.value, namespace.is_some());
                 }
 
                 // Fast path: if there is a single text child, it is faster to
@@ -262,28 +319,27 @@ impl<'a> DiffMachine<'a> {
                 // parent.
                 if children.len() == 1 {
                     if let VNode::Text(text) = children[0] {
-                        self.change_list.set_text(text);
+                        self.realdom.set_inner_text(real_id, text.text);
                         return;
                     }
                 }
 
                 for child in children {
-                    self.create(child);
+                    self.create(child, real_id);
                     if let VNode::Fragment(_) = child {
                         // do nothing
                         // fragments append themselves
                     } else {
-                        self.change_list.append_child();
+                        self.realdom.append_child();
                     }
                 }
             }
 
             VNode::Component(component) => {
-                self.change_list
-                    .create_text_node("placeholder for vcomponent");
+                self.realdom.create_text_node("placeholder for vcomponent");
 
-                let root_id = next_id();
-                self.change_list.save_known_root(root_id);
+                // let root_id = next_id();
+                // self.realdom.save_known_root(root_id);
 
                 log::debug!("Mounting a new component");
                 let caller: Weak<OpaqueComponent> = Rc::downgrade(&component.caller);
@@ -333,7 +389,8 @@ impl<'a> DiffMachine<'a> {
                 new_component.run_scope().unwrap();
 
                 // And then run the diff algorithm
-                self.diff_node(new_component.old_frame(), new_component.next_frame());
+                todo!();
+                // self.diff_node(new_component.old_frame(), new_component.next_frame());
 
                 // Finally, insert this node as a seen node.
                 self.seen_nodes.insert(idx);
@@ -343,8 +400,9 @@ impl<'a> DiffMachine<'a> {
             VNode::Fragment(frag) => {
                 // create the children directly in the space
                 for child in frag.children {
-                    self.create(child);
-                    self.change_list.append_child();
+                    todo!()
+                    // self.create(child);
+                    // self.realdom.append_child();
                 }
             }
 
@@ -395,7 +453,7 @@ impl<'a> DiffMachine<'a> {
     // The change list stack is left unchanged.
     fn diff_listeners(&mut self, old: &[Listener<'_>], new: &[Listener<'_>]) {
         if !old.is_empty() || !new.is_empty() {
-            self.change_list.commit_traversal();
+            // self.realdom.commit_traversal();
         }
 
         'outer1: for (_l_idx, new_l) in new.iter().enumerate() {
@@ -410,8 +468,8 @@ impl<'a> DiffMachine<'a> {
             for old_l in old {
                 if new_l.event == old_l.event {
                     if new_l.id != old_l.id {
-                        self.change_list.remove_event_listener(event_type);
-                        self.change_list
+                        self.realdom.remove_event_listener(event_type);
+                        self.realdom
                             .update_event_listener(event_type, new_l.scope, new_l.id)
                     }
 
@@ -419,7 +477,7 @@ impl<'a> DiffMachine<'a> {
                 }
             }
 
-            self.change_list
+            self.realdom
                 .new_event_listener(event_type, new_l.scope, new_l.id);
         }
 
@@ -429,7 +487,7 @@ impl<'a> DiffMachine<'a> {
                     continue 'outer2;
                 }
             }
-            self.change_list.remove_event_listener(old_l.event);
+            self.realdom.remove_event_listener(old_l.event);
         }
     }
 
@@ -440,7 +498,7 @@ impl<'a> DiffMachine<'a> {
     //     [... node]
     //
     // The change list stack is left unchanged.
-    fn diff_attr(
+    fn diff_attr<'a>(
         &mut self,
         old: &'a [Attribute<'a>],
         new: &'a [Attribute<'a>],
@@ -453,15 +511,15 @@ impl<'a> DiffMachine<'a> {
         // With the Rsx and Html macros, this will almost always be the case
         'outer: for new_attr in new {
             if new_attr.is_volatile() {
-                self.change_list.commit_traversal();
-                self.change_list
+                // self.realdom.commit_traversal();
+                self.realdom
                     .set_attribute(new_attr.name, new_attr.value, is_namespaced);
             } else {
                 for old_attr in old {
                     if old_attr.name == new_attr.name {
                         if old_attr.value != new_attr.value {
-                            self.change_list.commit_traversal();
-                            self.change_list.set_attribute(
+                            // self.realdom.commit_traversal();
+                            self.realdom.set_attribute(
                                 new_attr.name,
                                 new_attr.value,
                                 is_namespaced,
@@ -473,8 +531,8 @@ impl<'a> DiffMachine<'a> {
                     }
                 }
 
-                self.change_list.commit_traversal();
-                self.change_list
+                // self.realdom.commit_traversal();
+                self.realdom
                     .set_attribute(new_attr.name, new_attr.value, is_namespaced);
             }
         }
@@ -486,8 +544,8 @@ impl<'a> DiffMachine<'a> {
                 }
             }
 
-            self.change_list.commit_traversal();
-            self.change_list.remove_attribute(old_attr.name);
+            // self.realdom.commit_traversal();
+            self.realdom.remove_attribute(old_attr.name);
         }
     }
 
@@ -499,10 +557,10 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_children(&mut self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
+    fn diff_children<'a>(&mut self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
         if new.is_empty() {
             if !old.is_empty() {
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 self.remove_all_children(old);
             }
             return;
@@ -515,8 +573,8 @@ impl<'a> DiffMachine<'a> {
                 }
 
                 (_, &VNode::Text(text)) => {
-                    self.change_list.commit_traversal();
-                    self.change_list.set_text(text);
+                    // self.realdom.commit_traversal();
+                    self.realdom.set_text(text);
                     return;
                 }
 
@@ -527,7 +585,7 @@ impl<'a> DiffMachine<'a> {
 
         if old.is_empty() {
             if !new.is_empty() {
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 self.create_and_append_children(new);
             }
             return;
@@ -546,9 +604,9 @@ impl<'a> DiffMachine<'a> {
         );
 
         if new_is_keyed && old_is_keyed {
-            let t = self.change_list.next_temporary();
+            let t = self.realdom.next_temporary();
             self.diff_keyed_children(old, new);
-            self.change_list.set_next_temporary(t);
+            self.realdom.set_next_temporary(t);
         } else {
             self.diff_non_keyed_children(old, new);
         }
@@ -575,7 +633,7 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     //
     // Upon exiting, the change list stack is in the same state.
-    fn diff_keyed_children(&mut self, old: &[VNode<'a>], new: &[VNode<'a>]) {
+    fn diff_keyed_children<'a>(&mut self, old: &[VNode<'a>], new: &[VNode<'a>]) {
         // if cfg!(debug_assertions) {
         //     let mut keys = fxhash::FxHashSet::default();
         //     let mut assert_unique_keys = |children: &[VNode]| {
@@ -658,8 +716,8 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     //
     // Upon exit, the change list stack is the same.
-    fn diff_keyed_prefix(&mut self, old: &[VNode<'a>], new: &[VNode<'a>]) -> KeyedPrefixResult {
-        self.change_list.go_down();
+    fn diff_keyed_prefix<'a>(&mut self, old: &[VNode<'a>], new: &[VNode<'a>]) -> KeyedPrefixResult {
+        // self.realdom.go_down();
         let mut shared_prefix_count = 0;
 
         for (i, (old, new)) in old.iter().zip(new.iter()).enumerate() {
@@ -667,7 +725,7 @@ impl<'a> DiffMachine<'a> {
                 break;
             }
 
-            self.change_list.go_to_sibling(i);
+            self.realdom.go_to_sibling(i);
 
             self.diff_node(old, new);
 
@@ -677,8 +735,8 @@ impl<'a> DiffMachine<'a> {
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if shared_prefix_count == old.len() {
-            self.change_list.go_up();
-            self.change_list.commit_traversal();
+            self.realdom.go_up();
+            // self.realdom.commit_traversal();
             self.create_and_append_children(&new[shared_prefix_count..]);
             return KeyedPrefixResult::Finished;
         }
@@ -686,13 +744,13 @@ impl<'a> DiffMachine<'a> {
         // And if that was all of the new children, then remove all of the remaining
         // old children and we're finished.
         if shared_prefix_count == new.len() {
-            self.change_list.go_to_sibling(shared_prefix_count);
-            self.change_list.commit_traversal();
+            self.realdom.go_to_sibling(shared_prefix_count);
+            // self.realdom.commit_traversal();
             self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
             return KeyedPrefixResult::Finished;
         }
 
-        self.change_list.go_up();
+        self.realdom.go_up();
         KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
     }
 
@@ -709,7 +767,7 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     //
     // Upon exit from this function, it will be restored to that same state.
-    fn diff_keyed_middle(
+    fn diff_keyed_middle<'a>(
         &mut self,
         old: &[VNode<'a>],
         mut new: &[VNode<'a>],
@@ -753,11 +811,11 @@ impl<'a> DiffMachine<'a> {
         // afresh.
         if shared_suffix_count == 0 && shared_keys.is_empty() {
             if shared_prefix_count == 0 {
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 self.remove_all_children(old);
             } else {
-                self.change_list.go_down_to_child(shared_prefix_count);
-                self.change_list.commit_traversal();
+                self.realdom.go_down_to_child(shared_prefix_count);
+                // self.realdom.commit_traversal();
                 self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
             }
 
@@ -779,8 +837,8 @@ impl<'a> DiffMachine<'a> {
                 .unwrap_or(old.len());
 
             if end - start > 0 {
-                self.change_list.commit_traversal();
-                let mut t = self.change_list.save_children_to_temporaries(
+                // self.realdom.commit_traversal();
+                let mut t = self.realdom.save_children_to_temporaries(
                     shared_prefix_count + start,
                     shared_prefix_count + end,
                 );
@@ -805,8 +863,8 @@ impl<'a> DiffMachine<'a> {
             if !shared_keys.contains(&old_child.key()) {
                 // registry.remove_subtree(old_child);
                 // todo
-                self.change_list.commit_traversal();
-                self.change_list.remove_child(i + shared_prefix_count);
+                // self.realdom.commit_traversal();
+                self.realdom.remove_child(i + shared_prefix_count);
                 removed_count += 1;
             }
         }
@@ -849,7 +907,7 @@ impl<'a> DiffMachine<'a> {
             // shared suffix to the change list stack.
             //
             // [... parent]
-            self.change_list
+            self.realdom
                 .go_down_to_child(old_shared_suffix_start - removed_count);
         // [... parent first_child_of_shared_suffix]
         } else {
@@ -865,29 +923,29 @@ impl<'a> DiffMachine<'a> {
                 let old_index = new_index_to_old_index[last_index];
                 let temp = old_index_to_temp[old_index];
                 // [... parent]
-                self.change_list.go_down_to_temp_child(temp);
+                self.realdom.go_down_to_temp_child(temp);
                 // [... parent last]
                 self.diff_node(&old[old_index], last);
 
                 if new_index_is_in_lis.contains(&last_index) {
                     // Don't move it, since it is already where it needs to be.
                 } else {
-                    self.change_list.commit_traversal();
+                    // self.realdom.commit_traversal();
                     // [... parent last]
-                    self.change_list.append_child();
+                    self.realdom.append_child();
                     // [... parent]
-                    self.change_list.go_down_to_temp_child(temp);
+                    self.realdom.go_down_to_temp_child(temp);
                     // [... parent last]
                 }
             } else {
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 // [... parent]
                 self.create(last);
 
                 // [... parent last]
-                self.change_list.append_child();
+                self.realdom.append_child();
                 // [... parent]
-                self.change_list.go_down_to_reverse_child(0);
+                self.realdom.go_down_to_reverse_child(0);
                 // [... parent last]
             }
         }
@@ -896,11 +954,11 @@ impl<'a> DiffMachine<'a> {
             let old_index = new_index_to_old_index[new_index];
             if old_index == u32::MAX as usize {
                 debug_assert!(!shared_keys.contains(&new_child.key()));
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 // [... parent successor]
                 self.create(new_child);
                 // [... parent successor new_child]
-                self.change_list.insert_before();
+                self.realdom.insert_before();
             // [... parent new_child]
             } else {
                 debug_assert!(shared_keys.contains(&new_child.key()));
@@ -909,14 +967,14 @@ impl<'a> DiffMachine<'a> {
 
                 if new_index_is_in_lis.contains(&new_index) {
                     // [... parent successor]
-                    self.change_list.go_to_temp_sibling(temp);
+                    self.realdom.go_to_temp_sibling(temp);
                 // [... parent new_child]
                 } else {
-                    self.change_list.commit_traversal();
+                    // self.realdom.commit_traversal();
                     // [... parent successor]
-                    self.change_list.push_temporary(temp);
+                    self.realdom.push_temporary(temp);
                     // [... parent successor new_child]
-                    self.change_list.insert_before();
+                    self.realdom.insert_before();
                     // [... parent new_child]
                 }
 
@@ -925,7 +983,7 @@ impl<'a> DiffMachine<'a> {
         }
 
         // [... parent child]
-        self.change_list.go_up();
+        self.realdom.go_up();
         // [... parent]
     }
 
@@ -936,7 +994,7 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     //
     // When this function exits, the change list stack remains the same.
-    fn diff_keyed_suffix(
+    fn diff_keyed_suffix<'a>(
         &mut self,
         old: &[VNode<'a>],
         new: &[VNode<'a>],
@@ -946,16 +1004,16 @@ impl<'a> DiffMachine<'a> {
         debug_assert!(!old.is_empty());
 
         // [... parent]
-        self.change_list.go_down();
+        self.realdom.go_down();
         // [... parent new_child]
 
         for (i, (old_child, new_child)) in old.iter().zip(new.iter()).enumerate() {
-            self.change_list.go_to_sibling(new_shared_suffix_start + i);
+            self.realdom.go_to_sibling(new_shared_suffix_start + i);
             self.diff_node(old_child, new_child);
         }
 
         // [... parent]
-        self.change_list.go_up();
+        self.realdom.go_up();
     }
 
     // Diff children that are not keyed.
@@ -966,18 +1024,18 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(&mut self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
+    fn diff_non_keyed_children<'a>(&mut self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
         // Handled these cases in `diff_children` before calling this function.
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
         //     [... parent]
-        self.change_list.go_down();
+        self.realdom.go_down();
         //     [... parent child]
 
         for (i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
             // [... parent prev_child]
-            self.change_list.go_to_sibling(i);
+            self.realdom.go_to_sibling(i);
             // [... parent this_child]
             self.diff_node(old_child, new_child);
         }
@@ -986,9 +1044,9 @@ impl<'a> DiffMachine<'a> {
             // old.len > new.len -> removing some nodes
             Ordering::Greater => {
                 // [... parent prev_child]
-                self.change_list.go_to_sibling(new.len());
+                self.realdom.go_to_sibling(new.len());
                 // [... parent first_child_to_remove]
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 // support::remove_self_and_next_siblings(state, &old[new.len()..]);
                 self.remove_self_and_next_siblings(&old[new.len()..]);
                 // [... parent]
@@ -996,15 +1054,15 @@ impl<'a> DiffMachine<'a> {
             // old.len < new.len -> adding some nodes
             Ordering::Less => {
                 // [... parent last_child]
-                self.change_list.go_up();
+                self.realdom.go_up();
                 // [... parent]
-                self.change_list.commit_traversal();
+                // self.realdom.commit_traversal();
                 self.create_and_append_children(&new[old.len()..]);
             }
             // old.len == new.len -> no nodes added/removed, but πerhaps changed
             Ordering::Equal => {
                 // [... parent child]
-                self.change_list.go_up();
+                self.realdom.go_up();
                 // [... parent]
             }
         }
@@ -1021,15 +1079,15 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     //
     // When this function returns, the change list stack is in the same state.
-    pub fn remove_all_children(&mut self, old: &[VNode<'a>]) {
-        debug_assert!(self.change_list.traversal_is_committed());
+    pub fn remove_all_children<'a>(&mut self, old: &[VNode<'a>]) {
+        // debug_assert!(self.realdom.traversal_is_committed());
         log::debug!("REMOVING CHILDREN");
         for _child in old {
             // registry.remove_subtree(child);
         }
         // Fast way to remove all children: set the node's textContent to an empty
         // string.
-        self.change_list.set_text("");
+        self.realdom.set_text("");
     }
 
     // Create the given children and append them to the parent node.
@@ -1039,11 +1097,11 @@ impl<'a> DiffMachine<'a> {
     //     [... parent]
     //
     // When this function returns, the change list stack is in the same state.
-    pub fn create_and_append_children(&mut self, new: &[VNode<'a>]) {
-        debug_assert!(self.change_list.traversal_is_committed());
+    pub fn create_and_append_children<'a>(&mut self, new: &[VNode<'a>]) {
+        // debug_assert!(self.realdom.traversal_is_committed());
         for child in new {
             self.create(child);
-            self.change_list.append_child();
+            self.realdom.append_child();
         }
     }
 
@@ -1056,11 +1114,11 @@ impl<'a> DiffMachine<'a> {
     // After the function returns, the child is no longer on the change list stack:
     //
     //     [... parent]
-    pub fn remove_self_and_next_siblings(&mut self, old: &[VNode<'a>]) {
-        debug_assert!(self.change_list.traversal_is_committed());
+    pub fn remove_self_and_next_siblings<'a>(&mut self, old: &[VNode<'a>]) {
+        // debug_assert!(self.realdom.traversal_is_committed());
         for child in old {
             if let VNode::Component(vcomp) = child {
-                // self.change_list
+                // self.realdom
                 //     .create_text_node("placeholder for vcomponent");
 
                 todo!()
@@ -1071,7 +1129,7 @@ impl<'a> DiffMachine<'a> {
                 // })
                 // let id = get_id();
                 // *component.stable_addr.as_ref().borrow_mut() = Some(id);
-                // self.change_list.save_known_root(id);
+                // self.realdom.save_known_root(id);
                 // let scope = Rc::downgrade(&component.ass_scope);
                 // self.lifecycle_events.push_back(LifeCycleEvent::Mount {
                 //     caller: Rc::downgrade(&component.caller),
@@ -1082,7 +1140,7 @@ impl<'a> DiffMachine<'a> {
 
             // registry.remove_subtree(child);
         }
-        self.change_list.remove_self_and_next_siblings();
+        self.realdom.remove_self_and_next_siblings();
     }
 }
 

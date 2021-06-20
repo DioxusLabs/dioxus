@@ -11,7 +11,7 @@
 pub mod arena;
 pub mod component; // Logic for extending FC
 
-pub mod debug_renderer;
+// pub mod debug_renderer;
 pub mod diff;
 pub mod patch; // An "edit phase" described by transitions and edit operations // Test harness for validating that lifecycles and diffs work appropriately
                // the diffing algorithm that builds the ChangeList
@@ -30,7 +30,6 @@ pub mod builder {
 pub(crate) mod innerlude {
     pub use crate::component::*;
 
-    pub use crate::debug_renderer::*;
     pub use crate::diff::*;
     pub use crate::error::*;
     pub use crate::events::*;
@@ -77,6 +76,6 @@ pub mod prelude {
     pub use crate::diff::DiffMachine;
     pub use crate::virtual_dom::ScopeIdx;
 
-    pub use crate::debug_renderer::DebugRenderer;
+    // pub use crate::debug_renderer::DebugRenderer;
     pub use crate::hooks::*;
 }

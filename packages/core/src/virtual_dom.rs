@@ -63,6 +63,14 @@ pub struct VirtualDom {
     _root_prop_type: std::any::TypeId,
 }
 
+#[derive(Clone, Copy)]
+pub struct RealDomNode(u32);
+impl RealDomNode {
+    pub fn empty() -> Self {
+        Self(u32::MIN)
+    }
+}
+
 // ======================================
 // Public Methods for the VirtualDom
 // ======================================
@@ -174,10 +182,15 @@ impl VirtualDom {
             _root_prop_type: TypeId::of::<P>(),
         }
     }
+}
 
+// ======================================
+// Private Methods for the VirtualDom
+// ======================================
+impl VirtualDom {
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     /// Currently this doesn't do what we want it to do
-    pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
+    pub fn rebuild<'s, Dom: RealDom>(&'s mut self, realdom: &mut Dom) -> Result<()> {
         let mut diff_machine = DiffMachine::new(
             self.components.clone(),
             self.base_scope,
@@ -193,16 +206,10 @@ impl VirtualDom {
         let update = &base.event_channel;
         update();
 
-        self.progress_completely(&mut diff_machine)?;
+        self.progress_completely(realdom, &mut diff_machine)?;
 
-        Ok(diff_machine.consume())
+        Ok(())
     }
-}
-
-// ======================================
-// Private Methods for the VirtualDom
-// ======================================
-impl VirtualDom {
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
     ///  
     /// Given a synthetic event, the component that triggered the event, and the index of the callback, this runs the virtual
@@ -246,7 +253,11 @@ impl VirtualDom {
     // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
     //
     // A good project would be to remove all unsafe from this crate and move the unsafety into safer abstractions.
-    pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList> {
+    pub fn progress_with_event<Dom: RealDom>(
+        &mut self,
+        realdom: &mut Dom,
+        event: EventTrigger,
+    ) -> Result<()> {
         let id = event.component_id.clone();
 
         self.components.try_get_mut(id)?.call_listener(event)?;
@@ -254,18 +265,19 @@ impl VirtualDom {
         let mut diff_machine =
             DiffMachine::new(self.components.clone(), id, self.event_queue.clone());
 
-        self.progress_completely(&mut diff_machine)?;
+        self.progress_completely(realdom, &mut diff_machine)?;
 
-        Ok(diff_machine.consume())
+        Ok(())
     }
 
     /// Consume the event queue, descending depth-first.
     /// Only ever run each component once.
     ///
     /// The DiffMachine logs its progress as it goes which might be useful for certain types of renderers.
-    pub(crate) fn progress_completely<'s>(
+    pub(crate) fn progress_completely<'s, Dom: RealDom>(
         &'s mut self,
-        diff_machine: &'_ mut DiffMachine<'s>,
+        realdom: &mut Dom,
+        diff_machine: &'_ mut DiffMachine,
     ) -> Result<()> {
         // Add this component to the list of components that need to be difed
         // #[allow(unused_assignments)]
@@ -302,7 +314,8 @@ impl VirtualDom {
             cur_component.run_scope()?;
             // diff_machine.change_list.load_known_root(1);
 
-            diff_machine.diff_node(cur_component.old_frame(), cur_component.next_frame());
+            let (old, new) = cur_component.get_frames_mut();
+            diff_machine.diff_node(realdom, old, new);
 
             // cur_height = cur_component.height;
 
@@ -528,6 +541,12 @@ impl Scope {
             listener_fn(event);
         }
         Ok(())
+    }
+
+    fn get_frames_mut<'bump>(
+        &'bump mut self,
+    ) -> (&'bump mut VNode<'bump>, &'bump mut VNode<'bump>) {
+        todo!()
     }
 
     pub fn next_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
