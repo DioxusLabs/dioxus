@@ -192,6 +192,7 @@ impl VirtualDom {
     /// Currently this doesn't do what we want it to do
     pub fn rebuild<'s, Dom: RealDom>(&'s mut self, realdom: &mut Dom) -> Result<()> {
         let mut diff_machine = DiffMachine::new(
+            realdom,
             self.components.clone(),
             self.base_scope,
             self.event_queue.clone(),
@@ -206,7 +207,7 @@ impl VirtualDom {
         let update = &base.event_channel;
         update();
 
-        self.progress_completely(realdom, &mut diff_machine)?;
+        self.progress_completely(&mut diff_machine)?;
 
         Ok(())
     }
@@ -262,10 +263,14 @@ impl VirtualDom {
 
         self.components.try_get_mut(id)?.call_listener(event)?;
 
-        let mut diff_machine =
-            DiffMachine::new(self.components.clone(), id, self.event_queue.clone());
+        let mut diff_machine = DiffMachine::new(
+            realdom,
+            self.components.clone(),
+            id,
+            self.event_queue.clone(),
+        );
 
-        self.progress_completely(realdom, &mut diff_machine)?;
+        self.progress_completely(&mut diff_machine)?;
 
         Ok(())
     }
@@ -276,8 +281,7 @@ impl VirtualDom {
     /// The DiffMachine logs its progress as it goes which might be useful for certain types of renderers.
     pub(crate) fn progress_completely<'s, Dom: RealDom>(
         &'s mut self,
-        realdom: &mut Dom,
-        diff_machine: &'_ mut DiffMachine,
+        diff_machine: &'_ mut DiffMachine<'s, Dom>,
     ) -> Result<()> {
         // Add this component to the list of components that need to be difed
         // #[allow(unused_assignments)]
@@ -315,7 +319,7 @@ impl VirtualDom {
             // diff_machine.change_list.load_known_root(1);
 
             let (old, new) = cur_component.get_frames_mut();
-            diff_machine.diff_node(realdom, old, new);
+            diff_machine.diff_node(old, new);
 
             // cur_height = cur_component.height;
 

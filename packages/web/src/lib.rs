@@ -13,6 +13,7 @@ use dioxus_core::{events::EventTrigger, prelude::FC};
 
 pub use dioxus_core::prelude;
 pub mod interpreter;
+pub mod new;
 
 /// The `WebsysRenderer` provides a way of rendering a Dioxus Virtual DOM to the browser's DOM.
 /// Under the hood, we leverage WebSys and interact directly with the DOM

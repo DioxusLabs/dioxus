@@ -234,7 +234,7 @@ pub type VCompAssociatedScope = Option<ScopeIdx>;
 pub struct VComponent<'src> {
     pub key: NodeKey<'src>,
 
-    pub mounted_root: RealDomNode,
+    pub mounted_root: Cell<RealDomNode>,
     pub ass_scope: RefCell<VCompAssociatedScope>,
 
     // pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
@@ -335,7 +335,7 @@ impl<'a> VComponent<'a> {
             raw_props,
             children,
             caller,
-            mounted_root: RealDomNode::empty(),
+            mounted_root: Cell::new(RealDomNode::empty()),
         }
     }
 }
