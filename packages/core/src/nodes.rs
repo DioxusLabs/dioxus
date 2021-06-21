@@ -6,8 +6,8 @@
 use crate::{
     events::VirtualEvent,
     innerlude::{Context, Properties, Scope, ScopeIdx, FC},
-    nodebuilder::text3,
-    virtual_dom::{NodeCtx, RealDomNode},
+    nodebuilder::{text3, NodeCtx},
+    virtual_dom::RealDomNode,
 };
 use bumpalo::Bump;
 use std::{
@@ -109,6 +109,10 @@ impl<'a> VNode<'a> {
             // todo suspend should be allowed to have keys
             VNode::Suspended => NodeKey::NONE,
         }
+    }
+
+    fn get_child(&self, id: u32) -> Option<VNode<'a>> {
+        todo!()
     }
 }
 
@@ -377,5 +381,116 @@ impl<'a> VFragment<'a> {
         };
 
         Self { key, children }
+    }
+}
+
+/// This method converts a list of nested real/virtual nodes into a stream of nodes that are definitely associated
+/// with the real dom.
+///
+/// Why?
+/// ---
+/// Fragments are seen as virtual nodes but are actually a list of possibly-real nodes.
+/// JS implementations normalize their node lists when fragments are present. Here, we just create a new iterator
+/// that iterates through the recursive nesting of fragments.
+///
+/// Fragments are stupid and I wish we didn't need to support them.
+///
+/// This iterator only supports 3 levels of nested fragments
+///
+pub fn iterate_real_nodes<'a>(nodes: &'a [VNode<'a>]) -> RealNodeIterator<'a> {
+    RealNodeIterator::new(nodes)
+}
+
+struct RealNodeIterator<'a> {
+    nodes: &'a [VNode<'a>],
+
+    // an idx for each level of nesting
+    // it's highly highly unlikely to hit 4 levels of nested fragments
+    // so... we just don't support it
+    nesting_idxs: [Option<u32>; 3],
+}
+
+impl<'a> RealNodeIterator<'a> {
+    fn new(nodes: &'a [VNode<'a>]) -> Self {
+        Self {
+            nodes,
+            nesting_idxs: [None, None, None],
+        }
+    }
+
+    // advances the cursor to the next element, panicing if we're on the 3rd level and still finding fragments
+    fn advance_cursor(&mut self) {
+        match self.nesting_idxs {
+            [None, ..] => {}
+        }
+    }
+
+    fn get_current_node(&self) -> Option<&VNode<'a>> {
+        match self.nesting_idxs {
+            [None, None, None] => None,
+            [Some(a), None, None] => Some(&self.nodes[a as usize]),
+            [Some(a), Some(b), None] => {
+                //
+                *&self.nodes[a as usize].get_child(b).as_ref()
+            }
+            [Some(a), Some(b), Some(c)] => {
+                //
+                *&self.nodes[a as usize]
+                    .get_child(b)
+                    .unwrap()
+                    .get_child(c)
+                    .as_ref()
+            }
+        }
+    }
+}
+
+impl<'a> Iterator for RealNodeIterator<'a> {
+    type Item = &'a VNode<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+        // let top_idx = self.nesting_idxs.get_mut(0).unwrap();
+        // let node = &self.nodes.get_mut(*top_idx as usize);
+
+        // if node.is_none() {
+        //     return None;
+        // }
+        // let node = node.unwrap();
+
+        // match node {
+        //     VNode::Element(_) | VNode::Text(_) => {
+        //         *top_idx += 1;
+        //         return Some(node);
+        //     }
+        //     VNode::Suspended => todo!(),
+        //     // we need access over the scope map
+        //     VNode::Component(_) => todo!(),
+
+        //     VNode::Fragment(frag) => {
+        //         let nest_idx = self.nesting_idxs.get_mut(1).unwrap();
+        //         let node = &frag.children.get_mut(*nest_idx as usize);
+        //         match node {
+        //             VNode::Element(_) | VNode::Text(_) => {
+        //                 *nest_idx += 1;
+        //                 return Some(node);
+        //             }
+        //             VNode::Fragment(_) => todo!(),
+        //             VNode::Suspended => todo!(),
+        //             VNode::Component(_) => todo!(),
+        //         }
+        //     }
+        // }
+    }
+}
+
+mod tests {
+    use crate::nodebuilder::LazyNodes;
+
+    #[test]
+    fn iterate_nodes() {
+        // let t1 = LazyNodes::new(|b| {
+        //     //
+        // });
     }
 }

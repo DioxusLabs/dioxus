@@ -58,7 +58,7 @@ pub mod prelude {
     pub use crate::nodebuilder::LazyNodes;
 
     pub use crate::nodebuilder::ChildrenList;
-    pub use crate::virtual_dom::NodeCtx;
+    pub use crate::nodebuilder::NodeCtx;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
     pub use crate::innerlude::FC;

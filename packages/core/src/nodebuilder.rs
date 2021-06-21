@@ -1,13 +1,15 @@
 //! Helpers for building virtual DOM VNodes.
 
-use std::{any::Any, borrow::BorrowMut, fmt::Arguments, intrinsics::transmute, u128};
+use std::{
+    any::Any, borrow::BorrowMut, cell::RefCell, fmt::Arguments, intrinsics::transmute, u128,
+};
 
 use crate::{
     events::VirtualEvent,
     innerlude::{Properties, VComponent, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::{VElement, VFragment},
-    virtual_dom::NodeCtx,
+    virtual_dom::Scope,
 };
 
 /// A virtual DOM element builder.
@@ -713,5 +715,44 @@ impl<'a, 'b> ChildrenList<'a, 'b> {
 
     pub fn finish(self) -> &'a [VNode<'a>] {
         self.children.into_bump_slice()
+    }
+}
+
+// NodeCtx is used to build VNodes in the component's memory space.
+// This struct adds metadata to the final VNode about listeners, attributes, and children
+#[derive(Clone)]
+pub struct NodeCtx<'a> {
+    pub scope_ref: &'a Scope,
+    pub listener_id: RefCell<usize>,
+}
+
+impl<'a> NodeCtx<'a> {
+    #[inline]
+    pub fn bump(&self) -> &'a bumpalo::Bump {
+        &self.scope_ref.cur_frame().bump
+    }
+
+    fn text(&self, args: Arguments) -> VNode<'a> {
+        text3(self.bump(), args)
+    }
+
+    fn element<'b, Listeners, Attributes, Children>(
+        &'b self,
+        tag_name: &'static str,
+    ) -> ElementBuilder<
+        'a,
+        'b,
+        bumpalo::collections::Vec<'a, Listener<'a>>,
+        bumpalo::collections::Vec<'a, Attribute<'a>>,
+        bumpalo::collections::Vec<'a, VNode<'a>>,
+    > {
+        ElementBuilder::new(self, tag_name)
+    }
+}
+
+use std::fmt::Debug;
+impl Debug for NodeCtx<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
     }
 }

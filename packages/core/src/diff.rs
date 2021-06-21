@@ -1,4 +1,5 @@
 //! This module contains the stateful DiffMachine and all methods to diff VNodes, their properties, and their children.
+//! The DiffMachine calculates the diffs between the old and new frames, updates the new nodes, and modifies the real dom.
 //!
 //! Notice:
 //! ------
@@ -36,45 +37,40 @@ use std::{
 /// Instead of having handles directly over nodes, Dioxus uses simple u32s as node IDs.
 /// This allows layouts with up to 4,294,967,295 nodes. If we use nohasher, then retrieving is very fast.
 
+/// The "RealDom" abstracts over the... real dom. Elements are mapped by ID. The RealDom is inteded to maintain a stack
+/// of real nodes as the diffing algorithm descenes through the tree. This means that whatever is on top of the stack
+/// will receive modifications. However, instead of using child-based methods for descending through the tree, we instead
+/// ask the RealDom to either push or pop real nodes onto the stack. This saves us the indexing cost while working on a
+/// single node
 pub trait RealDom {
-    fn delete_root(&self, root: RealDomNode);
+    // Navigation
+    fn push_root(&self, root: RealDomNode);
+    fn pop(&self);
 
-    // ===========
-    //  Create
-    // ===========
-    /// Create a new text node and push it on to the top of the stack
+    // Add Nodes to the dom
+    fn append_child(&self);
+    fn replace_with(&self);
+
+    // Remove Nodesfrom the dom
+    fn remove(&self);
+    fn remove_all_children(&self);
+
+    // Create
     fn create_text_node(&self, text: &str) -> RealDomNode;
-
-    /// Create a new text node and push it on to the top of the stack
     fn create_element(&self, tag: &str) -> RealDomNode;
-
-    /// Create a new namespaced element and push it on to the top of the stack
     fn create_element_ns(&self, tag: &str, namespace: &str) -> RealDomNode;
 
-    fn append_node(&self, child: RealDomNode, parent: RealDomNode);
+    // events
+    fn new_event_listener(&self, event: &str, scope: ScopeIdx, id: usize);
+    // fn new_event_listener(&self, event: &str);
+    fn remove_event_listener(&self, event: &str);
 
-    // ===========
-    //  Remove
-    // ===========
-    fn remove_node(&self, node: RealDomNode);
+    // modify
+    fn set_text(&self, text: &str);
+    fn set_attribute(&self, name: &str, value: &str, is_namespaced: bool);
+    fn remove_attribute(&self, name: &str);
 
-    fn remove_all_children(&self, node: RealDomNode);
-
-    // ===========
-    //  Replace
-    // ===========
-    fn replace_node_with(&self, old: RealDomNode, new: RealDomNode);
-
-    fn new_event_listener(&self, node: RealDomNode, event: &str);
-
-    fn set_inner_text(&self, node: RealDomNode, text: &str);
-
-    fn set_class(&self, node: RealDomNode);
-
-    fn set_attr(&self, node: RealDomNode, name: &str, value: &str);
-
-    fn remove_attr(&self, node: RealDomNode);
-
+    // node ref
     fn raw_node_as_any_mut(&self) -> &mut dyn Any;
 }
 
@@ -99,13 +95,13 @@ pub struct DiffMachine<'a, Dom: RealDom> {
     pub seen_nodes: FxHashSet<ScopeIdx>,
 }
 
-// todo: see if unsafe works better
-static COUNTER: Cell<u32> = Cell::new(1);
-fn next_id() -> u32 {
-    let out = COUNTER.get();
-    COUNTER.set(out + 1);
-    out
-}
+// // todo: see if unsafe works better
+// static COUNTER: Cell<u32> = Cell::new(1);
+// fn next_id() -> u32 {
+//     let out = COUNTER.get();
+//     COUNTER.set(out + 1);
+//     out
+// }
 
 impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     pub fn new(
@@ -123,166 +119,184 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
             seen_nodes: FxHashSet::default(),
         }
     }
-
-    pub fn diff_node(&self, old_node: &mut VNode<'a>, new_node: &mut VNode<'a>) {
+    // Diff the `old` node with the `new` node. Emits instructions to modify a
+    // physical DOM node that reflects `old` into something that reflects `new`.
+    //
+    // Upon entry to this function, the physical DOM node must be on the top of the
+    // change list stack:
+    //
+    //     [... node]
+    //
+    // The change list stack is in the same state when this function exits.
+    // In the case of Fragments, the parent node is on the stack
+    pub fn diff_node(&mut self, old_node: &VNode<'a>, new_node: &VNode<'a>) {
         // pub fn diff_node(&self, old: &VNode<'a>, new: &VNode<'a>) {
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
         When re-entering, we reuse the EditList in DiffState
         */
-        match (old_node, new_node) {
-            (VNode::Text(old), VNode::Text(new)) => {
-                new.dom_id = old.dom_id;
-                if old.text != new.text {
-                    self.dom.set_inner_text(new.dom_id.get(), new.text);
-                }
-            }
-
-            (VNode::Text(old), VNode::Element(new)) => {
-                // // self.dom.commit_traversal();
-                self.create_and_repalce(new_node, old.dom_id.get())
-                // self.create(new_node);
-                // self.dom.replace_node_with(old.dom_id, old.dom_id);
-                // self.dom.replace_with();
-            }
-
-            (VNode::Element(old), VNode::Text(new)) => {
-                // // self.dom.commit_traversal();
-                self.create_and_repalce(new_node, old.dom_id.get())
-                // self.create(new_node);
-                // self.dom.replace_node_with(old.dom_id, new.dom_id);
-                // self.dom.replace_with();
-            }
-
-            (VNode::Element(old), VNode::Element(new)) => {
-                // If the element type is completely different, the element needs to be re-rendered completely
-                if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                    // // self.dom.commit_traversal();
-                    // self.dom.replace_with();
-                    self.dom
-                        .replace_node_with(old.dom_id.get(), new.dom_id.get());
-                    return;
-                }
-
-                self.diff_listeners(old.listeners, new.listeners);
-                self.diff_attr(old.attributes, new.attributes, new.namespace.is_some());
-                self.diff_children(old.children, new.children);
-            }
-
-            (VNode::Component(old), VNode::Component(new)) => {
-                // Make sure we're dealing with the same component (by function pointer)
-                if old.user_fc == new.user_fc {
-                    // Make sure the new component vnode is referencing the right scope id
-                    let scope_id = old.ass_scope.borrow().clone();
-                    *new.ass_scope.borrow_mut() = scope_id;
-
-                    // make sure the component's caller function is up to date
-                    self.components
-                        .with_scope(scope_id.unwrap(), |scope| {
-                            scope.caller = Rc::downgrade(&new.caller)
-                        })
-                        .unwrap();
-
-                    // React doesn't automatically memoize, but we do.
-                    // The cost is low enough to make it worth checking
-                    let should_render = match old.comparator {
-                        Some(comparator) => comparator(new),
-                        None => true,
-                    };
-
-                    if should_render {
-                        // // self.dom.commit_traversal();
-                        self.components
-                            .with_scope(scope_id.unwrap(), |f| {
-                                f.run_scope().unwrap();
-                            })
-                            .unwrap();
-                        // diff_machine.change_list.load_known_root(root_id);
-                        // run the scope
-                        //
-                    } else {
-                        // Component has memoized itself and doesn't need to be re-rendered.
-                        // We still need to make sure the child's props are up-to-date.
-                        // Don't commit traversal
+        match old_node {
+            VNode::Element(old) => match new_node {
+                // New node is an element, old node was en element, need to investiage more deeply
+                VNode::Element(new) => {
+                    // If the element type is completely different, the element needs to be re-rendered completely
+                    // This is an optimization React makes due to how users structure their code
+                    if new.tag_name != old.tag_name || new.namespace != old.namespace {
+                        self.create(new_node);
+                        self.dom.replace_with();
+                        return;
                     }
-                } else {
-                    // A new component has shown up! We need to destroy the old node
 
-                    // Wipe the old one and plant the new one
-                    // self.dom.commit_traversal();
-                    // self.dom.replace_node_with(old.dom_id, new.dom_id);
-                    // self.create(new_node);
-                    // self.dom.replace_with();
-                    self.create_and_repalce(new_node, old.mounted_root.get());
-
-                    // Now we need to remove the old scope and all of its descendents
-                    let old_scope = old.ass_scope.borrow().as_ref().unwrap().clone();
-                    self.destroy_scopes(old_scope);
+                    self.diff_listeners(old.listeners, new.listeners);
+                    self.diff_attr(old.attributes, new.attributes, new.namespace.is_some());
+                    self.diff_children(old.children, new.children);
                 }
-            }
+                // New node is a text element, need to replace the element with a simple text node
+                VNode::Text(_) => {
+                    self.create(new_node);
+                    self.dom.replace_with();
+                }
 
-            // todo: knock out any listeners
-            (old, VNode::Component(_)) => {
-                // self.dom.commit_traversal();
-                // self.create(new_node);
-                // self.dom.replace_with();
-                self.create_and_repalce(new_node, old.dom_id.get())
-            }
+                // New node is a component
+                // Make the component and replace our element on the stack with it
+                VNode::Component(_) => {
+                    self.create(new_node);
+                    self.dom.replace_with();
+                }
 
-            // A component is being torn down in favor of a non-component node
-            (VNode::Component(_old), _) => {
-                // self.dom.commit_traversal();
-                // self.create(new_node);
-                // self.dom.replace_with();
-                self.create_and_repalce(new_node, old.dom_id.get())
+                // New node is actually a sequence of nodes.
+                // We need to replace this one node with a sequence of nodes
+                // Not yet implement because it's kinda hairy
+                VNode::Fragment(_) => todo!(),
 
-                // Destroy the original scope and any of its children
-                self.destroy_scopes(_old.ass_scope.borrow().unwrap());
-            }
+                // New Node is actually suspended. Todo
+                VNode::Suspended => todo!(),
+            },
 
-            // Anything suspended is not enabled ATM
-            (VNode::Suspended, _) | (_, VNode::Suspended) => {
-                todo!("Suspended components not currently available")
-            }
+            // Old element was text
+            VNode::Text(old) => match new_node {
+                VNode::Text(new) => {
+                    if old.text != new.text {
+                        self.dom.set_text(new.text);
+                    }
+                }
+                VNode::Element(_) | VNode::Component(_) => {
+                    self.create(new_node);
+                    self.dom.replace_with();
+                }
 
-            // Fragments are special
-            // we actually have to remove a bunch of nodes
-            (VNode::Fragment(_), _) => {
-                todo!("Fragments not currently supported in diffing")
-            }
+                // TODO on handling these types
+                VNode::Fragment(_) => todo!(),
+                VNode::Suspended => todo!(),
+            },
 
-            (VNode::Fragment(_), VNode::Fragment(_)) => {
-                todo!("Fragments not currently supported in diffing")
-            }
+            // Old element was a component
+            VNode::Component(old) => {
+                match new_node {
+                    // It's something entirely different
+                    VNode::Element(_) | VNode::Text(_) => {
+                        self.create(new_node);
+                        self.dom.replace_with();
+                    }
 
-            (old_n, VNode::Fragment(_)) => {
-                match old_n {
-                    VNode::Element(_) => todo!(),
-                    VNode::Text(_) => todo!(),
+                    // It's also a component
+                    VNode::Component(new) => {
+                        match old.user_fc == new.user_fc {
+                            // Make sure we're dealing with the same component (by function pointer)
+                            true => {
+                                // Make sure the new component vnode is referencing the right scope id
+                                let scope_id = old.ass_scope.borrow().clone();
+                                *new.ass_scope.borrow_mut() = scope_id;
+
+                                // make sure the component's caller function is up to date
+                                self.components
+                                    .with_scope(scope_id.unwrap(), |scope| {
+                                        scope.caller = Rc::downgrade(&new.caller)
+                                    })
+                                    .unwrap();
+
+                                // React doesn't automatically memoize, but we do.
+                                // The cost is low enough to make it worth checking
+                                let should_render = match old.comparator {
+                                    Some(comparator) => comparator(new),
+                                    None => true,
+                                };
+
+                                if should_render {
+                                    // // self.dom.commit_traversal();
+                                    self.components
+                                        .with_scope(scope_id.unwrap(), |f| {
+                                            f.run_scope().unwrap();
+                                        })
+                                        .unwrap();
+                                    // diff_machine.change_list.load_known_root(root_id);
+                                    // run the scope
+                                    //
+                                } else {
+                                    // Component has memoized itself and doesn't need to be re-rendered.
+                                    // We still need to make sure the child's props are up-to-date.
+                                    // Don't commit traversal
+                                }
+                            }
+                            // It's an entirely different component
+                            false => {
+                                // A new component has shown up! We need to destroy the old node
+
+                                // Wipe the old one and plant the new one
+                                // self.dom.commit_traversal();
+                                // self.dom.replace_node_with(old.dom_id, new.dom_id);
+                                // self.create(new_node);
+                                // self.dom.replace_with();
+                                self.create(new_node);
+                                // self.create_and_repalce(new_node, old.mounted_root.get());
+
+                                // Now we need to remove the old scope and all of its descendents
+                                let old_scope = old.ass_scope.borrow().as_ref().unwrap().clone();
+                                self.destroy_scopes(old_scope);
+                            }
+                        }
+                    }
                     VNode::Fragment(_) => todo!(),
                     VNode::Suspended => todo!(),
-                    VNode::Component(_) => todo!(),
                 }
-                todo!("Fragments not currently supported in diffing")
             }
+
+            VNode::Fragment(_) => match new_node {
+                VNode::Fragment(_) => todo!(),
+                VNode::Element(_) => todo!(),
+                VNode::Text(_) => todo!(),
+                VNode::Suspended => todo!(),
+                VNode::Component(_) => todo!(),
+            },
+
+            VNode::Suspended => match new_node {
+                VNode::Suspended => todo!(),
+                VNode::Element(_) => todo!(),
+                VNode::Text(_) => todo!(),
+                VNode::Fragment(_) => todo!(),
+                VNode::Component(_) => todo!(),
+            },
         }
     }
 
-    // create a node and replace another node
-    // this method doesn't work with
-    fn create_and_repalce(&self, node: &mut VNode<'a>, parent: RealDomNode) {}
-
-    // create and append creates the series of elements and immediately appends them to whatever parent is provided
-    // this way we can handle a series of children
-    fn create_and_append(&self, node: &mut VNode<'a>, parent: RealDomNode) {
+    // Emit instructions to create the given virtual node.
+    //
+    // The change list stack may have any shape upon entering this function:
+    //
+    //     [...]
+    //
+    // When this function returns, the new node is on top of the change list stack:
+    //
+    //     [... node]
+    fn create(&mut self, node: &VNode<'a>) {
         // debug_assert!(self.dom.traversal_is_committed());
         match node {
             VNode::Text(text) => {
                 let real_id = self.dom.create_text_node(text.text);
                 text.dom_id.set(real_id);
             }
-            VNode::Element(&el) => {
+            VNode::Element(el) => {
                 let VElement {
                     key,
                     tag_name,
@@ -298,7 +312,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 } else {
                     self.dom.create_element(tag_name)
                 };
-                el.dom_id = real_id;
+                el.dom_id.set(real_id);
 
                 listeners.iter().enumerate().for_each(|(_id, listener)| {
                     todo!()
@@ -306,10 +320,9 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                     //     .new_event_listener(listener.event, listener.scope, listener.id)
                 });
 
-                for attr in attributes {
-                    todo!()
-                    // dom
-                    //     .set_attribute(&attr.name, &attr.value, namespace.is_some());
+                for attr in *attributes {
+                    self.dom
+                        .set_attribute(&attr.name, &attr.value, namespace.is_some());
                 }
 
                 // Fast path: if there is a single text child, it is faster to
@@ -319,14 +332,14 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 // text content, and finally (3) append the text node to this
                 // parent.
                 if children.len() == 1 {
-                    if let VNode::Text(text) = children[0] {
-                        self.dom.set_inner_text(real_id, text.text);
+                    if let VNode::Text(text) = &children[0] {
+                        self.dom.set_text(text.text);
                         return;
                     }
                 }
 
-                for child in children {
-                    self.create(child, real_id);
+                for child in *children {
+                    self.create(child);
                     if let VNode::Fragment(_) = child {
                         // do nothing
                         // fragments append themselves
@@ -412,12 +425,14 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
             }
         }
     }
+}
 
+impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     /// Destroy a scope and all of its descendents.
     ///
     /// Calling this will run the destuctors on all hooks in the tree.
     /// It will also add the destroyed nodes to the `seen_nodes` cache to prevent them from being renderered.
-    fn destroy_scopes(&self, old_scope: ScopeIdx) {
+    fn destroy_scopes(&mut self, old_scope: ScopeIdx) {
         let mut nodes_to_delete = vec![old_scope];
         let mut scopes_to_explore = vec![old_scope];
 
@@ -470,8 +485,9 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 if new_l.event == old_l.event {
                     if new_l.id != old_l.id {
                         self.dom.remove_event_listener(event_type);
-                        self.dom
-                            .update_event_listener(event_type, new_l.scope, new_l.id)
+                        // TODO! we need to mess with events and assign them by RealDomNode
+                        // self.dom
+                        //     .update_event_listener(event_type, new_l.scope, new_l.id)
                     }
 
                     continue 'outer1;
@@ -550,7 +566,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_children(&self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
+    fn diff_children(&mut self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
         if new.is_empty() {
             if !old.is_empty() {
                 // self.dom.commit_traversal();
@@ -560,14 +576,16 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
         }
 
         if new.len() == 1 {
-            match (old.first(), &new[0]) {
-                (Some(&VNode::Text(old_text)), &VNode::Text(new_text)) if old_text == new_text => {
+            match (&old.first(), &new[0]) {
+                (Some(VNode::Text(old_vtext)), VNode::Text(new_vtext))
+                    if old_vtext.text == new_vtext.text =>
+                {
                     // Don't take this fast path...
                 }
 
-                (_, &VNode::Text(text)) => {
+                (_, VNode::Text(text)) => {
                     // self.dom.commit_traversal();
-                    self.dom.set_text(text);
+                    self.dom.set_text(text.text);
                     return;
                 }
 
@@ -597,9 +615,10 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
         );
 
         if new_is_keyed && old_is_keyed {
-            let t = self.dom.next_temporary();
-            self.diff_keyed_children(old, new);
-            self.dom.set_next_temporary(t);
+            todo!("Not yet implemented a migration away from temporaries");
+            // let t = self.dom.next_temporary();
+            // self.diff_keyed_children(old, new);
+            // self.dom.set_next_temporary(t);
         } else {
             self.diff_non_keyed_children(old, new);
         }
@@ -627,6 +646,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //
     // Upon exiting, the change list stack is in the same state.
     fn diff_keyed_children(&self, old: &[VNode<'a>], new: &[VNode<'a>]) {
+        todo!();
         // if cfg!(debug_assertions) {
         //     let mut keys = fxhash::FxHashSet::default();
         //     let mut assert_unique_keys = |children: &[VNode]| {
@@ -710,41 +730,42 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //
     // Upon exit, the change list stack is the same.
     fn diff_keyed_prefix(&self, old: &[VNode<'a>], new: &[VNode<'a>]) -> KeyedPrefixResult {
+        todo!()
         // self.dom.go_down();
-        let mut shared_prefix_count = 0;
+        // let mut shared_prefix_count = 0;
 
-        for (i, (old, new)) in old.iter().zip(new.iter()).enumerate() {
-            if old.key() != new.key() {
-                break;
-            }
+        // for (i, (old, new)) in old.iter().zip(new.iter()).enumerate() {
+        //     if old.key() != new.key() {
+        //         break;
+        //     }
 
-            self.dom.go_to_sibling(i);
+        //     self.dom.go_to_sibling(i);
 
-            self.diff_node(old, new);
+        //     self.diff_node(old, new);
 
-            shared_prefix_count += 1;
-        }
+        //     shared_prefix_count += 1;
+        // }
 
-        // If that was all of the old children, then create and append the remaining
-        // new children and we're finished.
-        if shared_prefix_count == old.len() {
-            self.dom.go_up();
-            // self.dom.commit_traversal();
-            self.create_and_append_children(&new[shared_prefix_count..]);
-            return KeyedPrefixResult::Finished;
-        }
+        // // If that was all of the old children, then create and append the remaining
+        // // new children and we're finished.
+        // if shared_prefix_count == old.len() {
+        //     self.dom.go_up();
+        //     // self.dom.commit_traversal();
+        //     self.create_and_append_children(&new[shared_prefix_count..]);
+        //     return KeyedPrefixResult::Finished;
+        // }
 
-        // And if that was all of the new children, then remove all of the remaining
-        // old children and we're finished.
-        if shared_prefix_count == new.len() {
-            self.dom.go_to_sibling(shared_prefix_count);
-            // self.dom.commit_traversal();
-            self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
-            return KeyedPrefixResult::Finished;
-        }
+        // // And if that was all of the new children, then remove all of the remaining
+        // // old children and we're finished.
+        // if shared_prefix_count == new.len() {
+        //     self.dom.go_to_sibling(shared_prefix_count);
+        //     // self.dom.commit_traversal();
+        //     self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
+        //     return KeyedPrefixResult::Finished;
+        // }
 
-        self.dom.go_up();
-        KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
+        // self.dom.go_up();
+        // KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
     }
 
     // The most-general, expensive code path for keyed children diffing.
@@ -768,215 +789,216 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
         shared_suffix_count: usize,
         old_shared_suffix_start: usize,
     ) {
-        // Should have already diffed the shared-key prefixes and suffixes.
-        debug_assert_ne!(new.first().map(|n| n.key()), old.first().map(|o| o.key()));
-        debug_assert_ne!(new.last().map(|n| n.key()), old.last().map(|o| o.key()));
+        todo!()
+        // // Should have already diffed the shared-key prefixes and suffixes.
+        // debug_assert_ne!(new.first().map(|n| n.key()), old.first().map(|o| o.key()));
+        // debug_assert_ne!(new.last().map(|n| n.key()), old.last().map(|o| o.key()));
 
-        // The algorithm below relies upon using `u32::MAX` as a sentinel
-        // value, so if we have that many new nodes, it won't work. This
-        // check is a bit academic (hence only enabled in debug), since
-        // wasm32 doesn't have enough address space to hold that many nodes
-        // in memory.
-        debug_assert!(new.len() < u32::MAX as usize);
+        // // The algorithm below relies upon using `u32::MAX` as a sentinel
+        // // value, so if we have that many new nodes, it won't work. This
+        // // check is a bit academic (hence only enabled in debug), since
+        // // wasm32 doesn't have enough address space to hold that many nodes
+        // // in memory.
+        // debug_assert!(new.len() < u32::MAX as usize);
 
-        // Map from each `old` node's key to its index within `old`.
-        let mut old_key_to_old_index = FxHashMap::default();
-        old_key_to_old_index.reserve(old.len());
-        old_key_to_old_index.extend(old.iter().enumerate().map(|(i, o)| (o.key(), i)));
+        // // Map from each `old` node's key to its index within `old`.
+        // let mut old_key_to_old_index = FxHashMap::default();
+        // old_key_to_old_index.reserve(old.len());
+        // old_key_to_old_index.extend(old.iter().enumerate().map(|(i, o)| (o.key(), i)));
 
-        // The set of shared keys between `new` and `old`.
-        let mut shared_keys = FxHashSet::default();
-        // Map from each index in `new` to the index of the node in `old` that
-        // has the same key.
-        let mut new_index_to_old_index = Vec::with_capacity(new.len());
-        new_index_to_old_index.extend(new.iter().map(|n| {
-            let key = n.key();
-            if let Some(&i) = old_key_to_old_index.get(&key) {
-                shared_keys.insert(key);
-                i
-            } else {
-                u32::MAX as usize
-            }
-        }));
+        // // The set of shared keys between `new` and `old`.
+        // let mut shared_keys = FxHashSet::default();
+        // // Map from each index in `new` to the index of the node in `old` that
+        // // has the same key.
+        // let mut new_index_to_old_index = Vec::with_capacity(new.len());
+        // new_index_to_old_index.extend(new.iter().map(|n| {
+        //     let key = n.key();
+        //     if let Some(&i) = old_key_to_old_index.get(&key) {
+        //         shared_keys.insert(key);
+        //         i
+        //     } else {
+        //         u32::MAX as usize
+        //     }
+        // }));
 
-        // If none of the old keys are reused by the new children, then we
-        // remove all the remaining old children and create the new children
-        // afresh.
-        if shared_suffix_count == 0 && shared_keys.is_empty() {
-            if shared_prefix_count == 0 {
-                // self.dom.commit_traversal();
-                self.remove_all_children(old);
-            } else {
-                self.dom.go_down_to_child(shared_prefix_count);
-                // self.dom.commit_traversal();
-                self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
-            }
+        // // If none of the old keys are reused by the new children, then we
+        // // remove all the remaining old children and create the new children
+        // // afresh.
+        // if shared_suffix_count == 0 && shared_keys.is_empty() {
+        //     if shared_prefix_count == 0 {
+        //         // self.dom.commit_traversal();
+        //         self.remove_all_children(old);
+        //     } else {
+        //         self.dom.go_down_to_child(shared_prefix_count);
+        //         // self.dom.commit_traversal();
+        //         self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
+        //     }
 
-            self.create_and_append_children(new);
+        //     self.create_and_append_children(new);
 
-            return;
-        }
+        //     return;
+        // }
 
-        // Save each of the old children whose keys are reused in the new
-        // children.
-        let mut old_index_to_temp = vec![u32::MAX; old.len()];
-        let mut start = 0;
-        loop {
-            let end = (start..old.len())
-                .find(|&i| {
-                    let key = old[i].key();
-                    !shared_keys.contains(&key)
-                })
-                .unwrap_or(old.len());
+        // // Save each of the old children whose keys are reused in the new
+        // // children.
+        // let mut old_index_to_temp = vec![u32::MAX; old.len()];
+        // let mut start = 0;
+        // loop {
+        //     let end = (start..old.len())
+        //         .find(|&i| {
+        //             let key = old[i].key();
+        //             !shared_keys.contains(&key)
+        //         })
+        //         .unwrap_or(old.len());
 
-            if end - start > 0 {
-                // self.dom.commit_traversal();
-                let mut t = self.dom.save_children_to_temporaries(
-                    shared_prefix_count + start,
-                    shared_prefix_count + end,
-                );
-                for i in start..end {
-                    old_index_to_temp[i] = t;
-                    t += 1;
-                }
-            }
+        //     if end - start > 0 {
+        //         // self.dom.commit_traversal();
+        //         let mut t = self.dom.save_children_to_temporaries(
+        //             shared_prefix_count + start,
+        //             shared_prefix_count + end,
+        //         );
+        //         for i in start..end {
+        //             old_index_to_temp[i] = t;
+        //             t += 1;
+        //         }
+        //     }
 
-            debug_assert!(end <= old.len());
-            if end == old.len() {
-                break;
-            } else {
-                start = end + 1;
-            }
-        }
+        //     debug_assert!(end <= old.len());
+        //     if end == old.len() {
+        //         break;
+        //     } else {
+        //         start = end + 1;
+        //     }
+        // }
 
-        // Remove any old children whose keys were not reused in the new
-        // children. Remove from the end first so that we don't mess up indices.
-        let mut removed_count = 0;
-        for (i, old_child) in old.iter().enumerate().rev() {
-            if !shared_keys.contains(&old_child.key()) {
-                // registry.remove_subtree(old_child);
-                // todo
-                // self.dom.commit_traversal();
-                self.dom.remove_child(i + shared_prefix_count);
-                removed_count += 1;
-            }
-        }
+        // // Remove any old children whose keys were not reused in the new
+        // // children. Remove from the end first so that we don't mess up indices.
+        // let mut removed_count = 0;
+        // for (i, old_child) in old.iter().enumerate().rev() {
+        //     if !shared_keys.contains(&old_child.key()) {
+        //         // registry.remove_subtree(old_child);
+        //         // todo
+        //         // self.dom.commit_traversal();
+        //         self.dom.remove_child(i + shared_prefix_count);
+        //         removed_count += 1;
+        //     }
+        // }
 
-        // If there aren't any more new children, then we are done!
-        if new.is_empty() {
-            return;
-        }
+        // // If there aren't any more new children, then we are done!
+        // if new.is_empty() {
+        //     return;
+        // }
 
-        // The longest increasing subsequence within `new_index_to_old_index`. This
-        // is the longest sequence on DOM nodes in `old` that are relatively ordered
-        // correctly within `new`. We will leave these nodes in place in the DOM,
-        // and only move nodes that are not part of the LIS. This results in the
-        // maximum number of DOM nodes left in place, AKA the minimum number of DOM
-        // nodes moved.
-        let mut new_index_is_in_lis = FxHashSet::default();
-        new_index_is_in_lis.reserve(new_index_to_old_index.len());
-        let mut predecessors = vec![0; new_index_to_old_index.len()];
-        let mut starts = vec![0; new_index_to_old_index.len()];
-        longest_increasing_subsequence::lis_with(
-            &new_index_to_old_index,
-            &mut new_index_is_in_lis,
-            |a, b| a < b,
-            &mut predecessors,
-            &mut starts,
-        );
+        // // The longest increasing subsequence within `new_index_to_old_index`. This
+        // // is the longest sequence on DOM nodes in `old` that are relatively ordered
+        // // correctly within `new`. We will leave these nodes in place in the DOM,
+        // // and only move nodes that are not part of the LIS. This results in the
+        // // maximum number of DOM nodes left in place, AKA the minimum number of DOM
+        // // nodes moved.
+        // let mut new_index_is_in_lis = FxHashSet::default();
+        // new_index_is_in_lis.reserve(new_index_to_old_index.len());
+        // let mut predecessors = vec![0; new_index_to_old_index.len()];
+        // let mut starts = vec![0; new_index_to_old_index.len()];
+        // longest_increasing_subsequence::lis_with(
+        //     &new_index_to_old_index,
+        //     &mut new_index_is_in_lis,
+        //     |a, b| a < b,
+        //     &mut predecessors,
+        //     &mut starts,
+        // );
 
-        // Now we will iterate from the end of the new children back to the
-        // beginning, diffing old children we are reusing and if they aren't in the
-        // LIS moving them to their new destination, or creating new children. Note
-        // that iterating in reverse order lets us use `Node.prototype.insertBefore`
-        // to move/insert children.
-        //
-        // But first, we ensure that we have a child on the change list stack that
-        // we can `insertBefore`. We handle this once before looping over `new`
-        // children, so that we don't have to keep checking on every loop iteration.
-        if shared_suffix_count > 0 {
-            // There is a shared suffix after these middle children. We will be
-            // inserting before that shared suffix, so add the first child of that
-            // shared suffix to the change list stack.
-            //
-            // [... parent]
-            self.dom
-                .go_down_to_child(old_shared_suffix_start - removed_count);
-        // [... parent first_child_of_shared_suffix]
-        } else {
-            // There is no shared suffix coming after these middle children.
-            // Therefore we have to process the last child in `new` and move it to
-            // the end of the parent's children if it isn't already there.
-            let last_index = new.len() - 1;
-            // uhhhh why an unwrap?
-            let last = new.last().unwrap();
-            // let last = new.last().unwrap_throw();
-            new = &new[..new.len() - 1];
-            if shared_keys.contains(&last.key()) {
-                let old_index = new_index_to_old_index[last_index];
-                let temp = old_index_to_temp[old_index];
-                // [... parent]
-                self.dom.go_down_to_temp_child(temp);
-                // [... parent last]
-                self.diff_node(&old[old_index], last);
+        // // Now we will iterate from the end of the new children back to the
+        // // beginning, diffing old children we are reusing and if they aren't in the
+        // // LIS moving them to their new destination, or creating new children. Note
+        // // that iterating in reverse order lets us use `Node.prototype.insertBefore`
+        // // to move/insert children.
+        // //
+        // // But first, we ensure that we have a child on the change list stack that
+        // // we can `insertBefore`. We handle this once before looping over `new`
+        // // children, so that we don't have to keep checking on every loop iteration.
+        // if shared_suffix_count > 0 {
+        //     // There is a shared suffix after these middle children. We will be
+        //     // inserting before that shared suffix, so add the first child of that
+        //     // shared suffix to the change list stack.
+        //     //
+        //     // [... parent]
+        //     self.dom
+        //         .go_down_to_child(old_shared_suffix_start - removed_count);
+        // // [... parent first_child_of_shared_suffix]
+        // } else {
+        //     // There is no shared suffix coming after these middle children.
+        //     // Therefore we have to process the last child in `new` and move it to
+        //     // the end of the parent's children if it isn't already there.
+        //     let last_index = new.len() - 1;
+        //     // uhhhh why an unwrap?
+        //     let last = new.last().unwrap();
+        //     // let last = new.last().unwrap_throw();
+        //     new = &new[..new.len() - 1];
+        //     if shared_keys.contains(&last.key()) {
+        //         let old_index = new_index_to_old_index[last_index];
+        //         let temp = old_index_to_temp[old_index];
+        //         // [... parent]
+        //         self.dom.go_down_to_temp_child(temp);
+        //         // [... parent last]
+        //         self.diff_node(&old[old_index], last);
 
-                if new_index_is_in_lis.contains(&last_index) {
-                    // Don't move it, since it is already where it needs to be.
-                } else {
-                    // self.dom.commit_traversal();
-                    // [... parent last]
-                    self.dom.append_child();
-                    // [... parent]
-                    self.dom.go_down_to_temp_child(temp);
-                    // [... parent last]
-                }
-            } else {
-                // self.dom.commit_traversal();
-                // [... parent]
-                self.create(last);
+        //         if new_index_is_in_lis.contains(&last_index) {
+        //             // Don't move it, since it is already where it needs to be.
+        //         } else {
+        //             // self.dom.commit_traversal();
+        //             // [... parent last]
+        //             self.dom.append_child();
+        //             // [... parent]
+        //             self.dom.go_down_to_temp_child(temp);
+        //             // [... parent last]
+        //         }
+        //     } else {
+        //         // self.dom.commit_traversal();
+        //         // [... parent]
+        //         self.create(last);
 
-                // [... parent last]
-                self.dom.append_child();
-                // [... parent]
-                self.dom.go_down_to_reverse_child(0);
-                // [... parent last]
-            }
-        }
+        //         // [... parent last]
+        //         self.dom.append_child();
+        //         // [... parent]
+        //         self.dom.go_down_to_reverse_child(0);
+        //         // [... parent last]
+        //     }
+        // }
 
-        for (new_index, new_child) in new.iter().enumerate().rev() {
-            let old_index = new_index_to_old_index[new_index];
-            if old_index == u32::MAX as usize {
-                debug_assert!(!shared_keys.contains(&new_child.key()));
-                // self.dom.commit_traversal();
-                // [... parent successor]
-                self.create(new_child);
-                // [... parent successor new_child]
-                self.dom.insert_before();
-            // [... parent new_child]
-            } else {
-                debug_assert!(shared_keys.contains(&new_child.key()));
-                let temp = old_index_to_temp[old_index];
-                debug_assert_ne!(temp, u32::MAX);
+        // for (new_index, new_child) in new.iter().enumerate().rev() {
+        //     let old_index = new_index_to_old_index[new_index];
+        //     if old_index == u32::MAX as usize {
+        //         debug_assert!(!shared_keys.contains(&new_child.key()));
+        //         // self.dom.commit_traversal();
+        //         // [... parent successor]
+        //         self.create(new_child);
+        //         // [... parent successor new_child]
+        //         self.dom.insert_before();
+        //     // [... parent new_child]
+        //     } else {
+        //         debug_assert!(shared_keys.contains(&new_child.key()));
+        //         let temp = old_index_to_temp[old_index];
+        //         debug_assert_ne!(temp, u32::MAX);
 
-                if new_index_is_in_lis.contains(&new_index) {
-                    // [... parent successor]
-                    self.dom.go_to_temp_sibling(temp);
-                // [... parent new_child]
-                } else {
-                    // self.dom.commit_traversal();
-                    // [... parent successor]
-                    self.dom.push_temporary(temp);
-                    // [... parent successor new_child]
-                    self.dom.insert_before();
-                    // [... parent new_child]
-                }
+        //         if new_index_is_in_lis.contains(&new_index) {
+        //             // [... parent successor]
+        //             self.dom.go_to_temp_sibling(temp);
+        //         // [... parent new_child]
+        //         } else {
+        //             // self.dom.commit_traversal();
+        //             // [... parent successor]
+        //             self.dom.push_temporary(temp);
+        //             // [... parent successor new_child]
+        //             self.dom.insert_before();
+        //             // [... parent new_child]
+        //         }
 
-                self.diff_node(&old[old_index], new_child);
-            }
-        }
+        //         self.diff_node(&old[old_index], new_child);
+        //     }
+        // }
 
-        // [... parent child]
-        self.dom.go_up();
+        // // [... parent child]
+        // self.dom.go_up();
         // [... parent]
     }
 
@@ -993,20 +1015,21 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
         new: &[VNode<'a>],
         new_shared_suffix_start: usize,
     ) {
-        debug_assert_eq!(old.len(), new.len());
-        debug_assert!(!old.is_empty());
+        todo!()
+        //     debug_assert_eq!(old.len(), new.len());
+        //     debug_assert!(!old.is_empty());
 
-        // [... parent]
-        self.dom.go_down();
-        // [... parent new_child]
+        //     // [... parent]
+        //     self.dom.go_down();
+        //     // [... parent new_child]
 
-        for (i, (old_child, new_child)) in old.iter().zip(new.iter()).enumerate() {
-            self.dom.go_to_sibling(new_shared_suffix_start + i);
-            self.diff_node(old_child, new_child);
-        }
+        //     for (i, (old_child, new_child)) in old.iter().zip(new.iter()).enumerate() {
+        //         self.dom.go_to_sibling(new_shared_suffix_start + i);
+        //         self.diff_node(old_child, new_child);
+        //     }
 
-        // [... parent]
-        self.dom.go_up();
+        //     // [... parent]
+        //     self.dom.go_up();
     }
 
     // Diff children that are not keyed.
@@ -1023,42 +1046,44 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
         debug_assert!(!old.is_empty());
 
         //     [... parent]
-        self.dom.go_down();
+        // self.dom.go_down();
+        // self.dom.push_root()
         //     [... parent child]
 
-        for (i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
-            // [... parent prev_child]
-            self.dom.go_to_sibling(i);
-            // [... parent this_child]
-            self.diff_node(old_child, new_child);
-        }
+        todo!()
+        // for (i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
+        //     // [... parent prev_child]
+        //     self.dom.go_to_sibling(i);
+        //     // [... parent this_child]
+        //     self.diff_node(old_child, new_child);
+        // }
 
-        match old.len().cmp(&new.len()) {
-            // old.len > new.len -> removing some nodes
-            Ordering::Greater => {
-                // [... parent prev_child]
-                self.dom.go_to_sibling(new.len());
-                // [... parent first_child_to_remove]
-                // self.dom.commit_traversal();
-                // support::remove_self_and_next_siblings(state, &old[new.len()..]);
-                self.remove_self_and_next_siblings(&old[new.len()..]);
-                // [... parent]
-            }
-            // old.len < new.len -> adding some nodes
-            Ordering::Less => {
-                // [... parent last_child]
-                self.dom.go_up();
-                // [... parent]
-                // self.dom.commit_traversal();
-                self.create_and_append_children(&new[old.len()..]);
-            }
-            // old.len == new.len -> no nodes added/removed, but πerhaps changed
-            Ordering::Equal => {
-                // [... parent child]
-                self.dom.go_up();
-                // [... parent]
-            }
-        }
+        // match old.len().cmp(&new.len()) {
+        //     // old.len > new.len -> removing some nodes
+        //     Ordering::Greater => {
+        //         // [... parent prev_child]
+        //         self.dom.go_to_sibling(new.len());
+        //         // [... parent first_child_to_remove]
+        //         // self.dom.commit_traversal();
+        //         // support::remove_self_and_next_siblings(state, &old[new.len()..]);
+        //         self.remove_self_and_next_siblings(&old[new.len()..]);
+        //         // [... parent]
+        //     }
+        //     // old.len < new.len -> adding some nodes
+        //     Ordering::Less => {
+        //         // [... parent last_child]
+        //         self.dom.go_up();
+        //         // [... parent]
+        //         // self.dom.commit_traversal();
+        //         self.create_and_append_children(&new[old.len()..]);
+        //     }
+        //     // old.len == new.len -> no nodes added/removed, but πerhaps changed
+        //     Ordering::Equal => {
+        //         // [... parent child]
+        //         self.dom.go_up();
+        //         // [... parent]
+        //     }
+        // }
     }
 
     // ======================
@@ -1072,7 +1097,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // When this function returns, the change list stack is in the same state.
-    pub fn remove_all_children(&self, old: &[VNode<'a>]) {
+    pub fn remove_all_children(&mut self, old: &[VNode<'a>]) {
         // debug_assert!(self.dom.traversal_is_committed());
         log::debug!("REMOVING CHILDREN");
         for _child in old {
@@ -1091,12 +1116,12 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // When this function returns, the change list stack is in the same state.
-    pub fn create_and_append_children(&self, new: &[VNode<'a>]) {
+    pub fn create_and_append_children(&mut self, new: &[VNode<'a>]) {
         // debug_assert!(self.dom.traversal_is_committed());
         for child in new {
-            self.create_and_append(node, parent)
-            // self.create(child);
-            // self.dom.append_child();
+            // self.create_and_append(node, parent)
+            self.create(child);
+            self.dom.append_child();
         }
     }
 
@@ -1135,7 +1160,8 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
 
             // registry.remove_subtree(child);
         }
-        self.dom.remove_self_and_next_siblings();
+        todo!()
+        // self.dom.remove_self_and_next_siblings();
     }
 }
 

@@ -881,26 +881,6 @@ impl PartialOrd for HeightMarker {
     }
 }
 
-// NodeCtx is used to build VNodes in the component's memory space.
-// This struct adds metadata to the final VNode about listeners, attributes, and children
-#[derive(Clone)]
-pub struct NodeCtx<'a> {
-    pub scope_ref: &'a Scope,
-    pub listener_id: RefCell<usize>,
-}
-
-impl<'a> NodeCtx<'a> {
-    pub fn bump(&self) -> &'a Bump {
-        &self.scope_ref.cur_frame().bump
-    }
-}
-
-impl Debug for NodeCtx<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
-    }
-}
-
 #[derive(Debug, PartialEq, Hash)]
 pub struct ContextId {
     // Which component is the scope in

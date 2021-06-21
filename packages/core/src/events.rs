@@ -54,8 +54,8 @@ pub mod on {
 
     use crate::{
         builder::ElementBuilder,
+        builder::NodeCtx,
         innerlude::{Attribute, Listener, VNode},
-        virtual_dom::NodeCtx,
     };
 
     use super::VirtualEvent;
