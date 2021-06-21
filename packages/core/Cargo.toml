@@ -33,6 +33,7 @@ log = "0.4"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version="1", features=["derive"], optional=true }
+smallvec = "1.6.1"
 
 [features]
 default = []

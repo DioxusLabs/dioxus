@@ -95,14 +95,6 @@ pub struct DiffMachine<'a, Dom: RealDom> {
     pub seen_nodes: FxHashSet<ScopeIdx>,
 }
 
-// // todo: see if unsafe works better
-// static COUNTER: Cell<u32> = Cell::new(1);
-// fn next_id() -> u32 {
-//     let out = COUNTER.get();
-//     COUNTER.set(out + 1);
-//     out
-// }
-
 impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     pub fn new(
         dom: &'a mut Dom,
@@ -262,21 +254,32 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 }
             }
 
-            VNode::Fragment(_) => match new_node {
-                VNode::Fragment(_) => todo!(),
-                VNode::Element(_) => todo!(),
-                VNode::Text(_) => todo!(),
-                VNode::Suspended => todo!(),
-                VNode::Component(_) => todo!(),
-            },
+            VNode::Fragment(old) => {
+                //
+                match new_node {
+                    VNode::Fragment(_) => todo!(),
 
-            VNode::Suspended => match new_node {
-                VNode::Suspended => todo!(),
-                VNode::Element(_) => todo!(),
-                VNode::Text(_) => todo!(),
-                VNode::Fragment(_) => todo!(),
-                VNode::Component(_) => todo!(),
-            },
+                    // going from fragment to element means we're going from many (or potentially none) to one
+                    VNode::Element(new) => {}
+                    VNode::Text(_) => todo!(),
+                    VNode::Suspended => todo!(),
+                    VNode::Component(_) => todo!(),
+                }
+            }
+
+            // a suspended node will perform a mem-copy of the previous elements until it is ready
+            // this means that event listeners will need to be disabled and removed
+            // it also means that props will need to disabled - IE if the node "came out of hibernation" any props should be considered outdated
+            VNode::Suspended => {
+                //
+                match new_node {
+                    VNode::Suspended => todo!(),
+                    VNode::Element(_) => todo!(),
+                    VNode::Text(_) => todo!(),
+                    VNode::Fragment(_) => todo!(),
+                    VNode::Component(_) => todo!(),
+                }
+            }
         }
     }
 
