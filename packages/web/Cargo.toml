@@ -27,8 +27,8 @@ atoms = { path="../atoms" }
 # futures = "0.3.12"
 # html-validation = { path = "../html-validation", version = "0.1.1" }
 
-async-channel = "1.6.1"
-wee_alloc = "0.4.5"
+# async-channel = "1.6.1"
+nohash-hasher = "0.2.0"
 # futures-lite = "1.11.3"
 
 [dependencies.web-sys]
@@ -79,6 +79,8 @@ opt-level = 's'
 crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
+im-rc = "15.0.0"
+rand = { version="0.8.4", features=["small_rng"] }
 uuid = { version="0.8.2", features=["v4", "wasm-bindgen"] }
 
 [[example]]

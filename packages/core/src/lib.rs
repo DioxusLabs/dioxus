@@ -11,10 +11,9 @@
 pub mod arena;
 pub mod component; // Logic for extending FC
 
-// pub mod debug_renderer;
+pub mod debug_renderer;
 pub mod diff;
-pub mod patch; // An "edit phase" described by transitions and edit operations // Test harness for validating that lifecycles and diffs work appropriately
-               // the diffing algorithm that builds the ChangeList
+
 pub mod error; // Error type we expose to the renderers
 pub mod events; // Manages the synthetic event API
 pub mod hooks; // Built-in hooks
@@ -36,7 +35,6 @@ pub(crate) mod innerlude {
     pub use crate::hooks::*;
     pub use crate::nodebuilder::*;
     pub use crate::nodes::*;
-    pub use crate::patch::*;
     pub use crate::virtual_dom::*;
 
     pub type FC<P> = fn(Context<P>) -> VNode;

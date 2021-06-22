@@ -2,7 +2,7 @@
 - [] Transition away from names and towards compile-time safe tags
 - [] Fix diffing of fragments
 - [] Properly integrate memoization to prevent safety issues with children
-- [] Understand the issue with callbacks (outdated generations)
+- [x] Understand the issue with callbacks (outdated generations)
 - [] Fix examples for core, web, ssr, and general
 - [] Finish up documentation
 - [] Polish the Recoil (Dirac?) API

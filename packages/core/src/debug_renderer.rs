@@ -3,6 +3,7 @@
 //!
 //! Renderers don't actually need to own the virtual dom (it's up to the implementer).
 
+use crate::innerlude::RealDom;
 use crate::{events::EventTrigger, virtual_dom::VirtualDom};
 use crate::{innerlude::Result, prelude::*};
 
@@ -40,7 +41,7 @@ impl DebugRenderer {
         Ok(())
     }
 
-    pub fn step(&mut self, machine: &mut DiffMachine) -> Result<()> {
+    pub fn step<Dom: RealDom>(&mut self, machine: &mut DiffMachine<Dom>) -> Result<()> {
         Ok(())
     }
 
@@ -69,6 +70,27 @@ impl DebugRenderer {
 
     pub fn trigger_listener(&mut self, id: usize) -> Result<()> {
         Ok(())
+    }
+
+    pub fn render_nodes<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
+    where
+        F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+    {
+        Ok(())
+    }
+}
+
+pub struct DebugVNodeSource {
+    bump: Bump,
+}
+impl DebugVNodeSource {
+    fn new() -> Self {
+        Self { bump: Bump::new() }
+    }
+
+    fn render_nodes(&self) -> VNode {
+        // let ctx = NodeCtx
+        todo!()
     }
 }
 

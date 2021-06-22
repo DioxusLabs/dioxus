@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use dioxus_core as dioxus;
 use dioxus_web::{dioxus::prelude::*, WebsysRenderer};
 
 fn main() {

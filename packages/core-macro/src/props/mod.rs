@@ -502,6 +502,7 @@ mod field_info {
 
 mod struct_info {
     use proc_macro2::TokenStream;
+    use quote::__private::ext::RepToTokensExt;
     use quote::quote;
     use syn::parse::Error;
 
@@ -569,6 +570,13 @@ mod struct_info {
                 ref builder_name,
                 ..
             } = *self;
+
+            // we're generating stuff that goes into unsafe code here
+            // we use the heuristic: are there *any* generic parameters?
+            // If so, then they might have non-static lifetimes and we can't compare two generic things that *might borrow*
+            // Therefore, we will generate code that shortcircuits the "comparison" in memoization
+            let are_there_generics = self.generics.params.len() > 0;
+
             let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
             let all_fields_param = syn::GenericParam::Type(
                 syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site()).into(),
@@ -650,6 +658,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                     .extend(predicates.predicates.clone());
             }
 
+            let can_memoize = match are_there_generics {
+                true => quote! { false  },
+                false => quote! { self == other },
+            };
+
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
                     #[doc = #builder_method_doc]
@@ -679,11 +692,13 @@ Finally, call `.build()` to create the instance of `{name}`.
                     }
                 }
 
-                unsafe impl #impl_generics dioxus::prelude::Properties for #name #ty_generics{
+                impl #impl_generics dioxus::prelude::Properties for #name #ty_generics{
                     type Builder = #builder_name #generics_with_empty;
-                    const CAN_BE_MEMOIZED: bool = true;
                     fn builder() -> Self::Builder {
                         #name::builder()
+                    }
+                    unsafe fn memoize(&self, other: &Self) -> bool {
+                        #can_memoize
                     }
                 }
 

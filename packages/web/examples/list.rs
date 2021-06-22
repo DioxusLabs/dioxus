@@ -53,7 +53,7 @@ static App: FC<()> = |ctx| {
                     input {
                         class: "new-todo"
                         placeholder: "What needs to be done?"
-                        oninput: move |evt| set_draft(evt.value)
+                        oninput: move |evt| set_draft(evt.value())
                     }
                 }
 

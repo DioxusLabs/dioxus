@@ -111,8 +111,28 @@ impl<'a> VNode<'a> {
         }
     }
 
-    fn get_child(&self, id: u32) -> Option<VNode<'a>> {
+    fn get_child(&self, id: u32) -> Option<&'a VNode<'a>> {
         todo!()
+    }
+
+    pub fn is_real(&self) -> bool {
+        match self {
+            VNode::Element(_) => true,
+            VNode::Text(_) => true,
+            VNode::Fragment(_) => false,
+            VNode::Suspended => false,
+            VNode::Component(_) => false,
+        }
+    }
+
+    pub fn get_mounted_id(&self) -> Option<RealDomNode> {
+        match self {
+            VNode::Element(_) => todo!(),
+            VNode::Text(_) => todo!(),
+            VNode::Fragment(_) => todo!(),
+            VNode::Suspended => todo!(),
+            VNode::Component(_) => todo!(),
+        }
     }
 }
 
@@ -257,88 +277,68 @@ pub struct VComponent<'src> {
 }
 
 impl<'a> VComponent<'a> {
-    // use the type parameter on props creation and move it into a portable context
-    // this lets us keep scope generic *and* downcast its props when we need to:
-    // - perform comparisons when diffing (memoization)
-    // TODO: lift the requirement that props need to be static
-    // we want them to borrow references... maybe force implementing a "to_static_unsafe" trait
-
+    /// When the rsx! macro is called, it will check if the CanMemo flag is set to true (from the Props impl)
+    /// If it is set to true, then this method will be called which implements automatic memoization.
+    ///
+    /// If the CanMemo is `false`, then the macro will call the backup method which always defaults to "false"
     pub fn new<P: Properties + 'a>(
-        // bump: &'a Bump,
         ctx: &NodeCtx<'a>,
         component: FC<P>,
-        // props: bumpalo::boxed::Box<'a, P>,
         props: P,
         key: Option<&'a str>,
         children: &'a [VNode<'a>],
     ) -> Self {
-        // pub fn new<P: Properties + 'a>(component: FC<P>, props: P, key: Option<&'a str>) -> Self {
-        // let bad_props = unsafe { transmogrify(props) };
         let bump = ctx.bump();
-        let caller_ref = component as *const ();
-        let props = bump.alloc(props);
+        let user_fc = component as *const ();
 
+        let props = bump.alloc(props);
         let raw_props = props as *const P as *const ();
 
         let comparator: Option<&dyn Fn(&VComponent) -> bool> = {
-            if P::CAN_BE_MEMOIZED {
-                Some(bump.alloc(move |other: &VComponent| {
-                    // Safety:
-                    // We are guaranteed that the props will be of the same type because
-                    // there is no way to create a VComponent other than this `new` method.
-                    //
-                    // Therefore, if the render functions are identical (by address), then so will be
-                    // props type paramter (because it is the same render function). Therefore, we can be
-                    // sure
-                    if caller_ref == other.user_fc {
-                        // let g = other.raw_ctx.downcast_ref::<P>().unwrap();
-                        let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
-                        &props == &real_other
-                    } else {
-                        false
+            Some(bump.alloc(move |other: &VComponent| {
+                // Safety:
+                // ------
+                //
+                // Invariants:
+                // - Component function pointers are the same
+                // - Generic properties on the same function pointer are the same
+                // - Lifetime of P borrows from its parent
+                // - The parent scope still exists when method is called
+                // - Casting from T to *const () is portable
+                //
+                // Explanation:
+                //   We are guaranteed that the props will be of the same type because
+                //   there is no way to create a VComponent other than this `new` method.
+                //
+                //   Therefore, if the render functions are identical (by address), then so will be
+                //   props type paramter (because it is the same render function). Therefore, we can be
+                //   sure that it is safe to interperet the previous props raw pointer as the same props
+                //   type. From there, we can call the props' "memoize" method to see if we can
+                //   avoid re-rendering the component.
+                if user_fc == other.user_fc {
+                    let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
+                    let props_memoized = unsafe { props.memoize(&real_other) };
+                    match (props_memoized, children.len() == 0) {
+                        (true, true) => true,
+                        _ => false,
                     }
-                }))
-            } else {
-                None
-            }
+                } else {
+                    false
+                }
+            }))
         };
 
-        // let prref: &'a P = props.as_ref();
-
-        // let r = create_closure(component, raw_props);
-        // let caller: Rc<dyn for<'g> Fn(&'g Scope) -> VNode<'g>> = Rc::new(move |scope| {
-        //     // r(scope);
-        //     //
-        //     // let props2 = bad_props;
-        //     // props.as_ref();
-        //     // let ctx = Context {
-        //     //     props: prref,
-        //     //     scope,
-        //     // };
-        //     // let ctx: Context<'g, P> = todo!();
-        //     // todo!()
-        //     // let r = component(ctx);
-        //     todo!()
-        // });
-        let caller = create_closure(component, raw_props);
-
-        // let caller: Rc<dyn Fn(&Scope) -> VNode> = Rc::new(create_closure(component, raw_props));
-
-        let key = match key {
-            Some(key) => NodeKey::new(key),
-            None => NodeKey(None),
-        };
-
-        // raw_props: Box::new(props),
-        // comparator: Rc::new(props_comparator),
         Self {
-            key,
-            ass_scope: RefCell::new(None),
-            user_fc: caller_ref,
+            user_fc,
             comparator,
             raw_props,
             children,
-            caller,
+            ass_scope: RefCell::new(None),
+            key: match key {
+                Some(key) => NodeKey::new(key),
+                None => NodeKey(None),
+            },
+            caller: create_closure(component, raw_props),
             mounted_root: Cell::new(RealDomNode::empty()),
         }
     }
@@ -346,7 +346,7 @@ impl<'a> VComponent<'a> {
 
 type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r> + 'a>;
 
-fn create_closure<'a, P: Properties + 'a>(
+fn create_closure<'a, P: 'a>(
     component: FC<P>,
     raw_props: *const (),
 ) -> Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r>> {
@@ -385,7 +385,9 @@ impl<'a> VFragment<'a> {
 }
 
 /// This method converts a list of nested real/virtual nodes into a stream of nodes that are definitely associated
-/// with the real dom.
+/// with the real dom. The only types of nodes that may be returned are text, elemets, and components.
+///
+/// Components *are* considered virtual, but this iterator can't necessarily handle them without the scope arena.
 ///
 /// Why?
 /// ---
@@ -401,47 +403,80 @@ pub fn iterate_real_nodes<'a>(nodes: &'a [VNode<'a>]) -> RealNodeIterator<'a> {
     RealNodeIterator::new(nodes)
 }
 
-struct RealNodeIterator<'a> {
+pub struct RealNodeIterator<'a> {
     nodes: &'a [VNode<'a>],
 
-    // an idx for each level of nesting
-    // it's highly highly unlikely to hit 4 levels of nested fragments
-    // so... we just don't support it
-    nesting_idxs: [Option<u32>; 3],
+    // this node is always a "real" node
+    // the index is "what sibling # is it"
+    // IE in a list of children on a fragment, the node will be a text node that's the 5th sibling
+    node_stack: Vec<(&'a VNode<'a>, u32)>,
 }
 
 impl<'a> RealNodeIterator<'a> {
+    // We immediately descend to the first real node we can find
     fn new(nodes: &'a [VNode<'a>]) -> Self {
-        Self {
-            nodes,
-            nesting_idxs: [None, None, None],
+        let mut node_stack = Vec::new();
+        if nodes.len() > 0 {
+            let mut cur_node = nodes.get(0).unwrap();
+            loop {
+                node_stack.push((cur_node, 0_u32));
+                if !cur_node.is_real() {
+                    cur_node = cur_node.get_child(0).unwrap();
+                } else {
+                    break;
+                }
+            }
         }
+
+        Self { nodes, node_stack }
     }
 
-    // advances the cursor to the next element, panicing if we're on the 3rd level and still finding fragments
-    fn advance_cursor(&mut self) {
-        match self.nesting_idxs {
-            [None, ..] => {}
+    // // advances the cursor to the next element, panicing if we're on the 3rd level and still finding fragments
+    // fn advance_cursor(&mut self) {
+    //     let (mut cur_node, mut cur_id) = self.node_stack.last().unwrap();
+
+    //     while !cur_node.is_real() {
+    //         match cur_node {
+    //             VNode::Element(_) | VNode::Text(_) => todo!(),
+    //             VNode::Suspended => todo!(),
+    //             VNode::Component(_) => todo!(),
+    //             VNode::Fragment(frag) => {
+    //                 let p = frag.children;
+    //             }
+    //         }
+    //     }
+    // }
+
+    fn next_node(&mut self) -> bool {
+        let (mut cur_node, cur_id) = self.node_stack.last_mut().unwrap();
+
+        match cur_node {
+            VNode::Fragment(frag) => {
+                //
+                if *cur_id + 1 > frag.children.len() as u32 {
+                    self.node_stack.pop();
+                    let next = self.node_stack.last_mut();
+                    return false;
+                }
+                *cur_id += 1;
+                true
+            }
+
+            VNode::Element(_) => todo!(),
+            VNode::Text(_) => todo!(),
+            VNode::Suspended => todo!(),
+            VNode::Component(_) => todo!(),
         }
     }
 
     fn get_current_node(&self) -> Option<&VNode<'a>> {
-        match self.nesting_idxs {
-            [None, None, None] => None,
-            [Some(a), None, None] => Some(&self.nodes[a as usize]),
-            [Some(a), Some(b), None] => {
-                //
-                *&self.nodes[a as usize].get_child(b).as_ref()
-            }
-            [Some(a), Some(b), Some(c)] => {
-                //
-                *&self.nodes[a as usize]
-                    .get_child(b)
-                    .unwrap()
-                    .get_child(c)
-                    .as_ref()
-            }
-        }
+        self.node_stack.last().map(|(node, id)| match node {
+            VNode::Element(_) => todo!(),
+            VNode::Text(_) => todo!(),
+            VNode::Fragment(_) => todo!(),
+            VNode::Suspended => todo!(),
+            VNode::Component(_) => todo!(),
+        })
     }
 }
 
@@ -485,12 +520,26 @@ impl<'a> Iterator for RealNodeIterator<'a> {
 }
 
 mod tests {
+    use crate::debug_renderer::DebugRenderer;
     use crate::nodebuilder::LazyNodes;
 
+    use crate as dioxus;
+    use dioxus::prelude::*;
     #[test]
     fn iterate_nodes() {
-        // let t1 = LazyNodes::new(|b| {
-        //     //
-        // });
+        let rs = rsx! {
+            Fragment {
+                Fragment {
+                    Fragment {
+                        Fragment {
+                            h1 {"abc1"}
+                        }
+                        h2 {"abc2"}
+                    }
+                    h3 {"abc3"}
+                }
+                h4 {"abc4"}
+            }
+        };
     }
 }

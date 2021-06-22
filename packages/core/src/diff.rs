@@ -44,31 +44,30 @@ use std::{
 /// single node
 pub trait RealDom {
     // Navigation
-    fn push_root(&self, root: RealDomNode);
-    fn pop(&self);
+    fn push_root(&mut self, root: RealDomNode);
 
     // Add Nodes to the dom
-    fn append_child(&self);
-    fn replace_with(&self);
+    fn append_child(&mut self);
+    fn replace_with(&mut self);
 
     // Remove Nodesfrom the dom
-    fn remove(&self);
-    fn remove_all_children(&self);
+    fn remove(&mut self);
+    fn remove_all_children(&mut self);
 
     // Create
-    fn create_text_node(&self, text: &str) -> RealDomNode;
-    fn create_element(&self, tag: &str) -> RealDomNode;
-    fn create_element_ns(&self, tag: &str, namespace: &str) -> RealDomNode;
+    fn create_text_node(&mut self, text: &str) -> RealDomNode;
+    fn create_element(&mut self, tag: &str) -> RealDomNode;
+    fn create_element_ns(&mut self, tag: &str, namespace: &str) -> RealDomNode;
 
     // events
-    fn new_event_listener(&self, event: &str, scope: ScopeIdx, id: usize);
-    // fn new_event_listener(&self, event: &str);
-    fn remove_event_listener(&self, event: &str);
+    fn new_event_listener(&mut self, event: &str, scope: ScopeIdx, id: usize);
+    // fn new_event_listener(&mut self, event: &str);
+    fn remove_event_listener(&mut self, event: &str);
 
     // modify
-    fn set_text(&self, text: &str);
-    fn set_attribute(&self, name: &str, value: &str, is_namespaced: bool);
-    fn remove_attribute(&self, name: &str);
+    fn set_text(&mut self, text: &str);
+    fn set_attribute(&mut self, name: &str, value: &str, is_namespaced: bool);
+    fn remove_attribute(&mut self, name: &str);
 
     // node ref
     fn raw_node_as_any_mut(&self) -> &mut dyn Any;
@@ -470,7 +469,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... node]
     //
     // The change list stack is left unchanged.
-    fn diff_listeners(&self, old: &[Listener<'_>], new: &[Listener<'_>]) {
+    fn diff_listeners(&mut self, old: &[Listener<'_>], new: &[Listener<'_>]) {
         if !old.is_empty() || !new.is_empty() {
             // self.dom.commit_traversal();
         }
@@ -518,7 +517,12 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... node]
     //
     // The change list stack is left unchanged.
-    fn diff_attr(&self, old: &'a [Attribute<'a>], new: &'a [Attribute<'a>], is_namespaced: bool) {
+    fn diff_attr(
+        &mut self,
+        old: &'a [Attribute<'a>],
+        new: &'a [Attribute<'a>],
+        is_namespaced: bool,
+    ) {
         // Do O(n^2) passes to add/update and remove attributes, since
         // there are almost always very few attributes.
         //

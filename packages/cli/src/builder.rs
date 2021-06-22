@@ -131,7 +131,7 @@ fn gen_page(module: &str) -> String {
     <!-- Note the usage of `type=module` here as this is an ES6 module -->
     <script type="module">
       import init from "{}";
-      init();
+      init("./wasm/module_bg.wasm");
     </script>
   </body>
 </html>

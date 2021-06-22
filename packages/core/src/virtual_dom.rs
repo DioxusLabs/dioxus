@@ -64,8 +64,11 @@ pub struct VirtualDom {
 }
 
 #[derive(Clone, Copy)]
-pub struct RealDomNode(u32);
+pub struct RealDomNode(pub u32);
 impl RealDomNode {
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
     pub fn empty() -> Self {
         Self(u32::MIN)
     }
@@ -318,7 +321,8 @@ impl VirtualDom {
             cur_component.run_scope()?;
             // diff_machine.change_list.load_known_root(1);
 
-            let (old, new) = cur_component.get_frames_mut();
+            let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
+            // let (old, new) = cur_component.get_frames_mut();
             diff_machine.diff_node(old, new);
 
             // cur_height = cur_component.height;
@@ -527,7 +531,8 @@ impl Scope {
         let EventTrigger {
             listener_id, event, ..
         } = trigger;
-        //
+
+        // todo: implement scanning for outdated events
         unsafe {
             // Convert the raw ptr into an actual object
             // This operation is assumed to be safe
@@ -545,12 +550,6 @@ impl Scope {
             listener_fn(event);
         }
         Ok(())
-    }
-
-    fn get_frames_mut<'bump>(
-        &'bump mut self,
-    ) -> (&'bump mut VNode<'bump>, &'bump mut VNode<'bump>) {
-        todo!()
     }
 
     pub fn next_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {

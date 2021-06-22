@@ -2,14 +2,14 @@
 //! --------------------
 //! This example demonstrates how to use the raw context api for sharing state throughout the VirtualDOM Tree.
 //! A custom context must be its own unique type - otherwise use_context will fail. A context may be c
-//! 
-//! 
-//! 
-//! 
-//! 
-//! 
-//! 
-//! 
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
 
 use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
@@ -19,7 +19,6 @@ fn main() {
     console_error_panic_hook::set_once();
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
-
 
 #[derive(Debug)]
 struct CustomContext([&'static str; 3]);
@@ -45,7 +44,6 @@ static Example: FC<()> = |ctx| {
         }
     })
 };
-
 
 #[derive(Props, PartialEq)]
 struct ButtonProps {

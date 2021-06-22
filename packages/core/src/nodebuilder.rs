@@ -494,9 +494,21 @@ where
     ///     .finish();
     /// ```    
     pub fn iter_child(mut self, nodes: impl IntoIterator<Item = impl IntoVNode<'a>>) -> Self {
+        let len_before = self.children.len();
         for item in nodes {
             let child = item.into_vnode(&self.ctx);
             self.children.push(child);
+        }
+        let len_after = self.children.len();
+        if len_after > len_before {
+            let last_child = self.children.last().unwrap();
+            if last_child.key().is_none() {
+                // TODO: Somehow get the name of the component when NodeCtx is being made
+                const ERR_MSG: &str = r#"Warning: Each child in an array or iterator should have a unique "key" prop. 
+                Check the render method of XXXX. 
+                See fb.me/react-warning-keys for more information. "#;
+                log::error!("{}", ERR_MSG);
+            }
         }
         self
     }

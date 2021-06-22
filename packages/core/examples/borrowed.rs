@@ -63,10 +63,12 @@ impl PartialEq for ChildProps {
         false
     }
 }
-unsafe impl Properties for ChildProps {
+impl Properties for ChildProps {
     type Builder = ();
-    const CAN_BE_MEMOIZED: bool = false;
     fn builder() -> Self::Builder {
         ()
+    }
+    unsafe fn memoize(&self, other: &Self) -> bool {
+        self == other
     }
 }

@@ -9,7 +9,7 @@
 //! Here, we show to use Dioxus' Recoil state management solution to simplify app logic
 #![allow(non_snake_case)]
 use dioxus_web::dioxus::prelude::*;
-use recoil::*;
+
 use std::collections::HashMap;
 use uuid::Uuid;
 
