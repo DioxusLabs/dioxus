@@ -60,7 +60,13 @@ pub trait RealDom {
     fn create_element_ns(&mut self, tag: &str, namespace: &str) -> RealDomNode;
 
     // events
-    fn new_event_listener(&mut self, event: &str, scope: ScopeIdx, id: usize);
+    fn new_event_listener(
+        &mut self,
+        event: &str,
+        scope: ScopeIdx,
+        element_id: usize,
+        realnode: RealDomNode,
+    );
     // fn new_event_listener(&mut self, event: &str);
     fn remove_event_listener(&mut self, event: &str);
 
@@ -138,6 +144,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                         self.dom.replace_with();
                         return;
                     }
+                    new.dom_id.set(old.dom_id.get());
 
                     self.diff_listeners(old.listeners, new.listeners);
                     self.diff_attr(old.attributes, new.attributes, new.namespace.is_some());
@@ -145,6 +152,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 }
                 // New node is a text element, need to replace the element with a simple text node
                 VNode::Text(_) => {
+                    log::debug!("Replacing el with text");
                     self.create(new_node);
                     self.dom.replace_with();
                 }
@@ -169,8 +177,10 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
             VNode::Text(old) => match new_node {
                 VNode::Text(new) => {
                     if old.text != new.text {
+                        log::debug!("Text has changed {}, {}", old.text, new.text);
                         self.dom.set_text(new.text);
                     }
+                    new.dom_id.set(old.dom_id.get());
                 }
                 VNode::Element(_) | VNode::Component(_) => {
                     self.create(new_node);
@@ -316,10 +326,10 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 };
                 el.dom_id.set(real_id);
 
-                listeners.iter().enumerate().for_each(|(_id, listener)| {
-                    todo!()
-                    // dom
-                    //     .new_event_listener(listener.event, listener.scope, listener.id)
+                listeners.iter().enumerate().for_each(|(idx, listener)| {
+                    self.dom
+                        .new_event_listener(listener.event, listener.scope, idx, real_id);
+                    listener.mounted_node.set(real_id);
                 });
 
                 for attr in *attributes {
@@ -333,12 +343,12 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 // to emit three instructions to (1) create a text node, (2) set its
                 // text content, and finally (3) append the text node to this
                 // parent.
-                if children.len() == 1 {
-                    if let VNode::Text(text) = &children[0] {
-                        self.dom.set_text(text.text);
-                        return;
-                    }
-                }
+                // if children.len() == 1 {
+                //     if let VNode::Text(text) = &children[0] {
+                //         self.dom.set_text(text.text);
+                //         return;
+                //     }
+                // }
 
                 for child in *children {
                     self.create(child);
@@ -405,8 +415,8 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 new_component.run_scope().unwrap();
 
                 // And then run the diff algorithm
-                todo!();
-                // self.diff_node(new_component.old_frame(), new_component.next_frame());
+                // todo!();
+                self.diff_node(new_component.old_frame(), new_component.next_frame());
 
                 // Finally, insert this node as a seen node.
                 self.seen_nodes.insert(idx);
@@ -473,6 +483,8 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
         if !old.is_empty() || !new.is_empty() {
             // self.dom.commit_traversal();
         }
+        // TODO
+        // what does "diffing listeners" even mean?
 
         'outer1: for (_l_idx, new_l) in new.iter().enumerate() {
             // go through each new listener
@@ -480,34 +492,34 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
             // if any characteristics changed, remove and then re-add
 
             // if nothing changed, then just move on
-
             let event_type = new_l.event;
 
             for old_l in old {
                 if new_l.event == old_l.event {
-                    if new_l.id != old_l.id {
-                        self.dom.remove_event_listener(event_type);
-                        // TODO! we need to mess with events and assign them by RealDomNode
-                        // self.dom
-                        //     .update_event_listener(event_type, new_l.scope, new_l.id)
-                    }
+                    new_l.mounted_node.set(old_l.mounted_node.get());
+                    // if new_l.id != old_l.id {
+                    //     self.dom.remove_event_listener(event_type);
+                    //     // TODO! we need to mess with events and assign them by RealDomNode
+                    //     // self.dom
+                    //     //     .update_event_listener(event_type, new_l.scope, new_l.id)
+                    // }
 
                     continue 'outer1;
                 }
             }
 
-            self.dom
-                .new_event_listener(event_type, new_l.scope, new_l.id);
+            // self.dom
+            //     .new_event_listener(event_type, new_l.scope, new_l.id);
         }
 
-        'outer2: for old_l in old {
-            for new_l in new {
-                if new_l.event == old_l.event {
-                    continue 'outer2;
-                }
-            }
-            self.dom.remove_event_listener(old_l.event);
-        }
+        // 'outer2: for old_l in old {
+        //     for new_l in new {
+        //         if new_l.event == old_l.event {
+        //             continue 'outer2;
+        //         }
+        //     }
+        //     self.dom.remove_event_listener(old_l.event);
+        // }
     }
 
     // Diff a node's attributes.
@@ -590,11 +602,12 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                     // Don't take this fast path...
                 }
 
-                (_, VNode::Text(text)) => {
-                    // self.dom.commit_traversal();
-                    self.dom.set_text(text.text);
-                    return;
-                }
+                // (_, VNode::Text(text)) => {
+                //     // self.dom.commit_traversal();
+                //     log::debug!("using optimized text set");
+                //     self.dom.set_text(text.text);
+                //     return;
+                // }
 
                 // todo: any more optimizations
                 (_, _) => {}
@@ -1047,7 +1060,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(&self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
+    fn diff_non_keyed_children(&mut self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
         // Handled these cases in `diff_children` before calling this function.
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
@@ -1057,13 +1070,26 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
         // self.dom.push_root()
         //     [... parent child]
 
-        todo!()
-        // for (i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
-        //     // [... parent prev_child]
-        //     self.dom.go_to_sibling(i);
-        //     // [... parent this_child]
-        //     self.diff_node(old_child, new_child);
-        // }
+        // todo!()
+        for (i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
+            // [... parent prev_child]
+            // self.dom.go_to_sibling(i);
+            // [... parent this_child]
+            self.dom.push_root(old_child.get_mounted_id().unwrap());
+            self.diff_node(old_child, new_child);
+
+            let old_id = old_child.get_mounted_id().unwrap();
+            let new_id = new_child.get_mounted_id().unwrap();
+
+            log::debug!(
+                "pushed root. {:?}, {:?}",
+                old_child.get_mounted_id().unwrap(),
+                new_child.get_mounted_id().unwrap()
+            );
+            if old_id != new_id {
+                log::debug!("Mismatch: {:?}", new_child);
+            }
+        }
 
         // match old.len().cmp(&new.len()) {
         //     // old.len > new.len -> removing some nodes

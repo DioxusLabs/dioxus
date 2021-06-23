@@ -6,20 +6,20 @@
 
 use std::rc::Rc;
 
-use crate::innerlude::ScopeIdx;
+use crate::{innerlude::ScopeIdx, virtual_dom::RealDomNode};
 
 #[derive(Debug)]
 pub struct EventTrigger {
     pub component_id: ScopeIdx,
-    pub listener_id: usize,
+    pub real_node_id: RealDomNode,
     pub event: VirtualEvent,
 }
 
 impl EventTrigger {
-    pub fn new(event: VirtualEvent, scope: ScopeIdx, id: usize) -> Self {
+    pub fn new(event: VirtualEvent, scope: ScopeIdx, mounted_dom_id: RealDomNode) -> Self {
         Self {
             component_id: scope,
-            listener_id: id,
+            real_node_id: mounted_dom_id,
             event,
         }
     }
@@ -55,17 +55,15 @@ pub mod on {
     use crate::{
         builder::ElementBuilder,
         builder::NodeCtx,
-        innerlude::{Attribute, Listener, VNode},
+        innerlude::{Attribute, Listener, RealDomNode, VNode},
     };
+    use std::cell::Cell;
 
     use super::VirtualEvent;
 
     macro_rules! event_directory {
         ( $( $eventdata:ident: [ $( $name:ident )* ]; )* ) => {
             $(
-
-
-
                 $(
                     pub fn $name<'a>(
                         c: &'_ NodeCtx<'a>,
@@ -74,7 +72,7 @@ pub mod on {
                         let bump = &c.bump();
                         Listener {
                             event: stringify!($name),
-                            id: *c.listener_id.borrow(),
+                            mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
                             scope: c.scope_ref.arena_idx,
                             callback: bump.alloc(move |evt: VirtualEvent| match evt {
                                 VirtualEvent::$eventdata(event) => callback(event),
@@ -121,31 +119,31 @@ pub mod on {
         /// Returns whether or not a specific event is a bubbling event
         fn bubbles(&self) -> bool;
         /// Sets or returns whether the event should propagate up the hierarchy or not
-        fn cancelBubble(&self) -> ();
+        fn cancel_bubble(&self);
         /// Returns whether or not an event can have its default action prevented
         fn cancelable(&self) -> bool;
         /// Returns whether the event is composed or not
         fn composed(&self) -> bool;
         /// Returns the event's path
-        fn composedPath(&self) -> ();
+        fn composed_path(&self) -> String;
         /// Returns the element whose event listeners triggered the event
-        fn currentTarget(&self) -> ();
+        fn current_target(&self);
         /// Returns whether or not the preventDefault method was called for the event
-        fn defaultPrevented(&self) -> ();
+        fn default_prevented(&self) -> bool;
         /// Returns which phase of the event flow is currently being evaluated
-        fn eventPhase(&self) -> ();
+        fn event_phase(&self) -> usize;
         /// Returns whether or not an event is trusted
-        fn isTrusted(&self) -> ();
+        fn is_trusted(&self) -> bool;
         /// Cancels the event if it is cancelable, meaning that the default action that belongs to the event will
-        fn preventDefault(&self) -> ();
+        fn prevent_default(&self);
         /// Prevents other listeners of the same event from being called
-        fn stopImmediatePropagation(&self) -> ();
+        fn stop_immediate_propagation(&self);
         /// Prevents further propagation of an event during event flow
-        fn stopPropagation(&self) -> ();
+        fn stop_propagation(&self);
         /// Returns the element that triggered the event
-        fn target(&self) -> ();
+        fn target(&self);
         /// Returns the time (in milliseconds relative to the epoch) at which the event was created
-        fn timeStamp(&self) -> usize;
+        fn time_stamp(&self) -> usize;
     }
 
     pub trait ClipboardEvent: Debug {

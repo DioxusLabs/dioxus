@@ -11,11 +11,7 @@ fn main() {
 }
 
 static Example: FC<()> = |ctx| {
-    let nodes = (0..5).map(|f| {
-        rsx! {
-            li {"{f}"}
-        }
-    });
+    let nodes = (0..15).map(|f| rsx! (li { key: "{f}", "{f}"}));
     ctx.render(rsx! {
         div {
             span {

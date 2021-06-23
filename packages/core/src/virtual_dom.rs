@@ -24,7 +24,7 @@ use bumpalo::Bump;
 use generational_arena::Arena;
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet, VecDeque},
     fmt::Debug,
     future::Future,
@@ -63,7 +63,7 @@ pub struct VirtualDom {
     _root_prop_type: std::any::TypeId,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RealDomNode(pub u32);
 impl RealDomNode {
     pub fn new(id: u32) -> Self {
@@ -109,7 +109,7 @@ impl VirtualDom {
     ///
     /// let dom = VirtualDom::new(Example);
     /// ```
-    pub fn new(root: impl Fn(Context<()>) -> VNode + 'static) -> Self {
+    pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -141,10 +141,7 @@ impl VirtualDom {
     ///
     /// let dom = VirtualDom::new(Example);
     /// ```
-    pub fn new_with_props<P: Properties + 'static>(
-        root: impl Fn(Context<P>) -> VNode + 'static,
-        root_props: P,
-    ) -> Self {
+    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let components = ScopeArena::new(Arena::new());
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
@@ -260,11 +257,11 @@ impl VirtualDom {
     pub fn progress_with_event<Dom: RealDom>(
         &mut self,
         realdom: &mut Dom,
-        event: EventTrigger,
+        trigger: EventTrigger,
     ) -> Result<()> {
-        let id = event.component_id.clone();
+        let id = trigger.component_id.clone();
 
-        self.components.try_get_mut(id)?.call_listener(event)?;
+        self.components.try_get_mut(id)?.call_listener(trigger)?;
 
         let mut diff_machine = DiffMachine::new(
             realdom,
@@ -397,7 +394,12 @@ pub struct Scope {
     // - is self-refenrential and therefore needs to point into the bump
     // Stores references into the listeners attached to the vnodes
     // NEEDS TO BE PRIVATE
-    pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
+    pub(crate) listeners: RefCell<Vec<(*const Cell<RealDomNode>, *const dyn Fn(VirtualEvent))>>,
+    // pub(crate) listeners: RefCell<nohash_hasher::IntMap<u32, *const dyn Fn(VirtualEvent)>>,
+    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
+    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
+    // NoHashMap<RealDomNode, <*const dyn Fn(VirtualEvent)>
+    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
 }
 
 // We need to pin the hook so it doesn't move as we initialize the list of hooks
@@ -450,7 +452,7 @@ impl Scope {
         let child_nodes = unsafe { std::mem::transmute(child_nodes) };
 
         Self {
-            child_nodes: child_nodes,
+            child_nodes,
             caller,
             parent,
             arena_idx,
@@ -490,12 +492,12 @@ impl Scope {
         self.frames.next().bump.reset();
 
         // Remove all the outdated listeners
-        //
-        self.listeners
-            .try_borrow_mut()
-            .ok()
-            .ok_or(Error::FatalInternal("Borrowing listener failed"))?
-            .drain(..);
+        self.listeners.borrow_mut().clear();
+        // self.listeners
+        //     .try_borrow_mut()
+        //     .ok()
+        //     .ok_or(Error::FatalInternal("Borrowing listener failed"))?
+        //     .drain(..);
 
         *self.hookidx.borrow_mut() = 0;
 
@@ -529,26 +531,35 @@ impl Scope {
     // The listener list will be completely drained because the next frame will write over previous listeners
     pub fn call_listener(&mut self, trigger: EventTrigger) -> Result<()> {
         let EventTrigger {
-            listener_id, event, ..
+            real_node_id,
+            event,
+            ..
         } = trigger;
 
         // todo: implement scanning for outdated events
-        unsafe {
-            // Convert the raw ptr into an actual object
-            // This operation is assumed to be safe
-            let listener_fn = self
-                .listeners
-                .try_borrow()
-                .ok()
-                .ok_or(Error::FatalInternal("Borrowing listener failed"))?
-                .get(listener_id as usize)
-                .ok_or(Error::FatalInternal("Event should exist if triggered"))?
-                .as_ref()
-                .ok_or(Error::FatalInternal("Raw event ptr is invalid"))?;
 
-            // Run the callback with the user event
+        // Convert the raw ptr into an actual object
+        // This operation is assumed to be safe
+
+        log::debug!("Calling listeners! {:?}", self.listeners.borrow().len());
+        let listners = self.listeners.borrow();
+        let (_, listener) = listners
+            .iter()
+            .find(|(domptr, _)| {
+                let p = unsafe { &**domptr };
+                p.get() == real_node_id
+            })
+            .expect(&format!(
+                "Failed to find real node with ID {:?}",
+                real_node_id
+            ));
+
+        // TODO: Don'tdo a linear scan! Do a hashmap lookup! It'll be faster!
+        unsafe {
+            let listener_fn = &**listener;
             listener_fn(event);
         }
+
         Ok(())
     }
 

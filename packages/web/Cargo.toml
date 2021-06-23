@@ -27,8 +27,9 @@ atoms = { path="../atoms" }
 # futures = "0.3.12"
 # html-validation = { path = "../html-validation", version = "0.1.1" }
 
-# async-channel = "1.6.1"
+async-channel = "1.6.1"
 nohash-hasher = "0.2.0"
+anyhow = "1.0.41"
 # futures-lite = "1.11.3"
 
 [dependencies.web-sys]

@@ -1,7 +1,12 @@
 //! Helpers for building virtual DOM VNodes.
 
 use std::{
-    any::Any, borrow::BorrowMut, cell::RefCell, fmt::Arguments, intrinsics::transmute, u128,
+    any::Any,
+    borrow::BorrowMut,
+    cell::{Cell, RefCell},
+    fmt::Arguments,
+    intrinsics::transmute,
+    u128,
 };
 
 use crate::{
@@ -9,7 +14,7 @@ use crate::{
     innerlude::{Properties, VComponent, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::{VElement, VFragment},
-    virtual_dom::Scope,
+    virtual_dom::{RealDomNode, Scope},
 };
 
 /// A virtual DOM element builder.
@@ -353,12 +358,11 @@ where
     /// ```
     pub fn on(self, event: &'static str, callback: impl Fn(VirtualEvent) + 'a) -> Self {
         let bump = &self.ctx.bump();
-
         let listener = Listener {
             event,
             callback: bump.alloc(callback),
-            id: *self.ctx.listener_id.borrow(),
             scope: self.ctx.scope_ref.arena_idx,
+            mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
         };
         self.add_listener(listener)
     }
@@ -367,7 +371,8 @@ where
         self.listeners.push(listener);
 
         // bump the context id forward
-        *self.ctx.listener_id.borrow_mut() += 1;
+        let id = self.ctx.listener_id.get();
+        self.ctx.listener_id.set(id + 1);
 
         // Add this listener to the context list
         // This casts the listener to a self-referential pointer
@@ -378,7 +383,7 @@ where
                 .scope_ref
                 .listeners
                 .borrow_mut()
-                .push(r.callback as *const _);
+                .push((r.mounted_node as *const _, r.callback as *const _));
         });
 
         self
@@ -499,15 +504,19 @@ where
             let child = item.into_vnode(&self.ctx);
             self.children.push(child);
         }
-        let len_after = self.children.len();
-        if len_after > len_before {
-            let last_child = self.children.last().unwrap();
-            if last_child.key().is_none() {
-                // TODO: Somehow get the name of the component when NodeCtx is being made
-                const ERR_MSG: &str = r#"Warning: Each child in an array or iterator should have a unique "key" prop. 
-                Check the render method of XXXX. 
-                See fb.me/react-warning-keys for more information. "#;
-                log::error!("{}", ERR_MSG);
+        if self.children.len() > len_before + 1 {
+            if self.children.last().unwrap().key().is_none() {
+                if cfg!(debug_assertions) {
+                    log::error!(
+                        r#"
+Warning: Each child in an array or iterator should have a unique "key" prop. 
+Not providing a key will lead to poor performance with lists.
+See docs.rs/dioxus for more information. 
+---
+To help you identify where this error is coming from, we've generated a backtrace.
+                        "#,
+                    );
+                }
             }
         }
         self
@@ -548,17 +557,6 @@ impl<'a, F> VNodeBuilder<'a, LazyNodes<'a, F>> for LazyNodes<'a, F> where
     F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a
 {
 }
-
-// Cover the cases where nodes are pre-rendered.
-// Likely used by enums.
-// ----
-//  let nodes = ctx.render(rsx!{ ... };
-//  rsx! { {nodes } }
-// impl<'a> IntoVNode<'a> for VNode {
-//     fn into_vnode(self, _ctx: &NodeCtx<'a>) -> VNode<'a> {
-//         self.root
-//     }
-// }
 
 // Wrap the the node-builder closure in a concrete type.
 // ---
@@ -611,12 +609,14 @@ where
 
 impl<'a> IntoVNode<'a> for () {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+        todo!();
         VNode::Suspended
     }
 }
 
 impl<'a> IntoVNode<'a> for Option<()> {
     fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+        todo!();
         VNode::Suspended
     }
 }
@@ -735,7 +735,8 @@ impl<'a, 'b> ChildrenList<'a, 'b> {
 #[derive(Clone)]
 pub struct NodeCtx<'a> {
     pub scope_ref: &'a Scope,
-    pub listener_id: RefCell<usize>,
+    pub listener_id: Cell<usize>,
+    // pub listener_id: RefCell<usize>,
 }
 
 impl<'a> NodeCtx<'a> {
@@ -744,11 +745,13 @@ impl<'a> NodeCtx<'a> {
         &self.scope_ref.cur_frame().bump
     }
 
-    fn text(&self, args: Arguments) -> VNode<'a> {
+    /// Create some text that's allocated along with the other vnodes
+    pub fn text(&self, args: Arguments) -> VNode<'a> {
         text3(self.bump(), args)
     }
 
-    fn element<'b, Listeners, Attributes, Children>(
+    /// Create an element builder
+    pub fn element<'b, Listeners, Attributes, Children>(
         &'b self,
         tag_name: &'static str,
     ) -> ElementBuilder<

@@ -53,7 +53,7 @@ members = [
     "packages/core",
     "packages/html-namespace",
     "packages/web",
-    "packages/cli",
+    # "packages/cli",
     # "packages/atoms",
     # "packages/ssr",
     # "packages/docsite",

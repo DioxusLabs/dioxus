@@ -12,7 +12,7 @@ pub use dioxus_core as dioxus;
 use dioxus_core::{events::EventTrigger, prelude::FC};
 
 pub use dioxus_core::prelude;
-pub mod interpreter;
+// pub mod interpreter;
 pub mod new;
 
 /// The `WebsysRenderer` provides a way of rendering a Dioxus Virtual DOM to the browser's DOM.
@@ -34,7 +34,7 @@ impl WebsysRenderer {
     ///
     /// Run the app to completion, panicing if any error occurs while rendering.
     /// Pairs well with the wasm_bindgen async handler
-    pub async fn start(root: impl for<'a> Fn(Context<'a, ()>) -> VNode + 'static) {
+    pub async fn start(root: FC<()>) {
         Self::new(root).run().await.expect("Virtual DOM failed :(");
     }
 
@@ -42,7 +42,7 @@ impl WebsysRenderer {
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
     /// The root component can access things like routing in its context.
-    pub fn new(root: impl for<'a> Fn(Context<'a, ()>) -> VNode + 'static) -> Self {
+    pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -50,10 +50,7 @@ impl WebsysRenderer {
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
     /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new_with_props<T: Properties + 'static>(
-        root: impl for<'a> Fn(Context<'a, T>) -> VNode + 'static,
-        root_props: T,
-    ) -> Self {
+    pub fn new_with_props<T: Properties + 'static>(root: FC<T>, root_props: T) -> Self {
         Self::from_vdom(VirtualDom::new_with_props(root, root_props))
     }
 
@@ -63,28 +60,23 @@ impl WebsysRenderer {
     }
 
     pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
-        // let (sender, mut receiver) = async_channel::unbounded::<EventTrigger>();
-
         let body_element = prepare_websys_dom();
-
-        // let mut patch_machine = interpreter::PatchMachine::new(body_element.clone(), move |ev| {
-        //     log::debug!("Event trigger! {:#?}", ev);
-        //     let mut c = sender.clone();
-        //     wasm_bindgen_futures::spawn_local(async move {
-        //         c.send(ev).await.unwrap();
-        //     });
-        // });
 
         let root_node = body_element.first_child().unwrap();
 
-        let mut websys_dom = crate::new::WebsysDom::new(body_element);
+        let mut websys_dom = crate::new::WebsysDom::new(body_element.clone());
 
         websys_dom.stack.push(root_node);
-        // patch_machine.stack.push(root_node.clone());
-
-        // todo: initialize the event registry properly on the root
 
         self.internal_dom.rebuild(&mut websys_dom)?;
+
+        while let Some(trigger) = websys_dom.wait_for_event().await {
+            let root_node = body_element.first_child().unwrap();
+            websys_dom.stack.push(root_node.clone());
+            self.internal_dom
+                .progress_with_event(&mut websys_dom, trigger)?;
+        }
+
         // let edits = self.internal_dom.rebuild()?;
         // log::debug!("Received edits: {:#?}", edits);
         // edits.iter().for_each(|edit| {

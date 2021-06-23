@@ -13,7 +13,7 @@ use bumpalo::Bump;
 use std::{
     any::Any,
     cell::{Cell, RefCell},
-    fmt::{Arguments, Debug},
+    fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
     rc::Rc,
 };
@@ -127,11 +127,23 @@ impl<'a> VNode<'a> {
 
     pub fn get_mounted_id(&self) -> Option<RealDomNode> {
         match self {
-            VNode::Element(_) => todo!(),
-            VNode::Text(_) => todo!(),
+            VNode::Element(el) => Some(el.dom_id.get()),
+            VNode::Text(te) => Some(te.dom_id.get()),
             VNode::Fragment(_) => todo!(),
             VNode::Suspended => todo!(),
             VNode::Component(_) => todo!(),
+        }
+    }
+}
+
+impl Debug for VNode<'_> {
+    fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            VNode::Element(el) => write!(s, "element, {}", el.tag_name),
+            VNode::Text(t) => write!(s, "text, {}", t.text),
+            VNode::Fragment(_) => write!(s, "fragment"),
+            VNode::Suspended => write!(s, "suspended"),
+            VNode::Component(_) => write!(s, "component"),
         }
     }
 }
@@ -201,11 +213,14 @@ pub struct Listener<'bump> {
     /// The type of event to listen for.
     pub(crate) event: &'static str,
 
+    /// Which scope?
+    /// This might not actually be relevant
     pub scope: ScopeIdx,
-    pub id: usize,
+
+    pub mounted_node: &'bump Cell<RealDomNode>,
 
     /// The callback to invoke when the event happens.
-    pub(crate) callback: &'bump (dyn Fn(VirtualEvent)),
+    pub(crate) callback: &'bump dyn Fn(VirtualEvent),
 }
 
 /// The key for keyed children.
@@ -259,6 +274,7 @@ pub struct VComponent<'src> {
     pub key: NodeKey<'src>,
 
     pub mounted_root: Cell<RealDomNode>,
+
     pub ass_scope: RefCell<VCompAssociatedScope>,
 
     // pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
