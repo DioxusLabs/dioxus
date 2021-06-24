@@ -96,9 +96,10 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 
 Sorted by priority
 
+### Phase 1: The Basics
+
 | Feature                | Dioxus | React | Notes for Dioxus                                 |
 | ---------------------- | ------ | ----- | ------------------------------------------------ |
-| ----- Phase 1 -----    | -----  | ----- | -----                                            |
 | Conditional Rendering  | ✅     | ✅    | if/then to hide/show component                   |
 | Map, Iterator          | ✅     | ✅    | map/filter/reduce rsx!                           |
 | Keyed Components       | ✅     | ✅    | advanced diffing with keys                       |
@@ -117,21 +118,29 @@ Sorted by priority
 | Controlled Inputs      | ✅     | ✅    | stateful wrappers around inputs                  |
 | CSS/Inline Styles      | 🛠      | ✅    | syntax for inline/conditional styles             |
 | 1st class global state | 🛠      | ✅    | redux/recoil/mobx on top of context              |
-| ----- Phase 2 -----    | -----  | ----- | -----                                            |
-| 1st class router       | 👀     | ✅    | Hook built on top of history                     |
-| Assets                 | 👀     | ✅    | include css/svg/img url statically               |
-| Integrated classnames  | 🛠      | ❓    | built-in `classnames`                            |
-| Suspense               | 👀     | 🛠     | schedule future render from future/promise       |
-| Transition             | 👀     | 🛠     | High-level control over suspense                 |
-| Animation              | 👀     | ✅    | Spring-style animations                          |
-| Mobile                 | 👀     | ✅    | Render with cacao                                |
-| Desktop (native)       | 👀     | ✅    | Render with native desktop                       |
-| 3D Renderer            | 👀     | ✅    | react-three-fiber                                |
-| ----- Phase 3 -----    | -----  | ----- | -----                                            |
-| Portal                 | ❓     | ✅    | cast elements through tree                       |
-| Error/Panic boundary   | ❓     | ✅    | catch panics and display custom BSOD             |
-| Code-splitting         | 👀     | ✅    | Make bundle smaller/lazy                         |
-| LiveView               | 👀     | ❓    | Example for SSR + WASM apps                      |
+
+### Phase 2: Advanced Toolkits
+
+| Feature               | Dioxus | React | Notes for Dioxus                           |
+| --------------------- | ------ | ----- | ------------------------------------------ |
+| 1st class router      | 👀     | ✅    | Hook built on top of history               |
+| Assets                | 👀     | ✅    | include css/svg/img url statically         |
+| Integrated classnames | 🛠      | ❓    | built-in `classnames`                      |
+| Suspense              | 👀     | 🛠     | schedule future render from future/promise |
+| Transition            | 👀     | 🛠     | High-level control over suspense           |
+| Animation             | 👀     | ✅    | Spring-style animations                    |
+| Mobile                | 👀     | ✅    | Render with cacao                          |
+| Desktop (native)      | 👀     | ✅    | Render with native desktop                 |
+| 3D Renderer           | 👀     | ✅    | react-three-fiber                          |
+
+### Phase 3: Additional Complexity
+
+| Feature              | Dioxus | React | Notes for Dioxus                     |
+| -------------------- | ------ | ----- | ------------------------------------ |
+| Portal               | ❓     | ✅    | cast elements through tree           |
+| Error/Panic boundary | ❓     | ✅    | catch panics and display custom BSOD |
+| Code-splitting       | 👀     | ✅    | Make bundle smaller/lazy             |
+| LiveView             | 👀     | ❓    | Example for SSR + WASM apps          |
 
 - ✅ = implemented and working
 - 👀 = not yet implemented or being worked on
