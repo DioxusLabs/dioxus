@@ -92,9 +92,11 @@ And much more. Dioxus makes Rust apps just as fast to write as React apps, but a
 
 # Parity with React
 
+Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. This parity table does not necessarily include
+
 Sorted by priority
 
-| Feature                | Dioxus | React | Notes                                            |
+| Feature                | Dioxus | React | Notes for Dioxus                                 |
 | ---------------------- | ------ | ----- | ------------------------------------------------ |
 | ----- Phase 1 -----    | -----  | ----- | -----                                            |
 | Conditional Rendering  | ✅     | ✅    | if/then to hide/show component                   |
@@ -105,7 +107,7 @@ Sorted by priority
 | Context                | ✅     | ✅    | share state through the tree                     |
 | Hook                   | ✅     | ✅    | memory cells in components                       |
 | SSR                    | ✅     | ✅    | render directly to string                        |
-| Runs natively          | ✅     | 👀    | runs as a portable binary w/o a runtime (Node)   |
+| Runs natively          | ✅     | ❓    | runs as a portable binary w/o a runtime (Node)   |
 | Component Children     | ✅     | ✅    | cx.children() as a list of nodes                 |
 | Null components        | ✅     | ✅    | allow returning no components                    |
 | No-div components      | ✅     | ✅    | components that render components                |
@@ -118,15 +120,20 @@ Sorted by priority
 | ----- Phase 2 -----    | -----  | ----- | -----                                            |
 | 1st class router       | 👀     | ✅    | Hook built on top of history                     |
 | Assets                 | 👀     | ✅    | include css/svg/img url statically               |
-| Integrated classnames  | 🛠      | 👀    | built-in `classnames`                            |
-| Suspense               | 👀     | 👀    | schedule future render from future/promise       |
-| Transition             | 👀     | 👀    | High-level control over suspense                 |
+| Integrated classnames  | 🛠      | ❓    | built-in `classnames`                            |
+| Suspense               | 👀     | 🛠     | schedule future render from future/promise       |
+| Transition             | 👀     | 🛠     | High-level control over suspense                 |
 | Animation              | 👀     | ✅    | Spring-style animations                          |
 | Mobile                 | 👀     | ✅    | Render with cacao                                |
 | Desktop (native)       | 👀     | ✅    | Render with native desktop                       |
 | 3D Renderer            | 👀     | ✅    | react-three-fiber                                |
 | ----- Phase 3 -----    | -----  | ----- | -----                                            |
-| Portal                 | 👀     | ✅    | cast elements through tree                       |
-| Error/Panic boundary   | 👀     | ✅    | catch panics and display custom BSOD             |
+| Portal                 | ❓     | ✅    | cast elements through tree                       |
+| Error/Panic boundary   | ❓     | ✅    | catch panics and display custom BSOD             |
 | Code-splitting         | 👀     | ✅    | Make bundle smaller/lazy                         |
-| LiveView               | 👀     | 👀    | Example for SSR + WASM apps                      |
+| LiveView               | 👀     | ❓    | Example for SSR + WASM apps                      |
+
+✅ = implemented and working
+👀 = not yet implemented or being worked on
+🛠 = actively being worked on
+❓ = not sure if will or can implement
