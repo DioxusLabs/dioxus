@@ -133,7 +133,7 @@ Sorted by priority
 | Code-splitting         | 👀     | ✅    | Make bundle smaller/lazy                         |
 | LiveView               | 👀     | ❓    | Example for SSR + WASM apps                      |
 
-✅ = implemented and working
-👀 = not yet implemented or being worked on
-🛠 = actively being worked on
-❓ = not sure if will or can implement
+- ✅ = implemented and working
+- 👀 = not yet implemented or being worked on
+- 🛠 = actively being worked on
+- ❓ = not sure if will or can implement
