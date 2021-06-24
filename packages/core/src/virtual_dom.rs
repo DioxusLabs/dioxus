@@ -778,7 +778,7 @@ Any function prefixed with "use" should not be called conditionally.
     }
 
     /// There are hooks going on here!
-    fn use_context<T: 'static>(&self) -> &'src Rc<T> {
+    fn use_context<T: 'static>(&self) -> &'src T {
         self.try_use_context().unwrap()
     }
 

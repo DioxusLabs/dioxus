@@ -231,6 +231,6 @@ pub mod atoms {}
 // #[cfg(feature = "desktop")]
 pub mod webview {
     //! A webview based renderer for building desktop applications with Dioxus
-    use dioxus_core::prelude::FC;
-    pub fn launch<P>(f: FC<P>) {}
+    use dioxus_core::prelude::{Properties, FC};
+    pub fn launch<P: Properties>(f: FC<P>) {}
 }

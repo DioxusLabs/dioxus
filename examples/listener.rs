@@ -2,13 +2,7 @@
 
 use dioxus_core::prelude::*;
 
-fn main() {
-    Some(10)
-        .map(|f| f * 5)
-        .map(|f| f / 3)
-        .map(|f| f * 5)
-        .map(|f| f / 3);
-}
+fn main() {}
 
 static Example: FC<()> = |ctx| {
     let (name, set_name) = use_state(&ctx, || "...?");

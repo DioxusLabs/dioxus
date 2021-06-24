@@ -13,11 +13,12 @@ Sorted by priority
 | Context                | ✅     | ✅    | share state through the tree                     |
 | Hook                   | ✅     | ✅    | memory cells in components                       |
 | SSR                    | ✅     | ✅    | render directly to string                        |
-| Runs natively          | ✅     | 👀    | runs as a portable binary w/ extra tooling       |
+| Runs natively          | ✅     | 👀    | runs as a portable binary w/o a runtime (Node)   |
 | Component Children     | ✅     | ✅    | cx.children() as a list of nodes                 |
 | Null components        | ✅     | ✅    | allow returning no components                    |
 | No-div components      | ✅     | ✅    | components that render components                |
 | Fragments              | ✅     | ✅    | rsx! can return multiple elements without a root |
+| Manual Props           | 👀     | ✅    | Manually pass in props                           |
 | NodeRef                | 👀     | ✅    | gain direct access to nodes                      |
 | Controlled Inputs      | ✅     | ✅    | stateful wrappers around inputs                  |
 | CSS/Inline Styles      | 🛠      | ✅    | syntax for inline/conditional styles             |

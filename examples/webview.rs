@@ -6,22 +6,26 @@
 //! Under the hood, the dioxus_webview crate bridges a native Dioxus VirtualDom with a custom prebuit application running
 //! in the webview runtime. Custom handlers are provided for the webview instance to consume patches and emit user events
 //! into the native VDom instance.
+//!
+//! Currently, NodeRefs won't work properly, but all other event functionality will.
 
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::webview::launch(|ctx| {
-        let (count, set_count) = use_state(&ctx, || 0);
-
-        ctx.render(rsx! {
-            div {
-                h1 { "Dioxus Desktop Demo" }
-                p { "Count is {count}" }
-                button {
-                    "Click to increment"
-                    onclick: |_| set_count(count + 1)
-                }
-            }
-        })
-    });
+    dioxus::webview::launch(App);
 }
+
+static App: FC<()> = |cx| {
+    let (count, set_count) = use_state(&cx, || 0);
+
+    cx.render(rsx! {
+        div {
+            h1 { "Dioxus Desktop Demo" }
+            p { "Count is {count}" }
+            button {
+                "Click to increment"
+                onclick: move |_| set_count(count + 1)
+            }
+        }
+    })
+};
