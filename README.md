@@ -92,9 +92,7 @@ And much more. Dioxus makes Rust apps just as fast to write as React apps, but a
 
 # Parity with React
 
-Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. This parity table does not necessarily include
-
-Sorted by priority
+Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. This parity table does not necessarily include important ecosystem crates like code blocks, markdown, resizing hooks, etc.
 
 ### Phase 1: The Basics
 
