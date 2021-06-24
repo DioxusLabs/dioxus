@@ -132,3 +132,45 @@ static AntipatternMisusedHooks: FC<MisuedHooksProps> = |cx| {
         rsx!(in cx, div { "Not rendering state" })
     }
 };
+
+/// Antipattern: Downcasting refs and panicing
+/// ------------------------------------------
+///
+/// Occassionally it's useful to get the ref of an element to handle it directly. Elements support downcasting to
+/// Dioxus's virtual element types as well as their true native counterparts. Downcasting to Dioxus' virtual elements
+/// will never panic, but downcasting to native elements will fail if on an unsupported platform. We recommend avoiding
+/// publishing hooks and components that deply rely on control over elements using their native `ref`, preferring to
+/// use their Dioxus Virtual Element counterpart instead.
+// This particular code *will panic* due to the unwrap. Try to avoid these types of patterns.
+/// ---------------------------------
+/// TODO: Get this to compile properly
+/// let div_ref = use_node_ref(&cx);
+///
+/// cx.render(rsx!{
+///     div { ref: div_ref, class: "custom class",
+///         button { "click me to see my parent's class"
+///             onclick: move |_| if let Some(div_ref) = div_ref {
+///                 panic!("Div class is {}", div_ref.to_native::<web_sys::Element>().unwrap().class())
+///             }
+///         }
+///     }
+/// })
+static _example: FC<()> = |cx| todo!();
+
+/// Antipattern: publishing components and hooks with all features enabled
+/// ----------------------------------------------------------------------
+///
+/// The `dioxus` crate combines a bunch of useful utilities together (like the rsx! and html! macros, hooks, and more).
+/// However, when publishing your custom hook or component, we highly advise using only the `core` feature on the dioxus
+/// crate. This makes your crate compile faster, makes it more stable, and avoids bringing in incompatible libraries that
+/// might make it not compile on unsupported platforms.
+///
+/// We don't have a code snippet for this, but just prefer to use this line:
+///     dioxus = { version = "*", features = ["core"]}
+/// instead of this one:
+///     dioxus = { version = "*", features = ["web", "desktop", "full"]}
+/// in your Cargo.toml
+///
+/// This will only include the `core` dioxus crate which is relatively slim and fast to compile and avoids target-specific
+/// libraries.
+static __example: FC<()> = |cx| todo!();
