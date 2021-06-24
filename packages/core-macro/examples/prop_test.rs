@@ -2,18 +2,21 @@ fn main() {}
 
 pub mod dioxus {
     pub mod prelude {
-        pub unsafe trait Properties {
+        pub trait Properties {
             type Builder;
-            const CAN_BE_MEMOIZED: bool;
             fn builder() -> Self::Builder;
+            unsafe fn memoize(&self, other: &Self) -> bool;
         }
     }
 }
-#[derive(dioxus_core_macro::Props)]
+
+/// This implementation should require a "PartialEq" because it memoizes (no external references)
+#[derive(PartialEq, dioxus_core_macro::Props)]
 struct SomeProps {
     a: String,
 }
 
+/// This implementation does not require a "PartialEq" because it does not memoize
 #[derive(dioxus_core_macro::Props)]
 struct SomePropsTwo<'a> {
     a: &'a str,

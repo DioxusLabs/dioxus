@@ -44,11 +44,21 @@ pub enum VirtualEvent {
     MouseEvent(Rc<dyn on::MouseEvent>),
     PointerEvent(Rc<dyn on::PointerEvent>),
 
+    // image event has conflicting method types
     // ImageEvent(event_data::ImageEvent),
     OtherEvent,
 }
 
 pub mod on {
+    //! This module defines the synthetic events that all Dioxus apps enable. No matter the platform, every dioxus renderer
+    //! will implement the same events and same behavior (bubbling, cancelation, etc).
+    //!
+    //! Synthetic events are immutable and wrapped in Arc. It is the intention for Dioxus renderers to re-use the underyling
+    //! Arc allocation through "get_mut"
+    //!
+    //!
+    //!
+
     #![allow(unused)]
     use std::{fmt::Debug, ops::Deref, rc::Rc};
 
@@ -178,8 +188,8 @@ pub mod on {
 
     pub trait MouseEvent: Debug {
         fn alt_key(&self) -> bool;
-        fn button(&self) -> i32;
-        fn buttons(&self) -> i32;
+        fn button(&self) -> i16;
+        fn buttons(&self) -> u16;
         fn client_x(&self) -> i32;
         fn client_y(&self) -> i32;
         fn ctrl_key(&self) -> bool;
@@ -189,7 +199,7 @@ pub mod on {
         fn screen_x(&self) -> i32;
         fn screen_y(&self) -> i32;
         fn shift_key(&self) -> bool;
-        fn get_modifier_state(&self, key_code: usize) -> bool;
+        fn get_modifier_state(&self, key_code: &str) -> bool;
     }
 
     pub trait PointerEvent: Debug {

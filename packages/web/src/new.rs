@@ -480,43 +480,46 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
             pub struct CustomMouseEvent(web_sys::MouseEvent);
             impl dioxus_core::events::on::MouseEvent for CustomMouseEvent {
                 fn alt_key(&self) -> bool {
-                    todo!()
+                    self.0.alt_key()
                 }
-                fn button(&self) -> i32 {
-                    todo!()
+                fn button(&self) -> i16 {
+                    self.0.button()
                 }
-                fn buttons(&self) -> i32 {
-                    todo!()
+                fn buttons(&self) -> u16 {
+                    self.0.buttons()
                 }
                 fn client_x(&self) -> i32 {
-                    todo!()
+                    self.0.client_x()
                 }
                 fn client_y(&self) -> i32 {
-                    todo!()
+                    self.0.client_y()
                 }
                 fn ctrl_key(&self) -> bool {
-                    todo!()
+                    self.0.ctrl_key()
                 }
                 fn meta_key(&self) -> bool {
-                    todo!()
+                    self.0.meta_key()
                 }
                 fn page_x(&self) -> i32 {
-                    todo!()
+                    self.0.page_x()
                 }
                 fn page_y(&self) -> i32 {
-                    todo!()
+                    self.0.page_y()
                 }
                 fn screen_x(&self) -> i32 {
-                    todo!()
+                    self.0.screen_x()
                 }
                 fn screen_y(&self) -> i32 {
-                    todo!()
+                    self.0.screen_y()
                 }
                 fn shift_key(&self) -> bool {
-                    todo!()
+                    self.0.shift_key()
                 }
-                fn get_modifier_state(&self, key_code: usize) -> bool {
-                    todo!()
+
+                // yikes
+                // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
+                fn get_modifier_state(&self, key_code: &str) -> bool {
+                    self.0.get_modifier_state(key_code)
                 }
             }
             VirtualEvent::MouseEvent(Rc::new(CustomMouseEvent(evt)))

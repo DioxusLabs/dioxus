@@ -504,9 +504,9 @@ where
             let child = item.into_vnode(&self.ctx);
             self.children.push(child);
         }
-        if self.children.len() > len_before + 1 {
-            if self.children.last().unwrap().key().is_none() {
-                if cfg!(debug_assertions) {
+        if cfg!(debug_assertions) {
+            if self.children.len() > len_before + 1 {
+                if self.children.last().unwrap().key().is_none() {
                     log::error!(
                         r#"
 Warning: Each child in an array or iterator should have a unique "key" prop. 

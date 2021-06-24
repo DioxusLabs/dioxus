@@ -182,12 +182,14 @@ pub mod prelude {
     pub use dioxus_core::prelude::*;
     pub use dioxus_core_macro::fc;
 }
-pub mod builder {
-    // pub use dioxus_core::builder::*;
-}
-pub mod events {
-    // pub use dioxus_core::events::*;
-}
+// pub mod builder {
+//     // pub use dioxus_core::builder::*;
+// }
+pub use dioxus_core::builder;
+pub use dioxus_core::events;
+// pub mod events {
+//     // pub use dioxus_core::events::*;
+// }
 // Just a heads-up, the core functionality of dioxus rests in Dioxus-Core. This crate just wraps a bunch of utilities
 // together and exports their namespaces to something predicatble.
 #[cfg(feature = "core")]
