@@ -1,51 +1,31 @@
 # Parity with React
 
-Sorted by priority
-
-| Feature                | Dioxus | React | Notes                                            |
-| ---------------------- | ------ | ----- | ------------------------------------------------ |
-| ----- Phase 1 -----    | -----  | ----- | -----                                            |
-| Conditional Rendering  | ✅     | ✅    | if/then to hide/show component                   |
-| Map, Iterator          | ✅     | ✅    | map/filter/reduce rsx!                           |
-| Keyed Components       | ✅     | ✅    | advanced diffing with keys                       |
-| Web                    | ✅     | ✅    | renderer for web browser                         |
-| Desktop (webview)      | ✅     | ✅    | renderer for desktop                             |
-| Context                | ✅     | ✅    | share state through the tree                     |
-| Hook                   | ✅     | ✅    | memory cells in components                       |
-| SSR                    | ✅     | ✅    | render directly to string                        |
-| Runs natively          | ✅     | 👀    | runs as a portable binary w/ extra tooling       |
-| Component Children     | ✅     | ✅    | cx.children() as a list of nodes                 |
-| Null components        | ✅     | ✅    | allow returning no components                    |
-| No-div components      | ✅     | ✅    | components that render components                |
-| Fragments              | ✅     | ✅    | rsx! can return multiple elements without a root |
-| NodeRef                | 👀     | ✅    | gain direct access to nodes                      |
-| Controlled Inputs      | ✅     | ✅    | stateful wrappers around inputs                  |
-| CSS/Inline Styles      | 🛠      | ✅    | syntax for inline/conditional styles             |
-| 1st class global state | 🛠      | ✅    | redux/recoil/mobx on top of context              |
-| ----- Phase 2 -----    | -----  | ----- | -----                                            |
-| 1st class router       | 👀     | ✅    | Hook built on top of history                     |
-| Assets                 | 👀     | ✅    | include css/svg/img url statically               |
-| Integrated classnames  | 🛠      | 👀    | built-in `classnames`                            |
-| Suspense               | 👀     | 👀    | schedule future render from future/promise       |
-| Transition             | 👀     | 👀    | High-level control over suspense                 |
-| Animation              | 👀     | ✅    | Spring-style animations                          |
-| Mobile                 | 👀     | ✅    | Render with cacao                                |
-| Desktop (native)       | 👀     | ✅    | Render with native desktop                       |
-| 3D Renderer            | 👀     | ✅    | react-three-fiber                                |
-| ----- Phase 3 -----    | -----  | ----- | -----                                            |
-| Portal                 | 👀     | ✅    | cast elements through tree                       |
-| Error/Panic boundary   | 👀     | ✅    | catch panics and display custom BSOD             |
-| Code-splitting         | 👀     | ✅    | Make bundle smaller/lazy                         |
-| LiveView               | 👀     | 👀    | Example for SSR + WASM apps                      |
+Parity has moved to the homepage
 
 ## Required services:
 
 ---
 
-Gloo is covering a lot of these. We want to build hooks around these, and provide examples on how to use them.
+Gloo is covering a lot of these. We want to build hooks around these and provide examples on how to use them.
 https://github.com/rustwasm/gloo
 
-If the gloo service doesn't exist, then we need to contribute to the project
+For example, resize observer would function like this:
+
+```rust
+static Example: FC<()> = |cx| {
+    let observer = use_resize_observer();
+
+    cx.render(rsx!(
+        div { ref: observer.node_ref
+            "Size, x: {observer.x} y: {observer.y}"
+        }
+    ))
+}
+```
+
+However, resize observing is _not_ cross-platform, so this hook (internally) needs to abstract over the rendering platform.
+
+For other services, we shell out to gloo. If the gloo service doesn't exist, then we need to contribute to the project to make sure it exists.
 
 | Service                      | Hook examples | Current Projects |
 | ---------------------------- | ------------- | ---------------- |

@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
+use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
 
@@ -65,7 +66,7 @@ pub fn TodoList(ctx: Context<()>) -> VNode {
                     class: "new-todo"
                     placeholder: "What needs to be done?"
                     value: "{draft}"
-                    oninput: move |evt| set_draft(evt.value)
+                    oninput: move |evt| set_draft(evt.value())
                 }
             }
 
@@ -78,7 +79,7 @@ pub fn TodoList(ctx: Context<()>) -> VNode {
                     FilterState::Completed => item.checked,
                 })
                 .map(|(id, item)| {
-                    TodoEntry!();
+                    // TodoEntry!();
                     todo!()
                     // rsx!(TodoEntry {
                     //     key: "{order}",
@@ -100,17 +101,14 @@ pub struct TodoEntryProps {
     item: Rc<TodoItem>,
 }
 
-pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> VNode {
-// #[inline_props]
-pub fn TodoEntry(
-    ctx: Context,
-    baller: &impl Fn() -> (),
-    caller: &impl Fn() -> (),
-    todo: &Rc<TodoItem>,
-) -> VNode {
-    // pub fn TodoEntry(ctx: Context, todo: &Rc<TodoItem>) -> VNode {
+pub fn TodoEntry(ctx: Context<TodoEntryProps>) -> VNode {
     let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    // let todo = &ctx.item;
+    let contents = "";
+    let todo = TodoItem {
+        checked: false,
+        contents: "asd".to_string(),
+        id: uuid::Uuid::new_v4(),
+    };
 
     ctx.render(rsx! (
         li {

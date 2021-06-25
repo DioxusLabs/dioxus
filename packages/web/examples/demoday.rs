@@ -1,3 +1,4 @@
+use dioxus_core as dioxus;
 use dioxus_web::{dioxus::prelude::*, WebsysRenderer};
 
 fn main() {
@@ -10,7 +11,7 @@ fn App(ctx: Context<()>) -> VNode {
     ctx.render(rsx! {
         main { class: "dark:bg-gray-800 bg-white relative h-screen"
             NavBar {}
-            {(0..10).map(|f| rsx!{ Landing {} })}
+            {(0..10).map(|f| rsx!(Landing { key: "{f}" }))}
         }
     })
 }
@@ -61,7 +62,7 @@ fn Landing(ctx: Context<()>) -> VNode {
             div { class: "container mx-auto px-6 flex flex-col justify-between items-center relative py-8"
                 div { class: "flex flex-col"
                     h1 { class: "font-light w-full uppercase text-center text-4xl sm:text-5xl dark:text-white text-gray-800"
-                        "The React Framework for Production"
+                        "The Dioxus Framework for Production"
                     }
                     h2{ class: "font-light max-w-2xl mx-auto w-full text-xl dark:text-white text-gray-500 text-center py-8"
                         "Next.js gives you the best developer experience with all the features you need for production: \n

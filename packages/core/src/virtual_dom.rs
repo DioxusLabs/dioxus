@@ -24,7 +24,7 @@ use bumpalo::Bump;
 use generational_arena::Arena;
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet, VecDeque},
     fmt::Debug,
     future::Future,
@@ -63,6 +63,17 @@ pub struct VirtualDom {
     _root_prop_type: std::any::TypeId,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RealDomNode(pub u32);
+impl RealDomNode {
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+    pub fn empty() -> Self {
+        Self(u32::MIN)
+    }
+}
+
 // ======================================
 // Public Methods for the VirtualDom
 // ======================================
@@ -98,7 +109,7 @@ impl VirtualDom {
     ///
     /// let dom = VirtualDom::new(Example);
     /// ```
-    pub fn new(root: impl Fn(Context<()>) -> VNode + 'static) -> Self {
+    pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -130,10 +141,7 @@ impl VirtualDom {
     ///
     /// let dom = VirtualDom::new(Example);
     /// ```
-    pub fn new_with_props<P: Properties + 'static>(
-        root: impl Fn(Context<P>) -> VNode + 'static,
-        root_props: P,
-    ) -> Self {
+    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let components = ScopeArena::new(Arena::new());
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
@@ -174,11 +182,17 @@ impl VirtualDom {
             _root_prop_type: TypeId::of::<P>(),
         }
     }
+}
 
+// ======================================
+// Private Methods for the VirtualDom
+// ======================================
+impl VirtualDom {
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     /// Currently this doesn't do what we want it to do
-    pub fn rebuild<'s>(&'s mut self) -> Result<EditList<'s>> {
+    pub fn rebuild<'s, Dom: RealDom>(&'s mut self, realdom: &mut Dom) -> Result<()> {
         let mut diff_machine = DiffMachine::new(
+            realdom,
             self.components.clone(),
             self.base_scope,
             self.event_queue.clone(),
@@ -195,14 +209,8 @@ impl VirtualDom {
 
         self.progress_completely(&mut diff_machine)?;
 
-        Ok(diff_machine.consume())
+        Ok(())
     }
-}
-
-// ======================================
-// Private Methods for the VirtualDom
-// ======================================
-impl VirtualDom {
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
     ///  
     /// Given a synthetic event, the component that triggered the event, and the index of the callback, this runs the virtual
@@ -246,26 +254,34 @@ impl VirtualDom {
     // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
     //
     // A good project would be to remove all unsafe from this crate and move the unsafety into safer abstractions.
-    pub fn progress_with_event(&mut self, event: EventTrigger) -> Result<EditList> {
-        let id = event.component_id.clone();
+    pub fn progress_with_event<Dom: RealDom>(
+        &mut self,
+        realdom: &mut Dom,
+        trigger: EventTrigger,
+    ) -> Result<()> {
+        let id = trigger.component_id.clone();
 
-        self.components.try_get_mut(id)?.call_listener(event)?;
+        self.components.try_get_mut(id)?.call_listener(trigger)?;
 
-        let mut diff_machine =
-            DiffMachine::new(self.components.clone(), id, self.event_queue.clone());
+        let mut diff_machine = DiffMachine::new(
+            realdom,
+            self.components.clone(),
+            id,
+            self.event_queue.clone(),
+        );
 
         self.progress_completely(&mut diff_machine)?;
 
-        Ok(diff_machine.consume())
+        Ok(())
     }
 
     /// Consume the event queue, descending depth-first.
     /// Only ever run each component once.
     ///
     /// The DiffMachine logs its progress as it goes which might be useful for certain types of renderers.
-    pub(crate) fn progress_completely<'s>(
+    pub(crate) fn progress_completely<'s, Dom: RealDom>(
         &'s mut self,
-        diff_machine: &'_ mut DiffMachine<'s>,
+        diff_machine: &'_ mut DiffMachine<'s, Dom>,
     ) -> Result<()> {
         // Add this component to the list of components that need to be difed
         // #[allow(unused_assignments)]
@@ -302,7 +318,9 @@ impl VirtualDom {
             cur_component.run_scope()?;
             // diff_machine.change_list.load_known_root(1);
 
-            diff_machine.diff_node(cur_component.old_frame(), cur_component.next_frame());
+            let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
+            // let (old, new) = cur_component.get_frames_mut();
+            diff_machine.diff_node(old, new);
 
             // cur_height = cur_component.height;
 
@@ -376,7 +394,12 @@ pub struct Scope {
     // - is self-refenrential and therefore needs to point into the bump
     // Stores references into the listeners attached to the vnodes
     // NEEDS TO BE PRIVATE
-    pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
+    pub(crate) listeners: RefCell<Vec<(*const Cell<RealDomNode>, *const dyn Fn(VirtualEvent))>>,
+    // pub(crate) listeners: RefCell<nohash_hasher::IntMap<u32, *const dyn Fn(VirtualEvent)>>,
+    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
+    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
+    // NoHashMap<RealDomNode, <*const dyn Fn(VirtualEvent)>
+    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
 }
 
 // We need to pin the hook so it doesn't move as we initialize the list of hooks
@@ -429,7 +452,7 @@ impl Scope {
         let child_nodes = unsafe { std::mem::transmute(child_nodes) };
 
         Self {
-            child_nodes: child_nodes,
+            child_nodes,
             caller,
             parent,
             arena_idx,
@@ -469,12 +492,12 @@ impl Scope {
         self.frames.next().bump.reset();
 
         // Remove all the outdated listeners
-        //
-        self.listeners
-            .try_borrow_mut()
-            .ok()
-            .ok_or(Error::FatalInternal("Borrowing listener failed"))?
-            .drain(..);
+        self.listeners.borrow_mut().clear();
+        // self.listeners
+        //     .try_borrow_mut()
+        //     .ok()
+        //     .ok_or(Error::FatalInternal("Borrowing listener failed"))?
+        //     .drain(..);
 
         *self.hookidx.borrow_mut() = 0;
 
@@ -508,25 +531,35 @@ impl Scope {
     // The listener list will be completely drained because the next frame will write over previous listeners
     pub fn call_listener(&mut self, trigger: EventTrigger) -> Result<()> {
         let EventTrigger {
-            listener_id, event, ..
+            real_node_id,
+            event,
+            ..
         } = trigger;
-        //
-        unsafe {
-            // Convert the raw ptr into an actual object
-            // This operation is assumed to be safe
-            let listener_fn = self
-                .listeners
-                .try_borrow()
-                .ok()
-                .ok_or(Error::FatalInternal("Borrowing listener failed"))?
-                .get(listener_id as usize)
-                .ok_or(Error::FatalInternal("Event should exist if triggered"))?
-                .as_ref()
-                .ok_or(Error::FatalInternal("Raw event ptr is invalid"))?;
 
-            // Run the callback with the user event
+        // todo: implement scanning for outdated events
+
+        // Convert the raw ptr into an actual object
+        // This operation is assumed to be safe
+
+        log::debug!("Calling listeners! {:?}", self.listeners.borrow().len());
+        let listners = self.listeners.borrow();
+        let (_, listener) = listners
+            .iter()
+            .find(|(domptr, _)| {
+                let p = unsafe { &**domptr };
+                p.get() == real_node_id
+            })
+            .expect(&format!(
+                "Failed to find real node with ID {:?}",
+                real_node_id
+            ));
+
+        // TODO: Don'tdo a linear scan! Do a hashmap lookup! It'll be faster!
+        unsafe {
+            let listener_fn = &**listener;
             listener_fn(event);
         }
+
         Ok(())
     }
 
@@ -745,7 +778,7 @@ Any function prefixed with "use" should not be called conditionally.
     }
 
     /// There are hooks going on here!
-    fn use_context<T: 'static>(&self) -> &'src Rc<T> {
+    fn use_context<T: 'static>(&self) -> &'src T {
         self.try_use_context().unwrap()
     }
 
@@ -855,26 +888,6 @@ impl Ord for HeightMarker {
 impl PartialOrd for HeightMarker {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-// NodeCtx is used to build VNodes in the component's memory space.
-// This struct adds metadata to the final VNode about listeners, attributes, and children
-#[derive(Clone)]
-pub struct NodeCtx<'a> {
-    pub scope_ref: &'a Scope,
-    pub listener_id: RefCell<usize>,
-}
-
-impl<'a> NodeCtx<'a> {
-    pub fn bump(&self) -> &'a Bump {
-        &self.scope_ref.cur_frame().bump
-    }
-}
-
-impl Debug for NodeCtx<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
     }
 }
 

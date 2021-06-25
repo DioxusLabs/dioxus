@@ -1,10 +1,11 @@
+use dioxus_core as dioxus;
 use dioxus_web::{prelude::*, WebsysRenderer};
 
-mod filtertoggles;
-mod recoil;
-mod state;
-mod todoitem;
-mod todolist;
+// mod filtertoggles;
+// mod recoil;
+// mod state;
+// mod todoitem;
+// mod todolist;
 
 static APP_STYLE: &'static str = include_str!("./style.css");
 
@@ -13,10 +14,10 @@ fn main() {
         ctx.render(rsx! {
             div {
                 id: "app"
-                style { "{APP_STYLE}" }
+                // style { "{APP_STYLE}" }
 
                 // list
-                todolist::TodoList {}
+                // todolist::TodoList {}
 
                 // footer
                 footer {

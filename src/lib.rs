@@ -182,12 +182,14 @@ pub mod prelude {
     pub use dioxus_core::prelude::*;
     pub use dioxus_core_macro::fc;
 }
-pub mod builder {
-    // pub use dioxus_core::builder::*;
-}
-pub mod events {
-    // pub use dioxus_core::events::*;
-}
+// pub mod builder {
+//     // pub use dioxus_core::builder::*;
+// }
+pub use dioxus_core::builder;
+pub use dioxus_core::events;
+// pub mod events {
+//     // pub use dioxus_core::events::*;
+// }
 // Just a heads-up, the core functionality of dioxus rests in Dioxus-Core. This crate just wraps a bunch of utilities
 // together and exports their namespaces to something predicatble.
 #[cfg(feature = "core")]
@@ -229,6 +231,6 @@ pub mod atoms {}
 // #[cfg(feature = "desktop")]
 pub mod webview {
     //! A webview based renderer for building desktop applications with Dioxus
-    use dioxus_core::prelude::FC;
-    pub fn launch<P>(f: FC<P>) {}
+    use dioxus_core::prelude::{Properties, FC};
+    pub fn launch<P: Properties>(f: FC<P>) {}
 }

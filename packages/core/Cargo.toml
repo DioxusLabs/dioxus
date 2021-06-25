@@ -11,19 +11,22 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 
 [dependencies]
 # todo: use wast for faster load/compile
-dioxus-core-macro = { path = "../core-macro", version = "0.1.1" }
+dioxus-core-macro = { path="../core-macro", version="0.1.1" }
 
 # Backs scopes and graphs between parent and children
-generational-arena = { version = "0.2.8" }
+generational-arena = { version="0.2.8" }
 
-# Bumpalo backs the VNode creation
-bumpalo = { version = "3.6.0", features = ["collections", "boxed"] }
+# Bumpalo is used as a micro heap backing each component
+bumpalo = { version="3.6.0", features=["collections", "boxed"] }
 
 # custom error type
 thiserror = "1"
 
 # faster hashmaps
 fxhash = "0.2.1"
+
+# even *faster* hashmaps for index-based types
+nohash-hasher = "0.2.0"
 
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
@@ -32,7 +35,10 @@ longest-increasing-subsequence = "0.1.0"
 log = "0.4"
 
 # Serialize the Edits for use in Webview/Liveview instances
-serde = { version = "1", features = ["derive"], optional = true }
+serde = { version="1", features=["derive"], optional=true }
+
+smallvec = "1.6.1"
+
 
 [features]
 default = []

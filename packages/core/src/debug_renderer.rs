@@ -3,6 +3,7 @@
 //!
 //! Renderers don't actually need to own the virtual dom (it's up to the implementer).
 
+use crate::innerlude::RealDom;
 use crate::{events::EventTrigger, virtual_dom::VirtualDom};
 use crate::{innerlude::Result, prelude::*};
 
@@ -15,7 +16,7 @@ impl DebugRenderer {
     ///
     /// This means that the root component must either consumes its own context, or statics are used to generate the page.
     /// The root component can access things like routing in its context.
-    pub fn new(root: impl for<'a> Fn(Context<'a, ()>) -> VNode + 'static) -> Self {
+    pub fn new(root: FC<()>) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -23,10 +24,7 @@ impl DebugRenderer {
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
     /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new_with_props<T: Properties + 'static>(
-        root: impl for<'a> Fn(Context<'a, T>) -> VNode + 'static,
-        root_props: T,
-    ) -> Self {
+    pub fn new_with_props<T: Properties + 'static>(root: FC<T>, root_props: T) -> Self {
         Self::from_vdom(VirtualDom::new_with_props(root, root_props))
     }
 
@@ -40,7 +38,7 @@ impl DebugRenderer {
         Ok(())
     }
 
-    pub fn step(&mut self, machine: &mut DiffMachine) -> Result<()> {
+    pub fn step<Dom: RealDom>(&mut self, machine: &mut DiffMachine<Dom>) -> Result<()> {
         Ok(())
     }
 
@@ -69,6 +67,27 @@ impl DebugRenderer {
 
     pub fn trigger_listener(&mut self, id: usize) -> Result<()> {
         Ok(())
+    }
+
+    pub fn render_nodes<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
+    where
+        F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+    {
+        Ok(())
+    }
+}
+
+pub struct DebugVNodeSource {
+    bump: Bump,
+}
+impl DebugVNodeSource {
+    fn new() -> Self {
+        Self { bump: Bump::new() }
+    }
+
+    fn render_nodes(&self) -> VNode {
+        // let ctx = NodeCtx
+        todo!()
     }
 }
 

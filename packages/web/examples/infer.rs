@@ -1,3 +1,4 @@
+use dioxus_core as dioxus;
 use dioxus_core::{events::on::MouseEvent, prelude::*};
 use dioxus_web::WebsysRenderer;
 
@@ -14,7 +15,7 @@ fn main() {
 static Example: FC<()> = |ctx| {
     let (event, set_event) = use_state(&ctx, || None);
 
-    let handler = move |evt: MouseEvent| {
+    let handler = move |evt| {
         set_event(Some(evt));
     };
 
@@ -42,17 +43,15 @@ static Example: FC<()> = |ctx| {
     })
 };
 
-
 #[derive(Debug, PartialEq, Props)]
 struct ExampleProps {
-    name: String
+    name: String,
 }
 
 static Example2: FC<ExampleProps> = |ctx| {
-    ctx.render(rsx!{
+    ctx.render(rsx! {
         div {
             h1 {"hello {ctx.name}"}
         }
     })
 };
-

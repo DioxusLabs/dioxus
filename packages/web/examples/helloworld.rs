@@ -1,3 +1,4 @@
+use dioxus_core as dioxus;
 use dioxus_web::prelude::*;
 
 fn main() {

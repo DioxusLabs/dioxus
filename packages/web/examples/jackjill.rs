@@ -33,12 +33,11 @@ static Example: FC<()> = |ctx| {
                             <button
                                 class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
                                 onclick={move |_| set_name("jack")}>
-                                "Jack!"
+                                    "Jack!"
                                 </button>
 
                                 <button
                                     class="inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-                                    onclick={move |_| set_name("jill")}
                                     onclick={move |_| set_name("jill")}>
                                     "Jill!"
                                 </button>

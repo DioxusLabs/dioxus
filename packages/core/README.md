@@ -12,6 +12,19 @@ Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus 
 - Dodrio: bump allocation, double buffering, and source code for NodeBuilder
 - Percy: html! macro architecture, platform-agnostic edits
 - Yew: passion and inspiration ❤️
+- InfernoJS: approach to fragments and node diffing
+- Preact: approach for normalization and ref
+
+Dioxus-core leverages some really cool techniques and hits a very high level of parity with mature frameworks. Some unique features include:
+
+- managed lifetimes for borrowed data
+- suspended nodes (task/fiber endpoints) for asynchronous vnodes
+- custom memory allocator for vnodes and all text content
+- support for fragments w/ lazy normalization
+
+There's certainly more to the story, but these optimizations make Dioxus memory use and allocation count extremely minimal. For an average application, it is likely that zero allocations will need to be performed once the app has been mounted. Only when new components are added to the dom will allocations occur - and only en mass. The space of old VNodes is dynamically recycled as new nodes are added. Additionally, Dioxus tracks the average memory footprint of previous components to estimate how much memory allocate for future components.
+
+All in all, Dioxus treats memory as an incredibly valuable resource. Combined with the memory-efficient footprint of WASM compilation, Dioxus apps can scale to thousands of components and still stay snappy and respect your RAM usage.
 
 ## Goals
 
@@ -31,40 +44,36 @@ We have big goals for Dioxus. The final implementation must:
 - Support lazy VNodes (ie VNodes that are not actually created when the html! macro is used)
 - Support advanced diffing strategies (patience, Meyers, etc)
 
-## Design Quirks
-
-- Use of "Context" as a way of mitigating threading issues and the borrow checker. (JS relies on globals)
-- html! is lazy - needs to be used with a partner function to actually allocate the html. (Good be a good thing or a bad thing)
-
-```rust
-let text = TextRenderer::render(html! {<div>"hello world"</div>});
-// <div>hello world</div>
-```
-
 ```rust
 
-fn main() {
-    tide::new()
-        .get("blah", serve_app("../"))
-        .get("blah", ws_handler(serve_app))
+rsx!{ "this is a text node" }
+
+rsx!{
+    div {}
+    "asd"
+    div {}
+    div {}
+}
+rsx!{
+    div {
+        a {}
+        b {}
+        c {}
+        Container {
+            Container {
+                Container {
+                    Container {
+                        Container {
+                            div {}
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 
-fn serve_app(ctx: &Context<()>) -> VNode {
-    let livecontext = LiveContext::new()
-        .with_handler("graph", graph_component)
-        .with_handler("graph", graph_component)
-        .with_handler("graph", graph_component)
-        .with_handler("graph", graph_component)
-        .with_handler("graph", graph_component)
-        .with_handler("graph", graph_component)
-        .build();
 
-    ctx.render(html! {
-        <LiveContext ctx={livecontext}>
-            <App />
-        </ LiveContext>
-    })
-}
 
 ```

@@ -89,3 +89,61 @@ TypeScript is a great addition to JavaScript, but comes with a lot of tweaking f
 - various macros (`html!`, `rsx!`) for fast template iteration
 
 And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time. Dioxus also works on the server, on the web, on mobile, on desktop - and it runs completely natively so performance is never an issue.
+
+# Parity with React
+
+Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. This parity table does not necessarily include important ecosystem crates like code blocks, markdown, resizing hooks, etc.
+
+### Phase 1: The Basics
+
+| Feature                | Dioxus | React | Notes for Dioxus                                 |
+| ---------------------- | ------ | ----- | ------------------------------------------------ |
+| Conditional Rendering  | ✅     | ✅    | if/then to hide/show component                   |
+| Map, Iterator          | ✅     | ✅    | map/filter/reduce rsx!                           |
+| Keyed Components       | ✅     | ✅    | advanced diffing with keys                       |
+| Web                    | ✅     | ✅    | renderer for web browser                         |
+| Desktop (webview)      | ✅     | ✅    | renderer for desktop                             |
+| Context                | ✅     | ✅    | share state through the tree                     |
+| Hook                   | ✅     | ✅    | memory cells in components                       |
+| SSR                    | ✅     | ✅    | render directly to string                        |
+| Runs natively          | ✅     | ❓    | runs as a portable binary w/o a runtime (Node)   |
+| Component Children     | ✅     | ✅    | cx.children() as a list of nodes                 |
+| Null components        | ✅     | ✅    | allow returning no components                    |
+| No-div components      | ✅     | ✅    | components that render components                |
+| Fragments              | ✅     | ✅    | rsx! can return multiple elements without a root |
+| Manual Props           | ✅     | ✅    | Manually pass in props with spread syntax        |
+| Controlled Inputs      | ✅     | ✅    | stateful wrappers around inputs                  |
+| 1st class global state | 🛠      | ✅    | redux/recoil/mobx on top of context              |
+| NodeRef                | 🛠      | ✅    | gain direct access to nodes [1]                  |
+| CSS/Inline Styles      | 🛠      | ✅    | syntax for inline styles/attribute groups[2]     |
+
+- [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
+- [2] Would like to solve this in a more general way. Something like attribute groups that's not styling-specific.
+
+### Phase 2: Advanced Toolkits
+
+| Feature               | Dioxus | React | Notes for Dioxus                           |
+| --------------------- | ------ | ----- | ------------------------------------------ |
+| 1st class router      | 👀     | ✅    | Hook built on top of history               |
+| Assets                | 👀     | ✅    | include css/svg/img url statically         |
+| Integrated classnames | 🛠      | ❓    | built-in `classnames`                      |
+| Suspense              | 👀     | 🛠     | schedule future render from future/promise |
+| Transition            | 👀     | 🛠     | High-level control over suspense           |
+| Animation             | 👀     | ✅    | Spring-style animations                    |
+| Mobile                | 👀     | ✅    | Render with cacao                          |
+| Desktop (native)      | 👀     | ✅    | Render with native desktop                 |
+| 3D Renderer           | 👀     | ✅    | react-three-fiber                          |
+
+### Phase 3: Additional Complexity
+
+| Feature              | Dioxus | React | Notes for Dioxus                     |
+| -------------------- | ------ | ----- | ------------------------------------ |
+| Portal               | ❓     | ✅    | cast elements through tree           |
+| Error/Panic boundary | ❓     | ✅    | catch panics and display custom BSOD |
+| Code-splitting       | 👀     | ✅    | Make bundle smaller/lazy             |
+| LiveView             | 👀     | ❓    | Example for SSR + WASM apps          |
+
+- ✅ = implemented and working
+- 🛠 = actively being worked on
+- 👀 = not yet implemented or being worked on
+- ❓ = not sure if will or can implement

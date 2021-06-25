@@ -2,7 +2,6 @@ use std::{borrow::Borrow, convert::TryInto, default, fmt::Debug, sync::Arc};
 
 use dioxus_core::{
     events::{EventTrigger, VirtualEvent},
-    patch::Edit,
     prelude::ScopeIdx,
 };
 use fxhash::FxHashMap;

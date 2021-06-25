@@ -1,5 +1,6 @@
 //! Basic example that renders a simple VNode to the browser.
 
+use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_web::*;
 
@@ -50,15 +51,15 @@ static DocExamples: FC<()> = |ctx| {
         }
     };
 
-    rsx! {
-        div {}
-        h1 {}
-        {""}
-        "asbasd"
-        dioxus::Fragment {
-            //
-        }
-    }
+    // rsx! {
+    //     div {}
+    //     h1 {}
+    //     {""}
+    //     "asbasd"
+    //     dioxus::Fragment {
+    //         //
+    //     }
+    // }
 
     ctx.render(rsx! {
         div {

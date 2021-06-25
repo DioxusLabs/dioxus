@@ -13,8 +13,7 @@ pub mod component; // Logic for extending FC
 
 pub mod debug_renderer;
 pub mod diff;
-pub mod patch; // An "edit phase" described by transitions and edit operations // Test harness for validating that lifecycles and diffs work appropriately
-               // the diffing algorithm that builds the ChangeList
+
 pub mod error; // Error type we expose to the renderers
 pub mod events; // Manages the synthetic event API
 pub mod hooks; // Built-in hooks
@@ -30,14 +29,12 @@ pub mod builder {
 pub(crate) mod innerlude {
     pub use crate::component::*;
 
-    pub use crate::debug_renderer::*;
     pub use crate::diff::*;
     pub use crate::error::*;
     pub use crate::events::*;
     pub use crate::hooks::*;
     pub use crate::nodebuilder::*;
     pub use crate::nodes::*;
-    pub use crate::patch::*;
     pub use crate::virtual_dom::*;
 
     pub type FC<P> = fn(Context<P>) -> VNode;
@@ -59,7 +56,7 @@ pub mod prelude {
     pub use crate::nodebuilder::LazyNodes;
 
     pub use crate::nodebuilder::ChildrenList;
-    pub use crate::virtual_dom::NodeCtx;
+    pub use crate::nodebuilder::NodeCtx;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
     pub use crate::innerlude::FC;
@@ -77,6 +74,6 @@ pub mod prelude {
     pub use crate::diff::DiffMachine;
     pub use crate::virtual_dom::ScopeIdx;
 
-    pub use crate::debug_renderer::DebugRenderer;
+    // pub use crate::debug_renderer::DebugRenderer;
     pub use crate::hooks::*;
 }

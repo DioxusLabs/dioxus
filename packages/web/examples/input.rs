@@ -26,25 +26,22 @@ static App: FC<()> = |ctx| {
                         id: "username" 
                         type: "text"
                         value: "{val}"
-                        oninput: move |evet| {
-                            log::debug!("Value is {:#?}", evet);
-                            set_val(evet.value);
-                        }
+                        oninput: move |evet| set_val(evet.value())
                     }
                     p { "Val is: {val}" }
                 }            
             }
         }
-    })    
+    })
 };
 
 static Example: FC<()> = |ctx| {
     ctx.render(rsx! {
         div { class: "max-w-lg max-w-xs bg-blue-800 shadow-2xl rounded-lg mx-auto text-center py-12 mt-4 rounded-xl"
             div { class: "container py-5 max-w-md mx-auto"
-                h1 { class: "text-gray-200 text-center font-extrabold -mt-3 text-3xl", 
+                h1 { class: "text-gray-200 text-center font-extrabold -mt-3 text-3xl",
                     "Text Input Example"
-                } 
+                }
                 UserInput {}
             }
         }
@@ -54,19 +51,15 @@ static Example: FC<()> = |ctx| {
 static UserInput: FC<()> = |ctx| {
     let (val, set_val) = use_state(&ctx, || "asd".to_string());
 
-    rsx!{ in ctx,
+    rsx! { in ctx,
         div { class: "mb-4"
             input { class: "shadow appearance-none rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                 placeholder: "Username"
-                id: "username" 
+                id: "username"
                 type: "text"
-                oninput: move |evet| {
-                    log::debug!("Value is {:#?}", evet);
-                    set_val(evet.value);
-                }
+                oninput: move |evet| set_val(evet.value())
             }
             p { "Val is: {val}" }
         }
     }
-    
 };

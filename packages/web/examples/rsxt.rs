@@ -1,14 +1,18 @@
 #![allow(non_snake_case)]
-use dioxus_core as dioxus;
+use std::rc::Rc;
+
 use dioxus::{events::on::MouseEvent, prelude::*};
+use dioxus_core as dioxus;
 use dioxus_web::WebsysRenderer;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
     console_error_panic_hook::set_once();
-    
+
     wasm_bindgen_futures::spawn_local(async {
-        let props = ExampleProps { initial_name: "..?"};
+        let props = ExampleProps {
+            initial_name: "..?",
+        };
         WebsysRenderer::new_with_props(Example, props)
             .run()
             .await
@@ -25,17 +29,17 @@ static Example: FC<ExampleProps> = |ctx| {
     let name = use_state_new(&ctx, move || ctx.initial_name);
 
     ctx.render(rsx! {
-        div { 
+        div {
             class: "py-12 px-4 text-center w-full max-w-2xl mx-auto"
-            span { 
+            span {
                 class: "text-sm font-semibold"
                 "Dioxus Example: Jack and Jill"
             }
-            h2 { 
-                class: "text-5xl mt-2 mb-6 leading-tight font-semibold font-heading"   
+            h2 {
+                class: "text-5xl mt-2 mb-6 leading-tight font-semibold font-heading"
                 "Hello, {name}"
             }
-            
+
             CustomButton { name: "Jack!", handler: move |_| name.set("Jack") }
             CustomButton { name: "Jill!", handler: move |_| name.set("Jill") }
             CustomButton { name: "Bob!", handler: move |_| name.set("Bob")}
@@ -45,12 +49,10 @@ static Example: FC<ExampleProps> = |ctx| {
     })
 };
 
-
-
 #[derive(Props)]
-struct ButtonProps<'src, F: Fn(MouseEvent)> {
+struct ButtonProps<'src, F: Fn(Rc<dyn MouseEvent>)> {
     name: &'src str,
-    handler: F
+    handler: F,
 }
 
 fn CustomButton<'a, F: Fn(MouseEvent)>(ctx: Context<'a, ButtonProps<'a, F>>) -> VNode {
@@ -69,13 +71,12 @@ impl<F: Fn(MouseEvent)> PartialEq for ButtonProps<'_, F> {
     }
 }
 
-
 #[derive(Props, PartialEq)]
 struct PlaceholderProps {
-    val: &'static str
+    val: &'static str,
 }
 fn Placeholder(ctx: Context<PlaceholderProps>) -> VNode {
-    ctx.render(rsx!{
+    ctx.render(rsx! {
         div {
             "child: {ctx.val}"
         }

@@ -8,10 +8,6 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-// Use `wee_alloc` as the global allocator.
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 fn App(ctx: Context<()>) -> VNode {
     let cansee = use_state_new(&ctx, || false);
     rsx! { in ctx,

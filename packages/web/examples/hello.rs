@@ -1,3 +1,4 @@
+use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
 
@@ -10,12 +11,20 @@ fn main() {
 }
 
 static Example: FC<()> = |ctx| {
+    let nodes = (0..15).map(|f| rsx! (li { key: "{f}", "{f}"}));
     ctx.render(rsx! {
         div {
             span {
                 class: "px-2 py-1 flex w-36 mt-4 items-center text-xs rounded-md font-semibold text-yellow-500 bg-yellow-100"
-                "DUE DATE : 18 JUN"
+                "DUE DATE : 189 JUN"
             }
+            p {
+                "these"
+                "are"
+                "text"
+                "nodes"
+            }
+            {nodes}
         }
     })
 };

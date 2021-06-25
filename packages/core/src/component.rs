@@ -7,21 +7,27 @@
 
 use crate::innerlude::FC;
 
-pub unsafe trait Properties: PartialEq + Sized {
+pub trait Properties: Sized {
     type Builder;
-    const CAN_BE_MEMOIZED: bool;
     fn builder() -> Self::Builder;
+
+    /// Memoization can only happen if the props are 'static
+    /// The user must know if their props are static, but if they make a mistake, UB happens
+    /// Therefore it's unsafe to memeoize.
+    unsafe fn memoize(&self, other: &Self) -> bool;
 }
 
-unsafe impl Properties for () {
-    const CAN_BE_MEMOIZED: bool = true;
+impl Properties for () {
     type Builder = EmptyBuilder;
-
     fn builder() -> Self::Builder {
         EmptyBuilder {}
     }
+    unsafe fn memoize(&self, _other: &Self) -> bool {
+        true
+    }
 }
-
+// We allow components to use the () generic parameter if they have no props. This impl enables the "build" method
+// that the macros use to anonymously complete prop construction.
 pub struct EmptyBuilder;
 impl EmptyBuilder {
     #[inline]
@@ -30,6 +36,8 @@ impl EmptyBuilder {
     }
 }
 
+/// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
+/// to initialize a component's props.
 pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
     T::builder()
 }
@@ -39,9 +47,10 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
 ///
 /// Fragments capture a series of children without rendering extra nodes.
 ///
-///
-///
-pub static Fragment: FC<()> = |ctx| {
+/// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
+/// Try to avoid nesting fragments if you can. Infinitely nested Fragments *will* cause diffing to crash.
+#[allow(non_upper_case_globals)]
+pub const Fragment: FC<()> = |ctx| {
     use crate::prelude::*;
     ctx.render(LazyNodes::new(move |c| {
         crate::nodebuilder::vfragment(c, None, ctx.children())
