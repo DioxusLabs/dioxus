@@ -4,6 +4,7 @@
 
 use dioxus::prelude::{Context, Properties, VNode};
 use fxhash::FxHashMap;
+use new::DomNode;
 use web_sys::{window, Document, Element, Event, Node};
 // use futures::{channel::mpsc, SinkExt, StreamExt};
 
@@ -66,13 +67,13 @@ impl WebsysRenderer {
 
         let mut websys_dom = crate::new::WebsysDom::new(body_element.clone());
 
-        websys_dom.stack.push(root_node);
+        websys_dom.stack.push(DomNode::new_root(root_node));
 
         self.internal_dom.rebuild(&mut websys_dom)?;
 
         while let Some(trigger) = websys_dom.wait_for_event().await {
             let root_node = body_element.first_child().unwrap();
-            websys_dom.stack.push(root_node.clone());
+            websys_dom.stack.push(DomNode::new_root(root_node.clone()));
             self.internal_dom
                 .progress_with_event(&mut websys_dom, trigger)?;
         }

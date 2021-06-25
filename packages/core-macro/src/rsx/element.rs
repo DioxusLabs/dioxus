@@ -137,26 +137,31 @@ impl Parse for ElementAttr {
                     // todo: better error here
                     AttrType::BumpText(s.parse::<LitStr>()?)
                 }
-                "style" => {
-                    //
-                    todo!("inline style not yet supported")
-                }
+                // "style" => {
+                //     //
+                //     return Err(syn::Error::new(s.span(), "inline style not yet supported"));
+                // }
                 "classes" => {
                     //
-                    todo!("custom class lsit not supported")
+                    return Err(syn::Error::new(s.span(), "custom class lsit not supported"));
                 }
                 "namespace" => {
                     //
-                    todo!("custom namespace not supported")
+                    return Err(syn::Error::new(s.span(), "custom namespace not supported"));
                 }
                 "ref" => {
                     //
-                    todo!("custom ref not supported")
+                    return Err(syn::Error::new(s.span(), "custom ref not supported"));
                 }
                 _ => {
                     if s.peek(LitStr) {
                         let rawtext = s.parse::<LitStr>().unwrap();
                         AttrType::BumpText(rawtext)
+                    // } else if s.peek(token::Brace) {
+                    //     return Err(syn::Error::new(
+                    //         s.span(),
+                    //         "Attribute groups not yet supported",
+                    //     ));
                     } else {
                         let toks = s.parse::<Expr>()?;
                         AttrType::FieldTokens(toks)

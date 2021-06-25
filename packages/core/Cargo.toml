@@ -23,6 +23,7 @@ bumpalo = { version="3.6.0", features=["collections", "boxed"] }
 thiserror = "1"
 
 # faster hashmaps
+# todo: phase out in place of nohasher
 fxhash = "0.2.1"
 
 # even *faster* hashmaps for index-based types
@@ -34,12 +35,10 @@ longest-increasing-subsequence = "0.1.0"
 # internall used
 log = "0.4"
 
-# Serialize the Edits for use in Webview/Liveview instances
-serde = { version="1", features=["derive"], optional=true }
-
+# Used in diffing to optimize stack lists
 smallvec = "1.6.1"
 
 
 [features]
 default = []
-serialize = ["serde", "generational-arena/serde"]
+serialize = ["generational-arena/serde"]

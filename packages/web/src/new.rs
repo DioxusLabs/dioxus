@@ -12,9 +12,57 @@ use web_sys::{
     window, Document, Element, Event, HtmlElement, HtmlInputElement, HtmlOptionElement, Node,
 };
 
+#[derive(Debug, Clone)]
+pub struct DomNode {
+    node: Node,
+    meta: NodeMetadata,
+}
+impl std::ops::Deref for DomNode {
+    type Target = Node;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node
+    }
+}
+
+impl DomNode {
+    pub fn new_root(node: Node) -> Self {
+        Self {
+            node,
+            meta: NodeMetadata::IsRoot,
+        }
+    }
+    pub fn new_style(node: Node) -> Self {
+        Self {
+            node,
+            meta: NodeMetadata::IsStyle,
+        }
+    }
+    pub fn new_text(node: Node) -> Self {
+        Self {
+            node,
+            meta: NodeMetadata::IsText,
+        }
+    }
+    pub fn new_nothing(node: Node) -> Self {
+        Self {
+            node,
+            meta: NodeMetadata::Nothing,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum NodeMetadata {
+    IsStyle,
+    IsText,
+    IsRoot,
+    Nothing,
+}
+
 pub struct WebsysDom {
     pub stack: Stack,
-    nodes: IntMap<u32, Node>,
+    nodes: IntMap<u32, DomNode>,
     document: Document,
     root: Element,
 
@@ -40,6 +88,9 @@ pub struct WebsysDom {
     // TODO
     last_node_was_text: bool,
 
+    // used to support inline styles
+    building_style: bool,
+
     node_counter: Counter,
 }
 impl WebsysDom {
@@ -61,7 +112,13 @@ impl WebsysDom {
         let mut nodes =
             HashMap::with_capacity_and_hasher(1000, nohash_hasher::BuildNoHashHasher::default());
 
-        nodes.insert(0_u32, root.clone().dyn_into::<Node>().unwrap());
+        nodes.insert(
+            0_u32,
+            DomNode {
+                node: root.clone().dyn_into::<Node>().unwrap(),
+                meta: NodeMetadata::IsRoot,
+            },
+        );
         Self {
             stack: Stack::with_capacity(10),
             nodes,
@@ -74,6 +131,7 @@ impl WebsysDom {
             trigger: sender_callback,
             root,
             last_node_was_text: false,
+            building_style: false,
             node_counter: Counter(0),
         }
     }
@@ -100,6 +158,11 @@ impl dioxus_core::diff::RealDom for WebsysDom {
 
     fn append_child(&mut self) {
         log::debug!("Called [`append_child`]");
+        if self.building_style {
+            self.building_style = false;
+            return;
+        }
+
         let child = self.stack.pop();
 
         if child.dyn_ref::<web_sys::Text>().is_some() {
@@ -173,6 +236,9 @@ impl dioxus_core::diff::RealDom for WebsysDom {
             .create_text_node(text)
             .dyn_into::<Node>()
             .unwrap();
+
+        let textnode = DomNode::new_text(textnode);
+
         self.stack.push(textnode.clone());
         self.nodes.insert(nid, textnode);
 
@@ -182,16 +248,28 @@ impl dioxus_core::diff::RealDom for WebsysDom {
     }
 
     fn create_element(&mut self, tag: &str) -> dioxus_core::virtual_dom::RealDomNode {
-        let el = self
-            .document
-            .create_element(tag)
-            .unwrap()
-            .dyn_into::<Node>()
-            .unwrap();
-
-        self.stack.push(el.clone());
         let nid = self.node_counter.next();
-        self.nodes.insert(nid, el);
+
+        if tag == "style" {
+            self.building_style = true;
+            let real_node = self.stack.top();
+            self.nodes.insert(nid, real_node.clone());
+            // don't actually create any nodes
+            // the following set attributes will actually apply to the node currently on the stack
+        } else {
+            let el = self
+                .document
+                .create_element(tag)
+                .unwrap()
+                .dyn_into::<Node>()
+                .unwrap();
+
+            let el = DomNode::new_nothing(el);
+
+            self.stack.push(el.clone());
+            self.nodes.insert(nid, el);
+        }
+
         log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
         RealDomNode::new(nid)
     }
@@ -207,6 +285,7 @@ impl dioxus_core::diff::RealDom for WebsysDom {
             .unwrap()
             .dyn_into::<Node>()
             .unwrap();
+        let el = DomNode::new_nothing(el);
 
         self.stack.push(el.clone());
         let nid = self.node_counter.next();
@@ -332,6 +411,14 @@ impl dioxus_core::diff::RealDom for WebsysDom {
     }
 
     fn set_attribute(&mut self, name: &str, value: &str, is_namespaced: bool) {
+        if self.building_style {
+            // if we're currently building a style
+            if let Some(el) = self.stack.top().dyn_ref::<HtmlElement>() {
+                let style_declaration = el.style();
+                style_declaration.set_property(name, value);
+            }
+        }
+
         log::debug!("Called [`set_attribute`]: {}, {}", name, value);
         if name == "class" {
             if let Some(el) = self.stack.top().dyn_ref::<Element>() {
@@ -375,7 +462,7 @@ impl dioxus_core::diff::RealDom for WebsysDom {
 
 #[derive(Debug, Default)]
 pub struct Stack {
-    list: Vec<Node>,
+    list: Vec<DomNode>,
 }
 
 impl Stack {
@@ -385,12 +472,14 @@ impl Stack {
         }
     }
 
-    pub fn push(&mut self, node: Node) {
+    pub fn push(&mut self, node: DomNode) {
+        // pub fn push(&mut self, node: Node) {
         // debug!("stack-push: {:?}", node);
         self.list.push(node);
     }
 
-    pub fn pop(&mut self) -> Node {
+    pub fn pop(&mut self) -> DomNode {
+        // pub fn pop(&mut self) -> Node {
         let res = self.list.pop().unwrap();
         res
     }
@@ -399,7 +488,8 @@ impl Stack {
         self.list.clear();
     }
 
-    pub fn top(&self) -> &Node {
+    pub fn top(&self) -> &DomNode {
+        // pub fn top(&self) -> &Node {
         match self.list.last() {
             Some(a) => a,
             None => panic!("Called 'top' of an empty stack, make sure to push the root first"),

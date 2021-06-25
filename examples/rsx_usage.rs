@@ -53,6 +53,7 @@ static Example: FC<()> = |cx| {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
+
     cx.render(rsx! {
         div {
             // Elements
@@ -80,9 +81,16 @@ static Example: FC<()> = |cx| {
                 class: lazy_fmt,
                 id: format_args!("attributes can be passed lazily with std::fmt::Arguments"),
                 div {
+                    // inline styles aren't supported *yet* but you can use regular strings and formatting
+                    style: "font-size:300%;"
+
+                    // Inline styles *will* operate like style elements but will actually be handled in the renderer
+                    style { font_size: format_args!("{}", { if true {"300"} else {"100"} }) }
+
+                    // It's possible to use complex expressions for attributes too
                     class: {
-                        const WORD: &str = "expressions";
-                        format_args!("Arguments can be passed in through curly braces for complex {}", WORD)
+                        const WORD: &'static str = "expressions";
+                        format_args!("Arguments can be even lazily formatted directly {}", WORD)
                     }
                 }
             }
@@ -100,7 +108,7 @@ static Example: FC<()> = |cx| {
                 // Using an "ID" associated with your data is a good idea.
                 data.into_iter().map(|(k, v)| rsx!(li { key: "{k}" "{v}" }))
             }}
-            
+
 
             // Matching
             // Matching will throw a Rust error about "no two closures are the same type"
@@ -147,7 +155,7 @@ static Example: FC<()> = |cx| {
                     }
                 }
             }
-            
+
 
             // Components
             // Can accept any paths

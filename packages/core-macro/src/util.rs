@@ -105,7 +105,7 @@ static HTML_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "source",
         "span",
         "strong",
-        // "style",
+        "style",
         "sub",
         "summary",
         "sup",
