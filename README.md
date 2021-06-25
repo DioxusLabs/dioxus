@@ -144,6 +144,6 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | LiveView             | 👀     | ❓    | Example for SSR + WASM apps          |
 
 - ✅ = implemented and working
-- 👀 = not yet implemented or being worked on
 - 🛠 = actively being worked on
+- 👀 = not yet implemented or being worked on
 - ❓ = not sure if will or can implement
