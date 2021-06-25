@@ -116,23 +116,23 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | 1st class global state | 🛠      | ✅    | redux/recoil/mobx on top of context              |
 | NodeRef                | 🛠      | ✅    | gain direct access to nodes [1]                  |
 | CSS/Inline Styles      | 🛠      | ✅    | syntax for inline styles/attribute groups[2]     |
+| Suspense               | 🛠      | 🛠     | schedule future render from future/promise       |
 
 - [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
 - [2] Would like to solve this in a more general way. Something like attribute groups that's not styling-specific.
 
 ### Phase 2: Advanced Toolkits
 
-| Feature               | Dioxus | React | Notes for Dioxus                           |
-| --------------------- | ------ | ----- | ------------------------------------------ |
-| 1st class router      | 👀     | ✅    | Hook built on top of history               |
-| Assets                | 👀     | ✅    | include css/svg/img url statically         |
-| Integrated classnames | 🛠      | ❓    | built-in `classnames`                      |
-| Suspense              | 👀     | 🛠     | schedule future render from future/promise |
-| Transition            | 👀     | 🛠     | High-level control over suspense           |
-| Animation             | 👀     | ✅    | Spring-style animations                    |
-| Mobile                | 👀     | ✅    | Render with cacao                          |
-| Desktop (native)      | 👀     | ✅    | Render with native desktop                 |
-| 3D Renderer           | 👀     | ✅    | react-three-fiber                          |
+| Feature               | Dioxus | React | Notes for Dioxus                   |
+| --------------------- | ------ | ----- | ---------------------------------- |
+| 1st class router      | 👀     | ✅    | Hook built on top of history       |
+| Assets                | 👀     | ✅    | include css/svg/img url statically |
+| Integrated classnames | 🛠      | ❓    | built-in `classnames`              |
+| Transition            | 👀     | 🛠     | High-level control over suspense   |
+| Animation             | 👀     | ✅    | Spring-style animations            |
+| Mobile                | 👀     | ✅    | Render with cacao                  |
+| Desktop (native)      | 👀     | ✅    | Render with native desktop         |
+| 3D Renderer           | 👀     | ✅    | react-three-fiber                  |
 
 ### Phase 3: Additional Complexity
 
