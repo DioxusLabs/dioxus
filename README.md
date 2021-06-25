@@ -111,11 +111,13 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Null components        | ✅     | ✅    | allow returning no components                    |
 | No-div components      | ✅     | ✅    | components that render components                |
 | Fragments              | ✅     | ✅    | rsx! can return multiple elements without a root |
-| Manual Props           | 👀     | ✅    | Manually pass in props                           |
-| NodeRef                | 👀     | ✅    | gain direct access to nodes                      |
+| Manual Props           | ✅     | ✅    | Manually pass in props with spread syntax        |
 | Controlled Inputs      | ✅     | ✅    | stateful wrappers around inputs                  |
-| CSS/Inline Styles      | 🛠      | ✅    | syntax for inline/conditional styles             |
 | 1st class global state | 🛠      | ✅    | redux/recoil/mobx on top of context              |
+| NodeRef                | 🛠      | ✅    | gain direct access to nodes [1]                  |
+| CSS/Inline Styles      | 🛠      | ✅    | syntax for inline styles/attribute groups        |
+
+[1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API
 
 ### Phase 2: Advanced Toolkits
 

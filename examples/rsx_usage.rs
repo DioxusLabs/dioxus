@@ -162,11 +162,10 @@ static Example: FC<()> = |cx| {
             // Can take optional properties
             Taller { a: "asd" }
 
-            // Can pass in props directly
+            // Can pass in props directly as an expression
             {{
-                todo!("this neesd to be implemented");
                 let props = TallerProps {a: "hello"};
-                rsx!(Taller {a: "a"})
+                rsx!(Taller { ..props })
             }}
 
             // Can take children

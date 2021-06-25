@@ -27,21 +27,23 @@ pub struct Component {
     name: syn::Path,
     body: Vec<ComponentField>,
     children: Vec<Node>,
+    manual_props: Option<Expr>,
 }
 
 impl Parse for Component {
-    fn parse(s: ParseStream) -> Result<Self> {
+    fn parse(stream: ParseStream) -> Result<Self> {
         // let name = s.parse::<syn::ExprPath>()?;
         // todo: look into somehow getting the crate/super/etc
 
-        let name = syn::Path::parse_mod_style(s)?;
+        let name = syn::Path::parse_mod_style(stream)?;
 
         // parse the guts
         let content: ParseBuffer;
-        syn::braced!(content in s);
+        syn::braced!(content in stream);
 
         let mut body: Vec<ComponentField> = Vec::new();
         let mut children: Vec<Node> = Vec::new();
+        let mut manual_props = None;
 
         'parsing: loop {
             // [1] Break if empty
@@ -49,15 +51,10 @@ impl Parse for Component {
                 break 'parsing;
             }
 
-            if content.peek(token::Brace) && content.peek2(Token![...]) {
-                let inner: ParseBuffer;
-                syn::braced!(inner in content);
-                if inner.peek(Token![...]) {
-                    todo!("Inline props not yet supported");
-                }
-            }
-
-            if content.peek(Ident) && content.peek2(Token![:]) {
+            if content.peek(Token![..]) {
+                content.parse::<Token![..]>()?;
+                manual_props = Some(content.parse::<Expr>()?);
+            } else if content.peek(Ident) && content.peek2(Token![:]) {
                 body.push(content.parse::<ComponentField>()?);
             } else {
                 children.push(content.parse::<Node>()?);
@@ -74,6 +71,7 @@ impl Parse for Component {
             name,
             body,
             children,
+            manual_props,
         })
     }
 }
@@ -82,8 +80,13 @@ impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
 
-        let mut builder = quote! {
-            fc_to_builder(#name)
+        let using_manual_override = self.manual_props.is_some();
+
+        let mut builder = {
+            match &self.manual_props {
+                Some(manual_props) => quote! { #manual_props },
+                None => quote! { fc_to_builder(#name) },
+            }
         };
 
         let mut has_key = None;
@@ -92,13 +95,18 @@ impl ToTokens for Component {
             if field.name.to_string() == "key" {
                 has_key = Some(field);
             } else {
-                builder.append_all(quote! {#field});
+                match using_manual_override {
+                    true => panic!("Currently we don't support manual props and prop fields. Choose either manual props or prop fields"),
+                    false => builder.append_all(quote! {#field}),
+                }
             }
         }
 
-        builder.append_all(quote! {
-            .build()
-        });
+        if !using_manual_override {
+            builder.append_all(quote! {
+                .build()
+            });
+        }
 
         let key_token = match has_key {
             Some(field) => {
