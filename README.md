@@ -117,8 +117,8 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | NodeRef                | 🛠      | ✅    | gain direct access to nodes [1]                  |
 | CSS/Inline Styles      | 🛠      | ✅    | syntax for inline styles/attribute groups[2]     |
 
-[1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
-[2] Would like to solve this in a more general way. Something like attribute groups that's not styling-specific.
+- [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
+- [2] Would like to solve this in a more general way. Something like attribute groups that's not styling-specific.
 
 ### Phase 2: Advanced Toolkits
 
