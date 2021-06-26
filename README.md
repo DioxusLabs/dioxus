@@ -113,10 +113,10 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Fragments              | ✅     | ✅    | rsx! can return multiple elements without a root |
 | Manual Props           | ✅     | ✅    | Manually pass in props with spread syntax        |
 | Controlled Inputs      | ✅     | ✅    | stateful wrappers around inputs                  |
-| 1st class global state | 🛠      | ✅    | redux/recoil/mobx on top of context              |
-| NodeRef                | 🛠      | ✅    | gain direct access to nodes [1]                  |
-| CSS/Inline Styles      | 🛠      | ✅    | syntax for inline styles/attribute groups[2]     |
 | Suspense               | 🛠      | 🛠     | schedule future render from future/promise       |
+| 1st class global state | 🛠      | ✅    | redux/recoil/mobx on top of context              |
+| CSS/Inline Styles      | 🛠      | ✅    | syntax for inline styles/attribute groups[2]     |
+| NodeRef                | 🛠      | ✅    | gain direct access to nodes [1]                  |
 
 - [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
 - [2] Would like to solve this in a more general way. Something like attribute groups that's not styling-specific.
