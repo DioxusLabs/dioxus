@@ -8,9 +8,7 @@
 //! and all work will stop. In this example, we store the future in a hook so we can always resume it.
 
 use dioxus::prelude::*;
-
 fn main() {}
-
 #[derive(serde::Deserialize)]
 struct DogApi {
     message: String,
@@ -18,9 +16,11 @@ struct DogApi {
 const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random";
 
 pub static App: FC<()> = |cx| {
-    let doggo = use_fetch(&cx, ENDPOINT, |cx, res: surf::Result<DogApi>| match res {
-        Ok(res) => rsx!(in cx, img { src: "{res.message}"}),
-        Err(_) => rsx!(in cx, p { "Failed to load doggo :("}),
+    let doggo = use_future_effect(&cx, move || async move {
+        match surf::get(ENDPOINT).recv_json::<DogApi>().await {
+            Ok(res) => rsx!(in cx, img { src: "{res.message}" }),
+            Err(_) => rsx!(in cx, div { "No doggos for you :(" }),
+        }
     });
 
     cx.render(rsx!(
@@ -31,22 +31,29 @@ pub static App: FC<()> = |cx| {
     ))
 };
 
+use dioxus_core::virtual_dom::SuspendedContext;
+use futures::Future;
+use futures::FutureExt;
+use std::pin::Pin;
 fn use_fetch<'a, T: serde::de::DeserializeOwned + 'static>(
     cx: &impl Scoped<'a>,
     url: &str,
-    g: impl FnOnce(dioxus_core::virtual_dom::SuspendedContext, surf::Result<T>) -> VNode<'a> + 'a,
+    g: impl FnOnce(SuspendedContext, surf::Result<T>) -> VNode<'a> + 'a,
 ) -> VNode<'a> {
-    use futures::Future;
-    use futures::FutureExt;
-    use std::pin::Pin;
+    // essentially we're doing a "use_effect" but with no dependent props or post-render shenanigans
+    let fetch_promise = cx.use_hook(
+        move || surf::get(url).recv_json::<T>().boxed_local(),
+        // just pass the future through
+        |p| p,
+        |_| (),
+    );
+    cx.suspend(fetch_promise, g)
+}
 
-    // essentially we're doing a "use_effect" but with no dependent props
-    let doggo_promise: &'a mut Pin<Box<dyn Future<Output = surf::Result<T>> + Send + 'static>> = cx
-        .use_hook(
-            move || surf::get(url).recv_json::<T>().boxed(),
-            // just pass the future through
-            |p| p,
-            |_| (),
-        );
-    cx.suspend(doggo_promise, g)
+/// Spawns the future only when the inputs change
+fn use_future_effect<'a, 'b, F: Future<Output = VNode<'b>>>(
+    cx: &impl Scoped<'a>,
+    g: impl FnOnce() -> F + 'a,
+) -> VNode<'a> {
+    todo!()
 }
