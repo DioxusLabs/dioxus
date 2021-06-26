@@ -336,7 +336,8 @@ impl VirtualDom {
     }
 
     pub fn base_scope(&self) -> &Scope {
-        todo!()
+        let idx = self.base_scope;
+        self.components.try_get(idx).unwrap()
     }
 }
 
@@ -577,6 +578,10 @@ impl Scope {
 
     pub fn cur_frame(&self) -> &BumpFrame {
         self.frames.cur_frame()
+    }
+
+    pub fn root<'a>(&'a self) -> &'a VNode<'a> {
+        &self.frames.cur_frame().head_node
     }
 }
 

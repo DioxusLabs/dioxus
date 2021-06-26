@@ -437,140 +437,140 @@ impl<'a> VFragment<'a> {
     }
 }
 
-/// This method converts a list of nested real/virtual nodes into a stream of nodes that are definitely associated
-/// with the real dom. The only types of nodes that may be returned are text, elemets, and components.
-///
-/// Components *are* considered virtual, but this iterator can't necessarily handle them without the scope arena.
-///
-/// Why?
-/// ---
-/// Fragments are seen as virtual nodes but are actually a list of possibly-real nodes.
-/// JS implementations normalize their node lists when fragments are present. Here, we just create a new iterator
-/// that iterates through the recursive nesting of fragments.
-///
-/// Fragments are stupid and I wish we didn't need to support them.
-///
-/// This iterator only supports 3 levels of nested fragments
-///
-pub fn iterate_real_nodes<'a>(nodes: &'a [VNode<'a>]) -> RealNodeIterator<'a> {
-    RealNodeIterator::new(nodes)
-}
+// /// This method converts a list of nested real/virtual nodes into a stream of nodes that are definitely associated
+// /// with the real dom. The only types of nodes that may be returned are text, elemets, and components.
+// ///
+// /// Components *are* considered virtual, but this iterator can't necessarily handle them without the scope arena.
+// ///
+// /// Why?
+// /// ---
+// /// Fragments are seen as virtual nodes but are actually a list of possibly-real nodes.
+// /// JS implementations normalize their node lists when fragments are present. Here, we just create a new iterator
+// /// that iterates through the recursive nesting of fragments.
+// ///
+// /// Fragments are stupid and I wish we didn't need to support them.
+// ///
+// /// This iterator only supports 3 levels of nested fragments
+// ///
+// pub fn iterate_real_nodes<'a>(nodes: &'a [VNode<'a>]) -> RealNodeIterator<'a> {
+//     RealNodeIterator::new(nodes)
+// }
 
-pub struct RealNodeIterator<'a> {
-    nodes: &'a [VNode<'a>],
+// pub struct RealNodeIterator<'a> {
+//     nodes: &'a [VNode<'a>],
 
-    // this node is always a "real" node
-    // the index is "what sibling # is it"
-    // IE in a list of children on a fragment, the node will be a text node that's the 5th sibling
-    node_stack: Vec<(&'a VNode<'a>, u32)>,
-}
+//     // this node is always a "real" node
+//     // the index is "what sibling # is it"
+//     // IE in a list of children on a fragment, the node will be a text node that's the 5th sibling
+//     node_stack: Vec<(&'a VNode<'a>, u32)>,
+// }
 
-impl<'a> RealNodeIterator<'a> {
-    // We immediately descend to the first real node we can find
-    fn new(nodes: &'a [VNode<'a>]) -> Self {
-        let mut node_stack = Vec::new();
-        if nodes.len() > 0 {
-            let mut cur_node = nodes.get(0).unwrap();
-            loop {
-                node_stack.push((cur_node, 0_u32));
-                if !cur_node.is_real() {
-                    cur_node = cur_node.get_child(0).unwrap();
-                } else {
-                    break;
-                }
-            }
-        }
+// impl<'a> RealNodeIterator<'a> {
+//     // We immediately descend to the first real node we can find
+//     fn new(nodes: &'a [VNode<'a>]) -> Self {
+//         let mut node_stack = Vec::new();
+//         if nodes.len() > 0 {
+//             let mut cur_node = nodes.get(0).unwrap();
+//             loop {
+//                 node_stack.push((cur_node, 0_u32));
+//                 if !cur_node.is_real() {
+//                     cur_node = cur_node.get_child(0).unwrap();
+//                 } else {
+//                     break;
+//                 }
+//             }
+//         }
 
-        Self { nodes, node_stack }
-    }
+//         Self { nodes, node_stack }
+//     }
 
-    // // advances the cursor to the next element, panicing if we're on the 3rd level and still finding fragments
-    // fn advance_cursor(&mut self) {
-    //     let (mut cur_node, mut cur_id) = self.node_stack.last().unwrap();
+//     // // advances the cursor to the next element, panicing if we're on the 3rd level and still finding fragments
+//     // fn advance_cursor(&mut self) {
+//     //     let (mut cur_node, mut cur_id) = self.node_stack.last().unwrap();
 
-    //     while !cur_node.is_real() {
-    //         match cur_node {
-    //             VNode::Element(_) | VNode::Text(_) => todo!(),
-    //             VNode::Suspended => todo!(),
-    //             VNode::Component(_) => todo!(),
-    //             VNode::Fragment(frag) => {
-    //                 let p = frag.children;
-    //             }
-    //         }
-    //     }
-    // }
+//     //     while !cur_node.is_real() {
+//     //         match cur_node {
+//     //             VNode::Element(_) | VNode::Text(_) => todo!(),
+//     //             VNode::Suspended => todo!(),
+//     //             VNode::Component(_) => todo!(),
+//     //             VNode::Fragment(frag) => {
+//     //                 let p = frag.children;
+//     //             }
+//     //         }
+//     //     }
+//     // }
 
-    fn next_node(&mut self) -> bool {
-        let (mut cur_node, cur_id) = self.node_stack.last_mut().unwrap();
+//     fn next_node(&mut self) -> bool {
+//         let (mut cur_node, cur_id) = self.node_stack.last_mut().unwrap();
 
-        match cur_node {
-            VNode::Fragment(frag) => {
-                //
-                if *cur_id + 1 > frag.children.len() as u32 {
-                    self.node_stack.pop();
-                    let next = self.node_stack.last_mut();
-                    return false;
-                }
-                *cur_id += 1;
-                true
-            }
+//         match cur_node {
+//             VNode::Fragment(frag) => {
+//                 //
+//                 if *cur_id + 1 > frag.children.len() as u32 {
+//                     self.node_stack.pop();
+//                     let next = self.node_stack.last_mut();
+//                     return false;
+//                 }
+//                 *cur_id += 1;
+//                 true
+//             }
 
-            VNode::Element(_) => todo!(),
-            VNode::Text(_) => todo!(),
-            VNode::Suspended => todo!(),
-            VNode::Component(_) => todo!(),
-        }
-    }
+//             VNode::Element(_) => todo!(),
+//             VNode::Text(_) => todo!(),
+//             VNode::Suspended => todo!(),
+//             VNode::Component(_) => todo!(),
+//         }
+//     }
 
-    fn get_current_node(&self) -> Option<&VNode<'a>> {
-        self.node_stack.last().map(|(node, id)| match node {
-            VNode::Element(_) => todo!(),
-            VNode::Text(_) => todo!(),
-            VNode::Fragment(_) => todo!(),
-            VNode::Suspended => todo!(),
-            VNode::Component(_) => todo!(),
-        })
-    }
-}
+//     fn get_current_node(&self) -> Option<&VNode<'a>> {
+//         self.node_stack.last().map(|(node, id)| match node {
+//             VNode::Element(_) => todo!(),
+//             VNode::Text(_) => todo!(),
+//             VNode::Fragment(_) => todo!(),
+//             VNode::Suspended => todo!(),
+//             VNode::Component(_) => todo!(),
+//         })
+//     }
+// }
 
-impl<'a> Iterator for RealNodeIterator<'a> {
-    type Item = &'a VNode<'a>;
+// impl<'a> Iterator for RealNodeIterator<'a> {
+//     type Item = &'a VNode<'a>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-        // let top_idx = self.nesting_idxs.get_mut(0).unwrap();
-        // let node = &self.nodes.get_mut(*top_idx as usize);
+//     fn next(&mut self) -> Option<Self::Item> {
+//         todo!()
+//         // let top_idx = self.nesting_idxs.get_mut(0).unwrap();
+//         // let node = &self.nodes.get_mut(*top_idx as usize);
 
-        // if node.is_none() {
-        //     return None;
-        // }
-        // let node = node.unwrap();
+//         // if node.is_none() {
+//         //     return None;
+//         // }
+//         // let node = node.unwrap();
 
-        // match node {
-        //     VNode::Element(_) | VNode::Text(_) => {
-        //         *top_idx += 1;
-        //         return Some(node);
-        //     }
-        //     VNode::Suspended => todo!(),
-        //     // we need access over the scope map
-        //     VNode::Component(_) => todo!(),
+//         // match node {
+//         //     VNode::Element(_) | VNode::Text(_) => {
+//         //         *top_idx += 1;
+//         //         return Some(node);
+//         //     }
+//         //     VNode::Suspended => todo!(),
+//         //     // we need access over the scope map
+//         //     VNode::Component(_) => todo!(),
 
-        //     VNode::Fragment(frag) => {
-        //         let nest_idx = self.nesting_idxs.get_mut(1).unwrap();
-        //         let node = &frag.children.get_mut(*nest_idx as usize);
-        //         match node {
-        //             VNode::Element(_) | VNode::Text(_) => {
-        //                 *nest_idx += 1;
-        //                 return Some(node);
-        //             }
-        //             VNode::Fragment(_) => todo!(),
-        //             VNode::Suspended => todo!(),
-        //             VNode::Component(_) => todo!(),
-        //         }
-        //     }
-        // }
-    }
-}
+//         //     VNode::Fragment(frag) => {
+//         //         let nest_idx = self.nesting_idxs.get_mut(1).unwrap();
+//         //         let node = &frag.children.get_mut(*nest_idx as usize);
+//         //         match node {
+//         //             VNode::Element(_) | VNode::Text(_) => {
+//         //                 *nest_idx += 1;
+//         //                 return Some(node);
+//         //             }
+//         //             VNode::Fragment(_) => todo!(),
+//         //             VNode::Suspended => todo!(),
+//         //             VNode::Component(_) => todo!(),
+//         //         }
+//         //     }
+//         // }
+//     }
+// }
 
 mod tests {
     use crate::debug_renderer::DebugRenderer;

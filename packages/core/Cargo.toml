@@ -39,6 +39,7 @@ log = "0.4"
 
 smallvec = "1.6.1"
 
+# Backs scopes and unique keys
 slotmap = "1.0.3"
 
 futures = "0.3.15"

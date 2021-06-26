@@ -8,6 +8,7 @@
 //!
 //!
 
+pub mod util;
 pub mod arena;
 pub mod component; // Logic for extending FC
 
