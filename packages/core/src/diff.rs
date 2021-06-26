@@ -1254,7 +1254,6 @@ impl<'a> Iterator for ChildIterator<'a> {
                     VNode::Element(_) | VNode::Text(_) => {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
-                        // println!("Found element! Returning it!");
                         should_pop = true;
                         returned_node = Some(&**node);
                     }
