@@ -68,16 +68,7 @@
 //!
 //! The lifetimes might look a little messy, but are crucially important for Dioxus's efficiency and overall ergonimics.
 //! Components can also be crafted as static closures, enabling type inference without all the type signature noise. However,
-//! closure-style components cannot work with borrowed data, due to limitations in Rust's lifetime system.
-//!
-//! ```
-//! #[derive(Props)]
-//! struct Props { name: String }
-//!
-//! static Example: FC<Props> = |cx| {
-//!     html! { <div> "Hello {cx.props.name}!" </div> }
-//! }
-//! ```
+//! closure-style components cannot work with borrowed data due to limitations in Rust's lifetime system.
 //!
 //! To use custom properties for components, you'll need to derive the `Props` trait for your properties. This trait
 //! exposes a compile-time correct builder pattern (similar to typed-builder) that can be used in the `rsx!` and `html!`
@@ -142,31 +133,26 @@
 //! ## Supported Renderers
 //! Instead of being tightly coupled to a platform, browser, or toolkit, Dioxus implements a VirtualDOM object which
 //! can be consumed to draw the UI. The Dioxus VDOM is reactive and easily consumable by 3rd-party renderers via
-//! the `Patch` object. See [Implementing a Renderer](docs/8-custom-renderer.md) and the `StringRenderer` classes for information
+//! the `RealDom` trait. See [Implementing a Renderer](docs/8-custom-renderer.md), the `StringRenderer`, and `WebSys` render implementations for a template
 //! on how to implement your own custom renderer. We provide 1st-class support for these renderers:
 //!
 //! - dioxus-desktop (via WebView)
 //! - dioxus-web (via WebSys)
 //! - dioxus-ssr (via StringRenderer)
-//! - dioxus-liveview (SSR + StringRenderer)
+//! - dioxus-liveview (SSR + WebSys)
 //!
-//! In the main `Dioxus` crate, these are all accessible through configuration flags.
+//! In the main `dioxus` crate, these are all accessible through configuration flags.
 //!
 //! ## Rendering to the Web
 //!
 //! Most dioxus apps will be initialized in roughly the same way. The `launch` method in `web` will immediately start a
 //! VirtualDOM and await it using `wasm_bindgen_futures`.
 //!
-//!  VirtualDOM from
-//! a component root and immediately awaits it
-//!
+//! An example app that starts a websys app and internally awaits works as follows:
 //!
 //! ```
 //! use dioxus::prelude::*;
 //! fn main() {
-//!     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-//!     console_error_panic_hook::set_once();
-//!
 //!     diouxs::web::launch(Example);
 //! }
 //!
@@ -176,6 +162,8 @@
 //!     })
 //! };
 //! ```
+//!
+//! In reality, you'll want to integrate analytics, logging, crash-protection and more.
 
 pub mod prelude {
     //! A glob import that includes helper types like FC, rsx!, html!, and required traits
