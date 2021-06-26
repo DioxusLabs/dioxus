@@ -376,8 +376,8 @@ pub struct Scope {
 
     // pub event_queue: EventQueue,
     pub caller: Weak<OpaqueComponent>,
-    // pub caller: Weak<OpaqueComponent<'static>>,
-    pub hookidx: RefCell<usize>,
+
+    pub hookidx: Cell<usize>,
 
     // ==========================
     // slightly unsafe stuff
@@ -503,7 +503,7 @@ impl Scope {
         //     .ok_or(Error::FatalInternal("Borrowing listener failed"))?
         //     .drain(..);
 
-        *self.hookidx.borrow_mut() = 0;
+        self.hookidx.set(0);
 
         let caller = self
             .caller
@@ -714,7 +714,7 @@ pub trait Scoped<'src>: Sized {
     ) -> Output {
         let scope = self.get_scope();
 
-        let idx = *scope.hookidx.borrow();
+        let idx = scope.hookidx.get();
 
         // Grab out the hook list
         let mut hooks = scope.hooks.borrow_mut();
@@ -725,7 +725,7 @@ pub trait Scoped<'src>: Sized {
             hooks.push(Box::pin(new_state));
         }
 
-        *scope.hookidx.borrow_mut() += 1;
+        scope.hookidx.set(idx + 1);
 
         let stable_ref = hooks
             .get_mut(idx)
@@ -853,15 +853,15 @@ Any function prefixed with "use" should not be called conditionally.
         )
     }
 
-    fn suspend<O: 'src>(
+    fn suspend<Output: 'src, Fut: FnOnce(SuspendedContext, Output) -> VNode<'src> + 'src>(
         &self,
-        f: &'src mut Pin<Box<dyn Future<Output = O> + Send + 'static>>,
-        g: impl FnOnce(SuspendedContext, O) -> VNode<'src> + 'src,
+        fut: &'src mut Pin<Box<dyn Future<Output = Output> + 'static>>,
+        callback: Fut,
     ) -> VNode<'src> {
-        match f.now_or_never() {
-            Some(o) => {
+        match fut.now_or_never() {
+            Some(out) => {
                 let suspended_cx = SuspendedContext {};
-                let nodes = g(suspended_cx, o);
+                let nodes = callback(suspended_cx, out);
                 return nodes;
             }
             None => {
