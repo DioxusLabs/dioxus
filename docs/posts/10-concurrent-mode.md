@@ -5,14 +5,15 @@ Concurrent mode provides a mechanism for building efficient asynchronous compone
 To make a component asynchronous, simply change its function signature to async.
 
 ```rust
-fn Example(ctx: Context<()>) -> Vnode {
+fn Example(cx: Context<()>) -> Vnode {
     rsx!{ <div> "Hello world!" </div> }
 }
 ```
+
 becomes
 
 ```rust
-async fn Example(ctx: Context<()>) -> Vnode {
+async fn Example(cx: Context<()>) -> Vnode {
     rsx!{ <div> "Hello world!" </div> }
 }
 ```
@@ -20,7 +21,7 @@ async fn Example(ctx: Context<()>) -> Vnode {
 Now, logic in components can be awaited to delay updates of the component and its children. Like so:
 
 ```rust
-async fn Example(ctx: Context<()>) -> Vnode {
+async fn Example(cx: Context<()>) -> Vnode {
     let name = fetch_name().await;
     rsx!{ <div> "Hello {name}" </div> }
 }
@@ -30,7 +31,7 @@ async fetch_name() -> String {
 }
 ```
 
-This component will only schedule its render once the fetch is complete. However, we *don't* recommend using async/await directly in your components. 
+This component will only schedule its render once the fetch is complete. However, we _don't_ recommend using async/await directly in your components.
 
 Async is a notoriously challenging yet rewarding tool for efficient tools. If not careful, locking and unlocking shared aspects of the component's context can lead to data races and panics. If a shared resource is locked while the component is awaiting, then other components can be locked or panic when trying to access the same resource. These rules are especially important when references to shared global state are accessed using the context object's lifetime. If mutable references to data captured immutably by the context are taken, then the component will panic, and cause confusion.
 
@@ -39,7 +40,7 @@ Instead, we suggest using hooks and future combinators that can safely utilize t
 As part of our Dioxus hooks crate, we provide a data loader hook which pauses a component until its async dependencies are ready. This caches requests, reruns the fetch if dependencies have changed, and provides the option to render something else while the component is loading.
 
 ```rust
-async fn ExampleLoader(ctx: Context<()>) -> Vnode {
+async fn ExampleLoader(cx: Context<()>) -> Vnode {
     /*
     Fetch, pause the component from rendering at all.
 
@@ -49,8 +50,8 @@ async fn ExampleLoader(ctx: Context<()>) -> Vnode {
     This API stores the result on the Context object, so the loaded data is taken as reference.
     */
     let name: &Result<SomeStructure> = use_fetch_data("http://example.com/json", ())
-                                        .place_holder(|ctx| rsx!{<div> "loading..." </div>})
-                                        .delayed_place_holder(1000, |ctx| rsx!{ <div> "still loading..." </div>})
+                                        .place_holder(|cx| rsx!{<div> "loading..." </div>})
+                                        .delayed_place_holder(1000, |cx| rsx!{ <div> "still loading..." </div>})
                                         .await;
 
     match name {
@@ -60,14 +61,11 @@ async fn ExampleLoader(ctx: Context<()>) -> Vnode {
 }
 ```
 
-
-
-
 ```rust
-async fn Example(ctx: Context<()>) -> VNode {
+async fn Example(cx: Context<()>) -> VNode {
     // Diff this set between the last set
     // Check if we have any outstanding tasks?
-    // 
+    //
     // Eventually, render the component into the VDOM when the future completes
     <div>
         <Example />
@@ -79,6 +77,6 @@ async fn Example(ctx: Context<()>) -> VNode {
         <Suspense placeholder={html!{<div>"Loading"</div>}}>
             <Example />
         </Suspense>
-    </div>    
+    </div>
 }
 ```

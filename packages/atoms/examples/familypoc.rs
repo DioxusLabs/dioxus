@@ -12,11 +12,11 @@ struct Todo {
     contents: String,
 }
 
-static App: FC<()> = |ctx| {
-    use_init_recoil_root(ctx, |_| {});
-    let todos = use_read(&ctx, &TODOS);
+static App: FC<()> = |cx| {
+    use_init_recoil_root(cx, |_| {});
+    let todos = use_read(&cx, &TODOS);
 
-    rsx! { in ctx,
+    rsx! { in cx,
         div {
             "Basic Todolist with AtomFamilies in Recoil.rs"
         }
@@ -28,11 +28,11 @@ struct ChildProps {
     id: Uuid,
 }
 
-static Child: FC<ChildProps> = |ctx| {
-    let todo = use_read(ctx, &TODOS).get(&ctx.id).unwrap();
-    // let (todo, set_todo) = use_read_write(ctx, &TODOS);
+static Child: FC<ChildProps> = |cx| {
+    let todo = use_read(cx, &TODOS).get(&cx.id).unwrap();
+    // let (todo, set_todo) = use_read_write(cx, &TODOS);
 
-    rsx! { in ctx,
+    rsx! { in cx,
         div {
             h1 {"{todo.title}"}
             input { type: "checkbox", name: "scales", checked: "{todo.checked}" }

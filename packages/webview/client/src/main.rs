@@ -36,22 +36,22 @@ fn blah() {
     let handler = dioxus_liveview::new_handler()
         .from_directory("abc123") // serve a given directory as the root
         .with_context(|| SomeContext {}) // build out a new context for all of the server-rendered components to share
-        .with_route(SERVER_RENDERED_KEY, |ctx: &ServerRendered| {
+        .with_route(SERVER_RENDERED_KEY, |cx: &ServerRendered| {
             //
         })
-        .with_route(SERVER_RENDERED_KEY, |ctx| {
+        .with_route(SERVER_RENDERED_KEY, |cx| {
             //
         })
-        .with_route(SERVER_RENDERED_KEY, |ctx| {
+        .with_route(SERVER_RENDERED_KEY, |cx| {
             //
         })
-        .with_route(SERVER_RENDERED_KEY, |ctx| {
+        .with_route(SERVER_RENDERED_KEY, |cx| {
             //
         })
-        .with_route(SERVER_RENDERED_KEY, |ctx| {
+        .with_route(SERVER_RENDERED_KEY, |cx| {
             //
         })
-        .with_route(SERVER_RENDERED_KEY, |ctx| {
+        .with_route(SERVER_RENDERED_KEY, |cx| {
             //
         })
         // depend on the framework, build a different type of handler

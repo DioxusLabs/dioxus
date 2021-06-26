@@ -11,7 +11,7 @@ This macro allows allows a classic struct definition to be embedded directly int
 ```rust
 // Inlines and destructure props *automatically*
 #[functional_component]
-fn Example(ctx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
+fn Example(cx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
     html! {
         <div>
             <p> "Hello, {name}!" </p>
@@ -32,10 +32,10 @@ struct ExampleProps {
      count: i32
 };
 
-fn Example(ctx: &mut Context<ExampleProps>) -> VNode {
+fn Example(cx: &mut Context<ExampleProps>) -> VNode {
     let ExampleProps {
         name, pending, count
-    } = ctx.props;
+    } = cx.props;
 
     rsx! {
         <div>

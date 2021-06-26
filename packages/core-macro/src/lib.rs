@@ -61,8 +61,8 @@ pub fn html_template(s: TokenStream) -> TokenStream {
 /// ```ignore
 ///
 /// #[fc]
-/// fn Example(ctx: Context, name: &str) -> VNode {
-///     ctx.render(rsx! { h1 {"hello {name}"} })
+/// fn Example(cx: Context, name: &str) -> VNode {
+///     cx.render(rsx! { h1 {"hello {name}"} })
 /// }
 /// ```
 #[proc_macro_attribute]

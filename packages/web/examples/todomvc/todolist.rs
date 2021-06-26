@@ -6,12 +6,12 @@ use crate::{
 };
 use dioxus_core::prelude::*;
 
-pub fn TodoList(ctx: Context<()>) -> VNode {
-    let (draft, set_draft) = use_state(&ctx, || "".to_string());
-    let (todos, _) = use_state(&ctx, || Vec::<TodoItem>::new());
-    let filter = use_atom(&ctx, &FILTER);
+pub fn TodoList(cx: Context<()>) -> VNode {
+    let (draft, set_draft) = use_state(&cx, || "".to_string());
+    let (todos, _) = use_state(&cx, || Vec::<TodoItem>::new());
+    let filter = use_atom(&cx, &FILTER);
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             header {
                 class: "header"

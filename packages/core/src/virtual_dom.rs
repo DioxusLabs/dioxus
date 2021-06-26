@@ -21,6 +21,7 @@
 
 use crate::{arena::ScopeArena, innerlude::*};
 use bumpalo::Bump;
+use futures::FutureExt;
 use generational_arena::Arena;
 use std::{
     any::{Any, TypeId},
@@ -55,7 +56,7 @@ pub struct VirtualDom {
     #[doc(hidden)]
     _root_caller: Rc<OpaqueComponent>,
     // _root_caller: Rc<OpaqueComponent<'static>>,
-    /// Type of the original ctx. This is stored as TypeId so VirtualDom does not need to be generic.
+    /// Type of the original cx. This is stored as TypeId so VirtualDom does not need to be generic.
     ///
     /// Whenver props need to be updated, an Error will be thrown if the new props do not
     /// match the props used to create the VirtualDom.
@@ -90,12 +91,12 @@ impl VirtualDom {
     /// ```ignore
     /// // Directly from a closure
     ///
-    /// let dom = VirtualDom::new(|ctx| ctx.render(rsx!{ div {"hello world"} }));
+    /// let dom = VirtualDom::new(|cx| cx.render(rsx!{ div {"hello world"} }));
     ///
     /// // or pass in...
     ///
-    /// let root = |ctx| {
-    ///     ctx.render(rsx!{
+    /// let root = |cx| {
+    ///     cx.render(rsx!{
     ///         div {"hello world"}
     ///     })
     /// }
@@ -103,8 +104,8 @@ impl VirtualDom {
     ///
     /// // or directly from a fn
     ///
-    /// fn Example(ctx: Context<()>) -> VNode  {
-    ///     ctx.render(rsx!{ div{"hello world"} })
+    /// fn Example(cx: Context<()>) -> VNode  {
+    ///     cx.render(rsx!{ div{"hello world"} })
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
@@ -113,7 +114,7 @@ impl VirtualDom {
         Self::new_with_props(root, ())
     }
 
-    /// Start a new VirtualDom instance with a dependent ctx.
+    /// Start a new VirtualDom instance with a dependent cx.
     /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
@@ -122,12 +123,12 @@ impl VirtualDom {
     /// ```ignore
     /// // Directly from a closure
     ///
-    /// let dom = VirtualDom::new(|ctx| ctx.render(rsx!{ div {"hello world"} }));
+    /// let dom = VirtualDom::new(|cx| cx.render(rsx!{ div {"hello world"} }));
     ///
     /// // or pass in...
     ///
-    /// let root = |ctx| {
-    ///     ctx.render(rsx!{
+    /// let root = |cx| {
+    ///     cx.render(rsx!{
     ///         div {"hello world"}
     ///     })
     /// }
@@ -135,8 +136,8 @@ impl VirtualDom {
     ///
     /// // or directly from a fn
     ///
-    /// fn Example(ctx: Context, props: &SomeProps) -> VNode  {
-    ///     ctx.render(rsx!{ div{"hello world"} })
+    /// fn Example(cx: Context, props: &SomeProps) -> VNode  {
+    ///     cx.render(rsx!{ div{"hello world"} })
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
@@ -395,11 +396,13 @@ pub struct Scope {
     // Stores references into the listeners attached to the vnodes
     // NEEDS TO BE PRIVATE
     pub(crate) listeners: RefCell<Vec<(*const Cell<RealDomNode>, *const dyn Fn(VirtualEvent))>>,
+
+    pub(crate) suspended_tasks: Vec<Box<dyn Future<Output = VNode<'static>>>>,
     // pub(crate) listeners: RefCell<nohash_hasher::IntMap<u32, *const dyn Fn(VirtualEvent)>>,
     // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
     // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
     // NoHashMap<RealDomNode, <*const dyn Fn(VirtualEvent)>
-    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
+    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>
 }
 
 // We need to pin the hook so it doesn't move as we initialize the list of hooks
@@ -465,6 +468,7 @@ impl Scope {
             listeners: Default::default(),
             hookidx: Default::default(),
             descendents: Default::default(),
+            suspended_tasks: Default::default(),
         }
     }
 
@@ -588,9 +592,9 @@ impl Scope {
 ///
 /// }
 ///
-/// fn example(ctx: Context, props: &Props -> VNode {
+/// fn example(cx: Context, props: &Props -> VNode {
 ///     html! {
-///         <div> "Hello, {ctx.ctx.name}" </div>
+///         <div> "Hello, {cx.cx.name}" </div>
 ///     }
 /// }
 /// ```
@@ -645,6 +649,14 @@ pub trait Scoped<'src>: Sized {
         self.get_scope().event_channel.clone()
     }
 
+    fn schedule_effect(&self) -> Rc<dyn Fn() + 'static> {
+        todo!()
+    }
+
+    fn schedule_layout_effect(&self) {
+        todo!()
+    }
+
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
     ///
     /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
@@ -652,12 +664,12 @@ pub trait Scoped<'src>: Sized {
     /// ## Example
     ///
     /// ```ignore
-    /// fn Component(ctx: Context<()>) -> VNode {
+    /// fn Component(cx: Context<()>) -> VNode {
     ///     // Lazy assemble the VNode tree
     ///     let lazy_tree = html! {<div> "Hello World" </div>};
     ///     
     ///     // Actually build the tree and allocate it
-    ///     ctx.render(lazy_tree)
+    ///     cx.render(lazy_tree)
     /// }
     ///```
     fn render<'a, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a>(
@@ -750,7 +762,7 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     fn use_create_context<T: 'static>(&self, init: impl Fn() -> T) {
         let scope = self.get_scope();
-        let mut ctxs = scope.shared_contexts.borrow_mut();
+        let mut cxs = scope.shared_contexts.borrow_mut();
         let ty = TypeId::of::<T>();
 
         let is_initialized = self.use_hook(
@@ -763,14 +775,14 @@ Any function prefixed with "use" should not be called conditionally.
             |_| {},
         );
 
-        match (is_initialized, ctxs.contains_key(&ty)) {
+        match (is_initialized, cxs.contains_key(&ty)) {
             // Do nothing, already initialized and already exists
             (true, true) => {}
 
             // Needs to be initialized
             (false, false) => {
                 log::debug!("Initializing context...");
-                ctxs.insert(ty, Rc::new(init()));
+                cxs.insert(ty, Rc::new(init()));
             }
 
             _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
@@ -810,9 +822,9 @@ Any function prefixed with "use" should not be called conditionally.
                     log::debug!("Searching {:#?} for valid shared_context", inner.arena_idx);
                     let shared_contexts = inner.shared_contexts.borrow();
 
-                    if let Some(shared_ctx) = shared_contexts.get(&ty) {
-                        log::debug!("found matching ctx");
-                        let rc = shared_ctx
+                    if let Some(shared_cx) = shared_contexts.get(&ty) {
+                        log::debug!("found matching cx");
+                        let rc = shared_cx
                             .clone()
                             .downcast::<T>()
                             .expect("Should not fail, already validated the type from the hashmap");
@@ -841,10 +853,32 @@ Any function prefixed with "use" should not be called conditionally.
         )
     }
 
-    fn suspend<O>(
+    fn suspend<O: 'src>(
         &self,
-        f: impl Future<Output = O>,
-        g: impl FnOnce(O) -> VNode<'src> + 'src,
+        f: &'src mut Pin<Box<dyn Future<Output = O> + Send + 'static>>,
+        g: impl FnOnce(SuspendedContext, O) -> VNode<'src> + 'src,
+    ) -> VNode<'src> {
+        match f.now_or_never() {
+            Some(o) => {
+                let suspended_cx = SuspendedContext {};
+                let nodes = g(suspended_cx, o);
+                return nodes;
+            }
+            None => {
+                // we need to register this task
+                VNode::Suspended
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SuspendedContext {}
+
+impl SuspendedContext {
+    pub fn render<'a, 'src, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a>(
+        self,
+        lazy_nodes: LazyNodes<'src, F>,
     ) -> VNode<'src> {
         todo!()
     }

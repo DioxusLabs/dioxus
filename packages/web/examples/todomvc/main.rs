@@ -10,8 +10,8 @@ use dioxus_web::{prelude::*, WebsysRenderer};
 static APP_STYLE: &'static str = include_str!("./style.css");
 
 fn main() {
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx| {
-        ctx.render(rsx! {
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|cx| {
+        cx.render(rsx! {
             div {
                 id: "app"
                 // style { "{APP_STYLE}" }

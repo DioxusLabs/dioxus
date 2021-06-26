@@ -10,10 +10,10 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(CustomA))
 }
 
-fn CustomA(ctx: Context<()>) -> VNode {
-    let (val, set_val) = use_state(&ctx, || "abcdef".to_string() as String);
+fn CustomA(cx: Context<()>) -> VNode {
+    let (val, set_val) = use_state(&cx, || "abcdef".to_string() as String);
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             class: "m-8"
             "CustomA {val}"
@@ -42,12 +42,12 @@ mod components {
         val: String,
     }
 
-    pub fn CustomB(ctx: Context<PropsB>) -> VNode {
-        let (first, last) = ctx.val.split_at(3);
-        ctx.render(rsx! {
+    pub fn CustomB(cx: Context<PropsB>) -> VNode {
+        let (first, last) = cx.val.split_at(3);
+        cx.render(rsx! {
             div {
                 class: "m-8"
-                "CustomB {ctx.val}"
+                "CustomB {cx.val}"
                 CustomC {
                     val: first.to_string()
                 }
@@ -63,11 +63,11 @@ mod components {
         val: String,
     }
 
-    fn CustomC(ctx: Context<PropsC>) -> VNode {
-        ctx.render(rsx! {
+    fn CustomC(cx: Context<PropsC>) -> VNode {
+        cx.render(rsx! {
             div {
                 class: "m-8"
-                "CustomC {ctx.val}"
+                "CustomC {cx.val}"
             }
         })
     }

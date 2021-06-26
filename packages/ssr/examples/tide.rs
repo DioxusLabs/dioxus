@@ -14,8 +14,8 @@ struct ExampleProps {
     initial_name: String,
 }
 
-static Example: FC<ExampleProps> = |ctx| {
-    let dispaly_name = use_state_new(&ctx, move || ctx.initial_name.clone());
+static Example: FC<ExampleProps> = |cx| {
+    let dispaly_name = use_state_new(&cx, move || cx.initial_name.clone());
 
     let buttons = ["Jack", "Jill", "Bob"].iter().map(|name| {
         rsx!{
@@ -27,7 +27,7 @@ static Example: FC<ExampleProps> = |ctx| {
         }
     });
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             class: "py-12 px-4 text-center w-full max-w-2xl mx-auto",
             // classes: [Some("asd")]

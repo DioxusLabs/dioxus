@@ -190,7 +190,7 @@ pub struct TallerProps {
 }
 
 /// This component is taller than most :)
-pub fn Taller(ctx: Context<TallerProps>) -> VNode {
+pub fn Taller(cx: Context<TallerProps>) -> VNode {
     let b = true;
     todo!()
 }

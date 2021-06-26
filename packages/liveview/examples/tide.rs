@@ -27,13 +27,13 @@ mod client {
         Ok(dioxus_web::WebsysRenderer::start(APP).await)
     }
 
-    static APP: FC<()> = |ctx| {
+    static APP: FC<()> = |cx| {
         todo!()
-        // let (selected_stream, set_stream) = use_state(&ctx, || SelectedStream::Football);
+        // let (selected_stream, set_stream) = use_state(&cx, || SelectedStream::Football);
 
         // let opts = SelectedStream::iter().map(|name| rsx! { option { "{name}", value: "{name}" } });
 
-        // ctx.render(rsx! {
+        // cx.render(rsx! {
         //     div {
         //         h1 { "Tide basic CRUD app" }
         //         h2 { "Chosen stream: {selected_stream}" }
@@ -102,29 +102,29 @@ mod server {
         selected_stream: SelectedStream,
     }
 
-    static STREAM_LIST: FC<SreamListProps> = |ctx| {
+    static STREAM_LIST: FC<SreamListProps> = |cx| {
         //
-        match ctx.selected_stream {
-            SelectedStream::Football => ctx.render(rsx! {
+        match cx.selected_stream {
+            SelectedStream::Football => cx.render(rsx! {
                 li {
                     "watch football!"
                 }
             }),
 
             _ => unimplemented!()
-            // .render(ctx),
+            // .render(cx),
             // SelectedStream::Hockey => rsx! {
             //     li {
             //         "watch football!"
             //     }
             // }
-            // .render(ctx),
+            // .render(cx),
             // SelectedStream::Socker => rsx! {
             //     li {
             //         "watch football!"
             //     }
             // }
-            // .render(ctx),
+            // .render(cx),
         }
     };
 }
@@ -145,21 +145,21 @@ mod ergorsx {
     // }
 
     // trait Renderable {
-    //     fn render(self, nodectx: &Ncx) -> VVNode;
+    //     fn render(self, nodecx: &Ncx) -> VVNode;
     // }
 
     // impl<F: Fn(&Ncx) -> VVNode> Renderable for DTree<F> {
-    //     fn render(self, nodectx: &Ncx) -> VVNode {
-    //         (self.caller)(nodectx)
+    //     fn render(self, nodecx: &Ncx) -> VVNode {
+    //         (self.caller)(nodecx)
     //     }
     // }
 
     // fn test() {
     //     let t = 123;
     //     let r = match t {
-    //         123 => DTree::new(|f| VVNode {}).render(ctx),
-    //         456 => DTree::new(|f| VVNode {}).render(ctx),
-    //         789 => DTree::new(|f| VVNode {}).render(ctx),
+    //         123 => DTree::new(|f| VVNode {}).render(cx),
+    //         456 => DTree::new(|f| VVNode {}).render(cx),
+    //         789 => DTree::new(|f| VVNode {}).render(cx),
     //         _ => unreachable!(),
     //     };
     // }
@@ -169,11 +169,11 @@ mod ergorsx {
     //         div {
 
     //         }
-    //     }.render(ctx)
+    //     }.render(cx)
     // }
 
     // fn example() {
-    //     ctx.render(rsx!{
+    //     cx.render(rsx!{
     //         div {
 
     //         }

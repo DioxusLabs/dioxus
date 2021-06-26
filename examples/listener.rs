@@ -4,10 +4,10 @@ use dioxus_core::prelude::*;
 
 fn main() {}
 
-static Example: FC<()> = |ctx| {
-    let (name, set_name) = use_state(&ctx, || "...?");
+static Example: FC<()> = |cx| {
+    let (name, set_name) = use_state(&cx, || "...?");
 
-    ctx.render(rsx!(
+    cx.render(rsx!(
         div {
             h1 { "Hello, {name}" }
             // look ma - we can rsx! and html! together
@@ -17,8 +17,8 @@ static Example: FC<()> = |ctx| {
 };
 
 pub fn render<'src, 'a, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a, P>(
-    ctx: &'a Context<'src, P>,
+    cx: &'a Context<'src, P>,
     lazy_nodes: LazyNodes<'src, F>,
 ) -> VNode<'src> {
-    ctx.render(lazy_nodes)
+    cx.render(lazy_nodes)
 }

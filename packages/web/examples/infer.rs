@@ -12,8 +12,8 @@ fn main() {
 }
 
 // this is a component
-static Example: FC<()> = |ctx| {
-    let (event, set_event) = use_state(&ctx, || None);
+static Example: FC<()> = |cx| {
+    let (event, set_event) = use_state(&cx, || None);
 
     let handler = move |evt| {
         set_event(Some(evt));
@@ -21,7 +21,7 @@ static Example: FC<()> = |ctx| {
 
     log::info!("hello world");
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {  
             
             class: "py-12 px-4 w-full max-w-2xl mx-auto bg-red-100"
@@ -48,10 +48,10 @@ struct ExampleProps {
     name: String,
 }
 
-static Example2: FC<ExampleProps> = |ctx| {
-    ctx.render(rsx! {
+static Example2: FC<ExampleProps> = |cx| {
+    cx.render(rsx! {
         div {
-            h1 {"hello {ctx.name}"}
+            h1 {"hello {cx.name}"}
         }
     })
 };

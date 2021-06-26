@@ -11,10 +11,8 @@ use crate::{
 };
 use bumpalo::Bump;
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
-    marker::PhantomData,
     rc::Rc,
 };
 
@@ -56,6 +54,43 @@ impl<'a> Clone for VNode<'a> {
     }
 }
 
+impl<'old, 'new> VNode<'old> {
+    // performs a somewhat costly clone of this vnode into another bump
+    // this is used when you want to drag nodes from an old frame into a new frame
+    // There is no way to safely drag listeners over (no way to clone a closure)
+    //
+    // This method will only be called if a component was once a real node and then becomes suspended
+    fn deep_clone_to_new_bump(&self, new: &'new Bump) -> VNode<'new> {
+        match self {
+            VNode::Element(el) => {
+                let new_el: VElement<'new> = VElement {
+                    key: NodeKey::NONE,
+                    // key: el.key.clone(),
+                    tag_name: el.tag_name,
+                    // wipe listeners on deep clone, there's no way to know what other bump material they might be referencing (nodes, etc)
+                    listeners: &[],
+                    attributes: {
+                        let attr_vec = bumpalo::collections::Vec::new_in(new);
+                        attr_vec.into_bump_slice()
+                    },
+                    children: {
+                        let attr_vec = bumpalo::collections::Vec::new_in(new);
+                        attr_vec.into_bump_slice()
+                    },
+                    namespace: el.namespace.clone(),
+                    dom_id: el.dom_id.clone(),
+                };
+
+                VNode::Element(new.alloc_with(move || new_el))
+            }
+            VNode::Text(_) => todo!(),
+            VNode::Fragment(_) => todo!(),
+            VNode::Suspended => todo!(),
+            VNode::Component(_) => todo!(),
+        }
+    }
+}
+
 impl<'a> VNode<'a> {
     /// Low-level constructor for making a new `Node` of type element with given
     /// parts.
@@ -67,11 +102,11 @@ impl<'a> VNode<'a> {
     pub fn element(
         bump: &'a Bump,
         key: NodeKey<'a>,
-        tag_name: &'a str,
+        tag_name: &'static str,
         listeners: &'a [Listener<'a>],
         attributes: &'a [Attribute<'a>],
         children: &'a [VNode<'a>],
-        namespace: Option<&'a str>,
+        namespace: Option<&'static str>,
     ) -> VNode<'a> {
         let element = bump.alloc_with(|| VElement {
             key,
@@ -157,14 +192,16 @@ pub struct VText<'src> {
 // ========================================================
 //   VElement (div, h1, etc), attrs, keys, listener handle
 // ========================================================
+
+#[derive(Clone)]
 pub struct VElement<'a> {
     /// Elements have a tag name, zero or more attributes, and zero or more
     pub key: NodeKey<'a>,
-    pub tag_name: &'a str,
+    pub tag_name: &'static str,
     pub listeners: &'a [Listener<'a>],
     pub attributes: &'a [Attribute<'a>],
     pub children: &'a [VNode<'a>],
-    pub namespace: Option<&'a str>,
+    pub namespace: Option<&'static str>,
     pub dom_id: Cell<RealDomNode>,
 }
 
@@ -298,13 +335,13 @@ impl<'a> VComponent<'a> {
     ///
     /// If the CanMemo is `false`, then the macro will call the backup method which always defaults to "false"
     pub fn new<P: Properties + 'a>(
-        ctx: &NodeCtx<'a>,
+        cx: &NodeCtx<'a>,
         component: FC<P>,
         props: P,
         key: Option<&'a str>,
         children: &'a [VNode<'a>],
     ) -> Self {
-        let bump = ctx.bump();
+        let bump = cx.bump();
         let user_fc = component as *const ();
 
         let props = bump.alloc(props);
@@ -370,13 +407,13 @@ fn create_closure<'a, P: 'a>(
     let g: Captured = Rc::new(move |scp: &Scope| -> VNode {
         // cast back into the right lifetime
         let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
-        // let ctx: Context<P2> = todo!();
-        let ctx: Context<P> = Context {
+        // let cx: Context<P2> = todo!();
+        let cx: Context<P> = Context {
             props: safe_props,
             scope: scp,
         };
 
-        let g = component(ctx);
+        let g = component(cx);
         let g2 = unsafe { std::mem::transmute(g) };
         g2
     });

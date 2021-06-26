@@ -3,7 +3,7 @@
 //!
 //! Note - using the builder pattern does not required the Properties trait to be implemented - the only thing that matters is
 //! if the type suppports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
-//! that ensures compile-time required and optional fields on ctx.
+//! that ensures compile-time required and optional fields on cx.
 
 use crate::innerlude::FC;
 
@@ -50,9 +50,9 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
 /// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
 /// Try to avoid nesting fragments if you can. Infinitely nested Fragments *will* cause diffing to crash.
 #[allow(non_upper_case_globals)]
-pub const Fragment: FC<()> = |ctx| {
+pub const Fragment: FC<()> = |cx| {
     use crate::prelude::*;
-    ctx.render(LazyNodes::new(move |c| {
-        crate::nodebuilder::vfragment(c, None, ctx.children())
+    cx.render(LazyNodes::new(move |c| {
+        crate::nodebuilder::vfragment(c, None, cx.children())
     }))
 };

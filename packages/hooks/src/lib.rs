@@ -20,7 +20,7 @@ This is moderately efficient because the fields of the map are moved, but the da
 However, if you used similar approach with Dioxus:
 
 ```rust
-let (map, set_map) = use_state(&ctx, || HashMap::new());
+let (map, set_map) = use_state(&cx, || HashMap::new());
 set_map({
     let mut newmap = map.clone();
     newmap.set(key, value);
@@ -40,11 +40,11 @@ uses the same memoization on top of the use_context API.
 
 Here's a fully-functional todo app using the use_map API:
 ```rust
-static TodoList: FC<()> = |ctx| {
-    let todos = use_map(ctx, || HashMap::new());
+static TodoList: FC<()> = |cx| {
+    let todos = use_map(cx, || HashMap::new());
     let input = use_ref(|| None);
 
-    ctx.render(rsx!{
+    cx.render(rsx!{
         div {
             button {
                 "Add todo"
@@ -84,10 +84,10 @@ fn use_map() {}
 // Elements are received as Rc<T> in case the underlying collection is shuffled around
 // Setters/getters can be generated
 fn use_collection<'a, T: Collection>(
-    ctx: &impl Scoped<'a>,
+    cx: &impl Scoped<'a>,
     f: impl Fn() -> T,
 ) -> CollectionHandle<'a, T> {
-    ctx.use_hook(
+    cx.use_hook(
         || {},
         |h| {
             //

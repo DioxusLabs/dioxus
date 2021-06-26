@@ -39,7 +39,7 @@ impl Parse for HtmlRender {
             return input.parse::<LitStr>()?.parse::<HtmlRender>();
         }
 
-        // let ctx: Ident = s.parse()?;
+        // let cx: Ident = s.parse()?;
         // s.parse::<Token![,]>()?;
         // if elements are in an array, return a bumpalo::collections::Vec rather than a Node.
         let kind = if input.peek(token::Bracket) {
@@ -64,8 +64,8 @@ impl ToTokens for HtmlRender {
 
         // create a lazy tree that accepts a bump allocator
         let final_tokens = quote! {
-            dioxus::prelude::LazyNodes::new(move |ctx| {
-                let bump = &ctx.bump();
+            dioxus::prelude::LazyNodes::new(move |cx| {
+                let bump = &cx.bump();
 
                 #new_toks
             })
@@ -152,10 +152,10 @@ struct Element {
 
 impl ToTokens for ToToksCtx<&Element> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // let ctx = self.ctx;
+        // let cx = self.cx;
         let name = &self.inner.name.to_string();
         tokens.append_all(quote! {
-            dioxus::builder::ElementBuilder::new(ctx, #name)
+            dioxus::builder::ElementBuilder::new(cx, #name)
         });
         for attr in self.inner.attrs.iter() {
             self.recurse(attr).to_tokens(tokens);

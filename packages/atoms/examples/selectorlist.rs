@@ -17,12 +17,12 @@ const D_SELECTOR: SelectorFamilyBorrowed<i32, i32> = |api, key| -> &i32 {
     a
 };
 
-static App: FC<()> = |ctx| {
-    use_init_recoil_root(ctx, |_| {});
+static App: FC<()> = |cx| {
+    use_init_recoil_root(cx, |_| {});
 
-    let title = use_read(ctx, &C_SELECTOR);
+    let title = use_read(cx, &C_SELECTOR);
 
-    rsx! { in ctx,
+    rsx! { in cx,
         div {
             "{title}"
             // button { onclick: {next_light}, "Next light" }

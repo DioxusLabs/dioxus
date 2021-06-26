@@ -82,8 +82,8 @@ fn main() {
     dioxus::web::start(App)
 }
 
-fn App(ctx: Context<()>) -> VNode {
-    ctx.render(rsx! {
+fn App(cx: Context<()>) -> VNode {
+    cx.render(rsx! {
         div { "Hello, world!" }
     })
 }
@@ -108,8 +108,8 @@ fn main() {
 Finally, our app. Every component in Dioxus is a function that takes in a `Context` object and returns a `VNode`.
 
 ```rust
-fn App(ctx: Context<()>) -> VNode {
-    ctx.render(rsx! {
+fn App(cx: Context<()>) -> VNode {
+    cx.render(rsx! {
         div { "Hello, world!" }
     })
 };
@@ -119,7 +119,7 @@ In React, you'll save data between renders with hooks. However, hooks rely on gl
 
 Next, we're greeted with the `rsx!` macro. This lets us add a custom DSL for declaratively building the structure of our app. The semantics of this macro are similar to that of JSX and HTML, though with a familiar Rust-y interface. The `html!` macro is also available for writing components with a JSX/HTML syntax.
 
-The `rsx!` macro is lazy: it does not immediately produce elements or allocates, but rather builds a closure which can be rendered with `ctx.render`.
+The `rsx!` macro is lazy: it does not immediately produce elements or allocates, but rather builds a closure which can be rendered with `cx.render`.
 
 Now, let's launch our app in a development server:
 
@@ -135,7 +135,7 @@ If we wanted to golf a bit, we can shrink our hello-world even smaller:
 
 ```rust
 fn main() {
-    dioxus::web::start(|ctx| ctx.render(diouxs::rsx!( div { "Hello, World!" } ))
+    dioxus::web::start(|cx| cx.render(diouxs::rsx!( div { "Hello, World!" } ))
 }
 ```
 

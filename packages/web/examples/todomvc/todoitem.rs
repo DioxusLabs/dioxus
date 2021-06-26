@@ -7,11 +7,11 @@ pub struct TodoEntryProps {
     id: uuid::Uuid,
 }
 
-pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> VNode {
-    let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    let todo = use_atom_family(&ctx, &TODOS, ctx.id);
+pub fn TodoEntry(cx: Context, props: &TodoEntryProps) -> VNode {
+    let (is_editing, set_is_editing) = use_state(&cx, || false);
+    let todo = use_atom_family(&cx, &TODOS, cx.id);
 
-    ctx.render(rsx! (
+    cx.render(rsx! (
         li {
             "{todo.id}"
             input {

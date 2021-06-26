@@ -8,9 +8,9 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-fn App(ctx: Context<()>) -> VNode {
-    let cansee = use_state_new(&ctx, || false);
-    rsx! { in ctx,
+fn App(cx: Context<()>) -> VNode {
+    let cansee = use_state_new(&cx, || false);
+    rsx! { in cx,
         div {
             "Shadow of the child:"
             button { onclick: move |_| cansee.set(!**cansee)
@@ -21,8 +21,8 @@ fn App(ctx: Context<()>) -> VNode {
     }
 }
 
-fn Child(ctx: Context<()>) -> VNode {
-    rsx! { in ctx,
+fn Child(cx: Context<()>) -> VNode {
+    rsx! { in cx,
         section { class: "py-6 bg-coolGray-100 text-coolGray-900"
             div { class: "container mx-auto flex flex-col items-center justify-center p-4 space-y-8 md:p-10 md:px-24 xl:px-48"
                 h1 { class: "text-5xl font-bold leading-none text-center",

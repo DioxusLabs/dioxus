@@ -1,7 +1,7 @@
 use dioxus_ssr::prelude::{Context, VNode};
 
 // Parse a snippet into
-pub fn markdown_to_snippet<'a, P>(ctx: Context<'a, P>, text: &str) -> Vec<VNode<'a>> {
+pub fn markdown_to_snippet<'a, P>(cx: Context<'a, P>, text: &str) -> Vec<VNode<'a>> {
     let snips = Vec::new();
     use pulldown_cmark::{Options, Parser};
     let mut options = Options::empty();

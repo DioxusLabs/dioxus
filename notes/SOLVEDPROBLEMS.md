@@ -17,7 +17,7 @@ Originally the syntax of the FC macro was meant to look like:
 
 ```rust
 #[fc]
-fn example(ctx: &Context<{ name: String }>) -> VNode {
+fn example(cx: &Context<{ name: String }>) -> VNode {
     html! { <div> "Hello, {name}!" </div> }
 }
 ```
@@ -26,7 +26,7 @@ fn example(ctx: &Context<{ name: String }>) -> VNode {
 
 ```rust
 #[fc]
-fn example(ctx: &Context, name: String) -> VNode {
+fn example(cx: &Context, name: String) -> VNode {
     html! { <div> "Hello, {name}!" </div> }
 }
 ```
@@ -53,7 +53,7 @@ impl FunctionProvider for SomeComponent {
 pub type SomeComponent = FunctionComponent<function_name>;
 ```
 
-By default, the underlying component is defined as a "functional" implementation of the `Component` trait with all the lifecycle methods. In Dioxus, we don't allow components as structs, and instead take a "hooks-only" approach. However, we still need ctx. To get these without dealing with traits, we just assume functional components are modules. This lets the macros assume an FC is a module, and `FC::Props` is its props and `FC::component` is the component. Yew's method does a similar thing, but with associated types on traits.
+By default, the underlying component is defined as a "functional" implementation of the `Component` trait with all the lifecycle methods. In Dioxus, we don't allow components as structs, and instead take a "hooks-only" approach. However, we still need cx. To get these without dealing with traits, we just assume functional components are modules. This lets the macros assume an FC is a module, and `FC::Props` is its props and `FC::component` is the component. Yew's method does a similar thing, but with associated types on traits.
 
 Perhaps one day we might use traits instead.
 
@@ -71,7 +71,7 @@ mod Example {
         name: String
     }
 
-    fn component(ctx: &Context<Props>) -> VNode {
+    fn component(cx: &Context<Props>) -> VNode {
         html! { <div> "Hello, {name}!" </div> }
     }
 }
@@ -84,7 +84,7 @@ struct Props {
     name: String
 }
 
-fn component(ctx: &Context<Props>) -> VNode {
+fn component(cx: &Context<Props>) -> VNode {
     html! { <div> "Hello, {name}!" </div> }
 }
 ```
@@ -93,7 +93,7 @@ These definitions might be ugly, but the fc macro cleans it all up. The fc macro
 
 ```rust
 #[fc]
-fn example(ctx: &Context, name: String) -> VNode {
+fn example(cx: &Context, name: String) -> VNode {
     html! { <div> "Hello, {name}!" </div> }
 }
 
@@ -105,7 +105,7 @@ mod Example {
     struct Props {
         name: String
     }
-    fn component(ctx: &Context<Props>) -> VNode {
+    fn component(cx: &Context<Props>) -> VNode {
         html! { <div> "Hello, {name}!" </div> }
     }
 }
@@ -119,19 +119,19 @@ From a certain perspective, live components are simply server-side-rendered comp
 
 ```rust
 #[fc]
-static LiveFc: FC = |ctx, refresh_handler: impl FnOnce| {
+static LiveFc: FC = |cx, refresh_handler: impl FnOnce| {
     // Grab the "live context"
-    let live_context = ctx.use_context::<LiveContext>();
+    let live_context = cx.use_context::<LiveContext>();
 
     // Ensure this component is registered as "live"
     live_context.register_scope();
 
     // send our props to the live context and get back a future
-    let vnodes = live_context.request_update(ctx);
+    let vnodes = live_context.request_update(cx);
 
     // Suspend the rendering of this component until the vnodes are finished arriving
     // Render them once available
-    ctx.suspend(async move {
+    cx.suspend(async move {
         let output = vnodes.await;
 
         // inject any listener handles (ie button clicks, views, etc) to the parsed nodes
@@ -153,13 +153,13 @@ Notice that LiveComponent receivers (the client-side interpretation of a LiveCom
 The `VNodeTree` type is a very special type that allows VNodes to be created using a pluggable allocator. The html! macro creates something that looks like:
 
 ```rust
-static Example: FC<()> = |ctx| {
+static Example: FC<()> = |cx| {
     html! { <div> "blah" </div> }
 };
 
 // expands to...
 
-static Example: FC<()> = |ctx| {
+static Example: FC<()> = |cx| {
     // This function converts a Fn(allocator) -> VNode closure to a VNode struct that will later be evaluated.
     html_macro_to_vnodetree(move |allocator| {
         let mut node0 = allocator.alloc(VElement::div);
@@ -170,7 +170,7 @@ static Example: FC<()> = |ctx| {
 };
 ```
 
-At runtime, the new closure is created that captures references to `ctx`. Therefore, this closure can only be evaluated while `ctx` is borrowed and in scope. However, this closure can only be evaluated with an `allocator`. Currently, the global and Bumpalo allocators are available, though in the future we will add support for creating a VDom with any allocator or arena system (IE Jemalloc, wee-alloc, etc). The intention here is to allow arena allocation of VNodes (no need to box nested VNodes). Between diffing phases, the arena will be overwritten as old nodes are replaced with new nodes. This saves allocation time and enables bump allocators.
+At runtime, the new closure is created that captures references to `cx`. Therefore, this closure can only be evaluated while `cx` is borrowed and in scope. However, this closure can only be evaluated with an `allocator`. Currently, the global and Bumpalo allocators are available, though in the future we will add support for creating a VDom with any allocator or arena system (IE Jemalloc, wee-alloc, etc). The intention here is to allow arena allocation of VNodes (no need to box nested VNodes). Between diffing phases, the arena will be overwritten as old nodes are replaced with new nodes. This saves allocation time and enables bump allocators.
 
 ## Context and lifetimes
 
@@ -216,8 +216,8 @@ struct ExampleContext {
     items: Vec<String>
 }
 
-fn Example<'src>(ctx: Context<'src, ()>) -> VNode<'src> {
-    let val: &'b ContextGuard<ExampleContext> = (&'b ctx).use_context(|context: &'other ExampleContext| {
+fn Example<'src>(cx: Context<'src, ()>) -> VNode<'src> {
+    let val: &'b ContextGuard<ExampleContext> = (&'b cx).use_context(|context: &'other ExampleContext| {
         // always select the last element
         context.items.last()
     });
@@ -225,7 +225,7 @@ fn Example<'src>(ctx: Context<'src, ()>) -> VNode<'src> {
     let handler1 = move |_| println!("Value is {}", val); // deref coercion performed here for printing
     let handler2 = move |_| println!("Value is {}", val); // deref coercion performed here for printing
 
-    ctx.render(html! {
+    cx.render(html! {
         <div>
             <button onclick={handler1}> "Echo value with h1" </button>
             <button onclick={handler2}> "Echo value with h2" </button>
@@ -313,9 +313,9 @@ Here's how react does it:
 Any "dirty" node causes an entire subtree render. Calling "setState" at the very top will cascade all the way down. This is particularly bad for this component design:
 
 ```rust
-static APP: FC<()> = |ctx| {
+static APP: FC<()> = |cx| {
     let title = use_context(Title);
-    ctx.render(html!{
+    cx.render(html!{
         <div>
             <h1> "{title}"</h1>
             <HeavyList /> // VComponent::new(|| (FC, PropsForFc)) -> needs a context to immediately update the component's props imperatively? store the props in a box on bump? store the props on the child?
@@ -334,8 +334,8 @@ static APP: FC<()> = |ctx| {
         </div>
     })
 };
-static HEAVY_LIST: FC<()> = |ctx| {
-    ctx.render({
+static HEAVY_LIST: FC<()> = |cx| {
+    cx.render({
         {0.100.map(i => <BigElement >)}
     })
 };
@@ -348,7 +348,7 @@ An update to the use_context subscription will mark the node as dirty. The node 
 The FC layout was altered to make life easier for us inside the VirtualDom. The "view" function returns an unbounded VNode object. Calling the "view" function is unsafe under the hood, but prevents lifetimes from leaking out of the function call. Plus, it's easier to write. Because there are no lifetimes on the output (occur purely under the hood), we can escape needing to annotate them.
 
 ```rust
-fn component(ctx: Context, props: &Props) -> VNode {
+fn component(cx: Context, props: &Props) -> VNode {
 
 }
 ```
@@ -378,7 +378,7 @@ struct Props {
 
 }
 
-static Component: FC<Props> = |ctx| {
+static Component: FC<Props> = |cx| {
 
 }
 ```
@@ -387,7 +387,7 @@ or
 
 ```rust
 #[fc]
-static Component: FC = |ctx, name: &str| {
+static Component: FC = |cx, name: &str| {
 
 }
 ```
@@ -406,8 +406,8 @@ enum Patch {
 ```
 
 ```rust
-let node_ref = use_node_ref(&ctx);
-use_effect(&ctx, || {
+let node_ref = use_node_ref(&cx);
+use_effect(&cx, || {
 
 }, []);
 div { ref: node_ref,

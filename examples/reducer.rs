@@ -7,12 +7,12 @@
 fn main() {}
 use dioxus::prelude::*;
 
-pub static ExampleReducer: FC<()> = |ctx| {
-    let (state, reduce) = use_reducer(&ctx, PlayerState::new, PlayerState::reduce);
+pub static ExampleReducer: FC<()> = |cx| {
+    let (state, reduce) = use_reducer(&cx, PlayerState::new, PlayerState::reduce);
 
     let is_playing = state.is_playing();
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             h1 {"Select an option"}
             h3 {"The radio is... {is_playing}!"}

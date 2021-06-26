@@ -13,18 +13,18 @@ struct Todo {
     content: String,
 }
 
-static App: FC<()> = |ctx| {
-    use_init_recoil_root(ctx, move |cfg| {});
+static App: FC<()> = |cx| {
+    use_init_recoil_root(cx, move |cfg| {});
 
-    let todos = use_read_family(ctx, &TODOS);
+    let todos = use_read_family(cx, &TODOS);
 
-    // rsx! { in ctx,
+    // rsx! { in cx,
     //     div {
     //         h1 {"Basic Todolist with AtomFamilies in Recoil.rs"}
     //         ul { { todos.keys().map(|id| rsx! { Child { id: *id } }) } }
     //     }
     // }
-    ctx.render(html! {
+    cx.render(html! {
         <a href="#" class="">
             <img class="inline-block h-10 w-10 rounded-full object-cover ring-2 ring-white" src="/images/person/4.jpg" alt="Jade"/>
         </a>
@@ -36,10 +36,10 @@ struct ChildProps {
     id: Uuid,
 }
 
-static Child: FC<ChildProps> = |ctx| {
-    let (todo, set_todo) = use_read_write(ctx, &TODOS.select(&ctx.id));
+static Child: FC<ChildProps> = |cx| {
+    let (todo, set_todo) = use_read_write(cx, &TODOS.select(&cx.id));
 
-    rsx! { in ctx,
+    rsx! { in cx,
         li {
             h1 {"{todo.title}"}
             input { type: "checkbox", name: "scales", checked: "{todo.checked}" }

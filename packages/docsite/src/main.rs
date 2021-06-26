@@ -24,18 +24,18 @@ fn main() {
     */
 }
 
-static App: FC<()> = |ctx| {
-    let (url, set_url) = use_state(&ctx, || "");
+static App: FC<()> = |cx| {
+    let (url, set_url) = use_state(&cx, || "");
 
     let body = match *url {
-        "community" => rsx!(in ctx, Community {}),
-        "tutorial" => rsx!(in ctx, Tutorial {}),
-        "blog" => rsx!(in ctx, Blog {}),
-        "docs" => rsx!(in ctx, Docs {}),
-        _ => rsx!(in ctx, Home {}),
+        "community" => rsx!(in cx, Community {}),
+        "tutorial" => rsx!(in cx, Tutorial {}),
+        "blog" => rsx!(in cx, Blog {}),
+        "docs" => rsx!(in cx, Docs {}),
+        _ => rsx!(in cx, Home {}),
     };
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             NavBar {}
             {body}
@@ -44,8 +44,8 @@ static App: FC<()> = |ctx| {
     })
 };
 
-static NavBar: FC<()> = |ctx| {
-    ctx.render(rsx! {
+static NavBar: FC<()> = |cx| {
+    cx.render(rsx! {
         header {
             a {
                 href: "/"
@@ -99,7 +99,7 @@ static SECTIONS: &[(&str, &[(&str, &str)])] = &[
     ),
 ];
 
-fn Footer(ctx: Context<()>) -> VNode {
+fn Footer(cx: Context<()>) -> VNode {
     let sections = SECTIONS.iter().map(|(section, raw_links)| {
         let links = raw_links.iter().map(|(link_name, href)| {
             rsx! (
@@ -117,7 +117,7 @@ fn Footer(ctx: Context<()>) -> VNode {
         }
     });
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         footer {
             div {
                 div {
@@ -136,8 +136,8 @@ fn Footer(ctx: Context<()>) -> VNode {
     })
 }
 
-const ExternalLinkIcon: FC<()> = |ctx| {
-    ctx.render(html! {
+const ExternalLinkIcon: FC<()> = |cx| {
+    cx.render(html! {
         <svg x="0px" y="0px" viewBox="0 0 100 100" width="15" height="15">
             <path
                 fill="currentColor"

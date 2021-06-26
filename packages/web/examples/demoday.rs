@@ -7,8 +7,8 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App))
 }
 
-fn App(ctx: Context<()>) -> VNode {
-    ctx.render(rsx! {
+fn App(cx: Context<()>) -> VNode {
+    cx.render(rsx! {
         main { class: "dark:bg-gray-800 bg-white relative h-screen"
             NavBar {}
             {(0..10).map(|f| rsx!(Landing { key: "{f}" }))}
@@ -16,8 +16,8 @@ fn App(ctx: Context<()>) -> VNode {
     })
 }
 
-fn NavBar(ctx: Context<()>) -> VNode {
-    ctx.render(rsx!{
+fn NavBar(cx: Context<()>) -> VNode {
+    cx.render(rsx!{
         header { class: "h-24 sm:h-32 flex items-center z-30 w-full"
             div { class: "container mx-auto px-6 flex items-center justify-between"
                 div { class: "uppercase text-gray-800 dark:text-white font-black text-3xl"
@@ -56,8 +56,8 @@ fn NavBar(ctx: Context<()>) -> VNode {
     })
 }
 
-fn Landing(ctx: Context<()>) -> VNode {
-    ctx.render(rsx!{
+fn Landing(cx: Context<()>) -> VNode {
+    cx.render(rsx!{
         div { class: "bg-white dark:bg-gray-800 flex relative z-20 items-center"
             div { class: "container mx-auto px-6 flex flex-col justify-between items-center relative py-8"
                 div { class: "flex flex-col"

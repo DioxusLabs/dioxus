@@ -64,7 +64,7 @@ Also, we want selectors to have internal dependencies.
 ## Async atoms
 
 ```rust
-let (atom, set_atom, modify_atom) = (ATOM.use_read(ctx), ATOM.use_write(ctx), ATOM.use_modify(ctx));
+let (atom, set_atom, modify_atom) = (ATOM.use_read(cx), ATOM.use_write(cx), ATOM.use_modify(cx));
 
 const Title: AsyncAtom<String> = |builder| {
     builder.on_set(|api, new_val| async {
@@ -93,10 +93,10 @@ const ContentCards: SelectorFamily<Uuid, ContentCard> = |api, key| api.on_get_as
     data
 })
 
-static ContentCard: FC<()> = |ctx| {
-    let body =  async match use_recoil_value()(ctx.id).await {
-        Ok(content) => rsx!{in ctx, p {"{content}"} }
-        Err(e) => rsx!{in ctx, p {"Failed to load"}}
+static ContentCard: FC<()> = |cx| {
+    let body =  async match use_recoil_value()(cx.id).await {
+        Ok(content) => rsx!{in cx, p {"{content}"} }
+        Err(e) => rsx!{in cx, p {"Failed to load"}}
     };
 
     rsx!{

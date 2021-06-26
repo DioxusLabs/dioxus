@@ -9,12 +9,12 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example))
 }
 
-static Example: FC<()> = |ctx| {
-    let (name, set_name) = use_state(&ctx, || "...?");
+static Example: FC<()> = |cx| {
+    let (name, set_name) = use_state(&cx, || "...?");
 
     log::debug!("Running component....");
 
-    ctx.render(html! {
+    cx.render(html! {
             <div>
                 <section class="py-12 px-4 text-center">
                     <div class="w-full max-w-2xl mx-auto">

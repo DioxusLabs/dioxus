@@ -19,15 +19,15 @@ struct ListItem {
     age: u32,
 }
 
-fn app(ctx: Context<AppProps>) -> VNode {
-    let (val, set_val) = use_state(&ctx, || 0);
+fn app(cx: Context<AppProps>) -> VNode {
+    let (val, set_val) = use_state(&cx, || 0);
 
-    ctx.render(LazyNodes::new(move |_nodectx| {
-        builder::ElementBuilder::new(_nodectx, "div")
+    cx.render(LazyNodes::new(move |_nodecx| {
+        builder::ElementBuilder::new(_nodecx, "div")
             .iter_child({
-                ctx.items.iter().map(|child| {
+                cx.items.iter().map(|child| {
                     builder::virtual_child(
-                        _nodectx,
+                        _nodecx,
                         ChildItem,
                         ChildProps {
                             item: child.clone(),
@@ -38,8 +38,8 @@ fn app(ctx: Context<AppProps>) -> VNode {
                     )
                 })
             })
-            .iter_child([builder::ElementBuilder::new(_nodectx, "div")
-                .iter_child([builder::text3(_nodectx.bump(), format_args!("{}", val))])
+            .iter_child([builder::ElementBuilder::new(_nodecx, "div")
+                .iter_child([builder::text3(_nodecx.bump(), format_args!("{}", val))])
                 .finish()])
             .finish()
     }))

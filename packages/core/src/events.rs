@@ -44,6 +44,9 @@ pub enum VirtualEvent {
     MouseEvent(Rc<dyn on::MouseEvent>),
     PointerEvent(Rc<dyn on::PointerEvent>),
 
+    // Whenever a task is ready (complete) Dioxus produces this "FiberEvent"
+    FiberEvent { task_id: u16 },
+
     // image event has conflicting method types
     // ImageEvent(event_data::ImageEvent),
     OtherEvent,

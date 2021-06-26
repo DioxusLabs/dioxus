@@ -81,14 +81,14 @@ impl ToTokens for RsxRender {
         } else {
             let childs = &self.roots;
             let children = quote! {
-                ChildrenList::new(__ctx)
+                ChildrenList::new(__cx)
                     #( .add_child(#childs) )*
                     .finish()
             };
             quote! {
                 // #key_token,
                 dioxus::builder::vfragment(
-                    __ctx,
+                    __cx,
                     None,
                     #children
                 )
@@ -96,17 +96,17 @@ impl ToTokens for RsxRender {
         };
 
         match &self.custom_context {
-            // The `in ctx` pattern allows directly rendering
+            // The `in cx` pattern allows directly rendering
             Some(ident) => out_tokens.append_all(quote! {
-                #ident.render(dioxus::prelude::LazyNodes::new(move |__ctx|{
-                    let bump = &__ctx.bump();
+                #ident.render(dioxus::prelude::LazyNodes::new(move |__cx|{
+                    let bump = &__cx.bump();
                     #inner
                 }))
             }),
             // Otherwise we just build the LazyNode wrapper
             None => out_tokens.append_all(quote! {
-                dioxus::prelude::LazyNodes::new(move |__ctx|{
-                    let bump = &__ctx.bump();
+                dioxus::prelude::LazyNodes::new(move |__cx|{
+                    let bump = &__cx.bump();
                     #inner
                  })
             }),

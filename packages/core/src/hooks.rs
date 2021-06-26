@@ -28,8 +28,8 @@ mod use_state_def {
     ///
     /// Usage:
     /// ```ignore
-    /// static Example: FC<()> = |ctx| {
-    ///     let (counter, set_counter) = use_state(&ctx, || 0);
+    /// static Example: FC<()> = |cx| {
+    ///     let (counter, set_counter) = use_state(&cx, || 0);
     ///     let increment = |_| set_couter(counter + 1);
     ///     let decrement = |_| set_couter(counter + 1);
     ///
@@ -43,7 +43,7 @@ mod use_state_def {
     /// }
     /// ```
     pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
-        ctx: &impl Scoped<'a>,
+        cx: &impl Scoped<'a>,
         initial_state_fn: F,
     ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
         struct UseState<T: 'static> {
@@ -52,7 +52,7 @@ mod use_state_def {
             caller: Rc<dyn Fn(T) + 'static>,
         }
 
-        ctx.use_hook(
+        cx.use_hook(
             move || UseState {
                 new_val: Rc::new(RefCell::new(None)),
                 current_val: initial_state_fn(),
@@ -61,7 +61,7 @@ mod use_state_def {
             move |hook| {
                 log::debug!("Use_state set called");
                 let inner = hook.new_val.clone();
-                let scheduled_update = ctx.schedule_update();
+                let scheduled_update = cx.schedule_update();
 
                 // get ownership of the new val and replace the current with the new
                 // -> as_ref -> borrow_mut -> deref_mut -> take
@@ -155,8 +155,8 @@ mod new_use_state_def {
     ///
     /// Usage:
     /// ```ignore
-    /// static Example: FC<()> = |ctx| {
-    ///     let (counter, set_counter) = use_state(&ctx, || 0);
+    /// static Example: FC<()> = |cx| {
+    ///     let (counter, set_counter) = use_state(&cx, || 0);
     ///     let increment = |_| set_couter(counter + 1);
     ///     let decrement = |_| set_couter(counter + 1);
     ///
@@ -170,10 +170,10 @@ mod new_use_state_def {
     /// }
     /// ```
     pub fn use_state_new<'a, 'c, T: 'static, F: FnOnce() -> T>(
-        ctx: &impl Scoped<'a>,
+        cx: &impl Scoped<'a>,
         initial_state_fn: F,
     ) -> &'a UseState<T> {
-        ctx.use_hook(
+        cx.use_hook(
             move || UseState {
                 modifier: Rc::new(RefCell::new(None)),
                 current_val: initial_state_fn(),
@@ -182,7 +182,7 @@ mod new_use_state_def {
             },
             move |hook| {
                 log::debug!("addr of hook: {:#?}", hook as *const _);
-                let scheduled_update = ctx.schedule_update();
+                let scheduled_update = cx.schedule_update();
 
                 // log::debug!("Checking if new value {:#?}", &hook.current_val);
                 // get ownership of the new val and replace the current with the new
@@ -247,10 +247,10 @@ mod use_ref_def {
     /// Modifications to this value do not cause updates to the component
     /// Attach to inner context reference, so context can be consumed
     pub fn use_ref<'a, T: 'static>(
-        ctx: &impl Scoped<'a>,
+        cx: &impl Scoped<'a>,
         initial_state_fn: impl FnOnce() -> T + 'static,
     ) -> &'a RefCell<T> {
-        ctx.use_hook(|| RefCell::new(initial_state_fn()), |state| &*state, |_| {})
+        cx.use_hook(|| RefCell::new(initial_state_fn()), |state| &*state, |_| {})
     }
 }
 
@@ -271,11 +271,11 @@ mod use_reducer_def {
     /// This is behaves almost exactly the same way as React's "use_state".
     ///
     pub fn use_reducer<'a, 'c, State: 'static, Action: 'static>(
-        ctx: &impl Scoped<'a>,
+        cx: &impl Scoped<'a>,
         initial_state_fn: impl FnOnce() -> State,
         _reducer: impl Fn(&mut State, Action),
     ) -> (&'a State, &'a Box<dyn Fn(Action)>) {
-        ctx.use_hook(
+        cx.use_hook(
             move || UseReducer {
                 new_val: Rc::new(RefCell::new(None)),
                 current_val: initial_state_fn(),
@@ -283,7 +283,7 @@ mod use_reducer_def {
             },
             move |hook| {
                 let _inner = hook.new_val.clone();
-                let scheduled_update = ctx.schedule_update();
+                let scheduled_update = cx.schedule_update();
 
                 // get ownership of the new val and replace the current with the new
                 // -> as_ref -> borrow_mut -> deref_mut -> take
@@ -320,9 +320,9 @@ mod use_reducer_def {
         }
 
         // #[allow(unused)]
-        // static Example: FC<()> = |ctx| {
+        // static Example: FC<()> = |cx| {
         //     let (count, reduce) = use_reducer(
-        //         &ctx,
+        //         &cx,
         //         || 0,
         //         |count, action| match action {
         //             Actions::Incr => *count += 1,
@@ -330,7 +330,7 @@ mod use_reducer_def {
         //         },
         //     );
 
-        //     ctx.render(rsx! {
+        //     cx.render(rsx! {
         //         div {
         //             h1 {"Count: {count}"}
         //             button {
@@ -347,8 +347,8 @@ mod use_reducer_def {
     }
 }
 
-pub fn use_is_initialized<P>(ctx: Context<P>) -> bool {
-    let val = use_ref(&ctx, || false);
+pub fn use_is_initialized<P>(cx: Context<P>) -> bool {
+    let val = use_ref(&cx, || false);
     match *val.borrow() {
         true => true,
         false => {

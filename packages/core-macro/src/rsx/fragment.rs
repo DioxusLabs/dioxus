@@ -50,14 +50,14 @@ impl ToTokens for Fragment {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let childs = &self.children;
         let children = quote! {
-            ChildrenList::new(__ctx)
+            ChildrenList::new(__cx)
                 #( .add_child(#childs) )*
                 .finish()
         };
         tokens.append_all(quote! {
             // #key_token,
             dioxus::builder::vfragment(
-                __ctx,
+                __cx,
                 None,
                 #children
             )

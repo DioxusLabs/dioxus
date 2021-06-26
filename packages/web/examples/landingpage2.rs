@@ -13,10 +13,10 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static App: FC<()> = |ctx| {
-    let (contents, set_contents) = use_state(&ctx, || "asd");
+static App: FC<()> = |cx| {
+    let (contents, set_contents) = use_state(&cx, || "asd");
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div  { class: "flex items-center justify-center flex-col"
             div { class: "flex items-center justify-center"
                 div { class: "flex flex-col bg-white rounded p-4 w-full max-w-xs"

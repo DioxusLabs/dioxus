@@ -19,11 +19,11 @@ fn update_title(api: &RecoilApi) {
     }
 }
 
-static App: FC<()> = |ctx| {
-    let title = use_read(&ctx, &TITLE);
-    let next_light = use_recoil_api(&ctx, |api| move |_| update_title(&api));
+static App: FC<()> = |cx| {
+    let title = use_read(&cx, &TITLE);
+    let next_light = use_recoil_api(&cx, |api| move |_| update_title(&api));
 
-    rsx! { in ctx,
+    rsx! { in cx,
         div {
             "{title}"
             button { onclick: {next_light}, "Next light" }

@@ -29,13 +29,14 @@ where
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
 {
-    ctx: &'b NodeCtx<'a>,
+    cx: &'b NodeCtx<'a>,
     key: NodeKey<'a>,
-    tag_name: &'a str,
+    tag_name: &'static str,
+    // tag_name: &'a str,
     listeners: Listeners,
     attributes: Attributes,
     children: Children,
-    namespace: Option<&'a str>,
+    namespace: Option<&'static str>,
 }
 
 impl<'a, 'b>
@@ -70,10 +71,10 @@ impl<'a, 'b>
     /// let my_element_builder = ElementBuilder::new(&b, tag_name);
     /// # fn flip_coin() -> bool { true }
     /// ```
-    pub fn new(ctx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
-        let bump = ctx.bump();
+    pub fn new(cx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
+        let bump = cx.bump();
         ElementBuilder {
-            ctx,
+            cx,
             key: NodeKey::NONE,
             tag_name,
             listeners: bumpalo::collections::Vec::new_in(bump),
@@ -124,7 +125,7 @@ where
         L: 'a + AsRef<[Listener<'a>]>,
     {
         ElementBuilder {
-            ctx: self.ctx,
+            cx: self.cx,
             key: self.key,
             tag_name: self.tag_name,
             listeners,
@@ -163,7 +164,7 @@ where
         A: 'a + AsRef<[Attribute<'a>]>,
     {
         ElementBuilder {
-            ctx: self.ctx,
+            cx: self.cx,
             key: self.key,
             tag_name: self.tag_name,
             listeners: self.listeners,
@@ -202,7 +203,7 @@ where
         C: 'a + AsRef<[VNode<'a>]>,
     {
         ElementBuilder {
-            ctx: self.ctx,
+            cx: self.cx,
             key: self.key,
             tag_name: self.tag_name,
             listeners: self.listeners,
@@ -227,9 +228,9 @@ where
     ///     .finish();
     /// ```
     #[inline]
-    pub fn namespace(self, namespace: Option<&'a str>) -> Self {
+    pub fn namespace(self, namespace: Option<&'static str>) -> Self {
         ElementBuilder {
-            ctx: self.ctx,
+            cx: self.cx,
             key: self.key,
             tag_name: self.tag_name,
             listeners: self.listeners,
@@ -281,7 +282,7 @@ where
             Some(static_str) => static_str,
             None => {
                 use bumpalo::core_alloc::fmt::Write;
-                let mut s = bumpalo::collections::String::new_in(self.ctx.bump());
+                let mut s = bumpalo::collections::String::new_in(self.cx.bump());
                 s.write_fmt(args).unwrap();
                 s.into_bump_str()
             }
@@ -307,7 +308,7 @@ where
     /// ```
     #[inline]
     pub fn finish(self) -> VNode<'a> {
-        let bump = self.ctx.bump();
+        let bump = self.cx.bump();
 
         let children: &'a Children = bump.alloc(self.children);
         let children: &'a [VNode<'a>] = children.as_ref();
@@ -357,11 +358,11 @@ where
     ///     .finish();
     /// ```
     pub fn on(self, event: &'static str, callback: impl Fn(VirtualEvent) + 'a) -> Self {
-        let bump = &self.ctx.bump();
+        let bump = &self.cx.bump();
         let listener = Listener {
             event,
             callback: bump.alloc(callback),
-            scope: self.ctx.scope_ref.arena_idx,
+            scope: self.cx.scope_ref.arena_idx,
             mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
         };
         self.add_listener(listener)
@@ -371,15 +372,15 @@ where
         self.listeners.push(listener);
 
         // bump the context id forward
-        let id = self.ctx.listener_id.get();
-        self.ctx.listener_id.set(id + 1);
+        let id = self.cx.listener_id.get();
+        self.cx.listener_id.set(id + 1);
 
         // Add this listener to the context list
         // This casts the listener to a self-referential pointer
         // This is okay because the bump arena is stable
         self.listeners.last().map(|g| {
             let r = unsafe { std::mem::transmute::<&Listener<'a>, &Listener<'static>>(g) };
-            self.ctx
+            self.cx
                 .scope_ref
                 .listeners
                 .borrow_mut()
@@ -413,7 +414,7 @@ where
             Some(static_str) => static_str,
             None => {
                 use bumpalo::core_alloc::fmt::Write;
-                let mut s = bumpalo::collections::String::new_in(self.ctx.bump());
+                let mut s = bumpalo::collections::String::new_in(self.cx.bump());
                 s.write_fmt(args).unwrap();
                 s.into_bump_str()
             }
@@ -501,7 +502,7 @@ where
     pub fn iter_child(mut self, nodes: impl IntoIterator<Item = impl IntoVNode<'a>>) -> Self {
         let len_before = self.children.len();
         for item in nodes {
-            let child = item.into_vnode(&self.ctx);
+            let child = item.into_vnode(&self.cx);
             self.children.push(child);
         }
         if cfg!(debug_assertions) {
@@ -531,20 +532,20 @@ impl<'a> IntoIterator for VNode<'a> {
     }
 }
 impl<'a> IntoVNode<'a> for VNode<'a> {
-    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
         self
     }
 }
 
 impl<'a> IntoVNode<'a> for &VNode<'a> {
-    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
         // cloning is cheap since vnodes are just references into bump arenas
         self.clone()
     }
 }
 
 pub trait IntoVNode<'a> {
-    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a>;
+    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a>;
 }
 
 pub trait VNodeBuilder<'a, G>: IntoIterator<Item = G>
@@ -590,8 +591,8 @@ impl<'a, G> IntoVNode<'a> for LazyNodes<'a, G>
 where
     G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
 {
-    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
-        (self.inner)(ctx)
+    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
+        (self.inner)(cx)
     }
 }
 
@@ -608,14 +609,14 @@ where
 }
 
 impl<'a> IntoVNode<'a> for () {
-    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
         todo!();
         VNode::Suspended
     }
 }
 
 impl<'a> IntoVNode<'a> for Option<()> {
-    fn into_vnode(self, ctx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
         todo!();
         VNode::Suspended
     }
@@ -679,7 +680,7 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 }
 
 pub fn virtual_child<'a, T: Properties + 'a>(
-    ctx: &NodeCtx<'a>,
+    cx: &NodeCtx<'a>,
     f: FC<T>,
     props: T,
     key: Option<&'a str>, // key: NodeKey<'a>,
@@ -689,37 +690,37 @@ pub fn virtual_child<'a, T: Properties + 'a>(
     // might override it with the props macro
     // todo!()
     VNode::Component(
-        ctx.bump()
-            .alloc(crate::nodes::VComponent::new(ctx, f, props, key, children)),
-        // ctx.bump()
+        cx.bump()
+            .alloc(crate::nodes::VComponent::new(cx, f, props, key, children)),
+        // cx.bump()
         //     .alloc(crate::nodes::VComponent::new(f, props, key)),
     )
 }
 
 pub fn vfragment<'a>(
-    ctx: &NodeCtx<'a>,
+    cx: &NodeCtx<'a>,
     key: Option<&'a str>, // key: NodeKey<'a>,
     children: &'a [VNode<'a>],
 ) -> VNode<'a> {
-    VNode::Fragment(ctx.bump().alloc(VFragment::new(key, children)))
+    VNode::Fragment(cx.bump().alloc(VFragment::new(key, children)))
 }
 
 pub struct ChildrenList<'a, 'b> {
-    ctx: &'b NodeCtx<'a>,
+    cx: &'b NodeCtx<'a>,
     children: bumpalo::collections::Vec<'a, VNode<'a>>,
 }
 
 impl<'a, 'b> ChildrenList<'a, 'b> {
-    pub fn new(ctx: &'b NodeCtx<'a>) -> Self {
+    pub fn new(cx: &'b NodeCtx<'a>) -> Self {
         Self {
-            ctx,
-            children: bumpalo::collections::Vec::new_in(ctx.bump()),
+            cx,
+            children: bumpalo::collections::Vec::new_in(cx.bump()),
         }
     }
 
     pub fn add_child(mut self, nodes: impl IntoIterator<Item = impl IntoVNode<'a>>) -> Self {
         for item in nodes {
-            let child = item.into_vnode(&self.ctx);
+            let child = item.into_vnode(&self.cx);
             self.children.push(child);
         }
         self

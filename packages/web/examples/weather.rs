@@ -9,8 +9,8 @@ fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx| {
-        ctx.render(html! {
+    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|cx| {
+        cx.render(html! {
             <div>
                 <div class="flex items-center justify-center flex-col">
                     <div class="flex items-center justify-center">

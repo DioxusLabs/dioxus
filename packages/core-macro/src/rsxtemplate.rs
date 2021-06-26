@@ -46,7 +46,7 @@ impl Parse for RsxTemplate {
 
         // let new_stream = TokenStream::from(t.to_s)
 
-        // let ctx: Ident = s.parse()?;
+        // let cx: Ident = s.parse()?;
         // s.parse::<Token![,]>()?;
         // if elements are in an array, return a bumpalo::collections::Vec rather than a Node.
         // let kind = if s.peek(token::Bracket) {
@@ -72,8 +72,8 @@ impl ToTokens for RsxTemplate {
 
         // // create a lazy tree that accepts a bump allocator
         // let final_tokens = quote! {
-        //     dioxus::prelude::LazyNodes::new(move |ctx| {
-        //         let bump = &ctx.bump();
+        //     dioxus::prelude::LazyNodes::new(move |cx| {
+        //         let bump = &cx.bump();
 
         //         #new_toks
         //     })

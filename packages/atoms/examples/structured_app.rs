@@ -2,7 +2,7 @@ fn main() {}
 
 use dioxus_core::prelude::*;
 
-static App: FC<()> = |ctx| {
+static App: FC<()> = |cx| {
     //
     use_initialize_app()
 };

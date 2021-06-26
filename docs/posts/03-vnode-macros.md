@@ -12,8 +12,8 @@ You'll want to write RSX where you can, and in a future release we'll have a too
 
 ```rust
 #[fc]
-fn Example(ctx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
-    ctx.render(html! {
+fn Example(cx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
+    cx.render(html! {
         <div>
             <p> "Hello, {name}!" </p>
             <p> "Status: {pending}!" </p>
@@ -33,8 +33,8 @@ It's also a bit easier on the eyes 🙂.
 
 ```rust
 #[fc]
-fn Example(ctx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
-    ctx.render(rsx! {
+fn Example(cx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
+    cx.render(rsx! {
         div {
             p {"Hello, {name}!"}
             p {"Status: {pending}!"}
@@ -58,11 +58,11 @@ Commas are entirely optional, but might be useful to delineate between elements 
 The `render` function provides an **extremely efficient** allocator for VNodes and text, so try not to use the `format!` macro in your components. Rust's default `ToString` methods pass through the global allocator, but all text in components is allocated inside a manually-managed Bump arena.
 
 ```rust
-static Example: FC<()> = |ctx| {
+static Example: FC<()> = |cx| {
 
     let text = "example";
 
-    ctx.render(rsx!{
+    cx.render(rsx!{
         div {
             h1 { "Example" },
 
@@ -114,9 +114,9 @@ static Example: FC<()> = |ctx| {
                 // rsx! is lazy, and the underlying closures cannot have the same type
                 // Rendering produces the VNode type
                 {match rand::gen_range::<i32>(1..3) {
-                    1 => rsx!(in ctx, h1 { "big" })
-                    2 => rsx!(in ctx, h2 { "medium" })
-                    _ => rsx!(in ctx, h3 { "small" })
+                    1 => rsx!(in cx, h1 { "big" })
+                    2 => rsx!(in cx, h2 { "medium" })
+                    _ => rsx!(in cx, h3 { "small" })
                 }}
 
                 // Optionals
@@ -127,12 +127,12 @@ static Example: FC<()> = |ctx| {
 
                 // Child nodes
                 // Returns &[VNode]
-                {ctx.children()}
+                {cx.children()}
 
                 // Duplicating nodes
                 // Clones the nodes by reference, so they are literally identical
                 {{
-                    let node = rsx!(in ctx, h1{ "TopNode" });
+                    let node = rsx!(in cx, h1{ "TopNode" });
                     (0..10).map(|_| node.clone())
                 }}
 

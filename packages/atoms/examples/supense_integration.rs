@@ -13,23 +13,23 @@ use std::future::Future;
 
 use dioxus_core::prelude::*;
 
-static App: FC<()> = |ctx| {
+static App: FC<()> = |cx| {
     //
 
     let title = use_async_atom();
-    let title_card = suspend(&ctx, title, move |val| {
+    let title_card = suspend(&cx, title, move |val| {
         //
-        rsx!(in ctx, div {
+        rsx!(in cx, div {
             h3 { "{val}" }
         })
     });
 
     // let fut = (use_async_atom(), use_async_atom());
-    // let title_card2 = ctx.suspend(fut, move |(text, text2)| {
-    //     ctx.render(rsx!( h3 { "{text}" } ))
+    // let title_card2 = cx.suspend(fut, move |(text, text2)| {
+    //     cx.render(rsx!( h3 { "{text}" } ))
     // });
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             {title_card}
             // {title_card2}

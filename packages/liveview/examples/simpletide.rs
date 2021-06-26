@@ -27,13 +27,13 @@ mod client {
         Ok(dioxus_web::WebsysRenderer::start(APP).await)
     }
 
-    static APP: FC<()> = |ctx| {
+    static APP: FC<()> = |cx| {
         todo!()
-        // let (selected_stream, set_stream) = use_state(&ctx, || SelectedStream::Football);
+        // let (selected_stream, set_stream) = use_state(&cx, || SelectedStream::Football);
 
         // let opts = SelectedStream::iter().map(|name| rsx! { option { "{name}", value: "{name}" } });
 
-        // ctx.render(rsx! {
+        // cx.render(rsx! {
         //     div {
         //         h1 { "Tide basic CRUD app" }
         //         h2 { "Chosen stream: {selected_stream}" }
@@ -102,27 +102,27 @@ mod server {
         selected_stream: SelectedStream,
     }
 
-    static STREAM_LIST: FC<SreamListProps> = |ctx| {
+    static STREAM_LIST: FC<SreamListProps> = |cx| {
         //
-        let g = match ctx.selected_stream {
-            SelectedStream::Football => ctx.render(rsx! {
+        let g = match cx.selected_stream {
+            SelectedStream::Football => cx.render(rsx! {
                 li {
                     "watch football!"
                 }
             }),
-            SelectedStream::Hockey => ctx.render(rsx! {
+            SelectedStream::Hockey => cx.render(rsx! {
                 li {
                     "watch football!"
                 }
             }),
-            SelectedStream::Socker => ctx.render(rsx! {
+            SelectedStream::Socker => cx.render(rsx! {
                 li {
                     "watch football!"
                 }
             }),
         };
 
-        ctx.render(rsx! {
+        cx.render(rsx! {
             div {
 
             }

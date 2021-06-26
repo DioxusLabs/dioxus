@@ -17,8 +17,8 @@ fn main() {
     .expect("Webview finished");
 }
 
-static Example: FC<()> = |ctx| {
-    ctx.render(html! {
+static Example: FC<()> = |cx| {
+    cx.render(html! {
         <div>
         <svg class="octicon octicon-star v-align-text-bottom"
         viewBox="0 0 14 16" version="1.1"
@@ -36,8 +36,8 @@ static Example: FC<()> = |ctx| {
         </div>
     })
 };
-// static Example: FC<()> = |ctx| {
-//     ctx.render(rsx! {
+// static Example: FC<()> = |cx| {
+//     cx.render(rsx! {
 //         div  {
 //             class: "flex items-center justify-center flex-col"
 //             div {

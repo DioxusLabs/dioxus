@@ -33,10 +33,10 @@ impl RecoilContext<()> {
         // let (set, get) = (self.set, self.get);
 
         // TOODS
-        //     .get(&ctx)
+        //     .get(&cx)
         //     .iter()
         //     .filter(|(k, v)| v.checked)
-        //     .map(|(k, v)| TODOS.remove(&ctx, k));
+        //     .map(|(k, v)| TODOS.remove(&cx, k));
     }
 
     pub fn set_filter(&self, filter: &FilterState) {}

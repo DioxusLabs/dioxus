@@ -25,10 +25,10 @@ struct ExampleProps {
     initial_name: &'static str,
 }
 
-static Example: FC<ExampleProps> = |ctx| {
-    let name = use_state_new(&ctx, move || ctx.initial_name);
+static Example: FC<ExampleProps> = |cx| {
+    let name = use_state_new(&cx, move || cx.initial_name);
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             class: "py-12 px-4 text-center w-full max-w-2xl mx-auto"
             span {
@@ -55,12 +55,12 @@ struct ButtonProps<'src, F: Fn(Rc<dyn MouseEvent>)> {
     handler: F,
 }
 
-fn CustomButton<'a, F: Fn(MouseEvent)>(ctx: Context<'a, ButtonProps<'a, F>>) -> VNode {
-    ctx.render(rsx!{
+fn CustomButton<'a, F: Fn(MouseEvent)>(cx: Context<'a, ButtonProps<'a, F>>) -> VNode {
+    cx.render(rsx!{
         button {  
             class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
-            onmouseover: {&ctx.handler}
-            "{ctx.name}"
+            onmouseover: {&cx.handler}
+            "{cx.name}"
         }
     })
 }
@@ -75,10 +75,10 @@ impl<F: Fn(MouseEvent)> PartialEq for ButtonProps<'_, F> {
 struct PlaceholderProps {
     val: &'static str,
 }
-fn Placeholder(ctx: Context<PlaceholderProps>) -> VNode {
-    ctx.render(rsx! {
+fn Placeholder(cx: Context<PlaceholderProps>) -> VNode {
+    cx.render(rsx! {
         div {
-            "child: {ctx.val}"
+            "child: {cx.val}"
         }
     })
 }

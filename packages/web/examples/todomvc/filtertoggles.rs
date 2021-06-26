@@ -2,9 +2,9 @@ use crate::recoil;
 use crate::state::{FilterState, TODOS};
 use dioxus_core::prelude::*;
 
-pub fn FilterToggles(ctx: Context<()>) -> VNode {
-    let reducer = recoil::use_callback(&ctx, || ());
-    let items_left = recoil::use_atom_family(&ctx, &TODOS, uuid::Uuid::new_v4());
+pub fn FilterToggles(cx: Context<()>) -> VNode {
+    let reducer = recoil::use_callback(&cx, || ());
+    let items_left = recoil::use_atom_family(&cx, &TODOS, uuid::Uuid::new_v4());
 
     let toggles = [
         ("All", "", FilterState::All),
@@ -27,7 +27,7 @@ pub fn FilterToggles(ctx: Context<()>) -> VNode {
     let item_text = "";
     let items_left = "";
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         footer {
             span {
                 strong {"{items_left}"}

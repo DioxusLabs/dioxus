@@ -11,7 +11,7 @@ const HeroContent: [(&'static str, &'static str); 3] = [
 
 const SnippetHighlights: &'static str = include_str!("./../snippets.md");
 
-pub static Home: FC<()> = |ctx| {
+pub static Home: FC<()> = |cx| {
     let hero = HeroContent.iter().map(|(title, body)| {
         rsx! {
             div {
@@ -20,9 +20,9 @@ pub static Home: FC<()> = |ctx| {
             }
         }
     });
-    let snippets: Vec<VNode> = crate::utils::markdown_to_snippet(ctx, SnippetHighlights);
+    let snippets: Vec<VNode> = crate::utils::markdown_to_snippet(cx, SnippetHighlights);
 
-    rsx! { in ctx,
+    rsx! { in cx,
         div {
             header {
                 // Hero

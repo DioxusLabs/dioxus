@@ -5,8 +5,8 @@ fn main() {
     wasm_bindgen_futures::spawn_local(dioxus_web::WebsysRenderer::start(App))
 }
 
-fn App(ctx: Context<()>) -> VNode {
-    ctx.render(rsx! {
+fn App(cx: Context<()>) -> VNode {
+    cx.render(rsx! {
         div { "Hello, world!" }
     })
 }

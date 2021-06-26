@@ -2,10 +2,10 @@ fn main() {}
 
 use dioxus_core::prelude::*;
 
-static Example: FC<()> = |ctx| {
-    ctx.render(dioxus_core::prelude::LazyNodes::new(move |ctx| {
-        let bump = ctx.bump();
-        dioxus_core::builder::ElementBuilder::new(ctx, "h1")
+static Example: FC<()> = |cx| {
+    cx.render(dioxus_core::prelude::LazyNodes::new(move |cx| {
+        let bump = cx.bump();
+        dioxus_core::builder::ElementBuilder::new(cx, "h1")
             .children([dioxus_core::builder::text3(bump, format_args!("hello"))])
             .finish()
     }))
@@ -14,13 +14,13 @@ static Example: FC<()> = |ctx| {
 struct Props {
     text: String,
 }
-static Example2: FC<Props> = |ctx| {
-    ctx.render(dioxus_core::prelude::LazyNodes::new(move |__ctx| {
-        let bump = __ctx.bump();
-        dioxus_core::builder::ElementBuilder::new(__ctx, "h1")
+static Example2: FC<Props> = |cx| {
+    cx.render(dioxus_core::prelude::LazyNodes::new(move |__cx| {
+        let bump = __cx.bump();
+        dioxus_core::builder::ElementBuilder::new(__cx, "h1")
             .children([dioxus_core::builder::text3(
                 bump,
-                format_args!("{}", ctx.props.text),
+                format_args!("{}", cx.props.text),
             )])
             .finish()
     }))

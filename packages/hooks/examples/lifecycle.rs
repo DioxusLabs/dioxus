@@ -1,5 +1,3 @@
-
-
 fn main() {
     // let mut s = Context { props: &() };
     // let g = Component(&mut s);
@@ -15,9 +13,9 @@ fn main() {
 //     Remvoe,
 // }
 
-// static Component: FC<()> = |ctx| {
+// static Component: FC<()> = |cx| {
 //     let (tasks, dispatch) = use_reducer(
-//         ctx,
+//         cx,
 //         || CompState { tasks: Vec::new() },
 //         |state, action: Actions| match action {
 //             Actions::Add => state,
@@ -48,7 +46,7 @@ fn main() {
 // };
 
 // fn use_reducer<Props, State, Action>(
-//     ctx: &mut Context<Props>,
+//     cx: &mut Context<Props>,
 //     init: fn() -> State,
 //     reducer: fn(State, Action) -> State,
 // ) -> (State, impl Fn(Action)) {

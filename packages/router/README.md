@@ -9,11 +9,11 @@ Using the router should feel similar to tide's routing framework where an "addre
 Here's an example of how to use the router hook:
 
 ```rust
-static App: FC<()> = |ctx| {
+static App: FC<()> = |cx| {
 
     // Route returns the associated VNodes
     // This hook re-fires when the route changes
-    let route = use_router(ctx, |router| {
+    let route = use_router(cx, |router| {
         router.at("/").get(|path| {
             rsx!{ <LandingPage /> }
         });
@@ -27,7 +27,7 @@ static App: FC<()> = |ctx| {
         });
     });
 
-    ctx.render(rsx!{
+    cx.render(rsx!{
         div {
             Navbar {}
             {route}

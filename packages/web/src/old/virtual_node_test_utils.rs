@@ -147,10 +147,10 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
 
-fn Component(ctx: Context, props: ()) -> VNode {
-    let user_data = use_sql_query(&ctx, USER_DATA_QUERY);
+fn Component(cx: Context, props: ()) -> VNode {
+    let user_data = use_sql_query(&cx, USER_DATA_QUERY);
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         h1 { "Hello, {username}"}
         button {
             "Delete user"

@@ -53,23 +53,23 @@ This atom of state is initialized with a value of `"Green"`. The atom that is re
 This is then later used in components like so:
 
 ```rust
-fn App(ctx: Context<()>) -> VNode {
+fn App(cx: Context<()>) -> VNode {
     // The Atom root must be initialized at the top of the application before any use_Atom hooks
-    dirac::intialize_root(&ctx, |_| {});
+    dirac::intialize_root(&cx, |_| {});
 
-    let color = dirac::use_read(&ctx, &LightColor);
+    let color = dirac::use_read(&cx, &LightColor);
 
-    ctx.render(rsx!( h1 {"Color of light: {color}"} ))
+    cx.render(rsx!( h1 {"Color of light: {color}"} ))
 }
 ```
 
 Atoms are considered "Writable" objects since any consumer may also set the Atom's value with their own:
 
 ```rust
-fn App(ctx: Context<()>) -> VNode {
-    let color = dirac::use_read(&ctx, &LightColor);
-    let set_color = dirac::use_write(&ctx, &LightColor);
-    ctx.render(rsx!(
+fn App(cx: Context<()>) -> VNode {
+    let color = dirac::use_read(&cx, &LightColor);
+    let set_color = dirac::use_write(&cx, &LightColor);
+    cx.render(rsx!(
         h1 { "Color: {color}" }
         button { onclick: move |_| set_color("red"), "red" }
         button { onclick: move |_| set_color("yellow"), "yellow" }
@@ -81,9 +81,9 @@ fn App(ctx: Context<()>) -> VNode {
 "Reading" a value with use_read subscribes that component to any changes to that value while "Writing" a value does not. It's a good idea to use `write-only` whenever it makes sense to prevent unnecessary evaluations. Both `read` and `write` may be combined together to provide a `use_state` style hook.
 
 ```rust
-fn App(ctx: Context<()>) -> VNode {
-    let (color, set_color) = dirac::use_read_write(&ctx, &Light);
-    ctx.render(rsx!(
+fn App(cx: Context<()>) -> VNode {
+    let (color, set_color) = dirac::use_read_write(&cx, &Light);
+    cx.render(rsx!(
         h1 { "Color: {color}" }
         button { onclick: move |_| set_color("red"), "red" }
     ))
@@ -154,9 +154,9 @@ const CloudRatings: AtomFamily<&str, i32> = |api| {
 Whenever you `select` on a `Family`, the ID of the entry is tracked. Other subscribers will only be updated if they too select the same family with the same key and that value is updated. Otherwise, these subscribers will never re-render on an "insert", "remove", or "update" of the collection. You could easily implement this yourself with Atoms, immutable datastructures, and selectors, but our implementation is more efficient and first-class.
 
 ```rust
-fn App(ctx: Context<()>) -> VNode {
-    let (rating, set_rating) = dirac::use_read_write(ctx, CloudRatings.select("AWS"));
-    ctx.render(rsx!(
+fn App(cx: Context<()>) -> VNode {
+    let (rating, set_rating) = dirac::use_read_write(cx, CloudRatings.select("AWS"));
+    cx.render(rsx!(
         h1 { "AWS rating: {rating}" }
         button { onclick: move |_| set_rating((rating + 1) % 5), "incr" }
     ))

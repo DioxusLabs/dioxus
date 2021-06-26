@@ -13,8 +13,8 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static App: FC<()> = |ctx| {
-    ctx.render(rsx! {
+static App: FC<()> = |cx| {
+    cx.render(rsx! {
         div {
             h1 {"hello"}
             C1 {}
@@ -23,23 +23,23 @@ static App: FC<()> = |ctx| {
     })
 };
 
-static C1: FC<()> = |ctx| {
-    ctx.render(rsx! {
+static C1: FC<()> = |cx| {
+    cx.render(rsx! {
         button {
             "numba 1"
         }
     })
 };
 
-static C2: FC<()> = |ctx| {
-    ctx.render(rsx! {
+static C2: FC<()> = |cx| {
+    cx.render(rsx! {
         button {
             "numba 2"
         }
     })
 };
 
-static DocExamples: FC<()> = |ctx| {
+static DocExamples: FC<()> = |cx| {
     //
 
     let is_ready = false;
@@ -61,7 +61,7 @@ static DocExamples: FC<()> = |ctx| {
     //     }
     // }
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             { is_ready.then(|| rsx!{ h1 {"We are ready!"} }) }
         }

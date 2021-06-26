@@ -8,8 +8,8 @@ Dioxus-webview is an attempt at making a simpler "Tauri" where creating desktop 
 // main.rs
 #[async_std::main]
 async fn main() {
-   dioxus_webview::new(|ctx| {
-       let (count, set_count) = use_state(&ctx, || 0);
+   dioxus_webview::new(|cx| {
+       let (count, set_count) = use_state(&cx, || 0);
        html! {
             <div>
                 <h1> "Dioxus Desktop Demo" </h1>

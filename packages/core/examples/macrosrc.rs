@@ -34,7 +34,7 @@ fn main() {}
 //     2: Trees are not evaluated
 
 //     */
-//     let example_caller = move |ctx: &Bump| {
+//     let example_caller = move |cx: &Bump| {
 //         todo!()
 //         // let p = Props { blah: true, text };
 //         // let c = Context { props: &p };
@@ -57,11 +57,11 @@ fn main() {}
 //     }
 // }
 
-// fn component<'a>(ctx: Context<'a, Props>) -> VNode<'a> {
+// fn component<'a>(cx: Context<'a, Props>) -> VNode<'a> {
 //     // Write asynchronous rendering code that immediately returns a "suspended" VNode
 //     // The concurrent API will then progress this component when the future finishes
 //     // You can suspend the entire component, or just parts of it
-//     let product_list = ctx.suspend(async {
+//     let product_list = cx.suspend(async {
 //         // Suspend the rendering that completes when the future is done
 //         match fetch_data().await {
 //             Ok(data) => html! { <div> "success!" </div>},
@@ -70,7 +70,7 @@ fn main() {}
 //     });
 
 //     // todo!()
-//     ctx.render(html! {
+//     cx.render(html! {
 //         <div>
 //             <h1> "Products" </h1>
 //             <button> "hello!" </button>
@@ -82,27 +82,27 @@ fn main() {}
 //     })
 // }
 
-// fn BuilderComp<'a>(ctx: Context<'a, Props>) -> VNode<'a> {
+// fn BuilderComp<'a>(cx: Context<'a, Props>) -> VNode<'a> {
 //     // VNodes can be constructed via a builder or the html! macro
 //     // However, both of these are "lazy" - they need to be evaluated (aka, "viewed")
 //     // We can "view" them with Context for ultimate speed while inside components
-//     ctx.render(|bump| {
+//     cx.render(|bump| {
 //         div(bump)
 //             .attr("class", "edit")
 //             .child(text("Hello"))
-//             .child(text(ctx.ctx.text.as_ref()))
+//             .child(text(cx.cx.text.as_ref()))
 //             .finish()
 //     })
 // }
 
 // #[fc]
-// fn EffcComp(ctx: Context, name: &str) -> VNode {
+// fn EffcComp(cx: Context, name: &str) -> VNode {
 //     // VNodes can be constructed via a builder or the html! macro
 //     // However, both of these are "lazy" - they need to be evaluated (aka, "viewed")
 //     // We can "view" them with Context for ultimate speed while inside components
 //     // use "phase" style allocation;
 
-//     ctx.render(html! {
+//     cx.render(html! {
 //         <div>
 //             // your template goes here
 //             // feel free to directly use "name"
@@ -110,8 +110,8 @@ fn main() {}
 //     })
 // }
 
-// fn FullySuspended<'a>(ctx: &'a Context<Props>) -> VNode<'a> {
-//     ctx.suspend(async {
+// fn FullySuspended<'a>(cx: &'a Context<Props>) -> VNode<'a> {
+//     cx.suspend(async {
 //         let i: i32 = 0;
 
 //         // full suspended works great with just returning VNodes!
@@ -123,7 +123,7 @@ fn main() {}
 //             _ => html! { <div> </div> },
 //         };
 
-//         if ctx.ctx.blah {
+//         if cx.cx.blah {
 //             html! { <div> </div> }
 //         } else {
 //             tex

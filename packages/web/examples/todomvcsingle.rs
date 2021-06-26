@@ -72,10 +72,10 @@ impl TodoManager {
     }
 }
 
-pub fn TodoList(ctx: Context<()>) -> VNode {
-    let draft = use_state_new(&ctx, || "".to_string());
-    let todos = use_read(&ctx, &TODO_LIST);
-    let filter = use_read(&ctx, &FILTER);
+pub fn TodoList(cx: Context<()>) -> VNode {
+    let draft = use_state_new(&cx, || "".to_string());
+    let todos = use_read(&cx, &TODO_LIST);
+    let filter = use_read(&cx, &FILTER);
 
     let todolist = todos
         .values()
@@ -91,7 +91,7 @@ pub fn TodoList(ctx: Context<()>) -> VNode {
             })
         });
 
-    rsx! { in ctx,
+    rsx! { in cx,
         div {
             header {
                 class: "header"
@@ -116,11 +116,11 @@ pub struct TodoEntryProps {
     id: Uuid,
 }
 
-pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> VNode {
-    let (is_editing, set_is_editing) = use_state(&ctx, || false);
-    let todo = use_read(&ctx, &TODO_LIST).get(&ctx.id).unwrap();
+pub fn TodoEntry(cx: Context, props: &TodoEntryProps) -> VNode {
+    let (is_editing, set_is_editing) = use_state(&cx, || false);
+    let todo = use_read(&cx, &TODO_LIST).get(&cx.id).unwrap();
 
-    ctx.render(rsx! (
+    cx.render(rsx! (
         li {
             "{todo.id}"
             input {
@@ -137,9 +137,9 @@ pub fn TodoEntry(ctx: Context, props: &TodoEntryProps) -> VNode {
     ))
 }
 
-pub fn FilterToggles(ctx: Context<()>) -> VNode {
-    let reducer = TodoManager(use_recoil_api(ctx));
-    let items_left = use_read(ctx, &TODOS_LEFT);
+pub fn FilterToggles(cx: Context<()>) -> VNode {
+    let reducer = TodoManager(use_recoil_api(cx));
+    let items_left = use_read(cx, &TODOS_LEFT);
 
     let toggles = [
         ("All", "", FilterState::All),
@@ -164,7 +164,7 @@ pub fn FilterToggles(ctx: Context<()>) -> VNode {
         _ => "items",
     };
 
-    rsx! { in ctx,
+    rsx! { in cx,
         footer {
             span {
                 strong {"{items_left}"}
@@ -178,8 +178,8 @@ pub fn FilterToggles(ctx: Context<()>) -> VNode {
     }
 }
 
-pub fn Footer(ctx: Context<()>) -> VNode {
-    rsx! { in ctx,
+pub fn Footer(cx: Context<()>) -> VNode {
+    rsx! { in cx,
         footer { class: "info"
             p {"Double-click to edit a todo"}
             p {
@@ -196,9 +196,9 @@ pub fn Footer(ctx: Context<()>) -> VNode {
 
 const APP_STYLE: &'static str = include_str!("./todomvc/style.css");
 
-fn App(ctx: Context<()>) -> VNode {
-    use_init_recoil_root(ctx, |_| {});
-    rsx! { in ctx,
+fn App(cx: Context<()>) -> VNode {
+    use_init_recoil_root(cx, |_| {});
+    rsx! { in cx,
         div { id: "app"
             TodoList {}
             Footer {}

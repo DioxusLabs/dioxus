@@ -53,11 +53,11 @@ fn html_render(
 
 #[test]
 fn test_serialize() {
-    let mut dom = VirtualDom::new(|ctx| {
+    let mut dom = VirtualDom::new(|cx| {
         //
         //
         //
-        ctx.render(rsx! {
+        cx.render(rsx! {
             div {
                 title: "About W3Schools"
                 {(0..20).map(|f| rsx!{

@@ -10,9 +10,9 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
 
-static Example: FC<()> = |ctx| {
+static Example: FC<()> = |cx| {
     let nodes = (0..15).map(|f| rsx! (li { key: "{f}", "{f}"}));
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             span {
                 class: "px-2 py-1 flex w-36 mt-4 items-center text-xs rounded-md font-semibold text-yellow-500 bg-yellow-100"

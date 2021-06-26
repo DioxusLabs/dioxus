@@ -32,7 +32,7 @@
 //! ```
 //! use dioxus::prelude::*;
 //!
-//! fn Example(ctx: Context<()>) -> VNode {
+//! fn Example(cx: Context<()>) -> VNode {
 //!     html! { <div> "Hello, world!" </div> }
 //! }
 //! ```
@@ -44,8 +44,8 @@
 //! #[derive(Props)]
 //! struct Props { name: String }
 //!
-//! fn Example(ctx: Context<Props>) -> VNode {
-//!     html! { <div> "Hello {ctx.props.name}!" </div> }
+//! fn Example(cx: Context<Props>) -> VNode {
+//!     html! { <div> "Hello {cx.props.name}!" </div> }
 //! }
 //! ```
 //!
@@ -59,8 +59,8 @@
 //! #[derive(Props)]
 //! struct Props<'a> { name: &'a str }
 //!
-//! fn Example<'a>(ctx: Context<'a, Props<'a>>) -> VNode {
-//!     html! { <div> "Hello {ctx.props.name}!" </div> }
+//! fn Example<'a>(cx: Context<'a, Props<'a>>) -> VNode {
+//!     html! { <div> "Hello {cx.props.name}!" </div> }
 //! }
 //! ```
 //!
@@ -74,8 +74,8 @@
 //! #[derive(Props)]
 //! struct Props { name: String }
 //!
-//! static Example: FC<Props> = |ctx| {
-//!     html! { <div> "Hello {ctx.props.name}!" </div> }
+//! static Example: FC<Props> = |cx| {
+//!     html! { <div> "Hello {cx.props.name}!" </div> }
 //! }
 //! ```
 //!
@@ -102,9 +102,9 @@
 //! Dioxus uses hooks for state management. Hooks are a form of state persisted between calls of the function component.
 //!
 //! ```
-//! static Example: FC<()> = |ctx| {
-//!     let (val, set_val) = use_state(&ctx, || 0);
-//!     ctx.render(rsx!(
+//! static Example: FC<()> = |cx| {
+//!     let (val, set_val) = use_state(&cx, || 0);
+//!     cx.render(rsx!(
 //!         button { onclick: move |_| set_val(val + 1) }
 //!     ))
 //! }
@@ -114,8 +114,8 @@
 //! which allows the persistence of data between function component renders. This primitive is exposed directly through
 //! the `Context` item:
 //! ```
-//! fn my_hook<'a>(ctx: &impl Scoped<'a>) -> &'a String {
-//!     ctx.use_hook(
+//! fn my_hook<'a>(cx: &impl Scoped<'a>) -> &'a String {
+//!     cx.use_hook(
 //!         // Initializer stores a value
 //!         || String::new("stored_data"),
 //!           
@@ -170,8 +170,8 @@
 //!     diouxs::web::launch(Example);
 //! }
 //!
-//! static Example: FC<()> = |ctx| {
-//!     ctx.render(rsx! {
+//! static Example: FC<()> = |cx| {
+//!     cx.render(rsx! {
 //!         div { "Hello World!" }
 //!     })
 //! };

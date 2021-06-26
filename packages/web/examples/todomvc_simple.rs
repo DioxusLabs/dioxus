@@ -27,8 +27,8 @@ pub struct TodoItem {
 // =======================
 // Components
 // =======================
-pub fn App(ctx: Context<()>) -> VNode {
-    ctx.render(rsx! {
+pub fn App(cx: Context<()>) -> VNode {
+    cx.render(rsx! {
         div {
             id: "app"
 
@@ -52,12 +52,12 @@ pub fn App(ctx: Context<()>) -> VNode {
     })
 }
 
-pub fn TodoList(ctx: Context<()>) -> VNode {
-    let (draft, set_draft) = use_state(&ctx, || "".to_string());
-    let (todos, set_todos) = use_state(&ctx, || HashMap::<uuid::Uuid, Rc<TodoItem>>::new());
-    let (filter, set_filter) = use_state(&ctx, || FilterState::All);
+pub fn TodoList(cx: Context<()>) -> VNode {
+    let (draft, set_draft) = use_state(&cx, || "".to_string());
+    let (todos, set_todos) = use_state(&cx, || HashMap::<uuid::Uuid, Rc<TodoItem>>::new());
+    let (filter, set_filter) = use_state(&cx, || FilterState::All);
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             header {
                 class: "header"
@@ -101,8 +101,8 @@ pub struct TodoEntryProps {
     item: Rc<TodoItem>,
 }
 
-pub fn TodoEntry(ctx: Context<TodoEntryProps>) -> VNode {
-    let (is_editing, set_is_editing) = use_state(&ctx, || false);
+pub fn TodoEntry(cx: Context<TodoEntryProps>) -> VNode {
+    let (is_editing, set_is_editing) = use_state(&cx, || false);
     let contents = "";
     let todo = TodoItem {
         checked: false,
@@ -110,7 +110,7 @@ pub fn TodoEntry(ctx: Context<TodoEntryProps>) -> VNode {
         id: uuid::Uuid::new_v4(),
     };
 
-    ctx.render(rsx! (
+    cx.render(rsx! (
         li {
             "{todo.id}"
             input {
@@ -127,7 +127,7 @@ pub fn TodoEntry(ctx: Context<TodoEntryProps>) -> VNode {
     ))
 }
 
-pub fn FilterToggles(ctx: Context<()>) -> VNode {
+pub fn FilterToggles(cx: Context<()>) -> VNode {
     let toggles = [
         ("All", "", FilterState::All),
         ("Active", "active", FilterState::Active),
@@ -151,7 +151,7 @@ pub fn FilterToggles(ctx: Context<()>) -> VNode {
     let item_text = "";
     let items_left = "";
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         footer {
             span {
                 strong {"{items_left}"}

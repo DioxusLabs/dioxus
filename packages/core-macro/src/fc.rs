@@ -133,7 +133,7 @@ impl ToTokens for FunctionComponent {
             }
 
             impl<'a> FC for #function_name<'a> {
-                fn render(ctx: Context<'_>, props: &#function_name<'a>) -> VNode {
+                fn render(cx: Context<'_>, props: &#function_name<'a>) -> VNode {
                     let #function_name {
                         ..
                     } = props;
@@ -150,12 +150,12 @@ impl ToTokens for FunctionComponent {
             //     name: &'a str
             // }
 
-            // pub fn component<'a>(ctx: &'a Context<'a, Props>) -> VNode<'a> {
+            // pub fn component<'a>(cx: &'a Context<'a, Props>) -> VNode<'a> {
             //     // Destructure the props into the parent scope
             //     // todo: handle expansion of lifetimes
             //     let Props {
             //         name
-            //     } = ctx.props;
+            //     } = cx.props;
 
             //     #block
             // }

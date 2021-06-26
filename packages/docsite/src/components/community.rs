@@ -1,7 +1,7 @@
 use dioxus_ssr::prelude::*;
 
-pub static Community: FC<()> = |ctx| {
-    rsx! { in ctx,
+pub static Community: FC<()> = |cx| {
+    rsx! { in cx,
         div {
 
         }

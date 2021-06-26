@@ -1,11 +1,11 @@
-# Subscriptions 
+# Subscriptions
 
 Yew subscriptions are used to schedule update for components into the future. The `Context` object can create subscriptions:
 
 ```rust
-fn Component(ctx: Component<()>) -> VNode {
-    let update = ctx.schedule();
-    
+fn Component(cx: Component<()>) -> VNode {
+    let update = cx.schedule();
+
     // Now, when the subscription is called, the component will be re-evaluted
     update.consume();
 }
@@ -13,16 +13,15 @@ fn Component(ctx: Component<()>) -> VNode {
 
 Whenever a component's subscription is called, the component will then re-evaluated. You can consider the input properties of
 a component to be just another form of subscription. By default, the Dioxus component system automatically diffs a component's props
-when the parent function is called, and if the props are different, the child component's subscription is called. 
+when the parent function is called, and if the props are different, the child component's subscription is called.
 
 The subscription API exposes this functionality allowing hooks and state management solutions the ability to update components whenever
 some state or event occurs outside of the component. For instance, the `use_context` hook uses this to subscribe components that use a
 particular context.
 
-
 ```rust
-fn use_context<I>(ctx: Context<T>) -> I {
-  
+fn use_context<I>(cx: Context<T>) -> I {
+
 }
 
 
@@ -32,6 +31,3 @@ fn use_context<I>(ctx: Context<T>) -> I {
 
 
 ```
-
-
-

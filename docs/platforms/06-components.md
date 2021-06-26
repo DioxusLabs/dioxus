@@ -8,8 +8,8 @@ struct MyProps {
     name: String
 }
 
-fn Example(ctx: Context<MyProps>) -> VNode {
-    html! { <div> "Hello {ctx.ctx.name}!" </div> }
+fn Example(cx: Context<MyProps>) -> VNode {
+    html! { <div> "Hello {cx.cx.name}!" </div> }
 }
 ```
 
@@ -18,14 +18,14 @@ Here, the `Context` object is used to access hook state, create subscriptions, a
 ```rust
 // A very terse component!
 #[fc]
-fn Example(ctx: Context, name: String) -> VNode {
+fn Example(cx: Context, name: String) -> VNode {
     html! { <div> "Hello {name}!" </div> }
 }
 
 // or
 
 #[functional_component]
-static Example: FC = |ctx, name: String| html! { <div> "Hello {name}!" </div> };
+static Example: FC = |cx, name: String| html! { <div> "Hello {name}!" </div> };
 ```
 
 The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, templating engine, or the constructors directly.

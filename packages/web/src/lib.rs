@@ -179,9 +179,9 @@ mod tests {
         pretty_env_logger::init();
         log::info!("Hello!");
 
-        wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|ctx| {
+        wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|cx| {
             todo!()
-            // ctx.render(html! {
+            // cx.render(html! {
             //     <div>
             //         "Hello world"
             //         <button onclick={move |_| log::info!("button1 clicked!")}> "click me" </button>

@@ -120,14 +120,14 @@ impl ToTokens for Component {
 
         let childs = &self.children;
         let children = quote! {
-            ChildrenList::new(__ctx)
+            ChildrenList::new(__cx)
                 #( .add_child(#childs) )*
                 .finish()
         };
 
         tokens.append_all(quote! {
             dioxus::builder::virtual_child(
-                __ctx,
+                __cx,
                 #name,
                 #builder,
                 #key_token,

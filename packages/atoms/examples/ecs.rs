@@ -31,13 +31,13 @@ const TODOS: EcsModel<u32, TodoModel> = |builder| {};
 // const SELECT_TITLE: SelectorBorrowed<u32, &str> = |s, k| TODOS.field(0).select(k);
 // const SELECT_SUBTITLE: SelectorBorrowed<u32, &str> = |s, k| TODOS.field(1).select(k);
 
-static App: FC<()> = |ctx| {
-    use_init_recoil_root(ctx, |_| {});
+static App: FC<()> = |cx| {
+    use_init_recoil_root(cx, |_| {});
 
-    // let title = use_recoil_value(ctx, &C_SELECTOR);
+    // let title = use_recoil_value(cx, &C_SELECTOR);
 
     let title = "";
-    rsx! { in ctx,
+    rsx! { in cx,
         div {
             "{title}"
             // button { onclick: {next_light}, "Next light" }

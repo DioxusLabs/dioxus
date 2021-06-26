@@ -25,11 +25,11 @@ pub struct TodoItem {
     pub contents: String,
 }
 
-static App: FC<()> = |ctx| {
-    let (draft, set_draft) = use_state(&ctx, || "".to_string());
-    let (filter, set_filter) = use_state(&ctx, || FilterState::All);
-    let todos = use_state_new(&ctx, || BTreeMap::<uuid::Uuid, TodoItem>::new());
-    ctx.render(rsx!(
+static App: FC<()> = |cx| {
+    let (draft, set_draft) = use_state(&cx, || "".to_string());
+    let (filter, set_filter) = use_state(&cx, || FilterState::All);
+    let todos = use_state_new(&cx, || BTreeMap::<uuid::Uuid, TodoItem>::new());
+    cx.render(rsx!(
         div {
             id: "app"
             div {
@@ -131,9 +131,9 @@ static App: FC<()> = |ctx| {
     ))
 };
 
-pub fn FilterToggles(ctx: Context<()>) -> VNode {
-    // let reducer = recoil::use_callback(&ctx, || ());
-    // let items_left = recoil::use_atom_family(&ctx, &TODOS, uuid::Uuid::new_v4());
+pub fn FilterToggles(cx: Context<()>) -> VNode {
+    // let reducer = recoil::use_callback(&cx, || ());
+    // let items_left = recoil::use_atom_family(&cx, &TODOS, uuid::Uuid::new_v4());
 
     let toggles = [
         ("All", "", FilterState::All),
@@ -158,7 +158,7 @@ pub fn FilterToggles(ctx: Context<()>) -> VNode {
     let item_text = "";
     let items_left = "";
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         footer {
             span {
                 strong {"{items_left}"}

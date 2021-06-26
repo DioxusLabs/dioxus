@@ -12,8 +12,8 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static App: FC<()> = |ctx| {
-    ctx.render(rsx! {
+static App: FC<()> = |cx| {
+    cx.render(rsx! {
         h2 { "abc 1" }
         div {
             "hello world!"

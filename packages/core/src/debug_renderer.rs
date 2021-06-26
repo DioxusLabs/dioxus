@@ -86,7 +86,7 @@ impl DebugVNodeSource {
     }
 
     fn render_nodes(&self) -> VNode {
-        // let ctx = NodeCtx
+        // let cx = NodeCtx
         todo!()
     }
 }
@@ -97,9 +97,9 @@ mod tests {
 
     #[test]
     fn ensure_creation() -> Result<(), ()> {
-        // static Example: FC<()> = |ctx| {
+        // static Example: FC<()> = |cx| {
         //     //
-        //     ctx.render(html! { <div> "hello world" </div> })
+        //     cx.render(html! { <div> "hello world" </div> })
         // };
 
         // let mut dom = VirtualDom::new(Example);

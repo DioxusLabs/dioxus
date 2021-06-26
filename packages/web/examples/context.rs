@@ -24,10 +24,10 @@ fn main() {
 #[derive(Debug)]
 struct CustomContext([&'static str; 3]);
 
-static Example: FC<()> = |ctx| {
-    ctx.use_create_context(|| CustomContext(["Jack", "Jill", "Bob"]));
+static Example: FC<()> = |cx| {
+    cx.use_create_context(|| CustomContext(["Jack", "Jill", "Bob"]));
 
-    ctx.render(rsx! {
+    cx.render(rsx! {
         div {
             class: "py-12 px-4 text-center w-full max-w-2xl mx-auto"
             span {
@@ -51,11 +51,11 @@ struct ButtonProps {
     id: u8,
 }
 
-fn CustomButton(ctx: Context<ButtonProps>) -> VNode {
-    let names = ctx.use_context::<CustomContext>();
-    let name = names.0[ctx.id as usize];
+fn CustomButton(cx: Context<ButtonProps>) -> VNode {
+    let names = cx.use_context::<CustomContext>();
+    let name = names.0[cx.id as usize];
 
-    ctx.render(rsx!{
+    cx.render(rsx!{
         button {  
             class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
             "{name}"

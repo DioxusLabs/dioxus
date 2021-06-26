@@ -68,7 +68,7 @@ impl ToTokens for Element {
         let name = &self.name.to_string();
 
         tokens.append_all(quote! {
-            dioxus::builder::ElementBuilder::new(__ctx, #name)
+            dioxus::builder::ElementBuilder::new(__cx, #name)
         });
 
         for attr in self.attrs.iter() {
@@ -221,13 +221,13 @@ impl ToTokens for ElementAttr {
             }
             AttrType::Event(event) => {
                 tokens.append_all(quote! {
-                    .add_listener(dioxus::events::on::#nameident(__ctx, #event))
+                    .add_listener(dioxus::events::on::#nameident(__cx, #event))
                 });
             }
             AttrType::EventTokens(event) => {
                 //
                 tokens.append_all(quote! {
-                    .add_listener(dioxus::events::on::#nameident(__ctx, #event))
+                    .add_listener(dioxus::events::on::#nameident(__cx, #event))
                 });
             }
         }
