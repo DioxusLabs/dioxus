@@ -11,8 +11,11 @@ There is also limited support for dynamic handlers, but it will function similar
 You'll want to write RSX where you can, and in a future release we'll have a tool that automatically converts HTML to RSX.
 
 ```rust
-#[fc]
-fn Example(cx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
+#[derive(PartialEq, Props)]
+struct ExampleProps { name: &str, pending: bool, count: i32 }
+
+fn Example(cx: Context<ExampleProps> ) -> VNode {
+    let ExampleProps { name, pending, count } = cx.props;
     cx.render(html! {
         <div>
             <p> "Hello, {name}!" </p>
@@ -25,51 +28,41 @@ fn Example(cx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
 
 ## rsx! macro
 
-The rsx! macro is a VNode builder macro designed especially for Rust programs. Writing these should feel very natural, much like assembling a struct. VSCode also supports these with code folding, bracket-tabbing, bracket highlighting, and section selecting.
+The rsx! macro is a VNode builder macro designed especially for Rust programs. Writing these should feel very natural, much like assembling a struct. VSCode also supports these with code folding, bracket-tabbing, bracket highlighting, section selecting, inline documentation, and GOTO definition (no rename support yet 😔 ).
 
 The Dioxus VSCode extension will eventually provide a macro to convert a selection of html! template and turn it into rsx!, so you'll never need to transcribe templates by hand.
 
-It's also a bit easier on the eyes 🙂.
+It's also a bit easier on the eyes 🙂 than HTML.
 
 ```rust
-#[fc]
-fn Example(cx: Context, name: &str, pending: bool, count: i32 ) -> VNode {
+fn Example(cx: Context<ExampleProps>) -> VNode {
     cx.render(rsx! {
         div {
-            p {"Hello, {name}!"}
-            p {"Status: {pending}!"}
-            p {"Count {count}!"}
+            // cx derefs to props so you can access fields directly
+            p {"Hello, {cx.name}!"}
+            p {"Status: {cx.pending}!"}
+            p {"Count {cx.count}!"}
         }
     })
 }
-
 ```
 
 Each element takes a comma-separated list of expressions to build the node. Roughly, here's how they work:
 
-- `name: value` sets the property on this element.
+- `name: value` sets a property on this element.
 - `"text"` adds a new text element
 - `tag {}` adds a new child element
 - `CustomTag {}` adds a new child component
-- `{expr}` pastes the `expr` tokens literally. They must be IntoCtx<Vnode> to work properly
+- `{expr}` pastes the `expr` tokens literally. They must be `IntoIterator<T> where T: IntoVnode` to work properly
 
 Commas are entirely optional, but might be useful to delineate between elements and attributes.
 
-The `render` function provides an **extremely efficient** allocator for VNodes and text, so try not to use the `format!` macro in your components. Rust's default `ToString` methods pass through the global allocator, but all text in components is allocated inside a manually-managed Bump arena.
+The `render` function provides an **extremely efficient** allocator for VNodes and text, so try not to use the `format!` macro in your components. Rust's default `ToString` methods pass through the global allocator, but all text in components is allocated inside a manually-managed Bump arena. To push you in the right direction, all text-based attributes take `std::fmt::Arguments` directly, so you'll want to reach for `format_args!` when the built-in `f-string` interpolation just doesn't cut it.
 
 ```rust
 static Example: FC<()> = |cx| {
 
     let text = "example";
-
-    let g = async {
-        wait(10).await;
-        "hello"
-    };
-
-    let user_name = use_read_async(cx, USERNAME);
-    let title = cx.suspend(user_name, |user_name| rsx!{ h1 { "Welcome back, {user_name}" } });
-
 
     cx.render(rsx!{
         div {
@@ -92,12 +85,7 @@ static Example: FC<()> = |cx| {
                 // `class` is not a restricted keyword unlike JS and ClassName
                 class: "big small wide short {text}",
 
-                // bool-based classnames
-                classes: [("big", true), ("small", false)]
-
-                // Bool-based props
-                // *must* be in the tuple form, cannot enter as a variable
-                tag: ("type", false)
+                class: format_args!("attributes take fmt::Arguments. {}", 99)
 
                 tag: {"these tokens are placed directly"}
 
@@ -132,9 +120,6 @@ static Example: FC<()> = |cx| {
 
                 // Optionals
                 {true.and_then(|f| rsx!{ h1 {"Conditional Rendering"} })}
-
-                // Bool options
-                {(rsx!{ h1 {"Conditional Rendering"}, true)}
 
                 // Child nodes
                 // Returns &[VNode]
