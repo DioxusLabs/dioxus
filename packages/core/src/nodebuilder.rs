@@ -611,14 +611,18 @@ where
 impl<'a> IntoVNode<'a> for () {
     fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
         todo!();
-        VNode::Suspended
+        VNode::Suspended {
+            real: Cell::new(RealDomNode::empty()),
+        }
     }
 }
 
 impl<'a> IntoVNode<'a> for Option<()> {
     fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
         todo!();
-        VNode::Suspended
+        VNode::Suspended {
+            real: Cell::new(RealDomNode::empty()),
+        }
     }
 }
 

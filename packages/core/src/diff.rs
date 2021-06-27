@@ -4,15 +4,15 @@
 //! Notice:
 //! ------
 //!
-//! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and modified to support Components,
-//! Fragments, Suspense, and additional batching operations.
+//! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
+//! Components, Fragments, Suspense, and additional batching operations.
 //!
 //! Implementation Details:
 //! -----------------------
 //!
 //! All nodes are addressed by their IDs. The RealDom provides an imperative interface for making changes to these nodes.
-//! We don't necessarily intend for changes to happen exactly during the diffing process, so the implementor may choose
-//! to batch nodes if it is more performant for their application. The u32 should be a no-op to hash,
+//! We don't necessarily require that DOM changes happen instnatly during the diffing process, so the implementor may choose
+//! to batch nodes if it is more performant for their application. We care about an ID size of u32
 //!
 //!
 //! Further Reading and Thoughts
@@ -58,6 +58,8 @@ pub trait RealDom {
     fn create_text_node(&mut self, text: &str) -> RealDomNode;
     fn create_element(&mut self, tag: &str) -> RealDomNode;
     fn create_element_ns(&mut self, tag: &str, namespace: &str) -> RealDomNode;
+    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
+    fn create_placeholder(&mut self) -> RealDomNode;
 
     // events
     fn new_event_listener(
@@ -152,7 +154,6 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 }
                 // New node is a text element, need to replace the element with a simple text node
                 VNode::Text(_) => {
-                    log::debug!("Replacing el with text");
                     self.create(new_node);
                     self.dom.replace_with();
                 }
@@ -167,10 +168,22 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 // New node is actually a sequence of nodes.
                 // We need to replace this one node with a sequence of nodes
                 // Not yet implement because it's kinda hairy
-                VNode::Fragment(_) => todo!(),
+                VNode::Fragment(new) => {
+                    match new.children.len() {
+                        0 => {
+                            // remove
+                        }
+                        1 => {
+                            // replace
+                        }
+                        _ => {
+                            // remove and mount many
+                        }
+                    }
+                }
 
                 // New Node is actually suspended. Todo
-                VNode::Suspended => todo!(),
+                VNode::Suspended { real } => todo!(),
             },
 
             // Old element was text
@@ -200,7 +213,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                         }
                     }
                 }
-                VNode::Suspended => todo!(),
+                VNode::Suspended { real } => todo!(),
             },
 
             // Old element was a component
@@ -214,75 +227,74 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
 
                     // It's also a component
                     VNode::Component(new) => {
-                        match old.user_fc == new.user_fc {
+                        if old.user_fc == new.user_fc {
                             // Make sure we're dealing with the same component (by function pointer)
-                            true => {
-                                // Make sure the new component vnode is referencing the right scope id
-                                let scope_id = old.ass_scope.borrow().clone();
-                                *new.ass_scope.borrow_mut() = scope_id;
 
-                                // make sure the component's caller function is up to date
+                            // Make sure the new component vnode is referencing the right scope id
+                            let scope_id = old.ass_scope.borrow().clone();
+                            *new.ass_scope.borrow_mut() = scope_id;
+
+                            // make sure the component's caller function is up to date
+                            self.components
+                                .with_scope(scope_id.unwrap(), |scope| {
+                                    scope.caller = Rc::downgrade(&new.caller)
+                                })
+                                .unwrap();
+
+                            // React doesn't automatically memoize, but we do.
+                            // The cost is low enough to make it worth checking
+                            let should_render = match old.comparator {
+                                Some(comparator) => comparator(new),
+                                None => true,
+                            };
+
+                            if should_render {
+                                // // self.dom.commit_traversal();
                                 self.components
-                                    .with_scope(scope_id.unwrap(), |scope| {
-                                        scope.caller = Rc::downgrade(&new.caller)
+                                    .with_scope(scope_id.unwrap(), |f| {
+                                        f.run_scope().unwrap();
                                     })
                                     .unwrap();
-
-                                // React doesn't automatically memoize, but we do.
-                                // The cost is low enough to make it worth checking
-                                let should_render = match old.comparator {
-                                    Some(comparator) => comparator(new),
-                                    None => true,
-                                };
-
-                                if should_render {
-                                    // // self.dom.commit_traversal();
-                                    self.components
-                                        .with_scope(scope_id.unwrap(), |f| {
-                                            f.run_scope().unwrap();
-                                        })
-                                        .unwrap();
-                                    // diff_machine.change_list.load_known_root(root_id);
-                                    // run the scope
-                                    //
-                                } else {
-                                    // Component has memoized itself and doesn't need to be re-rendered.
-                                    // We still need to make sure the child's props are up-to-date.
-                                    // Don't commit traversal
-                                }
+                                // diff_machine.change_list.load_known_root(root_id);
+                                // run the scope
+                                //
+                            } else {
+                                // Component has memoized itself and doesn't need to be re-rendered.
+                                // We still need to make sure the child's props are up-to-date.
+                                // Don't commit traversal
                             }
+                        } else {
                             // It's an entirely different component
-                            false => {
-                                // A new component has shown up! We need to destroy the old node
 
-                                // Wipe the old one and plant the new one
-                                // self.dom.commit_traversal();
-                                // self.dom.replace_node_with(old.dom_id, new.dom_id);
-                                // self.create(new_node);
-                                // self.dom.replace_with();
-                                self.create(new_node);
-                                // self.create_and_repalce(new_node, old.mounted_root.get());
+                            // A new component has shown up! We need to destroy the old node
 
-                                // Now we need to remove the old scope and all of its descendents
-                                let old_scope = old.ass_scope.borrow().as_ref().unwrap().clone();
-                                self.destroy_scopes(old_scope);
-                            }
+                            // Wipe the old one and plant the new one
+                            // self.dom.commit_traversal();
+                            // self.dom.replace_node_with(old.dom_id, new.dom_id);
+                            // self.create(new_node);
+                            // self.dom.replace_with();
+                            self.create(new_node);
+                            // self.create_and_repalce(new_node, old.mounted_root.get());
+
+                            // Now we need to remove the old scope and all of its descendents
+                            let old_scope = old.ass_scope.borrow().as_ref().unwrap().clone();
+                            self.destroy_scopes(old_scope);
                         }
                     }
                     VNode::Fragment(_) => todo!(),
-                    VNode::Suspended => todo!(),
+                    VNode::Suspended { real } => todo!(),
                 }
             }
 
             VNode::Fragment(old) => {
                 //
                 match new_node {
-                    VNode::Fragment(_) => todo!(),
+                    VNode::Fragment(new) => todo!(),
 
                     // going from fragment to element means we're going from many (or potentially none) to one
                     VNode::Element(new) => {}
                     VNode::Text(_) => todo!(),
-                    VNode::Suspended => todo!(),
+                    VNode::Suspended { real } => todo!(),
                     VNode::Component(_) => todo!(),
                 }
             }
@@ -290,10 +302,12 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
             // a suspended node will perform a mem-copy of the previous elements until it is ready
             // this means that event listeners will need to be disabled and removed
             // it also means that props will need to disabled - IE if the node "came out of hibernation" any props should be considered outdated
-            VNode::Suspended => {
+            VNode::Suspended { real: old_real } => {
                 //
                 match new_node {
-                    VNode::Suspended => todo!(),
+                    VNode::Suspended { real: new_real } => {
+                        //
+                    }
                     VNode::Element(_) => todo!(),
                     VNode::Text(_) => todo!(),
                     VNode::Fragment(_) => todo!(),
@@ -354,6 +368,10 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 // to emit three instructions to (1) create a text node, (2) set its
                 // text content, and finally (3) append the text node to this
                 // parent.
+                //
+                // Notice: this is a web-specific optimization and may be changed in the future
+                //
+                // TODO move over
                 // if children.len() == 1 {
                 //     if let VNode::Text(text) = &children[0] {
                 //         self.dom.set_text(text.text);
@@ -373,7 +391,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
             }
 
             VNode::Component(component) => {
-                self.dom.create_text_node("placeholder for vcomponent");
+                let real_id = self.dom.create_placeholder();
 
                 // let root_id = next_id();
                 // self.dom.save_known_root(root_id);
@@ -426,7 +444,6 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
                 new_component.run_scope().unwrap();
 
                 // And then run the diff algorithm
-                // todo!();
                 self.diff_node(new_component.old_frame(), new_component.next_frame());
 
                 // Finally, insert this node as a seen node.
@@ -437,20 +454,16 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
             VNode::Fragment(frag) => {
                 // create the children directly in the space
                 for child in frag.children {
-                    todo!()
-                    // self.create(child);
-                    // self.dom.append_child();
+                    self.create(child);
+                    self.dom.append_child();
                 }
             }
 
-            VNode::Suspended => {
-                todo!("Creation of VNode::Suspended not yet supported")
+            VNode::Suspended { real } => {
+                let id = self.dom.create_placeholder();
+                real.set(id);
             }
         }
-    }
-
-    fn iter_children(&self, node: &VNode<'a>) -> ChildIterator<'a> {
-        todo!()
     }
 }
 
@@ -680,29 +693,29 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // Upon exiting, the change list stack is in the same state.
-    fn diff_keyed_children(&self, old: &[VNode<'a>], new: &[VNode<'a>]) {
-        todo!();
-        // if cfg!(debug_assertions) {
-        //     let mut keys = fxhash::FxHashSet::default();
-        //     let mut assert_unique_keys = |children: &[VNode]| {
-        //         keys.clear();
-        //         for child in children {
-        //             let key = child.key();
-        //             debug_assert!(
-        //                 key.is_some(),
-        //                 "if any sibling is keyed, all siblings must be keyed"
-        //             );
-        //             keys.insert(key);
-        //         }
-        //         debug_assert_eq!(
-        //             children.len(),
-        //             keys.len(),
-        //             "keyed siblings must each have a unique key"
-        //         );
-        //     };
-        //     assert_unique_keys(old);
-        //     assert_unique_keys(new);
-        // }
+    fn diff_keyed_children(&self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
+        // todo!();
+        if cfg!(debug_assertions) {
+            let mut keys = fxhash::FxHashSet::default();
+            let mut assert_unique_keys = |children: &'a [VNode<'a>]| {
+                keys.clear();
+                for child in children {
+                    let key = child.key();
+                    debug_assert!(
+                        key.is_some(),
+                        "if any sibling is keyed, all siblings must be keyed"
+                    );
+                    keys.insert(key);
+                }
+                debug_assert_eq!(
+                    children.len(),
+                    keys.len(),
+                    "keyed siblings must each have a unique key"
+                );
+            };
+            assert_unique_keys(old);
+            assert_unique_keys(new);
+        }
 
         // First up, we diff all the nodes with the same key at the beginning of the
         // children.
@@ -1090,7 +1103,12 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
             // [... parent prev_child]
             // self.dom.go_to_sibling(i);
             // [... parent this_child]
-            self.dom.push_root(old_child.get_mounted_id().unwrap());
+
+            let did = old_child.get_mounted_id().unwrap();
+            if did.0 == 0 {
+                log::debug!("Root is bad {:#?}", old_child);
+            }
+            self.dom.push_root(did);
             self.diff_node(old_child, new_child);
 
             let old_id = old_child.get_mounted_id().unwrap();
@@ -1270,7 +1288,7 @@ impl<'a> Iterator for ChildIterator<'a> {
 
                     // Immediately abort suspended nodes - can't do anything with them yet
                     // VNode::Suspended => should_pop = true,
-                    VNode::Suspended => todo!(),
+                    VNode::Suspended { real } => todo!(),
 
                     // For components, we load their root and push them onto the stack
                     VNode::Component(sc) => {
@@ -1370,7 +1388,7 @@ mod tests {
 
                 // These would represent failing cases.
                 VNode::Fragment(_) => panic!("Found: Fragment"),
-                VNode::Suspended => panic!("Found: Suspended"),
+                VNode::Suspended { real } => panic!("Found: Suspended"),
                 VNode::Component(_) => panic!("Found: Component"),
             }
         }

@@ -55,7 +55,7 @@ members = [
     "packages/core-macro",
     "packages/core",
     "packages/html-namespace",
-    # "packages/web",
+    "packages/web",
     # "packages/cli",
     # "packages/atoms",
     # "packages/ssr",

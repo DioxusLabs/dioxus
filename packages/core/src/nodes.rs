@@ -35,7 +35,7 @@ pub enum VNode<'src> {
     /// A "suspended component"
     /// This is a masqeurade over an underlying future that needs to complete
     /// When the future is completed, the VNode will then trigger a render
-    Suspended,
+    Suspended { real: Cell<RealDomNode> },
 
     /// A User-defined componen node (node type COMPONENT_NODE)
     Component(&'src VComponent<'src>),
@@ -49,7 +49,7 @@ impl<'a> Clone for VNode<'a> {
             VNode::Text(old) => VNode::Text(old.clone()),
             VNode::Fragment(fragment) => VNode::Fragment(fragment),
             VNode::Component(component) => VNode::Component(component),
-            VNode::Suspended => VNode::Suspended,
+            VNode::Suspended { real } => VNode::Suspended { real: real.clone() },
         }
     }
 }
@@ -85,7 +85,7 @@ impl<'old, 'new> VNode<'old> {
             }
             VNode::Text(_) => todo!(),
             VNode::Fragment(_) => todo!(),
-            VNode::Suspended => todo!(),
+            VNode::Suspended { real } => todo!(),
             VNode::Component(_) => todo!(),
         }
     }
@@ -142,7 +142,7 @@ impl<'a> VNode<'a> {
             VNode::Component(c) => c.key,
 
             // todo suspend should be allowed to have keys
-            VNode::Suspended => NodeKey::NONE,
+            VNode::Suspended { .. } => NodeKey::NONE,
         }
     }
 
@@ -155,7 +155,7 @@ impl<'a> VNode<'a> {
             VNode::Element(_) => true,
             VNode::Text(_) => true,
             VNode::Fragment(_) => false,
-            VNode::Suspended => false,
+            VNode::Suspended { .. } => false,
             VNode::Component(_) => false,
         }
     }
@@ -165,7 +165,7 @@ impl<'a> VNode<'a> {
             VNode::Element(el) => Some(el.dom_id.get()),
             VNode::Text(te) => Some(te.dom_id.get()),
             VNode::Fragment(_) => todo!(),
-            VNode::Suspended => todo!(),
+            VNode::Suspended { .. } => todo!(),
             VNode::Component(_) => todo!(),
         }
     }
@@ -177,7 +177,7 @@ impl Debug for VNode<'_> {
             VNode::Element(el) => write!(s, "element, {}", el.tag_name),
             VNode::Text(t) => write!(s, "text, {}", t.text),
             VNode::Fragment(_) => write!(s, "fragment"),
-            VNode::Suspended => write!(s, "suspended"),
+            VNode::Suspended { .. } => write!(s, "suspended"),
             VNode::Component(_) => write!(s, "component"),
         }
     }
@@ -434,165 +434,5 @@ impl<'a> VFragment<'a> {
         };
 
         Self { key, children }
-    }
-}
-
-// /// This method converts a list of nested real/virtual nodes into a stream of nodes that are definitely associated
-// /// with the real dom. The only types of nodes that may be returned are text, elemets, and components.
-// ///
-// /// Components *are* considered virtual, but this iterator can't necessarily handle them without the scope arena.
-// ///
-// /// Why?
-// /// ---
-// /// Fragments are seen as virtual nodes but are actually a list of possibly-real nodes.
-// /// JS implementations normalize their node lists when fragments are present. Here, we just create a new iterator
-// /// that iterates through the recursive nesting of fragments.
-// ///
-// /// Fragments are stupid and I wish we didn't need to support them.
-// ///
-// /// This iterator only supports 3 levels of nested fragments
-// ///
-// pub fn iterate_real_nodes<'a>(nodes: &'a [VNode<'a>]) -> RealNodeIterator<'a> {
-//     RealNodeIterator::new(nodes)
-// }
-
-// pub struct RealNodeIterator<'a> {
-//     nodes: &'a [VNode<'a>],
-
-//     // this node is always a "real" node
-//     // the index is "what sibling # is it"
-//     // IE in a list of children on a fragment, the node will be a text node that's the 5th sibling
-//     node_stack: Vec<(&'a VNode<'a>, u32)>,
-// }
-
-// impl<'a> RealNodeIterator<'a> {
-//     // We immediately descend to the first real node we can find
-//     fn new(nodes: &'a [VNode<'a>]) -> Self {
-//         let mut node_stack = Vec::new();
-//         if nodes.len() > 0 {
-//             let mut cur_node = nodes.get(0).unwrap();
-//             loop {
-//                 node_stack.push((cur_node, 0_u32));
-//                 if !cur_node.is_real() {
-//                     cur_node = cur_node.get_child(0).unwrap();
-//                 } else {
-//                     break;
-//                 }
-//             }
-//         }
-
-//         Self { nodes, node_stack }
-//     }
-
-//     // // advances the cursor to the next element, panicing if we're on the 3rd level and still finding fragments
-//     // fn advance_cursor(&mut self) {
-//     //     let (mut cur_node, mut cur_id) = self.node_stack.last().unwrap();
-
-//     //     while !cur_node.is_real() {
-//     //         match cur_node {
-//     //             VNode::Element(_) | VNode::Text(_) => todo!(),
-//     //             VNode::Suspended => todo!(),
-//     //             VNode::Component(_) => todo!(),
-//     //             VNode::Fragment(frag) => {
-//     //                 let p = frag.children;
-//     //             }
-//     //         }
-//     //     }
-//     // }
-
-//     fn next_node(&mut self) -> bool {
-//         let (mut cur_node, cur_id) = self.node_stack.last_mut().unwrap();
-
-//         match cur_node {
-//             VNode::Fragment(frag) => {
-//                 //
-//                 if *cur_id + 1 > frag.children.len() as u32 {
-//                     self.node_stack.pop();
-//                     let next = self.node_stack.last_mut();
-//                     return false;
-//                 }
-//                 *cur_id += 1;
-//                 true
-//             }
-
-//             VNode::Element(_) => todo!(),
-//             VNode::Text(_) => todo!(),
-//             VNode::Suspended => todo!(),
-//             VNode::Component(_) => todo!(),
-//         }
-//     }
-
-//     fn get_current_node(&self) -> Option<&VNode<'a>> {
-//         self.node_stack.last().map(|(node, id)| match node {
-//             VNode::Element(_) => todo!(),
-//             VNode::Text(_) => todo!(),
-//             VNode::Fragment(_) => todo!(),
-//             VNode::Suspended => todo!(),
-//             VNode::Component(_) => todo!(),
-//         })
-//     }
-// }
-
-// impl<'a> Iterator for RealNodeIterator<'a> {
-//     type Item = &'a VNode<'a>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         todo!()
-//         // let top_idx = self.nesting_idxs.get_mut(0).unwrap();
-//         // let node = &self.nodes.get_mut(*top_idx as usize);
-
-//         // if node.is_none() {
-//         //     return None;
-//         // }
-//         // let node = node.unwrap();
-
-//         // match node {
-//         //     VNode::Element(_) | VNode::Text(_) => {
-//         //         *top_idx += 1;
-//         //         return Some(node);
-//         //     }
-//         //     VNode::Suspended => todo!(),
-//         //     // we need access over the scope map
-//         //     VNode::Component(_) => todo!(),
-
-//         //     VNode::Fragment(frag) => {
-//         //         let nest_idx = self.nesting_idxs.get_mut(1).unwrap();
-//         //         let node = &frag.children.get_mut(*nest_idx as usize);
-//         //         match node {
-//         //             VNode::Element(_) | VNode::Text(_) => {
-//         //                 *nest_idx += 1;
-//         //                 return Some(node);
-//         //             }
-//         //             VNode::Fragment(_) => todo!(),
-//         //             VNode::Suspended => todo!(),
-//         //             VNode::Component(_) => todo!(),
-//         //         }
-//         //     }
-//         // }
-//     }
-// }
-
-mod tests {
-    use crate::debug_renderer::DebugRenderer;
-    use crate::nodebuilder::LazyNodes;
-
-    use crate as dioxus;
-    use dioxus::prelude::*;
-    #[test]
-    fn iterate_nodes() {
-        let rs = rsx! {
-            Fragment {
-                Fragment {
-                    Fragment {
-                        Fragment {
-                            h1 {"abc1"}
-                        }
-                        h2 {"abc2"}
-                    }
-                    h3 {"abc3"}
-                }
-                h4 {"abc4"}
-            }
-        };
     }
 }

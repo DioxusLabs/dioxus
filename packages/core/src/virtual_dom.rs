@@ -64,14 +64,19 @@ pub struct VirtualDom {
     _root_prop_type: std::any::TypeId,
 }
 
+/// The `RealDomNode` is an ID handle that corresponds to a foreign DOM node.
+///
+/// "u64" was chosen for two reasons
+/// - 0 cost hashing
+/// - use with slotmap and other versioned slot arenas
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RealDomNode(pub u32);
+pub struct RealDomNode(pub u64);
 impl RealDomNode {
-    pub fn new(id: u32) -> Self {
+    pub fn new(id: u64) -> Self {
         Self(id)
     }
     pub fn empty() -> Self {
-        Self(u32::MIN)
+        Self(u64::MIN)
     }
 }
 
@@ -795,7 +800,7 @@ Any function prefixed with "use" should not be called conditionally.
     }
 
     /// There are hooks going on here!
-    fn use_context<T: 'static>(&self) -> &'src T {
+    fn use_context<T: 'static>(&self) -> &'src Rc<T> {
         self.try_use_context().unwrap()
     }
 
@@ -871,7 +876,9 @@ Any function prefixed with "use" should not be called conditionally.
             }
             None => {
                 // we need to register this task
-                VNode::Suspended
+                VNode::Suspended {
+                    real: Cell::new(RealDomNode::empty()),
+                }
             }
         }
     }

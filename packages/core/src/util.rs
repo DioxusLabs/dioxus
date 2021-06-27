@@ -1,7 +1,7 @@
 use crate::innerlude::*;
 
 pub struct DebugDom {
-    counter: u32,
+    counter: u64,
 }
 impl DebugDom {
     pub fn new() -> Self {
@@ -30,6 +30,10 @@ impl RealDom for DebugDom {
     }
 
     fn create_element_ns(&mut self, tag: &str, namespace: &str) -> RealDomNode {
+        self.counter += 1;
+        RealDomNode::new(self.counter)
+    }
+    fn create_placeholder(&mut self) -> RealDomNode {
         self.counter += 1;
         RealDomNode::new(self.counter)
     }

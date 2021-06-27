@@ -7,6 +7,7 @@ use dioxus_core::{
 };
 use fxhash::FxHashMap;
 use nohash_hasher::IntMap;
+use slotmap::{DefaultKey, Key, KeyData};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     window, Document, Element, Event, HtmlElement, HtmlInputElement, HtmlOptionElement, Node,
@@ -14,7 +15,7 @@ use web_sys::{
 
 pub struct WebsysDom {
     pub stack: Stack,
-    nodes: IntMap<u32, Node>,
+    nodes: slotmap::SlotMap<DefaultKey, Node>,
     document: Document,
     root: Element,
 
@@ -39,8 +40,6 @@ pub struct WebsysDom {
     // `ptns` = Percy text node separator
     // TODO
     last_node_was_text: bool,
-
-    node_counter: Counter,
 }
 impl WebsysDom {
     pub fn new(root: Element) -> Self {
@@ -52,16 +51,18 @@ impl WebsysDom {
         let (sender, mut receiver) = async_channel::unbounded::<EventTrigger>();
 
         let sender_callback = Arc::new(move |ev| {
-            let mut c = sender.clone();
+            let c = sender.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 c.send(ev).await.unwrap();
             });
         });
 
-        let mut nodes =
-            HashMap::with_capacity_and_hasher(1000, nohash_hasher::BuildNoHashHasher::default());
+        let mut nodes = slotmap::SlotMap::new();
+        // HashMap::with_capacity_and_hasher(1000, nohash_hasher::BuildNoHashHasher::default());
+        // let mut nodes =
+        //     HashMap::with_capacity_and_hasher(1000, nohash_hasher::BuildNoHashHasher::default());
 
-        nodes.insert(0_u32, root.clone().dyn_into::<Node>().unwrap());
+        let root_id = nodes.insert(root.clone().dyn_into::<Node>().unwrap());
         Self {
             stack: Stack::with_capacity(10),
             nodes,
@@ -74,7 +75,6 @@ impl WebsysDom {
             trigger: sender_callback,
             root,
             last_node_was_text: false,
-            node_counter: Counter(0),
         }
     }
 
@@ -84,17 +84,11 @@ impl WebsysDom {
     }
 }
 
-struct Counter(u32);
-impl Counter {
-    fn next(&mut self) -> u32 {
-        self.0 += 1;
-        self.0
-    }
-}
 impl dioxus_core::diff::RealDom for WebsysDom {
     fn push_root(&mut self, root: dioxus_core::virtual_dom::RealDomNode) {
-        log::debug!("Called `[`push_root] {:?}", root);
-        let domnode = self.nodes.get(&root.0).expect("Failed to pop know root");
+        log::debug!("Called [push_root] {:?}", root);
+        let key: DefaultKey = KeyData::from_ffi(root.0).into();
+        let domnode = self.nodes.get(key).expect("Failed to pop know root");
         self.stack.push(domnode.clone());
     }
 
@@ -166,15 +160,19 @@ impl dioxus_core::diff::RealDom for WebsysDom {
         todo!()
     }
 
+    fn create_placeholder(&mut self) -> RealDomNode {
+        self.create_element("pre")
+    }
     fn create_text_node(&mut self, text: &str) -> dioxus_core::virtual_dom::RealDomNode {
-        let nid = self.node_counter.next();
+        // let nid = self.node_counter.next();
         let textnode = self
             .document
             .create_text_node(text)
             .dyn_into::<Node>()
             .unwrap();
         self.stack.push(textnode.clone());
-        self.nodes.insert(nid, textnode);
+        let nid = self.nodes.insert(textnode);
+        let nid = nid.data().as_ffi();
 
         log::debug!("Called [`create_text_node`]: {}, {}", text, nid);
 
@@ -190,8 +188,8 @@ impl dioxus_core::diff::RealDom for WebsysDom {
             .unwrap();
 
         self.stack.push(el.clone());
-        let nid = self.node_counter.next();
-        self.nodes.insert(nid, el);
+        // let nid = self.node_counter.?next();
+        let nid = self.nodes.insert(el).data().as_ffi();
         log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
         RealDomNode::new(nid)
     }
@@ -209,8 +207,9 @@ impl dioxus_core::diff::RealDom for WebsysDom {
             .unwrap();
 
         self.stack.push(el.clone());
-        let nid = self.node_counter.next();
-        self.nodes.insert(nid, el);
+        let nid = self.nodes.insert(el).data().as_ffi();
+        // let nid = self.node_counter.next();
+        // self.nodes.insert(nid, el);
         log::debug!("Called [`create_element_ns`]: {:}", nid);
         RealDomNode::new(nid)
     }
@@ -287,7 +286,7 @@ impl dioxus_core::diff::RealDom for WebsysDom {
                         .context("")?;
                     let real_id = fields
                         .next()
-                        .and_then(|f| f.parse::<u32>().ok().map(RealDomNode::new))
+                        .and_then(|f| f.parse::<u64>().ok().map(RealDomNode::new))
                         .context("")?;
 
                     // Call the trigger

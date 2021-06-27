@@ -26,6 +26,7 @@ atoms = { path="../atoms" }
 async-channel = "1.6.1"
 nohash-hasher = "0.2.0"
 anyhow = "1.0.41"
+slotmap = "1.0.3"
 
 [dependencies.web-sys]
 version = "0.3.50"
