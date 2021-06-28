@@ -22,13 +22,17 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
-use crate::{arena::ScopeArena, innerlude::*};
+use crate::{
+    arena::{ScopeArena, ScopeArenaInner},
+    innerlude::*,
+};
 use fxhash::{FxHashMap, FxHashSet};
 
 use std::{
     any::Any,
     cell::Cell,
     cmp::Ordering,
+    marker::PhantomData,
     rc::{Rc, Weak},
 };
 
@@ -42,7 +46,7 @@ use std::{
 /// will receive modifications. However, instead of using child-based methods for descending through the tree, we instead
 /// ask the RealDom to either push or pop real nodes onto the stack. This saves us the indexing cost while working on a
 /// single node
-pub trait RealDom {
+pub trait RealDom<'a> {
     // Navigation
     fn push_root(&mut self, root: RealDomNode);
 
@@ -55,27 +59,27 @@ pub trait RealDom {
     fn remove_all_children(&mut self);
 
     // Create
-    fn create_text_node(&mut self, text: &str) -> RealDomNode;
-    fn create_element(&mut self, tag: &str) -> RealDomNode;
-    fn create_element_ns(&mut self, tag: &str, namespace: &str) -> RealDomNode;
+    fn create_text_node(&mut self, text: &'a str) -> RealDomNode;
+    fn create_element(&mut self, tag: &'static str) -> RealDomNode;
+    fn create_element_ns(&mut self, tag: &'static str, namespace: &'static str) -> RealDomNode;
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     fn create_placeholder(&mut self) -> RealDomNode;
 
     // events
     fn new_event_listener(
         &mut self,
-        event: &str,
+        event: &'static str,
         scope: ScopeIdx,
         element_id: usize,
         realnode: RealDomNode,
     );
     // fn new_event_listener(&mut self, event: &str);
-    fn remove_event_listener(&mut self, event: &str);
+    fn remove_event_listener(&mut self, event: &'static str);
 
     // modify
-    fn set_text(&mut self, text: &str);
-    fn set_attribute(&mut self, name: &str, value: &str, is_namespaced: bool);
-    fn remove_attribute(&mut self, name: &str);
+    fn set_text(&mut self, text: &'a str);
+    fn set_attribute(&mut self, name: &'static str, value: &'a str, is_namespaced: bool);
+    fn remove_attribute(&mut self, name: &'static str);
 
     // node ref
     fn raw_node_as_any_mut(&self) -> &mut dyn Any;
@@ -93,19 +97,19 @@ pub trait RealDom {
 /// The order of these re-entrances is stored in the DiffState itself. The DiffState comes pre-loaded with a set of components
 /// that were modified by the eventtrigger. This prevents doubly evaluating components if they were both updated via
 /// subscriptions and props changes.
-pub struct DiffMachine<'a, Dom: RealDom> {
-    pub dom: &'a mut Dom,
+pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
+    pub dom: &'real mut Dom,
+    pub components: &'bump ScopeArena,
     pub cur_idx: ScopeIdx,
     pub diffed: FxHashSet<ScopeIdx>,
-    pub components: ScopeArena,
     pub event_queue: EventQueue,
     pub seen_nodes: FxHashSet<ScopeIdx>,
 }
 
-impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
+impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
     pub fn new(
-        dom: &'a mut Dom,
-        components: ScopeArena,
+        dom: &'real mut Dom,
+        components: &'bump ScopeArena,
         cur_idx: ScopeIdx,
         event_queue: EventQueue,
     ) -> Self {
@@ -128,8 +132,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //
     // The change list stack is in the same state when this function exits.
     // In the case of Fragments, the parent node is on the stack
-    pub fn diff_node(&mut self, old_node: &VNode<'a>, new_node: &VNode<'a>) {
-        // pub fn diff_node(&self, old: &VNode<'a>, new: &VNode<'a>) {
+    pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
         /*
         For each valid case, we "commit traversal", meaning we save this current position in the tree.
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
@@ -326,7 +329,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     // When this function returns, the new node is on top of the change list stack:
     //
     //     [... node]
-    fn create(&mut self, node: &VNode<'a>) {
+    fn create(&mut self, node: &'bump VNode<'bump>) {
         // debug_assert!(self.dom.traversal_is_committed());
         match node {
             VNode::Text(text) => {
@@ -434,7 +437,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
 
                 // yaaaaay lifetimes out of thin air
                 // really tho, we're merging the frame lifetimes together
-                let inner: &'a mut _ = unsafe { &mut *self.components.0.borrow().arena.get() };
+                let inner: &'bump mut _ = unsafe { &mut *self.components.0.borrow().arena.get() };
                 let new_component = inner.get_mut(idx).unwrap();
 
                 // Actually initialize the caller's slot with the right address
@@ -467,7 +470,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     }
 }
 
-impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
+impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     /// Destroy a scope and all of its descendents.
     ///
     /// Calling this will run the destuctors on all hooks in the tree.
@@ -559,8 +562,8 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     // The change list stack is left unchanged.
     fn diff_attr(
         &mut self,
-        old: &'a [Attribute<'a>],
-        new: &'a [Attribute<'a>],
+        old: &'bump [Attribute<'bump>],
+        new: &'bump [Attribute<'bump>],
         is_namespaced: bool,
     ) {
         // Do O(n^2) passes to add/update and remove attributes, since
@@ -613,7 +616,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_children(&mut self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
+    fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         if new.is_empty() {
             if !old.is_empty() {
                 // self.dom.commit_traversal();
@@ -693,11 +696,11 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // Upon exiting, the change list stack is in the same state.
-    fn diff_keyed_children(&self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
+    fn diff_keyed_children(&self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // todo!();
         if cfg!(debug_assertions) {
             let mut keys = fxhash::FxHashSet::default();
-            let mut assert_unique_keys = |children: &'a [VNode<'a>]| {
+            let mut assert_unique_keys = |children: &'bump [VNode<'bump>]| {
                 keys.clear();
                 for child in children {
                     let key = child.key();
@@ -777,7 +780,11 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // Upon exit, the change list stack is the same.
-    fn diff_keyed_prefix(&self, old: &[VNode<'a>], new: &[VNode<'a>]) -> KeyedPrefixResult {
+    fn diff_keyed_prefix(
+        &self,
+        old: &'bump [VNode<'bump>],
+        new: &'bump [VNode<'bump>],
+    ) -> KeyedPrefixResult {
         todo!()
         // self.dom.go_down();
         // let mut shared_prefix_count = 0;
@@ -831,8 +838,8 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     // Upon exit from this function, it will be restored to that same state.
     fn diff_keyed_middle(
         &self,
-        old: &[VNode<'a>],
-        mut new: &[VNode<'a>],
+        old: &[VNode<'bump>],
+        mut new: &[VNode<'bump>],
         shared_prefix_count: usize,
         shared_suffix_count: usize,
         old_shared_suffix_start: usize,
@@ -1059,8 +1066,8 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     // When this function exits, the change list stack remains the same.
     fn diff_keyed_suffix(
         &self,
-        old: &[VNode<'a>],
-        new: &[VNode<'a>],
+        old: &[VNode<'bump>],
+        new: &[VNode<'bump>],
         new_shared_suffix_start: usize,
     ) {
         todo!()
@@ -1088,7 +1095,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(&mut self, old: &'a [VNode<'a>], new: &'a [VNode<'a>]) {
+    fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Handled these cases in `diff_children` before calling this function.
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
@@ -1163,7 +1170,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // When this function returns, the change list stack is in the same state.
-    pub fn remove_all_children(&mut self, old: &[VNode<'a>]) {
+    pub fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
         // debug_assert!(self.dom.traversal_is_committed());
         log::debug!("REMOVING CHILDREN");
         for _child in old {
@@ -1182,7 +1189,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     //     [... parent]
     //
     // When this function returns, the change list stack is in the same state.
-    pub fn create_and_append_children(&mut self, new: &[VNode<'a>]) {
+    pub fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
         // debug_assert!(self.dom.traversal_is_committed());
         for child in new {
             // self.create_and_append(node, parent)
@@ -1200,7 +1207,7 @@ impl<'a, Dom: RealDom> DiffMachine<'a, Dom> {
     // After the function returns, the child is no longer on the change list stack:
     //
     //     [... parent]
-    pub fn remove_self_and_next_siblings(&self, old: &[VNode<'a>]) {
+    pub fn remove_self_and_next_siblings(&self, old: &[VNode<'bump>]) {
         // debug_assert!(self.dom.traversal_is_committed());
         for child in old {
             if let VNode::Component(vcomp) = child {

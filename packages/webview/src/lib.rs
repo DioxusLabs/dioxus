@@ -5,6 +5,7 @@ use dioxus_core::prelude::*;
 use dioxus_core::virtual_dom::VirtualDom;
 use web_view::Handle;
 use web_view::{WVResult, WebView, WebViewBuilder};
+mod dom;
 
 static HTML_CONTENT: &'static str = include_str!("./../../liveview/index.html");
 
@@ -22,6 +23,7 @@ pub struct WebviewRenderer<T> {
     /// The root component used to render the Webview
     root: FC<T>,
 }
+
 enum InnerEvent {
     Initiate(Handle<()>),
 }
@@ -68,8 +70,10 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
             .unwrap();
 
         let mut vdom = VirtualDom::new_with_props(root, props);
-        let edits = vdom.rebuild()?;
-        let ref_edits = Arc::new(serde_json::to_string(&edits)?);
+        let mut real_dom = dom::WebviewDom::new();
+        vdom.rebuild(&mut real_dom)?;
+
+        let ref_edits = Arc::new(serde_json::to_string(&real_dom.edits)?);
 
         loop {
             view.step()

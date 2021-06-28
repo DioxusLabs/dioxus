@@ -38,9 +38,9 @@ impl DebugRenderer {
         Ok(())
     }
 
-    pub fn step<Dom: RealDom>(&mut self, machine: &mut DiffMachine<Dom>) -> Result<()> {
-        Ok(())
-    }
+    // pub fn step<Dom: RealDom>(&mut self, machine: &mut DiffMachine<Dom>) -> Result<()> {
+    //     Ok(())
+    // }
 
     // this does a "holy" compare - if something is missing in the rhs, it doesn't complain.
     // it only complains if something shows up that's not in the lhs, *or* if a value is different.

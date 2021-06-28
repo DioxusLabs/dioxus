@@ -8,7 +8,7 @@ impl DebugDom {
         Self { counter: 0 }
     }
 }
-impl RealDom for DebugDom {
+impl<'a> RealDom<'a> for DebugDom {
     fn push_root(&mut self, root: RealDomNode) {}
 
     fn append_child(&mut self) {}

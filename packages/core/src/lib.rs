@@ -8,9 +8,9 @@
 //!
 //!
 
-pub mod util;
 pub mod arena;
-pub mod component; // Logic for extending FC
+pub mod component;
+pub mod util; // Logic for extending FC
 
 pub mod debug_renderer;
 pub mod diff;

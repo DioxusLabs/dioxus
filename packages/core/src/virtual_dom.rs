@@ -196,10 +196,10 @@ impl VirtualDom {
 impl VirtualDom {
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     /// Currently this doesn't do what we want it to do
-    pub fn rebuild<'s, Dom: RealDom>(&'s mut self, realdom: &mut Dom) -> Result<()> {
+    pub fn rebuild<'s, Dom: RealDom<'s>>(&'s mut self, realdom: &mut Dom) -> Result<()> {
         let mut diff_machine = DiffMachine::new(
             realdom,
-            self.components.clone(),
+            &self.components,
             self.base_scope,
             self.event_queue.clone(),
         );
@@ -207,7 +207,6 @@ impl VirtualDom {
         // Schedule an update and then immediately call it on the root component
         // This is akin to a hook being called from a listener and requring a re-render
         // Instead, this is done on top-level component
-
         let base = self.components.try_get(self.base_scope)?;
 
         let update = &base.event_channel;
@@ -260,21 +259,17 @@ impl VirtualDom {
     // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
     //
     // A good project would be to remove all unsafe from this crate and move the unsafety into safer abstractions.
-    pub fn progress_with_event<Dom: RealDom>(
-        &mut self,
-        realdom: &mut Dom,
+    pub fn progress_with_event<'s, Dom: RealDom<'s>>(
+        &'s mut self,
+        realdom: &'_ mut Dom,
         trigger: EventTrigger,
     ) -> Result<()> {
         let id = trigger.component_id.clone();
 
         self.components.try_get_mut(id)?.call_listener(trigger)?;
 
-        let mut diff_machine = DiffMachine::new(
-            realdom,
-            self.components.clone(),
-            id,
-            self.event_queue.clone(),
-        );
+        let mut diff_machine =
+            DiffMachine::new(realdom, &self.components, id, self.event_queue.clone());
 
         self.progress_completely(&mut diff_machine)?;
 
@@ -285,9 +280,9 @@ impl VirtualDom {
     /// Only ever run each component once.
     ///
     /// The DiffMachine logs its progress as it goes which might be useful for certain types of renderers.
-    pub(crate) fn progress_completely<'s, Dom: RealDom>(
-        &'s mut self,
-        diff_machine: &'_ mut DiffMachine<'s, Dom>,
+    pub(crate) fn progress_completely<'a, 'bump, Dom: RealDom<'bump>>(
+        &'bump self,
+        diff_machine: &'_ mut DiffMachine<'a, 'bump, Dom>,
     ) -> Result<()> {
         // Add this component to the list of components that need to be difed
         // #[allow(unused_assignments)]
