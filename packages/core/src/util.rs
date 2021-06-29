@@ -24,15 +24,11 @@ impl<'a> RealDom<'a> for DebugDom {
         RealDomNode::new(self.counter)
     }
 
-    fn create_element(&mut self, tag: &str) -> RealDomNode {
+    fn create_element(&mut self, tag: &str, ns: Option<&'a str>) -> RealDomNode {
         self.counter += 1;
         RealDomNode::new(self.counter)
     }
 
-    fn create_element_ns(&mut self, tag: &str, namespace: &str) -> RealDomNode {
-        self.counter += 1;
-        RealDomNode::new(self.counter)
-    }
     fn create_placeholder(&mut self) -> RealDomNode {
         self.counter += 1;
         RealDomNode::new(self.counter)
@@ -51,7 +47,7 @@ impl<'a> RealDom<'a> for DebugDom {
 
     fn set_text(&mut self, text: &str) {}
 
-    fn set_attribute(&mut self, name: &str, value: &str, is_namespaced: bool) {}
+    fn set_attribute(&mut self, name: &str, value: &str, namespace: Option<&str>) {}
 
     fn remove_attribute(&mut self, name: &str) {}
 

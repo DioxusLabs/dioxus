@@ -30,22 +30,20 @@ use fxhash::{FxHashMap, FxHashSet};
 
 use std::{
     any::Any,
-    cell::Cell,
-    cmp::Ordering,
-    marker::PhantomData,
     rc::{Rc, Weak},
 };
 
 /// The accompanying "real dom" exposes an imperative API for controlling the UI layout
 ///
-/// Instead of having handles directly over nodes, Dioxus uses simple u32s as node IDs.
-/// This allows layouts with up to 4,294,967,295 nodes. If we use nohasher, then retrieving is very fast.
-
-/// The "RealDom" abstracts over the... real dom. Elements are mapped by ID. The RealDom is inteded to maintain a stack
-/// of real nodes as the diffing algorithm descenes through the tree. This means that whatever is on top of the stack
-/// will receive modifications. However, instead of using child-based methods for descending through the tree, we instead
-/// ask the RealDom to either push or pop real nodes onto the stack. This saves us the indexing cost while working on a
-/// single node
+/// Instead of having handles directly over nodes, Dioxus uses simple u64s as node IDs.
+/// The expectation is that the underlying renderer will mainain their Nodes in something like slotmap or an ECS memory
+/// where indexing is very fast. For reference, the slotmap in the WebSys renderer takes about 3ns to randomly access any
+/// node.
+///
+/// The "RealDom" abstracts over the... real dom. The RealDom trait assumes that the renderer maintains a stack of real
+/// nodes as the diffing algorithm descenes through the tree. This means that whatever is on top of the stack will receive
+/// any modifications that follow. This technique enables the diffing algorithm to avoid directly handling or storing any
+/// target-specific Node type as well as easily serializing the edits to be sent over a network or IPC connection.
 pub trait RealDom<'a> {
     // Navigation
     fn push_root(&mut self, root: RealDomNode);
@@ -60,8 +58,8 @@ pub trait RealDom<'a> {
 
     // Create
     fn create_text_node(&mut self, text: &'a str) -> RealDomNode;
-    fn create_element(&mut self, tag: &'static str) -> RealDomNode;
-    fn create_element_ns(&mut self, tag: &'static str, namespace: &'static str) -> RealDomNode;
+    fn create_element(&mut self, tag: &'static str, ns: Option<&'static str>) -> RealDomNode;
+
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     fn create_placeholder(&mut self) -> RealDomNode;
 
@@ -73,12 +71,11 @@ pub trait RealDom<'a> {
         element_id: usize,
         realnode: RealDomNode,
     );
-    // fn new_event_listener(&mut self, event: &str);
     fn remove_event_listener(&mut self, event: &'static str);
 
     // modify
     fn set_text(&mut self, text: &'a str);
-    fn set_attribute(&mut self, name: &'static str, value: &'a str, is_namespaced: bool);
+    fn set_attribute(&mut self, name: &'static str, value: &'a str, ns: Option<&'a str>);
     fn remove_attribute(&mut self, name: &'static str);
 
     // node ref
@@ -152,7 +149,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                     new.dom_id.set(old.dom_id.get());
 
                     self.diff_listeners(old.listeners, new.listeners);
-                    self.diff_attr(old.attributes, new.attributes, new.namespace.is_some());
+                    self.diff_attr(old.attributes, new.attributes, new.namespace);
                     self.diff_children(old.children, new.children);
                 }
                 // New node is a text element, need to replace the element with a simple text node
@@ -348,9 +345,9 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                 } = el;
                 // log::info!("Creating {:#?}", node);
                 let real_id = if let Some(namespace) = namespace {
-                    self.dom.create_element_ns(tag_name, namespace)
+                    self.dom.create_element(tag_name, Some(namespace))
                 } else {
-                    self.dom.create_element(tag_name)
+                    self.dom.create_element(tag_name, None)
                 };
                 el.dom_id.set(real_id);
 
@@ -361,8 +358,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                 });
 
                 for attr in *attributes {
-                    self.dom
-                        .set_attribute(&attr.name, &attr.value, namespace.is_some());
+                    self.dom.set_attribute(&attr.name, &attr.value, *namespace);
                 }
 
                 // Fast path: if there is a single text child, it is faster to
@@ -564,7 +560,8 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         &mut self,
         old: &'bump [Attribute<'bump>],
         new: &'bump [Attribute<'bump>],
-        is_namespaced: bool,
+        namespace: Option<&'bump str>,
+        // is_namespaced: bool,
     ) {
         // Do O(n^2) passes to add/update and remove attributes, since
         // there are almost always very few attributes.
@@ -575,14 +572,14 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             if new_attr.is_volatile() {
                 // self.dom.commit_traversal();
                 self.dom
-                    .set_attribute(new_attr.name, new_attr.value, is_namespaced);
+                    .set_attribute(new_attr.name, new_attr.value, namespace);
             } else {
                 for old_attr in old {
                     if old_attr.name == new_attr.name {
                         if old_attr.value != new_attr.value {
                             // self.dom.commit_traversal();
                             self.dom
-                                .set_attribute(new_attr.name, new_attr.value, is_namespaced);
+                                .set_attribute(new_attr.name, new_attr.value, namespace);
                         }
                         continue 'outer;
                     } else {
@@ -592,7 +589,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
 
                 // self.dom.commit_traversal();
                 self.dom
-                    .set_attribute(new_attr.name, new_attr.value, is_namespaced);
+                    .set_attribute(new_attr.name, new_attr.value, namespace);
             }
         }
 

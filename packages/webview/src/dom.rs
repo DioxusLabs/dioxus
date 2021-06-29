@@ -58,11 +58,11 @@ pub enum SerializedDom<'bump> {
         id: u64,
     },
     NewEventListener {
+        event: &'bump str,
         scope: ScopeIdx,
         node: u64,
         idx: usize,
     },
-
     RemoveEventListener {
         event: &'bump str,
     },
@@ -72,6 +72,7 @@ pub enum SerializedDom<'bump> {
     SetAttribute {
         field: &'bump str,
         value: &'bump str,
+        ns: Option<&'bump str>,
     },
     RemoveAttribute {
         name: &'bump str,
@@ -85,7 +86,7 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
     }
 
     fn append_child(&mut self) {
-        self.edits.push(AppendChild {});
+        self.edits.push(AppendChild);
     }
 
     fn replace_with(&mut self) {
@@ -107,25 +108,17 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
         id
     }
 
-    fn create_element(&mut self, tag: &'bump str) -> dioxus_core::virtual_dom::RealDomNode {
-        self.node_counter += 1;
-        let id = RealDomNode::new(self.node_counter);
-        self.edits.push(CreateElement { id: id.0, tag });
-        id
-    }
-
-    fn create_element_ns(
+    fn create_element(
         &mut self,
-        tag: &'static str,
-        namespace: &'static str,
+        tag: &'bump str,
+        ns: Option<&'bump str>,
     ) -> dioxus_core::virtual_dom::RealDomNode {
         self.node_counter += 1;
         let id = RealDomNode::new(self.node_counter);
-        self.edits.push(CreateElementNs {
-            id: id.0,
-            ns: namespace,
-            tag,
-        });
+        match ns {
+            Some(ns) => self.edits.push(CreateElementNs { id: id.0, ns, tag }),
+            None => self.edits.push(CreateElement { id: id.0, tag }),
+        }
         id
     }
 
@@ -138,13 +131,14 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
 
     fn new_event_listener(
         &mut self,
-        event: &str,
+        event: &'static str,
         scope: dioxus_core::prelude::ScopeIdx,
         element_id: usize,
         realnode: dioxus_core::virtual_dom::RealDomNode,
     ) {
         self.edits.push(NewEventListener {
             scope,
+            event,
             idx: element_id,
             node: realnode.0,
         });
@@ -158,8 +152,8 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
         self.edits.push(SetText { text });
     }
 
-    fn set_attribute(&mut self, field: &'static str, value: &'bump str, is_namespaced: bool) {
-        self.edits.push(SetAttribute { field, value });
+    fn set_attribute(&mut self, field: &'static str, value: &'bump str, ns: Option<&'bump str>) {
+        self.edits.push(SetAttribute { field, value, ns });
     }
 
     fn remove_attribute(&mut self, name: &'static str) {
