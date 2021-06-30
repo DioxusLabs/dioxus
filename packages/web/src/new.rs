@@ -84,7 +84,7 @@ impl WebsysDom {
     }
 }
 
-impl dioxus_core::diff::RealDom for WebsysDom {
+impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     fn push_root(&mut self, root: dioxus_core::virtual_dom::RealDomNode) {
         log::debug!("Called [push_root] {:?}", root);
         let key: DefaultKey = KeyData::from_ffi(root.0).into();
@@ -161,7 +161,7 @@ impl dioxus_core::diff::RealDom for WebsysDom {
     }
 
     fn create_placeholder(&mut self) -> RealDomNode {
-        self.create_element("pre")
+        self.create_element("pre", None)
     }
     fn create_text_node(&mut self, text: &str) -> dioxus_core::virtual_dom::RealDomNode {
         // let nid = self.node_counter.next();
@@ -179,38 +179,30 @@ impl dioxus_core::diff::RealDom for WebsysDom {
         RealDomNode::new(nid)
     }
 
-    fn create_element(&mut self, tag: &str) -> dioxus_core::virtual_dom::RealDomNode {
-        let el = self
-            .document
-            .create_element(tag)
-            .unwrap()
-            .dyn_into::<Node>()
-            .unwrap();
+    fn create_element(
+        &mut self,
+        tag: &str,
+        ns: Option<&'static str>,
+    ) -> dioxus_core::virtual_dom::RealDomNode {
+        let el = match ns {
+            Some(ns) => self
+                .document
+                .create_element_ns(Some(ns), tag)
+                .unwrap()
+                .dyn_into::<Node>()
+                .unwrap(),
+            None => self
+                .document
+                .create_element(tag)
+                .unwrap()
+                .dyn_into::<Node>()
+                .unwrap(),
+        };
 
         self.stack.push(el.clone());
         // let nid = self.node_counter.?next();
         let nid = self.nodes.insert(el).data().as_ffi();
         log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
-        RealDomNode::new(nid)
-    }
-
-    fn create_element_ns(
-        &mut self,
-        tag: &str,
-        namespace: &str,
-    ) -> dioxus_core::virtual_dom::RealDomNode {
-        let el = self
-            .document
-            .create_element_ns(Some(namespace), tag)
-            .unwrap()
-            .dyn_into::<Node>()
-            .unwrap();
-
-        self.stack.push(el.clone());
-        let nid = self.nodes.insert(el).data().as_ffi();
-        // let nid = self.node_counter.next();
-        // self.nodes.insert(nid, el);
-        log::debug!("Called [`create_element_ns`]: {:}", nid);
         RealDomNode::new(nid)
     }
 
@@ -252,60 +244,11 @@ impl dioxus_core::diff::RealDom for WebsysDom {
             entry.0 += 1;
         } else {
             let trigger = self.trigger.clone();
+
             let handler = Closure::wrap(Box::new(move |event: &web_sys::Event| {
                 // "Result" cannot be received from JS
                 // Instead, we just build and immediately execute a closure that returns result
-                let res = || -> anyhow::Result<EventTrigger> {
-                    log::debug!("Handling event!");
-
-                    let target = event
-                        .target()
-                        .expect("missing target")
-                        .dyn_into::<Element>()
-                        .expect("not a valid element");
-
-                    let typ = event.type_();
-                    use anyhow::Context;
-                    let val: String = target
-                        .get_attribute(&format!("dioxus-event-{}", typ))
-                        .context("")?;
-
-                    let mut fields = val.splitn(4, ".");
-
-                    let gi_id = fields
-                        .next()
-                        .and_then(|f| f.parse::<usize>().ok())
-                        .context("")?;
-                    let gi_gen = fields
-                        .next()
-                        .and_then(|f| f.parse::<u64>().ok())
-                        .context("")?;
-                    let el_id = fields
-                        .next()
-                        .and_then(|f| f.parse::<usize>().ok())
-                        .context("")?;
-                    let real_id = fields
-                        .next()
-                        .and_then(|f| f.parse::<u64>().ok().map(RealDomNode::new))
-                        .context("")?;
-
-                    // Call the trigger
-                    log::debug!(
-                        "decoded gi_id: {},  gi_gen: {},  li_idx: {}",
-                        gi_id,
-                        gi_gen,
-                        el_id
-                    );
-
-                    let triggered_scope = ScopeIdx::from_raw_parts(gi_id, gi_gen);
-                    Ok(EventTrigger::new(
-                        virtual_event_from_websys_event(event),
-                        triggered_scope,
-                        real_id,
-                    ))
-                };
-
-                match res() {
+                match decode_trigger(event) {
                     Ok(synthetic_event) => trigger.as_ref()(synthetic_event),
                     Err(_) => log::error!("Error decoding Dioxus event attribute."),
                 };
@@ -330,7 +273,7 @@ impl dioxus_core::diff::RealDom for WebsysDom {
         self.stack.top().set_text_content(Some(text))
     }
 
-    fn set_attribute(&mut self, name: &str, value: &str, is_namespaced: bool) {
+    fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
         log::debug!("Called [`set_attribute`]: {}, {}", name, value);
         if name == "class" {
             if let Some(el) = self.stack.top().dyn_ref::<Element>() {
@@ -600,4 +543,59 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
         }
         _ => VirtualEvent::OtherEvent,
     }
+}
+
+/// This function decodes a websys event and produces an EventTrigger
+/// With the websys implementation, we attach a unique key to the nodes
+fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
+    log::debug!("Handling event!");
+
+    let target = event
+        .target()
+        .expect("missing target")
+        .dyn_into::<Element>()
+        .expect("not a valid element");
+
+    let typ = event.type_();
+
+    use anyhow::Context;
+
+    // The error handling here is not very descriptive and needs to be replaced with a zero-cost error system
+    let val: String = target
+        .get_attribute(&format!("dioxus-event-{}", typ))
+        .context("")?;
+
+    let mut fields = val.splitn(4, ".");
+
+    let gi_id = fields
+        .next()
+        .and_then(|f| f.parse::<usize>().ok())
+        .context("")?;
+    let gi_gen = fields
+        .next()
+        .and_then(|f| f.parse::<u64>().ok())
+        .context("")?;
+    let el_id = fields
+        .next()
+        .and_then(|f| f.parse::<usize>().ok())
+        .context("")?;
+    let real_id = fields
+        .next()
+        .and_then(|f| f.parse::<u64>().ok().map(RealDomNode::new))
+        .context("")?;
+
+    // Call the trigger
+    log::debug!(
+        "decoded gi_id: {},  gi_gen: {},  li_idx: {}",
+        gi_id,
+        gi_gen,
+        el_id
+    );
+
+    let triggered_scope = ScopeIdx::from_raw_parts(gi_id, gi_gen);
+    Ok(EventTrigger::new(
+        virtual_event_from_websys_event(event),
+        triggered_scope,
+        real_id,
+    ))
 }

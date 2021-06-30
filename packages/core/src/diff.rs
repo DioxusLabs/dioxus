@@ -175,9 +175,19 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                         }
                         1 => {
                             // replace
+                            self.create(&new.children[0]);
+                            self.dom.replace_with();
                         }
                         _ => {
+                            todo!()
                             // remove and mount many
+                            // self.remove_self_and_next_siblings(old)
+                            //
+                            // let iter = ChildIterator::new(new_node, self.components).rev();
+                            // for child in iter {}
+                            // for child in new.children.iter().skip(1).rev() {
+                            //     self.dom.remove();
+                            // }
                         }
                     }
                 }
@@ -231,8 +241,9 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                             // Make sure we're dealing with the same component (by function pointer)
 
                             // Make sure the new component vnode is referencing the right scope id
-                            let scope_id = old.ass_scope.borrow().clone();
-                            *new.ass_scope.borrow_mut() = scope_id;
+                            let scope_id = old.ass_scope.get();
+                            new.ass_scope.set(scope_id);
+                            new.mounted_root.set(old.mounted_root.get());
 
                             // make sure the component's caller function is up to date
                             self.components
@@ -243,6 +254,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
 
                             // React doesn't automatically memoize, but we do.
                             // The cost is low enough to make it worth checking
+                            // Rust produces fairly performant comparison methods, sometimes SIMD accelerated
                             let should_render = match old.comparator {
                                 Some(comparator) => comparator(new),
                                 None => true,
@@ -277,7 +289,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                             // self.create_and_repalce(new_node, old.mounted_root.get());
 
                             // Now we need to remove the old scope and all of its descendents
-                            let old_scope = old.ass_scope.borrow().as_ref().unwrap().clone();
+                            let old_scope = old.ass_scope.get().unwrap();
                             self.destroy_scopes(old_scope);
                         }
                     }
@@ -408,7 +420,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                 let idx = self
                     .components
                     .with(|components| {
-                        components.insert_with(|new_idx| {
+                        components.insert_with_key(|new_idx| {
                             let parent_scope = self.components.try_get(parent_idx).unwrap();
                             let height = parent_scope.height + 1;
                             Scope::new(
@@ -437,7 +449,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                 let new_component = inner.get_mut(idx).unwrap();
 
                 // Actually initialize the caller's slot with the right address
-                *component.ass_scope.borrow_mut() = Some(idx);
+                component.ass_scope.set(Some(idx));
 
                 // Run the scope for one iteration to initialize it
                 new_component.run_scope().unwrap();
@@ -1108,20 +1120,20 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             // self.dom.go_to_sibling(i);
             // [... parent this_child]
 
-            let did = old_child.get_mounted_id().unwrap();
+            let did = old_child.get_mounted_id(self.components).unwrap();
             if did.0 == 0 {
-                log::debug!("Root is bad {:#?}", old_child);
+                log::debug!("Root is bad: {:#?}", old_child);
             }
             self.dom.push_root(did);
             self.diff_node(old_child, new_child);
 
-            let old_id = old_child.get_mounted_id().unwrap();
-            let new_id = new_child.get_mounted_id().unwrap();
+            let old_id = old_child.get_mounted_id(self.components).unwrap();
+            let new_id = new_child.get_mounted_id(self.components).unwrap();
 
             log::debug!(
                 "pushed root. {:?}, {:?}",
-                old_child.get_mounted_id().unwrap(),
-                new_child.get_mounted_id().unwrap()
+                old_child.get_mounted_id(self.components).unwrap(),
+                new_child.get_mounted_id(self.components).unwrap()
             );
             if old_id != new_id {
                 log::debug!("Mismatch: {:?}", new_child);
@@ -1261,6 +1273,12 @@ impl<'a> ChildIterator<'a> {
     }
 }
 
+// impl<'a> DoubleEndedIterator for ChildIterator<'a> {
+//     fn next_back(&mut self) -> Option<Self::Item> {
+//         todo!()
+//     }
+// }
+
 impl<'a> Iterator for ChildIterator<'a> {
     type Item = &'a VNode<'a>;
 
@@ -1296,7 +1314,7 @@ impl<'a> Iterator for ChildIterator<'a> {
 
                     // For components, we load their root and push them onto the stack
                     VNode::Component(sc) => {
-                        let scope = self.scopes.try_get(sc.ass_scope.borrow().unwrap()).unwrap();
+                        let scope = self.scopes.try_get(sc.ass_scope.get().unwrap()).unwrap();
 
                         // Simply swap the current node on the stack with the root of the component
                         *node = scope.root();

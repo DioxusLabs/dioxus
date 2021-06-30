@@ -16,6 +16,7 @@ use dioxus_web::WebsysRenderer;
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
+    log::debug!("starting!");
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 

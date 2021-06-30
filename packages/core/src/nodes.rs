@@ -4,6 +4,7 @@
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 
 use crate::{
+    arena::ScopeArena,
     events::VirtualEvent,
     innerlude::{Context, Properties, Scope, ScopeIdx, FC},
     nodebuilder::{text3, NodeCtx},
@@ -160,13 +161,13 @@ impl<'a> VNode<'a> {
         }
     }
 
-    pub fn get_mounted_id(&self) -> Option<RealDomNode> {
+    pub fn get_mounted_id(&self, components: &ScopeArena) -> Option<RealDomNode> {
         match self {
             VNode::Element(el) => Some(el.dom_id.get()),
             VNode::Text(te) => Some(te.dom_id.get()),
             VNode::Fragment(_) => todo!(),
             VNode::Suspended { .. } => todo!(),
-            VNode::Component(_) => todo!(),
+            VNode::Component(el) => Some(el.mounted_root.get()),
         }
     }
 }
@@ -312,9 +313,9 @@ pub struct VComponent<'src> {
 
     pub mounted_root: Cell<RealDomNode>,
 
-    pub ass_scope: RefCell<VCompAssociatedScope>,
+    pub ass_scope: Cell<VCompAssociatedScope>,
 
-    // pub comparator: Rc<dyn Fn(&VComponent) -> bool + 'src>,
+    // todo: swap the RC out with
     pub caller: Rc<dyn Fn(&Scope) -> VNode>,
 
     pub children: &'src [VNode<'src>],
@@ -347,8 +348,8 @@ impl<'a> VComponent<'a> {
         let props = bump.alloc(props);
         let raw_props = props as *const P as *const ();
 
-        let comparator: Option<&dyn Fn(&VComponent) -> bool> = {
-            Some(bump.alloc(move |other: &VComponent| {
+        let comparator: Option<&dyn Fn(&VComponent) -> bool> = Some(bump.alloc_with(|| {
+            move |other: &VComponent| {
                 // Safety:
                 // ------
                 //
@@ -358,6 +359,7 @@ impl<'a> VComponent<'a> {
                 // - Lifetime of P borrows from its parent
                 // - The parent scope still exists when method is called
                 // - Casting from T to *const () is portable
+                // - Casting raw props to P can only happen when P is static
                 //
                 // Explanation:
                 //   We are guaranteed that the props will be of the same type because
@@ -378,7 +380,12 @@ impl<'a> VComponent<'a> {
                 } else {
                     false
                 }
-            }))
+            }
+        }));
+
+        let key = match key {
+            Some(key) => NodeKey::new(key),
+            None => NodeKey(None),
         };
 
         Self {
@@ -386,11 +393,8 @@ impl<'a> VComponent<'a> {
             comparator,
             raw_props,
             children,
-            ass_scope: RefCell::new(None),
-            key: match key {
-                Some(key) => NodeKey::new(key),
-                None => NodeKey(None),
-            },
+            ass_scope: Cell::new(None),
+            key,
             caller: create_closure(component, raw_props),
             mounted_root: Cell::new(RealDomNode::empty()),
         }
@@ -403,11 +407,9 @@ fn create_closure<'a, P: 'a>(
     component: FC<P>,
     raw_props: *const (),
 ) -> Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r>> {
-    // ) -> impl for<'r> Fn(&'r Scope) -> VNode<'r> {
     let g: Captured = Rc::new(move |scp: &Scope| -> VNode {
         // cast back into the right lifetime
         let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
-        // let cx: Context<P2> = todo!();
         let cx: Context<P> = Context {
             props: safe_props,
             scope: scp,

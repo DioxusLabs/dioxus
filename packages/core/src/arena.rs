@@ -4,15 +4,15 @@ use std::{
     rc::Rc,
 };
 
-use generational_arena::Arena;
-
 use crate::innerlude::*;
+use slotmap::{DefaultKey, SlotMap};
 
 #[derive(Clone)]
 pub struct ScopeArena(pub Rc<RefCell<ScopeArenaInner>>);
+pub type ScopeMap = SlotMap<DefaultKey, Scope>;
 
 pub struct ScopeArenaInner {
-    pub(crate) arena: UnsafeCell<Arena<Scope>>,
+    pub(crate) arena: UnsafeCell<ScopeMap>,
     locks: HashMap<ScopeIdx, MutStatus>,
 }
 
@@ -91,7 +91,7 @@ enum MutStatus {
 //     }
 // }
 impl ScopeArena {
-    pub fn new(arena: Arena<Scope>) -> Self {
+    pub fn new(arena: ScopeMap) -> Self {
         ScopeArena(Rc::new(RefCell::new(ScopeArenaInner {
             arena: UnsafeCell::new(arena),
             locks: Default::default(),
@@ -114,17 +114,17 @@ impl ScopeArena {
         scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
     }
 
-    fn inner(&self) -> &Arena<Scope> {
+    fn inner(&self) -> &ScopeMap {
         todo!()
     }
 
-    fn inner_mut(&mut self) -> &mut Arena<Scope> {
+    fn inner_mut(&mut self) -> &mut ScopeMap {
         todo!()
     }
 
     /// THIS METHOD IS CURRENTLY UNSAFE
     /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
-    pub fn with<T>(&self, f: impl FnOnce(&mut Arena<Scope>) -> T) -> Result<T> {
+    pub fn with<T>(&self, f: impl FnOnce(&mut ScopeMap) -> T) -> Result<T> {
         let inner = unsafe { &mut *self.0.borrow().arena.get() };
         Ok(f(inner))
         // todo!()
@@ -155,7 +155,7 @@ impl ScopeArena {
             .ok_or_else(|| Error::FatalInternal("Scope not found"))
     }
 
-    unsafe fn inner_unchecked<'s>() -> &'s mut Arena<Scope> {
+    unsafe fn inner_unchecked<'s>() -> &'s mut ScopeMap {
         todo!()
     }
 }

@@ -22,7 +22,8 @@
 use crate::{arena::ScopeArena, innerlude::*};
 use bumpalo::Bump;
 use futures::FutureExt;
-use generational_arena::Arena;
+use slotmap::DefaultKey;
+use slotmap::SlotMap;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -33,7 +34,8 @@ use std::{
     pin::Pin,
     rc::{Rc, Weak},
 };
-pub type ScopeIdx = generational_arena::Index;
+pub type ScopeIdx = DefaultKey;
+// pub type ScopeIdx = generational_arena::Index;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -148,7 +150,7 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Example);
     /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let components = ScopeArena::new(Arena::new());
+        let components = ScopeArena::new(SlotMap::new());
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
         // Here, we need to make it manually, using an RC to force the Weak reference to stick around for the main scope.
@@ -173,7 +175,7 @@ impl VirtualDom {
 
         let base_scope = components
             .with(|arena| {
-                arena.insert_with(move |myidx| {
+                arena.insert_with_key(move |myidx| {
                     let event_channel = _event_queue.new_channel(0, myidx);
                     Scope::new(caller_ref, myidx, None, 0, event_channel, link, &[])
                 })

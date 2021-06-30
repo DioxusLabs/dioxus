@@ -13,9 +13,6 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 # todo: use wast for faster load/compile
 dioxus-core-macro = { path="../core-macro", version="0.1.1" }
 
-# Backs scopes and graphs between parent and children
-generational-arena = { version="0.2.8" }
-
 # Bumpalo is used as a micro heap backing each component
 bumpalo = { version="3.6.0", features=["collections", "boxed"] }
 
@@ -47,4 +44,5 @@ futures = "0.3.15"
 
 [features]
 default = []
-serialize = ["generational-arena/serde"]
+serialize = []
+# serialize = ["generational-arena/serde"]
