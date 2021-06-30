@@ -9,12 +9,12 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 fn Example(cx: Context<()>) -> VNode {
-    let (selection, set_selection) = use_state(&cx, || "..?");
+    let mut selection = use_signal(&cx, || "..?");
 
     cx.render(rsx! {
         h1 { "Hello, {selection}" }
-        button { "?", onclick: move |_| set_selection("world!")}
-        button { "?", onclick: move |_| set_selection("Dioxus 🎉")}
+        button { "?", onclick: move |_| *selection = "world!"}
+        button { "?", onclick: move |_| *selection = "Dioxus 🎉"}
     })
 };
 ```
@@ -52,6 +52,7 @@ If you know React, then you already know Dioxus.
 
 ## Explore
 
+- [**Fine-grained reactivity**: Skip the diff overhead with signals ](docs/guides/00-index.md)
 - [**HTML Templates**: Drop in existing HTML5 templates with html! macro](docs/guides/00-index.md)
 - [**RSX Templates**: Clean component design with rsx! macro](docs/guides/00-index.md)
 - [**Running the examples**: Explore the vast collection of samples, tutorials, and demos](docs/guides/00-index.md)
