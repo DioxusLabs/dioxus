@@ -6,7 +6,6 @@ use dioxus_core::{
     virtual_dom::RealDomNode,
 };
 use fxhash::FxHashMap;
-use nohash_hasher::IntMap;
 use slotmap::{DefaultKey, Key, KeyData};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
@@ -20,25 +19,19 @@ pub struct WebsysDom {
     root: Element,
 
     event_receiver: async_channel::Receiver<EventTrigger>,
+
     trigger: Arc<dyn Fn(EventTrigger)>,
 
-    // every callback gets a monotomically increasing callback ID
-    callback_id: usize,
-
     // map of listener types to number of those listeners
-    listeners: FxHashMap<String, (usize, Closure<dyn FnMut(&Event)>)>,
-
-    // Map of callback_id to component index and listener id
-    callback_map: FxHashMap<usize, (usize, usize)>,
+    // This is roughly a delegater
+    // TODO: check how infero delegates its events - some are more performant
+    listeners: FxHashMap<&'static str, (usize, Closure<dyn FnMut(&Event)>)>,
 
     // We need to make sure to add comments between text nodes
     // We ensure that the text siblings are patched by preventing the browser from merging
     // neighboring text nodes. Originally inspired by some of React's work from 2016.
     //  -> https://reactjs.org/blog/2016/04/07/react-v15.html#major-changes
     //  -> https://github.com/facebook/react/pull/5753
-    //
-    // `ptns` = Percy text node separator
-    // TODO
     last_node_was_text: bool,
 }
 impl WebsysDom {
@@ -48,7 +41,7 @@ impl WebsysDom {
             .document()
             .expect("must have access to the Document");
 
-        let (sender, mut receiver) = async_channel::unbounded::<EventTrigger>();
+        let (sender, receiver) = async_channel::unbounded::<EventTrigger>();
 
         let sender_callback = Arc::new(move |ev| {
             let c = sender.clone();
@@ -57,19 +50,13 @@ impl WebsysDom {
             });
         });
 
-        let mut nodes = slotmap::SlotMap::new();
-        // HashMap::with_capacity_and_hasher(1000, nohash_hasher::BuildNoHashHasher::default());
-        // let mut nodes =
-        //     HashMap::with_capacity_and_hasher(1000, nohash_hasher::BuildNoHashHasher::default());
+        let mut nodes = slotmap::SlotMap::with_capacity(1000);
 
         let root_id = nodes.insert(root.clone().dyn_into::<Node>().unwrap());
         Self {
             stack: Stack::with_capacity(10),
             nodes,
-
-            callback_id: 0,
             listeners: FxHashMap::default(),
-            callback_map: FxHashMap::default(),
             document,
             event_receiver: receiver,
             trigger: sender_callback,
@@ -208,7 +195,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
 
     fn new_event_listener(
         &mut self,
-        event: &str,
+        event: &'static str,
         scope: dioxus_core::prelude::ScopeIdx,
         el_id: usize,
         real_id: RealDomNode,
@@ -231,10 +218,10 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
             .dyn_ref::<Element>()
             .expect(&format!("not an element: {:?}", el));
 
-        let (gi_id, gi_gen) = (&scope).into_raw_parts();
+        let gi_id = scope.data().as_ffi();
         el.set_attribute(
             &format!("dioxus-event-{}", event),
-            &format!("{}.{}.{}.{}", gi_id, gi_gen, el_id, real_id.0),
+            &format!("{}.{}.{}", gi_id, el_id, real_id.0),
         )
         .unwrap();
 
@@ -565,13 +552,9 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
         .get_attribute(&format!("dioxus-event-{}", typ))
         .context("")?;
 
-    let mut fields = val.splitn(4, ".");
+    let mut fields = val.splitn(3, ".");
 
     let gi_id = fields
-        .next()
-        .and_then(|f| f.parse::<usize>().ok())
-        .context("")?;
-    let gi_gen = fields
         .next()
         .and_then(|f| f.parse::<u64>().ok())
         .context("")?;
@@ -585,17 +568,19 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
         .context("")?;
 
     // Call the trigger
-    log::debug!(
-        "decoded gi_id: {},  gi_gen: {},  li_idx: {}",
-        gi_id,
-        gi_gen,
-        el_id
-    );
+    log::debug!("decoded gi_id: {}, li_idx: {}", gi_id, el_id);
 
-    let triggered_scope = ScopeIdx::from_raw_parts(gi_id, gi_gen);
+    let triggered_scope: ScopeIdx = KeyData::from_ffi(gi_id).into();
     Ok(EventTrigger::new(
         virtual_event_from_websys_event(event),
         triggered_scope,
         real_id,
     ))
+}
+
+struct ListenerMap {}
+impl ListenerMap {
+    fn get(&self, event: &'static str) -> bool {
+        false
+    }
 }

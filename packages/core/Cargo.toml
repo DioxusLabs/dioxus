@@ -22,9 +22,6 @@ thiserror = "1"
 # faster hashmaps
 fxhash = "0.2.1"
 
-# even *faster* hashmaps for index-based types
-nohash-hasher = "0.2.0"
-
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
 
@@ -39,6 +36,8 @@ smallvec = "1.6.1"
 # Backs scopes and unique keys
 slotmap = "1.0.3"
 
+# backs the fiber system for suspended components
+# todo: would like to use something smaller or just roll our own futures manually
 futures = "0.3.15"
 
 

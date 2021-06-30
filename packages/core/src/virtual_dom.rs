@@ -377,7 +377,6 @@ pub struct Scope {
 
     pub event_channel: Rc<dyn Fn() + 'static>,
 
-    // pub event_queue: EventQueue,
     pub caller: Weak<OpaqueComponent>,
 
     pub hookidx: Cell<usize>,
@@ -422,7 +421,6 @@ impl Scope {
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub fn new<'creator_node>(
         caller: Weak<OpaqueComponent>,
-        // caller: Weak<OpaqueComponent<'creator_node>>,
         arena_idx: ScopeIdx,
         parent: Option<ScopeIdx>,
         height: u32,

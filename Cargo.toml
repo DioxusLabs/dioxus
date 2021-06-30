@@ -56,7 +56,7 @@ members = [
     "packages/core",
     "packages/html-namespace",
     "packages/web",
-    "packages/webview"
+    # "packages/webview"
     # "packages/cli",
     # "packages/atoms",
     # "packages/ssr",

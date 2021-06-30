@@ -42,6 +42,7 @@ pros:
 cons:
 
 - cost of querying individual nodes (about 7ns per node query for all sizes w/ nohasher)
+- 2-3 ns query cost with slotmap
 - old IDs need to be manually freed when subtrees are destroyed
   - can be collected as garbage after every render
 - loss of ids between renders........................
@@ -54,4 +55,10 @@ cons:
 
 ## idea: leak raw nodes and then reclaim them on drop
 
-## idea: bind
+# Fiber/Concurrency
+
+Dioxus is designed to support partial rendering. Partial rendering means that not _every_ component will be rendered on every tick. If some components were diffed.
+
+Any given component will only be rendered on a single thread, so data inside of components does not need to be send/sync.
+
+To schedule a render outside of the main component, the `suspense` method is exposed. `Suspense` consumes a future (valid for `bump) lifetime

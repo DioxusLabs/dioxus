@@ -8,6 +8,7 @@
 //!
 //! Here, we show to use Dioxus' Recoil state management solution to simplify app logic
 #![allow(non_snake_case)]
+use dioxus_core as dioxus;
 use dioxus_web::dioxus::prelude::*;
 
 use std::collections::HashMap;
@@ -141,27 +142,18 @@ pub fn FilterToggles(cx: Context<()>) -> VNode {
     let reducer = TodoManager(use_recoil_api(cx));
     let items_left = use_read(cx, &TODOS_LEFT);
 
-    let toggles = [
-        ("All", "", FilterState::All),
-        ("Active", "active", FilterState::Active),
-        ("Completed", "completed", FilterState::Completed),
-    ]
-    .iter()
-    .map(|(name, path, filter)| {
-        rsx!(
-            li { class: "{name}"
-                a {
-                    href: "{path}",
-                    onclick: move |_| reducer.set_filter(&filter),
-                    "{name}",
-                }
-            }
-        )
-    });
-
     let item_text = match items_left {
         1 => "item",
         _ => "items",
+    };
+
+    let toggles = rsx! {
+        ul {
+            class: "filters"
+            li { class: "All", a { href: "", onclick: move |_| reducer.set_filter(&FilterState::All), "All" }}
+            li { class: "Active", a { href: "active", onclick: move |_| reducer.set_filter(&FilterState::Active), "Active" }}
+            li { class: "Completed", a { href: "completed", onclick: move |_| reducer.set_filter(&FilterState::Completed), "Completed" }}
+        }
     };
 
     rsx! { in cx,
@@ -170,10 +162,7 @@ pub fn FilterToggles(cx: Context<()>) -> VNode {
                 strong {"{items_left}"}
                 span { "{item_text} left" }
             }
-            ul {
-                class: "filters"
-                {toggles}
-            }
+            {toggles}
         }
     }
 }
