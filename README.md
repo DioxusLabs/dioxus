@@ -9,12 +9,12 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 fn Example(cx: Context<()>) -> VNode {
-    let mut selection = use_signal(&cx, || "..?");
+    let mut name = use_signal(cx, || "..?");
 
     cx.render(rsx! {
-        h1 { "Hello, {selection}" }
-        button { "?", onclick: move |_| *selection = "world!"}
-        button { "?", onclick: move |_| *selection = "Dioxus 🎉"}
+        h1 { "Hello, {name}" }
+        button { "?", onclick: move |_| name.set("world!")}
+        button { "?", onclick: move |_| name.set("Dioxus 🎉")}
     })
 };
 ```
@@ -25,17 +25,24 @@ If you know React, then you already know Dioxus.
 
 ### **Things you'll love ❤️:**
 
-- **Ergonomic** design
-- **Minimal** boilerplate
-- Familiar design and semantics
+- Ergonomic design
+- Minimal boilerplate
 - Simple build, test, and deploy
-- **Compile-time correct** templating
-- Support for **fine-grained reactivity**
-- Support for **html!** and **rsx!** templating
+- Compile-time correct templating
+- Support for fine-grained reactivity
+- Support for html! and rsx! templates
 - SSR, WASM, desktop, and mobile support
-- Support for **asynchronous** batched rendering
-- Powerful and simple **integrated state management**
-- **Rust!** (enums, static types, modules, efficiency)
+- Support for asynchronous batched rendering
+- Powerful and simple integrated state management
+- Rust! (enums, static types, modules, efficiency)
+
+### Key Differentiators
+
+- Immutability by default
+- Built-in suspense system
+- Integrations for isomorphic apps
+- Skip diffing altogether with signal API
+- Extremely portable without runtime requirements
 
 ## Get Started with...
 

@@ -34,7 +34,7 @@ fn Comp(cx: Context<()>) -> VNode {
                 onchange: move |new| set_title(new.value())
             }
             ul {
-                {0..1000.map(|f| rsx!{
+                {0..10000.map(|f| rsx!{
                     li { "{f}" }
                 })}
             }
@@ -57,7 +57,7 @@ fn Comp(cx: Context<()>) -> VNode {
 For a slightly more interesting example, this component calculates the sum between two numbers, but totally skips the diffing process.
 
 ```rust
-fn Comp(cx: Context<()>) -> VNode {
+fn Calculator(cx: Context<()>) -> VNode {
     let mut a = use_signal(&cx, || 0);
     let mut b = use_signal(&cx, || 0);
     let mut c = a + b;
@@ -88,11 +88,11 @@ let mut a = use_signal(&cx, || 0);
 let c = *a + *b;
 ```
 
-Calling `deref` or `derefmut` is actually more complex than it seems. When a value is derefed, you're essentially telling Dioxus that _this_ element _needs_ to be subscribed to the signal. If a signal is derefed in _no_ context, the entire component will be subscribed and the advantage of skipping diffing will be lost. Dioxus will throw an error in the console when this happens to tell you that you're using signals wrong, but your component will continue to work.
+Calling `deref` or `derefmut` is actually more complex than it seems. When a value is derefed, you're essentially telling Dioxus that _this_ element _needs_ to be subscribed to the signal. If a signal is derefed outside of an element, the entire component will be subscribed and the advantage of skipping diffing will be lost. Dioxus will throw an error in the console when this happens to tell you that you're using signals wrong, but your component will continue to work.
 
 ## Global Signals
 
-Sometimes you want a signal to propagate across your app, either through far-away siblings or through deeply-nested components. In these cases, we the Dirac: Dioxus' first-class state management toolkit. Dirac atoms implement the Signal API. This component will bind the input element to the `TITLE` atom.
+Sometimes you want a signal to propagate across your app, either through far-away siblings or through deeply-nested components. In these cases, we use Dirac: Dioxus's first-class state management toolkit. Dirac atoms automatically implement the Signal API. This component will bind the input element to the `TITLE` atom.
 
 ```rust
 const TITLE: Atom<String> = || "".to_string();
@@ -120,9 +120,13 @@ const Receiver: FC<()> = |cx| {
 
 Dioxus knows that the receiver's `title` signal is used only in the text node, and skips diffing Receiver entirely, knowing to update _just_ the text node.
 
+If you build a complex app on top of Dirac, you'll likely notice that many of your components simply won't be diffed at all. For instance, our Receiver component will never be diffed once it has been mounted!
+
 ## Signals and Iterators
 
 Sometimes you want to use a collection of items. With Signals, you can bypass diffing for collections - a very powerful technique to avoid re-rendering on large collections.
+
+By default, Dioxus is limited when you use iter/map. With the `For` component, you can provide an iterator and a function for the iterator to map to.
 
 Dioxus automatically understands how to use your signals when mixed with iterators through Deref/DerefMut. This lets you efficiently map collections while avoiding the re-rendering of lists. In essence, signals act as a hint to Dioxus on how to avoid un-necessary checks and renders, making your app faster.
 
@@ -132,9 +136,7 @@ const List: FC<()> = |cx| {
     let dict = use_signal(&cx, &DICT);
     cx.render(rsx!(
         ul {
-            {dict.iter().map(|(k, v)| rsx!{
-                li { "{v}" }
-            })}
+            For { each: dict, map: |k, v| rsx!( li { "{v}" }) }
         }
     ))
 };
