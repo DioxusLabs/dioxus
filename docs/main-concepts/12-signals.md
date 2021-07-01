@@ -45,7 +45,7 @@ fn Comp(cx: Context<()>) -> VNode {
 
 Many experienced React developers will just say "this is bad design" - but we consider it to be a pit of failure, rather than a pit of success! That's why signals exist - to push you in a more performant (and ergonomic) direction. Signals let us directly bind values to their final place in the VirtualDOM. Whenever the signal value is updated, Dioxus will only the DOM nodes where that signal is used. Signals are built into Dioxus, so we can directly bind attributes of elements to their updates.
 
-We can use signals generated a two-way binding between data and the input box. Our text input is now just a two-line component!
+We can use signals to generate a two-way binding between data and the input box. Our text input is now just a two-line component!
 
 ```rust
 fn Comp(cx: Context<()>) -> VNode {

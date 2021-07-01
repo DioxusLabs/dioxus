@@ -16,7 +16,7 @@ static Example: FC<()> = |cx| {
     ))
 };
 
-pub fn render<'src, 'a, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a, P>(
+pub fn render<'src, 'a, F: for<'b> FnOnce(&'b NodeFactory<'src>) -> VNode<'src> + 'src + 'a, P>(
     cx: &'a Context<'src, P>,
     lazy_nodes: LazyNodes<'src, F>,
 ) -> VNode<'src> {

@@ -21,7 +21,14 @@ pub fn html(s: TokenStream) -> TokenStream {
 }
 
 /// The html! macro makes it easy for developers to write jsx-style markup in their components.
-/// We aim to keep functional parity with html templates.
+/// ```
+/// rsx! {
+///     div {
+///         class: "some special class"
+///         h1 { "Children too" }
+///     }
+/// }
+/// ```
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
     match syn::parse::<rsx::RsxRender>(s) {

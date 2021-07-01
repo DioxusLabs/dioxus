@@ -9,7 +9,7 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 fn Example(cx: Context<()>) -> VNode {
-    let mut name = use_signal(cx, || "..?");
+    let name = use_state(cx, || "..?");
 
     cx.render(rsx! {
         h1 { "Hello, {name}" }
@@ -81,8 +81,6 @@ If you know React, then you already know Dioxus.
 
 ## Why?
 
----
-
 TypeScript is a great addition to JavaScript, but comes with a lot of tweaking flags, a slight performance hit, and an uneven ecosystem where some of the most important packages are not properly typed. TypeScript provides a lot of great benefits to JS projects, but comes with its own "tax" that can slow down dev teams. Rust can be seen as a step up from TypeScript, supporting:
 
 - static types for _all_ libraries
@@ -93,7 +91,7 @@ TypeScript is a great addition to JavaScript, but comes with a lot of tweaking f
 - integrated documentation
 - inline built-in unit/integration testing
 - best-in-class error handling
-- simple and fast build system
+- simple and fast build system (compared to webpack!)
 - powerful standard library (no need for lodash or underscore)
 - include_str! for integrating html/css/svg templates directly
 - various macros (`html!`, `rsx!`) for fast template iteration

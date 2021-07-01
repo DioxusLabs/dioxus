@@ -29,7 +29,7 @@ where
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
 {
-    cx: &'b NodeCtx<'a>,
+    cx: &'b NodeFactory<'a>,
     key: NodeKey<'a>,
     tag_name: &'static str,
     // tag_name: &'a str,
@@ -71,7 +71,7 @@ impl<'a, 'b>
     /// let my_element_builder = ElementBuilder::new(&b, tag_name);
     /// # fn flip_coin() -> bool { true }
     /// ```
-    pub fn new(cx: &'b NodeCtx<'a>, tag_name: &'static str) -> Self {
+    pub fn new(cx: &'b NodeFactory<'a>, tag_name: &'static str) -> Self {
         let bump = cx.bump();
         ElementBuilder {
             cx,
@@ -532,20 +532,20 @@ impl<'a> IntoIterator for VNode<'a> {
     }
 }
 impl<'a> IntoVNode<'a> for VNode<'a> {
-    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
         self
     }
 }
 
 impl<'a> IntoVNode<'a> for &VNode<'a> {
-    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
         // cloning is cheap since vnodes are just references into bump arenas
         self.clone()
     }
 }
 
 pub trait IntoVNode<'a> {
-    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a>;
+    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a>;
 }
 
 pub trait VNodeBuilder<'a, G>: IntoIterator<Item = G>
@@ -555,7 +555,7 @@ where
 }
 
 impl<'a, F> VNodeBuilder<'a, LazyNodes<'a, F>> for LazyNodes<'a, F> where
-    F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a
+    F: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a
 {
 }
 
@@ -564,7 +564,7 @@ impl<'a, F> VNodeBuilder<'a, LazyNodes<'a, F>> for LazyNodes<'a, F> where
 // This is a bit of a hack to implement the IntoVNode trait for closure types.
 pub struct LazyNodes<'a, G>
 where
-    G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+    G: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
 {
     inner: G,
     _p: std::marker::PhantomData<&'a ()>,
@@ -572,7 +572,7 @@ where
 
 impl<'a, G> LazyNodes<'a, G>
 where
-    G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+    G: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
 {
     pub fn new(f: G) -> Self {
         Self {
@@ -589,9 +589,9 @@ where
 //  rsx! { {nodes } }
 impl<'a, G> IntoVNode<'a> for LazyNodes<'a, G>
 where
-    G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+    G: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
 {
-    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
         (self.inner)(cx)
     }
 }
@@ -599,7 +599,7 @@ where
 // Required because anything that enters brackets in the rsx! macro needs to implement IntoIterator
 impl<'a, G> IntoIterator for LazyNodes<'a, G>
 where
-    G: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+    G: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
 {
     type Item = Self;
     type IntoIter = std::iter::Once<Self::Item>;
@@ -609,7 +609,7 @@ where
 }
 
 impl<'a> IntoVNode<'a> for () {
-    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
         todo!();
         VNode::Suspended {
             real: Cell::new(RealDomNode::empty()),
@@ -618,7 +618,7 @@ impl<'a> IntoVNode<'a> for () {
 }
 
 impl<'a> IntoVNode<'a> for Option<()> {
-    fn into_vnode(self, cx: &NodeCtx<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
         todo!();
         VNode::Suspended {
             real: Cell::new(RealDomNode::empty()),
@@ -684,7 +684,7 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 }
 
 pub fn virtual_child<'a, T: Properties + 'a>(
-    cx: &NodeCtx<'a>,
+    cx: &NodeFactory<'a>,
     f: FC<T>,
     props: T,
     key: Option<&'a str>, // key: NodeKey<'a>,
@@ -702,7 +702,7 @@ pub fn virtual_child<'a, T: Properties + 'a>(
 }
 
 pub fn vfragment<'a>(
-    cx: &NodeCtx<'a>,
+    cx: &NodeFactory<'a>,
     key: Option<&'a str>, // key: NodeKey<'a>,
     children: &'a [VNode<'a>],
 ) -> VNode<'a> {
@@ -710,12 +710,12 @@ pub fn vfragment<'a>(
 }
 
 pub struct ChildrenList<'a, 'b> {
-    cx: &'b NodeCtx<'a>,
+    cx: &'b NodeFactory<'a>,
     children: bumpalo::collections::Vec<'a, VNode<'a>>,
 }
 
 impl<'a, 'b> ChildrenList<'a, 'b> {
-    pub fn new(cx: &'b NodeCtx<'a>) -> Self {
+    pub fn new(cx: &'b NodeFactory<'a>) -> Self {
         Self {
             cx,
             children: bumpalo::collections::Vec::new_in(cx.bump()),
@@ -735,16 +735,16 @@ impl<'a, 'b> ChildrenList<'a, 'b> {
     }
 }
 
-// NodeCtx is used to build VNodes in the component's memory space.
+// NodeFactory is used to build VNodes in the component's memory space.
 // This struct adds metadata to the final VNode about listeners, attributes, and children
 #[derive(Clone)]
-pub struct NodeCtx<'a> {
+pub struct NodeFactory<'a> {
     pub scope_ref: &'a Scope,
     pub listener_id: Cell<usize>,
     // pub listener_id: RefCell<usize>,
 }
 
-impl<'a> NodeCtx<'a> {
+impl<'a> NodeFactory<'a> {
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
         &self.scope_ref.cur_frame().bump
@@ -771,7 +771,7 @@ impl<'a> NodeCtx<'a> {
 }
 
 use std::fmt::Debug;
-impl Debug for NodeCtx<'_> {
+impl Debug for NodeFactory<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }

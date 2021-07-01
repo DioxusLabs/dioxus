@@ -13,7 +13,7 @@
 //! - The [`Scope`] object for mangning component lifecycle
 //! - The [`ActiveFrame`] object for managing the Scope`s microheap
 //! - The [`Context`] object for exposing VirtualDOM API to components
-//! - The [`NodeCtx`] object for lazyily exposing the `Context` API to the nodebuilder API
+//! - The [`NodeFactory`] object for lazyily exposing the `Context` API to the nodebuilder API
 //! - The [`Hook`] object for exposing state management in components.
 //!
 //! This module includes just the barebones for a complete VirtualDOM API.
@@ -677,11 +677,11 @@ pub trait Scoped<'src>: Sized {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    fn render<'a, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a>(
+    fn render<'a, F: for<'b> FnOnce(&'b NodeFactory<'src>) -> VNode<'src> + 'src + 'a>(
         self,
         lazy_nodes: LazyNodes<'src, F>,
     ) -> VNode<'src> {
-        lazy_nodes.into_vnode(&NodeCtx {
+        lazy_nodes.into_vnode(&NodeFactory {
             scope_ref: self.get_scope(),
             listener_id: 0.into(),
         })
@@ -883,7 +883,7 @@ Any function prefixed with "use" should not be called conditionally.
 pub struct SuspendedContext {}
 
 impl SuspendedContext {
-    pub fn render<'a, 'src, F: for<'b> FnOnce(&'b NodeCtx<'src>) -> VNode<'src> + 'src + 'a>(
+    pub fn render<'a, 'src, F: for<'b> FnOnce(&'b NodeFactory<'src>) -> VNode<'src> + 'src + 'a>(
         self,
         lazy_nodes: LazyNodes<'src, F>,
     ) -> VNode<'src> {

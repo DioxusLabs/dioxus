@@ -20,6 +20,7 @@ pub mod events; // Manages the synthetic event API
 pub mod hooks; // Built-in hooks
 pub mod nodebuilder; // Logic for building VNodes with a direct syntax
 pub mod nodes; // Logic for the VNodes
+pub mod signals;
 pub mod virtual_dom; // Most fun logic starts here, manages the lifecycle and suspense
 
 pub mod builder {
@@ -57,7 +58,7 @@ pub mod prelude {
     pub use crate::nodebuilder::LazyNodes;
 
     pub use crate::nodebuilder::ChildrenList;
-    pub use crate::nodebuilder::NodeCtx;
+    pub use crate::nodebuilder::NodeFactory;
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
     pub use crate::innerlude::FC;

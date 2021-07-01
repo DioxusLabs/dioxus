@@ -7,7 +7,7 @@ use crate::{
     arena::ScopeArena,
     events::VirtualEvent,
     innerlude::{Context, Properties, Scope, ScopeIdx, FC},
-    nodebuilder::{text3, NodeCtx},
+    nodebuilder::{text3, NodeFactory},
     virtual_dom::RealDomNode,
 };
 use bumpalo::Bump;
@@ -336,7 +336,7 @@ impl<'a> VComponent<'a> {
     ///
     /// If the CanMemo is `false`, then the macro will call the backup method which always defaults to "false"
     pub fn new<P: Properties + 'a>(
-        cx: &NodeCtx<'a>,
+        cx: &NodeFactory<'a>,
         component: FC<P>,
         props: P,
         key: Option<&'a str>,

@@ -105,7 +105,7 @@ impl ToTokens for RsxRender {
             }),
             // Otherwise we just build the LazyNode wrapper
             None => out_tokens.append_all(quote! {
-                dioxus::prelude::LazyNodes::new(move |__cx|{
+                dioxus::prelude::LazyNodes::new(move |__cx: &NodeFactory|{
                     let bump = &__cx.bump();
                     #inner
                  })

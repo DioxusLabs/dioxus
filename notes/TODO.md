@@ -1,4 +1,4 @@
-- [] Move the builder API onto NodeCtx
+- [] Move the builder API onto NodeFactory
 - [] Transition away from names and towards compile-time safe tags
 - [] Fix diffing of fragments
 - [] Properly integrate memoization to prevent safety issues with children

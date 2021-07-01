@@ -67,7 +67,7 @@ pub mod on {
 
     use crate::{
         builder::ElementBuilder,
-        builder::NodeCtx,
+        builder::NodeFactory,
         innerlude::{Attribute, Listener, RealDomNode, VNode},
     };
     use std::cell::Cell;
@@ -79,7 +79,7 @@ pub mod on {
             $(
                 $(
                     pub fn $name<'a>(
-                        c: &'_ NodeCtx<'a>,
+                        c: &'_ NodeFactory<'a>,
                         callback: impl Fn(Rc<dyn $eventdata>) + 'a,
                     ) -> Listener<'a> {
                         let bump = &c.bump();

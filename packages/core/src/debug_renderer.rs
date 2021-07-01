@@ -51,7 +51,7 @@ impl DebugRenderer {
     // Does not handle children or lifecycles and will always fail the test if they show up in the rhs
     pub fn compare<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
     where
-        F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+        F: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
     {
         Ok(())
     }
@@ -60,7 +60,7 @@ impl DebugRenderer {
     // Ignores listeners and children components
     pub fn compare_full<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
     where
-        F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+        F: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
     {
         Ok(())
     }
@@ -71,7 +71,7 @@ impl DebugRenderer {
 
     pub fn render_nodes<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
     where
-        F: for<'b> FnOnce(&'b NodeCtx<'a>) -> VNode<'a> + 'a,
+        F: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
     {
         Ok(())
     }
@@ -86,7 +86,7 @@ impl DebugVNodeSource {
     }
 
     fn render_nodes(&self) -> VNode {
-        // let cx = NodeCtx
+        // let cx = NodeFactory
         todo!()
     }
 }

@@ -8,11 +8,11 @@
 //!
 //!
 
-struct NodeCtx {}
+struct NodeFactory {}
 
-struct div<'a>(&NodeCtx);
+struct div<'a>(&NodeFactory);
 impl<'a> div<'a> {
-    fn new(cx: &NodeCtx) -> Self {
+    fn new(cx: &NodeFactory) -> Self {
         div(cx)
     }
 }
@@ -21,7 +21,7 @@ fn main() {}
 
 fn factory(
     // this is your mom
-    cx: &NodeCtx,
+    cx: &NodeFactory,
 ) {
     div::new(cx);
     rsx! {
