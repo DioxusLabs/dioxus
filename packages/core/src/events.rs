@@ -177,10 +177,53 @@ pub mod on {
     }
 
     pub trait KeyboardEventInner: Debug {
-        fn char_code(&self) -> usize;
+        fn char_code(&self) -> u32;
+
+        /// Get the key code as an enum Variant.
+        ///
+        /// This is intended for things like arrow keys, escape keys, function keys, and other non-international keys.
+        /// To match on unicode sequences, use the [`key`] method - this will return a string identifier instead of a limited enum.
+        ///
+        ///
+        /// ## Example
+        ///
+        /// ```rust
+        /// use dioxus::KeyCode;
+        /// match event.key_code() {
+        ///     KeyCode::Escape => {}
+        ///     KeyCode::LeftArrow => {}
+        ///     KeyCode::RightArrow => {}
+        ///     _ => {}
+        /// }
+        /// ```
+        ///
+        fn key_code(&self) -> KeyCode;
+
+        /// Check if the ctrl key was pressed down
         fn ctrl_key(&self) -> bool;
+
+        /// Identify which "key" was entered.
+        ///
+        /// This is the best method to use for all languages. They key gets mapped to a String sequence which you can match on.
+        /// The key isn't an enum because there are just so many context-dependent keys.
+        ///
+        /// A full list on which keys to use is available at:
+        /// https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// match event.key().as_str() {
+        ///     "Esc" | "Escape" => {}
+        ///     "ArrowDown" => {}
+        ///     "ArrowLeft" => {}
+        ///      _ => {}
+        /// }
+        /// ```
+        ///
         fn key(&self) -> String;
-        fn key_code(&self) -> usize;
+
+        // fn key(&self) -> String;
         fn locale(&self) -> String;
         fn location(&self) -> usize;
         fn meta_key(&self) -> bool;
@@ -285,6 +328,225 @@ pub mod on {
     }
 
     pub trait ToggleEventInner: Debug {}
+
+    pub use util::KeyCode;
+    mod util {
+
+        #[derive(Clone, Copy)]
+        pub enum KeyCode {
+            Backspace = 8,
+            Tab = 9,
+            Enter = 13,
+            Shift = 16,
+            Ctrl = 17,
+            Alt = 18,
+            Pause = 19,
+            CapsLock = 20,
+            Escape = 27,
+            PageUp = 33,
+            PageDown = 34,
+            End = 35,
+            Home = 36,
+            LeftArrow = 37,
+            UpArrow = 38,
+            RightArrow = 39,
+            DownArrow = 40,
+            Insert = 45,
+            Delete = 46,
+            _0 = 48,
+            _1 = 49,
+            _2 = 50,
+            _3 = 51,
+            _4 = 52,
+            _5 = 53,
+            _6 = 54,
+            _7 = 55,
+            _8 = 56,
+            _9 = 57,
+            A = 65,
+            B = 66,
+            C = 67,
+            D = 68,
+            E = 69,
+            F = 70,
+            G = 71,
+            H = 72,
+            I = 73,
+            J = 74,
+            K = 75,
+            L = 76,
+            M = 77,
+            N = 78,
+            O = 79,
+            P = 80,
+            Q = 81,
+            R = 82,
+            S = 83,
+            T = 84,
+            U = 85,
+            V = 86,
+            W = 87,
+            X = 88,
+            Y = 89,
+            Z = 90,
+            LeftWindow = 91,
+            RightWindow = 92,
+            SelectKey = 93,
+            Numpad0 = 96,
+            Numpad1 = 97,
+            Numpad2 = 98,
+            Numpad3 = 99,
+            Numpad4 = 100,
+            Numpad5 = 101,
+            Numpad6 = 102,
+            Numpad7 = 103,
+            Numpad8 = 104,
+            Numpad9 = 105,
+            Multiply = 106,
+            Add = 107,
+            Subtract = 109,
+            DecimalPoint = 110,
+            Divide = 111,
+            F1 = 112,
+            F2 = 113,
+            F3 = 114,
+            F4 = 115,
+            F5 = 116,
+            F6 = 117,
+            F7 = 118,
+            F8 = 119,
+            F9 = 120,
+            F10 = 121,
+            F11 = 122,
+            F12 = 123,
+            NumLock = 144,
+            ScrollLock = 145,
+            Semicolon = 186,
+            EqualSign = 187,
+            Comma = 188,
+            Dash = 189,
+            Period = 190,
+            ForwardSlash = 191,
+            GraveAccent = 192,
+            OpenBracket = 219,
+            BackSlash = 220,
+            CloseBraket = 221,
+            SingleQuote = 222,
+            Unknown,
+        }
+
+        impl KeyCode {
+            pub fn from_raw_code(i: u8) -> Self {
+                use KeyCode::*;
+                match i {
+                    8 => Backspace,
+                    9 => Tab,
+                    13 => Enter,
+                    16 => Shift,
+                    17 => Ctrl,
+                    18 => Alt,
+                    19 => Pause,
+                    20 => CapsLock,
+                    27 => Escape,
+                    33 => PageUp,
+                    34 => PageDown,
+                    35 => End,
+                    36 => Home,
+                    37 => LeftArrow,
+                    38 => UpArrow,
+                    39 => RightArrow,
+                    40 => DownArrow,
+                    45 => Insert,
+                    46 => Delete,
+                    48 => _0,
+                    49 => _1,
+                    50 => _2,
+                    51 => _3,
+                    52 => _4,
+                    53 => _5,
+                    54 => _6,
+                    55 => _7,
+                    56 => _8,
+                    57 => _9,
+                    65 => A,
+                    66 => B,
+                    67 => C,
+                    68 => D,
+                    69 => E,
+                    70 => F,
+                    71 => G,
+                    72 => H,
+                    73 => I,
+                    74 => J,
+                    75 => K,
+                    76 => L,
+                    77 => M,
+                    78 => N,
+                    79 => O,
+                    80 => P,
+                    81 => Q,
+                    82 => R,
+                    83 => S,
+                    84 => T,
+                    85 => U,
+                    86 => V,
+                    87 => W,
+                    88 => X,
+                    89 => Y,
+                    90 => Z,
+                    91 => LeftWindow,
+                    92 => RightWindow,
+                    93 => SelectKey,
+                    96 => Numpad0,
+                    97 => Numpad1,
+                    98 => Numpad2,
+                    99 => Numpad3,
+                    100 => Numpad4,
+                    101 => Numpad5,
+                    102 => Numpad6,
+                    103 => Numpad7,
+                    104 => Numpad8,
+                    105 => Numpad9,
+                    106 => Multiply,
+                    107 => Add,
+                    109 => Subtract,
+                    110 => DecimalPoint,
+                    111 => Divide,
+                    112 => F1,
+                    113 => F2,
+                    114 => F3,
+                    115 => F4,
+                    116 => F5,
+                    117 => F6,
+                    118 => F7,
+                    119 => F8,
+                    120 => F9,
+                    121 => F10,
+                    122 => F11,
+                    123 => F12,
+                    144 => NumLock,
+                    145 => ScrollLock,
+                    186 => Semicolon,
+                    187 => EqualSign,
+                    188 => Comma,
+                    189 => Dash,
+                    190 => Period,
+                    191 => ForwardSlash,
+                    192 => GraveAccent,
+                    219 => OpenBracket,
+                    220 => BackSlash,
+                    221 => CloseBraket,
+                    222 => SingleQuote,
+                    _ => Unknown,
+                }
+            }
+
+            // get the raw code
+            fn raw_code(&self) -> u32 {
+                *self as u32
+            }
+        }
+    }
 }
 
 mod tests {

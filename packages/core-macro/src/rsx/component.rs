@@ -19,7 +19,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
-    token, Expr, Ident, Result, Token,
+    token, Expr, ExprClosure, Ident, Result, Token,
 };
 
 pub struct Component {
@@ -153,14 +153,48 @@ impl ToTokens for Component {
 // the struct's fields info
 pub struct ComponentField {
     name: Ident,
-    content: Expr,
+    content: ContentField,
+}
+
+enum ContentField {
+    ManExpr(Expr),
+    OnHandler(ExprClosure),
+
+    // A handler was provided in {} tokens
+    OnHandlerRaw(Expr),
+}
+
+impl ToTokens for ContentField {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            ContentField::ManExpr(e) => e.to_tokens(tokens),
+            ContentField::OnHandler(e) => tokens.append_all(quote! {
+                __cx.bump().alloc(#e)
+            }),
+            ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
+                __cx.bump().alloc(#e)
+            }),
+        }
+    }
 }
 
 impl Parse for ComponentField {
     fn parse(input: ParseStream) -> Result<Self> {
         let name = Ident::parse_any(input)?;
         input.parse::<Token![:]>()?;
-        let content = input.parse()?;
+
+        let name_str = name.to_string();
+        let content = if name_str.starts_with("on") {
+            if input.peek(token::Brace) {
+                let content;
+                syn::braced!(content in input);
+                ContentField::OnHandlerRaw(content.parse()?)
+            } else {
+                ContentField::OnHandler(input.parse()?)
+            }
+        } else {
+            ContentField::ManExpr(input.parse::<Expr>()?)
+        };
 
         Ok(Self { name, content })
     }
