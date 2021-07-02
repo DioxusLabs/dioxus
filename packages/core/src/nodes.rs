@@ -297,6 +297,11 @@ impl<'a> NodeKey<'a> {
     pub fn new(key: &'a str) -> Self {
         NodeKey(Some(key))
     }
+
+    #[inline]
+    pub fn new_opt(key: Option<&'a str>) -> Self {
+        NodeKey(key)
+    }
 }
 
 // ==============================

@@ -80,33 +80,46 @@ impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
 
-        let using_manual_override = self.manual_props.is_some();
-
-        let mut builder = {
-            match &self.manual_props {
-                Some(manual_props) => quote! { #manual_props },
-                None => quote! { fc_to_builder(#name) },
-            }
-        };
-
         let mut has_key = None;
 
-        for field in &self.body {
-            if field.name.to_string() == "key" {
-                has_key = Some(field);
-            } else {
-                match using_manual_override {
-                    true => panic!("Currently we don't support manual props and prop fields. Choose either manual props or prop fields"),
-                    false => builder.append_all(quote! {#field}),
+        let builder = match &self.manual_props {
+            Some(manual_props) => {
+                let mut toks = quote! {
+                    let mut __manual_props = #manual_props;
+                };
+                for field in &self.body {
+                    if field.name.to_string() == "key" {
+                        has_key = Some(field);
+                    } else {
+                        let name = &field.name;
+                        let val = &field.content;
+                        toks.append_all(quote! {
+                            __manual_props.#name = #val;
+                        });
+                    }
                 }
+                toks.append_all(quote! {
+                    __manual_props
+                });
+                quote! {{
+                    #toks
+                }}
             }
-        }
-
-        if !using_manual_override {
-            builder.append_all(quote! {
-                .build()
-            });
-        }
+            None => {
+                let mut toks = quote! { fc_to_builder(#name) };
+                for field in &self.body {
+                    if field.name.to_string() == "key" {
+                        has_key = Some(field);
+                    } else {
+                        toks.append_all(quote! {#field})
+                    }
+                }
+                toks.append_all(quote! {
+                    .build()
+                });
+                toks
+            }
+        };
 
         let key_token = match has_key {
             Some(field) => {

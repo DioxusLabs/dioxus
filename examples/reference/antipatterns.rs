@@ -21,10 +21,10 @@ fn main() {}
 /// Antipattern: Iterators without keys
 /// -----------------------------------
 ///
-/// This is considered an anti-pattern for performance reasons. Dioxus must diff your current and old layout and must
+/// This is considered an anti-pattern for performance reasons. Dioxus will diff your current and old layout and must
 /// take a slower path if it can't correlate old elements with new elements. Lists are particularly susceptible to the
 /// "slow" path, so you're strongly encouraged to provide a unique ID stable between renders. Additionally, providing
-/// the *wrong* keys is even worse. Keys should be:
+/// the *wrong* keys is even worse - props might be assigned to the wrong components! Keys should be:
 /// - Unique
 /// - Stable
 /// - Predictable
@@ -39,7 +39,7 @@ static AntipatternNoKeys: FC<NoKeysProps> = |cx| {
     rsx!(in cx, ul {
         {cx.data.iter().map(|(k, v)| rsx!(li { "List item: {v}" }))}
     });
-    // Like this:
+    // RIGHT: Like this:
     rsx!(in cx, ul {
         {cx.data.iter().map(|(k, v)| rsx!(li { key: "{k}", "List item: {v}" }))}
     })

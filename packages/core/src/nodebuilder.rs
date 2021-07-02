@@ -768,6 +768,25 @@ impl<'a> NodeFactory<'a> {
     > {
         ElementBuilder::new(self, tag_name)
     }
+
+    pub fn child_list(&self) -> ChildrenList {
+        ChildrenList::new(&self)
+    }
+
+    pub fn fragment_builder<'b>(
+        &'b self,
+        key: Option<&'a str>,
+        builder: impl FnOnce(ChildrenList<'a, 'b>) -> &'a [VNode<'a>],
+    ) -> VNode<'a> {
+        self.fragment(builder(ChildrenList::new(&self)), key)
+    }
+
+    pub fn fragment(&self, children: &'a [VNode<'a>], key: Option<&'a str>) -> VNode<'a> {
+        VNode::Fragment(self.bump().alloc(VFragment {
+            children,
+            key: NodeKey::new_opt(key),
+        }))
+    }
 }
 
 use std::fmt::Debug;

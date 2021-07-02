@@ -120,7 +120,7 @@ static Example: FC<()> = |cx| {
             {if true {
                 rsx!(in cx, h1 {"Top text"})
             } else {
-                cx.render(rsx!( h1 {"Bottom text"}))
+                rsx!(in cx, h1 {"Bottom text"})
             }}
 
             // returning "None" is a bit noisy... but rare in practice
@@ -168,7 +168,13 @@ static Example: FC<()> = |cx| {
                 rsx!(Taller { ..props })
             }}
 
-            // Can take children
+            // Spreading can also be overridden manually
+            Taller {
+                ..TallerProps { a: "ballin!" }
+                a: "not ballin!"
+            }
+
+            // Can take children too!
             Taller { a: "asd", div {"hello world!"} }
         }
     })

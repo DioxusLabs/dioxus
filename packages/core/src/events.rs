@@ -4,7 +4,7 @@
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
-use std::rc::Rc;
+use std::{ops::Deref, rc::Rc};
 
 use crate::{innerlude::ScopeIdx, virtual_dom::RealDomNode};
 
@@ -28,21 +28,21 @@ impl EventTrigger {
 #[derive(Debug)]
 pub enum VirtualEvent {
     // Real events
-    ClipboardEvent(Rc<dyn on::ClipboardEvent>),
-    CompositionEvent(Rc<dyn on::CompositionEvent>),
-    KeyboardEvent(Rc<dyn on::KeyboardEvent>),
-    FocusEvent(Rc<dyn on::FocusEvent>),
-    FormEvent(Rc<dyn on::FormEvent>),
-    SelectionEvent(Rc<dyn on::SelectionEvent>),
-    TouchEvent(Rc<dyn on::TouchEvent>),
-    UIEvent(Rc<dyn on::UIEvent>),
-    WheelEvent(Rc<dyn on::WheelEvent>),
-    MediaEvent(Rc<dyn on::MediaEvent>),
-    AnimationEvent(Rc<dyn on::AnimationEvent>),
-    TransitionEvent(Rc<dyn on::TransitionEvent>),
-    ToggleEvent(Rc<dyn on::ToggleEvent>),
-    MouseEvent(Rc<dyn on::MouseEvent>),
-    PointerEvent(Rc<dyn on::PointerEvent>),
+    ClipboardEvent(on::ClipboardEvent),
+    CompositionEvent(on::CompositionEvent),
+    KeyboardEvent(on::KeyboardEvent),
+    FocusEvent(on::FocusEvent),
+    FormEvent(on::FormEvent),
+    SelectionEvent(on::SelectionEvent),
+    TouchEvent(on::TouchEvent),
+    UIEvent(on::UIEvent),
+    WheelEvent(on::WheelEvent),
+    MediaEvent(on::MediaEvent),
+    AnimationEvent(on::AnimationEvent),
+    TransitionEvent(on::TransitionEvent),
+    ToggleEvent(on::ToggleEvent),
+    MouseEvent(on::MouseEvent),
+    PointerEvent(on::PointerEvent),
 
     // Whenever a task is ready (complete) Dioxus produces this "FiberEvent"
     FiberEvent { task_id: u16 },
@@ -75,12 +75,21 @@ pub mod on {
     use super::VirtualEvent;
 
     macro_rules! event_directory {
-        ( $( $eventdata:ident: [ $( $name:ident )* ]; )* ) => {
+        ( $( $eventdata:ident($wrapper:ident): [ $( $name:ident )* ]; )* ) => {
             $(
+                #[derive(Debug)]
+                pub struct $wrapper(Rc<dyn $eventdata>);
+                impl Deref for $wrapper {
+                    type Target = Rc<dyn $eventdata>;
+                    fn deref(&self) -> &Self::Target {
+                        &self.0
+                    }
+                }
+
                 $(
                     pub fn $name<'a>(
                         c: &'_ NodeFactory<'a>,
-                        callback: impl Fn(Rc<dyn $eventdata>) + 'a,
+                        callback: impl Fn($wrapper) + 'a,
                     ) -> Listener<'a> {
                         let bump = &c.bump();
                         Listener {
@@ -88,7 +97,7 @@ pub mod on {
                             mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
                             scope: c.scope_ref.arena_idx,
                             callback: bump.alloc(move |evt: VirtualEvent| match evt {
-                                VirtualEvent::$eventdata(event) => callback(event),
+                                VirtualEvent::$wrapper(event) => callback(event),
                                 _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
                             }),
                         }
@@ -99,36 +108,36 @@ pub mod on {
     }
 
     event_directory! {
-        ClipboardEvent: [copy cut paste];
-        CompositionEvent: [compositionend compositionstart compositionupdate];
-        KeyboardEvent: [keydown keypress keyup];
-        FocusEvent: [focus blur];
-        FormEvent: [change input invalid reset submit];
-        MouseEvent: [
+        ClipboardEventInner(ClipboardEvent): [copy cut paste];
+        CompositionEventInner(CompositionEvent): [compositionend compositionstart compositionupdate];
+        KeyboardEventInner(KeyboardEvent): [keydown keypress keyup];
+        FocusEventInner(FocusEvent): [focus blur];
+        FormEventInner(FormEvent): [change input invalid reset submit];
+        MouseEventInner(MouseEvent): [
             click contextmenu doubleclick drag dragend dragenter dragexit
             dragleave dragover dragstart drop mousedown mouseenter mouseleave
             mousemove mouseout mouseover mouseup
         ];
-        PointerEvent: [
+        PointerEventInner(PointerEvent): [
             pointerdown pointermove pointerup pointercancel gotpointercapture
             lostpointercapture pointerenter pointerleave pointerover pointerout
         ];
-        SelectionEvent: [select];
-        TouchEvent: [touchcancel touchend touchmove touchstart];
-        UIEvent: [scroll];
-        WheelEvent: [wheel];
-        MediaEvent: [
+        SelectionEventInner(SelectionEvent): [select];
+        TouchEventInner(TouchEvent): [touchcancel touchend touchmove touchstart];
+        UIEventInner(UIEvent): [scroll];
+        WheelEventInner(WheelEvent): [wheel];
+        MediaEventInner(MediaEvent): [
             abort canplay canplaythrough durationchange emptied encrypted
             ended error loadeddata loadedmetadata loadstart pause play
             playing progress ratechange seeked seeking stalled suspend
             timeupdate volumechange waiting
         ];
-        AnimationEvent: [animationstart animationend animationiteration];
-        TransitionEvent: [transitionend];
-        ToggleEvent: [toggle];
+        AnimationEventInner(AnimationEvent): [animationstart animationend animationiteration];
+        TransitionEventInner(TransitionEvent): [transitionend];
+        ToggleEventInner(ToggleEvent): [toggle];
     }
 
-    trait GenericEvent {
+    pub trait GenericEventInner {
         /// Returns whether or not a specific event is a bubbling event
         fn bubbles(&self) -> bool;
         /// Sets or returns whether the event should propagate up the hierarchy or not
@@ -159,15 +168,15 @@ pub mod on {
         fn time_stamp(&self) -> usize;
     }
 
-    pub trait ClipboardEvent: Debug {
+    pub trait ClipboardEventInner: Debug + GenericEventInner {
         // DOMDataTransfer clipboardData
     }
 
-    pub trait CompositionEvent: Debug {
+    pub trait CompositionEventInner: Debug {
         fn data(&self) -> String;
     }
 
-    pub trait KeyboardEvent: Debug {
+    pub trait KeyboardEventInner: Debug {
         fn char_code(&self) -> usize;
         fn ctrl_key(&self) -> bool;
         fn key(&self) -> String;
@@ -181,15 +190,15 @@ pub mod on {
         fn get_modifier_state(&self, key_code: usize) -> bool;
     }
 
-    pub trait FocusEvent: Debug {
-        /* DOMEventTarget relatedTarget */
+    pub trait FocusEventInner: Debug {
+        /* DOMEventInnerTarget relatedTarget */
     }
 
-    pub trait FormEvent: Debug {
+    pub trait FormEventInner: Debug {
         fn value(&self) -> String;
     }
 
-    pub trait MouseEvent: Debug {
+    pub trait MouseEventInner: Debug {
         fn alt_key(&self) -> bool;
         fn button(&self) -> i16;
         fn buttons(&self) -> u16;
@@ -205,7 +214,7 @@ pub mod on {
         fn get_modifier_state(&self, key_code: &str) -> bool;
     }
 
-    pub trait PointerEvent: Debug {
+    pub trait PointerEventInner: Debug {
         // Mouse only
         fn alt_key(&self) -> bool;
         fn button(&self) -> usize;
@@ -232,9 +241,9 @@ pub mod on {
         fn is_primary(&self) -> bool;
     }
 
-    pub trait SelectionEvent: Debug {}
+    pub trait SelectionEventInner: Debug {}
 
-    pub trait TouchEvent: Debug {
+    pub trait TouchEventInner: Debug {
         fn alt_key(&self) -> bool;
         fn ctrl_key(&self) -> bool;
         fn meta_key(&self) -> bool;
@@ -245,37 +254,37 @@ pub mod on {
         // touches: DOMTouchList,
     }
 
-    pub trait UIEvent: Debug {
+    pub trait UIEventInner: Debug {
         // DOMAbstractView view
         fn detail(&self) -> i32;
     }
 
-    pub trait WheelEvent: Debug {
+    pub trait WheelEventInner: Debug {
         fn delta_mode(&self) -> i32;
         fn delta_x(&self) -> i32;
         fn delta_y(&self) -> i32;
         fn delta_z(&self) -> i32;
     }
 
-    pub trait MediaEvent: Debug {}
+    pub trait MediaEventInner: Debug {}
 
-    pub trait ImageEvent: Debug {
+    pub trait ImageEventInner: Debug {
         //     load error
     }
 
-    pub trait AnimationEvent: Debug {
+    pub trait AnimationEventInner: Debug {
         fn animation_name(&self) -> String;
         fn pseudo_element(&self) -> String;
         fn elapsed_time(&self) -> f32;
     }
 
-    pub trait TransitionEvent: Debug {
+    pub trait TransitionEventInner: Debug {
         fn property_name(&self) -> String;
         fn pseudo_element(&self) -> String;
         fn elapsed_time(&self) -> f32;
     }
 
-    pub trait ToggleEvent: Debug {}
+    pub trait ToggleEventInner: Debug {}
 }
 
 mod tests {
