@@ -2,12 +2,14 @@
 
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
+use dioxus_core::serialize::DomEdits;
 use dioxus_core::{
     diff::RealDom,
     prelude::ScopeIdx,
     virtual_dom::{RealDomNode, VirtualDom},
 };
 use serde::{Deserialize, Serialize};
+use DomEdits::*;
 
 fn test() {
     const App: FC<()> = |cx| cx.render(rsx! { div {}});
@@ -20,7 +22,7 @@ fn test() {
 }
 
 pub struct WebviewDom<'bump> {
-    pub edits: Vec<SerializedDom<'bump>>,
+    pub edits: Vec<DomEdits<'bump>>,
     pub node_counter: u64,
 }
 impl WebviewDom<'_> {
@@ -31,55 +33,6 @@ impl WebviewDom<'_> {
         }
     }
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum SerializedDom<'bump> {
-    PushRoot {
-        root: u64,
-    },
-    AppendChild,
-    ReplaceWith,
-    Remove,
-    RemoveAllChildren,
-    CreateTextNode {
-        text: &'bump str,
-        id: u64,
-    },
-    CreateElement {
-        tag: &'bump str,
-        id: u64,
-    },
-    CreateElementNs {
-        tag: &'bump str,
-        id: u64,
-        ns: &'bump str,
-    },
-    CreatePlaceholder {
-        id: u64,
-    },
-    NewEventListener {
-        event: &'bump str,
-        scope: ScopeIdx,
-        node: u64,
-        idx: usize,
-    },
-    RemoveEventListener {
-        event: &'bump str,
-    },
-    SetText {
-        text: &'bump str,
-    },
-    SetAttribute {
-        field: &'bump str,
-        value: &'bump str,
-        ns: Option<&'bump str>,
-    },
-    RemoveAttribute {
-        name: &'bump str,
-    },
-}
-
-use SerializedDom::*;
 impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
     fn push_root(&mut self, root: dioxus_core::virtual_dom::RealDomNode) {
         self.edits.push(PushRoot { root: root.0 });

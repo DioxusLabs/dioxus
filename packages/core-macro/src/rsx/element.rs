@@ -161,10 +161,10 @@ impl Parse for ElementAttr {
                     // todo: better error here
                     AttrType::BumpText(s.parse::<LitStr>()?)
                 }
-                "style" => {
-                    //
-                    todo!("inline style not yet supported")
-                }
+                // "style" => {
+                //     //
+                //     todo!("inline style not yet supported")
+                // }
                 "classes" => {
                     //
                     todo!("custom class lsit not supported")

@@ -28,7 +28,8 @@ button:active {
 }
 
 #wrapper {
-  height: 100vh;
+  /* height: 100vh; */
+  height: max-content;
   
   display: flex;
   align-items: center;
@@ -58,7 +59,14 @@ button:active {
   color: white;
   background: #1c191c;
   line-height: 130px;
-  font-size: 6em;
+  /* font-size: 6em; */
+    font-size: 16px;
+    font-size: 4vw;
+
+
+  max-height: 160px;
+  padding: 0 30px;
+  /* height: 80px; */
   
   flex: 1;
 }
@@ -68,10 +76,10 @@ button:active {
 }
 
 .calculator-display .auto-scaling-text {
-  padding: 0 30px;
-  position: absolute;
-  right: 0;
-  transform-origin: right;
+  /* padding: 0 30px; */
+  /* position: absolute; */
+  /* right: 0; */
+  /* transform-origin: right; */
 }
 
 .calculator-keypad {

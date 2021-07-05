@@ -10,7 +10,7 @@ Dioxus-webview is an attempt at making a simpler "Tauri" where creating desktop 
 async fn main() {
    dioxus_webview::new(|cx| {
        let (count, set_count) = use_state(&cx, || 0);
-       html! {
+       cx.render(html! {
             <div>
                 <h1> "Dioxus Desktop Demo" </h1>
                 <p> "Count is {count}"</p>
@@ -18,7 +18,7 @@ async fn main() {
                     "Click to increment"
                 </button>
             </div>
-       }
+       })
    })
    .configure_webview(|view| {
       // custom webview config options

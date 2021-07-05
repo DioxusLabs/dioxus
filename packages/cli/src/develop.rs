@@ -1,5 +1,5 @@
 use crate::{builder::BuildConfig, cli::DevelopOptions, config::Config, error::Result};
-use async_std::{prelude::FutureExt};
+use async_std::prelude::FutureExt;
 
 use async_std::future;
 use async_std::prelude::*;
@@ -89,7 +89,8 @@ async fn launch_server(outdir: PathBuf) -> Result<()> {
         .serve_dir(p)?;
 
     let port = "8080";
-    let serve_addr = format!("127.0.0.1:{}", port);
+    let serve_addr = format!("0.0.0.0:{}", port);
+    // let serve_addr = format!("127.0.0.1:{}", port);
 
     info!("App available at http://{}", serve_addr);
     app.listen(serve_addr).await?;

@@ -104,28 +104,29 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 
 ### Phase 1: The Basics
 
-| Feature                 | Dioxus | React | Notes for Dioxus                                 |
-| ----------------------- | ------ | ----- | ------------------------------------------------ |
-| Conditional Rendering   | ✅     | ✅    | if/then to hide/show component                   |
-| Map, Iterator           | ✅     | ✅    | map/filter/reduce rsx!                           |
-| Keyed Components        | ✅     | ✅    | advanced diffing with keys                       |
-| Web                     | ✅     | ✅    | renderer for web browser                         |
-| Desktop (webview)       | ✅     | ✅    | renderer for desktop                             |
-| Context                 | ✅     | ✅    | share state through the tree                     |
-| Hook                    | ✅     | ✅    | memory cells in components                       |
-| SSR                     | ✅     | ✅    | render directly to string                        |
-| Runs natively           | ✅     | ❓    | runs as a portable binary w/o a runtime (Node)   |
-| Component Children      | ✅     | ✅    | cx.children() as a list of nodes                 |
-| Null components         | ✅     | ✅    | allow returning no components                    |
-| No-div components       | ✅     | ✅    | components that render components                |
-| Fragments               | ✅     | ✅    | rsx! can return multiple elements without a root |
-| Manual Props            | ✅     | ✅    | Manually pass in props with spread syntax        |
-| Controlled Inputs       | ✅     | ✅    | stateful wrappers around inputs                  |
-| Fine-grained reactivity | 🛠      | ❓    | Skip diffing for fine-grain updates              |
-| Suspense                | 🛠      | 🛠     | schedule future render from future/promise       |
-| 1st class global state  | 🛠      | ✅    | redux/recoil/mobx on top of context              |
-| CSS/Inline Styles       | 🛠      | ✅    | syntax for inline styles/attribute groups[2]     |
-| NodeRef                 | 🛠      | ✅    | gain direct access to nodes [1]                  |
+| Feature                 | Dioxus | React | Notes for Dioxus                                      |
+| ----------------------- | ------ | ----- | ----------------------------------------------------- |
+| Conditional Rendering   | ✅      | ✅     | if/then to hide/show component                        |
+| Map, Iterator           | ✅      | ✅     | map/filter/reduce rsx!                                |
+| Keyed Components        | ✅      | ✅     | advanced diffing with keys                            |
+| Web                     | ✅      | ✅     | renderer for web browser                              |
+| Desktop (webview)       | ✅      | ✅     | renderer for desktop                                  |
+| Context                 | ✅      | ✅     | share state through the tree                          |
+| Hook                    | ✅      | ✅     | memory cells in components                            |
+| SSR                     | ✅      | ✅     | render directly to string                             |
+| Component Children      | ✅      | ✅     | cx.children() as a list of nodes                      |
+| Null components         | ✅      | ✅     | allow returning no components                         |
+| No-div components       | ✅      | ✅     | components that render components                     |
+| Fragments               | ✅      | ✅     | rsx! can return multiple elements without a root      |
+| Manual Props            | ✅      | ✅     | Manually pass in props with spread syntax             |
+| Controlled Inputs       | ✅      | ✅     | stateful wrappers around inputs                       |
+| NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                       |
+| CSS/Inline Styles       | 🛠      | ✅     | syntax for inline styles/attribute groups[2]          |
+| 1st class global state  | 🛠      | ✅     | redux/recoil/mobx on top of context                   |
+| Suspense                | 🛠      | ✅     | schedule future render from future/promise            |
+| Cooperative Scheduling  | 🛠      | ✅     | Prioritize important events over non-important events |
+| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                   |
+| Runs natively           | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)        |
 
 - [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
 - [2] Would like to solve this in a more general way. Something like attribute groups that's not styling-specific.
@@ -134,23 +135,23 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 
 | Feature               | Dioxus | React | Notes for Dioxus                   |
 | --------------------- | ------ | ----- | ---------------------------------- |
-| 1st class router      | 👀     | ✅    | Hook built on top of history       |
-| Assets                | 👀     | ✅    | include css/svg/img url statically |
-| Integrated classnames | 🛠      | ❓    | built-in `classnames`              |
-| Transition            | 👀     | 🛠     | High-level control over suspense   |
-| Animation             | 👀     | ✅    | Spring-style animations            |
-| Mobile                | 👀     | ✅    | Render with cacao                  |
-| Desktop (native)      | 👀     | ✅    | Render with native desktop         |
-| 3D Renderer           | 👀     | ✅    | react-three-fiber                  |
+| 1st class router      | 👀      | ✅     | Hook built on top of history       |
+| Assets                | 👀      | ✅     | include css/svg/img url statically |
+| Integrated classnames | 🛠      | ❓     | built-in `classnames`              |
+| Transition            | 👀      | 🛠     | High-level control over suspense   |
+| Animation             | 👀      | ✅     | Spring-style animations            |
+| Mobile                | 👀      | ✅     | Render with cacao                  |
+| Desktop (native)      | 👀      | ✅     | Render with native desktop         |
+| 3D Renderer           | 👀      | ✅     | react-three-fiber                  |
 
 ### Phase 3: Additional Complexity
 
 | Feature              | Dioxus | React | Notes for Dioxus                     |
 | -------------------- | ------ | ----- | ------------------------------------ |
-| Portal               | ❓     | ✅    | cast elements through tree           |
-| Error/Panic boundary | ❓     | ✅    | catch panics and display custom BSOD |
-| Code-splitting       | 👀     | ✅    | Make bundle smaller/lazy             |
-| LiveView             | 👀     | ❓    | Example for SSR + WASM apps          |
+| Portal               | ❓      | ✅     | cast elements through tree           |
+| Error/Panic boundary | ❓      | ✅     | catch panics and display custom BSOD |
+| Code-splitting       | 👀      | ✅     | Make bundle smaller/lazy             |
+| LiveView             | 👀      | ❓     | Example for SSR + WASM apps          |
 
 - ✅ = implemented and working
 - 🛠 = actively being worked on

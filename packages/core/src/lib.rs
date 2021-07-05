@@ -8,6 +8,9 @@
 //!
 //!
 
+#[cfg(feature = "serialize")]
+pub mod serialize;
+
 pub mod arena;
 pub mod component;
 pub mod util; // Logic for extending FC

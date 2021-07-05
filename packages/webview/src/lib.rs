@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use dioxus_core::prelude::*;
 use dioxus_core::virtual_dom::VirtualDom;
-use web_view::Handle;
+use web_view::{escape, Handle};
 use web_view::{WVResult, WebView, WebViewBuilder};
 mod dom;
 
-static HTML_CONTENT: &'static str = include_str!("./../../liveview/index.html");
+static HTML_CONTENT: &'static str = include_str!("./index.html");
 
 pub fn launch<T: Properties + 'static>(
     builder: impl FnOnce(DioxusWebviewBuilder) -> DioxusWebviewBuilder,
@@ -79,13 +79,15 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
             view.step()
                 .expect("should not fail")
                 .expect("should not fail");
+            std::thread::sleep(std::time::Duration::from_millis(15));
 
             if let Ok(event) = receiver.try_recv() {
                 if let InnerEvent::Initiate(handle) = event {
                     let editlist = ref_edits.clone();
                     handle
                         .dispatch(move |view| {
-                            view.eval(format!("EditListReceived(`{}`);", editlist).as_str())
+                            let escaped = escape(&editlist);
+                            view.eval(&format!("EditListReceived({});", escaped))
                         })
                         .expect("Dispatch failed");
                 }

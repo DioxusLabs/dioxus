@@ -134,7 +134,7 @@ static HTML_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 static SVG_TAGS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     [
         // SVTG
-        "svg", "path", "g",
+        "svg", "path", "g", "text",
     ]
     .iter()
     .cloned()
