@@ -60,7 +60,7 @@ members = [
     "packages/html-namespace",
     "packages/web",
     # "packages/webview"
-    # "packages/cli",
+    "packages/cli",
     # "packages/atoms",
     # "packages/ssr",
     # "packages/docsite",

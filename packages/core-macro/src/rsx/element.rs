@@ -68,19 +68,43 @@ impl ToTokens for Element {
         let name = &self.name.to_string();
 
         tokens.append_all(quote! {
-            dioxus::builder::ElementBuilder::new(__cx, #name)
+            __cx.element(#name)
         });
+        // dioxus::builder::ElementBuilder::new(__cx, #name)
+        // dioxus::builder::ElementBuilder::new(__cx, #name)
 
+        // Add attributes
+        // TODO: conver to the "attrs" syntax for compile-time known sizes
         for attr in self.attrs.iter() {
             attr.to_tokens(tokens);
         }
 
-        let mut children = self.children.iter();
-        while let Some(child) = children.next() {
-            let inner_toks = child.to_token_stream();
+        // let mut children = self.children.iter();
+        // while let Some(child) = children.next() {
+        //     let inner_toks = child.to_token_stream();
+        //     tokens.append_all(quote! {
+        //         .iter_child(#inner_toks)
+        //     })
+        // }
+
+        let mut childs = quote! {};
+        for child in &self.children {
+            match child {
+                Node::Text(e) => e.to_tokens(&mut childs),
+                Node::Element(e) => e.to_tokens(&mut childs),
+                Node::RawExpr(e) => quote! {
+                    __cx.fragment_from_iter(#e)
+                }
+                .to_tokens(&mut childs),
+            }
+            childs.append_all(quote! {,})
+        }
+        if self.children.len() > 0 {
             tokens.append_all(quote! {
-                .iter_child(#inner_toks)
-            })
+                .children([
+                    #childs
+                ])
+            });
         }
 
         tokens.append_all(quote! {

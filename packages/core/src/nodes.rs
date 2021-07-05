@@ -29,7 +29,11 @@ pub enum VNode<'src> {
     /// A text node (node type `TEXT_NODE`).
     Text(VText<'src>),
 
-    /// A fragment is a "virtual position" in the DOM
+    /// A fragment is a list of elements that might have a dynamic order.
+    /// Normally, children will have a fixed order. However, Fragments allow a dynamic order and must be diffed differently.
+    ///
+    /// Fragments don't have a single mount into the dom, so their position is characterized by the head and tail nodes.
+    ///
     /// Fragments may have children and keys
     Fragment(&'src VFragment<'src>),
 

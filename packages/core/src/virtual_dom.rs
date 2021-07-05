@@ -487,6 +487,14 @@ impl Scope {
         self.caller = broken_caller;
     }
 
+    pub fn update_children<'creator_node>(
+        &mut self,
+        child_nodes: &'creator_node [VNode<'creator_node>],
+    ) {
+        let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+        self.child_nodes = child_nodes;
+    }
+
     /// Create a new context and run the component with references from the Virtual Dom
     /// This function downcasts the function pointer based on the stored props_type
     ///
@@ -597,9 +605,9 @@ impl Scope {
 ///
 /// }
 ///
-/// fn example(cx: Context, props: &Props -> VNode {
+/// fn example(cx: Context<Props>) -> VNode {
 ///     html! {
-///         <div> "Hello, {cx.cx.name}" </div>
+///         <div> "Hello, {cx.name}" </div>
 ///     }
 /// }
 /// ```

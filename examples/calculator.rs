@@ -98,16 +98,16 @@ static App: FC<()> = |cx| {
                     CalculatorKey { name: "key-0", onclick: move |_| input_digit(0), "0" }
                     CalculatorKey { name: "key-dot", onclick: move |_|  input_dot(), "●" }
 
-                    {(1..9).map(|k| rsx!{
+                    {(1..9).map(move |k| rsx!{
                         CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  input_digit(k), "{k}" }
                     })}
                 }
                 div { class: "operator-keys"
-                    CalculatorKey { name:"key-divide", onclick: move |_| operator.set(Some(Operator::Div)) "÷" }
-                    CalculatorKey { name:"key-multiply", onclick: move |_| operator.set(Some(Operator::Mul)) "×" }
-                    CalculatorKey { name:"key-subtract", onclick: move |_| operator.set(Some(Operator::Sub)) "−" }
-                    CalculatorKey { name:"key-add", onclick: move |_| operator.set(Some(Operator::Add)) "+" }
-                    CalculatorKey { name:"key-equals", onclick: move |_| perform_operation() "=" }
+                    CalculatorKey { name: "key-divide", onclick: move |_| operator.set(Some(Operator::Div)) "÷" }
+                    CalculatorKey { name: "key-multiply", onclick: move |_| operator.set(Some(Operator::Mul)) "×" }
+                    CalculatorKey { name: "key-subtract", onclick: move |_| operator.set(Some(Operator::Sub)) "−" }
+                    CalculatorKey { name: "key-add", onclick: move |_| operator.set(Some(Operator::Add)) "+" }
+                    CalculatorKey { name: "key-equals", onclick: move |_| perform_operation() "=" }
                 }
             }
         }
@@ -116,7 +116,10 @@ static App: FC<()> = |cx| {
 
 #[derive(Props)]
 struct CalculatorKeyProps<'a> {
+    /// Name!
     name: &'static str,
+
+    /// Click!
     onclick: &'a dyn Fn(MouseEvent),
 }
 

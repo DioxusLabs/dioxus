@@ -77,49 +77,6 @@ impl WebsysRenderer {
                 .progress_with_event(&mut websys_dom, trigger)?;
         }
 
-        // let edits = self.internal_dom.rebuild()?;
-        // log::debug!("Received edits: {:#?}", edits);
-        // edits.iter().for_each(|edit| {
-        //     log::debug!("patching with  {:?}", edit);
-        //     patch_machine.handle_edit(edit);
-        // });
-
-        // patch_machine.reset();
-        // let root_node = body_element.first_child().unwrap();
-        // patch_machine.stack.push(root_node.clone());
-
-        // log::debug!("patch stack size {:?}", patch_machine.stack);
-
-        // Event loop waits for the receiver to finish up
-        // TODO! Connect the sender to the virtual dom's suspense system
-        // Suspense is basically an external event that can force renders to specific nodes
-        // while let Ok(event) = receiver.recv().await {
-        // log::debug!("Stack before entrance {:#?}", patch_machine.stack.top());
-        // log::debug!("patch stack size before {:#?}", patch_machine.stack);
-        // patch_machine.reset();
-        // patch_machine.stack.push(root_node.clone());
-        // self.internal_dom
-        //     .progress_with_event(&mut websys_dom, event)?;
-        // let edits = self.internal_dom.progress_with_event(event)?;
-        // log::debug!("Received edits: {:#?}", edits);
-
-        // for edit in &edits {
-        //     // log::debug!("edit stream {:?}", edit);
-        //     // log::debug!("Stream stack {:#?}", patch_machine.stack.top());
-        //     patch_machine.handle_edit(edit);
-        // }
-
-        // log::debug!("patch stack size after {:#?}", patch_machine.stack);
-        // patch_machine.reset();
-        // our root node reference gets invalidated
-        // not sure why
-        // for now, just select the first child again.
-        // eventually, we'll just make our own root element instead of using body
-        // or just use body directly IDEK
-        // let root_node = body_element.first_child().unwrap();
-        // patch_machine.stack.push(root_node.clone());
-        // }
-
         Ok(()) // should actually never return from this, should be an error, rustc just cant see it
     }
 }
@@ -135,7 +92,7 @@ fn prepare_websys_dom() -> Element {
 
     // Build a dummy div
     let container: &Element = body.as_ref();
-    container.set_inner_html("");
+    // container.set_inner_html("");
     container
         .append_child(
             document
@@ -163,6 +120,299 @@ fn prepare_websys_dom() -> Element {
 //         })
 //     };
 // }
+
+/// Wasm-bindgen has a performance option to intern commonly used phrases
+/// This saves the decoding cost, making the interaction of Rust<->JS more performant.
+/// We intern all the HTML tags and attributes, making most operations much faster.
+///
+/// Interning takes about 1ms at the start of the app, but saves a *ton* of time later on.
+pub fn intern_cache() {
+    let cached_words = [
+        // All the HTML Tags
+        "a",
+        "abbr",
+        "address",
+        "area",
+        "article",
+        "aside",
+        "audio",
+        "b",
+        "base",
+        "bdi",
+        "bdo",
+        "big",
+        "blockquote",
+        "body",
+        "br",
+        "button",
+        "canvas",
+        "caption",
+        "cite",
+        "code",
+        "col",
+        "colgroup",
+        "command",
+        "data",
+        "datalist",
+        "dd",
+        "del",
+        "details",
+        "dfn",
+        "dialog",
+        "div",
+        "dl",
+        "dt",
+        "em",
+        "embed",
+        "fieldset",
+        "figcaption",
+        "figure",
+        "footer",
+        "form",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "head",
+        "header",
+        "hr",
+        "html",
+        "i",
+        "iframe",
+        "img",
+        "input",
+        "ins",
+        "kbd",
+        "keygen",
+        "label",
+        "legend",
+        "li",
+        "link",
+        "main",
+        "map",
+        "mark",
+        "menu",
+        "menuitem",
+        "meta",
+        "meter",
+        "nav",
+        "noscript",
+        "object",
+        "ol",
+        "optgroup",
+        "option",
+        "output",
+        "p",
+        "param",
+        "picture",
+        "pre",
+        "progress",
+        "q",
+        "rp",
+        "rt",
+        "ruby",
+        "s",
+        "samp",
+        "script",
+        "section",
+        "select",
+        "small",
+        "source",
+        "span",
+        "strong",
+        "style",
+        "sub",
+        "summary",
+        "sup",
+        "table",
+        "tbody",
+        "td",
+        "textarea",
+        "tfoot",
+        "th",
+        "thead",
+        "time",
+        "title",
+        "tr",
+        "track",
+        "u",
+        "ul",
+        "var",
+        "video",
+        "wbr",
+        // All the event handlers
+        "Attribute",
+        "accept",
+        "accept-charset",
+        "accesskey",
+        "action",
+        "alt",
+        "async",
+        "autocomplete",
+        "autofocus",
+        "autoplay",
+        "charset",
+        "checked",
+        "cite",
+        "class",
+        "cols",
+        "colspan",
+        "content",
+        "contenteditable",
+        "controls",
+        "coords",
+        "data",
+        "data-*",
+        "datetime",
+        "default",
+        "defer",
+        "dir",
+        "dirname",
+        "disabled",
+        "download",
+        "draggable",
+        "enctype",
+        "for",
+        "form",
+        "formaction",
+        "headers",
+        "height",
+        "hidden",
+        "high",
+        "href",
+        "hreflang",
+        "http-equiv",
+        "id",
+        "ismap",
+        "kind",
+        "label",
+        "lang",
+        "list",
+        "loop",
+        "low",
+        "max",
+        "maxlength",
+        "media",
+        "method",
+        "min",
+        "multiple",
+        "muted",
+        "name",
+        "novalidate",
+        "onabort",
+        "onafterprint",
+        "onbeforeprint",
+        "onbeforeunload",
+        "onblur",
+        "oncanplay",
+        "oncanplaythrough",
+        "onchange",
+        "onclick",
+        "oncontextmenu",
+        "oncopy",
+        "oncuechange",
+        "oncut",
+        "ondblclick",
+        "ondrag",
+        "ondragend",
+        "ondragenter",
+        "ondragleave",
+        "ondragover",
+        "ondragstart",
+        "ondrop",
+        "ondurationchange",
+        "onemptied",
+        "onended",
+        "onerror",
+        "onfocus",
+        "onhashchange",
+        "oninput",
+        "oninvalid",
+        "onkeydown",
+        "onkeypress",
+        "onkeyup",
+        "onload",
+        "onloadeddata",
+        "onloadedmetadata",
+        "onloadstart",
+        "onmousedown",
+        "onmousemove",
+        "onmouseout",
+        "onmouseover",
+        "onmouseup",
+        "onmousewheel",
+        "onoffline",
+        "ononline",
+        "<body>",
+        "onpageshow",
+        "onpaste",
+        "onpause",
+        "onplay",
+        "onplaying",
+        "<body>",
+        "onprogress",
+        "onratechange",
+        "onreset",
+        "onresize",
+        "onscroll",
+        "onsearch",
+        "onseeked",
+        "onseeking",
+        "onselect",
+        "onstalled",
+        "<body>",
+        "onsubmit",
+        "onsuspend",
+        "ontimeupdate",
+        "ontoggle",
+        "onunload",
+        "onvolumechange",
+        "onwaiting",
+        "onwheel",
+        "open",
+        "optimum",
+        "pattern",
+        "placeholder",
+        "poster",
+        "preload",
+        "readonly",
+        "rel",
+        "required",
+        "reversed",
+        "rows",
+        "rowspan",
+        "sandbox",
+        "scope",
+        "selected",
+        "shape",
+        "size",
+        "sizes",
+        "span",
+        "spellcheck",
+        "src",
+        "srcdoc",
+        "srclang",
+        "srcset",
+        "start",
+        "step",
+        "style",
+        "tabindex",
+        "target",
+        "title",
+        "translate",
+        "type",
+        "usemap",
+        "value",
+        "width",
+        "wrap",
+    ];
+
+    for s in cached_words {
+        wasm_bindgen::intern(s);
+    }
+}
 
 #[cfg(test)]
 mod tests {

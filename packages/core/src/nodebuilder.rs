@@ -9,6 +9,8 @@ use std::{
     u128,
 };
 
+use bumpalo::Bump;
+
 use crate::{
     events::VirtualEvent,
     innerlude::{Properties, VComponent, FC},
@@ -654,8 +656,9 @@ pub fn text3<'a>(bump: &'a bumpalo::Bump, args: std::fmt::Arguments) -> VNode<'a
     // we can just short-circuit to the &'static str version instead of having to allocate in the bump arena.
     //
     // In the most general case, this prevents the need for any string allocations for simple code IE:
-    //      div {"abc"}
-    //
+    // ```
+    //  div {"abc"}
+    // ```
     match args.as_str() {
         Some(static_str) => VNode::text(static_str),
         None => {
@@ -735,13 +738,14 @@ impl<'a, 'b> ChildrenList<'a, 'b> {
     }
 }
 
-// NodeFactory is used to build VNodes in the component's memory space.
-// This struct adds metadata to the final VNode about listeners, attributes, and children
+/// This struct provides an ergonomic API to quickly build VNodes.
+///
+/// NodeFactory is used to build VNodes in the component's memory space.
+/// This struct adds metadata to the final VNode about listeners, attributes, and children
 #[derive(Clone)]
 pub struct NodeFactory<'a> {
     pub scope_ref: &'a Scope,
     pub listener_id: Cell<usize>,
-    // pub listener_id: RefCell<usize>,
 }
 
 impl<'a> NodeFactory<'a> {
@@ -756,7 +760,7 @@ impl<'a> NodeFactory<'a> {
     }
 
     /// Create an element builder
-    pub fn element<'b, Listeners, Attributes, Children>(
+    pub fn element<'b>(
         &'b self,
         tag_name: &'static str,
     ) -> ElementBuilder<
@@ -786,6 +790,20 @@ impl<'a> NodeFactory<'a> {
             children,
             key: NodeKey::new_opt(key),
         }))
+    }
+
+    pub fn fragment_from_iter(
+        &self,
+        node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
+    ) -> VNode<'a> {
+        let mut nodes = bumpalo::collections::Vec::new_in(self.bump());
+        for node in node_iter.into_iter() {
+            nodes.push(node.into_vnode(&self));
+        }
+        VNode::Fragment(
+            self.bump()
+                .alloc(VFragment::new(None, nodes.into_bump_slice())),
+        )
     }
 }
 

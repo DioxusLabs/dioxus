@@ -3,15 +3,17 @@ use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
 
 fn main() {
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    console_error_panic_hook::set_once();
+    // wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+    // console_error_panic_hook::set_once();
 
-    log::info!("hello world");
+    // log::info!("hello world");
+    dioxus_web::intern_cache();
+
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
 
 static Example: FC<()> = |cx| {
-    let nodes = (0..15).map(|f| rsx! (li { key: "{f}", "{f}"}));
+    let nodes = (0..500).map(|f| rsx! (li {"div"}));
     cx.render(rsx! {
         div {
             span {

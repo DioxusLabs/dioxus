@@ -70,15 +70,20 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     // [3] Bindgen the final binary for use easy linking
     let mut bindgen_builder = Bindgen::new();
 
+    let release_type = match config.release {
+        true => "release",
+        false => "debug",
+    };
+
     let input_path = match executable {
         ExecutableType::Binary(name) | ExecutableType::Lib(name) => target_dir
             // .join("wasm32-unknown-unknown/release")
-            .join("wasm32-unknown-unknown/debug")
+            .join(format!("wasm32-unknown-unknown/{}", release_type))
             .join(format!("{}.wasm", name)),
 
         ExecutableType::Example(name) => target_dir
             // .join("wasm32-unknown-unknown/release/examples")
-            .join("wasm32-unknown-unknown/debug/examples")
+            .join(format!("wasm32-unknown-unknown/{}/examples", release_type))
             .join(format!("{}.wasm", name)),
     };
 

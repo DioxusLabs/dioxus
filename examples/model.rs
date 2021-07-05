@@ -4,51 +4,54 @@
 //! Some components benefit through the use of "Models". Models are a single block of encapsulated state that allow mutative
 //! methods to be performed on them. Dioxus exposes the ability to use the model pattern through the "use_model" hook.
 //!
+//! Models are commonly used in the "Model-View-Component" approach for building UI state.
+//!
 //! `use_model` is basically just a fancy wrapper around set_state, but saves a "working copy" of the new state behind a
-//! RefCell. To modify the working copy, you need to call "modify" which returns the RefMut. This makes it easy to write
+//! RefCell. To modify the working copy, you need to call "get_mut" which returns the RefMut. This makes it easy to write
 //! fully encapsulated apps that retain a certain feel of native Rusty-ness. A calculator app is a good example of when this
 //! is useful.
+//!
+//! Do note that "get_mut" returns a `RefMut` (a lock over a RefCell). If two `RefMut`s are held at the same time (ie in a loop)
+//! the RefCell will panic and crash. You can use `try_get_mut` or `.modify` to avoid this problem, or just not hold two
+//! RefMuts at the same time.
 
 use dioxus::events::on::*;
 use dioxus::prelude::*;
-use std::{
-    cell::RefCell,
-    ops::{Deref, DerefMut},
-};
 
 fn main() {
     dioxus::webview::launch(App)
 }
 
 static App: FC<()> = |cx| {
-    let state = use_model(&cx, || CalculatorState::new());
+    let calc = use_model(&cx, || Calculator::new());
 
-    let clear_display = state.display_value.eq("0");
+    let clear_display = calc.display_value.eq("0");
     let clear_text = if clear_display { "C" } else { "AC" };
-    let formatted = state.formatted();
+    let formatted = calc.formatted();
 
     cx.render(rsx! {
-        div { class: "calculator", onkeydown: move |evt| state.modify().handle_keydown(evt),
-            div { class: "calculator-display", "{formatted}"}
+        div { class: "calculator", onkeydown: move |evt| calc.get_mut().handle_keydown(evt),
+            div { class: "calculator-display","{formatted}"}
             div { class: "input-keys"
                 div { class: "function-keys"
-                    CalculatorKey { name: "key-clear", onclick: move |_| state.modify().clear_display() "{clear_text}" }
-                    CalculatorKey { name: "key-sign", onclick: move |_| state.modify().toggle_sign(), "±"}
-                    CalculatorKey { name: "key-percent", onclick: move |_| state.modify().toggle_percent() "%"}
+                    // All there ways that the calculator may be modified:
+                    CalculatorKey { name: "key-clear", onclick: move |_| calc.get_mut().clear_display() "{clear_text}" }
+                    CalculatorKey { name: "key-sign", onclick: move |_| calc.modify(Calculator::toggle_sign), "±"}
+                    CalculatorKey { name: "key-percent", onclick: move |_| calc.modify(|f| f.toggle_percent()) "%"}
                 }
                 div { class: "digit-keys"
-                    CalculatorKey { name: "key-0", onclick: move |_| state.modify().input_digit(0), "0" }
-                    CalculatorKey { name: "key-dot", onclick: move |_|  state.modify().input_dot(), "●" }
-                    {(1..9).map(|k| rsx!{
-                        CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  state.modify().input_digit(k), "{k}" }
+                    CalculatorKey { name: "key-0", onclick: move |_| calc.get_mut().input_digit(0), "0" }
+                    CalculatorKey { name: "key-dot", onclick: move |_|  calc.get_mut().input_dot(), "●" }
+                    {(1..9).map(move |k| rsx!{
+                        CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  calc.get_mut().input_digit(k), "{k}" }
                     })}
                 }
                 div { class: "operator-keys"
-                    CalculatorKey { name:"key-divide", onclick: move |_| state.modify().set_operator(Operator::Div) "÷" }
-                    CalculatorKey { name:"key-multiply", onclick: move |_| state.modify().set_operator(Operator::Mul) "×" }
-                    CalculatorKey { name:"key-subtract", onclick: move |_| state.modify().set_operator(Operator::Sub) "−" }
-                    CalculatorKey { name:"key-add", onclick: move |_| state.modify().set_operator(Operator::Add) "+" }
-                    CalculatorKey { name:"key-equals", onclick: move |_| state.modify().perform_operation() "=" }
+                    CalculatorKey { name:"key-divide", onclick: move |_| calc.get_mut().set_operator(Operator::Div) "÷" }
+                    CalculatorKey { name:"key-multiply", onclick: move |_| calc.get_mut().set_operator(Operator::Mul) "×" }
+                    CalculatorKey { name:"key-subtract", onclick: move |_| calc.get_mut().set_operator(Operator::Sub) "−" }
+                    CalculatorKey { name:"key-add", onclick: move |_| calc.get_mut().set_operator(Operator::Add) "+" }
+                    CalculatorKey { name:"key-equals", onclick: move |_| calc.get_mut().perform_operation() "=" }
                 }
             }
         }
@@ -56,7 +59,7 @@ static App: FC<()> = |cx| {
 };
 
 #[derive(Clone)]
-struct CalculatorState {
+struct Calculator {
     display_value: String,
     operator: Option<Operator>,
     cur_val: f64,
@@ -68,9 +71,10 @@ enum Operator {
     Mul,
     Div,
 }
-impl CalculatorState {
+
+impl Calculator {
     fn new() -> Self {
-        CalculatorState {
+        Calculator {
             display_value: "0".to_string(),
             operator: None,
             cur_val: 0.0,
@@ -118,7 +122,9 @@ impl CalculatorState {
             self.display_value.pop();
         }
     }
-    fn set_operator(&mut self, operator: Operator) {}
+    fn set_operator(&mut self, operator: Operator) {
+        self.operator = Some(operator)
+    }
     fn handle_keydown(&mut self, evt: KeyboardEvent) {
         match evt.key_code() {
             KeyCode::Backspace => self.backspace(),
@@ -160,6 +166,10 @@ fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> VNode<'a> {
 use odl::use_model;
 mod odl {
     use super::*;
+    use std::{
+        cell::RefCell,
+        ops::{Deref, DerefMut},
+    };
     /// Use model makes it easy to use "models" as state for components. To modify the model, call "modify" and a clone of the
     /// current model will be made, with a RefMut lock on it. Dioxus will never run your components multithreaded, so you can
     /// be relatively sure that this won't fail in practice
@@ -208,8 +218,13 @@ mod odl {
                 wip: RefCell::new(t),
             }
         }
-        pub fn modify(&self) -> RefMut<'_, T> {
+        pub fn get_mut(&self) -> RefMut<'_, T> {
             self.wip.borrow_mut()
+        }
+        pub fn modify(&self, f: impl FnOnce(&mut T)) {
+            let mut g = self.get_mut();
+            let r = g.deref_mut();
+            todo!()
         }
     }
 

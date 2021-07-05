@@ -10,7 +10,7 @@ license = "MIT/Apache-2.0"
 [dependencies]
 dioxus-core = { path="../core", version="0.1.2" }
 js-sys = "0.3"
-wasm-bindgen = "0.2.71"
+wasm-bindgen = { version="0.2.71", features=["enable-interning"] }
 lazy_static = "1.4.0"
 wasm-bindgen-futures = "0.4.20"
 wasm-logger = "0.2.0"
@@ -31,6 +31,7 @@ slotmap = "1.0.3"
 version = "0.3.50"
 features = [
     "Comment",
+    "Attr",
     "Document",
     "Element",
     "HtmlElement",
@@ -47,6 +48,7 @@ features = [
     "MouseEvent",
     "InputEvent",
     "ClipboardEvent",
+    "NamedNodeMap",
     "KeyboardEvent",
     "TouchEvent",
     "WheelEvent",
@@ -70,4 +72,5 @@ crate-type = ["cdylib", "rlib"]
 [dev-dependencies]
 im-rc = "15.0.0"
 rand = { version="0.8.4", features=["small_rng"] }
+separator = "0.4.1"
 uuid = { version="0.8.2", features=["v4", "wasm-bindgen"] }

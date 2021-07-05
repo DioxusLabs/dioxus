@@ -61,13 +61,7 @@ impl ToTokens for TextNode {
         // todo: use heuristics to see if we can promote to &static str
         let token_stream = &self.0.to_token_stream();
         tokens.append_all(quote! {
-            {
-                // use bumpalo::core_alloc::fmt::Write;
-                // let mut s = bumpalo::collections::String::new_in(bump);
-                // s.write_fmt(format_args_f!(#token_stream)).unwrap();
-                dioxus::builder::text3(bump, format_args_f!(#token_stream))
-                // dioxus::builder::text2(s)
-            }
+            __cx.text(format_args_f!(#token_stream))
         });
     }
 }

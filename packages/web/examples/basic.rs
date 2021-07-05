@@ -1,5 +1,6 @@
 //! Basic example that renders a simple VNode to the browser.
 
+use dioxus::events::on::MouseEvent;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_web::*;
@@ -14,56 +15,42 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
+    let (state, set_state) = use_state(&cx, || 0);
     cx.render(rsx! {
         div {
-            h1 {"hello"}
-            C1 {}
-            C2 {}
+            section { class: "py-12 px-4 text-center"
+                div { class: "w-full max-w-2xl mx-auto"
+                    span { class: "text-sm font-semibold"
+                        "count: {state}"
+                    }
+                    div {
+                        C1 {
+                            onclick: move |_| set_state(state + 1)
+                            "incr"
+                        }
+                        C1 {
+                            onclick: move |_| set_state(state - 1)
+                            "decr"
+                        }
+                    }
+                }
+            }
         }
     })
 };
 
-static C1: FC<()> = |cx| {
+#[derive(Props)]
+struct IncrementerProps<'a> {
+    onclick: &'a dyn Fn(MouseEvent),
+}
+
+fn C1<'a, 'b>(cx: Context<'a, IncrementerProps<'b>>) -> VNode<'a> {
     cx.render(rsx! {
         button {
-            "numba 1"
+            class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"
+            onclick: {cx.onclick}
+            "becr"
+            {cx.children()}
         }
     })
-};
-
-static C2: FC<()> = |cx| {
-    cx.render(rsx! {
-        button {
-            "numba 2"
-        }
-    })
-};
-
-static DocExamples: FC<()> = |cx| {
-    //
-
-    let is_ready = false;
-
-    let items = (0..10).map(|i| rsx! { li {"{i}"} });
-    let _ = rsx! {
-        ul {
-            {items}
-        }
-    };
-
-    // rsx! {
-    //     div {}
-    //     h1 {}
-    //     {""}
-    //     "asbasd"
-    //     dioxus::Fragment {
-    //         //
-    //     }
-    // }
-
-    cx.render(rsx! {
-        div {
-            { is_ready.then(|| rsx!{ h1 {"We are ready!"} }) }
-        }
-    })
-};
+}

@@ -171,6 +171,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         tag: &str,
         ns: Option<&'static str>,
     ) -> dioxus_core::virtual_dom::RealDomNode {
+        let tag = wasm_bindgen::intern(tag);
         let el = match ns {
             Some(ns) => self
                 .document
@@ -200,6 +201,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         el_id: usize,
         real_id: RealDomNode,
     ) {
+        let event = wasm_bindgen::intern(event);
         log::debug!(
             "Called [`new_event_listener`]: {}, {:?}, {}, {:?}",
             event,
@@ -237,7 +239,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
                 // Instead, we just build and immediately execute a closure that returns result
                 match decode_trigger(event) {
                     Ok(synthetic_event) => trigger.as_ref()(synthetic_event),
-                    Err(_) => log::error!("Error decoding Dioxus event attribute."),
+                    Err(e) => log::error!("Error decoding Dioxus event attribute. {:#?}", e),
                 };
             }) as Box<dyn FnMut(&Event)>);
 
@@ -407,7 +409,7 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
 
             #[derive(Debug)]
             pub struct CustomMouseEvent(web_sys::MouseEvent);
-            impl dioxus_core::events::on::MouseEvent for CustomMouseEvent {
+            impl dioxus_core::events::on::MouseEventInner for CustomMouseEvent {
                 fn alt_key(&self) -> bool {
                     self.0.alt_key()
                 }
@@ -451,7 +453,7 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
                     self.0.get_modifier_state(key_code)
                 }
             }
-            VirtualEvent::MouseEvent(Rc::new(CustomMouseEvent(evt)))
+            VirtualEvent::MouseEvent(MouseEvent(Rc::new(CustomMouseEvent(evt))))
             // MouseEvent(Box::new(RawMouseEvent {
             //                 alt_key: evt.alt_key(),
             //                 button: evt.button() as i32,
@@ -547,25 +549,36 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
 
     use anyhow::Context;
 
+    // for attr in  {
+    let attrs = target.attributes();
+    for x in 0..attrs.length() {
+        let attr = attrs.item(x).unwrap();
+        log::debug!("attrs include: {:#?}", attr);
+    }
+    // }
+    // for attr in target.attributes() {
+    //     log::debug!("attrs include: {:#?}", attr);
+    // }
+
     // The error handling here is not very descriptive and needs to be replaced with a zero-cost error system
     let val: String = target
         .get_attribute(&format!("dioxus-event-{}", typ))
-        .context("")?;
+        .context(format!("wrong format - received {:#?}", typ))?;
 
     let mut fields = val.splitn(3, ".");
 
     let gi_id = fields
         .next()
         .and_then(|f| f.parse::<u64>().ok())
-        .context("")?;
+        .context("failed to parse gi id")?;
     let el_id = fields
         .next()
         .and_then(|f| f.parse::<usize>().ok())
-        .context("")?;
+        .context("failed to parse el id")?;
     let real_id = fields
         .next()
         .and_then(|f| f.parse::<u64>().ok().map(RealDomNode::new))
-        .context("")?;
+        .context("failed to parse real id")?;
 
     // Call the trigger
     log::debug!("decoded gi_id: {}, li_idx: {}", gi_id, el_id);
@@ -575,6 +588,7 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
         virtual_event_from_websys_event(event),
         triggered_scope,
         real_id,
+        dioxus_core::events::EventPriority::High,
     ))
 }
 
@@ -584,3 +598,6 @@ impl ListenerMap {
         false
     }
 }
+
+struct JsStringCache {}
+impl JsStringCache {}

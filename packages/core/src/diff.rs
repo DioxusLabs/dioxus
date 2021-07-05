@@ -135,197 +135,357 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
         Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
         When re-entering, we reuse the EditList in DiffState
         */
-        match old_node {
-            VNode::Element(old) => match new_node {
-                // New node is an element, old node was en element, need to investiage more deeply
-                VNode::Element(new) => {
-                    // If the element type is completely different, the element needs to be re-rendered completely
-                    // This is an optimization React makes due to how users structure their code
-                    if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                        self.create(new_node);
-                        self.dom.replace_with();
-                        return;
-                    }
-                    new.dom_id.set(old.dom_id.get());
-
-                    self.diff_listeners(old.listeners, new.listeners);
-                    self.diff_attr(old.attributes, new.attributes, new.namespace);
-                    self.diff_children(old.children, new.children);
+        log::debug!("diffing...");
+        match (old_node, new_node) {
+            // Handle the "sane" cases first.
+            // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
+            // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
+            (VNode::Text(old), VNode::Text(new)) => {
+                if old.text != new.text {
+                    self.dom.push_root(old.dom_id.get());
+                    log::debug!("Text has changed {}, {}", old.text, new.text);
+                    self.dom.set_text(new.text);
                 }
-                // New node is a text element, need to replace the element with a simple text node
-                VNode::Text(_) => {
-                    self.create(new_node);
-                    self.dom.replace_with();
-                }
-
-                // New node is a component
-                // Make the component and replace our element on the stack with it
-                VNode::Component(_) => {
-                    self.create(new_node);
-                    self.dom.replace_with();
-                }
-
-                // New node is actually a sequence of nodes.
-                // We need to replace this one node with a sequence of nodes
-                // Not yet implement because it's kinda hairy
-                VNode::Fragment(new) => {
-                    match new.children.len() {
-                        0 => {
-                            // remove
-                        }
-                        1 => {
-                            // replace
-                            self.create(&new.children[0]);
-                            self.dom.replace_with();
-                        }
-                        _ => {
-                            todo!()
-                            // remove and mount many
-                            // self.remove_self_and_next_siblings(old)
-                            //
-                            // let iter = ChildIterator::new(new_node, self.components).rev();
-                            // for child in iter {}
-                            // for child in new.children.iter().skip(1).rev() {
-                            //     self.dom.remove();
-                            // }
-                        }
-                    }
-                }
-
-                // New Node is actually suspended. Todo
-                VNode::Suspended { real } => todo!(),
-            },
-
-            // Old element was text
-            VNode::Text(old) => match new_node {
-                VNode::Text(new) => {
-                    if old.text != new.text {
-                        log::debug!("Text has changed {}, {}", old.text, new.text);
-                        self.dom.set_text(new.text);
-                    }
-                    new.dom_id.set(old.dom_id.get());
-                }
-                VNode::Element(_) | VNode::Component(_) => {
-                    self.create(new_node);
-                    self.dom.replace_with();
-                }
-
-                // TODO on handling these types
-                VNode::Fragment(frag) => {
-                    if frag.children.len() == 0 {
-                        // do nothing
-                    } else {
-                        self.create(&frag.children[0]);
-                        self.dom.replace_with();
-                        for child in frag.children.iter().skip(1) {
-                            self.create(child);
-                            self.dom.append_child();
-                        }
-                    }
-                }
-                VNode::Suspended { real } => todo!(),
-            },
-
-            // Old element was a component
-            VNode::Component(old) => {
-                match new_node {
-                    // It's something entirely different
-                    VNode::Element(_) | VNode::Text(_) => {
-                        self.create(new_node);
-                        self.dom.replace_with();
-                    }
-
-                    // It's also a component
-                    VNode::Component(new) => {
-                        if old.user_fc == new.user_fc {
-                            // Make sure we're dealing with the same component (by function pointer)
-
-                            // Make sure the new component vnode is referencing the right scope id
-                            let scope_id = old.ass_scope.get();
-                            new.ass_scope.set(scope_id);
-                            new.mounted_root.set(old.mounted_root.get());
-
-                            // make sure the component's caller function is up to date
-                            self.components
-                                .with_scope(scope_id.unwrap(), |scope| {
-                                    scope.caller = Rc::downgrade(&new.caller)
-                                })
-                                .unwrap();
-
-                            // React doesn't automatically memoize, but we do.
-                            // The cost is low enough to make it worth checking
-                            // Rust produces fairly performant comparison methods, sometimes SIMD accelerated
-                            let should_render = match old.comparator {
-                                Some(comparator) => comparator(new),
-                                None => true,
-                            };
-
-                            if should_render {
-                                // // self.dom.commit_traversal();
-                                self.components
-                                    .with_scope(scope_id.unwrap(), |f| {
-                                        f.run_scope().unwrap();
-                                    })
-                                    .unwrap();
-                                // diff_machine.change_list.load_known_root(root_id);
-                                // run the scope
-                                //
-                            } else {
-                                // Component has memoized itself and doesn't need to be re-rendered.
-                                // We still need to make sure the child's props are up-to-date.
-                                // Don't commit traversal
-                            }
-                        } else {
-                            // It's an entirely different component
-
-                            // A new component has shown up! We need to destroy the old node
-
-                            // Wipe the old one and plant the new one
-                            // self.dom.commit_traversal();
-                            // self.dom.replace_node_with(old.dom_id, new.dom_id);
-                            // self.create(new_node);
-                            // self.dom.replace_with();
-                            self.create(new_node);
-                            // self.create_and_repalce(new_node, old.mounted_root.get());
-
-                            // Now we need to remove the old scope and all of its descendents
-                            let old_scope = old.ass_scope.get().unwrap();
-                            self.destroy_scopes(old_scope);
-                        }
-                    }
-                    VNode::Fragment(_) => todo!(),
-                    VNode::Suspended { real } => todo!(),
-                }
+                new.dom_id.set(old.dom_id.get());
             }
 
-            VNode::Fragment(old) => {
+            (VNode::Element(old), VNode::Element(new)) => {
+                // If the element type is completely different, the element needs to be re-rendered completely
+                // This is an optimization React makes due to how users structure their code
                 //
-                match new_node {
-                    VNode::Fragment(new) => todo!(),
+                // In Dioxus, this is less likely to occur unless through a fragment
+                if new.tag_name != old.tag_name || new.namespace != old.namespace {
+                    log::debug!("things have changed....?");
+                    self.dom.push_root(old.dom_id.get());
+                    self.create(new_node);
+                    self.dom.replace_with();
+                    return;
+                }
+                log::debug!("Important Things haven't changed!");
+                new.dom_id.set(old.dom_id.get());
 
-                    // going from fragment to element means we're going from many (or potentially none) to one
-                    VNode::Element(new) => {}
-                    VNode::Text(_) => todo!(),
-                    VNode::Suspended { real } => todo!(),
-                    VNode::Component(_) => todo!(),
+                self.diff_listeners(old.listeners, new.listeners);
+                self.diff_attr(old.attributes, new.attributes, new.namespace);
+                self.diff_children(old.children, new.children);
+            }
+
+            (VNode::Component(old), VNode::Component(new)) => {
+                log::warn!("diffing components? {:#?}", new.user_fc);
+                if old.user_fc == new.user_fc {
+                    // Make sure we're dealing with the same component (by function pointer)
+
+                    // Make sure the new component vnode is referencing the right scope id
+                    let scope_id = old.ass_scope.get();
+                    new.ass_scope.set(scope_id);
+
+                    // new.mounted_root.set(old.mounted_root.get());
+
+                    // make sure the component's caller function is up to date
+                    let scope = self.components.try_get_mut(scope_id.unwrap()).unwrap();
+                    // .with_scope(scope_id.unwrap(), |scope| {
+                    scope.caller = Rc::downgrade(&new.caller);
+                    scope.update_children(new.children);
+                    // })
+                    // .unwrap();
+
+                    // React doesn't automatically memoize, but we do.
+                    // The cost is low enough to make it worth checking
+                    // Rust produces fairly performant comparison methods, sometimes SIMD accelerated
+                    // let should_render = match old.comparator {
+                    //     Some(comparator) => comparator(new),
+                    //     None => true,
+                    // };
+
+                    // if should_render {
+                    // // self.dom.commit_traversal();
+                    // let f = self.components.try_get_mut(scope_id.unwrap()).unwrap();
+                    // self.components
+                    //     .with_scope(scope_id.unwrap(), |f| {
+                    log::debug!("running scope during diff {:#?}", scope_id);
+                    scope.run_scope().unwrap();
+                    self.diff_node(scope.old_frame(), scope.next_frame());
+                    log::debug!("scope completed {:#?}", scope_id);
+                    self.seen_nodes.insert(scope_id.unwrap());
+                    // })
+                    // .unwrap();
+
+                    // diff_machine.change_list.load_known_root(root_id);
+                    // run the scope
+                    //
+                    // } else {
+                    //     log::error!("Memoized componented");
+                    //     // Component has memoized itself and doesn't need to be re-rendered.
+                    //     // We still need to make sure the child's props are up-to-date.
+                    //     // Don't commit traversal
+                    // }
+                } else {
+                    // It's an entirely different component
+
+                    // A new component has shown up! We need to destroy the old node
+
+                    // Wipe the old one and plant the new one
+                    // self.dom.commit_traversal();
+                    // self.dom.replace_node_with(old.dom_id, new.dom_id);
+                    // self.create(new_node);
+                    log::warn!("creating and replacing...");
+                    self.create(new_node);
+
+                    // self.dom.replace_with();
+                    // self.create_and_repalce(new_node, old.mounted_root.get());
+
+                    // Now we need to remove the old scope and all of its descendents
+                    let old_scope = old.ass_scope.get().unwrap();
+                    self.destroy_scopes(old_scope);
                 }
             }
 
-            // a suspended node will perform a mem-copy of the previous elements until it is ready
-            // this means that event listeners will need to be disabled and removed
-            // it also means that props will need to disabled - IE if the node "came out of hibernation" any props should be considered outdated
-            VNode::Suspended { real: old_real } => {
+            (VNode::Fragment(old), VNode::Fragment(new)) => {
+                log::debug!("diffing as fragment");
+                // This is the case where options or direct vnodes might be used.
+                // In this case, it's faster to just skip ahead to their diff
+                if old.children.len() == 1 && new.children.len() == 1 {
+                    self.diff_node(old.children.get(0).unwrap(), new.children.get(0).unwrap());
+                    return;
+                }
+
+                // Diff using the approach where we're looking for added or removed nodes.
+                if old.children.len() != new.children.len() {}
+
+                // Diff where we think the elements are the same
+                if old.children.len() == new.children.len() {}
+
+                self.diff_children(old.children, new.children);
+                // todo!()
+            }
+
+            // Okay - these are the "insane" cases where the structure is entirely different.
+            // The factory and rsx! APIs don't really produce structures like this, so we don't take any too complicated
+            // code paths.
+
+            // in the case where the old node was a fragment but the new nodes are text,
+            (VNode::Fragment(_) | VNode::Component(_), VNode::Element(_) | VNode::Text(_)) => {
+                // find the first real element int the old node
+                let mut iter = RealChildIterator::new(old_node, self.components);
+                if let Some(first) = iter.next() {
+                    // replace the very first node with the creation of the element or text
+                } else {
+                    // there are no real elements in the old fragment...
+                    // We need to load up the next real
+                }
+                if let VNode::Component(old) = old_node {
+                    // schedule this component's destructor to be run
+                    todo!()
+                }
+            }
+            // In the case where real nodes are being replaced by potentially
+            (VNode::Element(_) | VNode::Text(_), VNode::Fragment(new)) => {
                 //
-                match new_node {
-                    VNode::Suspended { real: new_real } => {
-                        //
-                    }
-                    VNode::Element(_) => todo!(),
-                    VNode::Text(_) => todo!(),
-                    VNode::Fragment(_) => todo!(),
-                    VNode::Component(_) => todo!(),
-                }
             }
+            (VNode::Text(_), VNode::Element(_)) => {
+                self.create(new_node);
+                self.dom.replace_with();
+            }
+            (VNode::Element(_), VNode::Text(_)) => {
+                self.create(new_node);
+                self.dom.replace_with();
+            }
+
+            _ => {
+                //
+            } /*
+
+              */
+              //
+              // VNode::Element(old) => match new_node {
+              //     // New node is an element, old node was en element, need to investiage more deeply
+              //     VNode::Element(new) => {
+              //         // If the element type is completely different, the element needs to be re-rendered completely
+              //         // This is an optimization React makes due to how users structure their code
+              //         if new.tag_name != old.tag_name || new.namespace != old.namespace {
+              //             self.create(new_node);
+              //             self.dom.replace_with();
+              //             return;
+              //         }
+              //         new.dom_id.set(old.dom_id.get());
+
+              //         self.diff_listeners(old.listeners, new.listeners);
+              //         self.diff_attr(old.attributes, new.attributes, new.namespace);
+              //         self.diff_children(old.children, new.children);
+              //     }
+              //     // New node is a text element, need to replace the element with a simple text node
+              //     VNode::Text(_) => {
+              //         self.create(new_node);
+              //         self.dom.replace_with();
+              //     }
+
+              //     // New node is a component
+              //     // Make the component and replace our element on the stack with it
+              //     VNode::Component(_) => {
+              //         self.create(new_node);
+              //         self.dom.replace_with();
+              //     }
+
+              //     // New node is actually a sequence of nodes.
+              //     // We need to replace this one node with a sequence of nodes
+              //     // Not yet implement because it's kinda hairy
+              //     VNode::Fragment(new) => {
+              //         match new.children.len() {
+              //             0 => {
+              //                 // remove
+              //             }
+              //             1 => {
+              //                 // replace
+              //                 self.create(&new.children[0]);
+              //                 self.dom.replace_with();
+              //             }
+              //             _ => {
+              //                 todo!()
+              //                 // remove and mount many
+              //                 // self.remove_self_and_next_siblings(old)
+              //                 //
+              //                 // let iter = ChildIterator::new(new_node, self.components).rev();
+              //                 // for child in iter {}
+              //                 // for child in new.children.iter().skip(1).rev() {
+              //                 //     self.dom.remove();
+              //                 // }
+              //             }
+              //         }
+              //     }
+
+              //     // New Node is actually suspended. Todo
+              //     VNode::Suspended { real } => todo!(),
+              // },
+
+              // // Old element was text
+              // VNode::Text(old) => match new_node {
+              //     VNode::Text(new) => {
+              //         if old.text != new.text {
+              //             log::debug!("Text has changed {}, {}", old.text, new.text);
+              //             self.dom.set_text(new.text);
+              //         }
+              //         new.dom_id.set(old.dom_id.get());
+              //     }
+              //     VNode::Element(_) | VNode::Component(_) => {
+              //         self.create(new_node);
+              //         self.dom.replace_with();
+              //     }
+
+              //     // TODO on handling these types
+              //     VNode::Fragment(frag) => {
+              //         if frag.children.len() == 0 {
+              //             // do nothing
+              //         } else {
+              //             self.create(&frag.children[0]);
+              //             self.dom.replace_with();
+              //             for child in frag.children.iter().skip(1) {
+              //                 self.create(child);
+              //                 self.dom.append_child();
+              //             }
+              //         }
+              //     }
+              //     VNode::Suspended { real } => todo!(),
+              // },
+
+              // // Old element was a component
+              // VNode::Component(old) => {
+              //     match new_node {
+              //         // It's something entirely different
+              //         VNode::Element(_) | VNode::Text(_) => {
+              //             self.create(new_node);
+              //             self.dom.replace_with();
+              //         }
+
+              //         // It's also a component
+              //         VNode::Component(new) => {
+              //             if old.user_fc == new.user_fc {
+              //                 // Make sure we're dealing with the same component (by function pointer)
+
+              //                 // Make sure the new component vnode is referencing the right scope id
+              //                 let scope_id = old.ass_scope.get();
+              //                 new.ass_scope.set(scope_id);
+              //                 new.mounted_root.set(old.mounted_root.get());
+
+              //                 // make sure the component's caller function is up to date
+              //                 self.components
+              //                     .with_scope(scope_id.unwrap(), |scope| {
+              //                         scope.caller = Rc::downgrade(&new.caller)
+              //                     })
+              //                     .unwrap();
+
+              //                 // React doesn't automatically memoize, but we do.
+              //                 // The cost is low enough to make it worth checking
+              //                 // Rust produces fairly performant comparison methods, sometimes SIMD accelerated
+              //                 let should_render = match old.comparator {
+              //                     Some(comparator) => comparator(new),
+              //                     None => true,
+              //                 };
+
+              //                 if should_render {
+              //                     // // self.dom.commit_traversal();
+              //                     self.components
+              //                         .with_scope(scope_id.unwrap(), |f| {
+              //                             f.run_scope().unwrap();
+              //                         })
+              //                         .unwrap();
+              //                     // diff_machine.change_list.load_known_root(root_id);
+              //                     // run the scope
+              //                     //
+              //                 } else {
+              //                     // Component has memoized itself and doesn't need to be re-rendered.
+              //                     // We still need to make sure the child's props are up-to-date.
+              //                     // Don't commit traversal
+              //                 }
+              //             } else {
+              //                 // It's an entirely different component
+
+              //                 // A new component has shown up! We need to destroy the old node
+
+              //                 // Wipe the old one and plant the new one
+              //                 // self.dom.commit_traversal();
+              //                 // self.dom.replace_node_with(old.dom_id, new.dom_id);
+              //                 // self.create(new_node);
+              //                 // self.dom.replace_with();
+              //                 self.create(new_node);
+              //                 // self.create_and_repalce(new_node, old.mounted_root.get());
+
+              //                 // Now we need to remove the old scope and all of its descendents
+              //                 let old_scope = old.ass_scope.get().unwrap();
+              //                 self.destroy_scopes(old_scope);
+              //             }
+              //         }
+              //         VNode::Fragment(_) => todo!(),
+              //         VNode::Suspended { real } => todo!(),
+              //     }
+              // }
+
+              // VNode::Fragment(old) => {
+              //     //
+              //     match new_node {
+              //         VNode::Fragment(new) => todo!(),
+
+              //         // going from fragment to element means we're going from many (or potentially none) to one
+              //         VNode::Element(new) => {}
+              //         VNode::Text(_) => todo!(),
+              //         VNode::Suspended { real } => todo!(),
+              //         VNode::Component(_) => todo!(),
+              //     }
+              // }
+
+              // // a suspended node will perform a mem-copy of the previous elements until it is ready
+              // // this means that event listeners will need to be disabled and removed
+              // // it also means that props will need to disabled - IE if the node "came out of hibernation" any props should be considered outdated
+              // VNode::Suspended { real: old_real } => {
+              //     //
+              //     match new_node {
+              //         VNode::Suspended { real: new_real } => {
+              //             //
+              //         }
+              //         VNode::Element(_) => todo!(),
+              //         VNode::Text(_) => todo!(),
+              //         VNode::Fragment(_) => todo!(),
+              //         VNode::Component(_) => todo!(),
+              //     }
+              // }
         }
     }
 
@@ -340,6 +500,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
     //     [... node]
     fn create(&mut self, node: &'bump VNode<'bump>) {
         // debug_assert!(self.dom.traversal_is_committed());
+        log::warn!("Creating node!");
         match node {
             VNode::Text(text) => {
                 let real_id = self.dom.create_text_node(text.text);
@@ -402,7 +563,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
             }
 
             VNode::Component(component) => {
-                let real_id = self.dom.create_placeholder();
+                // let real_id = self.dom.create_placeholder();
 
                 // let root_id = next_id();
                 // self.dom.save_known_root(root_id);
@@ -455,6 +616,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                 new_component.run_scope().unwrap();
 
                 // And then run the diff algorithm
+                let _real_id = self.dom.create_placeholder();
                 self.diff_node(new_component.old_frame(), new_component.next_frame());
 
                 // Finally, insert this node as a seen node.
@@ -675,11 +837,14 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         );
 
         if new_is_keyed && old_is_keyed {
-            todo!("Not yet implemented a migration away from temporaries");
+            log::warn!("using the wrong approach");
+            self.diff_non_keyed_children(old, new);
+            // todo!("Not yet implemented a migration away from temporaries");
             // let t = self.dom.next_temporary();
             // self.diff_keyed_children(old, new);
             // self.dom.set_next_temporary(t);
         } else {
+            log::debug!("diffing non keyed children");
             self.diff_non_keyed_children(old, new);
         }
     }
@@ -1120,24 +1285,24 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             // self.dom.go_to_sibling(i);
             // [... parent this_child]
 
-            let did = old_child.get_mounted_id(self.components).unwrap();
-            if did.0 == 0 {
-                log::debug!("Root is bad: {:#?}", old_child);
-            }
-            self.dom.push_root(did);
+            // let did = old_child.get_mounted_id(self.components).unwrap();
+            // if did.0 == 0 {
+            //     log::debug!("Root is bad: {:#?}", old_child);
+            // }
+            // self.dom.push_root(did);
             self.diff_node(old_child, new_child);
 
-            let old_id = old_child.get_mounted_id(self.components).unwrap();
-            let new_id = new_child.get_mounted_id(self.components).unwrap();
+            // let old_id = old_child.get_mounted_id(self.components).unwrap();
+            // let new_id = new_child.get_mounted_id(self.components).unwrap();
 
-            log::debug!(
-                "pushed root. {:?}, {:?}",
-                old_child.get_mounted_id(self.components).unwrap(),
-                new_child.get_mounted_id(self.components).unwrap()
-            );
-            if old_id != new_id {
-                log::debug!("Mismatch: {:?}", new_child);
-            }
+            // log::debug!(
+            //     "pushed root. {:?}, {:?}",
+            //     old_child.get_mounted_id(self.components).unwrap(),
+            //     new_child.get_mounted_id(self.components).unwrap()
+            // );
+            // if old_id != new_id {
+            //     log::debug!("Mismatch: {:?}", new_child);
+            // }
         }
 
         // match old.len().cmp(&new.len()) {
@@ -1256,7 +1421,11 @@ enum KeyedPrefixResult {
     MoreWorkToDo(usize),
 }
 
-struct ChildIterator<'a> {
+/// This iterator iterates through a list of virtual children and only returns real children (Elements or Text).
+///
+/// This iterator is useful when it's important to load the next real root onto the top of the stack for operations like
+/// "InsertBefore".
+struct RealChildIterator<'a> {
     scopes: &'a ScopeArena,
 
     // Heuristcally we should never bleed into 5 completely nested fragments/components
@@ -1264,7 +1433,7 @@ struct ChildIterator<'a> {
     stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 5]>,
 }
 
-impl<'a> ChildIterator<'a> {
+impl<'a> RealChildIterator<'a> {
     fn new(starter: &'a VNode<'a>, scopes: &'a ScopeArena) -> Self {
         Self {
             scopes,
@@ -1279,7 +1448,7 @@ impl<'a> ChildIterator<'a> {
 //     }
 // }
 
-impl<'a> Iterator for ChildIterator<'a> {
+impl<'a> Iterator for RealChildIterator<'a> {
     type Item = &'a VNode<'a>;
 
     fn next(&mut self) -> Option<&'a VNode<'a>> {
@@ -1402,7 +1571,7 @@ mod tests {
         let mut renderer = DebugDom::new();
         dom.rebuild(&mut renderer).unwrap();
         let starter = dom.base_scope().root();
-        let ite = ChildIterator::new(starter, &dom.components);
+        let ite = RealChildIterator::new(starter, &dom.components);
         for child in ite {
             match child {
                 VNode::Element(el) => println!("Found: Element {}", el.tag_name),
