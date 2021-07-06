@@ -31,13 +31,12 @@ static App: FC<()> = |cx| {
 
     cx.render(rsx! {
         div { class: "calculator", onkeydown: move |evt| calc.get_mut().handle_keydown(evt),
-            div { class: "calculator-display","{formatted}"}
+            div { class: "calculator-display", "{formatted}" }
             div { class: "input-keys"
                 div { class: "function-keys"
-                    // All there ways that the calculator may be modified:
-                    CalculatorKey { name: "key-clear", onclick: move |_| calc.get_mut().clear_display() "{clear_text}" }
-                    CalculatorKey { name: "key-sign", onclick: move |_| calc.modify(Calculator::toggle_sign), "±"}
-                    CalculatorKey { name: "key-percent", onclick: move |_| calc.modify(|f| f.toggle_percent()) "%"}
+                    CalculatorKey { name: "key-clear", onclick: move |_| calc.get_mut().clear_display(), "{clear_text}" }
+                    CalculatorKey { name: "key-sign", onclick: move |_| calc.get_mut().toggle_sign(), "±"}
+                    CalculatorKey { name: "key-percent", onclick: move |_| calc.get_mut().toggle_percent(), "%"}
                 }
                 div { class: "digit-keys"
                     CalculatorKey { name: "key-0", onclick: move |_| calc.get_mut().input_digit(0), "0" }
@@ -58,12 +57,29 @@ static App: FC<()> = |cx| {
     })
 };
 
+#[derive(Props)]
+struct CalculatorKeyProps<'a> {
+    name: &'static str,
+    onclick: &'a dyn Fn(MouseEvent),
+}
+
+fn CalculatorKey<'a>(cx: Context<'a, CalculatorKeyProps>) -> VNode<'a> {
+    cx.render(rsx! {
+        button {
+            class: "calculator-key {cx.name}"
+            onclick: {cx.onclick}
+            {cx.children()}
+        }
+    })
+}
+
 #[derive(Clone)]
 struct Calculator {
     display_value: String,
     operator: Option<Operator>,
     cur_val: f64,
 }
+
 #[derive(Clone)]
 enum Operator {
     Add,
@@ -116,7 +132,9 @@ impl Calculator {
             self.display_value = format!("-{}", self.display_value);
         }
     }
-    fn toggle_percent(&mut self) {}
+    fn toggle_percent(&mut self) {
+        self.display_value = (self.display_value.parse::<f64>().unwrap() / 100.0).to_string();
+    }
     fn backspace(&mut self) {
         if !self.display_value.as_str().eq("0") {
             self.display_value.pop();
@@ -145,20 +163,4 @@ impl Calculator {
             _ => {}
         }
     }
-}
-
-#[derive(Props)]
-struct CalculatorKeyProps<'a> {
-    name: &'static str,
-    onclick: &'a dyn Fn(MouseEvent),
-}
-
-fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> VNode<'a> {
-    cx.render(rsx! {
-        button {
-            class: "calculator-key {cx.name}"
-            onclick: {cx.onclick}
-            {cx.children()}
-        }
-    })
 }
