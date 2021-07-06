@@ -10,6 +10,8 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 [dependencies]
 dioxus-core = { path="./packages/core", version="0.1.0" }
 dioxus-core-macro = { path="./packages/core-macro", version="0.1.0" }
+
+dioxus-web = { path="./packages/web", optional=true }
 # dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
 
 
@@ -20,7 +22,7 @@ core = []
 ssr = []
 hooks = []
 router = []
-web = []
+web = ["dioxus-web"]
 desktop = []
 
 
@@ -32,21 +34,6 @@ split-debuginfo = "unpacked"
 futures = "0.3.15"
 log = "0.4.14"
 num-format = "0.4.0"
-# For the tide ssr examples
-# async-std = { version="1.9.0", features=["attributes"] }
-# tide = { version="0.16.0" }
-
-# For the livewview example
-# tide-websockets = "0.4.0"
-# serde_millis = "0.1"
-# serde_json = "1"
-# serde = { version="1", features=['derive'] }
-
-# For the doc generator
-# pulldown-cmark = { version="0.8.0", default-features=false }
-
-# dioxus-webview = { path="./packages/webview", version="0.0.0" }
-# dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
 rand = "0.8.4"
 separator = "0.4.1"
 serde = { version="1.0.126", features=["derive"] }

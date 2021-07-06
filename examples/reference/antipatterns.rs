@@ -85,7 +85,7 @@ static AntipatternNestedFragments: FC<()> = |cx| {
 /// recognize from the function signature, but Dioxus will not update the "live" version of state. Calling `set_state`
 /// merely places a new value in the queue and schedules the component for a future update.
 static AntipaternRelyingOnSetState: FC<()> = |cx| {
-    let (state, set_state) = use_state(&cx, || "Hello world");
+    let (state, set_state) = use_state_classic(&cx, || "Hello world");
     set_state("New state");
     // This will return false! `state` will *still* be "Hello world"
     assert!(state == &"New state");
@@ -126,7 +126,7 @@ static AntipatternMisusedHooks: FC<MisuedHooksProps> = |cx| {
     if cx.should_render_state {
         // do not place a hook in the conditional!
         // prefer to move it out of the conditional
-        let (state, set_state) = use_state(&cx, || "hello world");
+        let (state, set_state) = use_state_classic(&cx, || "hello world");
         rsx!(in cx, div { "{state}" })
     } else {
         rsx!(in cx, div { "Not rendering state" })

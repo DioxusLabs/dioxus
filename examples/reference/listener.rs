@@ -11,7 +11,7 @@ fn main() {}
 
 /// We can use `set_name` in multiple closures; the closures automatically *copy* the reference to set_name.
 static ButtonList: FC<()> = |cx| {
-    let (name, set_name) = use_state(&cx, || "...?");
+    let (name, set_name) = use_state_classic(&cx, || "...?");
 
     let names = ["jack", "jill", "john", "jane"]
         .iter()

@@ -36,7 +36,7 @@ use std::{
 ///     }
 /// }
 /// ```
-pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
+pub fn use_state_classic<'a, 'c, T: 'static, F: FnOnce() -> T>(
     cx: &impl Scoped<'a>,
     initial_state_fn: F,
 ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
@@ -158,7 +158,7 @@ impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
 ///     }
 /// }
 /// ```
-pub fn use_state_new<'a, 'c, T: 'static, F: FnOnce() -> T>(
+pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
     cx: &impl Scoped<'a>,
     initial_state_fn: F,
 ) -> &'a UseState<T> {

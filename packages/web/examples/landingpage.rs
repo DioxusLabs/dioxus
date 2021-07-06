@@ -13,7 +13,7 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let (contents, set_contents) = use_state(&cx, || "asd");
+    let (contents, set_contents) = use_state_classic(&cx, || "asd");
 
     cx.render(rsx! {
         div  {

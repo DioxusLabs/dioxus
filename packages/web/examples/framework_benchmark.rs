@@ -24,8 +24,8 @@ fn main() {
 type RowList = im_rc::HashMap<usize, Rc<str>, nohash_hasher::BuildNoHashHasher<usize>>;
 
 static App: FC<()> = |cx| {
-    let (items, set_items) = use_state(&cx, || RowList::default());
-    let (selection, set_selection) = use_state(&cx, || None as Option<usize>);
+    let (items, set_items) = use_state_classic(&cx, || RowList::default());
+    let (selection, set_selection) = use_state_classic(&cx, || None as Option<usize>);
 
     let create_rendered_rows = move |from, num| move |_| set_items(create_row_list(from, num));
 

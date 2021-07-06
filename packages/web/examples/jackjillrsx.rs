@@ -9,7 +9,7 @@ fn main() {
 }
 
 static Example: FC<()> = |cx| {
-    let (name, set_name) = use_state(&cx, || "...?");
+    let (name, set_name) = use_state_classic(&cx, || "...?");
     cx.render(rsx! {
         section { class: "py-12 px-4 text-center"
             div { class: "w-full max-w-2xl mx-auto"

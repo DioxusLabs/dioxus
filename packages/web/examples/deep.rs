@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn CustomA(cx: Context<()>) -> VNode {
-    let (val, set_val) = use_state(&cx, || "abcdef".to_string() as String);
+    let (val, set_val) = use_state_classic(&cx, || "abcdef".to_string() as String);
 
     cx.render(rsx! {
         div {

@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn App(cx: Context<()>) -> VNode {
-    let cansee = use_state_new(&cx, || false);
+    let cansee = use_state(&cx, || false);
     rsx! { in cx,
         div {
             "Shadow of the child:"

@@ -26,9 +26,9 @@ pub struct TodoItem {
 }
 
 static App: FC<()> = |cx| {
-    let (draft, set_draft) = use_state(&cx, || "".to_string());
-    let (filter, set_filter) = use_state(&cx, || FilterState::All);
-    let todos = use_state_new(&cx, || BTreeMap::<uuid::Uuid, TodoItem>::new());
+    let (draft, set_draft) = use_state_classic(&cx, || "".to_string());
+    let (filter, set_filter) = use_state_classic(&cx, || FilterState::All);
+    let todos = use_state(&cx, || BTreeMap::<uuid::Uuid, TodoItem>::new());
     cx.render(rsx!(
         div {
             id: "app"

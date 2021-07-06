@@ -15,7 +15,7 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let (state, set_state) = use_state(&cx, || 0);
+    let (state, set_state) = use_state_classic(&cx, || 0);
     cx.render(rsx! {
         div {
             section { class: "py-12 px-4 text-center"

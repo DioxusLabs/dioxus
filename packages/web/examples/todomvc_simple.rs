@@ -53,9 +53,9 @@ pub fn App(cx: Context<()>) -> VNode {
 }
 
 pub fn TodoList(cx: Context<()>) -> VNode {
-    let (draft, set_draft) = use_state(&cx, || "".to_string());
-    let (todos, set_todos) = use_state(&cx, || HashMap::<uuid::Uuid, Rc<TodoItem>>::new());
-    let (filter, set_filter) = use_state(&cx, || FilterState::All);
+    let (draft, set_draft) = use_state_classic(&cx, || "".to_string());
+    let (todos, set_todos) = use_state_classic(&cx, || HashMap::<uuid::Uuid, Rc<TodoItem>>::new());
+    let (filter, set_filter) = use_state_classic(&cx, || FilterState::All);
 
     cx.render(rsx! {
         div {
@@ -102,7 +102,7 @@ pub struct TodoEntryProps {
 }
 
 pub fn TodoEntry(cx: Context<TodoEntryProps>) -> VNode {
-    let (is_editing, set_is_editing) = use_state(&cx, || false);
+    let (is_editing, set_is_editing) = use_state_classic(&cx, || false);
     let contents = "";
     let todo = TodoItem {
         checked: false,

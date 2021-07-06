@@ -196,6 +196,8 @@ pub mod inputs {
 #[cfg(feature = "web")]
 pub mod web {
     //! A web-sys based renderer for building fast and interactive web applications
+    use dioxus_core::prelude::{Properties, FC};
+    pub fn launch<P: Properties>(f: FC<P>) {}
 }
 #[cfg(feature = "ssr")]
 pub mod ssr {

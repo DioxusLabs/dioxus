@@ -10,7 +10,7 @@ fn main() {
 }
 
 static Example: FC<()> = |cx| {
-    let (name, set_name) = use_state(&cx, || "...?");
+    let (name, set_name) = use_state_classic(&cx, || "...?");
 
     log::debug!("Running component....");
 
