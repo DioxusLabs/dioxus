@@ -2,6 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
+use dioxus_html_namespace as dioxus_elements;
 use dioxus_web::WebsysRenderer;
 
 static APP_STYLE: &'static str = include_str!("./todomvc/style.css");
@@ -112,7 +113,7 @@ pub fn TodoEntry(cx: Context<TodoEntryProps>) -> VNode {
             "{todo.id}"
             input {
                 class: "toggle"
-                type: "checkbox"
+                r#type: "checkbox"
                 "{todo.checked}"
             }
            {is_editing.then(|| rsx!{

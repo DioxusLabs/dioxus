@@ -1,9 +1,9 @@
 //! Basic example that renders a simple VNode to the browser.
 
-use std::{future::Future, pin::Pin, rc::Rc};
-
 use dioxus_core::prelude::*;
+use dioxus_html_namespace as dioxus_elements;
 use dioxus_web::*;
+
 fn main() {
     // Setup logging and panic handling
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));

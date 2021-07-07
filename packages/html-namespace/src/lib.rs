@@ -26,7 +26,18 @@ macro_rules! builder_constructors {
     ( $(
         $(#[$attr:meta])*
         $name:ident <> $namespace:tt;
-    )* ) => {};
+    )* ) => {
+        $(
+            #[allow(non_camel_case_types)]
+            $(#[$attr])*
+            pub struct $name;
+
+            impl DioxusElement for $name {
+                const TAG_NAME: &'static str = stringify!($name);
+                const NAME_SPACE: Option<&'static str> = Some(stringify!($namespace));
+            }
+        )*
+    };
 }
 
 // Organized in the same order as
@@ -554,6 +565,7 @@ builder_constructors! {
     /// [`<slot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/slot)
     /// element.
     slot;
+
     /// Build a
     /// [`<template>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)
     /// element.

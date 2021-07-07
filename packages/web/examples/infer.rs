@@ -1,6 +1,8 @@
 use dioxus_core as dioxus;
 use dioxus_core::{events::on::MouseEvent, prelude::*};
 use dioxus_web::WebsysRenderer;
+use dioxus_html_namespace as dioxus_elements;
+
 
 fn main() {
     // Setup logging

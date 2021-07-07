@@ -12,6 +12,9 @@ use dioxus::events::on::MouseEvent;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
+use dioxus_html_namespace as dioxus_elements;
+
+
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
@@ -21,7 +24,8 @@ fn main() {
 }
 
 // We use a special immutable hashmap to make hashmap operations efficient
-type RowList = im_rc::HashMap<usize, Rc<str>, nohash_hasher::BuildNoHashHasher<usize>>;
+type RowList = im_rc::HashMap<usize, Rc<str>, FxBuildHasher>;
+// type RowList = im_rc::HashMap<usize, Rc<str>, nohash_hasher::BuildNoHashHasher<usize>>;
 
 static App: FC<()> = |cx| {
     let (items, set_items) = use_state_classic(&cx, || RowList::default());
@@ -90,15 +94,15 @@ static App: FC<()> = |cx| {
 };
 
 #[derive(Props)]
-struct ActionButtonProps<F: Fn(Rc<dyn MouseEvent>)> {
+struct ActionButtonProps<F: Fn(MouseEvent)> {
     name: &'static str,
     id: &'static str,
     action: F,
 }
-fn ActionButton<F: Fn(Rc<dyn MouseEvent>)>(cx: Context<ActionButtonProps<F>>) -> VNode {
+fn ActionButton<F: Fn(MouseEvent)>(cx: Context<ActionButtonProps<F>>) -> VNode {
     cx.render(rsx! {
         div { class: "col-sm-6 smallpad"
-            button {class:"btn btn-primary btn-block", type: "button", id: "{cx.id}",  onclick: {&cx.action},
+            button {class:"btn btn-primary btn-block", r#type: "button", id: "{cx.id}",  onclick: {&cx.action},
                 "{cx.name}"
             }
         }
@@ -128,6 +132,7 @@ fn Row<'a>(cx: Context<'a, RowProps>) -> VNode {
     })
 }
 
+use fxhash::{FxBuildHasher, FxHasher32};
 use rand::prelude::*;
 fn create_new_row_label(rng: &mut SmallRng) -> Rc<str> {
     let mut label = String::new();

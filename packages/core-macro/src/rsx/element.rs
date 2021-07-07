@@ -25,7 +25,7 @@ impl ToTokens for Element {
         // let name = &self.name.to_string();
 
         tokens.append_all(quote! {
-            __cx.element(#name)
+            __cx.element(dioxus_elements::#name)
         });
 
         // Add attributes

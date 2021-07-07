@@ -6,6 +6,7 @@ use std::{
     cell::{Cell, RefCell},
     fmt::Arguments,
     intrinsics::transmute,
+    marker::PhantomData,
     u128,
 };
 
@@ -511,8 +512,9 @@ where
     pub fn iter_child(mut self, nodes: impl IntoIterator<Item = impl IntoVNode<'a>>) -> Self {
         let len_before = self.children.len();
         for item in nodes {
-            let child = item.into_vnode(&self.cx);
-            self.children.push(child);
+            todo!()
+            // let child = item.into_vnode(&self.cx);
+            // self.children.push(child);
         }
         if cfg!(debug_assertions) {
             if self.children.len() > len_before + 1 {
@@ -541,52 +543,53 @@ impl<'a> IntoIterator for VNode<'a> {
     }
 }
 impl<'a> IntoVNode<'a> for VNode<'a> {
-    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self
     }
 }
 
 impl<'a> IntoVNode<'a> for &VNode<'a> {
-    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>
+// where
+    //     'a: 'c,
+    {
+        todo!()
         // cloning is cheap since vnodes are just references into bump arenas
-        self.clone()
+        // self.clone()
     }
 }
 
 pub trait IntoVNode<'a> {
-    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a>;
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 
-pub trait VNodeBuilder<'a, G>: IntoIterator<Item = G>
-where
-    G: IntoVNode<'a>,
-{
-}
+// pub trait VNodeBuilder<'a, G>: IntoIterator<Item = G>
+// where
+//     G: IntoVNode<'a>,
+// {
+// }
 
-impl<'a, F> VNodeBuilder<'a, LazyNodes<'a, F>> for LazyNodes<'a, F> where
-    F: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a
-{
-}
+// impl<'a, F> VNodeBuilder<'a, LazyNodes<F>> for LazyNodes<F> where F: FnOnce(NodeFactory) -> VNode {}
 
 // Wrap the the node-builder closure in a concrete type.
 // ---
 // This is a bit of a hack to implement the IntoVNode trait for closure types.
 pub struct LazyNodes<'a, G>
 where
-    G: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
+    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
 {
     inner: G,
-    _p: std::marker::PhantomData<&'a ()>,
+    _p: PhantomData<&'a ()>,
 }
 
 impl<'a, G> LazyNodes<'a, G>
 where
-    G: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
+    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
 {
     pub fn new(f: G) -> Self {
         Self {
             inner: f,
-            _p: std::default::Default::default(),
+            _p: PhantomData {},
         }
     }
 }
@@ -598,9 +601,9 @@ where
 //  rsx! { {nodes } }
 impl<'a, G> IntoVNode<'a> for LazyNodes<'a, G>
 where
-    G: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
+    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
 {
-    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         (self.inner)(cx)
     }
 }
@@ -608,7 +611,7 @@ where
 // Required because anything that enters brackets in the rsx! macro needs to implement IntoIterator
 impl<'a, G> IntoIterator for LazyNodes<'a, G>
 where
-    G: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
+    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
 {
     type Item = Self;
     type IntoIter = std::iter::Once<Self::Item>;
@@ -617,23 +620,23 @@ where
     }
 }
 
-impl<'a> IntoVNode<'a> for () {
-    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
-        todo!();
-        VNode::Suspended {
-            real: Cell::new(RealDomNode::empty()),
-        }
-    }
-}
+// impl IntoVNode<'_> for () {
+//     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+//         todo!();
+//         VNode::Suspended {
+//             real: Cell::new(RealDomNode::empty()),
+//         }
+//     }
+// }
 
-impl<'a> IntoVNode<'a> for Option<()> {
-    fn into_vnode(self, cx: &NodeFactory<'a>) -> VNode<'a> {
-        todo!();
-        VNode::Suspended {
-            real: Cell::new(RealDomNode::empty()),
-        }
-    }
-}
+// impl IntoVNode<'_> for Option<()> {
+//     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+//         todo!();
+//         VNode::Suspended {
+//             real: Cell::new(RealDomNode::empty()),
+//         }
+//     }
+// }
 
 /// Construct a text VNode.
 ///
@@ -702,7 +705,7 @@ pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
 }
 
 pub fn virtual_child<'a, T: Properties + 'a>(
-    cx: &NodeFactory<'a>,
+    cx: NodeFactory<'a>,
     f: FC<T>,
     props: T,
     key: Option<&'a str>, // key: NodeKey<'a>,
@@ -713,54 +716,28 @@ pub fn virtual_child<'a, T: Properties + 'a>(
     // todo!()
     VNode::Component(
         cx.bump()
-            .alloc(crate::nodes::VComponent::new(cx, f, props, key, children)),
+            .alloc(crate::nodes::VComponent::new(&cx, f, props, key, children)),
         // cx.bump()
         //     .alloc(crate::nodes::VComponent::new(f, props, key)),
     )
 }
 
 pub fn vfragment<'a>(
-    cx: &NodeFactory<'a>,
+    cx: NodeFactory<'a>,
     key: Option<&'a str>, // key: NodeKey<'a>,
     children: &'a [VNode<'a>],
 ) -> VNode<'a> {
     VNode::Fragment(cx.bump().alloc(VFragment::new(key, children)))
 }
 
-pub struct ChildrenList<'a, 'b> {
-    cx: &'b NodeFactory<'a>,
-    children: bumpalo::collections::Vec<'a, VNode<'a>>,
-}
-
-impl<'a, 'b> ChildrenList<'a, 'b> {
-    pub fn new(cx: &'b NodeFactory<'a>) -> Self {
-        Self {
-            cx,
-            children: bumpalo::collections::Vec::new_in(cx.bump()),
-        }
-    }
-
-    pub fn add_child(mut self, nodes: impl IntoIterator<Item = impl IntoVNode<'a>>) -> Self {
-        for item in nodes {
-            let child = item.into_vnode(&self.cx);
-            self.children.push(child);
-        }
-        self
-    }
-
-    pub fn finish(self) -> &'a [VNode<'a>] {
-        self.children.into_bump_slice()
-    }
-}
-
 /// This struct provides an ergonomic API to quickly build VNodes.
 ///
 /// NodeFactory is used to build VNodes in the component's memory space.
 /// This struct adds metadata to the final VNode about listeners, attributes, and children
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct NodeFactory<'a> {
     pub scope_ref: &'a Scope,
-    pub listener_id: Cell<usize>,
+    pub listener_id: &'a Cell<usize>,
 }
 
 impl<'a> NodeFactory<'a> {
@@ -791,7 +768,7 @@ impl<'a> NodeFactory<'a> {
     pub fn attr(
         &self,
         name: &'static str,
-        val: Arguments<'a>,
+        val: Arguments,
         namespace: Option<&'static str>,
     ) -> Attribute<'a> {
         let value = raw_text(self.bump(), val);
@@ -802,18 +779,6 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn child_list(&self) -> ChildrenList {
-        ChildrenList::new(&self)
-    }
-
-    pub fn fragment_builder<'b>(
-        &'b self,
-        key: Option<&'a str>,
-        builder: impl FnOnce(ChildrenList<'a, 'b>) -> &'a [VNode<'a>],
-    ) -> VNode<'a> {
-        self.fragment(builder(ChildrenList::new(&self)), key)
-    }
-
     pub fn fragment(&self, children: &'a [VNode<'a>], key: Option<&'a str>) -> VNode<'a> {
         VNode::Fragment(self.bump().alloc(VFragment {
             children,
@@ -822,12 +787,12 @@ impl<'a> NodeFactory<'a> {
     }
 
     pub fn fragment_from_iter(
-        &self,
+        self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
     ) -> VNode<'a> {
         let mut nodes = bumpalo::collections::Vec::new_in(self.bump());
         for node in node_iter.into_iter() {
-            nodes.push(node.into_vnode(&self));
+            nodes.push(node.into_vnode(self));
         }
         VNode::Fragment(
             self.bump()

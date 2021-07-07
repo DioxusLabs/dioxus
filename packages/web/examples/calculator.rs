@@ -9,6 +9,7 @@
 use dioxus::events::on::*;
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
+use dioxus_html_namespace as dioxus_elements;
 use dioxus_web::WebsysRenderer;
 
 const STYLE: &str = include_str!("../../../examples/assets/calculator.css");
@@ -159,7 +160,7 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a>(cx: Context<'a, CalculatorKeyProps>) -> VNode<'a> {
+fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> VNode<'a> {
     cx.render(rsx! {
         button {
             class: "calculator-key {cx.name}"
@@ -181,7 +182,7 @@ fn CalculatorDisplay<'a>(cx: Context<'a, CalculatorDisplayProps>) -> VNode<'a> {
     // TODO: make it autoscaling with css
     cx.render(rsx! {
         div { class: "calculator-display"
-            div { class: "auto-scaling-text", "{display_value}" }
+            div { class: "auto-scaling-text", "{formatted}" }
         }
     })
 }

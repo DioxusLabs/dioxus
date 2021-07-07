@@ -1,13 +1,14 @@
 use std::rc::Rc;
 
+use dioxus::prelude::*;
 use dioxus_core as dioxus;
-use dioxus_web::{dioxus::prelude::*, WebsysRenderer};
+use dioxus_html_namespace as dioxus_elements;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(CustomA))
+    wasm_bindgen_futures::spawn_local(dioxus_web::WebsysRenderer::start(CustomA))
 }
 
 fn CustomA(cx: Context<()>) -> VNode {

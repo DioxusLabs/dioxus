@@ -49,10 +49,23 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
 ///
 /// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
 /// Try to avoid nesting fragments if you can. Infinitely nested Fragments *will* cause diffing to crash.
-#[allow(non_upper_case_globals)]
-pub const Fragment: FC<()> = |cx| {
-    use crate::prelude::*;
-    cx.render(LazyNodes::new(move |c| {
-        crate::nodebuilder::vfragment(c, None, cx.children())
+use crate::prelude::*;
+pub fn Fragment<'a>(cx: Context<'a, ()>) -> VNode<'a> {
+    let childs: &'a [VNode<'a>] = cx.children();
+    cx.render(LazyNodes::new({
+        move |f| {
+            //
+            f.fragment_from_iter(childs)
+        }
     }))
-};
+}
+// #[allow(non_upper_case_globals)]
+// pub const Fragment: FC<()> = |cx| {
+//     use crate::prelude::*;
+//     let childs = cx.children();
+//     cx.render(LazyNodes::new(move |c| {
+//         c.fragment_from_iter(childs)
+//         // c.text(format_args!(""))
+//         // crate::nodebuilder::vfragment(c, None, cx.children())
+//     }))
+// };

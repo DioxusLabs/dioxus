@@ -393,6 +393,8 @@ pub struct Scope {
     // could also use ourborous
     hooks: RefCell<Vec<Hook>>,
 
+    pub(crate) listener_idx: Cell<usize>,
+
     // Unsafety:
     // - is self-refenrential and therefore needs to point into the bump
     // Stores references into the listeners attached to the vnodes
@@ -463,6 +465,7 @@ impl Scope {
             height,
             event_channel,
             arena_link,
+            listener_idx: Default::default(),
             frames: ActiveFrame::new(),
             hooks: Default::default(),
             shared_contexts: Default::default(),
@@ -506,13 +509,9 @@ impl Scope {
 
         // Remove all the outdated listeners
         self.listeners.borrow_mut().clear();
-        // self.listeners
-        //     .try_borrow_mut()
-        //     .ok()
-        //     .ok_or(Error::FatalInternal("Borrowing listener failed"))?
-        //     .drain(..);
 
         self.hookidx.set(0);
+        self.listener_idx.set(0);
 
         let caller = self
             .caller
@@ -522,12 +521,8 @@ impl Scope {
         // Cast the caller ptr from static to one with our own reference
         let c2: &OpaqueComponent = caller.as_ref();
         let c3: &OpaqueComponent = unsafe { std::mem::transmute(c2) };
-        // let c2: &OpaqueComponent<'static> = caller.as_ref();
-        // let c3: &OpaqueComponent<'sel> = unsafe { std::mem::transmute(c2) };
 
-        let unsafe_head = unsafe { self.own_vnodes(c3) };
-
-        self.frames.cur_frame_mut().head_node = unsafe_head;
+        self.frames.cur_frame_mut().head_node = unsafe { self.own_vnodes(c3) };
 
         Ok(())
     }
@@ -685,13 +680,15 @@ pub trait Scoped<'src>: Sized {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    fn render<'a, F: for<'b> FnOnce(&'b NodeFactory<'src>) -> VNode<'src> + 'src + 'a>(
+    fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
         self,
         lazy_nodes: LazyNodes<'src, F>,
     ) -> VNode<'src> {
-        lazy_nodes.into_vnode(&NodeFactory {
-            scope_ref: self.get_scope(),
-            listener_id: 0.into(),
+        let scope_ref = self.get_scope();
+        let listener_id = &scope_ref.listener_idx;
+        lazy_nodes.into_vnode(NodeFactory {
+            scope_ref,
+            listener_id,
         })
     }
 
@@ -890,14 +887,14 @@ Any function prefixed with "use" should not be called conditionally.
 #[derive(Clone)]
 pub struct SuspendedContext {}
 
-impl SuspendedContext {
-    pub fn render<'a, 'src, F: for<'b> FnOnce(&'b NodeFactory<'src>) -> VNode<'src> + 'src + 'a>(
-        self,
-        lazy_nodes: LazyNodes<'src, F>,
-    ) -> VNode<'src> {
-        todo!()
-    }
-}
+// impl SuspendedContext {
+//     pub fn render<'a, F: for<'b, 'src> FnOnce(&'b NodeFactory<'src>) -> VNode<'src>>(
+//         &self,
+//         lazy_nodes: LazyNodes<F>,
+//     ) -> VNode {
+//         todo!()
+//     }
+// }
 
 // ==================================================================================
 //                Supporting structs for the above abstractions

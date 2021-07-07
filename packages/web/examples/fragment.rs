@@ -1,6 +1,7 @@
 //! Basic example that renders a simple VNode to the browser.
 
 use dioxus_core::prelude::*;
+use dioxus_html_namespace as dioxus_elements;
 use dioxus_web::*;
 
 fn main() {

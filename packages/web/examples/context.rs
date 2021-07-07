@@ -14,6 +14,7 @@
 use dioxus_core::prelude::*;
 use dioxus_core as dioxus;
 use dioxus_web::WebsysRenderer;
+use dioxus_html_namespace as dioxus_elements;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));

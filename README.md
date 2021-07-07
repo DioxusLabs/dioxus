@@ -107,29 +107,29 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Feature                 | Dioxus | React | Notes for Dioxus                                      |
 | ----------------------- | ------ | ----- | ----------------------------------------------------- |
 | Conditional Rendering   | ✅      | ✅     | if/then to hide/show component                        |
-| Map, Iterator           | ✅      | ✅     | map/filter/reduce rsx!                                |
+| Map, Iterator           | ✅      | ✅     | map/filter/reduce to produce rsx!                     |
 | Keyed Components        | ✅      | ✅     | advanced diffing with keys                            |
 | Web                     | ✅      | ✅     | renderer for web browser                              |
 | Desktop (webview)       | ✅      | ✅     | renderer for desktop                                  |
-| Context                 | ✅      | ✅     | share state through the tree                          |
+| Shared State (Context)  | ✅      | ✅     | share state through the tree                          |
 | Hook                    | ✅      | ✅     | memory cells in components                            |
 | SSR                     | ✅      | ✅     | render directly to string                             |
 | Component Children      | ✅      | ✅     | cx.children() as a list of nodes                      |
-| Null components         | ✅      | ✅     | allow returning no components                         |
-| No-div components       | ✅      | ✅     | components that render components                     |
-| Fragments               | ✅      | ✅     | rsx! can return multiple elements without a root      |
+| Headless components     | ✅      | ✅     | components that don't return real elements            |
+| Fragments               | ✅      | ✅     | multiple elements without a real root                 |
 | Manual Props            | ✅      | ✅     | Manually pass in props with spread syntax             |
 | Controlled Inputs       | ✅      | ✅     | stateful wrappers around inputs                       |
-| CSS/Inline Styles       | ✅      | ✅     | syntax for inline styles/attribute groups[2]          |
-| NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                       |
-| 1st class global state  | 🛠      | ✅     | redux/recoil/mobx on top of context                   |
+| CSS/Inline Styles       | ✅      | ✅     | syntax for inline styles/attribute groups             |
+| Custom elements         | ✅      | ✅     | Define new element primitives                         |
+| Compile-time correct    | ✅      | ✅     | Throw errors on invalid template layouts              |
+| 1st class global state  | ✅      | ❓     | redux/recoil/mobx on top of context                   |
 | Suspense                | 🛠      | ✅     | schedule future render from future/promise            |
 | Cooperative Scheduling  | 🛠      | ✅     | Prioritize important events over non-important events |
 | Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                   |
 | Runs natively           | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)        |
+| NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                       |
 
 - [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
-- [2] Would like to solve this in a more general way. Something like attribute groups that's not styling-specific.
 
 ### Phase 2: Advanced Toolkits
 

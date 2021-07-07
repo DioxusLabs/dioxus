@@ -4,6 +4,8 @@ use std::rc::Rc;
 use dioxus::{events::on::MouseEvent, prelude::*};
 use dioxus_core as dioxus;
 use dioxus_web::WebsysRenderer;
+use dioxus_html_namespace as dioxus_elements;
+
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
@@ -50,7 +52,7 @@ static Example: FC<ExampleProps> = |cx| {
 };
 
 #[derive(Props)]
-struct ButtonProps<'src, F: Fn(Rc<dyn MouseEvent>)> {
+struct ButtonProps<'src, F: Fn(MouseEvent)> {
     name: &'src str,
     handler: F,
 }

@@ -1,4 +1,6 @@
 use dioxus_core as dioxus;
+use dioxus_html_namespace as dioxus_elements;
+use dioxus_html_namespace::*;
 use dioxus_web::{dioxus::prelude::*, WebsysRenderer};
 
 fn main() {
@@ -9,7 +11,7 @@ fn main() {
 
 fn App(cx: Context<()>) -> VNode {
     cx.render(rsx! {
-        main { class: "dark:bg-gray-800 bg-white relative h-screen"
+        div { class: "dark:bg-gray-800 bg-white relative h-screen"
             NavBar {}
             {(0..10).map(|f| rsx!(Landing { key: "{f}" }))}
         }

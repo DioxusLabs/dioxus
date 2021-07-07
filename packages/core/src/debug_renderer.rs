@@ -49,18 +49,18 @@ impl DebugRenderer {
     // If you have a list or "nth" child, you do need to list those children, but you don't need to
     // fill in their children/attrs/etc
     // Does not handle children or lifecycles and will always fail the test if they show up in the rhs
-    pub fn compare<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
+    pub fn compare<F>(&self, other: LazyNodes<F>) -> Result<()>
     where
-        F: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
+        F: for<'b, 'c> FnOnce(&'b NodeFactory<'c>) -> VNode<'c>,
     {
         Ok(())
     }
 
     // Do a full compare - everything must match
     // Ignores listeners and children components
-    pub fn compare_full<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
+    pub fn compare_full<F>(&self, other: LazyNodes<F>) -> Result<()>
     where
-        F: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
+        F: for<'b, 'c> FnOnce(&'b NodeFactory<'c>) -> VNode<'c>,
     {
         Ok(())
     }
@@ -69,9 +69,9 @@ impl DebugRenderer {
         Ok(())
     }
 
-    pub fn render_nodes<'a, F>(&self, other: LazyNodes<'a, F>) -> Result<()>
+    pub fn render_nodes<F>(&self, other: LazyNodes<F>) -> Result<()>
     where
-        F: for<'b> FnOnce(&'b NodeFactory<'a>) -> VNode<'a> + 'a,
+        F: for<'b, 'c> FnOnce(&'b NodeFactory<'c>) -> VNode<'c>,
     {
         Ok(())
     }

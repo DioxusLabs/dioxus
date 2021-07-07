@@ -2,8 +2,7 @@
 //!
 //! The example from the README.md
 
-use dioxus::{events::on::MouseEvent, prelude::*};
-use dioxus_html_namespace::{button, div, h1};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus::web::launch(Example)
@@ -12,11 +11,27 @@ fn main() {
 fn Example(cx: Context<()>) -> VNode {
     let name = use_state(&cx, || "..?");
 
-    let handler = move |e: MouseEvent| e.cl;
-
     cx.render(rsx! {
         h1 { "Hello, {name}" }
-        button { "?", onclick: move |event| name.set("world!")}
+        button { "?", onclick: move |_| name.set("world!")}
         button { "?", onclick: move |_| name.set("Dioxus 🎉")}
     })
 }
+
+static Example2: FC<()> = |cx| {
+    let (g, set_g) = use_state_classic(&cx, || 0);
+    let v = (0..10).map(|f| {
+        dioxus::prelude::LazyNodes::new(move |__cx: &NodeFactory| {
+            __cx.element(dioxus_elements::li)
+                .listeners([dioxus::events::on::onclick(__cx, move |_| set_g(10))])
+                .finish()
+        })
+    });
+    cx.render(dioxus::prelude::LazyNodes::new(
+        move |__cx: &NodeFactory| {
+            __cx.element(dioxus_elements::div)
+                .children([__cx.fragment_from_iter(v)])
+                .finish()
+        },
+    ))
+};

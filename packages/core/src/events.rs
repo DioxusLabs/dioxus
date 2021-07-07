@@ -124,14 +124,12 @@ pub mod on {
 
     macro_rules! event_directory {
         ( $(
-            $(
-                #[$attr:meta]
-            )*
+            $( #[$attr:meta] )*
             $eventdata:ident($wrapper:ident): [
                 $(
-                    #[$method_attr:meta]
+                    $( #[$method_attr:meta] )*
+                    $name:ident
                 )*
-                $( $name:ident )*
             ];
         )* ) => {
             $(
@@ -149,8 +147,8 @@ pub mod on {
                     }
                 }
 
-                $(#[$method_attr])*
                 $(
+                    $(#[$method_attr])*
                     pub fn $name<'a>(
                         c: &'_ NodeFactory<'a>,
                         callback: impl Fn($wrapper) + 'a,
@@ -181,35 +179,51 @@ pub mod on {
     //
     //
     event_directory! {
-
-
-
-
         ClipboardEventInner(ClipboardEvent): [
             /// Called when "copy"
             oncopy
+            /// oncut
             oncut
+            /// onpaste
             onpaste
         ];
+
         CompositionEventInner(CompositionEvent): [
+            /// oncompositionend
             oncompositionend
+            /// oncompositionstart
             oncompositionstart
+            /// oncompositionupdate
             oncompositionupdate
         ];
+
         KeyboardEventInner(KeyboardEvent): [
+            /// onkeydown
             onkeydown
+            /// onkeypress
             onkeypress
+            /// onkeyup
             onkeyup
         ];
+
         FocusEventInner(FocusEvent): [
+            /// onfocus
             onfocus
+            /// onblur
             onblur
         ];
+
+
         FormEventInner(FormEvent): [
+            /// onchange
             onchange
+            /// oninput
             oninput
+            /// oninvalid
             oninvalid
+            /// onreset
             onreset
+            /// onsubmit
             onsubmit
         ];
 
@@ -237,63 +251,202 @@ pub mod on {
         /// ```
         ///
         /// ## Event Handlers
-        /// - click
-        /// - contextmenu
-        /// - doubleclick
-        /// - drag
-        /// - dragend
-        /// - dragenter
-        /// - dragexit
-        /// - dragleave
-        /// - dragover
-        /// - dragstart
-        /// - drop
-        /// - mousedown
-        /// - mouseenter
-        /// - mouseleave
-        /// - mousemove
-        /// - mouseout
-        /// - mouseover
-        /// - mouseup
+        /// - [`onclick`]
+        /// - [`oncontextmenu`]
+        /// - [`ondoubleclick`]
+        /// - [`ondrag`]
+        /// - [`ondragend`]
+        /// - [`ondragenter`]
+        /// - [`ondragexit`]
+        /// - [`ondragleave`]
+        /// - [`ondragover`]
+        /// - [`ondragstart`]
+        /// - [`ondrop`]
+        /// - [`onmousedown`]
+        /// - [`onmouseenter`]
+        /// - [`onmouseleave`]
+        /// - [`onmousemove`]
+        /// - [`onmouseout`]
+        /// - [`onmouseover`]
+        /// - [`onmouseup`]
         MouseEventInner(MouseEvent): [
-            /// Onclick!
+            /// Execute a callback when a button is clicked.
+            ///
+            /// ## Description
+            ///
+            /// An element receives a click event when a pointing device button (such as a mouse's primary mouse button)
+            /// is both pressed and released while the pointer is located inside the element.
+            ///
+            /// - Bubbles: Yes
+            /// - Cancelable: Yes
+            /// - Interface: [`MouseEvent`]
+            ///
+            /// If the button is pressed on one element and the pointer is moved outside the element before the button
+            /// is released, the event is fired on the most specific ancestor element that contained both elements.
+            /// `click` fires after both the `mousedown` and `mouseup` events have fired, in that order.
+            ///
+            /// ## Example
+            /// ```
+            /// rsx!( button { "click me", onclick: move |_| log::info!("Clicked!`") } )
+            /// ```
+            ///
+            /// ## Reference
+            /// - https://www.w3schools.com/tags/ev_onclick.asp
+            /// - https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event
+            ///
             onclick
+            /// oncontextmenu
             oncontextmenu
+            /// ondoubleclick
             ondoubleclick
+            /// ondrag
             ondrag
+            /// ondragend
             ondragend
+            /// ondragenter
             ondragenter
+            /// ondragexit
             ondragexit
+            /// ondragleave
             ondragleave
+            /// ondragover
             ondragover
+            /// ondragstart
             ondragstart
+            /// ondrop
             ondrop
+            /// onmousedown
             onmousedown
+            /// onmouseenter
             onmouseenter
+            /// onmouseleave
             onmouseleave
+            /// onmousemove
             onmousemove
+            /// onmouseout
             onmouseout
+            /// onmouseover
             onmouseover
+            /// onmouseup
             onmouseup
         ];
 
         PointerEventInner(PointerEvent): [
-            pointerdown pointermove pointerup pointercancel gotpointercapture
-            lostpointercapture pointerenter pointerleave pointerover pointerout
+            /// pointerdown
+            onpointerdown
+            /// pointermove
+            onpointermove
+            /// pointerup
+            onpointerup
+            /// pointercancel
+            onpointercancel
+            /// gotpointercapture
+            ongotpointercapture
+            /// lostpointercapture
+            onlostpointercapture
+            /// pointerenter
+            onpointerenter
+            /// pointerleave
+            onpointerleave
+            /// pointerover
+            onpointerover
+            /// pointerout
+            onpointerout
         ];
-        SelectionEventInner(SelectionEvent): [select];
-        TouchEventInner(TouchEvent): [touchcancel touchend touchmove touchstart];
-        UIEventInner(UIEvent): [scroll];
-        WheelEventInner(WheelEvent): [wheel];
+
+        SelectionEventInner(SelectionEvent): [
+            /// onselect
+            onselect
+        ];
+
+        TouchEventInner(TouchEvent): [
+            /// ontouchcancel
+            ontouchcancel
+            /// ontouchend
+            ontouchend
+            /// ontouchmove
+            ontouchmove
+            /// ontouchstart
+            ontouchstart
+        ];
+
+        UIEventInner(UIEvent): [
+            ///
+            scroll
+        ];
+
+        WheelEventInner(WheelEvent): [
+            ///
+            wheel
+        ];
+
         MediaEventInner(MediaEvent): [
-            abort canplay canplaythrough durationchange emptied encrypted
-            ended error loadeddata loadedmetadata loadstart pause play
-            playing progress ratechange seeked seeking stalled suspend
-            timeupdate volumechange waiting
+            ///abort
+            onabort
+            ///canplay
+            oncanplay
+            ///canplaythrough
+            oncanplaythrough
+            ///durationchange
+            ondurationchange
+            ///emptied
+            onemptied
+            ///encrypted
+            onencrypted
+            ///ended
+            onended
+            ///error
+            onerror
+            ///loadeddata
+            onloadeddata
+            ///loadedmetadata
+            onloadedmetadata
+            ///loadstart
+            onloadstart
+            ///pause
+            onpause
+            ///play
+            onplay
+            ///playing
+            onplaying
+            ///progress
+            onprogress
+            ///ratechange
+            onratechange
+            ///seeked
+            onseeked
+            ///seeking
+            onseeking
+            ///stalled
+            onstalled
+            ///suspend
+            onsuspend
+            ///timeupdate
+            ontimeupdate
+            ///volumechange
+            onvolumechange
+            ///waiting
+            onwaiting
         ];
-        AnimationEventInner(AnimationEvent): [animationstart animationend animationiteration];
-        TransitionEventInner(TransitionEvent): [transitionend];
-        ToggleEventInner(ToggleEvent): [toggle];
+
+        AnimationEventInner(AnimationEvent): [
+            /// onanimationstart
+            onanimationstart
+            /// onanimationend
+            onanimationend
+            /// onanimationiteration
+            onanimationiteration
+        ];
+
+        TransitionEventInner(TransitionEvent): [
+            ///
+            ontransitionend
+        ];
+
+        ToggleEventInner(ToggleEvent): [
+            ///
+            ontoggle
+        ];
     }
 
     pub trait GenericEventInner {
@@ -404,7 +557,6 @@ pub mod on {
         fn alt_key(&self) -> bool;
         fn button(&self) -> i16;
         fn buttons(&self) -> u16;
-
         /// Get the X coordinate of the mouse relative to the window
         fn client_x(&self) -> i32;
         fn client_y(&self) -> i32;
@@ -709,26 +861,3 @@ pub mod on {
         }
     }
 }
-
-// mod tests {
-
-//     use std::rc::Rc;
-
-//     use crate as dioxus;
-//     use crate::events::on::MouseEvent;
-//     use crate::prelude::*;
-
-//     fn autocomplete() {
-//         // let v = move |evt| {
-//         //     let r = evt.alt_key();
-//         // };
-
-//         let g = rsx! {
-//             button {
-//                 onclick: move |evt| {
-//                     let r = evt.alt_key();
-//                 }
-//             }
-//         };
-//     }
-// }

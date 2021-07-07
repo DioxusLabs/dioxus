@@ -1,6 +1,8 @@
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_web::WebsysRenderer;
+use dioxus_html_namespace as dioxus_elements;
+
 
 fn main() {
     // wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
@@ -24,7 +26,7 @@ static App: FC<()> = |cx| {
                         placeholder: "Username"
                         class: "shadow appearance-none rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                         id: "username" 
-                        type: "text"
+                        r#type: "text"
                         value: "{val}"
                         oninput: move |evet| set_val(evet.value())
                     }
@@ -56,7 +58,7 @@ static UserInput: FC<()> = |cx| {
             input { class: "shadow appearance-none rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                 placeholder: "Username"
                 id: "username"
-                type: "text"
+                r#type: "text"
                 oninput: move |evet| set_val(evet.value())
             }
             p { "Val is: {val}" }

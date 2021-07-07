@@ -80,7 +80,7 @@ impl ToTokens for RsxRender {
             quote! {#inner}
         } else {
             let childs = &self.roots;
-            quote! { __cx.fragment_from_iter(&[ #(#childs),* ]) }
+            quote! { __cx.fragment_from_iter([ #(#childs),* ]) }
         };
 
         match &self.custom_context {
