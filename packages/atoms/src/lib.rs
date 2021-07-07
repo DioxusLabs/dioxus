@@ -32,7 +32,7 @@ mod traits {
     // Atoms, selectors, and their family variants are readable
     pub trait Readable<T: AtomValue>: Sized + Copy {
         fn use_read<'a, P: 'static>(self, cx: Context<'a, P>) -> &'a T {
-            hooks::use_read(&cx, self)
+            hooks::use_read(cx, self)
         }
 
         // This returns a future of the value
@@ -95,9 +95,9 @@ mod atoms {
             const EXAMPLE_ATOM: Atom<i32> = |_| 10;
 
             // ensure that atoms are both read and write
-            let _ = use_read(&cx, &EXAMPLE_ATOM);
-            let _ = use_read_write(&cx, &EXAMPLE_ATOM);
-            let _ = use_write(&cx, &EXAMPLE_ATOM);
+            let _ = use_read(cx, &EXAMPLE_ATOM);
+            let _ = use_read_write(cx, &EXAMPLE_ATOM);
+            let _ = use_write(cx, &EXAMPLE_ATOM);
         }
     }
 }
@@ -161,7 +161,7 @@ mod atomfamily {
 
         fn test(cx: Context<()>) {
             let title = Titles.select(&10).use_read(cx);
-            let t2 = use_read(&cx, &Titles.select(&10));
+            let t2 = use_read(cx, &Titles.select(&10));
         }
     }
 }
@@ -368,7 +368,7 @@ mod root {
 
 mod hooks {
     use super::*;
-    use dioxus_core::{hooks::use_ref, prelude::Context, virtual_dom::Scoped};
+    use dioxus_core::{hooks::use_ref, prelude::Context};
 
     pub fn use_init_recoil_root<P>(cx: Context<P>, cfg: impl Fn(())) {
         cx.use_create_context(move || RefCell::new(RecoilRoot::new()))
@@ -381,12 +381,12 @@ mod hooks {
     ///
     /// You can use this method to create controllers that perform much more complex actions than set/get
     /// However, be aware that "getting" values through this hook will not subscribe the component to any updates.
-    pub fn use_recoil_api<'a>(cx: &impl Scoped<'a>) -> &'a Rc<RecoilContext> {
+    pub fn use_recoil_api<'a, P>(cx: Context<'a, P>) -> &'a Rc<RecoilContext> {
         cx.use_context::<RecoilContext>()
     }
 
-    pub fn use_write<'a, T: AtomValue>(
-        cx: &impl Scoped<'a>,
+    pub fn use_write<'a, P, T: AtomValue>(
+        cx: Context<'a, P>,
         // todo: this shouldn't need to be static
         writable: impl Writable<T>,
     ) -> &'a Rc<dyn Fn(T)> {
@@ -412,8 +412,8 @@ mod hooks {
     /// Read the atom and get the Rc directly to the Atom's slot
     /// This is useful if you need the memoized Atom value. However, Rc<T> is not as easy to
     /// work with as
-    pub fn use_read_raw<'a, T: AtomValue>(
-        cx: &impl Scoped<'a>,
+    pub fn use_read_raw<'a, P, T: AtomValue>(
+        cx: Context<'a, P>,
         readable: impl Readable<T>,
     ) -> &'a Rc<T> {
         struct ReadHook<T> {
@@ -449,7 +449,7 @@ mod hooks {
     }
 
     ///
-    pub fn use_read<'a, T: AtomValue>(cx: &impl Scoped<'a>, readable: impl Readable<T>) -> &'a T {
+    pub fn use_read<'a, P, T: AtomValue>(cx: Context<'a, P>, readable: impl Readable<T>) -> &'a T {
         use_read_raw(cx, readable).as_ref()
     }
 
@@ -468,8 +468,8 @@ mod hooks {
     /// // equivalent to:
     /// let (title, set_title) = (use_read(cx, &Title), use_write(cx, &Title));
     /// ```
-    pub fn use_read_write<'a, T: AtomValue + 'static>(
-        cx: &impl Scoped<'a>,
+    pub fn use_read_write<'a, P, T: AtomValue + 'static>(
+        cx: Context<'a, P>,
         writable: impl Writable<T>,
     ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
         (use_read(cx, writable), use_write(cx, writable))

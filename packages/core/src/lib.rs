@@ -57,7 +57,6 @@ pub mod prelude {
     use crate::nodes;
     pub use crate::styles::{AsAttr, StyleBuilder};
     pub use crate::virtual_dom::Context;
-    pub use crate::virtual_dom::Scoped;
     pub use nodes::*;
 
     pub use crate::nodebuilder::LazyNodes;
