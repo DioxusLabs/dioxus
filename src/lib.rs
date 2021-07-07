@@ -94,7 +94,7 @@
 //!
 //! ```
 //! static Example: FC<()> = |cx| {
-//!     let (val, set_val) = use_state(&cx, || 0);
+//!     let (val, set_val) = use_state(cx, || 0);
 //!     cx.render(rsx!(
 //!         button { onclick: move |_| set_val(val + 1) }
 //!     ))

@@ -34,7 +34,7 @@ enum LightState {
     Red,
 }
 static HelloMessage: FC<()> = |cx| {
-    let (color, set_color) = use_state(&cx, || LightState::Green);
+    let (color, set_color) = use_state(cx, || LightState::Green);
 
     let title = match color {
         Green => "Green means go",

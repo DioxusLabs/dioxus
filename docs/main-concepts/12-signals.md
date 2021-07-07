@@ -12,7 +12,7 @@ Your component today might look something like this:
 
 ```rust
 fn Comp(cx: Context<()>) -> VNode {
-    let (title, set_title) = use_state(&cx, || "Title".to_string());
+    let (title, set_title) = use_state(cx, || "Title".to_string());
     cx.render(rsx!{
         input {
             value: title,
@@ -26,7 +26,7 @@ This component is fairly straightforward - the input updates its own value on ev
 
 ```rust
 fn Comp(cx: Context<()>) -> VNode {
-    let (title, set_title) = use_state(&cx, || "Title".to_string());
+    let (title, set_title) = use_state(cx, || "Title".to_string());
     cx.render(rsx!{
         div {
             input {

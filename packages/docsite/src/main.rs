@@ -25,7 +25,7 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let (url, set_url) = use_state(&cx, || "");
+    let (url, set_url) = use_state(cx, || "");
 
     let body = match *url {
         "community" => rsx!(in cx, Community {}),

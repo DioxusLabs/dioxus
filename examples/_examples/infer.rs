@@ -15,7 +15,7 @@ fn main() {
 
 // this is a component
 static Example: FC<()> = |cx| {
-    let (event, set_event) = use_state_classic(&cx, || None);
+    let (event, set_event) = use_state_classic(cx, || None);
 
     let handler = move |evt| {
         set_event(Some(evt));

@@ -16,7 +16,7 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let (count, set_count) = use_state_classic(&cx, || 0);
+    let (count, set_count) = use_state_classic(cx, || 0);
 
     cx.render(rsx! {
         div {

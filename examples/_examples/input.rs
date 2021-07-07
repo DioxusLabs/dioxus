@@ -13,7 +13,7 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let (val, set_val) = use_state_classic(&cx, || "asd".to_string());
+    let (val, set_val) = use_state_classic(cx, || "asd".to_string());
 
     cx.render(rsx! {
         div { class: "max-w-lg max-w-xs bg-blue-800 shadow-2xl rounded-lg mx-auto text-center py-12 mt-4 rounded-xl"
@@ -51,7 +51,7 @@ static Example: FC<()> = |cx| {
 };
 
 static UserInput: FC<()> = |cx| {
-    let (val, set_val) = use_state_classic(&cx, || "asd".to_string());
+    let (val, set_val) = use_state_classic(cx, || "asd".to_string());
 
     rsx! { in cx,
         div { class: "mb-4"

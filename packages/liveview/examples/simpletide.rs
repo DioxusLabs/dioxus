@@ -29,7 +29,7 @@ mod client {
 
     static APP: FC<()> = |cx| {
         todo!()
-        // let (selected_stream, set_stream) = use_state(&cx, || SelectedStream::Football);
+        // let (selected_stream, set_stream) = use_state(cx, || SelectedStream::Football);
 
         // let opts = SelectedStream::iter().map(|name| rsx! { option { "{name}", value: "{name}" } });
 

@@ -28,7 +28,7 @@ struct ExampleProps {
 }
 
 static Example: FC<ExampleProps> = |cx| {
-    let name = use_state(&cx, move || cx.initial_name);
+    let name = use_state(cx, move || cx.initial_name);
 
     cx.render(rsx! {
         div {

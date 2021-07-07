@@ -18,7 +18,6 @@ use syn::{
 pub enum AmbiguousElement {
     Element(Element),
     Component(Component),
-    Fragment(Fragment),
 }
 
 impl Parse for AmbiguousElement {
@@ -76,7 +75,6 @@ impl ToTokens for AmbiguousElement {
         match self {
             AmbiguousElement::Element(el) => el.to_tokens(tokens),
             AmbiguousElement::Component(comp) => comp.to_tokens(tokens),
-            AmbiguousElement::Fragment(frag) => frag.to_tokens(tokens),
         }
     }
 }

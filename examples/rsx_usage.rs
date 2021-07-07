@@ -47,7 +47,7 @@ fn main() {
 const NONE_ELEMENT: Option<()> = None;
 
 use baller::Baller;
-use dioxus_core::prelude::*;
+use dioxus::prelude::*;
 
 static Example: FC<()> = |cx| {
     let formatting = "formatting!";

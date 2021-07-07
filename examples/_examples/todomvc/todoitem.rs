@@ -8,7 +8,7 @@ pub struct TodoEntryProps {
 }
 
 pub fn TodoEntry(cx: Context, props: &TodoEntryProps) -> VNode {
-    let (is_editing, set_is_editing) = use_state(&cx, || false);
+    let (is_editing, set_is_editing) = use_state(cx, || false);
     let todo = use_atom_family(&cx, &TODOS, cx.id);
 
     cx.render(rsx! (

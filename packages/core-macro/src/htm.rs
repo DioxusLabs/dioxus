@@ -39,7 +39,7 @@ impl Parse for HtmlRender {
             return input.parse::<LitStr>()?.parse::<HtmlRender>();
         }
 
-        // let cx: Ident = s.parse()?;
+        // let __cx: Ident = s.parse()?;
         // s.parse::<Token![,]>()?;
         // if elements are in an array, return a bumpalo::collections::Vec rather than a Node.
         let kind = if input.peek(token::Bracket) {
@@ -64,8 +64,8 @@ impl ToTokens for HtmlRender {
 
         // create a lazy tree that accepts a bump allocator
         let final_tokens = quote! {
-            dioxus::prelude::LazyNodes::new(move |cx| {
-                let bump = &cx.bump();
+            dioxus::prelude::LazyNodes::new(move |__cx| {
+                let bump = __cx.bump();
 
                 #new_toks
             })
@@ -152,16 +152,18 @@ struct Element {
 
 impl ToTokens for ToToksCtx<&Element> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // let cx = self.cx;
-        let name = &self.inner.name.to_string();
+        // let __cx = self.__cx;
+        let name = &self.inner.name;
+        // let name = &self.inner.name.to_string();
         tokens.append_all(quote! {
-            dioxus::builder::ElementBuilder::new(cx, #name)
+            __cx.element(dioxus_elements::#name)
+            // dioxus::builder::ElementBuilder::new( #name)
         });
         for attr in self.inner.attrs.iter() {
             self.recurse(attr).to_tokens(tokens);
         }
 
-        if is_valid_svg_tag(name) {
+        if is_valid_svg_tag(&name.to_string()) {
             tokens.append_all(quote! {
                 .namespace(Some("http://www.w3.org/2000/svg"))
             });

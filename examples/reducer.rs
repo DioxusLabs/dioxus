@@ -8,7 +8,7 @@ fn main() {}
 use dioxus::prelude::*;
 
 pub static ExampleReducer: FC<()> = |cx| {
-    let (state, reduce) = use_reducer(&cx, PlayerState::new, PlayerState::reduce);
+    let (state, reduce) = use_reducer(cx, PlayerState::new, PlayerState::reduce);
 
     let is_playing = state.is_playing();
 

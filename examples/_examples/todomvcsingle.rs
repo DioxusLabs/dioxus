@@ -74,7 +74,7 @@ impl TodoManager {
 }
 
 pub fn TodoList(cx: Context<()>) -> VNode {
-    let draft = use_state(&cx, || "".to_string());
+    let draft = use_state(cx, || "".to_string());
     let todos = use_read(&cx, &TODO_LIST);
     let filter = use_read(&cx, &FILTER);
 
@@ -118,7 +118,7 @@ pub struct TodoEntryProps {
 }
 
 pub fn TodoEntry(cx: Context, props: &TodoEntryProps) -> VNode {
-    let (is_editing, set_is_editing) = use_state_classic(&cx, || false);
+    let (is_editing, set_is_editing) = use_state_classic(cx, || false);
     let todo = use_read(&cx, &TODO_LIST).get(&cx.id).unwrap();
 
     cx.render(rsx! (

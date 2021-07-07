@@ -620,23 +620,17 @@ where
     }
 }
 
-// impl IntoVNode<'_> for () {
-//     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
-//         todo!();
-//         VNode::Suspended {
-//             real: Cell::new(RealDomNode::empty()),
-//         }
-//     }
-// }
+impl IntoVNode<'_> for () {
+    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        cx.fragment_from_iter(None as Option<VNode>)
+    }
+}
 
-// impl IntoVNode<'_> for Option<()> {
-//     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
-//         todo!();
-//         VNode::Suspended {
-//             real: Cell::new(RealDomNode::empty()),
-//         }
-//     }
-// }
+impl IntoVNode<'_> for Option<()> {
+    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        cx.fragment_from_iter(None as Option<VNode>)
+    }
+}
 
 /// Construct a text VNode.
 ///
@@ -717,8 +711,6 @@ pub fn virtual_child<'a, T: Properties + 'a>(
     VNode::Component(
         cx.bump()
             .alloc(crate::nodes::VComponent::new(&cx, f, props, key, children)),
-        // cx.bump()
-        //     .alloc(crate::nodes::VComponent::new(f, props, key)),
     )
 }
 
@@ -784,6 +776,26 @@ impl<'a> NodeFactory<'a> {
             children,
             key: NodeKey::new_opt(key),
         }))
+    }
+
+    pub fn virtual_child<T: Properties + 'a, C>(
+        &self,
+        f: FC<T>,
+        props: T,
+        key: Option<&'a str>, // key: NodeKey<'a>,
+        children: C,
+    ) -> VNode<'a>
+    where
+        C: 'a + AsRef<[VNode<'a>]>,
+    {
+        let children: &'a C = self.bump().alloc(children);
+        VNode::Component(self.bump().alloc(crate::nodes::VComponent::new(
+            self,
+            f,
+            props,
+            key,
+            children.as_ref(),
+        )))
     }
 
     pub fn fragment_from_iter(

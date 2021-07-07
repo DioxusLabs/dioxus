@@ -23,7 +23,7 @@ use std::{
 /// Usage:
 /// ```ignore
 /// static Example: FC<()> = |cx| {
-///     let (counter, set_counter) = use_state(&cx, || 0);
+///     let (counter, set_counter) = use_state(cx, || 0);
 ///     let increment = |_| set_couter(counter + 1);
 ///     let decrement = |_| set_couter(counter + 1);
 ///
@@ -145,7 +145,7 @@ impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
 /// Usage:
 /// ```ignore
 /// static Example: FC<()> = |cx| {
-///     let (counter, set_counter) = use_state(&cx, || 0);
+///     let (counter, set_counter) = use_state(cx, || 0);
 ///     let increment = |_| set_couter(counter + 1);
 ///     let decrement = |_| set_couter(counter + 1);
 ///

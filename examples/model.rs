@@ -23,7 +23,7 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let calc = use_model(&cx, || Calculator::new());
+    let calc = use_model(cx, || Calculator::new());
 
     let clear_display = calc.display_value.eq("0");
     let clear_text = if clear_display { "C" } else { "AC" };

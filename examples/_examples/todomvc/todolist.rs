@@ -7,8 +7,8 @@ use crate::{
 use dioxus_core::prelude::*;
 
 pub fn TodoList(cx: Context<()>) -> VNode {
-    let (draft, set_draft) = use_state(&cx, || "".to_string());
-    let (todos, _) = use_state(&cx, || Vec::<TodoItem>::new());
+    let (draft, set_draft) = use_state(cx, || "".to_string());
+    let (todos, _) = use_state(cx, || Vec::<TodoItem>::new());
     let filter = use_atom(&cx, &FILTER);
 
     cx.render(rsx! {
