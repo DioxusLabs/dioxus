@@ -39,6 +39,11 @@ impl Parse for AmbiguousElement {
             }
         }
 
+        // if input.peek(Ident) {
+        //     let name_str = input.fork().parse::<Ident>().unwrap().to_string();
+        // } else {
+        // }
+
         if let Ok(name) = input.fork().parse::<Ident>() {
             let name_str = name.to_string();
 

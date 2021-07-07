@@ -45,27 +45,17 @@ impl Parse for Component {
         let mut children: Vec<Node> = Vec::new();
         let mut manual_props = None;
 
-        'parsing: loop {
-            // [1] Break if empty
-            if content.is_empty() {
-                break 'parsing;
-            }
-
-            if content.peek(Token![..]) {
-                content.parse::<Token![..]>()?;
-                manual_props = Some(content.parse::<Expr>()?);
-            } else if content.peek(Ident) && content.peek2(Token![:]) {
-                body.push(content.parse::<ComponentField>()?);
-            } else {
-                children.push(content.parse::<Node>()?);
-            }
-
-            // consume comma if it exists
-            // we don't actually care if there *are* commas between attrs
-            if content.peek(Token![,]) {
-                let _ = content.parse::<Token![,]>();
-            }
-        }
+        parse_component_body(
+            &content,
+            &BodyParseConfig {
+                allow_children: true,
+                allow_fields: true,
+                allow_manual_props: true,
+            },
+            &mut body,
+            &mut children,
+            &mut manual_props,
+        )?;
 
         Ok(Self {
             name,
@@ -74,6 +64,52 @@ impl Parse for Component {
             manual_props,
         })
     }
+}
+
+pub struct BodyParseConfig {
+    pub allow_fields: bool,
+    pub allow_children: bool,
+    pub allow_manual_props: bool,
+}
+
+pub fn parse_component_body(
+    content: &ParseBuffer,
+    cfg: &BodyParseConfig,
+    body: &mut Vec<ComponentField>,
+    children: &mut Vec<Node>,
+    manual_props: &mut Option<Expr>,
+) -> Result<()> {
+    'parsing: loop {
+        // [1] Break if empty
+        if content.is_empty() {
+            break 'parsing;
+        }
+
+        if content.peek(Token![..]) {
+            if !cfg.allow_manual_props {
+                // toss an error
+            }
+            content.parse::<Token![..]>()?;
+            *manual_props = Some(content.parse::<Expr>()?);
+        } else if content.peek(Ident) && content.peek2(Token![:]) {
+            if !cfg.allow_fields {
+                // toss an error
+            }
+            body.push(content.parse::<ComponentField>()?);
+        } else {
+            if !cfg.allow_children {
+                // toss an error
+            }
+            children.push(content.parse::<Node>()?);
+        }
+
+        // consume comma if it exists
+        // we don't actually care if there *are* commas between attrs
+        if content.peek(Token![,]) {
+            let _ = content.parse::<Token![,]>();
+        }
+    }
+    Ok(())
 }
 
 impl ToTokens for Component {
@@ -135,12 +171,6 @@ impl ToTokens for Component {
         let children = quote! {
             [ #( #childs ),* ]
         };
-        // ChildrenList::new(__cx)
-        //     #( .add_child(#childs) )*
-        //     .finish()
-        // ChildrenList::new(__cx)
-        //     #( .add_child(#childs) )*
-        //     .finish()
 
         tokens.append_all(quote! {
             __cx.virtual_child(

@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-html-namespace"
+name = "dioxus-html"
 version = "0.0.0"
 edition = "2018"
 

@@ -9,10 +9,16 @@ mod dom;
 
 static HTML_CONTENT: &'static str = include_str!("./index.html");
 
-pub fn launch<T: Properties + 'static>(
+pub fn launch(
     builder: impl FnOnce(DioxusWebviewBuilder) -> DioxusWebviewBuilder,
-    props: T,
-    root: FC<T>,
+    root: FC<()>,
+) -> anyhow::Result<()> {
+    launch_with_props(builder, (), root)
+}
+pub fn launch_with_props<P: Properties + 'static>(
+    builder: impl FnOnce(DioxusWebviewBuilder) -> DioxusWebviewBuilder,
+    props: P,
+    root: FC<P>,
 ) -> anyhow::Result<()> {
     WebviewRenderer::run(root, props, builder)
 }

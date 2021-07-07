@@ -16,18 +16,6 @@ pub enum Node {
     RawExpr(Expr),
 }
 
-impl ToTokens for Node {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match &self {
-            Node::Element(el) => el.to_tokens(tokens),
-            Node::Text(txt) => txt.to_tokens(tokens),
-            Node::RawExpr(exp) => tokens.append_all(quote! {
-                 __cx.fragment_from_iter(#exp)
-            }),
-        }
-    }
-}
-
 impl Parse for Node {
     fn parse(stream: ParseStream) -> Result<Self> {
         // Supposedly this approach is discouraged due to inability to return proper errors
@@ -44,6 +32,18 @@ impl Parse for Node {
         }
 
         Ok(Node::Element(stream.parse::<AmbiguousElement>()?))
+    }
+}
+
+impl ToTokens for Node {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match &self {
+            Node::Element(el) => el.to_tokens(tokens),
+            Node::Text(txt) => txt.to_tokens(tokens),
+            Node::RawExpr(exp) => tokens.append_all(quote! {
+                 __cx.fragment_from_iter(#exp)
+            }),
+        }
     }
 }
 

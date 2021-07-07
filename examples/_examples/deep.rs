@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
-use dioxus_html_namespace as dioxus_elements;
+use dioxus_html as dioxus_elements;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));

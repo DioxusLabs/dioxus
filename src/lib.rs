@@ -169,7 +169,7 @@ pub mod prelude {
     //! A glob import that includes helper types like FC, rsx!, html!, and required traits
     pub use dioxus_core::prelude::*;
     pub use dioxus_core_macro::fc;
-    pub use dioxus_html_namespace as dioxus_elements;
+    pub use dioxus_html as dioxus_elements;
 }
 // pub mod builder {
 //     // pub use dioxus_core::builder::*;
@@ -218,3 +218,6 @@ pub mod testing {
 }
 #[cfg(feature = "atoms")]
 pub mod atoms {}
+
+#[cfg(feature = "desktop")]
+pub use dioxus_webview as desktop;

@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
-use dioxus_html_namespace as dioxus_elements;
+use dioxus_html as dioxus_elements;
 use dioxus_web::WebsysRenderer;
 
 static APP_STYLE: &'static str = include_str!("./todomvc/style.css");

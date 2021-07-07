@@ -10,20 +10,22 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 [dependencies]
 dioxus-core = { path="./packages/core", version="0.1.0" }
 dioxus-core-macro = { path="./packages/core-macro", version="0.1.0" }
-dioxus-html-namespace = { path="./packages/html-namespace" }
+dioxus-html = { path="./packages/html", optional=true }
 dioxus-web = { path="./packages/web", optional=true }
+dioxus-webview = { path="./packages/webview", optional=true }
 # dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
 
 
 [features]
-default = ["ssr", "hooks", "router", "web", "core", "atoms"]
+default = ["ssr", "hooks", "router", "core", "atoms", "html", "web", "desktop"]
 atoms = []
 core = []
 ssr = []
 hooks = []
 router = []
+html = ["dioxus-html"]
 web = ["dioxus-web"]
-desktop = []
+desktop = ["dioxus-webview"]
 
 
 [profile.dev]
@@ -44,7 +46,7 @@ surf = "2.2.0"
 members = [
     "packages/core-macro",
     "packages/core",
-    "packages/html-namespace",
+    "packages/html",
     "packages/web",
     "packages/webview",
     # "packages/atoms",

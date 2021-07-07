@@ -1,6 +1,6 @@
 use dioxus::{events::on::MouseEvent, prelude::*};
 use dioxus_core as dioxus;
-use dioxus_html_namespace as dioxus_elements;
+use dioxus_html as dioxus_elements;
 use dioxus_web::WebsysRenderer;
 
 fn main() {

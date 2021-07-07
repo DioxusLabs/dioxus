@@ -1,6 +1,6 @@
 use dioxus_core as dioxus;
-use dioxus_html_namespace as dioxus_elements;
-use dioxus_html_namespace::*;
+use dioxus_html as dioxus_elements;
+use dioxus_html::*;
 use dioxus_web::{dioxus::prelude::*, WebsysRenderer};
 
 fn main() {

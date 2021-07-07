@@ -1,6 +1,6 @@
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
-use dioxus_html_namespace as dioxus_elements;
+use dioxus_html as dioxus_elements;
 use dioxus_web::WebsysRenderer;
 use std::collections::BTreeMap;
 

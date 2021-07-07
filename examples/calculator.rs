@@ -5,7 +5,7 @@
 // use dioxus::prelude::*;
 
 fn main() {
-    dioxus::webview::launch(App);
+    dioxus::desktop::launch(App);
 }
 
 use dioxus::events::on::*;

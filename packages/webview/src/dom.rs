@@ -2,13 +2,11 @@
 
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
-use dioxus_core::serialize::DomEdits;
 use dioxus_core::{
     diff::RealDom,
-    prelude::ScopeIdx,
+    serialize::DomEdits,
     virtual_dom::{RealDomNode, VirtualDom},
 };
-use serde::{Deserialize, Serialize};
 use DomEdits::*;
 
 pub struct WebviewDom<'bump> {

@@ -34,14 +34,14 @@ use syn::{
 
 pub struct RsxRender {
     custom_context: Option<Ident>,
-    roots: Vec<AmbiguousElement>,
+    roots: Vec<Node>,
 }
 
 impl Parse for RsxRender {
     fn parse(input: ParseStream) -> Result<Self> {
-        if input.peek(LitStr) {
-            return input.parse::<LitStr>()?.parse::<RsxRender>();
-        }
+        // if input.peek(LitStr) {
+        //     return input.parse::<LitStr>()?.parse::<RsxRender>();
+        // }
 
         // try to parse the first ident and comma
         let custom_context =
@@ -61,13 +61,23 @@ impl Parse for RsxRender {
                 None
             };
 
-        let mut roots = Vec::new();
-        while !input.is_empty() {
-            roots.push(input.parse::<AmbiguousElement>()?);
-        }
+        let mut body = Vec::new();
+        let mut children = Vec::new();
+        let mut manual_props = None;
+        parse_component_body(
+            input,
+            &BodyParseConfig {
+                allow_children: true,
+                allow_fields: false,
+                allow_manual_props: false,
+            },
+            &mut body,
+            &mut children,
+            &mut manual_props,
+        )?;
 
         Ok(Self {
-            roots,
+            roots: children,
             custom_context,
         })
     }

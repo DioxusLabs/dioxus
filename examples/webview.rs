@@ -12,7 +12,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::webview::launch(App);
+    dioxus::desktop::launch(App);
 }
 
 static App: FC<()> = |cx| {
