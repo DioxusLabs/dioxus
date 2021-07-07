@@ -11,7 +11,6 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 dioxus-core = { path="./packages/core", version="0.1.0" }
 dioxus-core-macro = { path="./packages/core-macro", version="0.1.0" }
 dioxus-html-namespace = { path="./packages/html-namespace" }
-
 dioxus-web = { path="./packages/web", optional=true }
 # dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
 
@@ -48,10 +47,7 @@ members = [
     "packages/html-namespace",
     "packages/web",
     "packages/webview",
-    "packages/cli",
     # "packages/atoms",
     # "packages/ssr",
     # "packages/docsite",
-    # "packages/router",
-    # "packages/inputs",
 ]
