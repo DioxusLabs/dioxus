@@ -571,97 +571,43 @@ impl Scope {
         Ok(())
     }
 
-    pub fn next_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+    pub(crate) fn next_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
         self.frames.current_head_node()
     }
 
-    pub fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
+    pub(crate) fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
         self.frames.prev_head_node()
     }
 
-    pub fn cur_frame(&self) -> &BumpFrame {
+    pub(crate) fn cur_frame(&self) -> &BumpFrame {
         self.frames.cur_frame()
     }
 
-    pub fn root<'a>(&'a self) -> &'a VNode<'a> {
+    pub(crate) fn root<'a>(&'a self) -> &'a VNode<'a> {
         &self.frames.cur_frame().head_node
     }
-}
-
-/// Components in Dioxus use the "Context" object to interact with their lifecycle.
-/// This lets components schedule updates, integrate hooks, and expose their context via the context api.
-///
-/// Properties passed down from the parent component are also directly accessible via the exposed "props" field.
-///
-/// ```ignore
-/// #[derive(Properties)]
-/// struct Props {
-///     name: String
-///
-/// }
-///
-/// fn example(cx: Context<Props>) -> VNode {
-///     html! {
-///         <div> "Hello, {cx.name}" </div>
-///     }
-/// }
-/// ```
-// todo: force lifetime of source into T as a valid lifetime too
-// it's definitely possible, just needs some more messing around
-
-pub struct Context<'src, T> {
-    pub props: &'src T,
-    pub scope: &'src Scope,
-}
-
-impl<'src, T> Copy for Context<'src, T> {}
-impl<'src, T> Clone for Context<'src, T> {
-    fn clone(&self) -> Self {
-        Self {
-            props: self.props,
-            scope: self.scope,
-        }
-    }
-}
-
-impl<'a, T> Deref for Context<'a, T> {
-    type Target = &'a T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.props
-    }
-}
-
-impl<'src, T> Scoped<'src> for Context<'src, T> {
-    fn get_scope(&self) -> &'src Scope {
-        self.scope
-    }
-}
-
-pub trait Scoped<'src>: Sized {
-    fn get_scope(&self) -> &'src Scope;
 
     /// Access the children elements passed into the component
-    fn children(&self) -> &'src [VNode<'src>] {
+    pub fn children(&self) -> &[VNode] {
         // We're re-casting the nodes back out
         // They don't really have a static lifetime
         unsafe {
-            let scope = self.get_scope();
+            let scope = self;
             let nodes = scope.child_nodes;
             nodes
         }
     }
 
     /// Create a subscription that schedules a future render for the reference component
-    fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
-        self.get_scope().event_channel.clone()
+    pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
+        self.event_channel.clone()
     }
 
-    fn schedule_effect(&self) -> Rc<dyn Fn() + 'static> {
+    pub fn schedule_effect(&self) -> Rc<dyn Fn() + 'static> {
         todo!()
     }
 
-    fn schedule_layout_effect(&self) {
+    pub fn schedule_layout_effect(&self) {
         todo!()
     }
 
@@ -680,11 +626,11 @@ pub trait Scoped<'src>: Sized {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
-        self,
+    pub fn render<'src, F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+        &'src self,
         lazy_nodes: LazyNodes<'src, F>,
     ) -> VNode<'src> {
-        let scope_ref = self.get_scope();
+        let scope_ref = self;
         let listener_id = &scope_ref.listener_idx;
         lazy_nodes.into_vnode(NodeFactory {
             scope_ref,
@@ -692,7 +638,6 @@ pub trait Scoped<'src>: Sized {
         })
     }
 
-    // impl<'scope> Context<'scope> {
     /// Store a value between renders
     ///
     /// - Initializer: closure used to create the initial hook state
@@ -709,8 +654,8 @@ pub trait Scoped<'src>: Sized {
     ///     )
     /// }
     /// ```
-    fn use_hook<InternalHookState: 'static, Output: 'src>(
-        &self,
+    pub fn use_hook<'src, InternalHookState: 'static, Output: 'src>(
+        &'src self,
 
         // The closure that builds the hook state
         initializer: impl FnOnce() -> InternalHookState,
@@ -722,7 +667,7 @@ pub trait Scoped<'src>: Sized {
         // TODO: add this to the "clean up" group for when the component is dropped
         _cleanup: impl FnOnce(InternalHookState),
     ) -> Output {
-        let scope = self.get_scope();
+        let scope = self;
 
         let idx = scope.hookidx.get();
 
@@ -771,7 +716,7 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     fn use_create_context<T: 'static>(&self, init: impl Fn() -> T) {
-        let scope = self.get_scope();
+        let scope = self;
         let mut cxs = scope.shared_contexts.borrow_mut();
         let ty = TypeId::of::<T>();
 
@@ -800,12 +745,12 @@ Any function prefixed with "use" should not be called conditionally.
     }
 
     /// There are hooks going on here!
-    fn use_context<T: 'static>(&self) -> &'src Rc<T> {
+    pub fn use_context<'src, T: 'static>(&'src self) -> &'src Rc<T> {
         self.try_use_context().unwrap()
     }
 
     /// Uses a context, storing the cached value around
-    fn try_use_context<T: 'static>(&self) -> Result<&'src Rc<T>> {
+    pub fn try_use_context<'src, T: 'static>(&'src self) -> Result<&'src Rc<T>> {
         struct UseContextHook<C> {
             par: Option<Rc<C>>,
             we: Option<Weak<C>>,
@@ -817,8 +762,7 @@ Any function prefixed with "use" should not be called conditionally.
                 we: None as Option<Weak<T>>,
             },
             move |hook| {
-                let scope = self.get_scope();
-                let mut scope = Some(scope);
+                let mut scope = Some(self);
 
                 if let Some(we) = &hook.we {
                     if let Some(re) = we.upgrade() {
@@ -863,8 +807,12 @@ Any function prefixed with "use" should not be called conditionally.
         )
     }
 
-    fn suspend<Output: 'src, Fut: FnOnce(SuspendedContext, Output) -> VNode<'src> + 'src>(
-        &self,
+    pub fn suspend<
+        'src,
+        Output: 'src,
+        Fut: FnOnce(SuspendedContext, Output) -> VNode<'src> + 'src,
+    >(
+        &'src self,
         fut: &'src mut Pin<Box<dyn Future<Output = Output> + 'static>>,
         callback: Fut,
     ) -> VNode<'src> {
@@ -881,6 +829,120 @@ Any function prefixed with "use" should not be called conditionally.
                 }
             }
         }
+    }
+}
+
+/// Components in Dioxus use the "Context" object to interact with their lifecycle.
+/// This lets components schedule updates, integrate hooks, and expose their context via the context api.
+///
+/// Properties passed down from the parent component are also directly accessible via the exposed "props" field.
+///
+/// ```ignore
+/// #[derive(Properties)]
+/// struct Props {
+///     name: String
+///
+/// }
+///
+/// fn example(cx: Context<Props>) -> VNode {
+///     html! {
+///         <div> "Hello, {cx.name}" </div>
+///     }
+/// }
+/// ```
+// todo: force lifetime of source into T as a valid lifetime too
+// it's definitely possible, just needs some more messing around
+pub struct Context<'src, T> {
+    pub props: &'src T,
+    pub scope: &'src Scope,
+}
+
+impl<'src, T> Copy for Context<'src, T> {}
+impl<'src, T> Clone for Context<'src, T> {
+    fn clone(&self) -> Self {
+        Self {
+            props: self.props,
+            scope: self.scope,
+        }
+    }
+}
+
+impl<'a, T> Deref for Context<'a, T> {
+    type Target = &'a T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.props
+    }
+}
+/// The `Scoped` trait makes it slightly less cumbersome for hooks to use the underlying `Scope` without having to make
+/// their hooks generic over the [`Props`] type that [`Context`] is
+///
+/// ## Example:
+///
+/// ```
+/// fn use_raw<T>(cx: impl Scoped) -> &mut T {
+///     
+/// }
+/// ```
+///
+pub trait Scoped<'src>: Sized + Clone + Copy {
+    ///
+    ///
+    ///
+    ///
+    ///
+    ///
+    ///
+    fn get_scope(self) -> &'src Scope;
+
+    #[inline]
+    fn children(self) -> &'src [VNode<'src>] {
+        self.get_scope().children()
+    }
+
+    #[inline]
+    fn schedule_update(self) -> Rc<dyn Fn() + 'static> {
+        self.get_scope().schedule_update()
+    }
+
+    #[inline]
+    fn use_hook<InternalHookState: 'static, Output: 'src>(
+        self,
+        initializer: impl FnOnce() -> InternalHookState,
+        runner: impl FnOnce(&'src mut InternalHookState) -> Output,
+        _cleanup: impl FnOnce(InternalHookState),
+    ) -> Output {
+        self.get_scope().use_hook(initializer, runner, _cleanup)
+    }
+
+    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
+    ///
+    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
+    ///
+    /// ## Example
+    ///
+    /// ```ignore
+    /// fn Component(cx: Context<()>) -> VNode {
+    ///     // Lazy assemble the VNode tree
+    ///     let lazy_tree = html! {<div> "Hello World" </div>};
+    ///     
+    ///     // Actually build the tree and allocate it
+    ///     cx.render(lazy_tree)
+    /// }
+    ///```
+    #[inline]
+    fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+        self,
+        lazy_nodes: LazyNodes<'src, F>,
+    ) -> VNode<'src> {
+        self.get_scope().render(lazy_nodes)
+    }
+}
+
+impl<'src, T> Scoped<'src> for Context<'src, T> {
+    #[inline]
+    fn get_scope(self) -> &'src Scope {
+        self.scope
     }
 }
 

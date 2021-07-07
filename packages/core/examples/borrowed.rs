@@ -20,28 +20,29 @@ struct ListItem {
 }
 
 fn app(cx: Context<AppProps>) -> VNode {
-    let (val, set_val) = use_state_classic(&cx, || 0);
+    let (val, set_val) = use_state_classic(cx, || 0);
 
     cx.render(LazyNodes::new(move |_nodecx| {
-        builder::ElementBuilder::new(_nodecx, "div")
-            .iter_child({
-                cx.items.iter().map(|child| {
-                    builder::virtual_child(
-                        _nodecx,
-                        ChildItem,
-                        ChildProps {
-                            item: child.clone(),
-                            item_handler: set_val.clone(),
-                        },
-                        None,
-                        &[],
-                    )
-                })
-            })
-            .iter_child([builder::ElementBuilder::new(_nodecx, "div")
-                .iter_child([builder::text3(_nodecx.bump(), format_args!("{}", val))])
-                .finish()])
-            .finish()
+        todo!()
+        // builder::ElementBuilder::new(_nodecx, "div")
+        //     .iter_child({
+        //         cx.items.iter().map(|child| {
+        //             builder::virtual_child(
+        //                 _nodecx,
+        //                 ChildItem,
+        //                 ChildProps {
+        //                     item: child.clone(),
+        //                     item_handler: set_val.clone(),
+        //                 },
+        //                 None,
+        //                 &[],
+        //             )
+        //         })
+        //     })
+        //     .iter_child([builder::ElementBuilder::new(_nodecx, "div")
+        //         .iter_child([builder::text3(_nodecx.bump(), format_args!("{}", val))])
+        //         .finish()])
+        //     .finish()
     }))
 }
 

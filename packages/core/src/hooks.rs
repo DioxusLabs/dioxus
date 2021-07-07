@@ -37,7 +37,7 @@ use std::{
 /// }
 /// ```
 pub fn use_state_classic<'a, 'c, T: 'static, F: FnOnce() -> T>(
-    cx: &impl Scoped<'a>,
+    cx: impl Scoped<'a>,
     initial_state_fn: F,
 ) -> (&'a T, &'a Rc<dyn Fn(T)>) {
     struct UseState<T: 'static> {
@@ -159,7 +159,7 @@ impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
 /// }
 /// ```
 pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
-    cx: &impl Scoped<'a>,
+    cx: impl Scoped<'a>,
     initial_state_fn: F,
 ) -> &'a UseState<T> {
     cx.use_hook(
@@ -231,7 +231,7 @@ pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
 /// Modifications to this value do not cause updates to the component
 /// Attach to inner context reference, so context can be consumed
 pub fn use_ref<'a, T: 'static>(
-    cx: &impl Scoped<'a>,
+    cx: impl Scoped<'a>,
     initial_state_fn: impl FnOnce() -> T + 'static,
 ) -> &'a RefCell<T> {
     cx.use_hook(|| RefCell::new(initial_state_fn()), |state| &*state, |_| {})
@@ -250,7 +250,7 @@ struct UseReducer<T: 'static, R: 'static> {
 /// This is behaves almost exactly the same way as React's "use_state".
 ///
 pub fn use_reducer<'a, 'c, State: 'static, Action: 'static>(
-    cx: &impl Scoped<'a>,
+    cx: impl Scoped<'a>,
     initial_state_fn: impl FnOnce() -> State,
     _reducer: impl Fn(&mut State, Action),
 ) -> (&'a State, &'a Box<dyn Fn(Action)>) {
@@ -292,7 +292,7 @@ pub fn use_reducer<'a, 'c, State: 'static, Action: 'static>(
 /// current model will be made, with a RefMut lock on it. Dioxus will never run your components multithreaded, so you can
 /// be relatively sure that this won't fail in practice
 pub fn use_model<'a, T: ToOwned<Owned = T> + 'static>(
-    cx: &impl Scoped<'a>,
+    cx: impl Scoped<'a>,
     f: impl FnOnce() -> T,
 ) -> &'a UseModel<T> {
     cx.use_hook(
@@ -382,7 +382,7 @@ mod tests {
 }
 
 pub fn use_is_initialized<P>(cx: Context<P>) -> bool {
-    let val = use_ref(&cx, || false);
+    let val = use_ref(cx, || false);
     match *val.borrow() {
         true => true,
         false => {
