@@ -21,7 +21,9 @@ impl ToTokens for Node {
         match &self {
             Node::Element(el) => el.to_tokens(tokens),
             Node::Text(txt) => txt.to_tokens(tokens),
-            Node::RawExpr(exp) => exp.to_tokens(tokens),
+            Node::RawExpr(exp) => tokens.append_all(quote! {
+                 __cx.fragment_from_iter(#exp)
+            }),
         }
     }
 }

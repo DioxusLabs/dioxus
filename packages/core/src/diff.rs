@@ -1326,69 +1326,69 @@ mod tests {
     use crate::util::DebugDom;
     use dioxus_core_macro::*;
 
-    #[test]
-    fn test_child_iterator() {
-        static App: FC<()> = |cx| {
-            cx.render(rsx! {
-                Fragment {
-                    div {}
-                    h1 {}
-                    h2 {}
-                    h3 {}
-                    Fragment {
-                        "internal node"
-                        div {
-                            "baller text shouldn't show up"
-                        }
-                        p {
+    // #[test]
+    // fn test_child_iterator() {
+    //     static App: FC<()> = |cx| {
+    //         cx.render(rsx! {
+    //             Fragment {
+    //                 div {}
+    //                 h1 {}
+    //                 h2 {}
+    //                 h3 {}
+    //                 Fragment {
+    //                     "internal node"
+    //                     div {
+    //                         "baller text shouldn't show up"
+    //                     }
+    //                     p {
 
-                        }
-                        Fragment {
-                            Fragment {
-                                "wow you really like framgents"
-                                Fragment {
-                                    "why are you like this"
-                                    Fragment {
-                                        "just stop now please"
-                                        Fragment {
-                                            "this hurts"
-                                            Fragment {
-                                                "who needs this many fragments?????"
-                                                Fragment {
-                                                    "just... fine..."
-                                                    Fragment {
-                                                        "no"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    "my text node 1"
-                    "my text node 2"
-                    "my text node 3"
-                    "my text node 4"
-                }
-            })
-        };
-        let mut dom = VirtualDom::new(App);
-        let mut renderer = DebugDom::new();
-        dom.rebuild(&mut renderer).unwrap();
-        let starter = dom.base_scope().root();
-        let ite = RealChildIterator::new(starter, &dom.components);
-        for child in ite {
-            match child {
-                VNode::Element(el) => println!("Found: Element {}", el.tag_name),
-                VNode::Text(t) => println!("Found: Text {:?}", t.text),
+    //                     }
+    //                     Fragment {
+    //                         Fragment {
+    //                             "wow you really like framgents"
+    //                             Fragment {
+    //                                 "why are you like this"
+    //                                 Fragment {
+    //                                     "just stop now please"
+    //                                     Fragment {
+    //                                         "this hurts"
+    //                                         Fragment {
+    //                                             "who needs this many fragments?????"
+    //                                             Fragment {
+    //                                                 "just... fine..."
+    //                                                 Fragment {
+    //                                                     "no"
+    //                                                 }
+    //                                             }
+    //                                         }
+    //                                     }
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //                 "my text node 1"
+    //                 "my text node 2"
+    //                 "my text node 3"
+    //                 "my text node 4"
+    //             }
+    //         })
+    //     };
+    //     let mut dom = VirtualDom::new(App);
+    //     let mut renderer = DebugDom::new();
+    //     dom.rebuild(&mut renderer).unwrap();
+    //     let starter = dom.base_scope().root();
+    //     let ite = RealChildIterator::new(starter, &dom.components);
+    //     for child in ite {
+    //         match child {
+    //             VNode::Element(el) => println!("Found: Element {}", el.tag_name),
+    //             VNode::Text(t) => println!("Found: Text {:?}", t.text),
 
-                // These would represent failing cases.
-                VNode::Fragment(_) => panic!("Found: Fragment"),
-                VNode::Suspended { real } => panic!("Found: Suspended"),
-                VNode::Component(_) => panic!("Found: Component"),
-            }
-        }
-    }
+    //             // These would represent failing cases.
+    //             VNode::Fragment(_) => panic!("Found: Fragment"),
+    //             VNode::Suspended { real } => panic!("Found: Suspended"),
+    //             VNode::Component(_) => panic!("Found: Component"),
+    //         }
+    //     }
+    // }
 }

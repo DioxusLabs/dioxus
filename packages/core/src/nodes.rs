@@ -216,6 +216,11 @@ pub struct VElement<'a> {
 pub struct Attribute<'a> {
     pub name: &'static str,
     pub value: &'a str,
+
+    /// If an attribute is "namespaced", then it belongs to a group
+    /// The most common namespace is the "style" namespace
+    // pub is_dynamic: bool,
+    pub namespace: Option<&'static str>,
 }
 
 impl<'a> Attribute<'a> {

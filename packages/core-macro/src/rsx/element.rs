@@ -13,15 +13,55 @@ use syn::{
 // =======================================
 pub struct Element {
     name: Ident,
-    attrs: Vec<ElementAttr>,
+    key: Option<AttrType>,
+    attributes: Vec<ElementAttr>,
+    listeners: Vec<ElementAttr>,
     children: Vec<Node>,
+}
+
+impl ToTokens for Element {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let name = &self.name;
+        // let name = &self.name.to_string();
+
+        tokens.append_all(quote! {
+            __cx.element(#name)
+        });
+
+        // Add attributes
+        // TODO: conver to the "attrs" syntax for compile-time known sizes
+        if self.attributes.len() > 0 {
+            let attr = &self.attributes;
+            tokens.append_all(quote! {
+                .attributes([ #(#attr),* ])
+            })
+        }
+
+        if self.children.len() > 0 {
+            let childs = &self.children;
+            tokens.append_all(quote! {
+                .children([ #(#childs),* ])
+            });
+        }
+
+        if self.listeners.len() > 0 {
+            let listeners = &self.listeners;
+            tokens.append_all(quote! {
+                .listeners([ #(#listeners),* ])
+            });
+        }
+
+        tokens.append_all(quote! {
+            .finish()
+        });
+    }
 }
 
 impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
-        //
         let name = Ident::parse(stream)?;
 
+        // TODO: remove this in favor of the compile-time validation system
         if !crate::util::is_valid_tag(&name.to_string()) {
             return Err(Error::new(name.span(), "Not a valid Html tag"));
         }
@@ -30,20 +70,19 @@ impl Parse for Element {
         let content: ParseBuffer;
         syn::braced!(content in stream);
 
-        let mut attrs: Vec<ElementAttr> = vec![];
+        let mut attributes: Vec<ElementAttr> = vec![];
+        let mut listeners: Vec<ElementAttr> = vec![];
         let mut children: Vec<Node> = vec![];
+        let mut key = None;
+
         'parsing: loop {
             // [1] Break if empty
             if content.is_empty() {
                 break 'parsing;
             }
 
-            let forked = content.fork();
-            if forked.call(Ident::parse_any).is_ok()
-                && forked.parse::<Token![:]>().is_ok()
-                && forked.parse::<Token![:]>().is_err()
-            {
-                attrs.push(content.parse::<ElementAttr>()?);
+            if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
+                parse_element_body(&content, &mut attributes, &mut listeners, &mut key)?;
             } else {
                 children.push(content.parse::<Node>()?);
             }
@@ -56,60 +95,12 @@ impl Parse for Element {
         }
 
         Ok(Self {
+            key,
             name,
-            attrs,
+            attributes,
             children,
+            listeners,
         })
-    }
-}
-
-impl ToTokens for Element {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = &self.name.to_string();
-
-        tokens.append_all(quote! {
-            __cx.element(#name)
-        });
-        // dioxus::builder::ElementBuilder::new(__cx, #name)
-        // dioxus::builder::ElementBuilder::new(__cx, #name)
-
-        // Add attributes
-        // TODO: conver to the "attrs" syntax for compile-time known sizes
-        for attr in self.attrs.iter() {
-            attr.to_tokens(tokens);
-        }
-
-        // let mut children = self.children.iter();
-        // while let Some(child) = children.next() {
-        //     let inner_toks = child.to_token_stream();
-        //     tokens.append_all(quote! {
-        //         .iter_child(#inner_toks)
-        //     })
-        // }
-
-        let mut childs = quote! {};
-        for child in &self.children {
-            match child {
-                Node::Text(e) => e.to_tokens(&mut childs),
-                Node::Element(e) => e.to_tokens(&mut childs),
-                Node::RawExpr(e) => quote! {
-                    __cx.fragment_from_iter(#e)
-                }
-                .to_tokens(&mut childs),
-            }
-            childs.append_all(quote! {,})
-        }
-        if self.children.len() > 0 {
-            tokens.append_all(quote! {
-                .children([
-                    #childs
-                ])
-            });
-        }
-
-        tokens.append_all(quote! {
-            .finish()
-        });
     }
 }
 
@@ -118,7 +109,8 @@ impl ToTokens for Element {
 /// =======================================
 struct ElementAttr {
     name: Ident,
-    ty: AttrType,
+    value: AttrType,
+    namespace: Option<String>,
 }
 
 enum AttrType {
@@ -128,132 +120,142 @@ enum AttrType {
     Event(ExprClosure),
 }
 
-impl Parse for ElementAttr {
-    fn parse(s: ParseStream) -> Result<Self> {
-        let mut name = Ident::parse_any(s)?;
-        let name_str = name.to_string();
-        s.parse::<Token![:]>()?;
+// We parse attributes and dump them into the attribute vec
+// This is because some tags might be namespaced (IE style)
+// These dedicated tags produce multiple name-spaced attributes
+fn parse_element_body(
+    stream: ParseStream,
+    attrs: &mut Vec<ElementAttr>,
+    listeners: &mut Vec<ElementAttr>,
+    key: &mut Option<AttrType>,
+) -> Result<()> {
+    let mut name = Ident::parse_any(stream)?;
+    let name_str = name.to_string();
+    stream.parse::<Token![:]>()?;
 
-        // Check if this is an event handler
-        // If so, parse into literal tokens
-        let ty = if name_str.starts_with("on") {
-            // remove the "on" bit
-            name = Ident::new(&name_str.trim_start_matches("on"), name.span());
+    // Return early if the field is a listener
+    if name_str.starts_with("on") {
+        // remove the "on" bit
+        // name = Ident::new(&name_str.trim_start_matches("on"), name.span());
 
-            if s.peek(token::Brace) {
-                let content;
-                syn::braced!(content in s);
+        let ty = if stream.peek(token::Brace) {
+            let content;
+            syn::braced!(content in stream);
 
-                // Try to parse directly as a closure
-                let fork = content.fork();
-                if let Ok(event) = fork.parse::<ExprClosure>() {
-                    content.advance_to(&fork);
-                    AttrType::Event(event)
-                } else {
-                    AttrType::EventTokens(content.parse()?)
-                }
+            // Try to parse directly as a closure
+            let fork = content.fork();
+            if let Ok(event) = fork.parse::<ExprClosure>() {
+                content.advance_to(&fork);
+                AttrType::Event(event)
             } else {
-                AttrType::Event(s.parse()?)
+                AttrType::EventTokens(content.parse()?)
             }
         } else {
-            match name_str.as_str() {
-                "key" => {
-                    // todo: better error here
-                    AttrType::BumpText(s.parse::<LitStr>()?)
+            AttrType::Event(stream.parse()?)
+        };
+        listeners.push(ElementAttr {
+            name,
+            value: ty,
+            namespace: None,
+        });
+        return Ok(());
+    }
+
+    let ty: AttrType = match name_str.as_str() {
+        // short circuit early if style is using the special syntax
+        "style" if stream.peek(token::Brace) => {
+            let inner;
+            syn::braced!(inner in stream);
+
+            while !inner.is_empty() {
+                let name = Ident::parse_any(&inner)?;
+                inner.parse::<Token![:]>()?;
+                let ty = if inner.peek(LitStr) {
+                    let rawtext = inner.parse::<LitStr>().unwrap();
+                    AttrType::BumpText(rawtext)
+                } else {
+                    let toks = inner.parse::<Expr>()?;
+                    AttrType::FieldTokens(toks)
+                };
+                if inner.peek(Token![,]) {
+                    let _ = inner.parse::<Token![,]>();
                 }
-                // "style" => {
-                //     //
-                //     todo!("inline style not yet supported")
-                // }
-                "classes" => {
-                    //
-                    todo!("custom class lsit not supported")
-                }
-                "namespace" => {
-                    //
-                    todo!("custom namespace not supported")
-                }
-                "ref" => {
-                    //
-                    todo!("custom ref not supported")
-                }
-                _ => {
-                    if s.peek(LitStr) {
-                        let rawtext = s.parse::<LitStr>().unwrap();
-                        AttrType::BumpText(rawtext)
-                    } else {
-                        let toks = s.parse::<Expr>()?;
-                        AttrType::FieldTokens(toks)
-                    }
-                }
+                attrs.push(ElementAttr {
+                    name,
+                    value: ty,
+                    namespace: Some("style".to_string()),
+                });
             }
 
-            // let lit_str = if name_str == "style" && s.peek(token::Brace) {
-            //     // special-case to deal with literal styles.
-            //     let outer;
-            //     syn::braced!(outer in s);
-            //     // double brace for inline style.
-            //     // todo!("Style support not ready yet");
-
-            //     // if outer.peek(token::Brace) {
-            //     //     let inner;
-            //     //     syn::braced!(inner in outer);
-            //     //     let styles: Styles = inner.parse()?;
-            //     //     MaybeExpr::Literal(LitStr::new(&styles.to_string(), Span::call_site()))
-            //     // } else {
-            //     // just parse as an expression
-            //     outer.parse()?
-            // // }
-            // } else {
-            //     s.parse()?
-            // };
-        };
-
-        // consume comma if it exists
-        // we don't actually care if there *are* commas between attrs
-        if s.peek(Token![,]) {
-            let _ = s.parse::<Token![,]>();
+            return Ok(());
+        }
+        "key" => {
+            *key = Some(AttrType::BumpText(stream.parse::<LitStr>()?));
+            return Ok(());
+        }
+        "classes" => {
+            todo!("custom class lsit not supported")
+        }
+        "namespace" => {
+            todo!("custom namespace not supported")
+        }
+        "ref" => {
+            todo!("NodeRefs are currently not supported! This is currently a reserved keyword.")
         }
 
-        Ok(ElementAttr { name, ty })
+        // Fall through
+        _ => {
+            if stream.peek(LitStr) {
+                let rawtext = stream.parse::<LitStr>().unwrap();
+                AttrType::BumpText(rawtext)
+            } else {
+                let toks = stream.parse::<Expr>()?;
+                AttrType::FieldTokens(toks)
+            }
+        }
+    };
+
+    // consume comma if it exists
+    // we don't actually care if there *are* commas between attrs
+    if stream.peek(Token![,]) {
+        let _ = stream.parse::<Token![,]>();
     }
+
+    attrs.push(ElementAttr {
+        name,
+        value: ty,
+        namespace: None,
+    });
+    Ok(())
 }
 
 impl ToTokens for ElementAttr {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = self.name.to_string();
         let nameident = &self.name;
-        let _attr_stream = TokenStream2::new();
 
-        match &self.ty {
-            AttrType::BumpText(value) => match name.as_str() {
-                "key" => {
-                    tokens.append_all(quote! {
-                        .key2(format_args_f!(#value))
-                    });
-                }
-                _ => {
-                    tokens.append_all(quote! {
-                        .attr(#name, format_args_f!(#value))
-                    });
-                }
-            },
-            AttrType::FieldTokens(exp) => {
-                tokens.append_all(quote! {
-                    .attr(#name, #exp)
-                });
-            }
-            AttrType::Event(event) => {
-                tokens.append_all(quote! {
-                    .add_listener(dioxus::events::on::#nameident(__cx, #event))
-                });
-            }
-            AttrType::EventTokens(event) => {
-                //
-                tokens.append_all(quote! {
-                    .add_listener(dioxus::events::on::#nameident(__cx, #event))
-                });
-            }
+        let namespace = match &self.namespace {
+            Some(t) => quote! { Some(#t) },
+            None => quote! { None },
+        };
+
+        match &self.value {
+            AttrType::BumpText(value) => tokens.append_all(quote! {
+                __cx.attr(#name, format_args_f!(#value), #namespace)
+            }),
+
+            AttrType::FieldTokens(exp) => tokens.append_all(quote! {
+                __cx.attr(#name, #exp, #namespace)
+            }),
+
+            // todo: move event handlers on to the elements or onto the nodefactory
+            AttrType::Event(event) => tokens.append_all(quote! {
+                dioxus::events::on::#nameident(__cx, #event)
+            }),
+
+            AttrType::EventTokens(event) => tokens.append_all(quote! {
+                dioxus::events::on::#nameident(__cx, #event)
+            }),
         }
     }
 }

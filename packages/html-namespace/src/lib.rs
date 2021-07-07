@@ -1,37 +1,22 @@
-trait DioxusElement {
-    const TAG_NAME: &'static str;
-    const NAME_SPACE: Option<&'static str>;
-}
+//! # Dioxus Namespace for HTML
+//!
+//! This crate provides a set of compile-time correct HTML elements that can be used with the Rsx and Html macros.
+//! This system allows users to easily build new tags, new types, and customize the output of the Rsx and Html macros.
+//!
+//! An added benefit of this approach is the ability to lend comprehensive documentation on how to use these elements inside
+//! of the Rsx and Html macros. Each element comes with a substantial amount of documentation on how to best use it, hopefully
+//! making the development cycle quick.
 
-struct myinput {}
-
-struct NodeBuilder {}
-impl NodeBuilder {
-    // fn add_attr()
-}
+use dioxus_core::prelude::{DioxusElement, NodeFactory};
 
 macro_rules! builder_constructors {
-    ( $(
-        $(#[$attr:meta])*
-        $name:ident;
-        // {
-            // attrs: [
-            //     $(
-            //         $(#[$attr2:meta])*
-            //         $attr3:ident
-            //         ,
-            //     )*
-            // ];
-        // }
-    )* ) => {
+    ( $( $(#[$attr:meta])* $name:ident; )* ) => {
         $(
             #[allow(non_camel_case_types)]
             $(#[$attr])*
-            pub struct $name<'a> {
-                // the we wrap the builder, shielding what can be added
-                builder: &'a NodeBuilder
-            }
-            impl<'a> DioxusElement for $name<'a> {
+            pub struct $name;
+
+            impl DioxusElement for $name {
                 const TAG_NAME: &'static str = stringify!($name);
                 const NAME_SPACE: Option<&'static str> = None;
             }
@@ -48,6 +33,10 @@ macro_rules! builder_constructors {
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element
 //
 // Does not include obsolete elements.
+
+// This namespace represents a collection of modern HTML-5 compatiable elements.
+//
+// This list does not include obsolete, deprecated, experimental, or poorly supported elements.
 builder_constructors! {
     // Document metadata
 
@@ -109,18 +98,57 @@ builder_constructors! {
     /// element.
     header;
 
+
     /// Build a
     /// [`<h1>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h1)
     /// element.
+    ///
+    /// # About
+    /// - The HTML `<h1>` element is found within the `<body>` tag.
+    /// - Headings can range from `<h1>` to `<h6>`.
+    /// - The most important heading is `<h1>` and the least important heading is `<h6>`.
+    /// - The `<h1>` heading is the first heading in the document.
+    /// - The `<h1>` heading is usually a large bolded font.
+    ///
+    /// # Usage
+    /// ```
+    /// html!(<h1> A header element </h1>)
+    /// rsx!(h1 { "A header element" })
+    /// LazyNodes::new(|f| f.el(h1).children([f.text("A header element")]).finish())
+    /// ```
     h1;
+
 
     /// Build a
     /// [`<h2>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h2)
     /// element.
+    ///
+    /// # About
+    /// - The HTML `<h2>` element is found within the `<body>` tag.
+    /// - Headings can range from `<h1>` to `<h6>`.
+    /// - The most important heading is `<h1>` and the least important heading is `<h6>`.
+    /// - The `<h2>` heading is the second heading in the document.
+    /// - The `<h2>` heading is usually a large bolded font.
+    ///
+    /// # Usage
+    /// ```
+    /// html!(<h2> A header element </h2>)
+    /// rsx!(h2 { "A header element" })
+    /// LazyNodes::new(|f| f.el(h2).children([f.text("A header element")]).finish())
+    /// ```
     h2;
+
+
     /// Build a
     /// [`<h3>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h3)
     /// element.
+    ///
+    /// # About
+    /// - The HTML <h1> element is found within the <body> tag.
+    /// - Headings can range from <h1> to <h6>.
+    /// - The most important heading is <h1> and the least important heading is <h6>.
+    /// - The <h1> heading is the first heading in the document.
+    /// - The <h1> heading is usually a large bolded font.
     h3;
     /// Build a
     /// [`<h4>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h4)
@@ -134,10 +162,7 @@ builder_constructors! {
     /// [`<h6>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h6)
     /// element.
     h6;
-    /// Build a
-    /// [`<hgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hgroup)
-    /// element.
-    hgroup;
+
     /// Build a
     /// [`<main>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/main)
     /// element.
@@ -268,22 +293,17 @@ builder_constructors! {
     /// [`<q>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/q)
     /// element.
     q;
-    /// Build a
-    /// [`<rb>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rb)
-    /// element.
-    rb;
+
     /// Build a
     /// [`<rp>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rp)
     /// element.
     rp;
+
     /// Build a
     /// [`<rt>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rt)
     /// element.
     rt;
-    /// Build a
-    /// [`<rtc>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rtc)
-    /// element.
-    rtc;
+
     /// Build a
     /// [`<ruby>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ruby)
     /// element.
@@ -521,18 +541,8 @@ builder_constructors! {
     /// [`<details>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/details)
     /// element.
     details;
-    /// Build a
-    /// [`<dialog>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
-    /// element.
-    dialog;
-    /// Build a
-    /// [`<menu>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/menu)
-    /// element.
-    menu;
-    /// Build a
-    /// [`<menuitem>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/menuitem)
-    /// element.
-    menuitem;
+
+
     /// Build a
     /// [`<summary>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/summary)
     /// element.
@@ -552,7 +562,6 @@ builder_constructors! {
 
 builder_constructors! {
     // SVG components
-
     /// Build a
     /// [`<svg>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg)
     /// element.
@@ -589,39 +598,4 @@ builder_constructors! {
     /// [`<image>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/image)
     /// element.
     image <> "http://www.w3.org/2000/svg";
-}
-
-macro_rules! impl_attrs {
-    ( $(
-        $(#[$attr:meta])*
-        $name:ident: [$($f:ident)*];
-    )* ) => {};
-}
-
-impl_attrs! {
-    /// Indicates whether the user can interact with the element
-    disabled: [button command fieldset input keygen optgroup option select textarea];
-
-}
-
-mod tests {
-    use super::*;
-    fn r#type() {}
-
-    struct MyThing {}
-    impl MyThing {
-        /// eat my socks
-        fn r#type(&self) -> &Self {
-            self
-        }
-        fn nothing(&self) -> &Self {
-            self
-        }
-    }
-    fn test() {
-        let t = MyThing {};
-        t.r#type().r#nothing();
-
-        // let g = div::TAG_NAME;
-    }
 }

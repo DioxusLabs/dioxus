@@ -120,8 +120,8 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Fragments               | ✅      | ✅     | rsx! can return multiple elements without a root      |
 | Manual Props            | ✅      | ✅     | Manually pass in props with spread syntax             |
 | Controlled Inputs       | ✅      | ✅     | stateful wrappers around inputs                       |
+| CSS/Inline Styles       | ✅      | ✅     | syntax for inline styles/attribute groups[2]          |
 | NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                       |
-| CSS/Inline Styles       | 🛠      | ✅     | syntax for inline styles/attribute groups[2]          |
 | 1st class global state  | 🛠      | ✅     | redux/recoil/mobx on top of context                   |
 | Suspense                | 🛠      | ✅     | schedule future render from future/promise            |
 | Cooperative Scheduling  | 🛠      | ✅     | Prioritize important events over non-important events |

@@ -123,10 +123,25 @@ pub mod on {
     use super::VirtualEvent;
 
     macro_rules! event_directory {
-        ( $( $eventdata:ident($wrapper:ident): [ $( $name:ident )* ]; )* ) => {
+        ( $(
             $(
+                #[$attr:meta]
+            )*
+            $eventdata:ident($wrapper:ident): [
+                $(
+                    #[$method_attr:meta]
+                )*
+                $( $name:ident )*
+            ];
+        )* ) => {
+            $(
+                $(#[$attr])*
                 #[derive(Debug)]
                 pub struct $wrapper(pub Rc<dyn $eventdata>);
+
+                // todo: derefing to the event is fine (and easy) but breaks some IDE stuff like (go to source)
+                // going to source in fact takes you to the source of Rc which is... less than useful
+                // Either we ask for this to be changed in Rust-analyzer or manually impkement the trait
                 impl Deref for $wrapper {
                     type Target = Rc<dyn $eventdata>;
                     fn deref(&self) -> &Self::Target {
@@ -134,6 +149,7 @@ pub mod on {
                     }
                 }
 
+                $(#[$method_attr])*
                 $(
                     pub fn $name<'a>(
                         c: &'_ NodeFactory<'a>,
@@ -155,17 +171,112 @@ pub mod on {
         };
     }
 
+    // The Dioxus Synthetic event system
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
     event_directory! {
-        ClipboardEventInner(ClipboardEvent): [copy cut paste];
-        CompositionEventInner(CompositionEvent): [compositionend compositionstart compositionupdate];
-        KeyboardEventInner(KeyboardEvent): [keydown keypress keyup];
-        FocusEventInner(FocusEvent): [focus blur];
-        FormEventInner(FormEvent): [change input invalid reset submit];
-        MouseEventInner(MouseEvent): [
-            click contextmenu doubleclick drag dragend dragenter dragexit
-            dragleave dragover dragstart drop mousedown mouseenter mouseleave
-            mousemove mouseout mouseover mouseup
+
+
+
+
+        ClipboardEventInner(ClipboardEvent): [
+            /// Called when "copy"
+            oncopy
+            oncut
+            onpaste
         ];
+        CompositionEventInner(CompositionEvent): [
+            oncompositionend
+            oncompositionstart
+            oncompositionupdate
+        ];
+        KeyboardEventInner(KeyboardEvent): [
+            onkeydown
+            onkeypress
+            onkeyup
+        ];
+        FocusEventInner(FocusEvent): [
+            onfocus
+            onblur
+        ];
+        FormEventInner(FormEvent): [
+            onchange
+            oninput
+            oninvalid
+            onreset
+            onsubmit
+        ];
+
+
+        /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
+        ///
+        ///
+        /// The MouseEvent interface represents events that occur due to the user interacting with a pointing device (such as a mouse).
+        ///
+        /// ## Trait implementation:
+        /// ```rust
+        ///     fn alt_key(&self) -> bool;
+        ///     fn button(&self) -> i16;
+        ///     fn buttons(&self) -> u16;
+        ///     fn client_x(&self) -> i32;
+        ///     fn client_y(&self) -> i32;
+        ///     fn ctrl_key(&self) -> bool;
+        ///     fn meta_key(&self) -> bool;
+        ///     fn page_x(&self) -> i32;
+        ///     fn page_y(&self) -> i32;
+        ///     fn screen_x(&self) -> i32;
+        ///     fn screen_y(&self) -> i32;
+        ///     fn shift_key(&self) -> bool;
+        ///     fn get_modifier_state(&self, key_code: &str) -> bool;
+        /// ```
+        ///
+        /// ## Event Handlers
+        /// - click
+        /// - contextmenu
+        /// - doubleclick
+        /// - drag
+        /// - dragend
+        /// - dragenter
+        /// - dragexit
+        /// - dragleave
+        /// - dragover
+        /// - dragstart
+        /// - drop
+        /// - mousedown
+        /// - mouseenter
+        /// - mouseleave
+        /// - mousemove
+        /// - mouseout
+        /// - mouseover
+        /// - mouseup
+        MouseEventInner(MouseEvent): [
+            /// Onclick!
+            onclick
+            oncontextmenu
+            ondoubleclick
+            ondrag
+            ondragend
+            ondragenter
+            ondragexit
+            ondragleave
+            ondragover
+            ondragstart
+            ondrop
+            onmousedown
+            onmouseenter
+            onmouseleave
+            onmousemove
+            onmouseout
+            onmouseover
+            onmouseup
+        ];
+
         PointerEventInner(PointerEvent): [
             pointerdown pointermove pointerup pointercancel gotpointercapture
             lostpointercapture pointerenter pointerleave pointerover pointerout
@@ -293,6 +404,8 @@ pub mod on {
         fn alt_key(&self) -> bool;
         fn button(&self) -> i16;
         fn buttons(&self) -> u16;
+
+        /// Get the X coordinate of the mouse relative to the window
         fn client_x(&self) -> i32;
         fn client_y(&self) -> i32;
         fn ctrl_key(&self) -> bool;
@@ -597,25 +710,25 @@ pub mod on {
     }
 }
 
-mod tests {
+// mod tests {
 
-    use std::rc::Rc;
+//     use std::rc::Rc;
 
-    use crate as dioxus;
-    use crate::events::on::MouseEvent;
-    use crate::prelude::*;
+//     use crate as dioxus;
+//     use crate::events::on::MouseEvent;
+//     use crate::prelude::*;
 
-    fn autocomplete() {
-        // let v = move |evt| {
-        //     let r = evt.alt_key();
-        // };
+//     fn autocomplete() {
+//         // let v = move |evt| {
+//         //     let r = evt.alt_key();
+//         // };
 
-        let g = rsx! {
-            button {
-                onclick: move |evt| {
-                    let r = evt.alt_key();
-                }
-            }
-        };
-    }
-}
+//         let g = rsx! {
+//             button {
+//                 onclick: move |evt| {
+//                     let r = evt.alt_key();
+//                 }
+//             }
+//         };
+//     }
+// }

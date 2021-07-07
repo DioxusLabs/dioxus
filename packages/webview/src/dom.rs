@@ -11,16 +11,6 @@ use dioxus_core::{
 use serde::{Deserialize, Serialize};
 use DomEdits::*;
 
-fn test() {
-    const App: FC<()> = |cx| cx.render(rsx! { div {}});
-    let mut vi = VirtualDom::new(App);
-    let mut real = WebviewDom {
-        edits: Vec::new(),
-        node_counter: 0,
-    };
-    vi.rebuild(&mut real);
-}
-
 pub struct WebviewDom<'bump> {
     pub edits: Vec<DomEdits<'bump>>,
     pub node_counter: u64,

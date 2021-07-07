@@ -13,7 +13,7 @@ use bumpalo::Bump;
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Properties, VComponent, FC},
+    innerlude::{Properties, VComponent, VText, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::{VElement, VFragment},
     virtual_dom::{RealDomNode, Scope},
@@ -34,7 +34,6 @@ where
     cx: &'b NodeFactory<'a>,
     key: NodeKey<'a>,
     tag_name: &'static str,
-    // tag_name: &'a str,
     listeners: Listeners,
     attributes: Attributes,
     children: Children,
@@ -422,7 +421,11 @@ where
             }
         };
 
-        self.attributes.push(Attribute { name, value });
+        self.attributes.push(Attribute {
+            name,
+            value,
+            namespace: None,
+        });
         self
     }
 
@@ -455,7 +458,11 @@ where
     /// ```
     pub fn bool_attr(mut self, name: &'static str, should_add: bool) -> Self {
         if should_add {
-            self.attributes.push(Attribute { name, value: "" });
+            self.attributes.push(Attribute {
+                name,
+                value: "",
+                namespace: None,
+            });
         }
         self
     }
@@ -659,13 +666,17 @@ pub fn text3<'a>(bump: &'a bumpalo::Bump, args: std::fmt::Arguments) -> VNode<'a
     // ```
     //  div {"abc"}
     // ```
+    VNode::text(raw_text(bump, args))
+}
+
+pub fn raw_text<'a>(bump: &'a bumpalo::Bump, args: std::fmt::Arguments) -> &'a str {
     match args.as_str() {
-        Some(static_str) => VNode::text(static_str),
+        Some(static_str) => static_str,
         None => {
             use bumpalo::core_alloc::fmt::Write;
             let mut s = bumpalo::collections::String::new_in(bump);
             s.write_fmt(args).unwrap();
-            VNode::text(s.into_bump_str())
+            s.into_bump_str()
         }
     }
 }
@@ -683,7 +694,11 @@ pub fn text3<'a>(bump: &'a bumpalo::Bump, args: std::fmt::Arguments) -> VNode<'a
 /// let my_id_attr = attr("id", "my-id");
 /// ```
 pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
-    Attribute { name, value }
+    Attribute {
+        name,
+        value,
+        namespace: None,
+    }
 }
 
 pub fn virtual_child<'a, T: Properties + 'a>(
@@ -762,7 +777,7 @@ impl<'a> NodeFactory<'a> {
     /// Create an element builder
     pub fn element<'b>(
         &'b self,
-        tag_name: &'static str,
+        tag: impl DioxusElement,
     ) -> ElementBuilder<
         'a,
         'b,
@@ -770,7 +785,21 @@ impl<'a> NodeFactory<'a> {
         bumpalo::collections::Vec<'a, Attribute<'a>>,
         bumpalo::collections::Vec<'a, VNode<'a>>,
     > {
-        ElementBuilder::new(self, tag_name)
+        ElementBuilder::new(self, tag.tag_name())
+    }
+
+    pub fn attr(
+        &self,
+        name: &'static str,
+        val: Arguments<'a>,
+        namespace: Option<&'static str>,
+    ) -> Attribute<'a> {
+        let value = raw_text(self.bump(), val);
+        Attribute {
+            name,
+            value,
+            namespace,
+        }
     }
 
     pub fn child_list(&self) -> ChildrenList {
@@ -811,5 +840,13 @@ use std::fmt::Debug;
 impl Debug for NodeFactory<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
+    }
+}
+
+pub trait DioxusElement {
+    const TAG_NAME: &'static str;
+    const NAME_SPACE: Option<&'static str>;
+    fn tag_name(&self) -> &'static str {
+        Self::TAG_NAME
     }
 }

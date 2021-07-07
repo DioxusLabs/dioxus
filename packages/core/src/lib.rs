@@ -13,6 +13,7 @@ pub mod serialize;
 
 pub mod arena;
 pub mod component;
+pub mod styles;
 pub mod util; // Logic for extending FC
 
 pub mod debug_renderer;
@@ -54,6 +55,7 @@ pub(crate) mod innerlude {
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     use crate::nodes;
+    pub use crate::styles::{AsAttr, StyleBuilder};
     pub use crate::virtual_dom::Context;
     pub use crate::virtual_dom::Scoped;
     pub use nodes::*;
@@ -61,7 +63,7 @@ pub mod prelude {
     pub use crate::nodebuilder::LazyNodes;
 
     pub use crate::nodebuilder::ChildrenList;
-    pub use crate::nodebuilder::NodeFactory;
+    pub use crate::nodebuilder::{DioxusElement, NodeFactory};
     // pub use nodes::iterables::IterableNodes;
     /// This type alias is an internal way of abstracting over the static functions that represent components.
     pub use crate::innerlude::FC;
