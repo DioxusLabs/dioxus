@@ -21,8 +21,11 @@ use dioxus::prelude::*;
 const STYLE: &str = include_str!("./assets/calculator.css");
 fn main() {
     dioxus::desktop::launch(App, |cfg| {
-        cfg.title("Calculator Demo").resizable(false).size(350, 550)
-    });
+        cfg.with_title("Calculator Demo")
+            .with_resizable(true)
+            .with_skip_taskbar(true)
+    })
+    .expect("failed to launch dioxus app");
 }
 
 enum Operator {

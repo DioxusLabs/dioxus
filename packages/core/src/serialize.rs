@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// network or through FFI boundaries.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum DomEdits<'bump> {
+pub enum DomEdit<'bump> {
     PushRoot {
         root: u64,
     },

@@ -1,24 +1,28 @@
+use std::borrow::BorrowMut;
 use std::sync::mpsc::channel;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use dioxus_core::prelude::*;
 use dioxus_core::virtual_dom::VirtualDom;
-use web_view::{escape, Handle};
-use web_view::{WVResult, WebView, WebViewBuilder};
+use dioxus_core::{prelude::*, serialize::DomEdit};
+use wry::{
+    application::window::{Window, WindowBuilder},
+    webview::{RpcRequest, RpcResponse},
+};
+
 mod dom;
 
 static HTML_CONTENT: &'static str = include_str!("./index.html");
 
 pub fn launch(
     root: FC<()>,
-    builder: impl FnOnce(DioxusWebviewBuilder) -> DioxusWebviewBuilder,
+    builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
 ) -> anyhow::Result<()> {
     launch_with_props(root, (), builder)
 }
 pub fn launch_with_props<P: Properties + 'static>(
     root: FC<P>,
     props: P,
-    builder: impl FnOnce(DioxusWebviewBuilder) -> DioxusWebviewBuilder,
+    builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
 ) -> anyhow::Result<()> {
     WebviewRenderer::run(root, props, builder)
 }
@@ -29,85 +33,125 @@ pub struct WebviewRenderer<T> {
     /// The root component used to render the Webview
     root: FC<T>,
 }
-
-enum InnerEvent {
-    Initiate(Handle<()>),
+enum RpcEvent<'a> {
+    Initialize {
+        //
+        edits: Vec<DomEdit<'a>>,
+    },
 }
 
 impl<T: Properties + 'static> WebviewRenderer<T> {
     pub fn run(
         root: FC<T>,
         props: T,
-        user_builder: impl FnOnce(DioxusWebviewBuilder) -> DioxusWebviewBuilder,
+        user_builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
     ) -> anyhow::Result<()> {
-        let (sender, receiver) = channel::<InnerEvent>();
+        use wry::{
+            application::{
+                event::{Event, StartCause, WindowEvent},
+                event_loop::{ControlFlow, EventLoop},
+                window::WindowBuilder,
+            },
+            webview::WebViewBuilder,
+        };
 
-        let DioxusWebviewBuilder {
-            title,
-            width,
-            height,
-            resizable,
-            debug,
-            frameless,
-            visible,
-            min_width,
-            min_height,
-        } = user_builder(DioxusWebviewBuilder::new());
+        let event_loop = EventLoop::new();
 
-        let mut view = web_view::builder()
-            .invoke_handler(|view, arg| {
-                let handle = view.handle();
-                sender
-                    .send(InnerEvent::Initiate(handle))
-                    .expect("should not fail");
-
-                Ok(())
-            })
-            .content(web_view::Content::Html(HTML_CONTENT))
-            .user_data(())
-            .title(title)
-            .size(width, height)
-            .resizable(resizable)
-            .debug(debug)
-            .frameless(frameless)
-            .visible(visible)
-            .min_size(min_width, min_height)
-            .build()
-            .unwrap();
+        let window = user_builder(WindowBuilder::new()).build(&event_loop)?;
 
         let mut vdom = VirtualDom::new_with_props(root, props);
         let mut real_dom = dom::WebviewDom::new();
         vdom.rebuild(&mut real_dom)?;
 
-        let ref_edits = Arc::new(serde_json::to_string(&real_dom.edits)?);
+        let edits = Arc::new(RwLock::new(Some(serde_json::to_value(real_dom.edits)?)));
 
-        loop {
-            view.step()
-                .expect("should not fail")
-                .expect("should not fail");
-            std::thread::sleep(std::time::Duration::from_millis(15));
+        // let ref_edits = Arc::new(serde_json::to_string(&real_dom.edits)?);
 
-            if let Ok(event) = receiver.try_recv() {
-                if let InnerEvent::Initiate(handle) = event {
-                    let editlist = ref_edits.clone();
-                    handle
-                        .dispatch(move |view| {
-                            let escaped = escape(&editlist);
-                            view.eval(&format!("EditListReceived({});", escaped))
-                        })
-                        .expect("Dispatch failed");
+        let handler = move |window: &Window, mut req: RpcRequest| {
+            //
+            let d = edits.clone();
+            match req.method.as_str() {
+                "initiate" => {
+                    let mut ed = d.write().unwrap();
+                    let edits = match ed.as_mut() {
+                        Some(ed) => Some(ed.take()),
+                        None => None,
+                    };
+                    Some(RpcResponse::new_result(req.id.take(), edits))
+                }
+                _ => todo!("this message failed"),
+            }
+        };
+
+        let webview = WebViewBuilder::new(window)?
+            .with_url(&format!("data:text/html,{}", HTML_CONTENT))?
+            .with_rpc_handler(handler)
+            .build()?;
+
+        event_loop.run(move |event, _, control_flow| {
+            *control_flow = ControlFlow::Wait;
+
+            match event {
+                Event::WindowEvent { event, .. } => {
+                    //
+                    match event {
+                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        _ => {}
+                    }
+                }
+                _ => {
+                    // let _ = webview.resize();
                 }
             }
-        }
+        });
+
+        // let mut view = web_view::builder()
+        //     .invoke_handler(|view, arg| {
+        //         let handle = view.handle();
+        //         sender
+        //             .send(InnerEvent::Initiate(handle))
+        //             .expect("should not fail");
+
+        //         Ok(())
+        //     })
+        //     .content(web_view::Content::Html(HTML_CONTENT))
+        //     .user_data(())
+        //     .title(title)
+        //     .size(width, height)
+        //     .resizable(resizable)
+        //     .debug(debug)
+        //     .frameless(frameless)
+        //     .visible(visible)
+        //     .min_size(min_width, min_height)
+        //     .build()
+        //     .unwrap();
+        // loop {
+        //     view.step()
+        //         .expect("should not fail")
+        //         .expect("should not fail");
+        //     std::thread::sleep(std::time::Duration::from_millis(15));
+
+        //     if let Ok(event) = receiver.try_recv() {
+        //         if let InnerEvent::Initiate(handle) = event {
+        //             let editlist = ref_edits.clone();
+        //             handle
+        //                 .dispatch(move |view| {
+        //                     let escaped = escape(&editlist);
+        //                     view.eval(&format!("EditListReceived({});", escaped))
+        //                 })
+        //                 .expect("Dispatch failed");
+        //         }
+        //     }
+        // }
     }
 
     /// Create a new text-renderer instance from a functional component root.
     /// Automatically progresses the creation of the VNode tree to completion.
     ///
     /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new(root: FC<T>, builder: impl FnOnce() -> WVResult<WebView<'static, ()>>) -> Self {
-        Self { root }
-    }
+    // pub fn new(root: FC<T>, builder: impl FnOnce() -> WVResult<WebView<'static, ()>>) -> Self {
+    //     Self { root }
+    // }
 
     /// Create a new text renderer from an existing Virtual DOM.
     /// This will progress the existing VDom's events to completion.
@@ -124,6 +168,57 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
     pub fn update_mut(&mut self, modifier: impl Fn(&mut T)) {
         todo!()
     }
+}
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct MessageParameters {
+    message: String,
+}
+
+fn HANDLER(window: &Window, mut req: RpcRequest) -> Option<RpcResponse> {
+    use wry::{
+        application::{
+            event::{Event, WindowEvent},
+            event_loop::{ControlFlow, EventLoop},
+            window::{Fullscreen, Window, WindowBuilder},
+        },
+        webview::{RpcRequest, RpcResponse, WebViewBuilder},
+    };
+
+    let mut response = None;
+    if &req.method == "fullscreen" {
+        if let Some(params) = req.params.take() {
+            if let Ok(mut args) = serde_json::from_value::<Vec<bool>>(params) {
+                if !args.is_empty() {
+                    if args.swap_remove(0) {
+                        window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                    } else {
+                        window.set_fullscreen(None);
+                    }
+                };
+                response = Some(RpcResponse::new_result(req.id.take(), None));
+            }
+        }
+    } else if &req.method == "send-parameters" {
+        if let Some(params) = req.params.take() {
+            if let Ok(mut args) = serde_json::from_value::<Vec<MessageParameters>>(params) {
+                let result = if !args.is_empty() {
+                    let msg = args.swap_remove(0);
+                    Some(Value::String(format!("Hello, {}!", msg.message)))
+                } else {
+                    // NOTE: in the real-world we should send an error response here!
+                    None
+                };
+                // Must always send a response as this is a `call()`
+                response = Some(RpcResponse::new_result(req.id.take(), result));
+            }
+        }
+    }
+
+    response
 }
 
 pub struct DioxusWebviewBuilder<'a> {

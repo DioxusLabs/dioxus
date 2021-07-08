@@ -4,13 +4,13 @@ use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core::{
     diff::RealDom,
-    serialize::DomEdits,
+    serialize::DomEdit,
     virtual_dom::{RealDomNode, VirtualDom},
 };
-use DomEdits::*;
+use DomEdit::*;
 
 pub struct WebviewDom<'bump> {
-    pub edits: Vec<DomEdits<'bump>>,
+    pub edits: Vec<DomEdit<'bump>>,
     pub node_counter: u64,
 }
 impl WebviewDom<'_> {

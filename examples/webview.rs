@@ -20,12 +20,9 @@ static App: FC<()> = |cx| {
 
     cx.render(rsx! {
         div {
-            h1 { "Dioxus Desktop Demo" }
-            p { "Count is {count}" }
-            button {
-                "Click to increment"
-                onclick: move |_| count += 1
-            }
+            h1 { "Hifive counter: {count}" }
+            button { onclick: move |_| count += 1, "Up high!" }
+            button { onclick: move |_| count -= 1, "Down low!" }
         }
     })
 };

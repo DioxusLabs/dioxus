@@ -1,20 +1,22 @@
-<!-- a js-only interpreter for the dioxus patch stream :) -->
 <!DOCTYPE html>
 <html>
 
 <head>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-    <meta charset="UTF-8" />
-    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet" />
+    <!-- <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet" /> -->
 </head>
+
+
+
 
 <body>
     <div></div>
 </body>
 <script>
+
     class Interpreter {
         constructor(root) {
             this.stack = [root];
+            this.listeners = {};
             this.lastNodeWasText = false;
             this.nodes = {
                 0: root
@@ -30,6 +32,7 @@
         }
     }
 
+
     class OPTABLE {
         PushRoot(self, edit) {
             const id = edit.root;
@@ -37,7 +40,6 @@
             self.stack.push(node);
         }
         AppendChild(self, edit) {
-            // todo: prevent merging of text nodes
             const node = self.pop();
             self.top().appendChild(node);
         }
@@ -52,14 +54,13 @@
             node.remove();
         }
         RemoveAllChildren(self, edit) {
-            // todo - we never actually call this one
         }
         CreateTextNode(self, edit) {
             self.stack.push(document.createTextNode(edit.text));
         }
         CreateElement(self, edit) {
             const tagName = edit.tag;
-            console.log(`creating element! ${edit}`);
+            console.log(`creating element: `, edit);
             self.stack.push(document.createElement(tagName));
         }
         CreateElementNs(self, edit) {
@@ -69,10 +70,8 @@
             self.stack.push(document.createElement("pre"));
         }
         NewEventListener(self, edit) {
-            // todo
         }
         RemoveEventListener(self, edit) {
-            // todo
         }
         SetText(self, edit) {
             self.top().textContent = edit.text;
@@ -83,7 +82,6 @@
             const node = self.top(self.stack);
             node.setAttribute(name, value);
 
-            // Some attributes are "volatile" and don't work through `setAttribute`.
             if ((name === "value", self)) {
                 node.value = value;
             }
@@ -99,7 +97,6 @@
             const node = self.top(self.stack);
             node.removeAttribute(name);
 
-            // Some attributes are "volatile" and don't work through `removeAttribute`.
             if ((name === "value", self)) {
                 node.value = null;
             }
@@ -110,11 +107,9 @@
                 node.selected = false;
             }
         }
-
     }
 
-    const op_table = new OPTABLE();
-    const interpreter = new Interpreter(window.document.body);
+
 
     function EditListReceived(rawEditList) {
         let editList = JSON.parse(rawEditList);
@@ -125,7 +120,20 @@
         });
     }
 
-    external.invoke("initiate");
+    const op_table = new OPTABLE();
+    const interpreter = new Interpreter(window.document.body);
+
+    async function initialize() {
+        const reply = await rpc.call('initiate');
+        console.log(reply);
+        reply.forEach(function (edit, index) {
+            console.log(edit);
+            op_table[edit.type](interpreter, edit);
+        });
+    }
+    console.log("initializing...");
+    initialize();
 </script>
+
 
 </html>

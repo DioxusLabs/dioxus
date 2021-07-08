@@ -102,7 +102,10 @@ where
 impl<'a, T: 'static> UseState<'a, T> {
     /// Tell the Dioxus Scheduler that we need to be processed
     pub fn needs_update(&self) {
-        (self.inner.callback)();
+        if !self.inner.update_scheuled.get() {
+            self.inner.update_scheuled.set(true);
+            (self.inner.callback)();
+        }
     }
 
     pub fn set(&self, new_val: T) {
@@ -143,7 +146,7 @@ impl<'a, T: 'static> std::ops::Deref for UseState<'a, T> {
     }
 }
 
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 impl<'a, T: Copy + Add<T, Output = T>> Add<T> for UseState<'a, T> {
     type Output = T;
 
@@ -156,6 +159,18 @@ impl<'a, T: Copy + Add<T, Output = T>> AddAssign<T> for UseState<'a, T> {
         self.set(self.inner.current_val.add(rhs));
     }
 }
+impl<'a, T: Copy + Sub<T, Output = T>> Sub<T> for UseState<'a, T> {
+    type Output = T;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        self.inner.current_val.sub(rhs)
+    }
+}
+impl<'a, T: Copy + Sub<T, Output = T>> SubAssign<T> for UseState<'a, T> {
+    fn sub_assign(&mut self, rhs: T) {
+        self.set(self.inner.current_val.sub(rhs));
+    }
+}
 
 // enable displaty for the handle
 impl<'a, T: 'static + Display> std::fmt::Display for UseState<'a, T> {
@@ -165,6 +180,7 @@ impl<'a, T: 'static + Display> std::fmt::Display for UseState<'a, T> {
 }
 struct UseStateInner<T: 'static> {
     current_val: T,
+    update_scheuled: Cell<bool>,
     callback: Rc<dyn Fn()>,
     wip: RefCell<Option<T>>,
 }
@@ -213,9 +229,10 @@ pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
             current_val: initial_state_fn(),
             callback: cx.schedule_update(),
             wip: RefCell::new(None),
+            update_scheuled: Cell::new(false),
         },
         move |hook| {
-            log::debug!("addr of hook: {:#?}", hook as *const _);
+            hook.update_scheuled.set(false);
             let mut new_val = hook.wip.borrow_mut();
             if new_val.is_some() {
                 hook.current_val = new_val.take().unwrap();
