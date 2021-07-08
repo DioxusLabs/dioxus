@@ -5,7 +5,7 @@
 // use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(App, |cfg| cfg);
 }
 
 use dioxus::events::on::*;

@@ -39,7 +39,7 @@
 //! - Allow top-level fragments
 //!
 fn main() {
-    dioxus::webview::launch(Example);
+    dioxus::desktop::launch(Example, |c| c);
 }
 
 /// When trying to return "nothing" to Dioxus, you'll need to specify the type parameter or Rust will be sad.

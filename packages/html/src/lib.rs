@@ -62,18 +62,22 @@ builder_constructors! {
     /// [`<head>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/head)
     /// element.
     head;
+
     /// Build a
     /// [`<link>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/link)
     /// element.
     link;
+
     /// Build a
     /// [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta)
     /// element.
     meta;
+
     /// Build a
     /// [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style)
     /// element.
     style;
+
     /// Build a
     /// [`<title>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title)
     /// element.
@@ -109,7 +113,6 @@ builder_constructors! {
     /// element.
     header;
 
-
     /// Build a
     /// [`<h1>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h1)
     /// element.
@@ -122,11 +125,13 @@ builder_constructors! {
     /// - The `<h1>` heading is usually a large bolded font.
     ///
     /// # Usage
+    ///
     /// ```
     /// html!(<h1> A header element </h1>)
     /// rsx!(h1 { "A header element" })
     /// LazyNodes::new(|f| f.el(h1).children([f.text("A header element")]).finish())
     /// ```
+    ///
     h1;
 
 

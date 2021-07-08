@@ -72,6 +72,8 @@ pub struct BodyParseConfig {
     pub allow_manual_props: bool,
 }
 
+// todo: unify this body parsing for both elements and components
+// both are style rather ad-hoc, though components are currently more configured
 pub fn parse_component_body(
     content: &ParseBuffer,
     cfg: &BodyParseConfig,
@@ -87,18 +89,27 @@ pub fn parse_component_body(
 
         if content.peek(Token![..]) {
             if !cfg.allow_manual_props {
-                // toss an error
+                return Err(Error::new(
+                    content.span(),
+                    "Props spread syntax is not allowed in this context. \nMake to only use the elipsis `..` in Components.",
+                ));
             }
             content.parse::<Token![..]>()?;
             *manual_props = Some(content.parse::<Expr>()?);
         } else if content.peek(Ident) && content.peek2(Token![:]) {
             if !cfg.allow_fields {
-                // toss an error
+                return Err(Error::new(
+                    content.span(),
+                    "Property fields is not allowed in this context. \nMake to only use fields in Components or Elements.",
+                ));
             }
             body.push(content.parse::<ComponentField>()?);
         } else {
             if !cfg.allow_children {
-                // toss an error
+                return Err(Error::new(
+                    content.span(),
+                    "This item is not allowed to accept children.",
+                ));
             }
             children.push(content.parse::<Node>()?);
         }

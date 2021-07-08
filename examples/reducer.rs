@@ -4,10 +4,12 @@
 //! This pattern is very useful when a single component can handle many types of input that can
 //! be represented by an enum.
 
-fn main() {}
 use dioxus::prelude::*;
+fn main() {
+    dioxus::desktop::launch(App, |c| c);
+}
 
-pub static ExampleReducer: FC<()> = |cx| {
+pub static App: FC<()> = |cx| {
     let (state, reduce) = use_reducer(cx, PlayerState::new, PlayerState::reduce);
 
     let is_playing = state.is_playing();

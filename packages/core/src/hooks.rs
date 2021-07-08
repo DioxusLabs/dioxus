@@ -8,7 +8,7 @@
 use crate::innerlude::Context;
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     ops::{Deref, DerefMut},
     rc::Rc,
 };
@@ -87,39 +87,47 @@ use std::{
 };
 
 pub struct UseState<T: 'static> {
-    modifier: Rc<RefCell<Option<Box<dyn FnOnce(&mut T)>>>>,
     current_val: T,
-    update: Box<dyn Fn() + 'static>,
-    setter: Box<dyn Fn(T) + 'static>,
-    // setter: Box<dyn Fn(T) + 'static>,
+    callback: Rc<dyn Fn()>,
+    wip: RefCell<Option<T>>,
 }
 
-// #[derive(Clone, Copy)]
-// pub struct UseStateHandle<'a, T: 'static> {
-//     inner: &'a UseState<T>,
-//     // pub setter: &'a dyn Fn(T),
-//     // pub modifier: &'a dyn Fn(&mut T),
-// }
-
-impl<'a, T: 'static> UseState<T> {
-    pub fn setter(&self) -> &dyn Fn(T) {
-        &self.setter
-        // let r = self.setter.as_mut();
-        // unsafe { Pin::get_unchecked_mut(r) }
+impl<T: 'static> UseState<T> {
+    /// Tell the Dioxus Scheduler that we need to be processed
+    pub fn needs_update(&self) {
+        (self.callback)();
     }
 
     pub fn set(&self, new_val: T) {
-        self.modify(|f| *f = new_val);
+        self.needs_update();
+        *self.wip.borrow_mut() = Some(new_val);
     }
 
-    // signal that we need to be updated
-    // save the modifier
-    pub fn modify(&self, f: impl FnOnce(&mut T) + 'static) {
-        let mut slot = self.modifier.as_ref().borrow_mut();
-        *slot = Some(Box::new(f));
-        (self.update)();
+    pub fn get(&self) -> &T {
+        &self.current_val
+    }
+
+    /// Get the current status of the work-in-progress data
+    pub fn get_wip(&self) -> Ref<Option<T>> {
+        self.wip.borrow()
     }
 }
+impl<'a, T: 'static + ToOwned<Owned = T>> UseState<T> {
+    pub fn get_mut<'r>(&'r self) -> RefMut<'r, T> {
+        // make sure we get processed
+        self.needs_update();
+
+        // Bring out the new value, cloning if it we need to
+        // "get_mut" is locked behind "ToOwned" to make it explicit that cloning occurs to use this
+        RefMut::map(self.wip.borrow_mut(), |slot| {
+            if slot.is_none() {
+                *slot = Some(self.current_val.to_owned());
+            }
+            slot.as_mut().unwrap()
+        })
+    }
+}
+
 impl<'a, T: 'static> std::ops::Deref for UseState<T> {
     type Target = T;
 
@@ -163,66 +171,22 @@ pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
 ) -> &'a UseState<T> {
     cx.use_hook(
         move || UseState {
-            modifier: Rc::new(RefCell::new(None)),
             current_val: initial_state_fn(),
-            update: Box::new(|| {}),
-            setter: Box::new(|_| {}),
+            callback: cx.schedule_update(),
+            wip: RefCell::new(None),
         },
         move |hook| {
             log::debug!("addr of hook: {:#?}", hook as *const _);
-            let scheduled_update = cx.schedule_update();
-
-            // log::debug!("Checking if new value {:#?}", &hook.current_val);
-            // get ownership of the new val and replace the current with the new
-            // -> as_ref -> borrow_mut -> deref_mut -> take
-            // -> rc     -> &RefCell   -> RefMut    -> &Option<T> -> T
-            if let Some(new_val) = hook.modifier.as_ref().borrow_mut().deref_mut().take() {
-                // log::debug!("setting prev {:#?}", &hook.current_val);
-                (new_val)(&mut hook.current_val);
-                // log::debug!("setting new value {:#?}", &hook.current_val);
+            let mut new_val = hook.wip.borrow_mut();
+            if new_val.is_some() {
+                hook.current_val = new_val.take().unwrap();
             }
-
-            hook.update = Box::new(move || scheduled_update());
-
-            let modifier = hook.modifier.clone();
-            hook.setter = Box::new(move |new_val: T| {
-                let mut slot = modifier.as_ref().borrow_mut();
-
-                let slot2 = slot.deref_mut();
-                *slot2 = Some(Box::new(move |old: &mut T| *old = new_val));
-            });
 
             &*hook
         },
         |_| {},
     )
 }
-
-// pub struct UseRef<T: 'static> {
-//     _current: RefCell<T>,
-// }
-// impl<T: 'static> UseRef<T> {
-//     fn new(val: T) -> Self {
-//         Self {
-//             _current: RefCell::new(val),
-//         }
-//     }
-
-//     pub fn set(&self, new: T) {
-//         let mut val = self._current.borrow_mut();
-//         *val = new;
-//     }
-
-//     pub fn modify(&self, modifier: impl FnOnce(&mut T)) {
-//         let mut val = self._current.borrow_mut();
-//         let val_as_ref = val.deref_mut();
-//         modifier(val_as_ref);
-//     }
-
-//     pub fn current(&self) -> std::cell::Ref<'_, T> {
-//         self._current.borrow()
-//     }
-// }
 
 /// Store a mutable value between renders!
 /// To read the value, borrow the ref.

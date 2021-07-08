@@ -22,14 +22,14 @@ pub struct Element {
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
-        // let name = &self.name.to_string();
 
         tokens.append_all(quote! {
             __cx.element(dioxus_elements::#name)
         });
 
-        // Add attributes
-        // TODO: conver to the "attrs" syntax for compile-time known sizes
+        // By gating these methods, we can keep the output of `cargo expand` readable.
+        // We also prevent the issue where zero-sized arrays fail to have propery type inference.
+
         if self.attributes.len() > 0 {
             let attr = &self.attributes;
             tokens.append_all(quote! {

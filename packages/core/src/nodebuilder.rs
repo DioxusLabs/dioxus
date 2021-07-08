@@ -549,27 +549,14 @@ impl<'a> IntoVNode<'a> for VNode<'a> {
 }
 
 impl<'a> IntoVNode<'a> for &VNode<'a> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>
-// where
-    //     'a: 'c,
-    {
-        todo!()
-        // cloning is cheap since vnodes are just references into bump arenas
-        // self.clone()
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        self.clone()
     }
 }
 
 pub trait IntoVNode<'a> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
-
-// pub trait VNodeBuilder<'a, G>: IntoIterator<Item = G>
-// where
-//     G: IntoVNode<'a>,
-// {
-// }
-
-// impl<'a, F> VNodeBuilder<'a, LazyNodes<F>> for LazyNodes<F> where F: FnOnce(NodeFactory) -> VNode {}
 
 // Wrap the the node-builder closure in a concrete type.
 // ---
