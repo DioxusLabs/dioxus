@@ -10,7 +10,6 @@ license = "MIT/Apache-2.0"
 
 [dependencies]
 # web-view = { git = "https://github.com/Boscop/web-view" }
-web-view = "0.7.3"
 dioxus-core = { path="../core", version="0.1.2", features=["serialize"] }
 anyhow = "1.0.38"
 argh = "0.1.4"
@@ -21,6 +20,10 @@ thiserror = "1.0.23"
 log = "0.4.13"
 fern = { version="0.6.0", features=["colored"] }
 
+tide = "0.15.0"
+tide-websockets = "0.3.0"
+html-escape = "0.2.9"
+
 # thiserror = "1.0.23"
 # log = "0.4.13"
 # fern = { version = "0.6.0", features = ["colored"] }
@@ -30,10 +33,7 @@ fern = { version="0.6.0", features=["colored"] }
 # serde = "1.0.120"
 # serde_json = "1.0.61"
 # async-std = { version = "1.9.0", features = ["attributes"] }
-tide = "0.15.0"
-tide-websockets = "0.3.0"
-html-escape = "0.2.9"
-# wry = "0.10.3"
+wry = "0.10.3"
 
 
 [build-dependencies]

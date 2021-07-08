@@ -151,7 +151,7 @@ pub mod on {
                     $(#[$method_attr])*
                     pub fn $name<'a>(
                         c: NodeFactory<'a>,
-                        callback: impl Fn($wrapper) + 'a,
+                        mut callback: impl FnMut($wrapper) + 'a,
                     ) -> Listener<'a> {
                         let bump = &c.bump();
                         Listener {

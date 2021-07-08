@@ -16,7 +16,7 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let (count, set_count) = use_state_classic(cx, || 0);
+    let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {
         div {
@@ -24,7 +24,7 @@ static App: FC<()> = |cx| {
             p { "Count is {count}" }
             button {
                 "Click to increment"
-                onclick: move |_| set_count(count + 1)
+                onclick: move |_| count += 1
             }
         }
     })

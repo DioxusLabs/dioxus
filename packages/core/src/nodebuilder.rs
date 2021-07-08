@@ -359,7 +359,7 @@ where
     ///     })
     ///     .finish();
     /// ```
-    pub fn on(self, event: &'static str, callback: impl Fn(VirtualEvent) + 'a) -> Self {
+    pub fn on(self, event: &'static str, callback: impl FnMut(VirtualEvent) + 'a) -> Self {
         let bump = &self.cx.bump();
         let listener = Listener {
             event,
@@ -382,11 +382,10 @@ where
         // This is okay because the bump arena is stable
         self.listeners.last().map(|g| {
             let r = unsafe { std::mem::transmute::<&Listener<'a>, &Listener<'static>>(g) };
-            self.cx
-                .scope_ref
-                .listeners
-                .borrow_mut()
-                .push((r.mounted_node as *const _, r.callback as *const _));
+            self.cx.scope_ref.listeners.borrow_mut().push((
+                r.mounted_node as *const _ as *mut _,
+                r.callback as *const _ as *mut _,
+            ));
         });
 
         self

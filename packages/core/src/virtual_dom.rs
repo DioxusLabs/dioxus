@@ -399,14 +399,14 @@ pub struct Scope {
     // - is self-refenrential and therefore needs to point into the bump
     // Stores references into the listeners attached to the vnodes
     // NEEDS TO BE PRIVATE
-    pub(crate) listeners: RefCell<Vec<(*const Cell<RealDomNode>, *const dyn Fn(VirtualEvent))>>,
+    pub(crate) listeners: RefCell<Vec<(*mut Cell<RealDomNode>, *mut dyn FnMut(VirtualEvent))>>,
 
     pub(crate) suspended_tasks: Vec<Box<dyn Future<Output = VNode<'static>>>>,
-    // pub(crate) listeners: RefCell<nohash_hasher::IntMap<u32, *const dyn Fn(VirtualEvent)>>,
-    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
-    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>,
-    // NoHashMap<RealDomNode, <*const dyn Fn(VirtualEvent)>
-    // pub(crate) listeners: RefCell<Vec<*const dyn Fn(VirtualEvent)>>
+    // pub(crate) listeners: RefCell<nohash_hasher::IntMap<u32, *const dyn FnMut(VirtualEvent)>>,
+    // pub(crate) listeners: RefCell<Vec<*const dyn FnMut(VirtualEvent)>>,
+    // pub(crate) listeners: RefCell<Vec<*const dyn FnMut(VirtualEvent)>>,
+    // NoHashMap<RealDomNode, <*const dyn FnMut(VirtualEvent)>
+    // pub(crate) listeners: RefCell<Vec<*const dyn FnMut(VirtualEvent)>>
 }
 
 // We need to pin the hook so it doesn't move as we initialize the list of hooks
@@ -550,7 +550,7 @@ impl Scope {
         // This operation is assumed to be safe
 
         log::debug!("Calling listeners! {:?}", self.listeners.borrow().len());
-        let listners = self.listeners.borrow();
+        let mut listners = self.listeners.borrow_mut();
         let (_, listener) = listners
             .iter()
             .find(|(domptr, _)| {
@@ -564,7 +564,7 @@ impl Scope {
 
         // TODO: Don'tdo a linear scan! Do a hashmap lookup! It'll be faster!
         unsafe {
-            let listener_fn = &**listener;
+            let mut listener_fn = &mut **listener;
             listener_fn(event);
         }
 

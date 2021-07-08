@@ -267,7 +267,7 @@ pub struct Listener<'bump> {
     pub mounted_node: &'bump Cell<RealDomNode>,
 
     /// The callback to invoke when the event happens.
-    pub(crate) callback: &'bump dyn Fn(VirtualEvent),
+    pub(crate) callback: &'bump dyn FnMut(VirtualEvent),
 }
 
 /// The key for keyed children.
