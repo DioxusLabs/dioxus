@@ -427,6 +427,7 @@ fn create_closure<'a, P: 'a>(
         let cx: Context<P> = Context {
             props: safe_props,
             scope: scp,
+            tasks: todo!(),
         };
 
         let g = component(cx);

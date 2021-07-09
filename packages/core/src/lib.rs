@@ -13,10 +13,11 @@ pub mod serialize;
 
 pub mod arena;
 pub mod component;
+pub mod hooklist;
 pub mod styles;
+pub mod tasks;
 pub mod util; // Logic for extending FC
-
-// pub mod debug_renderer;
+              // pub mod debug_renderer;
 pub mod diff;
 
 pub mod error; // Error type we expose to the renderers

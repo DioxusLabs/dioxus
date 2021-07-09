@@ -19,11 +19,14 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
+use crate::hooklist::HookList;
 use crate::{arena::ScopeArena, innerlude::*};
+use appendlist::AppendList;
 use bumpalo::Bump;
 use futures::FutureExt;
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
+use std::marker::PhantomData;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -159,7 +162,11 @@ impl VirtualDom {
             // the lifetime of this closure is just as long as the lifetime on the scope reference
             // this closure moves root props (which is static) into this closure
             let props = unsafe { &*(&root_props as *const _) };
-            root(Context { props, scope })
+            root(Context {
+                props,
+                scope,
+                tasks: todo!(),
+            })
         });
 
         // Create a weak reference to the OpaqueComponent for the root scope to use as its render function
@@ -379,8 +386,6 @@ pub struct Scope {
 
     pub caller: Weak<OpaqueComponent>,
 
-    pub hookidx: Cell<usize>,
-
     // ==========================
     // slightly unsafe stuff
     // ==========================
@@ -391,8 +396,8 @@ pub struct Scope {
     // These two could be combined with "OwningRef" to remove unsafe usage
     // or we could dedicate a tiny bump arena just for them
     // could also use ourborous
-    hooks: RefCell<Vec<Hook>>,
-
+    hooks: HookList,
+    // hooks: RefCell<Vec<Hook>>,
     pub(crate) listener_idx: Cell<usize>,
 
     // Unsafety:
@@ -410,7 +415,7 @@ pub struct Scope {
 }
 
 // We need to pin the hook so it doesn't move as we initialize the list of hooks
-type Hook = Pin<Box<dyn std::any::Any>>;
+type Hook = Box<dyn std::any::Any>;
 type EventChannel = Rc<dyn Fn()>;
 
 impl Scope {
@@ -470,7 +475,6 @@ impl Scope {
             hooks: Default::default(),
             shared_contexts: Default::default(),
             listeners: Default::default(),
-            hookidx: Default::default(),
             descendents: Default::default(),
             suspended_tasks: Default::default(),
         }
@@ -510,7 +514,7 @@ impl Scope {
         // Remove all the outdated listeners
         self.listeners.borrow_mut().clear();
 
-        self.hookidx.set(0);
+        unsafe { self.hooks.reset() };
         self.listener_idx.set(0);
 
         let caller = self
@@ -611,7 +615,13 @@ impl Scope {
 pub struct Context<'src, T> {
     pub props: &'src T,
     pub scope: &'src Scope,
+    pub tasks: &'src AppendList<&'src mut DTask>,
+    // pub task: &'src RefCell<Vec<&'src mut >>,
 }
+pub type DTask = Pin<Box<dyn Future<Output = ()>>>;
+// // pub task: &'src RefCell<Option<&'src mut Pin<Box<dyn Future<Output = ()>>>>>,
+// pub task: Option<()>, // pub task: &'src RefCell<Option<&'src mut Pin<Box<dyn Future<Output = ()>>>>>,
+// pub task: &'src RefCell<Option<&'src mut Pin<Box<dyn Future<Output = ()>>>>>
 
 impl<'src, T> Copy for Context<'src, T> {}
 impl<'src, T> Clone for Context<'src, T> {
@@ -619,6 +629,7 @@ impl<'src, T> Clone for Context<'src, T> {
         Self {
             props: self.props,
             scope: self.scope,
+            tasks: todo!(),
         }
     }
 }
@@ -712,29 +723,13 @@ impl<'src, P> Context<'src, P> {
         // TODO: add this to the "clean up" group for when the component is dropped
         _cleanup: impl FnOnce(InternalHookState),
     ) -> Output {
-        let scope = self.scope;
-
-        let idx = scope.hookidx.get();
-
-        // Grab out the hook list
-        let mut hooks = scope.hooks.borrow_mut();
-
         // If the idx is the same as the hook length, then we need to add the current hook
-        if idx >= hooks.len() {
+        if self.scope.hooks.is_finished() {
             let new_state = initializer();
-            hooks.push(Box::pin(new_state));
+            self.scope.hooks.push(Box::new(new_state));
         }
 
-        scope.hookidx.set(idx + 1);
-
-        let stable_ref = hooks
-            .get_mut(idx)
-            .expect("Should not fail, idx is validated")
-            .as_mut();
-
-        let pinned_state = unsafe { Pin::get_unchecked_mut(stable_ref) };
-
-        let internal_state = pinned_state.downcast_mut::<InternalHookState>().expect(
+        let state = self.scope.hooks.next::<InternalHookState>().expect(
             r###"
 Unable to retrive the hook that was initialized in this index.
 Consult the `rules of hooks` to understand how to use hooks properly.
@@ -744,8 +739,7 @@ Any function prefixed with "use" should not be called conditionally.
             "###,
         );
 
-        // We extend the lifetime of the internal state
-        runner(unsafe { &mut *(internal_state as *mut _) })
+        runner(state)
     }
 
     /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
@@ -882,16 +876,21 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     pub fn submit_task(
         &self,
-        task: &'src mut Pin<Box<dyn Future<Output = ()> + 'static>>,
+        mut task: &'src mut Pin<Box<dyn Future<Output = ()> + 'static>>,
     ) -> TaskHandle {
+        self.tasks.push(task);
+        // let mut g = self.task.borrow_mut();
+        // *g = Some(task);
         // the pointer to the task is stable - we guarantee stability of all &'src references
-        let task_ptr = task as *mut _;
+        // let task_ptr = task as *mut _;
 
-        TaskHandle {}
+        TaskHandle { _p: PhantomData {} }
     }
 }
 
-pub struct TaskHandle {}
+pub struct TaskHandle<'src> {
+    _p: PhantomData<&'src ()>,
+}
 #[derive(Clone)]
 pub struct SuspendedContext {}
 

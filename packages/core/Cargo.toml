@@ -42,6 +42,7 @@ futures = "0.3.15"
 
 
 async-std = { version="1.9.0", features=["attributes"] }
+appendlist = "1.4.0"
 
 [features]
 default = ["serialize"]
