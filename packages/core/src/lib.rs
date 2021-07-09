@@ -43,6 +43,7 @@ pub(crate) mod innerlude {
     pub use crate::hooks::*;
     pub use crate::nodebuilder::*;
     pub use crate::nodes::*;
+    pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
     pub type FC<P> = fn(Context<P>) -> VNode;
