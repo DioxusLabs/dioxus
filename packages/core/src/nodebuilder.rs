@@ -14,10 +14,10 @@ use bumpalo::Bump;
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Properties, VComponent, VText, FC},
+    innerlude::{Properties, Scope, VComponent, VText, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::{VElement, VFragment},
-    virtual_dom::{RealDomNode, Scope},
+    virtual_dom::RealDomNode,
 };
 
 /// A virtual DOM element builder.

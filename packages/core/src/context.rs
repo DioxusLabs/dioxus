@@ -16,6 +16,7 @@ use std::{
     pin::Pin,
     rc::{Rc, Weak},
 };
+
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
 /// This lets components schedule updates, integrate hooks, and expose their context via the context api.
 ///
@@ -40,12 +41,9 @@ pub struct Context<'src, T> {
     pub props: &'src T,
     pub scope: &'src Scope,
     pub tasks: &'src AppendList<&'src mut DTask>,
-    // pub task: &'src RefCell<Vec<&'src mut >>,
 }
+
 pub type DTask = Pin<Box<dyn Future<Output = ()>>>;
-// // pub task: &'src RefCell<Option<&'src mut Pin<Box<dyn Future<Output = ()>>>>>,
-// pub task: Option<()>, // pub task: &'src RefCell<Option<&'src mut Pin<Box<dyn Future<Output = ()>>>>>,
-// pub task: &'src RefCell<Option<&'src mut Pin<Box<dyn Future<Output = ()>>>>>
 
 impl<'src, T> Copy for Context<'src, T> {}
 impl<'src, T> Clone for Context<'src, T> {
@@ -53,7 +51,7 @@ impl<'src, T> Clone for Context<'src, T> {
         Self {
             props: self.props,
             scope: self.scope,
-            tasks: todo!(),
+            tasks: self.tasks,
         }
     }
 }
@@ -145,7 +143,7 @@ impl<'src, P> Context<'src, P> {
 
         // The closure that cleans up whatever mess is left when the component gets torn down
         // TODO: add this to the "clean up" group for when the component is dropped
-        _cleanup: impl FnOnce(InternalHookState),
+        cleanup: impl FnOnce(InternalHookState),
     ) -> Output {
         // If the idx is the same as the hook length, then we need to add the current hook
         if self.scope.hooks.is_finished() {

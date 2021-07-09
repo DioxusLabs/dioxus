@@ -22,6 +22,7 @@ pub mod hooklist;
 pub mod hooks;
 pub mod nodebuilder;
 pub mod nodes;
+pub mod scope;
 pub mod signals;
 pub mod styles;
 pub mod tasks;
@@ -43,6 +44,7 @@ pub(crate) mod innerlude {
     pub use crate::hooks::*;
     pub use crate::nodebuilder::*;
     pub use crate::nodes::*;
+    pub use crate::scope::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
