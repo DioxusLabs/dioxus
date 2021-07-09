@@ -10,17 +10,28 @@ use crate::{innerlude::ScopeIdx, virtual_dom::RealDomNode};
 
 #[derive(Debug)]
 pub struct EventTrigger {
-    ///
-    pub component_id: ScopeIdx,
+    /// The originator of the event trigger
+    pub originator: ScopeIdx,
 
-    ///
-    pub real_node_id: RealDomNode,
+    /// The optional real node associated with the trigger
+    pub real_node_id: Option<RealDomNode>,
 
-    ///
+    /// The type of event
     pub event: VirtualEvent,
 
-    ///
+    /// The priority of the event
     pub priority: EventPriority,
+}
+
+impl EventTrigger {
+    pub fn new_from_task(originator: ScopeIdx) -> Self {
+        Self {
+            originator,
+            event: VirtualEvent::FiberEvent,
+            priority: EventPriority::Low,
+            real_node_id: None,
+        }
+    }
 }
 
 /// Priority of Event Triggers.
@@ -61,12 +72,12 @@ impl EventTrigger {
     pub fn new(
         event: VirtualEvent,
         scope: ScopeIdx,
-        mounted_dom_id: RealDomNode,
+        mounted_dom_id: Option<RealDomNode>,
         priority: EventPriority,
     ) -> Self {
         Self {
             priority,
-            component_id: scope,
+            originator: scope,
             real_node_id: mounted_dom_id,
             event,
         }
@@ -93,7 +104,7 @@ pub enum VirtualEvent {
     PointerEvent(on::PointerEvent),
 
     // Whenever a task is ready (complete) Dioxus produces this "FiberEvent"
-    FiberEvent { task_id: u16 },
+    FiberEvent,
 
     // image event has conflicting method types
     // ImageEvent(event_data::ImageEvent),

@@ -19,24 +19,11 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
-use crate::hooklist::HookList;
+use crate::tasks::TaskQueue;
 use crate::{arena::ScopeArena, innerlude::*};
-use appendlist::AppendList;
-use bumpalo::Bump;
-use futures::FutureExt;
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
-use std::marker::PhantomData;
-use std::{
-    any::{Any, TypeId},
-    cell::{Cell, RefCell},
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Debug,
-    future::Future,
-    ops::Deref,
-    pin::Pin,
-    rc::{Rc, Weak},
-};
+use std::{any::TypeId, fmt::Debug, rc::Rc};
 
 pub type ScopeIdx = DefaultKey;
 
@@ -57,10 +44,12 @@ pub struct VirtualDom {
     /// All components dump their updates into a queue to be processed
     pub(crate) event_queue: EventQueue,
 
+    pub(crate) tasks: TaskQueue,
+
     /// a strong allocation to the "caller" for the original component and its props
     #[doc(hidden)]
     _root_caller: Rc<OpaqueComponent>,
-    // _root_caller: Rc<OpaqueComponent<'static>>,
+
     /// Type of the original cx. This is stored as TypeId so VirtualDom does not need to be generic.
     ///
     /// Whenver props need to be updated, an Error will be thrown if the new props do not
@@ -194,6 +183,7 @@ impl VirtualDom {
             base_scope,
             event_queue,
             components,
+            tasks: TaskQueue::new(),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
@@ -273,7 +263,7 @@ impl VirtualDom {
         realdom: &'_ mut Dom,
         trigger: EventTrigger,
     ) -> Result<()> {
-        let id = trigger.component_id.clone();
+        let id = trigger.originator.clone();
 
         self.components.try_get_mut(id)?.call_listener(trigger)?;
 

@@ -81,6 +81,7 @@ impl<'a> RealDom<'a> for DebugDom {
         realnode: RealDomNode,
     ) {
     }
+
     fn remove_event_listener(&mut self, event: &str) {}
 
     fn set_text(&mut self, text: &str) {}

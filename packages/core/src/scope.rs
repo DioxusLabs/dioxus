@@ -216,7 +216,7 @@ impl Scope {
             .iter()
             .find(|(domptr, _)| {
                 let p = unsafe { &**domptr };
-                p.get() == real_node_id
+                p.get() == real_node_id.expect("realdomnode not found, propery handling of true virtual events not managed")
             })
             .expect(&format!(
                 "Failed to find real node with ID {:?}",

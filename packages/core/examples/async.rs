@@ -17,5 +17,7 @@ const App: FC<()> = |cx| {
 
     cx.submit_task(fut);
 
+    cx.submit_task(fut);
+
     todo!()
 };
