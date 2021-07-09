@@ -12,21 +12,21 @@
 pub mod serialize;
 
 pub mod arena;
+pub mod bumpframe;
 pub mod component;
+pub mod context;
+pub mod diff;
+pub mod error;
+pub mod events;
 pub mod hooklist;
+pub mod hooks;
+pub mod nodebuilder;
+pub mod nodes;
+pub mod signals;
 pub mod styles;
 pub mod tasks;
-pub mod util; // Logic for extending FC
-              // pub mod debug_renderer;
-pub mod diff;
-
-pub mod error; // Error type we expose to the renderers
-pub mod events; // Manages the synthetic event API
-pub mod hooks; // Built-in hooks
-pub mod nodebuilder; // Logic for building VNodes with a direct syntax
-pub mod nodes; // Logic for the VNodes
-pub mod signals;
-pub mod virtual_dom; // Most fun logic starts here, manages the lifecycle and suspense
+pub mod util;
+pub mod virtual_dom;
 
 pub mod builder {
     pub use super::nodebuilder::*;
@@ -34,8 +34,9 @@ pub mod builder {
 
 // types used internally that are important
 pub(crate) mod innerlude {
+    pub use crate::bumpframe::*;
     pub use crate::component::*;
-
+    pub use crate::context::*;
     pub use crate::diff::*;
     pub use crate::error::*;
     pub use crate::events::*;
@@ -55,9 +56,10 @@ pub(crate) mod innerlude {
 /// Essential when working with the html! macro
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
+    pub use crate::context::Context;
     use crate::nodes;
     pub use crate::styles::{AsAttr, StyleBuilder};
-    pub use crate::virtual_dom::Context;
+
     pub use nodes::*;
 
     pub use crate::nodebuilder::LazyNodes;

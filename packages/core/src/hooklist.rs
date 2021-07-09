@@ -36,7 +36,7 @@ impl HookList {
     pub(crate) fn next<T: 'static>(&self) -> Option<&mut T> {
         self.vals.get(self.idx.get()).and_then(|inn| {
             self.idx.set(self.idx.get() + 1);
-            let mut raw_box = unsafe { &mut *inn.cell.get() };
+            let raw_box = unsafe { &mut *inn.cell.get() };
             raw_box.downcast_mut::<T>()
         })
     }
