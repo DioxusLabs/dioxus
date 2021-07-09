@@ -1,5 +1,5 @@
 use crate::hooklist::HookList;
-use crate::{arena::ScopeArena, innerlude::*};
+use crate::{arena::SharedArena, innerlude::*};
 use appendlist::AppendList;
 use bumpalo::Bump;
 use futures::FutureExt;
@@ -16,6 +16,11 @@ use std::{
     pin::Pin,
     rc::{Rc, Weak},
 };
+
+// We need to pin the hook so it doesn't move as we initialize the list of hooks
+type Hook = Box<dyn std::any::Any>;
+type EventChannel = Rc<dyn Fn()>;
+pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> VNode<'b>;
 
 /// Every component in Dioxus is represented by a `Scope`.
 ///
@@ -35,7 +40,7 @@ pub struct Scope {
 
     // A reference to the list of components.
     // This lets us traverse the component list whenever we need to access our parent or children.
-    pub arena_link: ScopeArena,
+    pub arena_link: SharedArena,
 
     pub shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
@@ -46,7 +51,7 @@ pub struct Scope {
 
     pub event_channel: Rc<dyn Fn() + 'static>,
 
-    pub caller: Weak<OpaqueComponent>,
+    pub caller: Weak<WrappedCaller>,
 
     // ==========================
     // slightly unsafe stuff
@@ -71,10 +76,6 @@ pub struct Scope {
     pub(crate) suspended_tasks: Vec<*mut Pin<Box<dyn Future<Output = VNode<'static>>>>>,
 }
 
-// We need to pin the hook so it doesn't move as we initialize the list of hooks
-type Hook = Box<dyn std::any::Any>;
-type EventChannel = Rc<dyn Fn()>;
-
 impl Scope {
     // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
     // we are going to break this lifetime by force in order to save it on ourselves.
@@ -84,12 +85,12 @@ impl Scope {
     // Scopes cannot be made anywhere else except for this file
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub fn new<'creator_node>(
-        caller: Weak<OpaqueComponent>,
+        caller: Weak<WrappedCaller>,
         arena_idx: ScopeIdx,
         parent: Option<ScopeIdx>,
         height: u32,
         event_channel: EventChannel,
-        arena_link: ScopeArena,
+        arena_link: SharedArena,
         child_nodes: &'creator_node [VNode<'creator_node>],
     ) -> Self {
         log::debug!(
@@ -97,25 +98,6 @@ impl Scope {
             height,
             arena_idx
         );
-
-        // The function to run this scope is actually located in the parent's bump arena.
-        // Every time the parent is updated, that function is invalidated via double-buffering wiping the old frame.
-        // If children try to run this invalid caller, it *will* result in UB.
-        //
-        // During the lifecycle progression process, this caller will need to be updated. Right now,
-        // until formal safety abstractions are implemented, we will just use unsafe to "detach" the caller
-        // lifetime from the bump arena, exposing ourselves to this potential for invalidation. Truthfully,
-        // this is a bit of a hack, but will remain this way until we've figured out a cleaner solution.
-        //
-        // Not the best solution, so TODO on removing this in favor of a dedicated resource abstraction.
-        let caller = unsafe {
-            std::mem::transmute::<
-                Weak<OpaqueComponent>,
-                Weak<OpaqueComponent>,
-                // Weak<OpaqueComponent<'creator_node>>,
-                // Weak<OpaqueComponent<'static>>,
-            >(caller)
-        };
 
         let child_nodes = unsafe { std::mem::transmute(child_nodes) };
 
@@ -137,18 +119,8 @@ impl Scope {
         }
     }
 
-    pub fn update_caller<'creator_node>(&mut self, caller: Weak<OpaqueComponent>) {
-        // pub fn update_caller<'creator_node>(&mut self, caller: Weak<OpaqueComponent<'creator_node>>) {
-        let broken_caller = unsafe {
-            std::mem::transmute::<
-                Weak<OpaqueComponent>,
-                Weak<OpaqueComponent>,
-                // Weak<OpaqueComponent<'creator_node>>,
-                // Weak<OpaqueComponent<'static>>,
-            >(caller)
-        };
-
-        self.caller = broken_caller;
+    pub fn update_caller<'creator_node>(&mut self, caller: Weak<WrappedCaller>) {
+        self.caller = caller;
     }
 
     pub fn update_children<'creator_node>(
@@ -159,10 +131,6 @@ impl Scope {
         self.child_nodes = child_nodes;
     }
 
-    /// Create a new context and run the component with references from the Virtual Dom
-    /// This function downcasts the function pointer based on the stored props_type
-    ///
-    /// Props is ?Sized because we borrow the props and don't need to know the size. P (sized) is used as a marker (unsized)
     pub fn run_scope<'sel>(&'sel mut self) -> Result<()> {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
@@ -180,19 +148,17 @@ impl Scope {
             .ok_or(Error::FatalInternal("Failed to get caller"))?;
 
         // Cast the caller ptr from static to one with our own reference
-        let c2: &OpaqueComponent = caller.as_ref();
-        let c3: &OpaqueComponent = unsafe { std::mem::transmute(c2) };
+        let c3: &WrappedCaller = caller.as_ref();
 
-        self.frames.cur_frame_mut().head_node = unsafe { self.own_vnodes(c3) };
+        self.frames.cur_frame_mut().head_node = unsafe { self.call_user_component(c3) };
 
         Ok(())
     }
 
     // this is its own function so we can preciesly control how lifetimes flow
-    unsafe fn own_vnodes<'a>(&'a self, f: &OpaqueComponent) -> VNode<'static> {
-        let new_head: VNode<'a> = f(self);
-        let out: VNode<'static> = std::mem::transmute(new_head);
-        out
+    unsafe fn call_user_component<'a>(&'a self, caller: &WrappedCaller) -> VNode<'static> {
+        let new_head: VNode<'a> = caller(self);
+        std::mem::transmute(new_head)
     }
 
     // A safe wrapper around calling listeners

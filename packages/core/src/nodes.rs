@@ -4,11 +4,10 @@
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 
 use crate::{
-    arena::ScopeArena,
+    arena::SharedArena,
     events::VirtualEvent,
-    innerlude::{Context, Properties, Scope, ScopeIdx, FC},
+    innerlude::{Context, Properties, RealDom, RealDomNode, Scope, ScopeIdx, FC},
     nodebuilder::{text3, NodeFactory},
-    virtual_dom::RealDomNode,
 };
 use bumpalo::Bump;
 use std::{
@@ -165,7 +164,7 @@ impl<'a> VNode<'a> {
         }
     }
 
-    pub fn get_mounted_id(&self, components: &ScopeArena) -> Option<RealDomNode> {
+    pub fn get_mounted_id(&self, components: &SharedArena) -> Option<RealDomNode> {
         match self {
             VNode::Element(el) => Some(el.dom_id.get()),
             VNode::Text(te) => Some(te.dom_id.get()),

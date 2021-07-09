@@ -19,7 +19,6 @@ pub mod diff;
 pub mod error;
 pub mod events;
 pub mod hooklist;
-pub mod hooks;
 pub mod nodebuilder;
 pub mod nodes;
 pub mod scope;
@@ -41,7 +40,6 @@ pub(crate) mod innerlude {
     pub use crate::diff::*;
     pub use crate::error::*;
     pub use crate::events::*;
-    pub use crate::hooks::*;
     pub use crate::nodebuilder::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
@@ -84,7 +82,4 @@ pub mod prelude {
 
     pub use crate::diff::DiffMachine;
     pub use crate::virtual_dom::ScopeIdx;
-
-    // pub use crate::debug_renderer::DebugRenderer;
-    pub use crate::hooks::*;
 }

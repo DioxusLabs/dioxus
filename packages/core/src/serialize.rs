@@ -1,3 +1,12 @@
+//! Serialization
+//! -------------
+//!
+//!
+//!
+//!
+//!
+//!
+
 use crate::prelude::ScopeIdx;
 use serde::{Deserialize, Serialize};
 

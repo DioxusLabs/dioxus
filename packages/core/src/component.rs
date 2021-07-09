@@ -43,7 +43,6 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
 }
 
 /// Create inline fragments
-/// ------------------------
 ///
 /// Fragments capture a series of children without rendering extra nodes.
 ///

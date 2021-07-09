@@ -1,7 +1,4 @@
-fn main() {
-    // let mut s = Context { props: &() };
-    // let g = Component(&mut s);
-}
+fn main() {}
 
 // struct CompState {
 //     tasks: Vec<()>,

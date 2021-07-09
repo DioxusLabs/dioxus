@@ -1,13 +1,15 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+    vec::Drain,
+};
 
 use crate::innerlude::*;
 
-// We actually allocate the properties for components in their parent's properties
-// We then expose a handle to use those props for render in the form of "OpaqueComponent"
-pub type OpaqueComponent = dyn for<'b> Fn(&'b Scope) -> VNode<'b>;
-
 #[derive(PartialEq, Debug, Clone, Default)]
-pub struct EventQueue(pub Rc<RefCell<Vec<HeightMarker>>>);
+pub struct EventQueue {
+    pub queue: Rc<RefCell<Vec<HeightMarker>>>,
+}
 
 impl EventQueue {
     pub fn new_channel(&self, height: u32, idx: ScopeIdx) -> Rc<dyn Fn()> {
@@ -15,8 +17,16 @@ impl EventQueue {
         let marker = HeightMarker { height, idx };
         Rc::new(move || {
             log::debug!("channel updated {:#?}", marker);
-            inner.0.as_ref().borrow_mut().push(marker)
+            inner.queue.as_ref().borrow_mut().push(marker)
         })
+    }
+
+    pub fn sort_unstable(&self) {
+        self.queue.borrow_mut().sort_unstable()
+    }
+
+    pub fn borrow_mut(&self) -> RefMut<Vec<HeightMarker>> {
+        self.queue.borrow_mut()
     }
 }
 
@@ -36,6 +46,22 @@ impl Ord for HeightMarker {
 impl PartialOrd for HeightMarker {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+/// The `RealDomNode` is an ID handle that corresponds to a foreign DOM node.
+///
+/// "u64" was chosen for two reasons
+/// - 0 cost hashing
+/// - use with slotmap and other versioned slot arenas
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RealDomNode(pub u64);
+impl RealDomNode {
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+    pub fn empty() -> Self {
+        Self(u64::MIN)
     }
 }
 

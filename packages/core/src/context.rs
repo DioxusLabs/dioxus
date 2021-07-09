@@ -1,5 +1,5 @@
 use crate::hooklist::HookList;
-use crate::{arena::ScopeArena, innerlude::*};
+use crate::{arena::SharedArena, innerlude::*};
 use appendlist::AppendList;
 use bumpalo::Bump;
 use futures::FutureExt;
@@ -40,10 +40,11 @@ use std::{
 pub struct Context<'src, T> {
     pub props: &'src T,
     pub scope: &'src Scope,
-    pub tasks: &'src AppendList<&'src mut DTask>,
+    pub tasks: &'src AppendList<&'src mut DTask<'src>>,
 }
 
-pub type DTask = Pin<Box<dyn Future<Output = ()>>>;
+pub type DTask<'s> = dyn Future<Output = ()> + 's;
+// pub type DTask = Pin<Box<dyn Future<Output = ()>>>;
 
 impl<'src, T> Copy for Context<'src, T> {}
 impl<'src, T> Clone for Context<'src, T> {
@@ -293,12 +294,15 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     /// Tasks can't return anything, but they can be controlled with the returned handle
     ///
-    /// Tasks will only run until the component renders again. If you want your task to last longer than one frame, you'll need
-    /// to store it somehow.
+    /// Tasks will only run until the component renders again. Because `submit_task` is valid for the &'src lifetime, it
+    /// is considered "stable"
+    ///
+    ///
     ///
     pub fn submit_task(
         &self,
-        mut task: &'src mut Pin<Box<dyn Future<Output = ()> + 'static>>,
+        mut task: &'src mut DTask<'src>,
+        // mut task: &'src mut Pin<Box<dyn Future<Output = ()> + 'static>>,
     ) -> TaskHandle {
         self.tasks.push(task);
         // let mut g = self.task.borrow_mut();

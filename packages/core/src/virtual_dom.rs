@@ -20,7 +20,7 @@
 //! Additional functionality is defined in the respective files.
 
 use crate::tasks::TaskQueue;
-use crate::{arena::ScopeArena, innerlude::*};
+use crate::{arena::SharedArena, innerlude::*};
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
 use std::{any::TypeId, fmt::Debug, rc::Rc};
@@ -35,7 +35,7 @@ pub struct VirtualDom {
     ///
     /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
     /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    pub components: ScopeArena,
+    pub components: SharedArena,
 
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
@@ -48,7 +48,7 @@ pub struct VirtualDom {
 
     /// a strong allocation to the "caller" for the original component and its props
     #[doc(hidden)]
-    _root_caller: Rc<OpaqueComponent>,
+    _root_caller: Rc<WrappedCaller>,
 
     /// Type of the original cx. This is stored as TypeId so VirtualDom does not need to be generic.
     ///
@@ -56,22 +56,6 @@ pub struct VirtualDom {
     /// match the props used to create the VirtualDom.
     #[doc(hidden)]
     _root_prop_type: std::any::TypeId,
-}
-
-/// The `RealDomNode` is an ID handle that corresponds to a foreign DOM node.
-///
-/// "u64" was chosen for two reasons
-/// - 0 cost hashing
-/// - use with slotmap and other versioned slot arenas
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RealDomNode(pub u64);
-impl RealDomNode {
-    pub fn new(id: u64) -> Self {
-        Self(id)
-    }
-    pub fn empty() -> Self {
-        Self(u64::MIN)
-    }
 }
 
 // ======================================
@@ -142,11 +126,11 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Example);
     /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let components = ScopeArena::new(SlotMap::new());
+        let components = SharedArena::new(SlotMap::new());
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
         // Here, we need to make it manually, using an RC to force the Weak reference to stick around for the main scope.
-        let _root_caller: Rc<OpaqueComponent> = Rc::new(move |scope| {
+        let _root_caller: Rc<WrappedCaller> = Rc::new(move |scope| {
             // let _root_caller: Rc<OpaqueComponent<'static>> = Rc::new(move |scope| {
             // the lifetime of this closure is just as long as the lifetime on the scope reference
             // this closure moves root props (which is static) into this closure
@@ -283,12 +267,8 @@ impl VirtualDom {
         &'bump self,
         diff_machine: &'_ mut DiffMachine<'a, 'bump, Dom>,
     ) -> Result<()> {
-        // Add this component to the list of components that need to be difed
-        // #[allow(unused_assignments)]
-        // let mut cur_height: u32 = 0;
-
         // Now, there are events in the queue
-        let mut updates = self.event_queue.0.as_ref().borrow_mut();
+        let mut updates = self.event_queue.queue.as_ref().borrow_mut();
 
         // Order the nodes by their height, we want the nodes with the smallest depth on top
         // This prevents us from running the same component multiple times
@@ -299,6 +279,7 @@ impl VirtualDom {
         // Iterate through the triggered nodes (sorted by height) and begin to diff them
         for update in updates.drain(..) {
             log::debug!("Running updates for: {:#?}", update);
+
             // Make sure this isn't a node we've already seen, we don't want to double-render anything
             // If we double-renderer something, this would cause memory safety issues
             if diff_machine.seen_nodes.contains(&update.idx) {
@@ -310,19 +291,12 @@ impl VirtualDom {
 
             // Start a new mutable borrow to components
             // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
-
             let cur_component = self.components.try_get_mut(update.idx).unwrap();
-            // let inner: &'s mut _ = unsafe { &mut *self.components.0.borrow().arena.get() };
-            // let cur_component = inner.get_mut(update.idx).unwrap();
 
             cur_component.run_scope()?;
-            // diff_machine.change_list.load_known_root(1);
 
             let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
-            // let (old, new) = cur_component.get_frames_mut();
             diff_machine.diff_node(old, new);
-
-            // cur_height = cur_component.height;
 
             // log::debug!(
             //     "Processing update: {:#?} with height {}",

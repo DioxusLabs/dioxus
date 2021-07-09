@@ -1,5 +1,5 @@
 use crate::hooklist::HookList;
-use crate::{arena::ScopeArena, innerlude::*};
+use crate::{arena::SharedArena, innerlude::*};
 use appendlist::AppendList;
 use bumpalo::Bump;
 use futures::FutureExt;

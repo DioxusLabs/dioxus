@@ -22,10 +22,7 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
-use crate::{
-    arena::{ScopeArena, ScopeArenaInner},
-    innerlude::*,
-};
+use crate::{arena::SharedArena, innerlude::*};
 use fxhash::{FxHashMap, FxHashSet};
 
 use std::{
@@ -96,7 +93,7 @@ pub trait RealDom<'a> {
 /// subscriptions and props changes.
 pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub dom: &'real mut Dom,
-    pub components: &'bump ScopeArena,
+    pub components: &'bump SharedArena,
     pub cur_idx: ScopeIdx,
     pub diffed: FxHashSet<ScopeIdx>,
     pub event_queue: EventQueue,
@@ -106,7 +103,7 @@ pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
 impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
     pub fn new(
         dom: &'real mut Dom,
-        components: &'bump ScopeArena,
+        components: &'bump SharedArena,
         cur_idx: ScopeIdx,
         event_queue: EventQueue,
     ) -> Self {
@@ -376,7 +373,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                 // self.dom.save_known_root(root_id);
 
                 log::debug!("Mounting a new component");
-                let caller: Weak<OpaqueComponent> = Rc::downgrade(&component.caller);
+                let caller: Weak<WrappedCaller> = Rc::downgrade(&component.caller);
 
                 // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
                 // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
@@ -413,7 +410,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
 
                 // yaaaaay lifetimes out of thin air
                 // really tho, we're merging the frame lifetimes together
-                let inner: &'bump mut _ = unsafe { &mut *self.components.0.borrow().arena.get() };
+                let inner: &'bump mut _ = unsafe { &mut *self.components.components.get() };
                 let new_component = inner.get_mut(idx).unwrap();
 
                 // Actually initialize the caller's slot with the right address
@@ -1233,7 +1230,7 @@ enum KeyedPrefixResult {
 /// This iterator is useful when it's important to load the next real root onto the top of the stack for operations like
 /// "InsertBefore".
 struct RealChildIterator<'a> {
-    scopes: &'a ScopeArena,
+    scopes: &'a SharedArena,
 
     // Heuristcally we should never bleed into 5 completely nested fragments/components
     // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
@@ -1241,7 +1238,7 @@ struct RealChildIterator<'a> {
 }
 
 impl<'a> RealChildIterator<'a> {
-    fn new(starter: &'a VNode<'a>, scopes: &'a ScopeArena) -> Self {
+    fn new(starter: &'a VNode<'a>, scopes: &'a SharedArena) -> Self {
         Self {
             scopes,
             stack: smallvec::smallvec![(0, starter)],

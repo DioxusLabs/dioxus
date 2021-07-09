@@ -13,7 +13,7 @@ dioxus-core-macro = { path="./packages/core-macro", version="0.1.0" }
 dioxus-html = { path="./packages/html", optional=true }
 dioxus-web = { path="./packages/web", optional=true }
 dioxus-webview = { path="./packages/webview", optional=true }
-# dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
+dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
 
 
 [features]
@@ -49,6 +49,7 @@ members = [
     "packages/html",
     "packages/web",
     "packages/webview",
+    "packages/hooks",
     # "packages/atoms",
     # "packages/ssr",
     # "packages/docsite",

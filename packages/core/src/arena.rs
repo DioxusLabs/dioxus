@@ -2,37 +2,33 @@ use std::{
     cell::{RefCell, UnsafeCell},
     collections::HashMap,
     rc::Rc,
+    sync::Arc,
 };
 
 use crate::innerlude::*;
 use slotmap::{DefaultKey, SlotMap};
 
 #[derive(Clone)]
-pub struct ScopeArena(pub Rc<RefCell<ScopeArenaInner>>);
-pub type ScopeMap = SlotMap<DefaultKey, Scope>;
-
-pub struct ScopeArenaInner {
-    pub(crate) arena: UnsafeCell<ScopeMap>,
-    locks: HashMap<ScopeIdx, MutStatus>,
+pub struct SharedArena {
+    pub components: Arc<UnsafeCell<ScopeMap>>,
 }
+pub type ScopeMap = SlotMap<DefaultKey, Scope>;
 
 enum MutStatus {
     Immut,
     Mut,
 }
 
-impl ScopeArena {
+impl SharedArena {
     pub fn new(arena: ScopeMap) -> Self {
-        ScopeArena(Rc::new(RefCell::new(ScopeArenaInner {
-            arena: UnsafeCell::new(arena),
-            locks: Default::default(),
-        })))
+        let components = Arc::new(UnsafeCell::new(arena));
+        SharedArena { components }
     }
 
     /// THIS METHOD IS CURRENTLY UNSAFE
     /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
     pub fn try_get(&self, idx: ScopeIdx) -> Result<&Scope> {
-        let inner = unsafe { &*self.0.borrow().arena.get() };
+        let inner = unsafe { &*self.components.get() };
         let scope = inner.get(idx);
         scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
     }
@@ -40,7 +36,7 @@ impl ScopeArena {
     /// THIS METHOD IS CURRENTLY UNSAFE
     /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
     pub fn try_get_mut(&self, idx: ScopeIdx) -> Result<&mut Scope> {
-        let inner = unsafe { &mut *self.0.borrow().arena.get() };
+        let inner = unsafe { &mut *self.components.get() };
         let scope = inner.get_mut(idx);
         scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
     }
@@ -56,7 +52,7 @@ impl ScopeArena {
     /// THIS METHOD IS CURRENTLY UNSAFE
     /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
     pub fn with<T>(&self, f: impl FnOnce(&mut ScopeMap) -> T) -> Result<T> {
-        let inner = unsafe { &mut *self.0.borrow().arena.get() };
+        let inner = unsafe { &mut *self.components.get() };
         Ok(f(inner))
         // todo!()
     }
@@ -80,7 +76,7 @@ impl ScopeArena {
     }
 
     pub fn try_remove(&self, id: ScopeIdx) -> Result<Scope> {
-        let inner = unsafe { &mut *self.0.borrow().arena.get() };
+        let inner = unsafe { &mut *self.components.get() };
         inner
             .remove(id)
             .ok_or_else(|| Error::FatalInternal("Scope not found"))

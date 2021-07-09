@@ -6,7 +6,7 @@
 
 use std::{ops::Deref, rc::Rc};
 
-use crate::{innerlude::ScopeIdx, virtual_dom::RealDomNode};
+use crate::innerlude::{RealDomNode, ScopeIdx};
 
 #[derive(Debug)]
 pub struct EventTrigger {

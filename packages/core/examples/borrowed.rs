@@ -20,7 +20,7 @@ struct ListItem {
 }
 
 fn app(cx: Context<AppProps>) -> VNode {
-    let (val, set_val) = use_state_classic(cx, || 0);
+    // let (val, set_val) = use_state_classic(cx, || 0);
 
     cx.render(LazyNodes::new(move |_nodecx| {
         todo!()

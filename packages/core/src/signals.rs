@@ -1,1 +1,8 @@
-//! Support for jumping out of the diff engine
+//! Signas: Avoid the Diff Engine
+//! -----------------------------
+//!
+//!
+//!
+//!
+//!
+//!

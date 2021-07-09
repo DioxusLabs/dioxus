@@ -14,10 +14,9 @@ use bumpalo::Bump;
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Properties, Scope, VComponent, VText, FC},
+    innerlude::{Properties, RealDomNode, Scope, VComponent, VText, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
     prelude::{VElement, VFragment},
-    virtual_dom::RealDomNode,
 };
 
 /// A virtual DOM element builder.
@@ -509,6 +508,7 @@ where
     ///     .finish();
     /// ```    
     pub fn iter_child(mut self, nodes: impl IntoIterator<Item = impl IntoVNode<'a>>) -> Self {
+        todo!();
         let len_before = self.children.len();
         for item in nodes {
             todo!()
@@ -542,13 +542,13 @@ impl<'a> IntoIterator for VNode<'a> {
     }
 }
 impl<'a> IntoVNode<'a> for VNode<'a> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
         self
     }
 }
 
 impl<'a> IntoVNode<'a> for &VNode<'a> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
         self.clone()
     }
 }
@@ -801,7 +801,7 @@ impl<'a> NodeFactory<'a> {
 
 use std::fmt::Debug;
 impl Debug for NodeFactory<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
