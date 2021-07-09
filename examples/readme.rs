@@ -4,15 +4,17 @@
 
 use dioxus::prelude::*;
 fn main() {
-    dioxus::web::launch(Example)
+    dioxus::web::launch(App)
 }
 
-fn Example(cx: Context<()>) -> VNode {
-    let name = use_state(cx, || "..?");
+static App: FC<()> = |cx| {
+    let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {
-        h1 { "Hello, {name}" }
-        button { "?", onclick: move |_| name.set("world!")}
-        button { "?", onclick: move |_| name.set("Dioxus 🎉")}
+        div {
+            h1 { "Hifive counter: {count}" }
+            button { onclick: move |_| count += 1, "Up high!" }
+            button { onclick: move |_| count -= 1, "Down low!" }
+        }
     })
-}
+};

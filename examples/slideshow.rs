@@ -16,9 +16,9 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let slide_id = use_state(cx, || 0);
+    let slides = use_state(cx, SlideController::new);
 
-    let slide = match *slide_id {
+    let slide = match slides.slide_id {
         0 => cx.render(rsx!(Title {})),
         1 => cx.render(rsx!(Slide1 {})),
         2 => cx.render(rsx!(Slide2 {})),
@@ -28,12 +28,15 @@ static App: FC<()> = |cx| {
 
     cx.render(rsx! {
         div {
+            style: {
+                background_color: "red"
+            }
             div {
                 div { h1 {"my awesome slideshow"} }
                 div {
-                    button {"<-", onclick: move |_| if *slide_id != 0 { *slide_id.get_mut() -= 1}}
-                    h3 { "{slide_id}" }
-                    button {"->" onclick: move |_| if *slide_id != 4 { *slide_id.get_mut() += 1 }}
+                    button {"<-", onclick: move |_| slides.get_mut().go_forward()}
+                    h3 { "{slides.slide_id}" }
+                    button {"->" onclick: move |_| slides.get_mut().go_backward()}
                  }
             }
             {slide}
@@ -41,38 +44,69 @@ static App: FC<()> = |cx| {
     })
 };
 
+#[derive(Clone)]
+struct SlideController {
+    slide_id: isize,
+}
+impl SlideController {
+    fn new() -> Self {
+        Self { slide_id: 0 }
+    }
+    fn can_go_forward(&self) -> bool {
+        false
+    }
+    fn can_go_backward(&self) -> bool {
+        true
+    }
+    fn go_forward(&mut self) {
+        if self.can_go_forward() {
+            self.slide_id += 1;
+        }
+    }
+    fn go_backward(&mut self) {
+        if self.can_go_backward() {
+            self.slide_id -= 1;
+        }
+    }
+}
+
 const Title: FC<()> = |cx| {
     cx.render(rsx! {
         div {
-
+            h1 { "Title" }
+            p {}
         }
     })
 };
 const Slide1: FC<()> = |cx| {
     cx.render(rsx! {
         div {
-
+            h1 { "Slide1" }
+            p {}
         }
     })
 };
 const Slide2: FC<()> = |cx| {
     cx.render(rsx! {
         div {
-
+            h1 { "Slide2" }
+            p {}
         }
     })
 };
 const Slide3: FC<()> = |cx| {
     cx.render(rsx! {
         div {
-
+            h1 { "Slide3" }
+            p {}
         }
     })
 };
 const End: FC<()> = |cx| {
     cx.render(rsx! {
         div {
-
+            h1 { "End" }
+            p {}
         }
     })
 };

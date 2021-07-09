@@ -401,7 +401,7 @@ pub struct Scope {
     // NEEDS TO BE PRIVATE
     pub(crate) listeners: RefCell<Vec<(*mut Cell<RealDomNode>, *mut dyn FnMut(VirtualEvent))>>,
 
-    pub(crate) suspended_tasks: Vec<Box<dyn Future<Output = VNode<'static>>>>,
+    pub(crate) suspended_tasks: Vec<*mut Pin<Box<dyn Future<Output = VNode<'static>>>>>,
     // pub(crate) listeners: RefCell<nohash_hasher::IntMap<u32, *const dyn FnMut(VirtualEvent)>>,
     // pub(crate) listeners: RefCell<Vec<*const dyn FnMut(VirtualEvent)>>,
     // pub(crate) listeners: RefCell<Vec<*const dyn FnMut(VirtualEvent)>>,
@@ -871,8 +871,27 @@ Any function prefixed with "use" should not be called conditionally.
             }
         }
     }
+
+    /// `submit_task` will submit the future to be polled.
+    /// Dioxus will step its internal event loop if the future returns if the future completes while waiting.
+    ///
+    /// Tasks can't return anything, but they can be controlled with the returned handle
+    ///
+    /// Tasks will only run until the component renders again. If you want your task to last longer than one frame, you'll need
+    /// to store it somehow.
+    ///
+    pub fn submit_task(
+        &self,
+        task: &'src mut Pin<Box<dyn Future<Output = ()> + 'static>>,
+    ) -> TaskHandle {
+        // the pointer to the task is stable - we guarantee stability of all &'src references
+        let task_ptr = task as *mut _;
+
+        TaskHandle {}
+    }
 }
 
+pub struct TaskHandle {}
 #[derive(Clone)]
 pub struct SuspendedContext {}
 

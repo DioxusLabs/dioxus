@@ -1,4 +1,5 @@
 use std::borrow::BorrowMut;
+use std::ops::{Deref, DerefMut};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 
@@ -10,6 +11,7 @@ use wry::{
 };
 
 mod dom;
+mod escape;
 
 static HTML_CONTENT: &'static str = include_str!("./index.html");
 
@@ -59,33 +61,57 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
 
         let window = user_builder(WindowBuilder::new()).build(&event_loop)?;
 
-        let mut vdom = VirtualDom::new_with_props(root, props);
-        let mut real_dom = dom::WebviewDom::new();
-        vdom.rebuild(&mut real_dom)?;
+        let vir = VirtualDom::new_with_props(root, props);
 
-        let edits = Arc::new(RwLock::new(Some(serde_json::to_value(real_dom.edits)?)));
-
-        // let ref_edits = Arc::new(serde_json::to_string(&real_dom.edits)?);
-
-        let handler = move |window: &Window, mut req: RpcRequest| {
-            //
-            let d = edits.clone();
-            match req.method.as_str() {
-                "initiate" => {
-                    let mut ed = d.write().unwrap();
-                    let edits = match ed.as_mut() {
-                        Some(ed) => Some(ed.take()),
-                        None => None,
-                    };
-                    Some(RpcResponse::new_result(req.id.take(), edits))
-                }
-                _ => todo!("this message failed"),
-            }
-        };
+        // todo: combine these or something
+        let vdom = Arc::new(RwLock::new(vir));
+        let registry = Arc::new(RwLock::new(Some(WebviewRegistry::new())));
 
         let webview = WebViewBuilder::new(window)?
             .with_url(&format!("data:text/html,{}", HTML_CONTENT))?
-            .with_rpc_handler(handler)
+            .with_rpc_handler(move |window: &Window, mut req: RpcRequest| {
+                match req.method.as_str() {
+                    "initiate" => {
+                        let mut lock = vdom.write().unwrap();
+                        let mut reg_lock = registry.write().unwrap();
+
+                        // Create the thin wrapper around the registry to collect the edits into
+                        let mut real = dom::WebviewDom::new(reg_lock.take().unwrap());
+
+                        // Serialize the edit stream
+                        let edits = {
+                            lock.rebuild(&mut real).unwrap();
+                            serde_json::to_value(&real.edits).unwrap()
+                        };
+
+                        // Give back the registry into its slot
+                        *reg_lock = Some(real.consume());
+
+                        // Return the edits into the webview runtime
+                        Some(RpcResponse::new_result(req.id.take(), Some(edits)))
+                    }
+                    "user_event" => {
+                        let mut lock = vdom.write().unwrap();
+                        let mut reg_lock = registry.write().unwrap();
+
+                        // Create the thin wrapper around the registry to collect the edits into
+                        let mut real = dom::WebviewDom::new(reg_lock.take().unwrap());
+
+                        // Serialize the edit stream
+                        let edits = {
+                            lock.rebuild(&mut real).unwrap();
+                            serde_json::to_value(&real.edits).unwrap()
+                        };
+
+                        // Give back the registry into its slot
+                        *reg_lock = Some(real.consume());
+
+                        // Return the edits into the webview runtime
+                        Some(RpcResponse::new_result(req.id.take(), Some(edits)))
+                    }
+                    _ => todo!("this message failed"),
+                }
+            })
             .build()?;
 
         event_loop.run(move |event, _, control_flow| {
@@ -172,6 +198,8 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::dom::WebviewRegistry;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct MessageParameters {

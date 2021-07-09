@@ -5,9 +5,6 @@
     <!-- <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet" /> -->
 </head>
 
-
-
-
 <body>
     <div></div>
 </body>
@@ -16,7 +13,9 @@
     class Interpreter {
         constructor(root) {
             this.stack = [root];
-            this.listeners = {};
+            this.listeners = {
+
+            };
             this.lastNodeWasText = false;
             this.nodes = {
                 0: root
