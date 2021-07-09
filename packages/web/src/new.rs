@@ -2,8 +2,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use dioxus_core::{
     events::{EventTrigger, VirtualEvent},
-    prelude::ScopeIdx,
-    virtual_dom::RealDomNode,
+    prelude::{RealDomNode, ScopeIdx},
 };
 use fxhash::FxHashMap;
 use slotmap::{DefaultKey, Key, KeyData};
@@ -72,7 +71,7 @@ impl WebsysDom {
 }
 
 impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
-    fn push_root(&mut self, root: dioxus_core::virtual_dom::RealDomNode) {
+    fn push_root(&mut self, root: RealDomNode) {
         log::debug!("Called [push_root] {:?}", root);
         let key: DefaultKey = KeyData::from_ffi(root.0).into();
         let domnode = self.nodes.get(key).expect("Failed to pop know root");
@@ -150,7 +149,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     fn create_placeholder(&mut self) -> RealDomNode {
         self.create_element("pre", None)
     }
-    fn create_text_node(&mut self, text: &str) -> dioxus_core::virtual_dom::RealDomNode {
+    fn create_text_node(&mut self, text: &str) -> RealDomNode {
         // let nid = self.node_counter.next();
         let textnode = self
             .document
@@ -166,11 +165,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         RealDomNode::new(nid)
     }
 
-    fn create_element(
-        &mut self,
-        tag: &str,
-        ns: Option<&'static str>,
-    ) -> dioxus_core::virtual_dom::RealDomNode {
+    fn create_element(&mut self, tag: &str, ns: Option<&'static str>) -> RealDomNode {
         let tag = wasm_bindgen::intern(tag);
         let el = match ns {
             Some(ns) => self
@@ -587,7 +582,7 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
     Ok(EventTrigger::new(
         virtual_event_from_websys_event(event),
         triggered_scope,
-        real_id,
+        Some(real_id),
         dioxus_core::events::EventPriority::High,
     ))
 }

@@ -39,15 +39,15 @@ impl TaskQueue {
         Self { slots, submitter }
     }
 
-    fn push_task(&mut self, task: DTask) -> TaskHandle {
+    pub fn submit_task(&mut self, task: DTask) -> TaskHandle {
         let key = self.slots.write().unwrap().insert(task);
-        TaskHandle {}
+        TaskHandle { key }
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.slots.read().unwrap().is_empty()
     }
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.slots.read().unwrap().len()
     }
 }
@@ -99,7 +99,9 @@ impl Stream for TaskQueue {
     }
 }
 
-struct TaskHandle {}
+pub struct TaskHandle {
+    key: DefaultKey,
+}
 
 pub struct DTask {
     fut: *mut Pin<Box<dyn Future<Output = ()>>>,
@@ -114,7 +116,7 @@ impl DTask {
             dead: Cell::new(false),
         }
     }
-    fn debug_new(fut: &mut Pin<Box<dyn Future<Output = ()>>>) -> Self {
+    pub fn debug_new(fut: &mut Pin<Box<dyn Future<Output = ()>>>) -> Self {
         let originator = ScopeIdx::default();
         Self {
             fut,
@@ -154,9 +156,9 @@ mod tests {
         }) as RawTask);
 
         let mut queue = TaskQueue::new();
-        queue.push_task(DTask::debug_new(f1));
-        queue.push_task(DTask::debug_new(f2));
-        queue.push_task(DTask::debug_new(f3));
+        queue.submit_task(DTask::debug_new(f1));
+        queue.submit_task(DTask::debug_new(f2));
+        queue.submit_task(DTask::debug_new(f3));
 
         while !queue.is_empty() {
             let next = queue.next().await;

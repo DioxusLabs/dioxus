@@ -21,6 +21,7 @@
 
 use crate::tasks::TaskQueue;
 use crate::{arena::SharedArena, innerlude::*};
+use appendlist::AppendList;
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
 use std::{any::TypeId, fmt::Debug, rc::Rc};
@@ -130,16 +131,29 @@ impl VirtualDom {
 
         // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
         // Here, we need to make it manually, using an RC to force the Weak reference to stick around for the main scope.
-        let _root_caller: Rc<WrappedCaller> = Rc::new(move |scope| {
+        let _root_caller: Rc<WrappedCaller> = Rc::new(move |scope: &Scope| {
             // let _root_caller: Rc<OpaqueComponent<'static>> = Rc::new(move |scope| {
             // the lifetime of this closure is just as long as the lifetime on the scope reference
             // this closure moves root props (which is static) into this closure
             let props = unsafe { &*(&root_props as *const _) };
-            root(Context {
+            let tasks = AppendList::new();
+            let t2 = &tasks;
+
+            let cx = Context {
                 props,
                 scope,
-                tasks: todo!(),
-            })
+                tasks: t2,
+            };
+            let nodes = root(cx);
+
+            log::debug!("There were {:?} tasks submitted", tasks.len());
+            // cast a weird lifetime to shake the appendlist thing
+            // TODO: move all of this into the same logic that governs other components
+            // we want to wrap everything in a dioxus root component
+            unsafe { std::mem::transmute(nodes) }
+            // std::mem::drop(tasks);
+            //
+            // nodes
         });
 
         // Create a weak reference to the OpaqueComponent for the root scope to use as its render function
@@ -185,6 +199,7 @@ impl VirtualDom {
             &self.components,
             self.base_scope,
             self.event_queue.clone(),
+            &self.tasks,
         );
 
         // Schedule an update and then immediately call it on the root component
@@ -251,8 +266,13 @@ impl VirtualDom {
 
         self.components.try_get_mut(id)?.call_listener(trigger)?;
 
-        let mut diff_machine =
-            DiffMachine::new(realdom, &self.components, id, self.event_queue.clone());
+        let mut diff_machine = DiffMachine::new(
+            realdom,
+            &self.components,
+            id,
+            self.event_queue.clone(),
+            &self.tasks,
+        );
 
         self.progress_completely(&mut diff_machine)?;
 

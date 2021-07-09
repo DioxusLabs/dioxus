@@ -22,7 +22,7 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
-use crate::{arena::SharedArena, innerlude::*};
+use crate::{arena::SharedArena, innerlude::*, tasks::TaskQueue};
 use fxhash::{FxHashMap, FxHashSet};
 
 use std::{
@@ -94,6 +94,7 @@ pub trait RealDom<'a> {
 pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub dom: &'real mut Dom,
     pub components: &'bump SharedArena,
+    pub task_queue: &'bump TaskQueue,
     pub cur_idx: ScopeIdx,
     pub diffed: FxHashSet<ScopeIdx>,
     pub event_queue: EventQueue,
@@ -106,12 +107,14 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
         components: &'bump SharedArena,
         cur_idx: ScopeIdx,
         event_queue: EventQueue,
+        task_queue: &'bump TaskQueue,
     ) -> Self {
         Self {
             components,
             dom,
             cur_idx,
             event_queue,
+            task_queue,
             diffed: FxHashSet::default(),
             seen_nodes: FxHashSet::default(),
         }

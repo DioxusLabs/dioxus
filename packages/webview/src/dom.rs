@@ -2,11 +2,7 @@
 
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
-use dioxus_core::{
-    diff::RealDom,
-    serialize::DomEdit,
-    virtual_dom::{RealDomNode, VirtualDom},
-};
+use dioxus_core::{diff::RealDom, serialize::DomEdit, virtual_dom::VirtualDom};
 use DomEdit::*;
 
 pub struct WebviewRegistry {}
@@ -37,7 +33,7 @@ impl WebviewDom<'_> {
     }
 }
 impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
-    fn push_root(&mut self, root: dioxus_core::virtual_dom::RealDomNode) {
+    fn push_root(&mut self, root: RealDomNode) {
         self.edits.push(PushRoot { root: root.0 });
     }
 
@@ -57,18 +53,14 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
         self.edits.push(RemoveAllChildren);
     }
 
-    fn create_text_node(&mut self, text: &'bump str) -> dioxus_core::virtual_dom::RealDomNode {
+    fn create_text_node(&mut self, text: &'bump str) -> RealDomNode {
         self.node_counter += 1;
         let id = RealDomNode::new(self.node_counter);
         self.edits.push(CreateTextNode { text, id: id.0 });
         id
     }
 
-    fn create_element(
-        &mut self,
-        tag: &'bump str,
-        ns: Option<&'bump str>,
-    ) -> dioxus_core::virtual_dom::RealDomNode {
+    fn create_element(&mut self, tag: &'bump str, ns: Option<&'bump str>) -> RealDomNode {
         self.node_counter += 1;
         let id = RealDomNode::new(self.node_counter);
         match ns {
@@ -78,7 +70,7 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
         id
     }
 
-    fn create_placeholder(&mut self) -> dioxus_core::virtual_dom::RealDomNode {
+    fn create_placeholder(&mut self) -> RealDomNode {
         self.node_counter += 1;
         let id = RealDomNode::new(self.node_counter);
         self.edits.push(CreatePlaceholder { id: id.0 });
@@ -90,7 +82,7 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
         event: &'static str,
         scope: dioxus_core::prelude::ScopeIdx,
         element_id: usize,
-        realnode: dioxus_core::virtual_dom::RealDomNode,
+        realnode: RealDomNode,
     ) {
         self.edits.push(NewEventListener {
             scope,

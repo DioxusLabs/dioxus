@@ -169,6 +169,7 @@ pub mod prelude {
     //! A glob import that includes helper types like FC, rsx!, html!, and required traits
     pub use dioxus_core::prelude::*;
     pub use dioxus_core_macro::fc;
+    pub use dioxus_hooks::*;
     pub use dioxus_html as dioxus_elements;
 }
 // pub mod builder {

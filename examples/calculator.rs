@@ -26,19 +26,18 @@ static App: FC<()> = |cx| {
     let clear_display = display_value.eq("0");
     let clear_text = if clear_display { "C" } else { "AC" };
 
-    let input_digit =
-        move |num: u8| display_value.modify(move |f| f.push_str(num.to_string().as_str()));
+    let input_digit = move |num: u8| display_value.get_mut().push_str(num.to_string().as_str());
 
-    let input_dot = move || display_value.modify(move |f| f.push_str("."));
+    let input_dot = move || display_value.get_mut().push_str(".");
 
     let perform_operation = move || {
         if let Some(op) = operator.as_ref() {
             let rhs = display_value.parse::<f64>().unwrap();
             let new_val = match op {
-                Operator::Add => **cur_val + rhs,
-                Operator::Sub => **cur_val - rhs,
-                Operator::Mul => **cur_val * rhs,
-                Operator::Div => **cur_val / rhs,
+                Operator::Add => *cur_val + rhs,
+                Operator::Sub => *cur_val - rhs,
+                Operator::Mul => *cur_val * rhs,
+                Operator::Div => *cur_val / rhs,
             };
             cur_val.set(new_val);
             display_value.set(new_val.to_string());
@@ -50,7 +49,7 @@ static App: FC<()> = |cx| {
         if display_value.starts_with("-") {
             display_value.set(display_value.trim_start_matches("-").to_string())
         } else {
-            display_value.set(format!("-{}", **display_value))
+            display_value.set(format!("-{}", *display_value))
         }
     };
     let toggle_percent = move |_| todo!();
@@ -64,11 +63,11 @@ static App: FC<()> = |cx| {
     };
 
     let keydownhandler = move |evt: KeyboardEvent| match evt.key_code() {
-        KeyCode::Backspace => display_value.modify(|f| {
-            if !f.as_str().eq("0") {
-                f.pop();
+        KeyCode::Backspace => {
+            if !display_value.as_str().eq("0") {
+                display_value.get_mut().pop();
             }
-        }),
+        }
         KeyCode::_0 => input_digit(0),
         KeyCode::_1 => input_digit(1),
         KeyCode::_2 => input_digit(2),

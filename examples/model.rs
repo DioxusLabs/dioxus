@@ -36,9 +36,9 @@ enum Operator {
 }
 
 static App: FC<()> = |cx| {
-    let (cur_val, set_cur_val) = use_state_classic(cx, || 0.0_f64);
-    let (operator, set_operator) = use_state_classic(cx, || None as Option<Operator>);
-    let (display_value, set_display_value) = use_state_classic(cx, || "0".to_string());
+    let (cur_val, set_cur_val) = use_state(cx, || 0.0_f64).classic();
+    let (operator, set_operator) = use_state(cx, || None as Option<Operator>).classic();
+    let (display_value, set_display_value) = use_state(cx, || "0".to_string()).classic();
 
     let clear_display = display_value.eq("0");
     let clear_text = if clear_display { "C" } else { "AC" };

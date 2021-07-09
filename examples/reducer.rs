@@ -1,5 +1,6 @@
 //! Example: Reducer Pattern
 //! -----------------
+//!
 //! This example shows how to encapsulate sate in dioxus components with the reducer pattern.
 //! This pattern is very useful when a single component can handle many types of input that can
 //! be represented by an enum.
@@ -10,7 +11,7 @@ fn main() {
 }
 
 pub static App: FC<()> = |cx| {
-    let (state, reduce) = use_reducer(cx, PlayerState::new, PlayerState::reduce);
+    let state = use_state(cx, PlayerState::new);
 
     let is_playing = state.is_playing();
 
@@ -20,11 +21,11 @@ pub static App: FC<()> = |cx| {
             h3 {"The radio is... {is_playing}!"}
             button {
                 "Pause"
-                onclick: move |_| reduce(PlayerAction::Pause)
+                onclick: move |_| state.get_mut().reduce(PlayerAction::Pause)
             }
             button {
                 "Play"
-                onclick: move |_| reduce(PlayerAction::Play)
+                onclick: move |_| state.get_mut().reduce(PlayerAction::Play)
             }
         }
     })
@@ -35,6 +36,7 @@ enum PlayerAction {
     Play,
 }
 
+#[derive(Clone)]
 struct PlayerState {
     is_playing: bool,
 }

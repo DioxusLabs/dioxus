@@ -147,18 +147,18 @@ impl<'src, P> Context<'src, P> {
         cleanup: impl FnOnce(InternalHookState),
     ) -> Output {
         // If the idx is the same as the hook length, then we need to add the current hook
-        if self.scope.hooks.is_finished() {
+        if self.scope.hooks.at_end() {
             let new_state = initializer();
-            self.scope.hooks.push(Box::new(new_state));
+            self.scope.hooks.push(new_state);
         }
 
         let state = self.scope.hooks.next::<InternalHookState>().expect(
             r###"
-Unable to retrive the hook that was initialized in this index.
-Consult the `rules of hooks` to understand how to use hooks properly.
-
-You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
-Any function prefixed with "use" should not be called conditionally.
+            Unable to retrive the hook that was initialized in this index.
+            Consult the `rules of hooks` to understand how to use hooks properly.
+            
+            You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+            Any function prefixed with "use" should not be called conditionally.
             "###,
         );
 
@@ -299,16 +299,8 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     ///
-    pub fn submit_task(
-        &self,
-        mut task: &'src mut DTask<'src>,
-        // mut task: &'src mut Pin<Box<dyn Future<Output = ()> + 'static>>,
-    ) -> TaskHandle {
+    pub fn submit_task(&self, mut task: &'src mut DTask<'src>) -> TaskHandle {
         self.tasks.push(task);
-        // let mut g = self.task.borrow_mut();
-        // *g = Some(task);
-        // the pointer to the task is stable - we guarantee stability of all &'src references
-        // let task_ptr = task as *mut _;
 
         TaskHandle { _p: PhantomData {} }
     }

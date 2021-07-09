@@ -61,6 +61,7 @@ pub mod prelude {
     use crate::nodes;
     pub use crate::styles::{AsAttr, StyleBuilder};
 
+    pub use crate::util::RealDomNode;
     pub use nodes::*;
 
     pub use crate::nodebuilder::LazyNodes;

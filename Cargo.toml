@@ -40,7 +40,7 @@ rand = "0.8.4"
 separator = "0.4.1"
 serde = { version="1.0.126", features=["derive"] }
 surf = "2.2.0"
-
+env_logger = "*"
 
 [workspace]
 members = [

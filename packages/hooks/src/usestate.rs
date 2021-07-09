@@ -69,7 +69,6 @@ struct UseStateInner<T: 'static> {
     update_scheuled: Cell<bool>,
     callback: Rc<dyn Fn()>,
     wip: RefCell<Option<T>>,
-    updater: 
 }
 
 pub struct UseState<'a, T: 'static> {
@@ -109,7 +108,7 @@ impl<'a, T: 'static> UseState<'a, T> {
     }
 
     pub fn classic(self) -> (&'a T, &'a Rc<dyn Fn(T)>) {
-        (&self.inner.current_val)
+        todo!()
     }
 }
 impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {

@@ -59,7 +59,7 @@ impl HookList {
     }
 
     #[inline]
-    pub(crate) fn is_finished(&self) -> bool {
-        self.idx.get() == self.vals.len()
+    pub(crate) fn at_end(&self) -> bool {
+        self.cur_idx() >= self.len()
     }
 }

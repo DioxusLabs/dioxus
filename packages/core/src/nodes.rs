@@ -9,6 +9,7 @@ use crate::{
     innerlude::{Context, Properties, RealDom, RealDomNode, Scope, ScopeIdx, FC},
     nodebuilder::{text3, NodeFactory},
 };
+use appendlist::AppendList;
 use bumpalo::Bump;
 use std::{
     cell::{Cell, RefCell},
@@ -417,19 +418,25 @@ impl<'a> VComponent<'a> {
 type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r> + 'a>;
 
 fn create_closure<'a, P: 'a>(
-    component: FC<P>,
+    user_component: FC<P>,
     raw_props: *const (),
 ) -> Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r>> {
     let g: Captured = Rc::new(move |scp: &Scope| -> VNode {
         // cast back into the right lifetime
         let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
+        let tasks = AppendList::new();
         let cx: Context<P> = Context {
             props: safe_props,
             scope: scp,
-            tasks: todo!(),
+            tasks: &tasks,
         };
 
-        let g = component(cx);
+        let g = user_component(cx);
+
+        // collect the submitted tasks
+        println!("tasks submittted: {:#?}", tasks.len());
+        // log::debug!("tasks submittted: {:#?}", tasks.len());
+
         let g2 = unsafe { std::mem::transmute(g) };
         g2
     });
