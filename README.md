@@ -36,14 +36,6 @@ If you know React, then you already know Dioxus.
 - Powerful and simple integrated state management
 - Rust! (enums, static types, modules, efficiency)
 
-### Key Differentiators
-
-- Immutability by default
-- Built-in suspense system
-- Integrations for isomorphic apps
-- Skip diffing altogether with signal API
-- Extremely portable without runtime requirements
-
 ## Get Started with...
 
 <table style="width:100%" align="center">
@@ -121,13 +113,15 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Controlled Inputs       | ✅      | ✅     | stateful wrappers around inputs                       |
 | CSS/Inline Styles       | ✅      | ✅     | syntax for inline styles/attribute groups             |
 | Custom elements         | ✅      | ✅     | Define new element primitives                         |
-| Compile-time correct    | ✅      | ✅     | Throw errors on invalid template layouts              |
-| 1st class global state  | ✅      | ❓     | redux/recoil/mobx on top of context                   |
 | Suspense                | 🛠      | ✅     | schedule future render from future/promise            |
 | Cooperative Scheduling  | 🛠      | ✅     | Prioritize important events over non-important events |
-| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                   |
-| Runs natively           | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)        |
 | NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                       |
+| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                   |
+| Compile-time correct    | ✅      | ❓     | Throw errors on invalid template layouts              |
+| Runs natively           | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)        |
+| 1st class global state  | ✅      | ❓     | redux/recoil/mobx on top of context                   |
+| Subtree Memoization     | ✅      | ❓     | skip diffing static element subtrees                  |
+| Heuristic Engine        | ✅      | ❓     | track component memory usage to minimize allocations  |
 
 - [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
 

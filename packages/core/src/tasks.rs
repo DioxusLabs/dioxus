@@ -16,14 +16,16 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{Future, Stream, StreamExt};
+use futures_util::{Future, Stream, StreamExt};
 use slotmap::{DefaultKey, SlotMap};
 
 use crate::{events::EventTrigger, prelude::ScopeIdx};
 
+pub type TaskSubmitter = Arc<dyn Fn(DTask)>;
+
 pub struct TaskQueue {
     slots: Arc<RwLock<SlotMap<DefaultKey, DTask>>>,
-    submitter: Arc<dyn Fn(DTask)>,
+    submitter: TaskSubmitter,
 }
 
 impl TaskQueue {
@@ -34,9 +36,14 @@ impl TaskQueue {
 
         let submitter = Arc::new(move |task| {
             let mut slots = slots2.write().unwrap();
+            log::debug!("Task submitted into global task queue");
             slots.insert(task);
         });
         Self { slots, submitter }
+    }
+
+    pub fn new_submitter(&self) -> TaskSubmitter {
+        self.submitter.clone()
     }
 
     pub fn submit_task(&mut self, task: DTask) -> TaskHandle {
@@ -126,43 +133,44 @@ impl DTask {
     }
 }
 
-mod tests {
-    use std::time::Duration;
+// #[cfg(test)]
+// mod tests {
+//     use std::time::Duration;
 
-    use super::*;
-    use bumpalo::Bump;
+//     use super::*;
+//     use bumpalo::Bump;
 
-    #[async_std::test]
-    async fn example() {
-        let bump = Bump::new();
-        type RawTask = Pin<Box<dyn Future<Output = ()>>>;
-        // build the three
-        let f1 = bump.alloc(Box::pin(async {
-            //
-            async_std::task::sleep(Duration::from_secs(3)).await;
-            println!("3 sec")
-        }) as RawTask);
+//     #[async_std::test]
+//     async fn example() {
+//         let bump = Bump::new();
+//         type RawTask = Pin<Box<dyn Future<Output = ()>>>;
+//         // build the three
+//         let f1 = bump.alloc(Box::pin(async {
+//             //
+//             async_std::task::sleep(Duration::from_secs(3)).await;
+//             println!("3 sec")
+//         }) as RawTask);
 
-        let f2 = bump.alloc(Box::pin(async {
-            //
-            async_std::task::sleep(Duration::from_secs(2)).await;
-            println!("2 sec")
-        }) as RawTask);
+//         let f2 = bump.alloc(Box::pin(async {
+//             //
+//             async_std::task::sleep(Duration::from_secs(2)).await;
+//             println!("2 sec")
+//         }) as RawTask);
 
-        let f3 = bump.alloc(Box::pin(async {
-            //
-            async_std::task::sleep(Duration::from_secs(1)).await;
-            println!("1 sec");
-        }) as RawTask);
+//         let f3 = bump.alloc(Box::pin(async {
+//             //
+//             async_std::task::sleep(Duration::from_secs(1)).await;
+//             println!("1 sec");
+//         }) as RawTask);
 
-        let mut queue = TaskQueue::new();
-        queue.submit_task(DTask::debug_new(f1));
-        queue.submit_task(DTask::debug_new(f2));
-        queue.submit_task(DTask::debug_new(f3));
+//         let mut queue = TaskQueue::new();
+//         queue.submit_task(DTask::debug_new(f1));
+//         queue.submit_task(DTask::debug_new(f2));
+//         queue.submit_task(DTask::debug_new(f3));
 
-        while !queue.is_empty() {
-            let next = queue.next().await;
-            println!("Event received {:#?}", next);
-        }
-    }
-}
+//         while !queue.is_empty() {
+//             let next = queue.next().await;
+//             println!("Event received {:#?}", next);
+//         }
+//     }
+// }

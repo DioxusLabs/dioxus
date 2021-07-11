@@ -4,6 +4,8 @@ use std::{
     vec::Drain,
 };
 
+use futures_util::StreamExt;
+
 use crate::innerlude::*;
 
 #[derive(PartialEq, Debug, Clone, Default)]
@@ -67,18 +69,28 @@ impl RealDomNode {
 
 pub struct DebugDom {
     counter: u64,
+    logging: bool,
 }
 impl DebugDom {
     pub fn new() -> Self {
-        Self { counter: 0 }
+        Self {
+            counter: 0,
+            logging: false,
+        }
+    }
+    pub fn with_logging_enabled() -> Self {
+        Self {
+            counter: 0,
+            logging: true,
+        }
     }
 }
 impl<'a> RealDom<'a> for DebugDom {
     fn push_root(&mut self, root: RealDomNode) {}
 
-    fn append_child(&mut self) {}
+    fn append_children(&mut self, many: u32) {}
 
-    fn replace_with(&mut self) {}
+    fn replace_with(&mut self, many: u32) {}
 
     fn remove(&mut self) {}
 
@@ -120,3 +132,61 @@ impl<'a> RealDom<'a> for DebugDom {
         todo!()
     }
 }
+
+async fn launch_demo(app: FC<()>) {
+    let mut dom = VirtualDom::new(app);
+    let mut real_dom = DebugDom::new();
+    dom.rebuild(&mut real_dom).unwrap();
+
+    while let Some(evt) = dom.tasks.next().await {
+        //
+        log::debug!("Event triggered! {:#?}", evt);
+    }
+}
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate as dioxus;
+//     use std::{pin::Pin, time::Duration};
+
+//     use crate::builder::DioxusElement;
+//     use dioxus::prelude::*;
+//     use futures::Future;
+
+//     #[async_std::test]
+//     async fn async_tick() {
+//         static App: FC<()> = |cx| {
+//             // let mut count = use_state(cx, || 0);
+//             let mut fut = cx.use_hook(
+//                 move || {
+//                     Box::pin(async {
+//                         //
+//                         let mut tick: i32 = 0;
+//                         loop {
+//                             async_std::task::sleep(Duration::from_millis(250)).await;
+//                             log::debug!("ticking forward... {}", tick);
+//                             tick += 1;
+//                             // match surf::get(ENDPOINT).recv_json::<DogApi>().await {
+//                             //     Ok(_) => (),
+//                             //     Err(_) => (),
+//                             // }
+//                         }
+//                     }) as Pin<Box<dyn Future<Output = ()> + 'static>>
+//                 },
+//                 |h| h,
+//                 |_| {},
+//             );
+
+//             cx.submit_task(fut);
+
+//             cx.render(LazyNodes::new(move |f| {
+//                 f.text(format_args!("it's sorta working"))
+//             }))
+//         };
+
+//         std::env::set_var("RUST_LOG", "debug");
+//         env_logger::init();
+//         launch_demo(App).await;
+//     }
+// }

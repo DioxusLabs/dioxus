@@ -78,7 +78,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         self.stack.push(domnode.clone());
     }
 
-    fn append_child(&mut self) {
+    fn append_children(&mut self, many: u32) {
         log::debug!("Called [`append_child`]");
         let child = self.stack.pop();
 
@@ -99,7 +99,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         self.stack.top().append_child(&child).unwrap();
     }
 
-    fn replace_with(&mut self) {
+    fn replace_with(&mut self, many: u32) {
         log::debug!("Called [`replace_with`]");
         let new_node = self.stack.pop();
         let old_node = self.stack.pop();
@@ -193,15 +193,16 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         &mut self,
         event: &'static str,
         scope: dioxus_core::prelude::ScopeIdx,
-        el_id: usize,
+        _element_id: usize,
         real_id: RealDomNode,
     ) {
+        let (_on, event) = event.split_at(2);
         let event = wasm_bindgen::intern(event);
         log::debug!(
             "Called [`new_event_listener`]: {}, {:?}, {}, {:?}",
             event,
             scope,
-            el_id,
+            _element_id,
             real_id
         );
         // attach the correct attributes to the element
@@ -215,10 +216,11 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
             .dyn_ref::<Element>()
             .expect(&format!("not an element: {:?}", el));
 
-        let gi_id = scope.data().as_ffi();
+        let scope_id = scope.data().as_ffi();
         el.set_attribute(
             &format!("dioxus-event-{}", event),
-            &format!("{}.{}.{}", gi_id, el_id, real_id.0),
+            &format!("{}.{}", scope_id, real_id.0),
+            // &format!("{}.{}.{}", gi_id, el_id, real_id.0),
         )
         .unwrap();
 
@@ -566,19 +568,20 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
         .next()
         .and_then(|f| f.parse::<u64>().ok())
         .context("failed to parse gi id")?;
-    let el_id = fields
-        .next()
-        .and_then(|f| f.parse::<usize>().ok())
-        .context("failed to parse el id")?;
+    // let el_id = fields
+    //     .next()
+    //     .and_then(|f| f.parse::<usize>().ok())
+    //     .context("failed to parse el id")?;
     let real_id = fields
         .next()
         .and_then(|f| f.parse::<u64>().ok().map(RealDomNode::new))
         .context("failed to parse real id")?;
 
     // Call the trigger
-    log::debug!("decoded gi_id: {}, li_idx: {}", gi_id, el_id);
+    log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
 
     let triggered_scope: ScopeIdx = KeyData::from_ffi(gi_id).into();
+    log::debug!("Triggered scope is {:#?}", triggered_scope);
     Ok(EventTrigger::new(
         virtual_event_from_websys_event(event),
         triggered_scope,

@@ -24,6 +24,9 @@ use crate::{arena::SharedArena, innerlude::*};
 use appendlist::AppendList;
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
+use std::any::Any;
+use std::cell::RefCell;
+use std::pin::Pin;
 use std::{any::TypeId, fmt::Debug, rc::Rc};
 
 pub type ScopeIdx = DefaultKey;
@@ -45,11 +48,9 @@ pub struct VirtualDom {
     /// All components dump their updates into a queue to be processed
     pub(crate) event_queue: EventQueue,
 
-    pub(crate) tasks: TaskQueue,
+    pub tasks: TaskQueue,
 
-    /// a strong allocation to the "caller" for the original component and its props
-    #[doc(hidden)]
-    _root_caller: Rc<WrappedCaller>,
+    root_props: std::pin::Pin<Box<dyn std::any::Any>>,
 
     /// Type of the original cx. This is stored as TypeId so VirtualDom does not need to be generic.
     ///
@@ -129,59 +130,36 @@ impl VirtualDom {
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let components = SharedArena::new(SlotMap::new());
 
-        // Normally, a component would be passed as a child in the RSX macro which automatically produces OpaqueComponents
-        // Here, we need to make it manually, using an RC to force the Weak reference to stick around for the main scope.
-        let _root_caller: Rc<WrappedCaller> = Rc::new(move |scope: &Scope| {
-            // let _root_caller: Rc<OpaqueComponent<'static>> = Rc::new(move |scope| {
-            // the lifetime of this closure is just as long as the lifetime on the scope reference
-            // this closure moves root props (which is static) into this closure
-            let props = unsafe { &*(&root_props as *const _) };
-            let tasks = AppendList::new();
-            let t2 = &tasks;
-
-            let cx = Context {
-                props,
-                scope,
-                tasks: t2,
-            };
-            let nodes = root(cx);
-
-            log::debug!("There were {:?} tasks submitted", tasks.len());
-            // cast a weird lifetime to shake the appendlist thing
-            // TODO: move all of this into the same logic that governs other components
-            // we want to wrap everything in a dioxus root component
-            unsafe { std::mem::transmute(nodes) }
-            // std::mem::drop(tasks);
-            //
-            // nodes
-        });
-
-        // Create a weak reference to the OpaqueComponent for the root scope to use as its render function
-        let caller_ref = Rc::downgrade(&_root_caller);
+        let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+        let props_ptr = root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
 
         // Build a funnel for hooks to send their updates into. The `use_hook` method will call into the update funnel.
         let event_queue = EventQueue::default();
         let _event_queue = event_queue.clone();
 
-        // Make the first scope
-        // We don't run the component though, so renderers will need to call "rebuild" when they initialize their DOM
         let link = components.clone();
+
+        let tasks = TaskQueue::new();
+        let submitter = tasks.new_submitter();
 
         let base_scope = components
             .with(|arena| {
                 arena.insert_with_key(move |myidx| {
                     let event_channel = _event_queue.new_channel(0, myidx);
-                    Scope::new(caller_ref, myidx, None, 0, event_channel, link, &[])
+                    let caller = crate::nodes::create_component_caller(root, props_ptr as *const _);
+                    Scope::new(caller, myidx, None, 0, event_channel, link, &[], submitter)
                 })
             })
             .unwrap();
 
+        log::debug!("base scope is {:#?}", base_scope);
+
         Self {
-            _root_caller,
             base_scope,
             event_queue,
             components,
-            tasks: TaskQueue::new(),
+            root_props,
+            tasks,
             _root_prop_type: TypeId::of::<P>(),
         }
     }
@@ -191,6 +169,38 @@ impl VirtualDom {
 // Private Methods for the VirtualDom
 // ======================================
 impl VirtualDom {
+    /// Rebuilds the VirtualDOM from scratch, but uses a "dummy" RealDom.
+    ///
+    /// Used in contexts where a real copy of the  structure doesn't matter, and the VirtualDOM is the source of truth.
+    ///
+    /// ## Why?
+    ///
+    /// This method uses the `DebugDom` under the hood - essentially making the VirtualDOM's diffing patches a "no-op".
+    ///
+    /// SSR takes advantage of this by using Dioxus itself as the source of truth, and rendering from the tree directly.
+    pub fn rebuild_in_place(&mut self) -> Result<()> {
+        let mut realdom = DebugDom::new();
+        let mut diff_machine = DiffMachine::new(
+            &mut realdom,
+            &self.components,
+            self.base_scope,
+            self.event_queue.clone(),
+            &self.tasks,
+        );
+
+        // Schedule an update and then immediately call it on the root component
+        // This is akin to a hook being called from a listener and requring a re-render
+        // Instead, this is done on top-level component
+        let base = self.components.try_get(self.base_scope)?;
+
+        let update = &base.event_channel;
+        update();
+
+        self.progress_completely(&mut diff_machine)?;
+
+        Ok(())
+    }
+
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     /// Currently this doesn't do what we want it to do
     pub fn rebuild<'s, Dom: RealDom<'s>>(&'s mut self, realdom: &mut Dom) -> Result<()> {

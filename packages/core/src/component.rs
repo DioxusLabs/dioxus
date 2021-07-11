@@ -9,6 +9,7 @@ use crate::innerlude::FC;
 
 pub trait Properties: Sized {
     type Builder;
+    const IS_STATIC: bool = false;
     fn builder() -> Self::Builder;
 
     /// Memoization can only happen if the props are 'static
@@ -19,6 +20,7 @@ pub trait Properties: Sized {
 
 impl Properties for () {
     type Builder = EmptyBuilder;
+    const IS_STATIC: bool = true;
     fn builder() -> Self::Builder {
         EmptyBuilder {}
     }

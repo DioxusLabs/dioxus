@@ -2,7 +2,6 @@ use crate::hooklist::HookList;
 use crate::{arena::SharedArena, innerlude::*};
 use appendlist::AppendList;
 use bumpalo::Bump;
-use futures::FutureExt;
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
 use std::marker::PhantomData;
@@ -34,11 +33,11 @@ impl ActiveFrame {
         Self::from_frames(
             BumpFrame {
                 bump: Bump::new(),
-                head_node: VNode::text(""),
+                head_node: VNode::static_text(""),
             },
             BumpFrame {
                 bump: Bump::new(),
-                head_node: VNode::text(""),
+                head_node: VNode::static_text(""),
             },
         )
     }

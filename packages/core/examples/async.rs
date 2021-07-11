@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use dioxus_core::prelude::*;
-use futures::Future;
+use std::future::Future;
 
 fn main() {}
 
@@ -18,7 +18,7 @@ const App: FC<()> = |cx| {
     );
     // let g = unsafe { Pin::new_unchecked(fut) };
 
-    cx.submit_task(fut);
+    // cx.submit_task(fut);
 
     todo!()
 };

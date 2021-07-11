@@ -5,14 +5,31 @@
 //! ------
 //!
 //! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
-//! Components, Fragments, Suspense, and additional batching operations.
+//! Components, Fragments, Suspense, SubTree memoization, and additional batching operations.
 //!
-//! Implementation Details:
-//! -----------------------
+//! ## Implementation Details:
+//!
+//! ### IDs for elements
 //!
 //! All nodes are addressed by their IDs. The RealDom provides an imperative interface for making changes to these nodes.
 //! We don't necessarily require that DOM changes happen instnatly during the diffing process, so the implementor may choose
-//! to batch nodes if it is more performant for their application. We care about an ID size of u32
+//! to batch nodes if it is more performant for their application. The expectation is that renderers use a Slotmap for nodes
+//! whose keys can be converted to u64 on FFI boundaries.
+//!
+//! When new nodes are created through `render`, they won't know which real node they correspond to. During diffing, we
+//! always make sure to copy over the ID. If we don't do this properly, the realdomnode will be populated incorrectly and
+//! brick the user's page.
+//!
+//! ## Subtree Memoization
+//! We also employ "subtree memoization" which saves us from having to check trees which take no dynamic content. We can
+//! detect if a subtree is "static" by checking if its children are "static". Since we dive into the tree depth-first, the
+//! calls to "create" propogate this information upwards. Structures like the one below are entirely static:
+//! ```rust
+//! rsx!( div { class: "hello world", "this node is entirely static" } )
+//! ```
+//! Because the subtrees won't be diffed, their "real node" data will be stale (invalid), so its up to the reconciler to
+//! track nodes created in a scope and clean up all relevant data. Support for this is currently WIP
+//!
 //!
 //!
 //! Further Reading and Thoughts
@@ -25,10 +42,7 @@
 use crate::{arena::SharedArena, innerlude::*, tasks::TaskQueue};
 use fxhash::{FxHashMap, FxHashSet};
 
-use std::{
-    any::Any,
-    rc::{Rc, Weak},
-};
+use std::any::Any;
 
 /// The accompanying "real dom" exposes an imperative API for controlling the UI layout
 ///
@@ -46,8 +60,10 @@ pub trait RealDom<'a> {
     fn push_root(&mut self, root: RealDomNode);
 
     // Add Nodes to the dom
-    fn append_child(&mut self);
-    fn replace_with(&mut self);
+    // add m nodes from the stack
+    fn append_children(&mut self, many: u32);
+    // replace the n-m node on the stack with the m nodes
+    fn replace_with(&mut self, many: u32);
 
     // Remove Nodesfrom the dom
     fn remove(&mut self);
@@ -101,7 +117,10 @@ pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub seen_nodes: FxHashSet<ScopeIdx>,
 }
 
-impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
+impl<'real, 'bump, Dom> DiffMachine<'real, 'bump, Dom>
+where
+    Dom: RealDom<'bump>,
+{
     pub fn new(
         dom: &'real mut Dom,
         components: &'bump SharedArena,
@@ -141,6 +160,10 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
             // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
             (VNode::Text(old), VNode::Text(new)) => {
+                if old.is_static {
+                    log::debug!("encountered static text node: {:?}", old.text);
+                }
+
                 if old.text != new.text {
                     self.dom.push_root(old.dom_id.get());
                     log::debug!("Text has changed {}, {}", old.text, new.text);
@@ -156,8 +179,8 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                 // In Dioxus, this is less likely to occur unless through a fragment
                 if new.tag_name != old.tag_name || new.namespace != old.namespace {
                     self.dom.push_root(old.dom_id.get());
-                    self.create(new_node);
-                    self.dom.replace_with();
+                    let meta = self.create(new_node);
+                    self.dom.replace_with(meta.added_to_stack);
                     return;
                 }
                 new.dom_id.set(old.dom_id.get());
@@ -181,7 +204,7 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                     // make sure the component's caller function is up to date
                     let scope = self.components.try_get_mut(scope_id.unwrap()).unwrap();
                     // .with_scope(scope_id.unwrap(), |scope| {
-                    scope.caller = Rc::downgrade(&new.caller);
+                    scope.caller = new.caller.clone();
 
                     // ack - this doesn't work on its own!
                     scope.update_children(new.children);
@@ -265,17 +288,17 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
             // in the case where the old node was a fragment but the new nodes are text,
             (VNode::Fragment(_) | VNode::Component(_), VNode::Element(_) | VNode::Text(_)) => {
                 // find the first real element int the old node
-                let mut iter = RealChildIterator::new(old_node, self.components);
-                if let Some(first) = iter.next() {
-                    // replace the very first node with the creation of the element or text
-                } else {
-                    // there are no real elements in the old fragment...
-                    // We need to load up the next real
-                }
-                if let VNode::Component(old) = old_node {
-                    // schedule this component's destructor to be run
-                    todo!()
-                }
+                // let mut iter = RealChildIterator::new(old_node, self.components);
+                // if let Some(first) = iter.next() {
+                //     // replace the very first node with the creation of the element or text
+                // } else {
+                //     // there are no real elements in the old fragment...
+                //     // We need to load up the next real
+                // }
+                // if let VNode::Component(old) = old_node {
+                //     // schedule this component's destructor to be run
+                //     todo!()
+                // }
             }
             // In the case where real nodes are being replaced by potentially
             (VNode::Element(_) | VNode::Text(_), VNode::Fragment(new)) => {
@@ -283,11 +306,11 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
             }
             (VNode::Text(_), VNode::Element(_)) => {
                 self.create(new_node);
-                self.dom.replace_with();
+                self.dom.replace_with(1);
             }
             (VNode::Element(_), VNode::Text(_)) => {
                 self.create(new_node);
-                self.dom.replace_with();
+                self.dom.replace_with(1);
             }
 
             _ => {
@@ -295,7 +318,28 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
             }
         }
     }
+}
 
+// When we create new nodes, we need to propagate some information back up the call chain.
+// This gives the caller some information on how to handle things like insertins, appending, and subtree discarding.
+struct CreateMeta {
+    is_static: bool,
+    added_to_stack: u32,
+}
+
+impl CreateMeta {
+    fn new(is_static: bool, added_to_tack: u32) -> Self {
+        Self {
+            is_static,
+            added_to_stack: added_to_tack,
+        }
+    }
+}
+
+impl<'real, 'bump, Dom> DiffMachine<'real, 'bump, Dom>
+where
+    Dom: RealDom<'bump>,
+{
     // Emit instructions to create the given virtual node.
     //
     // The change list stack may have any shape upon entering this function:
@@ -305,15 +349,22 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
     // When this function returns, the new node is on top of the change list stack:
     //
     //     [... node]
-    fn create(&mut self, node: &'bump VNode<'bump>) {
-        // debug_assert!(self.dom.traversal_is_committed());
-        log::warn!("Creating node!");
+    fn create(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
+        log::warn!("Creating node! ... {:#?}", node);
         match node {
             VNode::Text(text) => {
                 let real_id = self.dom.create_text_node(text.text);
                 text.dom_id.set(real_id);
+                CreateMeta::new(text.is_static, 1)
             }
             VNode::Element(el) => {
+                // we have the potential to completely eliminate working on this node in the future(!)
+                //
+                // This can only be done if all of the elements properties (attrs, children, listeners, etc) are static
+                // While creating these things, keep track if we can memoize this element.
+                // At the end, we'll set this flag on the element to skip it
+                let mut is_static: bool = true;
+
                 let VElement {
                     key,
                     tag_name,
@@ -322,22 +373,27 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                     children,
                     namespace,
                     dom_id,
+                    is_static: el_is_static,
                 } = el;
-                // log::info!("Creating {:#?}", node);
+
                 let real_id = if let Some(namespace) = namespace {
                     self.dom.create_element(tag_name, Some(namespace))
                 } else {
                     self.dom.create_element(tag_name, None)
                 };
-                el.dom_id.set(real_id);
+                dom_id.set(real_id);
 
                 listeners.iter().enumerate().for_each(|(idx, listener)| {
+                    listener.mounted_node.set(real_id);
                     self.dom
                         .new_event_listener(listener.event, listener.scope, idx, real_id);
-                    listener.mounted_node.set(real_id);
+
+                    // if the node has an event listener, then it must be visited ?
+                    is_static = false;
                 });
 
                 for attr in *attributes {
+                    is_static = is_static && attr.is_static;
                     self.dom.set_attribute(&attr.name, &attr.value, *namespace);
                 }
 
@@ -359,28 +415,26 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                 // }
 
                 for child in *children {
-                    self.create(child);
-                    if let VNode::Fragment(_) = child {
-                        // do nothing
-                        // fragments append themselves
-                    } else {
-                        self.dom.append_child();
-                    }
+                    let child_meta = self.create(child);
+                    is_static = is_static && child_meta.is_static;
+
+                    // append whatever children were generated by this call
+                    self.dom.append_children(child_meta.added_to_stack);
                 }
+
+                if is_static {
+                    log::debug!("created a static node {:#?}", node);
+                } else {
+                    log::debug!("created a dynamic node {:#?}", node);
+                }
+
+                el_is_static.set(is_static);
+                CreateMeta::new(is_static, 1)
             }
 
-            VNode::Component(component) => {
-                // let real_id = self.dom.create_placeholder();
-
-                // let root_id = next_id();
-                // self.dom.save_known_root(root_id);
-
+            VNode::Component(vcomponent) => {
                 log::debug!("Mounting a new component");
-                let caller: Weak<WrappedCaller> = Rc::downgrade(&component.caller);
-
-                // We're modifying the component arena while holding onto references into the assoiated bump arenas of its children
-                // those references are stable, even if the component arena moves around in memory, thanks to the bump arenas.
-                // However, there is no way to convey this to rust, so we need to use unsafe to pierce through the lifetime.
+                let caller = vcomponent.caller.clone();
 
                 let parent_idx = self.cur_idx;
 
@@ -398,50 +452,69 @@ impl<'real, 'bump, Dom: RealDom<'bump>> DiffMachine<'real, 'bump, Dom> {
                                 height,
                                 self.event_queue.new_channel(height, new_idx),
                                 self.components.clone(),
-                                component.children,
+                                vcomponent.children,
+                                self.task_queue.new_submitter(),
                             )
                         })
                     })
                     .unwrap();
 
-                {
-                    let cur_component = self.components.try_get_mut(idx).unwrap();
-                    let mut ch = cur_component.descendents.borrow_mut();
-                    ch.insert(idx);
-                    std::mem::drop(ch);
-                }
+                // This code is supposed to insert the new idx into the parent's descendent list, but it doesn't really work.
+                // This is mostly used for cleanup - to remove old scopes when components are destroyed.
+                // TODO
+                //
+                // self.components
+                //     .try_get_mut(idx)
+                //     .unwrap()
+                //     .descendents
+                //     .borrow_mut()
+                //     .insert(idx);
 
-                // yaaaaay lifetimes out of thin air
-                // really tho, we're merging the frame lifetimes together
+                // TODO: abstract this unsafe into the arena abstraction
                 let inner: &'bump mut _ = unsafe { &mut *self.components.components.get() };
                 let new_component = inner.get_mut(idx).unwrap();
 
                 // Actually initialize the caller's slot with the right address
-                component.ass_scope.set(Some(idx));
+                vcomponent.ass_scope.set(Some(idx));
 
                 // Run the scope for one iteration to initialize it
                 new_component.run_scope().unwrap();
 
-                // And then run the diff algorithm
-                let _real_id = self.dom.create_placeholder();
+                // By using "diff_node" instead of "create", we delegate the mutations to the child
+                // However, "diff_node" always expects a real node on the stack, so we put a placeholder so it knows where to start.
+                //
+                // TODO: we need to delete (IE relcaim this node, otherwise the arena will grow infinitely)
+                let _ = self.dom.create_placeholder();
                 self.diff_node(new_component.old_frame(), new_component.next_frame());
 
                 // Finally, insert this node as a seen node.
                 self.seen_nodes.insert(idx);
+
+                // Virtual Components don't result in new nodes on the stack
+                // However, we can skip them from future diffing if they take no children, have no props, take no key, etc.
+                CreateMeta::new(vcomponent.is_static, 0)
             }
 
-            // we go the the "known root" but only operate on a sibling basis
+            // Fragments are the only nodes that can contain dynamic content (IE through curlies or iterators).
+            // We can never ignore their contents, so the prescence of a fragment indicates that we need always diff them.
             VNode::Fragment(frag) => {
-                // create the children directly in the space
-                for child in frag.children {
-                    self.create(child);
-                    self.dom.append_child();
+                let mut nodes_added = 0;
+                for child in frag.children.iter().rev() {
+                    // different types of nodes will generate different amounts on the stack
+                    // nested fragments will spew a ton of nodes onto the stack
+                    // TODO: make sure that our order (.rev) makes sense in a nested situation
+                    let new_meta = self.create(child);
+                    nodes_added += new_meta.added_to_stack;
                 }
+
+                // Never ignore
+                CreateMeta::new(false, nodes_added)
             }
 
             VNode::Suspended { real } => {
                 let id = self.dom.create_placeholder();
                 real.set(id);
+                CreateMeta::new(false, 1)
             }
         }
     }
@@ -1171,11 +1244,9 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     //
     // When this function returns, the change list stack is in the same state.
     pub fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
-        // debug_assert!(self.dom.traversal_is_committed());
         for child in new {
-            // self.create_and_append(node, parent)
-            self.create(child);
-            self.dom.append_child();
+            let meta = self.create(child);
+            self.dom.append_children(meta.added_to_stack);
         }
     }
 
@@ -1226,169 +1297,4 @@ enum KeyedPrefixResult {
     // There is more diffing work to do. Here is a count of how many children at
     // the beginning of `new` and `old` we already processed.
     MoreWorkToDo(usize),
-}
-
-/// This iterator iterates through a list of virtual children and only returns real children (Elements or Text).
-///
-/// This iterator is useful when it's important to load the next real root onto the top of the stack for operations like
-/// "InsertBefore".
-struct RealChildIterator<'a> {
-    scopes: &'a SharedArena,
-
-    // Heuristcally we should never bleed into 5 completely nested fragments/components
-    // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
-    stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 5]>,
-}
-
-impl<'a> RealChildIterator<'a> {
-    fn new(starter: &'a VNode<'a>, scopes: &'a SharedArena) -> Self {
-        Self {
-            scopes,
-            stack: smallvec::smallvec![(0, starter)],
-        }
-    }
-}
-
-// impl<'a> DoubleEndedIterator for ChildIterator<'a> {
-//     fn next_back(&mut self) -> Option<Self::Item> {
-//         todo!()
-//     }
-// }
-
-impl<'a> Iterator for RealChildIterator<'a> {
-    type Item = &'a VNode<'a>;
-
-    fn next(&mut self) -> Option<&'a VNode<'a>> {
-        let mut should_pop = false;
-        let mut returned_node = None;
-        let mut should_push = None;
-
-        while returned_node.is_none() {
-            if let Some((count, node)) = self.stack.last_mut() {
-                match node {
-                    // We can only exit our looping when we get "real" nodes
-                    VNode::Element(_) | VNode::Text(_) => {
-                        // We've recursed INTO an element/text
-                        // We need to recurse *out* of it and move forward to the next
-                        should_pop = true;
-                        returned_node = Some(&**node);
-                    }
-
-                    // If we get a fragment we push the next child
-                    VNode::Fragment(frag) => {
-                        let _count = *count as usize;
-                        if _count >= frag.children.len() {
-                            should_pop = true;
-                        } else {
-                            should_push = Some(&frag.children[_count]);
-                        }
-                    }
-
-                    // Immediately abort suspended nodes - can't do anything with them yet
-                    // VNode::Suspended => should_pop = true,
-                    VNode::Suspended { real } => todo!(),
-
-                    // For components, we load their root and push them onto the stack
-                    VNode::Component(sc) => {
-                        let scope = self.scopes.try_get(sc.ass_scope.get().unwrap()).unwrap();
-
-                        // Simply swap the current node on the stack with the root of the component
-                        *node = scope.root();
-                    }
-                }
-            } else {
-                // If there's no more items on the stack, we're done!
-                return None;
-            }
-
-            if should_pop {
-                self.stack.pop();
-                if let Some((id, _)) = self.stack.last_mut() {
-                    *id += 1;
-                }
-                should_pop = false;
-            }
-
-            if let Some(push) = should_push {
-                self.stack.push((0, push));
-                should_push = None;
-            }
-        }
-
-        returned_node
-    }
-}
-
-mod tests {
-    use super::*;
-    use crate as dioxus;
-    use crate::innerlude::*;
-    use crate::util::DebugDom;
-    use dioxus_core_macro::*;
-
-    // #[test]
-    // fn test_child_iterator() {
-    //     static App: FC<()> = |cx| {
-    //         cx.render(rsx! {
-    //             Fragment {
-    //                 div {}
-    //                 h1 {}
-    //                 h2 {}
-    //                 h3 {}
-    //                 Fragment {
-    //                     "internal node"
-    //                     div {
-    //                         "baller text shouldn't show up"
-    //                     }
-    //                     p {
-
-    //                     }
-    //                     Fragment {
-    //                         Fragment {
-    //                             "wow you really like framgents"
-    //                             Fragment {
-    //                                 "why are you like this"
-    //                                 Fragment {
-    //                                     "just stop now please"
-    //                                     Fragment {
-    //                                         "this hurts"
-    //                                         Fragment {
-    //                                             "who needs this many fragments?????"
-    //                                             Fragment {
-    //                                                 "just... fine..."
-    //                                                 Fragment {
-    //                                                     "no"
-    //                                                 }
-    //                                             }
-    //                                         }
-    //                                     }
-    //                                 }
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-    //                 "my text node 1"
-    //                 "my text node 2"
-    //                 "my text node 3"
-    //                 "my text node 4"
-    //             }
-    //         })
-    //     };
-    //     let mut dom = VirtualDom::new(App);
-    //     let mut renderer = DebugDom::new();
-    //     dom.rebuild(&mut renderer).unwrap();
-    //     let starter = dom.base_scope().root();
-    //     let ite = RealChildIterator::new(starter, &dom.components);
-    //     for child in ite {
-    //         match child {
-    //             VNode::Element(el) => println!("Found: Element {}", el.tag_name),
-    //             VNode::Text(t) => println!("Found: Text {:?}", t.text),
-
-    //             // These would represent failing cases.
-    //             VNode::Fragment(_) => panic!("Found: Fragment"),
-    //             VNode::Suspended { real } => panic!("Found: Suspended"),
-    //             VNode::Component(_) => panic!("Found: Component"),
-    //         }
-    //     }
-    // }
 }

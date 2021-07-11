@@ -2,10 +2,10 @@ use crate::hooklist::HookList;
 use crate::{arena::SharedArena, innerlude::*};
 use appendlist::AppendList;
 use bumpalo::Bump;
-use futures::FutureExt;
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -14,7 +14,7 @@ use std::{
     future::Future,
     ops::Deref,
     pin::Pin,
-    rc::{Rc, Weak},
+    rc::Rc,
 };
 
 // We need to pin the hook so it doesn't move as we initialize the list of hooks
@@ -51,7 +51,7 @@ pub struct Scope {
 
     pub event_channel: Rc<dyn Fn() + 'static>,
 
-    pub caller: Weak<WrappedCaller>,
+    pub caller: Rc<WrappedCaller>,
 
     // ==========================
     // slightly unsafe stuff
@@ -73,6 +73,8 @@ pub struct Scope {
     // NEEDS TO BE PRIVATE
     pub(crate) listeners: RefCell<Vec<(*mut Cell<RealDomNode>, *mut dyn FnMut(VirtualEvent))>>,
 
+    pub task_submitter: TaskSubmitter,
+
     pub(crate) suspended_tasks: Vec<*mut Pin<Box<dyn Future<Output = VNode<'static>>>>>,
 }
 
@@ -85,13 +87,14 @@ impl Scope {
     // Scopes cannot be made anywhere else except for this file
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub fn new<'creator_node>(
-        caller: Weak<WrappedCaller>,
+        caller: Rc<WrappedCaller>,
         arena_idx: ScopeIdx,
         parent: Option<ScopeIdx>,
         height: u32,
         event_channel: EventChannel,
         arena_link: SharedArena,
         child_nodes: &'creator_node [VNode<'creator_node>],
+        task_submitter: TaskSubmitter,
     ) -> Self {
         log::debug!(
             "New scope created, height is {}, idx is {:?}",
@@ -109,6 +112,7 @@ impl Scope {
             height,
             event_channel,
             arena_link,
+            task_submitter,
             listener_idx: Default::default(),
             frames: ActiveFrame::new(),
             hooks: Default::default(),
@@ -119,7 +123,7 @@ impl Scope {
         }
     }
 
-    pub fn update_caller<'creator_node>(&mut self, caller: Weak<WrappedCaller>) {
+    pub fn update_caller<'creator_node>(&mut self, caller: Rc<WrappedCaller>) {
         self.caller = caller;
     }
 
@@ -136,19 +140,15 @@ impl Scope {
         // This breaks any latent references, invalidating every pointer referencing into it.
         self.frames.next().bump.reset();
 
+        log::debug!("clearing listeners!");
         // Remove all the outdated listeners
         self.listeners.borrow_mut().clear();
 
         unsafe { self.hooks.reset() };
         self.listener_idx.set(0);
 
-        let caller = self
-            .caller
-            .upgrade()
-            .ok_or(Error::FatalInternal("Failed to get caller"))?;
-
         // Cast the caller ptr from static to one with our own reference
-        let c3: &WrappedCaller = caller.as_ref();
+        let c3: &WrappedCaller = self.caller.as_ref();
 
         self.frames.cur_frame_mut().head_node = unsafe { self.call_user_component(c3) };
 
@@ -176,26 +176,40 @@ impl Scope {
         // Convert the raw ptr into an actual object
         // This operation is assumed to be safe
 
-        log::debug!("Calling listeners! {:?}", self.listeners.borrow().len());
-        let mut listners = self.listeners.borrow_mut();
-        let (_, listener) = listners
-            .iter()
-            .find(|(domptr, _)| {
-                let p = unsafe { &**domptr };
-                p.get() == real_node_id.expect("realdomnode not found, propery handling of true virtual events not managed")
-            })
-            .expect(&format!(
-                "Failed to find real node with ID {:?}",
-                real_node_id
-            ));
+        log::debug!(
+            "There are  {:?} listeners associated with this scope {:#?}",
+            self.listeners.borrow().len(),
+            self.arena_idx
+        );
 
-        // TODO: Don'tdo a linear scan! Do a hashmap lookup! It'll be faster!
-        unsafe {
-            let mut listener_fn = &mut **listener;
-            listener_fn(event);
+        let mut listners = self.listeners.borrow_mut();
+
+        // let listener = listners.get(trigger);
+        let raw_listener = listners.iter().find(|(domptr, _)| {
+            let search = unsafe { &**domptr };
+            let search_id = search.get();
+            log::info!("searching listener {:#?}", search_id);
+            match real_node_id {
+                Some(e) => search_id == e,
+                None => false,
+            }
+        });
+
+        match raw_listener {
+            Some((_node, listener)) => unsafe {
+                // TODO: Don'tdo a linear scan! Do a hashmap lookup! It'll be faster!
+                let listener_fn = &mut **listener;
+                listener_fn(event);
+            },
+            None => todo!(),
         }
 
         Ok(())
+    }
+
+    pub fn submit_task(&self, task: &mut Pin<Box<dyn Future<Output = ()>>>) {
+        log::debug!("Task submitted into scope");
+        (self.task_submitter)(DTask::new(task, self.arena_idx));
     }
 
     pub(crate) fn next_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
@@ -210,7 +224,7 @@ impl Scope {
         self.frames.cur_frame()
     }
 
-    pub(crate) fn root<'a>(&'a self) -> &'a VNode<'a> {
+    pub fn root<'a>(&'a self) -> &'a VNode<'a> {
         &self.frames.cur_frame().head_node
     }
 }

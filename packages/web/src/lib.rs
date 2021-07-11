@@ -3,6 +3,8 @@
 //! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using Websys.
 
 use dioxus::prelude::{Context, Properties, VNode};
+use futures_util::{pin_mut, Stream, StreamExt};
+
 use fxhash::FxHashMap;
 use web_sys::{window, Document, Element, Event, Node};
 // use futures::{channel::mpsc, SinkExt, StreamExt};
@@ -70,12 +72,41 @@ impl WebsysRenderer {
 
         self.internal_dom.rebuild(&mut websys_dom)?;
 
-        while let Some(trigger) = websys_dom.wait_for_event().await {
+        log::info!("Going into event loop");
+        loop {
+            let trigger = {
+                let real_queue = websys_dom.wait_for_event();
+                let task_queue = (&mut self.internal_dom.tasks).next();
+
+                pin_mut!(real_queue);
+                pin_mut!(task_queue);
+
+                match futures_util::future::select(real_queue, task_queue).await {
+                    futures_util::future::Either::Left((trigger, _)) => trigger,
+                    futures_util::future::Either::Right((trigger, _)) => trigger,
+                }
+            };
+
+            log::info!("event received");
             let root_node = body_element.first_child().unwrap();
             websys_dom.stack.push(root_node.clone());
             self.internal_dom
-                .progress_with_event(&mut websys_dom, trigger)?;
+                .progress_with_event(&mut websys_dom, trigger.unwrap())?;
+
+            // let t2 = self.internal_dom.tasks.next();
+            // futures::select! {
+            //     trigger = t1 => {
+            //         log::info!("event received");
+            //         let root_node = body_element.first_child().unwrap();
+            //         websys_dom.stack.push(root_node.clone());
+            //         self.internal_dom
+            //             .progress_with_event(&mut websys_dom, trigger)?;
+            //     },
+            //     () = t2 => {}
+            // };
         }
+        // while let Some(trigger) = websys_dom.wait_for_event().await {
+        // }
 
         Ok(()) // should actually never return from this, should be an error, rustc just cant see it
     }

@@ -9,23 +9,26 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 
 [dependencies]
 dioxus-core = { path="./packages/core", version="0.1.0" }
-dioxus-core-macro = { path="./packages/core-macro", version="0.1.0" }
+dioxus-core-macro = { path="./packages/core-macro", version="0.1.0", optional=true }
 dioxus-html = { path="./packages/html", optional=true }
 dioxus-web = { path="./packages/web", optional=true }
 dioxus-webview = { path="./packages/webview", optional=true }
-dioxus-hooks = { path="./packages/hooks", version="0.0.0" }
+dioxus-hooks = { path="./packages/hooks", version="0.0.0", optional=true }
 
 
 [features]
-default = ["ssr", "hooks", "router", "core", "atoms", "html", "web", "desktop"]
+default = ["macro", "ssr", "hooks", "router", "core", "atoms", "html", "web", "desktop"]
 atoms = []
-core = []
+macro = ["dioxus-core-macro"]
 ssr = []
-hooks = []
+hooks = ["dioxus-hooks"]
 router = []
 html = ["dioxus-html"]
 web = ["dioxus-web"]
 desktop = ["dioxus-webview"]
+
+# Core just includes dioxus-core (the only required package)
+core = []
 
 
 [profile.dev]
@@ -41,6 +44,7 @@ separator = "0.4.1"
 serde = { version="1.0.126", features=["derive"] }
 surf = "2.2.0"
 env_logger = "*"
+async-std = { version="1.9.0", features=["attributes"] }
 
 [workspace]
 members = [
@@ -50,7 +54,7 @@ members = [
     "packages/web",
     "packages/webview",
     "packages/hooks",
+    "packages/ssr",
     # "packages/atoms",
-    # "packages/ssr",
     # "packages/docsite",
 ]

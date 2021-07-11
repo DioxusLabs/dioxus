@@ -11,6 +11,7 @@ dioxus-core = { path = "../core", version = "0.1.0", features = ["serialize"] }
 
 
 [dev-dependencies]
+dioxus-html = { path = "../html" }
 tide-websockets = "*"
 thiserror = "1.0.23"
 log = "0.4.13"

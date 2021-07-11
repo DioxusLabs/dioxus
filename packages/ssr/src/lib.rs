@@ -7,79 +7,128 @@
 //! an external renderer is needed to progress the component lifecycles. The `TextRenderer` shows how to use the Virtual DOM
 //! API to progress these lifecycle events to generate a fully-mounted Virtual DOM instance which can be renderer in the
 //! `render` method.
-//!
-//! ```ignore
-//! fn main() {
-//!     let renderer = TextRenderer::<()>::new(|_| html! {<div> "Hello world" </div>});
-//!     let output = renderer.render();
-//!     assert_eq!(output, "<div>Hello World</div>");
-//! }
-//! ```
-//!
-//! The `TextRenderer` is particularly useful when needing to cache a Virtual DOM in between requests
-//!
 
-use dioxus_core::prelude::{VNode, FC};
-pub mod tostring;
+use std::fmt::{Arguments, Display, Formatter};
 
-pub mod prelude {
-    pub use dioxus_core::prelude::*;
+use dioxus_core::prelude::*;
+use dioxus_core::{nodes::VNode, prelude::ScopeIdx, virtual_dom::VirtualDom};
+use std::io::{BufWriter, Result, Write};
+
+pub fn render_root(vdom: &VirtualDom) -> String {
+    format!("{:}", TextRenderer::new(vdom))
 }
 
-/// The `TextRenderer` provides a way of rendering a Dioxus Virtual DOM to a String.
+/// A configurable text renderer for the Dioxus VirtualDOM.
+///
+///
+/// ## Details
+///
+/// This uses the `Formatter` infrastructure so you can write into anything that supports `write_fmt`. We can't accept
+/// any generic writer, so you need to "Display" the text renderer. This is done through `format!` or `format_args!`
 ///
 ///
 ///
-pub struct TextRenderer<T> {
-    _root_type: std::marker::PhantomData<T>,
+///
+pub struct TextRenderer<'a> {
+    vdom: &'a VirtualDom,
 }
 
-impl<T> TextRenderer<T> {
-    /// Create a new text-renderer instance from a functional component root.
-    /// Automatically progresses the creation of the VNode tree to completion.
-    ///
-    /// A VDom is automatically created. If you want more granular control of the VDom, use `from_vdom`
-    pub fn new(root: FC<T>) -> Self {
-        Self {
-            _root_type: std::marker::PhantomData {},
+impl<'a> TextRenderer<'a> {
+    fn new(vdom: &'a VirtualDom) -> Self {
+        Self { vdom }
+    }
+
+    fn html_render(&self, node: &VNode, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match node {
+            VNode::Element(el) => {
+                write!(f, "<{}", el.tag_name)?;
+                for attr in el.attributes {
+                    write!(f, " {}=\"{}\"", attr.name, attr.value)?;
+                }
+                write!(f, ">\n")?;
+                for child in el.children {
+                    self.html_render(child, f)?;
+                }
+                write!(f, "\n</{}>", el.tag_name)?;
+                Ok(())
+            }
+            VNode::Text(text) => write!(f, "{}", text.text),
+            VNode::Suspended { .. } => todo!(),
+            VNode::Component(vcomp) => {
+                todo!()
+                // let id = vcomp.ass_scope.borrow().unwrap();
+                // let id = vcomp.ass_scope.as_ref().borrow().unwrap();
+                // let new_node = dom
+                //     .components
+                //     .try_get(id)
+                //     .unwrap()
+                //     .frames
+                //     .current_head_node();
+                // html_render(&dom, new_node, f)
+            }
+            VNode::Fragment(_) => todo!(),
         }
     }
+}
 
-    /// Create a new text renderer from an existing Virtual DOM.
-    /// This will progress the existing VDom's events to completion.
-    pub fn from_vdom() -> Self {
-        todo!()
+impl Display for TextRenderer<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let root = self.vdom.base_scope();
+        let root_node = root.root();
+        self.html_render(root_node, f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use dioxus_core as dioxus;
+    use dioxus_html as dioxus_elements;
+
+    const SIMPLE_APP: FC<()> = |cx| {
+        //
+        cx.render(rsx!(div {
+            "hello world!"
+        }))
+    };
+
+    const SLIGHTLY_MORE_COMPLEX: FC<()> = |cx| {
+        cx.render(rsx! {
+            div {
+                title: "About W3Schools"
+                {(0..20).map(|f| rsx!{
+                    div {
+                        title: "About W3Schools"
+                        style: "color:blue;text-align:center"
+                        class: "About W3Schools"
+                        p {
+                            title: "About W3Schools"
+                            "Hello world!: {f}"
+                        }
+                    }
+                })}
+            }
+        })
+    };
+
+    #[test]
+    fn test_to_string_works() {
+        let mut dom = VirtualDom::new(SIMPLE_APP);
+        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dbg!(render_root(&dom));
     }
 
-    /// Pass new args to the root function
-    pub fn update(&mut self, new_val: T) {
-        todo!()
-    }
+    #[test]
+    fn test_write_to_file() {
+        use std::fs::File;
 
-    /// Modify the root function in place, forcing a re-render regardless if the props changed
-    pub fn update_mut(&mut self, modifier: impl Fn(&mut T)) {
-        todo!()
-    }
+        let mut file = File::create("index.html").unwrap();
 
-    /// Immediately render a VNode to string
-    pub fn to_text(root: VNode) -> String {
-        todo!()
-    }
+        let mut dom = VirtualDom::new(SIMPLE_APP);
+        dom.rebuild_in_place().expect("failed to run virtualdom");
 
-    /// Render the virtual DOM to a string
-    pub fn render(&self) -> String {
-        let mut buffer = String::new();
-
-        // iterate through the internal patch queue of virtual dom, and apply them to the buffer
-        /*
-         */
-        todo!()
-    }
-
-    /// Render VDom to an existing buffer
-    /// TODO @Jon, support non-string buffers to actually make this useful
-    /// Currently, this only supports overwriting an existing buffer, instead of just
-    pub fn render_mut(&self, buf: &mut String) {
-        todo!()
+        file.write_fmt(format_args!("{}", TextRenderer::new(&dom)))
+            .unwrap();
     }
 }

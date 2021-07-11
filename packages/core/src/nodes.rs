@@ -7,7 +7,7 @@ use crate::{
     arena::SharedArena,
     events::VirtualEvent,
     innerlude::{Context, Properties, RealDom, RealDomNode, Scope, ScopeIdx, FC},
-    nodebuilder::{text3, NodeFactory},
+    nodebuilder::NodeFactory,
 };
 use appendlist::AppendList;
 use bumpalo::Bump;
@@ -39,7 +39,7 @@ pub enum VNode<'src> {
 
     /// A "suspended component"
     /// This is a masqeurade over an underlying future that needs to complete
-    /// When the future is completed, the VNode will then trigger a render
+    /// When the future is completed, the VNode will then trigger a render and the `real` field gets populated
     Suspended { real: Cell<RealDomNode> },
 
     /// A User-defined componen node (node type COMPONENT_NODE)
@@ -84,6 +84,7 @@ impl<'old, 'new> VNode<'old> {
                     },
                     namespace: el.namespace.clone(),
                     dom_id: el.dom_id.clone(),
+                    is_static: el.is_static.clone(),
                 };
 
                 VNode::Element(new.alloc_with(move || new_el))
@@ -121,21 +122,33 @@ impl<'a> VNode<'a> {
             children,
             namespace,
             dom_id: Cell::new(RealDomNode::empty()),
+            is_static: Cell::new(false),
         });
         VNode::Element(element)
     }
 
-    /// Construct a new text node with the given text.
-    #[inline]
-    pub fn text(text: &'a str) -> VNode<'a> {
+    pub fn static_text(text: &'static str) -> VNode {
         VNode::Text(VText {
             text,
+            is_static: true,
             dom_id: Cell::new(RealDomNode::empty()),
         })
     }
-
-    pub fn text_args(bump: &'a Bump, args: Arguments) -> VNode<'a> {
-        text3(bump, args)
+    /// Construct a new text node with the given text.
+    pub fn text(bump: &'a Bump, args: Arguments) -> VNode<'a> {
+        match args.as_str() {
+            Some(text) => VNode::static_text(text),
+            None => {
+                use bumpalo::core_alloc::fmt::Write;
+                let mut s = bumpalo::collections::String::new_in(bump);
+                s.write_fmt(args).unwrap();
+                VNode::Text(VText {
+                    text: s.into_bump_str(),
+                    is_static: false,
+                    dom_id: Cell::new(RealDomNode::empty()),
+                })
+            }
+        }
     }
 
     #[inline]
@@ -191,6 +204,7 @@ impl Debug for VNode<'_> {
 #[derive(Clone)]
 pub struct VText<'src> {
     pub text: &'src str,
+    pub is_static: bool,
     pub dom_id: Cell<RealDomNode>,
 }
 
@@ -208,6 +222,7 @@ pub struct VElement<'a> {
     pub children: &'a [VNode<'a>],
     pub namespace: Option<&'static str>,
     pub dom_id: Cell<RealDomNode>,
+    pub is_static: Cell<bool>,
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or
@@ -216,6 +231,7 @@ pub struct VElement<'a> {
 pub struct Attribute<'a> {
     pub name: &'static str,
     pub value: &'a str,
+    pub is_static: bool,
 
     /// If an attribute is "namespaced", then it belongs to a group
     /// The most common namespace is the "style" namespace
@@ -336,6 +352,8 @@ pub struct VComponent<'src> {
 
     pub comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
+    pub is_static: bool,
+
     // a pointer into the bump arena (given by the 'src lifetime)
     // raw_props: Box<dyn Any>,
     raw_props: *const (),
@@ -402,6 +420,15 @@ impl<'a> VComponent<'a> {
             None => NodeKey(None),
         };
 
+        let caller = create_component_caller(component, raw_props);
+
+        // If the component does not have children, has no props (we can't memoize props), and has no no key, then we don't
+        // need to bother diffing it in the future
+        //
+        // This is more of an optimization to prevent unnecessary descending through the tree during diffing, rather than
+        // actually speeding up the diff process itself
+        let is_static = children.len() == 0 && P::IS_STATIC && key.is_none();
+
         Self {
             user_fc,
             comparator,
@@ -409,7 +436,8 @@ impl<'a> VComponent<'a> {
             children,
             ass_scope: Cell::new(None),
             key,
-            caller: create_closure(component, raw_props),
+            caller,
+            is_static,
             mounted_root: Cell::new(RealDomNode::empty()),
         }
     }
@@ -417,14 +445,14 @@ impl<'a> VComponent<'a> {
 
 type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r> + 'a>;
 
-fn create_closure<'a, P: 'a>(
+pub fn create_component_caller<'a, P: 'a>(
     user_component: FC<P>,
     raw_props: *const (),
 ) -> Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r>> {
     let g: Captured = Rc::new(move |scp: &Scope| -> VNode {
         // cast back into the right lifetime
         let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
-        let tasks = AppendList::new();
+        let tasks = RefCell::new(Vec::new());
         let cx: Context<P> = Context {
             props: safe_props,
             scope: scp,
@@ -433,11 +461,12 @@ fn create_closure<'a, P: 'a>(
 
         let g = user_component(cx);
 
-        // collect the submitted tasks
-        println!("tasks submittted: {:#?}", tasks.len());
-        // log::debug!("tasks submittted: {:#?}", tasks.len());
+        for task in tasks.borrow_mut().drain(..) {
+            scp.submit_task(task);
+        }
 
         let g2 = unsafe { std::mem::transmute(g) };
+
         g2
     });
     let r: Captured<'static> = unsafe { std::mem::transmute(g) };

@@ -2,7 +2,6 @@ use crate::hooklist::HookList;
 use crate::{arena::SharedArena, innerlude::*};
 use appendlist::AppendList;
 use bumpalo::Bump;
-use futures::FutureExt;
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
 use std::marker::PhantomData;
@@ -40,11 +39,9 @@ use std::{
 pub struct Context<'src, T> {
     pub props: &'src T,
     pub scope: &'src Scope,
-    pub tasks: &'src AppendList<&'src mut DTask<'src>>,
+    pub tasks: &'src RefCell<Vec<&'src mut PinnedTask>>,
 }
-
-pub type DTask<'s> = dyn Future<Output = ()> + 's;
-// pub type DTask = Pin<Box<dyn Future<Output = ()>>>;
+pub type PinnedTask = Pin<Box<dyn Future<Output = ()>>>;
 
 impl<'src, T> Copy for Context<'src, T> {}
 impl<'src, T> Clone for Context<'src, T> {
@@ -133,36 +130,34 @@ impl<'src, P> Context<'src, P> {
     ///     )
     /// }
     /// ```
-    pub fn use_hook<InternalHookState: 'static, Output: 'src>(
+    pub fn use_hook<State, Output, Init, Run, Cleanup>(
         self,
-
-        // The closure that builds the hook state
-        initializer: impl FnOnce() -> InternalHookState,
-
-        // The closure that takes the hookstate and returns some value
-        runner: impl FnOnce(&'src mut InternalHookState) -> Output,
-
-        // The closure that cleans up whatever mess is left when the component gets torn down
-        // TODO: add this to the "clean up" group for when the component is dropped
-        cleanup: impl FnOnce(InternalHookState),
-    ) -> Output {
+        initializer: Init,
+        runner: Run,
+        cleanup: Cleanup,
+    ) -> Output
+    where
+        State: 'static,
+        Output: 'src,
+        Init: FnOnce() -> State,
+        Run: FnOnce(&'src mut State) -> Output,
+        Cleanup: FnOnce(State),
+    {
         // If the idx is the same as the hook length, then we need to add the current hook
         if self.scope.hooks.at_end() {
             let new_state = initializer();
             self.scope.hooks.push(new_state);
         }
 
-        let state = self.scope.hooks.next::<InternalHookState>().expect(
-            r###"
-            Unable to retrive the hook that was initialized in this index.
-            Consult the `rules of hooks` to understand how to use hooks properly.
-            
-            You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
-            Any function prefixed with "use" should not be called conditionally.
-            "###,
-        );
+        const ERR_MSG: &str = r###"
+Unable to retrive the hook that was initialized in this index.
+Consult the `rules of hooks` to understand how to use hooks properly.
 
-        runner(state)
+You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+Any function prefixed with "use" should not be called conditionally.
+"###;
+
+        runner(self.scope.hooks.next::<State>().expect(ERR_MSG))
     }
 
     /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
@@ -178,8 +173,7 @@ impl<'src, P> Context<'src, P> {
     ///
     ///
     pub fn use_create_context<T: 'static>(&self, init: impl Fn() -> T) {
-        let mut scope = self.scope;
-        let mut cxs = scope.shared_contexts.borrow_mut();
+        let mut cxs = self.scope.shared_contexts.borrow_mut();
         let ty = TypeId::of::<T>();
 
         let is_initialized = self.use_hook(
@@ -274,6 +268,7 @@ impl<'src, P> Context<'src, P> {
         fut: &'src mut Pin<Box<dyn Future<Output = Output> + 'static>>,
         callback: Fut,
     ) -> VNode<'src> {
+        use futures_util::FutureExt;
         match fut.now_or_never() {
             Some(out) => {
                 let suspended_cx = SuspendedContext {};
@@ -290,6 +285,10 @@ impl<'src, P> Context<'src, P> {
     }
 
     /// `submit_task` will submit the future to be polled.
+    ///
+    /// This is useful when you have some async task that needs to be progressed.
+    ///
+    /// ## Explanation
     /// Dioxus will step its internal event loop if the future returns if the future completes while waiting.
     ///
     /// Tasks can't return anything, but they can be controlled with the returned handle
@@ -299,8 +298,8 @@ impl<'src, P> Context<'src, P> {
     ///
     ///
     ///
-    pub fn submit_task(&self, mut task: &'src mut DTask<'src>) -> TaskHandle {
-        self.tasks.push(task);
+    pub fn submit_task(&self, task: &'src mut PinnedTask) -> TaskHandle {
+        self.tasks.borrow_mut().push(task);
 
         TaskHandle { _p: PhantomData {} }
     }

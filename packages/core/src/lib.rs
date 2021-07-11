@@ -43,6 +43,7 @@ pub(crate) mod innerlude {
     pub use crate::nodebuilder::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
+    pub use crate::tasks::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -62,6 +63,7 @@ pub mod prelude {
     pub use crate::styles::{AsAttr, StyleBuilder};
 
     pub use crate::util::RealDomNode;
+    pub use crate::virtual_dom::VirtualDom;
     pub use nodes::*;
 
     pub use crate::nodebuilder::LazyNodes;

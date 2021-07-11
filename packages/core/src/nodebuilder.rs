@@ -308,7 +308,7 @@ where
     /// let my_div: VNode = builder.finish();
     /// ```
     #[inline]
-    pub fn finish(self) -> VNode<'a> {
+    pub fn finish(mut self) -> VNode<'a> {
         let bump = self.cx.bump();
 
         let children: &'a Children = bump.alloc(self.children);
@@ -316,6 +316,23 @@ where
 
         let listeners: &'a Listeners = bump.alloc(self.listeners);
         let listeners: &'a [Listener<'a>] = listeners.as_ref();
+
+        for listener in listeners {
+            // bump the context id forward
+            let id = self.cx.listener_id.get();
+            self.cx.listener_id.set(id + 1);
+
+            // Add this listener to the context list
+            // This casts the listener to a self-referential pointer
+            // This is okay because the bump arena is stable
+
+            // TODO: maybe not add it into CTX immediately
+            let r = unsafe { std::mem::transmute::<&Listener<'a>, &Listener<'static>>(listener) };
+            self.cx.scope_ref.listeners.borrow_mut().push((
+                r.mounted_node as *const _ as *mut _,
+                r.callback as *const _ as *mut _,
+            ));
+        }
 
         let attributes: &'a Attributes = bump.alloc(self.attributes);
         let attributes: &'a [Attribute<'a>] = attributes.as_ref();
@@ -338,57 +355,57 @@ where
     Attributes: 'a + AsRef<[Attribute<'a>]>,
     Children: 'a + AsRef<[VNode<'a>]>,
 {
-    /// Add a new event listener to this element.
-    ///
-    /// The `event` string specifies which event will be listened for. The
-    /// `callback` function is the function that will be invoked if the
-    /// specified event occurs.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use dioxus::{builder::*, bumpalo::Bump};
-    ///
-    /// let b = Bump::new();
-    ///
-    /// // A button that does something when clicked!
-    /// let my_button = button(&b)
-    ///     .on("click", |event| {
-    ///         // ...
-    ///     })
-    ///     .finish();
-    /// ```
-    pub fn on(self, event: &'static str, callback: impl FnMut(VirtualEvent) + 'a) -> Self {
-        let bump = &self.cx.bump();
-        let listener = Listener {
-            event,
-            callback: bump.alloc(callback),
-            scope: self.cx.scope_ref.arena_idx,
-            mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
-        };
-        self.add_listener(listener)
-    }
+    // / Add a new event listener to this element.
+    // /
+    // / The `event` string specifies which event will be listened for. The
+    // / `callback` function is the function that will be invoked if the
+    // / specified event occurs.
+    // /
+    // / # Example
+    // /
+    // / ```no_run
+    // / use dioxus::{builder::*, bumpalo::Bump};
+    // /
+    // / let b = Bump::new();
+    // /
+    // / // A button that does something when clicked!
+    // / let my_button = button(&b)
+    // /     .on("click", |event| {
+    // /         // ...
+    // /     })
+    // /     .finish();
+    // / ```
+    // pub fn on(self, event: &'static str, callback: impl FnMut(VirtualEvent) + 'a) -> Self {
+    //     let bump = &self.cx.bump();
+    //     let listener = Listener {
+    //         event,
+    //         callback: bump.alloc(callback),
+    //         scope: self.cx.scope_ref.arena_idx,
+    //         mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
+    //     };
+    //     self.add_listener(listener)
+    // }
 
-    pub fn add_listener(mut self, listener: Listener<'a>) -> Self {
-        self.listeners.push(listener);
+    // pub fn add_listener(mut self, listener: Listener<'a>) -> Self {
+    //     self.listeners.push(listener);
 
-        // bump the context id forward
-        let id = self.cx.listener_id.get();
-        self.cx.listener_id.set(id + 1);
+    //     // bump the context id forward
+    //     let id = self.cx.listener_id.get();
+    //     self.cx.listener_id.set(id + 1);
 
-        // Add this listener to the context list
-        // This casts the listener to a self-referential pointer
-        // This is okay because the bump arena is stable
-        self.listeners.last().map(|g| {
-            let r = unsafe { std::mem::transmute::<&Listener<'a>, &Listener<'static>>(g) };
-            self.cx.scope_ref.listeners.borrow_mut().push((
-                r.mounted_node as *const _ as *mut _,
-                r.callback as *const _ as *mut _,
-            ));
-        });
+    //     // Add this listener to the context list
+    //     // This casts the listener to a self-referential pointer
+    //     // This is okay because the bump arena is stable
+    //     self.listeners.last().map(|g| {
+    //         let r = unsafe { std::mem::transmute::<&Listener<'a>, &Listener<'static>>(g) };
+    //         self.cx.scope_ref.listeners.borrow_mut().push((
+    //             r.mounted_node as *const _ as *mut _,
+    //             r.callback as *const _ as *mut _,
+    //         ));
+    //     });
 
-        self
-    }
+    //     self
+    // }
 }
 
 impl<'a, 'b, Listeners, Children>
@@ -410,59 +427,14 @@ where
     /// let my_div = div(&b).attr("id", "my-div").finish();
     /// ```
     pub fn attr(mut self, name: &'static str, args: std::fmt::Arguments) -> Self {
-        let value = match args.as_str() {
-            Some(static_str) => static_str,
-            None => {
-                use bumpalo::core_alloc::fmt::Write;
-                let mut s = bumpalo::collections::String::new_in(self.cx.bump());
-                s.write_fmt(args).unwrap();
-                s.into_bump_str()
-            }
-        };
+        let (value, is_static) = raw_text(self.cx.bump(), args);
 
         self.attributes.push(Attribute {
             name,
             value,
+            is_static,
             namespace: None,
         });
-        self
-    }
-
-    /// Conditionally add a "boolean-style" attribute to this element.
-    ///
-    /// If the `should_add` parameter is true, then adds an attribute with the
-    /// given `name` and an empty string value. If the `should_add` parameter is
-    /// false, then the attribute is not added.
-    ///
-    /// This method is useful for attributes whose semantics are defined by
-    /// whether or not the attribute is present or not, and whose value is
-    /// ignored. Example attributes like this include:
-    ///
-    /// * `checked`
-    /// * `hidden`
-    /// * `selected`
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use dioxus::{builder::*, bumpalo::Bump};
-    /// use js_sys::Math;
-    ///
-    /// let b = Bump::new();
-    ///
-    /// // Create the `<div>` that is randomly hidden 50% of the time.
-    /// let my_div = div(&b)
-    ///     .bool_attr("hidden", Math::random() >= 0.5)
-    ///     .finish();
-    /// ```
-    pub fn bool_attr(mut self, name: &'static str, should_add: bool) -> Self {
-        if should_add {
-            self.attributes.push(Attribute {
-                name,
-                value: "",
-                namespace: None,
-            });
-        }
         self
     }
 }
@@ -618,69 +590,15 @@ impl IntoVNode<'_> for Option<()> {
     }
 }
 
-/// Construct a text VNode.
-///
-/// This is `dioxus`'s virtual DOM equivalent of `document.createTextVNode`.
-///
-/// # Example
-///
-/// ```no_run
-/// use dioxus::builder::*;
-///
-/// let my_text = text("hello, dioxus!");
-/// ```
-#[inline]
-pub fn text<'a>(contents: &'a str) -> VNode<'a> {
-    VNode::text(contents)
-}
-
-pub fn text2<'a>(contents: bumpalo::collections::String<'a>) -> VNode<'a> {
-    let f: &'a str = contents.into_bump_str();
-    VNode::text(f)
-}
-
-pub fn text3<'a>(bump: &'a bumpalo::Bump, args: std::fmt::Arguments) -> VNode<'a> {
-    // This is a cute little optimization
-    //
-    // We use format_args! on everything. However, not all textnodes have dynamic content, and thus are completely static.
-    // we can just short-circuit to the &'static str version instead of having to allocate in the bump arena.
-    //
-    // In the most general case, this prevents the need for any string allocations for simple code IE:
-    // ```
-    //  div {"abc"}
-    // ```
-    VNode::text(raw_text(bump, args))
-}
-
-pub fn raw_text<'a>(bump: &'a bumpalo::Bump, args: std::fmt::Arguments) -> &'a str {
+pub fn raw_text<'a>(bump: &'a bumpalo::Bump, args: std::fmt::Arguments) -> (&'a str, bool) {
     match args.as_str() {
-        Some(static_str) => static_str,
+        Some(static_str) => (static_str, true),
         None => {
             use bumpalo::core_alloc::fmt::Write;
             let mut s = bumpalo::collections::String::new_in(bump);
             s.write_fmt(args).unwrap();
-            s.into_bump_str()
+            (s.into_bump_str(), false)
         }
-    }
-}
-
-/// Construct an attribute for an element.
-///
-/// # Example
-///
-/// This example creates the `id="my-id"` for some element like `<div
-/// id="my-id"/>`.
-///
-/// ```no_run
-/// use dioxus::builder::*;
-///
-/// let my_id_attr = attr("id", "my-id");
-/// ```
-pub fn attr<'a>(name: &'static str, value: &'a str) -> Attribute<'a> {
-    Attribute {
-        name,
-        value,
-        namespace: None,
     }
 }
 
@@ -726,7 +644,7 @@ impl<'a> NodeFactory<'a> {
 
     /// Create some text that's allocated along with the other vnodes
     pub fn text(&self, args: Arguments) -> VNode<'a> {
-        text3(self.bump(), args)
+        VNode::text(self.bump(), args)
     }
 
     /// Create an element builder
@@ -749,10 +667,11 @@ impl<'a> NodeFactory<'a> {
         val: Arguments,
         namespace: Option<&'static str>,
     ) -> Attribute<'a> {
-        let value = raw_text(self.bump(), val);
+        let (value, is_static) = raw_text(self.bump(), val);
         Attribute {
             name,
             value,
+            is_static,
             namespace,
         }
     }
