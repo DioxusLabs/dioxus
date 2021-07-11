@@ -1,5 +1,3 @@
-//! Dioxus Server-Side-Rendering
-//!
 //! This crate demonstrates how to implement a custom renderer for Dioxus VNodes via the `TextRenderer` renderer.
 //! The `TextRenderer` consumes a Dioxus Virtual DOM, progresses its event queue, and renders the VNodes to a String.
 //!
@@ -18,6 +16,29 @@ pub fn render_root(vdom: &VirtualDom) -> String {
     format!("{:}", TextRenderer::new(vdom))
 }
 
+pub struct SsrConfig {
+    // currently not supported - control if we indent the HTML output
+    indent: bool,
+
+    // Control if elements are written onto a new line
+    newline: bool,
+
+    // Currently not implemented
+    // Don't proceed onto new components. Instead, put the name of the component.
+    // TODO: components don't have names :(
+    skip_components: bool,
+}
+
+impl Default for SsrConfig {
+    fn default() -> Self {
+        Self {
+            indent: false,
+
+            newline: false,
+            skip_components: false,
+        }
+    }
+}
 /// A configurable text renderer for the Dioxus VirtualDOM.
 ///
 ///
@@ -26,48 +47,71 @@ pub fn render_root(vdom: &VirtualDom) -> String {
 /// This uses the `Formatter` infrastructure so you can write into anything that supports `write_fmt`. We can't accept
 /// any generic writer, so you need to "Display" the text renderer. This is done through `format!` or `format_args!`
 ///
+/// ## Example
+/// ```ignore
+/// const App: FC<()> = |cx| cx.render(rsx!(div { "hello world" }));
+/// let mut vdom = VirtualDom::new(App);
+/// vdom.rebuild_in_place();
 ///
-///
-///
+/// let renderer = TextRenderer::new(&vdom);
+/// let output = format!("{}", renderer);
+/// assert_eq!(output, "<div>hello world</div>");
+/// ```
 pub struct TextRenderer<'a> {
     vdom: &'a VirtualDom,
+    cfg: SsrConfig,
 }
 
 impl<'a> TextRenderer<'a> {
     fn new(vdom: &'a VirtualDom) -> Self {
-        Self { vdom }
+        Self {
+            vdom,
+            cfg: SsrConfig::default(),
+        }
     }
 
     fn html_render(&self, node: &VNode, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match node {
+            VNode::Text(text) => write!(f, "{}", text.text)?,
             VNode::Element(el) => {
                 write!(f, "<{}", el.tag_name)?;
                 for attr in el.attributes {
                     write!(f, " {}=\"{}\"", attr.name, attr.value)?;
                 }
-                write!(f, ">\n")?;
+                match self.cfg.newline {
+                    true => write!(f, ">\n")?,
+                    false => write!(f, ">")?,
+                }
+
                 for child in el.children {
                     self.html_render(child, f)?;
                 }
-                write!(f, "\n</{}>", el.tag_name)?;
-                Ok(())
+                match self.cfg.newline {
+                    true => write!(f, "\n</{}>", el.tag_name)?,
+                    false => write!(f, "</{}>", el.tag_name)?,
+                }
             }
-            VNode::Text(text) => write!(f, "{}", text.text),
-            VNode::Suspended { .. } => todo!(),
+            VNode::Fragment(frag) => {
+                for child in frag.children {
+                    self.html_render(child, f)?;
+                }
+            }
             VNode::Component(vcomp) => {
-                todo!()
-                // let id = vcomp.ass_scope.borrow().unwrap();
-                // let id = vcomp.ass_scope.as_ref().borrow().unwrap();
-                // let new_node = dom
-                //     .components
-                //     .try_get(id)
-                //     .unwrap()
-                //     .frames
-                //     .current_head_node();
-                // html_render(&dom, new_node, f)
+                let idx = vcomp.ass_scope.get().unwrap();
+
+                let new_node = self
+                    .vdom
+                    .components
+                    .try_get(idx)
+                    .unwrap()
+                    .frames
+                    .current_head_node();
+
+                self.html_render(new_node, f)?;
             }
-            VNode::Fragment(_) => todo!(),
+            VNode::Suspended { .. } => todo!(),
         }
+        Ok(())
     }
 }
 
@@ -125,7 +169,7 @@ mod tests {
 
         let mut file = File::create("index.html").unwrap();
 
-        let mut dom = VirtualDom::new(SIMPLE_APP);
+        let mut dom = VirtualDom::new(SLIGHTLY_MORE_COMPLEX);
         dom.rebuild_in_place().expect("failed to run virtualdom");
 
         file.write_fmt(format_args!("{}", TextRenderer::new(&dom)))

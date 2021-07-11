@@ -180,25 +180,7 @@ impl VirtualDom {
     /// SSR takes advantage of this by using Dioxus itself as the source of truth, and rendering from the tree directly.
     pub fn rebuild_in_place(&mut self) -> Result<()> {
         let mut realdom = DebugDom::new();
-        let mut diff_machine = DiffMachine::new(
-            &mut realdom,
-            &self.components,
-            self.base_scope,
-            self.event_queue.clone(),
-            &self.tasks,
-        );
-
-        // Schedule an update and then immediately call it on the root component
-        // This is akin to a hook being called from a listener and requring a re-render
-        // Instead, this is done on top-level component
-        let base = self.components.try_get(self.base_scope)?;
-
-        let update = &base.event_channel;
-        update();
-
-        self.progress_completely(&mut diff_machine)?;
-
-        Ok(())
+        self.rebuild(&mut realdom)
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch

@@ -531,7 +531,7 @@ pub mod on {
         /// The key isn't an enum because there are just so many context-dependent keys.
         ///
         /// A full list on which keys to use is available at:
-        /// https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
+        /// <https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values>
         ///
         /// # Example
         ///
