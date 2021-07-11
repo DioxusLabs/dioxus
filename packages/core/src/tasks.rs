@@ -19,7 +19,7 @@ use std::{
 use futures_util::{Future, Stream, StreamExt};
 use slotmap::{DefaultKey, SlotMap};
 
-use crate::{events::EventTrigger, prelude::ScopeIdx};
+use crate::{events::EventTrigger, innerlude::ScopeIdx};
 
 pub type TaskSubmitter = Arc<dyn Fn(DTask)>;
 

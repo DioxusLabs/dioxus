@@ -444,31 +444,3 @@ pub fn intern_cache() {
         wasm_bindgen::intern(s);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use std::env;
-
-    use super::*;
-    use dioxus::prelude::bumpalo;
-    use dioxus::prelude::format_args_f;
-    use dioxus_core as dioxus;
-    use dioxus_core::prelude::html;
-
-    fn simple_patch() {
-        env::set_var("RUST_LOG", "trace");
-        pretty_env_logger::init();
-        log::info!("Hello!");
-
-        wasm_bindgen_futures::spawn_local(WebsysRenderer::start(|cx| {
-            todo!()
-            // cx.render(html! {
-            //     <div>
-            //         "Hello world"
-            //         <button onclick={move |_| log::info!("button1 clicked!")}> "click me" </button>
-            //         <button onclick={move |_| log::info!("button2 clicked!")}> "click me" </button>
-            //     </div>
-            // })
-        }))
-    }
-}

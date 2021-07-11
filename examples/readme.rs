@@ -1,10 +1,10 @@
 //! Example: README.md showcase
 //!
-//! The example from the README.md
+//! The example from the README.md.
 
 use dioxus::prelude::*;
 fn main() {
-    dioxus::web::launch(App)
+    dioxus::desktop::launch(App, |c| c);
 }
 
 static App: FC<()> = |cx| {
@@ -12,7 +12,7 @@ static App: FC<()> = |cx| {
 
     cx.render(rsx! {
         div {
-            h1 { "Hifive counter: {count}" }
+            h1 { "High-Five counter: {count}" }
             button { onclick: move |_| count += 1, "Up high!" }
             button { onclick: move |_| count -= 1, "Down low!" }
         }

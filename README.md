@@ -12,7 +12,7 @@ fn App(cx: Context<()>) -> VNode {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {
-        h1 { "Hi-Five counter: {count}" }
+        h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
     })
@@ -96,32 +96,32 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 
 ### Phase 1: The Basics
 
-| Feature                 | Dioxus | React | Notes for Dioxus                                      |
-| ----------------------- | ------ | ----- | ----------------------------------------------------- |
-| Conditional Rendering   | ✅      | ✅     | if/then to hide/show component                        |
-| Map, Iterator           | ✅      | ✅     | map/filter/reduce to produce rsx!                     |
-| Keyed Components        | ✅      | ✅     | advanced diffing with keys                            |
-| Web                     | ✅      | ✅     | renderer for web browser                              |
-| Desktop (webview)       | ✅      | ✅     | renderer for desktop                                  |
-| Shared State (Context)  | ✅      | ✅     | share state through the tree                          |
-| Hook                    | ✅      | ✅     | memory cells in components                            |
-| SSR                     | ✅      | ✅     | render directly to string                             |
-| Component Children      | ✅      | ✅     | cx.children() as a list of nodes                      |
-| Headless components     | ✅      | ✅     | components that don't return real elements            |
-| Fragments               | ✅      | ✅     | multiple elements without a real root                 |
-| Manual Props            | ✅      | ✅     | Manually pass in props with spread syntax             |
-| Controlled Inputs       | ✅      | ✅     | stateful wrappers around inputs                       |
-| CSS/Inline Styles       | ✅      | ✅     | syntax for inline styles/attribute groups             |
-| Custom elements         | ✅      | ✅     | Define new element primitives                         |
-| Suspense                | 🛠      | ✅     | schedule future render from future/promise            |
-| Cooperative Scheduling  | 🛠      | ✅     | Prioritize important events over non-important events |
-| NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                       |
-| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                   |
-| Compile-time correct    | ✅      | ❓     | Throw errors on invalid template layouts              |
-| Runs natively           | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)        |
-| 1st class global state  | ✅      | ❓     | redux/recoil/mobx on top of context                   |
-| Subtree Memoization     | ✅      | ❓     | skip diffing static element subtrees                  |
-| Heuristic Engine        | ✅      | ❓     | track component memory usage to minimize allocations  |
+| Feature                 | Dioxus | React | Notes for Dioxus                                            |
+| ----------------------- | ------ | ----- | ----------------------------------------------------------- |
+| Conditional Rendering   | ✅      | ✅     | if/then to hide/show component                              |
+| Map, Iterator           | ✅      | ✅     | map/filter/reduce to produce rsx!                           |
+| Keyed Components        | ✅      | ✅     | advanced diffing with keys                                  |
+| Web                     | ✅      | ✅     | renderer for web browser                                    |
+| Desktop (webview)       | ✅      | ✅     | renderer for desktop                                        |
+| Shared State (Context)  | ✅      | ✅     | share state through the tree                                |
+| Hooks                   | ✅      | ✅     | memory cells in components                                  |
+| SSR                     | ✅      | ✅     | render directly to string                                   |
+| Component Children      | ✅      | ✅     | cx.children() as a list of nodes                            |
+| Headless components     | ✅      | ✅     | components that don't return real elements                  |
+| Fragments               | ✅      | ✅     | multiple elements without a real root                       |
+| Manual Props            | ✅      | ✅     | Manually pass in props with spread syntax                   |
+| Controlled Inputs       | ✅      | ✅     | stateful wrappers around inputs                             |
+| CSS/Inline Styles       | ✅      | ✅     | syntax for inline styles/attribute groups                   |
+| Custom elements         | ✅      | ✅     | Define new element primitives                               |
+| Suspense                | 🛠      | ✅     | schedule future render from future/promise                  |
+| Cooperative Scheduling  | 🛠      | ✅     | Prioritize important events over non-important events       |
+| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                         |
+| Compile-time correct    | ✅      | ❓     | Throw errors on invalid template layouts                    |
+| Runs natively           | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)              |
+| 1st class global state  | ✅      | ❓     | redux/recoil/mobx on top of context                         |
+| Subtree Memoization     | ✅      | ❓     | skip diffing static element subtrees                        |
+| Heuristic Engine        | 🛠      | ❓     | track component memory usage to minimize future allocations |
+| NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                             |
 
 - [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
 

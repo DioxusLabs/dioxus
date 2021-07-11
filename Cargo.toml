@@ -14,6 +14,7 @@ dioxus-html = { path = "./packages/html", optional = true }
 dioxus-web = { path = "./packages/web", optional = true }
 dioxus-webview = { path = "./packages/webview", optional = true }
 dioxus-hooks = { path = "./packages/hooks", optional = true }
+dioxus-ssr = { path = "./packages/ssr", optional = true }
 
 
 [features]
@@ -30,7 +31,7 @@ default = [
 ]
 atoms = []
 macro = ["dioxus-core-macro"]
-ssr = []
+ssr = ["dioxus-ssr"]
 hooks = ["dioxus-hooks"]
 router = []
 html = ["dioxus-html"]

@@ -1,8 +1,6 @@
 //! webview dom
 
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
-use dioxus_core::{diff::RealDom, serialize::DomEdit, virtual_dom::VirtualDom};
+use dioxus_core::{DomEdit, RealDom, RealDomNode, ScopeIdx};
 use DomEdit::*;
 
 pub struct WebviewRegistry {}
@@ -80,7 +78,7 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
     fn new_event_listener(
         &mut self,
         event: &'static str,
-        scope: dioxus_core::prelude::ScopeIdx,
+        scope: ScopeIdx,
         element_id: usize,
         realnode: RealDomNode,
     ) {

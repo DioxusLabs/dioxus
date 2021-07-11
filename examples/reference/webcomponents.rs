@@ -10,8 +10,6 @@
 //! We don't support building new webcomponents with Dioxus, however.
 //!
 
-use dioxus::{builder::ElementBuilder, prelude::NodeFactory};
-
 fn main() {}
 
 mod dioxus_elements {

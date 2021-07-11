@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use dioxus_core::{
     events::{EventTrigger, VirtualEvent},
-    prelude::{RealDomNode, ScopeIdx},
+    RealDomNode, ScopeIdx,
 };
 use fxhash::FxHashMap;
 use slotmap::{DefaultKey, Key, KeyData};
@@ -192,7 +192,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     fn new_event_listener(
         &mut self,
         event: &'static str,
-        scope: dioxus_core::prelude::ScopeIdx,
+        scope: ScopeIdx,
         _element_id: usize,
         real_id: RealDomNode,
     ) {

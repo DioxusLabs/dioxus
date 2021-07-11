@@ -16,7 +16,7 @@ pub fn render_root(vdom: &VirtualDom) -> String {
 
 pub struct SsrConfig {
     // currently not supported - control if we indent the HTML output
-    _indent: bool,
+    indent: bool,
 
     // Control if elements are written onto a new line
     newline: bool,
@@ -30,7 +30,7 @@ pub struct SsrConfig {
 impl Default for SsrConfig {
     fn default() -> Self {
         Self {
-            _indent: false,
+            indent: false,
 
             newline: false,
             _skip_components: false,
@@ -68,10 +68,23 @@ impl<'a> TextRenderer<'a> {
         }
     }
 
-    fn html_render(&self, node: &VNode, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn html_render(&self, node: &VNode, f: &mut std::fmt::Formatter, il: u16) -> std::fmt::Result {
         match node {
-            VNode::Text(text) => write!(f, "{}", text.text)?,
+            VNode::Text(text) => {
+                if self.cfg.indent {
+                    for _ in 0..il {
+                        write!(f, "    ")?;
+                    }
+                }
+                write!(f, "{}", text.text)?
+            }
             VNode::Element(el) => {
+                if self.cfg.indent {
+                    for _ in 0..il {
+                        write!(f, "    ")?;
+                    }
+                }
+
                 write!(f, "<{}", el.tag_name)?;
                 for attr in el.attributes {
                     write!(f, " {}=\"{}\"", attr.name, attr.value)?;
@@ -82,16 +95,26 @@ impl<'a> TextRenderer<'a> {
                 }
 
                 for child in el.children {
-                    self.html_render(child, f)?;
+                    self.html_render(child, f, il + 1)?;
                 }
-                match self.cfg.newline {
-                    true => write!(f, "\n</{}>", el.tag_name)?,
-                    false => write!(f, "</{}>", el.tag_name)?,
+
+                if self.cfg.newline {
+                    write!(f, "\n")?;
+                }
+                if self.cfg.indent {
+                    for _ in 0..il {
+                        write!(f, "    ")?;
+                    }
+                }
+
+                write!(f, "</{}>", el.tag_name)?;
+                if self.cfg.newline {
+                    write!(f, "\n")?;
                 }
             }
             VNode::Fragment(frag) => {
                 for child in frag.children {
-                    self.html_render(child, f)?;
+                    self.html_render(child, f, il + 1)?;
                 }
             }
             VNode::Component(vcomp) => {
@@ -105,7 +128,7 @@ impl<'a> TextRenderer<'a> {
                     .frames
                     .current_head_node();
 
-                self.html_render(new_node, f)?;
+                self.html_render(new_node, f, il + 1)?;
             }
             VNode::Suspended { .. } => todo!(),
         }
@@ -117,7 +140,7 @@ impl Display for TextRenderer<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let root = self.vdom.base_scope();
         let root_node = root.root();
-        self.html_render(root_node, f)
+        self.html_render(root_node, f, 0)
     }
 }
 

@@ -7,7 +7,7 @@
 //!
 //!
 
-use crate::prelude::ScopeIdx;
+use crate::innerlude::ScopeIdx;
 use serde::{Deserialize, Serialize};
 
 /// A `DomEdit` represents a serialzied form of the VirtualDom's trait-based API. This allows streaming edits across the

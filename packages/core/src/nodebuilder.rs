@@ -14,9 +14,8 @@ use bumpalo::Bump;
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Properties, RealDomNode, Scope, VComponent, VText, FC},
+    innerlude::{Properties, RealDomNode, Scope, VComponent, VFragment, VText, FC},
     nodes::{Attribute, Listener, NodeKey, VNode},
-    prelude::{VElement, VFragment},
 };
 
 /// A virtual DOM element builder.
@@ -645,6 +644,20 @@ impl<'a> NodeFactory<'a> {
     /// Create some text that's allocated along with the other vnodes
     pub fn text(&self, args: Arguments) -> VNode<'a> {
         VNode::text(self.bump(), args)
+    }
+
+    /// Create an element builder
+    pub fn raw_element<'b>(
+        &'b self,
+        tag: &'static str,
+    ) -> ElementBuilder<
+        'a,
+        'b,
+        bumpalo::collections::Vec<'a, Listener<'a>>,
+        bumpalo::collections::Vec<'a, Attribute<'a>>,
+        bumpalo::collections::Vec<'a, VNode<'a>>,
+    > {
+        ElementBuilder::new(self, tag)
     }
 
     /// Create an element builder

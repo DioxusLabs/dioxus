@@ -7,6 +7,7 @@
 fn main() {}
 
 use dioxus_core::prelude::*;
+use dioxus_core::*;
 use std::rc::Rc;
 
 struct AppProps {

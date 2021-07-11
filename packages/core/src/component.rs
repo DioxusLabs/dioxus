@@ -44,6 +44,7 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
     T::builder()
 }
 
+use crate::nodebuilder::LazyNodes;
 /// Create inline fragments
 ///
 /// Fragments capture a series of children without rendering extra nodes.
@@ -53,5 +54,7 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
 use crate::prelude::*;
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment<'a>(cx: Context<'a, ()>) -> VNode<'a> {
-    cx.render(LazyNodes::new(move |f| f.fragment_from_iter(cx.children())))
+    cx.render(LazyNodes::new(move |f| {
+        f.fragment_from_iter(cx.children())
+    }))
 }

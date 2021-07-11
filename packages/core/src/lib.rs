@@ -28,10 +28,6 @@ pub mod tasks;
 pub mod util;
 pub mod virtual_dom;
 
-pub mod builder {
-    pub use super::nodebuilder::*;
-}
-
 // types used internally that are important
 pub(crate) mod innerlude {
     pub use crate::bumpframe::*;
@@ -43,6 +39,7 @@ pub(crate) mod innerlude {
     pub use crate::nodebuilder::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
+    pub use crate::serialize::*;
     pub use crate::tasks::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
@@ -54,35 +51,23 @@ pub(crate) mod innerlude {
     pub use dioxus_core_macro::{html, rsx};
 }
 
-/// Re-export common types for ease of development use.
-/// Essential when working with the html! macro
+pub use crate::{
+    innerlude::{
+        DioxusElement, DomEdit, LazyNodes, NodeFactory, RealDom, RealDomNode, ScopeIdx, FC,
+    },
+    virtual_dom::VirtualDom,
+};
+
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::context::Context;
-    use crate::nodes;
-    pub use crate::styles::{AsAttr, StyleBuilder};
-
-    pub use crate::util::RealDomNode;
-    pub use crate::virtual_dom::VirtualDom;
-    pub use nodes::*;
-
-    pub use crate::nodebuilder::LazyNodes;
-
-    pub use crate::nodebuilder::{DioxusElement, NodeFactory};
-    // pub use nodes::iterables::IterableNodes;
-    /// This type alias is an internal way of abstracting over the static functions that represent components.
-    pub use crate::innerlude::FC;
-
-    // expose our bumpalo type
-    pub use bumpalo;
-    pub use bumpalo::Bump;
-
-    // Re-export the FC macro
-    pub use crate::nodebuilder as builder;
-    // pub use dioxus_core_macro::fc;
-
+    pub use crate::innerlude::{LazyNodes, NodeFactory, FC};
+    pub use crate::nodebuilder::DioxusElement;
+    pub use crate::nodes::VNode;
+    pub use crate::VirtualDom;
     pub use dioxus_core_macro::{format_args_f, html, rsx, Props};
+}
 
-    pub use crate::diff::DiffMachine;
-    pub use crate::virtual_dom::ScopeIdx;
+pub mod exports {
+    // export important things here
 }

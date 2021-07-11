@@ -125,8 +125,8 @@ pub mod on {
     use std::{fmt::Debug, ops::Deref, rc::Rc};
 
     use crate::{
-        builder::ElementBuilder,
-        builder::NodeFactory,
+        innerlude::ElementBuilder,
+        innerlude::NodeFactory,
         innerlude::{Attribute, Listener, RealDomNode, VNode},
     };
     use std::cell::Cell;

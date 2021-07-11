@@ -165,60 +165,29 @@
 //!
 //! In reality, you'll want to integrate analytics, logging, crash-protection and more.
 
-pub mod prelude {
-    //! A glob import that includes helper types like FC, rsx!, html!, and required traits
-    pub use dioxus_core::prelude::*;
-    pub use dioxus_core_macro::fc;
-    pub use dioxus_hooks::*;
-    pub use dioxus_html as dioxus_elements;
-}
-// pub mod builder {
-//     // pub use dioxus_core::builder::*;
-// }
-pub use dioxus_core::builder;
-pub use dioxus_core::events;
-// pub mod events {
-//     // pub use dioxus_core::events::*;
-// }
 // Just a heads-up, the core functionality of dioxus rests in Dioxus-Core. This crate just wraps a bunch of utilities
 // together and exports their namespaces to something predicatble.
 #[cfg(feature = "core")]
-pub mod core {
-    //! Core functionality that includes the VirtualDOM, diffing, and Context APIs
+pub use dioxus_core as core;
 
-    // Re-export core completely
-    pub use dioxus_core::*;
-}
+#[cfg(feature = "core")]
+pub use dioxus_core::events;
 
-// Input elements work differently on different platforms.
-// This module helps abstract over Selects, TextInputs, TextAreas, Radios, etc for a cross-platform input experience
-pub mod inputs {
-    //! Cross-platform abstractions over user inputs
-}
 #[cfg(feature = "web")]
-pub mod web {
-    //! A web-sys based renderer for building fast and interactive web applications
-    use dioxus_core::prelude::{Properties, FC};
-    pub fn launch<P: Properties>(f: FC<P>) {}
-}
+pub use dioxus_web as web;
+
 #[cfg(feature = "ssr")]
-pub mod ssr {
-    //! A dedicated renderer for writing a Dioxus VirtualDOM to a string
-}
-#[cfg(feature = "ssr")]
-pub mod hooks {
-    //! Useful hooks like use_state, use_ref
-}
-#[cfg(feature = "ssr")]
-pub mod router {
-    //! A cross-platform router implementation
-}
-#[cfg(feature = "ssr")]
-pub mod testing {
-    //! Tools to make it easier to write tests for Dioxus components
-}
-#[cfg(feature = "atoms")]
-pub mod atoms {}
+pub use dioxus_ssr as ssr;
+
+#[cfg(feature = "hooks")]
+pub use dioxus_hooks as hooks;
 
 #[cfg(feature = "desktop")]
 pub use dioxus_webview as desktop;
+
+pub mod prelude {
+    //! A glob import that includes helper types like FC, rsx!, html!, and required traits
+    pub use dioxus_core::prelude::*;
+    pub use dioxus_hooks::*;
+    pub use dioxus_html as dioxus_elements;
+}

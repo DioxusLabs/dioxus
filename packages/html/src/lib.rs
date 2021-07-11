@@ -7,7 +7,7 @@
 //! of the Rsx and Html macros. Each element comes with a substantial amount of documentation on how to best use it, hopefully
 //! making the development cycle quick.
 
-use dioxus_core::prelude::{DioxusElement, NodeFactory};
+use dioxus_core::{DioxusElement, NodeFactory};
 
 macro_rules! builder_constructors {
     ( $( $(#[$attr:meta])* $name:ident; )* ) => {
