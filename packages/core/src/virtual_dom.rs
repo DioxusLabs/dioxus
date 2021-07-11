@@ -43,12 +43,12 @@ pub struct VirtualDom {
 
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
-    pub base_scope: ScopeIdx,
+    pub(crate) base_scope: ScopeIdx,
 
     /// All components dump their updates into a queue to be processed
     pub(crate) event_queue: EventQueue,
 
-    pub tasks: TaskQueue,
+    pub(crate) tasks: TaskQueue,
 
     root_props: std::pin::Pin<Box<dyn std::any::Any>>,
 
@@ -163,12 +163,21 @@ impl VirtualDom {
             _root_prop_type: TypeId::of::<P>(),
         }
     }
-}
 
-// ======================================
-// Private Methods for the VirtualDom
-// ======================================
-impl VirtualDom {
+    pub fn launch_in_place(root: FC<()>) -> Self {
+        let mut s = Self::new(root);
+        s.rebuild_in_place();
+        s
+    }
+
+    /// Creates a new virtualdom and immediately rebuilds it in place, not caring about the RealDom to write into.
+    ///
+    pub fn launch_with_props_in_place<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
+        let mut s = Self::new_with_props(root, root_props);
+        s.rebuild_in_place();
+        s
+    }
+
     /// Rebuilds the VirtualDOM from scratch, but uses a "dummy" RealDom.
     ///
     /// Used in contexts where a real copy of the  structure doesn't matter, and the VirtualDOM is the source of truth.

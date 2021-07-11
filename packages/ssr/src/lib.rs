@@ -6,11 +6,9 @@
 //! API to progress these lifecycle events to generate a fully-mounted Virtual DOM instance which can be renderer in the
 //! `render` method.
 
-use std::fmt::{Arguments, Display, Formatter};
+use std::fmt::{Display, Formatter};
 
-use dioxus_core::prelude::*;
-use dioxus_core::{nodes::VNode, prelude::ScopeIdx, virtual_dom::VirtualDom};
-use std::io::{BufWriter, Result, Write};
+use dioxus_core::{nodes::VNode, virtual_dom::VirtualDom};
 
 pub fn render_root(vdom: &VirtualDom) -> String {
     format!("{:}", TextRenderer::new(vdom))
@@ -18,7 +16,7 @@ pub fn render_root(vdom: &VirtualDom) -> String {
 
 pub struct SsrConfig {
     // currently not supported - control if we indent the HTML output
-    indent: bool,
+    _indent: bool,
 
     // Control if elements are written onto a new line
     newline: bool,
@@ -26,16 +24,16 @@ pub struct SsrConfig {
     // Currently not implemented
     // Don't proceed onto new components. Instead, put the name of the component.
     // TODO: components don't have names :(
-    skip_components: bool,
+    _skip_components: bool,
 }
 
 impl Default for SsrConfig {
     fn default() -> Self {
         Self {
-            indent: false,
+            _indent: false,
 
             newline: false,
-            skip_components: false,
+            _skip_components: false,
         }
     }
 }
@@ -128,10 +126,10 @@ mod tests {
     use super::*;
 
     use dioxus_core as dioxus;
+    use dioxus_core::prelude::*;
     use dioxus_html as dioxus_elements;
 
     const SIMPLE_APP: FC<()> = |cx| {
-        //
         cx.render(rsx!(div {
             "hello world!"
         }))
@@ -156,16 +154,47 @@ mod tests {
         })
     };
 
+    const NESTED_APP: FC<()> = |cx| {
+        cx.render(rsx!(
+            div {
+                SIMPLE_APP {}
+            }
+        ))
+    };
+    const FRAGMENT_APP: FC<()> = |cx| {
+        cx.render(rsx!(
+            div { "f1" }
+            div { "f2" }
+            div { "f3" }
+            div { "f4" }
+        ))
+    };
+
     #[test]
-    fn test_to_string_works() {
+    fn to_string_works() {
         let mut dom = VirtualDom::new(SIMPLE_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
         dbg!(render_root(&dom));
     }
 
     #[test]
-    fn test_write_to_file() {
+    fn nested() {
+        let mut dom = VirtualDom::new(NESTED_APP);
+        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dbg!(render_root(&dom));
+    }
+
+    #[test]
+    fn fragment_app() {
+        let mut dom = VirtualDom::new(FRAGMENT_APP);
+        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dbg!(render_root(&dom));
+    }
+
+    #[test]
+    fn write_to_file() {
         use std::fs::File;
+        use std::io::Write;
 
         let mut file = File::create("index.html").unwrap();
 
