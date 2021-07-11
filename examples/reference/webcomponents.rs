@@ -14,8 +14,15 @@ use dioxus::{builder::ElementBuilder, prelude::NodeFactory};
 
 fn main() {}
 
-// TODO
-struct MyEle<'a, 'b> {
-    el: ElementBuilder<'a, 'b>,
-    fac: &'b NodeFactory<'a>,
+mod dioxus_elements {
+    use dioxus::prelude::DioxusElement;
+
+    struct custom_element;
+    impl DioxusElement for custom_element {
+        const TAG_NAME: &'static str = "custom_element";
+        const NAME_SPACE: Option<&'static str> = None;
+    }
+
+    // Re-export the normal html namespace
+    pub use dioxus::prelude::dioxus_elements::*;
 }

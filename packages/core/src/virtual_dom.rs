@@ -43,12 +43,12 @@ pub struct VirtualDom {
 
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
-    pub(crate) base_scope: ScopeIdx,
+    pub base_scope: ScopeIdx,
 
     /// All components dump their updates into a queue to be processed
-    pub(crate) event_queue: EventQueue,
+    pub event_queue: EventQueue,
 
-    pub(crate) tasks: TaskQueue,
+    pub tasks: TaskQueue,
 
     root_props: std::pin::Pin<Box<dyn std::any::Any>>,
 

@@ -11,11 +11,11 @@ fn main() {}
 
 /// We can use `set_name` in multiple closures; the closures automatically *copy* the reference to set_name.
 static ButtonList: FC<()> = |cx| {
-    let (name, set_name) = use_state_classic(cx, || "...?");
+    let name = use_state(cx, || "...?");
 
     let names = ["jack", "jill", "john", "jane"]
         .iter()
-        .map(move |n| rsx!(button { onclick: move |_| set_name(n), "{n}" }));
+        .map(move |n| rsx!(button { onclick: move |_| name.set(n), "{n}" }));
 
     cx.render(rsx!(
         div {

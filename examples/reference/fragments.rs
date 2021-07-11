@@ -35,11 +35,12 @@ static Example2: FC<()> = |cx| {
 
 // Using the `fragment` method on the NodeFactory
 static Example3: FC<()> = |cx| {
-    cx.render(LazyNodes::new(move |fac: &NodeFactory| {
-        fac.fragment_builder(None, |list| {
-            list.add_child(fac.text(format_args!("A")))
-                .add_child(fac.text(format_args!("B")))
-                .finish()
-        })
+    cx.render(LazyNodes::new(move |fac| {
+        fac.fragment_from_iter([
+            fac.text(format_args!("A")),
+            fac.text(format_args!("B")),
+            fac.text(format_args!("A")),
+            fac.text(format_args!("B")),
+        ])
     }))
 };

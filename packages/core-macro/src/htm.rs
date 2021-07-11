@@ -356,7 +356,9 @@ impl ToTokens for ToToksCtx<&TextNode> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let mut token_stream = TokenStream2::new();
         self.recurse(&self.inner.0).to_tokens(&mut token_stream);
-        tokens.append_all(quote! {dioxus::builder::text3(bump, format_args_f!(#token_stream))});
+        tokens.append_all(quote! {
+            __cx.text(format_args_f!(#token_stream))
+        });
     }
 }
 

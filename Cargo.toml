@@ -8,16 +8,26 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path="./packages/core", version="0.1.0" }
-dioxus-core-macro = { path="./packages/core-macro", version="0.1.0", optional=true }
-dioxus-html = { path="./packages/html", optional=true }
-dioxus-web = { path="./packages/web", optional=true }
-dioxus-webview = { path="./packages/webview", optional=true }
-dioxus-hooks = { path="./packages/hooks", version="0.0.0", optional=true }
+dioxus-core = { path = "./packages/core" }
+dioxus-core-macro = { path = "./packages/core-macro", optional = true }
+dioxus-html = { path = "./packages/html", optional = true }
+dioxus-web = { path = "./packages/web", optional = true }
+dioxus-webview = { path = "./packages/webview", optional = true }
+dioxus-hooks = { path = "./packages/hooks", optional = true }
 
 
 [features]
-default = ["macro", "ssr", "hooks", "router", "core", "atoms", "html", "web", "desktop"]
+default = [
+    "core",
+    "atoms",
+    "macro",
+    "ssr",
+    "hooks",
+    "router",
+    "html",
+    "web",
+    "desktop",
+]
 atoms = []
 macro = ["dioxus-core-macro"]
 ssr = []
@@ -31,29 +41,25 @@ desktop = ["dioxus-webview"]
 core = []
 
 
-[profile.dev]
-split-debuginfo = "unpacked"
-
-
 [dev-dependencies]
 futures = "0.3.15"
 log = "0.4.14"
 num-format = "0.4.0"
 rand = "0.8.4"
 separator = "0.4.1"
-serde = { version="1.0.126", features=["derive"] }
+serde = { version = "1.0.126", features = ["derive"] }
 surf = "2.2.0"
 env_logger = "*"
-async-std = { version="1.9.0", features=["attributes"] }
+async-std = { version = "1.9.0", features = ["attributes"] }
 
 [workspace]
 members = [
-    "packages/core-macro",
     "packages/core",
+    "packages/core-macro",
     "packages/html",
+    "packages/hooks",
     "packages/web",
     "packages/webview",
-    "packages/hooks",
     "packages/ssr",
     # "packages/atoms",
     # "packages/docsite",

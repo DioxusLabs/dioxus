@@ -11,10 +11,10 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 
 [dependencies]
 # todo: use wast for faster load/compile
-dioxus-core-macro = { path="../core-macro", version="0.1.1" }
+dioxus-core-macro = { path = "../core-macro", version = "0.1.1" }
 
 # Bumpalo is used as a micro heap backing each component
-bumpalo = { version="3.6.0", features=["collections", "boxed"] }
+bumpalo = { version = "3.6.0", features = ["collections", "boxed"] }
 
 # custom error type
 thiserror = "1"
@@ -29,7 +29,7 @@ longest-increasing-subsequence = "0.1.0"
 log = "0.4"
 
 # # Serialize the Edits for use in Webview/Liveview instances
-serde = { version="1", features=["derive"], optional=true }
+serde = { version = "1", features = ["derive"], optional = true }
 
 # Backs scopes and unique keys
 slotmap = "1.0.3"
@@ -37,12 +37,6 @@ slotmap = "1.0.3"
 appendlist = "1.4.0"
 
 futures-util = "0.3.15"
-
-[dev-dependencies]
-dioxus-html = { path="../html" }
-dioxus-hooks = { path="../hooks" }
-env_logger = "*"
-# async-std = { version="1.9.0", features=["attributes"] }
 
 [features]
 default = []
