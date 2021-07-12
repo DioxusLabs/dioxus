@@ -36,11 +36,11 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
     }
 
     fn append_children(&mut self, many: u32) {
-        self.edits.push(AppendChild);
+        self.edits.push(AppendChildren { many });
     }
 
     fn replace_with(&mut self, many: u32) {
-        self.edits.push(ReplaceWith);
+        self.edits.push(ReplaceWith { many });
     }
 
     fn remove(&mut self) {

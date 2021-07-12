@@ -1,16 +1,14 @@
 //! This module contains the stateful DiffMachine and all methods to diff VNodes, their properties, and their children.
 //! The DiffMachine calculates the diffs between the old and new frames, updates the new nodes, and modifies the real dom.
 //!
-//! Notice:
-//! ------
-//!
+//! ## Notice:
 //! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
 //! Components, Fragments, Suspense, SubTree memoization, and additional batching operations.
 //!
 //! ## Implementation Details:
 //!
 //! ### IDs for elements
-//!
+//! --------------------
 //! All nodes are addressed by their IDs. The RealDom provides an imperative interface for making changes to these nodes.
 //! We don't necessarily require that DOM changes happen instnatly during the diffing process, so the implementor may choose
 //! to batch nodes if it is more performant for their application. The expectation is that renderers use a Slotmap for nodes
@@ -21,6 +19,7 @@
 //! brick the user's page.
 //!
 //! ## Subtree Memoization
+//! -----------------------
 //! We also employ "subtree memoization" which saves us from having to check trees which take no dynamic content. We can
 //! detect if a subtree is "static" by checking if its children are "static". Since we dive into the tree depth-first, the
 //! calls to "create" propogate this information upwards. Structures like the one below are entirely static:
@@ -30,11 +29,21 @@
 //! Because the subtrees won't be diffed, their "real node" data will be stale (invalid), so its up to the reconciler to
 //! track nodes created in a scope and clean up all relevant data. Support for this is currently WIP
 //!
+//! ## Bloom Filter and Heuristics
+//! ------------------------------
+//! For all components, we employ some basic heuristics to speed up allocations and pre-size bump arenas. The heuristics are
+//! currently very rough, but will get better as time goes on. For FFI, we recommend using a bloom filter to cache strings.
+//!
+//! ## Garbage Collection
+//! ---------------------
+//! We roughly place the role of garbage collection onto the reconciler. Dioxus needs to manage the lifecycle of components
+//! but will not spend any time cleaning up old elements. It's the Reconciler's duty to understand which elements need to
+//! be cleaned up *after* the diffing is completed. The reconciler should schedule this garbage collection as the absolute
+//! lowest priority task, after all edits have been applied.
 //!
 //!
 //! Further Reading and Thoughts
 //! ----------------------------
-//!
 //! There are more ways of increasing diff performance here that are currently not implemented.
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
@@ -58,11 +67,14 @@ use std::any::Any;
 pub trait RealDom<'a> {
     // Navigation
     fn push_root(&mut self, root: RealDomNode);
+    fn pop(&mut self);
 
     // Add Nodes to the dom
     // add m nodes from the stack
     fn append_children(&mut self, many: u32);
+
     // replace the n-m node on the stack with the m nodes
+    // ends with the last element of the chain on the top of the stack
     fn replace_with(&mut self, many: u32);
 
     // Remove Nodesfrom the dom
@@ -138,23 +150,14 @@ where
             seen_nodes: FxHashSet::default(),
         }
     }
+
     // Diff the `old` node with the `new` node. Emits instructions to modify a
     // physical DOM node that reflects `old` into something that reflects `new`.
     //
-    // Upon entry to this function, the physical DOM node must be on the top of the
-    // change list stack:
+    // the real stack should be what it is coming in and out of this function (ideally empty)
     //
-    //     [... node]
-    //
-    // The change list stack is in the same state when this function exits.
-    // In the case of Fragments, the parent node is on the stack
+    // each function call assumes the stack is fresh (empty).
     pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
-        /*
-        For each valid case, we "commit traversal", meaning we save this current position in the tree.
-        Then, we diff and queue an edit event (via chagelist). s single trees - when components show up, we save that traversal and then re-enter later.
-        When re-entering, we reuse the EditList in DiffState
-        */
-        // log::debug!("diffing...");
         match (old_node, new_node) {
             // Handle the "sane" cases first.
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
@@ -168,7 +171,9 @@ where
                     self.dom.push_root(old.dom_id.get());
                     log::debug!("Text has changed {}, {}", old.text, new.text);
                     self.dom.set_text(new.text);
+                    self.dom.pop();
                 }
+
                 new.dom_id.set(old.dom_id.get());
             }
 
@@ -181,13 +186,19 @@ where
                     self.dom.push_root(old.dom_id.get());
                     let meta = self.create(new_node);
                     self.dom.replace_with(meta.added_to_stack);
+                    self.dom.pop();
                     return;
                 }
-                new.dom_id.set(old.dom_id.get());
 
+                let oldid = old.dom_id.get();
+                new.dom_id.set(oldid);
+
+                // push it just in case
+                self.dom.push_root(oldid);
                 self.diff_listeners(old.listeners, new.listeners);
                 self.diff_attr(old.attributes, new.attributes, new.namespace);
                 self.diff_children(old.children, new.children);
+                self.dom.pop();
             }
 
             (VNode::Component(old), VNode::Component(new)) => {
@@ -278,44 +289,47 @@ where
                 if old.children.len() == new.children.len() {}
 
                 self.diff_children(old.children, new.children);
-                // todo!()
             }
 
-            // Okay - these are the "insane" cases where the structure is entirely different.
-            // The factory and rsx! APIs don't really produce structures like this, so we don't take any too complicated
-            // code paths.
+            // The strategy here is to pick the first possible node from the previous set and use that as our replace with root
+            // We also walk the "real node" list to make sure all latent roots are claened up
+            // This covers the case any time a fragment or component shows up with pretty much anything else
+            (
+                VNode::Component(_) | VNode::Fragment(_) | VNode::Text(_) | VNode::Element(_),
+                VNode::Component(_) | VNode::Fragment(_) | VNode::Text(_) | VNode::Element(_),
+            ) => {
+                // Choose the node to use as the placeholder for replacewith
+                let back_node = match old_node {
+                    VNode::Element(_) | VNode::Text(_) => old_node
+                        .get_mounted_id(&self.components)
+                        .expect("Element and text always have a real node"),
 
-            // in the case where the old node was a fragment but the new nodes are text,
-            (VNode::Fragment(_) | VNode::Component(_), VNode::Element(_) | VNode::Text(_)) => {
-                // find the first real element int the old node
-                // let mut iter = RealChildIterator::new(old_node, self.components);
-                // if let Some(first) = iter.next() {
-                //     // replace the very first node with the creation of the element or text
-                // } else {
-                //     // there are no real elements in the old fragment...
-                //     // We need to load up the next real
-                // }
-                // if let VNode::Component(old) = old_node {
-                //     // schedule this component's destructor to be run
-                //     todo!()
-                // }
-            }
-            // In the case where real nodes are being replaced by potentially
-            (VNode::Element(_) | VNode::Text(_), VNode::Fragment(new)) => {
-                //
-            }
-            (VNode::Text(_), VNode::Element(_)) => {
-                self.create(new_node);
-                self.dom.replace_with(1);
-            }
-            (VNode::Element(_), VNode::Text(_)) => {
-                self.create(new_node);
-                self.dom.replace_with(1);
+                    _ => {
+                        let mut old_iter = RealChildIterator::new(old_node, &self.components);
+
+                        let back_node = old_iter
+                            .next()
+                            .expect("Empty fragments should generate a placeholder.");
+
+                        // remove any leftovers
+                        for to_remove in old_iter {
+                            self.dom.push_root(to_remove);
+                            self.dom.remove();
+                        }
+
+                        back_node
+                    }
+                };
+
+                // replace the placeholder or first node with the nodes generated from the "new"
+                self.dom.push_root(back_node);
+                let meta = self.create(new_node);
+                self.dom.replace_with(meta.added_to_stack);
             }
 
-            _ => {
-                //
-            }
+            // TODO
+            (VNode::Suspended { .. }, _) => todo!(),
+            (_, VNode::Suspended { .. }) => todo!(),
         }
     }
 }
@@ -480,23 +494,19 @@ where
                 // Run the scope for one iteration to initialize it
                 new_component.run_scope().unwrap();
 
-                // By using "diff_node" instead of "create", we delegate the mutations to the child
-                // However, "diff_node" always expects a real node on the stack, so we put a placeholder so it knows where to start.
-                //
                 // TODO: we need to delete (IE relcaim this node, otherwise the arena will grow infinitely)
-                let _ = self.dom.create_placeholder();
-                self.diff_node(new_component.old_frame(), new_component.next_frame());
+                let nextnode = new_component.next_frame();
+                let meta = self.create(nextnode);
 
                 // Finally, insert this node as a seen node.
                 self.seen_nodes.insert(idx);
 
-                // Virtual Components don't result in new nodes on the stack
-                // However, we can skip them from future diffing if they take no children, have no props, take no key, etc.
-                CreateMeta::new(vcomponent.is_static, 0)
+                CreateMeta::new(vcomponent.is_static, meta.added_to_stack)
             }
 
             // Fragments are the only nodes that can contain dynamic content (IE through curlies or iterators).
             // We can never ignore their contents, so the prescence of a fragment indicates that we need always diff them.
+            // Fragments will just put all their nodes onto the stack after creation
             VNode::Fragment(frag) => {
                 let mut nodes_added = 0;
                 for child in frag.children.iter().rev() {
@@ -506,6 +516,7 @@ where
                     let new_meta = self.create(child);
                     nodes_added += new_meta.added_to_stack;
                 }
+                log::info!("This fragment added {} nodes to the stack", nodes_added);
 
                 // Never ignore
                 CreateMeta::new(false, nodes_added)
@@ -877,6 +888,39 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
     }
 
+    // Remove all of a node's children.
+    //
+    // The change list stack must have this shape upon entry to this function:
+    //
+    //     [... parent]
+    //
+    // When this function returns, the change list stack is in the same state.
+    pub fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
+        // debug_assert!(self.dom.traversal_is_committed());
+        log::debug!("REMOVING CHILDREN");
+        for _child in old {
+            // registry.remove_subtree(child);
+        }
+        // Fast way to remove all children: set the node's textContent to an empty
+        // string.
+        todo!()
+        // self.dom.set_inner_text("");
+    }
+
+    // Create the given children and append them to the parent node.
+    //
+    // The parent node must currently be on top of the change list stack:
+    //
+    //     [... parent]
+    //
+    // When this function returns, the change list stack is in the same state.
+    pub fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
+        for child in new {
+            let meta = self.create(child);
+            self.dom.append_children(meta.added_to_stack);
+        }
+    }
+
     // The most-general, expensive code path for keyed children diffing.
     //
     // We find the longest subsequence within `old` of children that are relatively
@@ -1217,39 +1261,6 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // Support methods
     // ======================
 
-    // Remove all of a node's children.
-    //
-    // The change list stack must have this shape upon entry to this function:
-    //
-    //     [... parent]
-    //
-    // When this function returns, the change list stack is in the same state.
-    pub fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
-        // debug_assert!(self.dom.traversal_is_committed());
-        log::debug!("REMOVING CHILDREN");
-        for _child in old {
-            // registry.remove_subtree(child);
-        }
-        // Fast way to remove all children: set the node's textContent to an empty
-        // string.
-        todo!()
-        // self.dom.set_inner_text("");
-    }
-
-    // Create the given children and append them to the parent node.
-    //
-    // The parent node must currently be on top of the change list stack:
-    //
-    //     [... parent]
-    //
-    // When this function returns, the change list stack is in the same state.
-    pub fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
-        for child in new {
-            let meta = self.create(child);
-            self.dom.append_children(meta.added_to_stack);
-        }
-    }
-
     // Remove the current child and all of its following siblings.
     //
     // The change list stack must have this shape upon entry to this function:
@@ -1297,4 +1308,96 @@ enum KeyedPrefixResult {
     // There is more diffing work to do. Here is a count of how many children at
     // the beginning of `new` and `old` we already processed.
     MoreWorkToDo(usize),
+}
+
+/// This iterator iterates through a list of virtual children and only returns real children (Elements or Text).
+///
+/// This iterator is useful when it's important to load the next real root onto the top of the stack for operations like
+/// "InsertBefore".
+struct RealChildIterator<'a> {
+    scopes: &'a SharedArena,
+
+    // Heuristcally we should never bleed into 5 completely nested fragments/components
+    // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
+    stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 5]>,
+}
+
+impl<'a> RealChildIterator<'a> {
+    fn new(starter: &'a VNode<'a>, scopes: &'a SharedArena) -> Self {
+        Self {
+            scopes,
+            stack: smallvec::smallvec![(0, starter)],
+        }
+    }
+}
+
+impl<'a> Iterator for RealChildIterator<'a> {
+    type Item = RealDomNode;
+
+    fn next(&mut self) -> Option<RealDomNode> {
+        let mut should_pop = false;
+        let mut returned_node = None;
+        let mut should_push = None;
+
+        while returned_node.is_none() {
+            if let Some((count, node)) = self.stack.last_mut() {
+                match node {
+                    // We can only exit our looping when we get "real" nodes
+                    // This includes fragments and components when they're empty (have a single root)
+                    VNode::Element(_) | VNode::Text(_) => {
+                        // We've recursed INTO an element/text
+                        // We need to recurse *out* of it and move forward to the next
+                        should_pop = true;
+                        returned_node = node.get_mounted_id(&self.scopes);
+                    }
+
+                    // If we get a fragment we push the next child
+                    VNode::Fragment(frag) => {
+                        let subcount = *count as usize;
+
+                        if frag.children.len() == 0 {
+                            should_pop = true;
+                            returned_node = node.get_mounted_id(&self.scopes);
+                        }
+
+                        if subcount >= frag.children.len() {
+                            should_pop = true;
+                        } else {
+                            should_push = Some(&frag.children[subcount]);
+                        }
+                    }
+
+                    // Immediately abort suspended nodes - can't do anything with them yet
+                    // VNode::Suspended => should_pop = true,
+                    VNode::Suspended { real } => todo!(),
+
+                    // For components, we load their root and push them onto the stack
+                    VNode::Component(sc) => {
+                        let scope = self.scopes.try_get(sc.ass_scope.get().unwrap()).unwrap();
+
+                        // Simply swap the current node on the stack with the root of the component
+                        *node = scope.root();
+                    }
+                }
+            } else {
+                // If there's no more items on the stack, we're done!
+                return None;
+            }
+
+            if should_pop {
+                self.stack.pop();
+                if let Some((id, _)) = self.stack.last_mut() {
+                    *id += 1;
+                }
+                should_pop = false;
+            }
+
+            if let Some(push) = should_push {
+                self.stack.push((0, push));
+                should_push = None;
+            }
+        }
+
+        returned_node
+    }
 }

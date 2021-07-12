@@ -18,8 +18,12 @@ pub enum DomEdit<'bump> {
     PushRoot {
         root: u64,
     },
-    AppendChild,
-    ReplaceWith,
+    AppendChildren {
+        many: u32,
+    },
+    ReplaceWith {
+        many: u32,
+    },
     Remove,
     RemoveAllChildren,
     CreateTextNode {

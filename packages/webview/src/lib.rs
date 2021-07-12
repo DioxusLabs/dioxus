@@ -48,6 +48,15 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
         props: T,
         user_builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
     ) -> anyhow::Result<()> {
+        Self::run_with_edits(root, props, user_builder, None)
+    }
+
+    pub fn run_with_edits(
+        root: FC<T>,
+        props: T,
+        user_builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
+        redits: Option<Vec<DomEdit<'static>>>,
+    ) -> anyhow::Result<()> {
         use wry::{
             application::{
                 event::{Event, StartCause, WindowEvent},
@@ -72,20 +81,25 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
             .with_rpc_handler(move |window: &Window, mut req: RpcRequest| {
                 match req.method.as_str() {
                     "initiate" => {
-                        let mut lock = vdom.write().unwrap();
-                        let mut reg_lock = registry.write().unwrap();
+                        let edits = if let Some(edits) = &redits {
+                            serde_json::to_value(edits).unwrap()
+                        } else {
+                            let mut lock = vdom.write().unwrap();
+                            let mut reg_lock = registry.write().unwrap();
 
-                        // Create the thin wrapper around the registry to collect the edits into
-                        let mut real = dom::WebviewDom::new(reg_lock.take().unwrap());
+                            // Create the thin wrapper around the registry to collect the edits into
+                            let mut real = dom::WebviewDom::new(reg_lock.take().unwrap());
 
-                        // Serialize the edit stream
-                        let edits = {
-                            lock.rebuild(&mut real).unwrap();
-                            serde_json::to_value(&real.edits).unwrap()
+                            // Serialize the edit stream
+                            let edits = {
+                                lock.rebuild(&mut real).unwrap();
+                                serde_json::to_value(&real.edits).unwrap()
+                            };
+
+                            // Give back the registry into its slot
+                            *reg_lock = Some(real.consume());
+                            edits
                         };
-
-                        // Give back the registry into its slot
-                        *reg_lock = Some(real.consume());
 
                         // Return the edits into the webview runtime
                         Some(RpcResponse::new_result(req.id.take(), Some(edits)))

@@ -18,7 +18,7 @@ enum Operator {
     Div,
 }
 
-static App: FC<()> = |cx| {
+const App: FC<()> = |cx| {
     let cur_val = use_state(cx, || 0.0_f64);
     let operator = use_state(cx, || None as Option<Operator>);
     let display_value = use_state(cx, || "".to_string());
@@ -52,6 +52,7 @@ static App: FC<()> = |cx| {
             display_value.set(format!("-{}", *display_value))
         }
     };
+
     let toggle_percent = move |_| todo!();
 
     let clear_key = move |_| {

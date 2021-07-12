@@ -37,6 +37,8 @@ slotmap = "1.0.3"
 appendlist = "1.4.0"
 
 futures-util = "0.3.15"
+smallvec = "1.6.1"
+
 
 [features]
 default = []

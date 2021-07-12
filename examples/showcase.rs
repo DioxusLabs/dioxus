@@ -11,7 +11,6 @@ mod reference {
     mod controlled_inputs;
     mod custom_elements;
     mod empty;
-    mod fiber;
     mod fragments;
     mod global_css;
     mod inline_styles;

@@ -3,136 +3,149 @@
 
 <head>
     <!-- <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet" /> -->
+
+    <script>
+        class Interpreter {
+            constructor(root) {
+                this.stack = [root];
+                this.listeners = {};
+                this.lastNodeWasText = false;
+                this.nodes = {
+                    0: root
+                };
+            }
+
+            top() {
+                return this.stack[this.stack.length - 1];
+            }
+
+            pop() {
+                return this.stack.pop();
+            }
+        }
+
+        class OPTABLE {
+            PushRoot(self, edit) {
+                const id = edit.root;
+                const node = self.nodes[id];
+                self.stack.push(node);
+            }
+            AppendChildren(self, edit) {
+                let root = self.stack[self.stack.length - (edit.many + 1)];
+                for (let i = 0; i < edit.many; i++) {
+                    console.log("popping ", i, edit.many);
+                    let node = self.pop();
+                    root.appendChild(node);
+                }
+            }
+            ReplaceWith(self, edit) {
+
+                let root = self.stack[self.stack.length - (edit.many + 1)];
+                let els = [];
+
+                for (let i = 0; i < edit.many; i++) {
+                    els.push(self.pop());
+                }
+
+                root.replaceWith(...els);
+            }
+            Remove(self, edit) {
+                const node = self.stack.pop();
+                node.remove();
+            }
+            RemoveAllChildren(self, edit) {
+            }
+            CreateTextNode(self, edit) {
+                self.stack.push(document.createTextNode(edit.text));
+            }
+            CreateElement(self, edit) {
+                const tagName = edit.tag;
+                console.log(`creating element: `, edit);
+                self.stack.push(document.createElement(tagName));
+            }
+            CreateElementNs(self, edit) {
+                self.stack.push(document.createElementNS(edit.ns, edit.tag));
+            }
+            CreatePlaceholder(self, edit) {
+                const a = `self.stack.push(document.createElement("pre"))`;
+                self.stack.push(document.createComment("vroot"));
+            }
+            NewEventListener(self, edit) {
+            }
+            RemoveEventListener(self, edit) {
+            }
+            SetText(self, edit) {
+                self.top().textContent = edit.text;
+            }
+            SetAttribute(self, edit) {
+                const name = edit.field;
+                const value = edit.value;
+                const node = self.top(self.stack);
+                node.setAttribute(name, value);
+
+                if ((name === "value", self)) {
+                    node.value = value;
+                }
+                if ((name === "checked", self)) {
+                    node.checked = true;
+                }
+                if ((name === "selected", self)) {
+                    node.selected = true;
+                }
+            }
+            RemoveAttribute(self, edit) {
+                const name = edit.field;
+                const node = self.top(self.stack);
+                node.removeAttribute(name);
+
+                if ((name === "value", self)) {
+                    node.value = null;
+                }
+                if ((name === "checked", self)) {
+                    node.checked = false;
+                }
+                if ((name === "selected", self)) {
+                    node.selected = false;
+                }
+            }
+        }
+
+        function EditListReceived(rawEditList) {
+            let editList = JSON.parse(rawEditList);
+            console.warn("hnelllo");
+            editList.forEach(function (edit, index) {
+                console.log(edit);
+                op_table[edit.type](interpreter, edit);
+            });
+        }
+
+        const op_table = new OPTABLE();
+
+        async function initialize() {
+            const reply = await rpc.call('initiate');
+            const interpreter = new Interpreter(window.document.getElementById("app").firstChild);
+            console.log(reply);
+
+            for (let x = 0; x < reply.length; x++) {
+                let edit = reply[x];
+                console.log(edit);
+                op_table[edit.type](interpreter, edit);
+            }
+
+            console.log("stack completed: ", interpreter.stack);
+        }
+        console.log("initializing...");
+        initialize();
+    </script>
 </head>
 
+
+
 <body>
-    <div></div>
+    <div id="app">
+        _
+    </div>
 </body>
-<script>
-
-    class Interpreter {
-        constructor(root) {
-            this.stack = [root];
-            this.listeners = {
-
-            };
-            this.lastNodeWasText = false;
-            this.nodes = {
-                0: root
-            };
-        }
-
-        top() {
-            return this.stack[this.stack.length - 1];
-        }
-
-        pop() {
-            return this.stack.pop();
-        }
-    }
-
-
-    class OPTABLE {
-        PushRoot(self, edit) {
-            const id = edit.root;
-            const node = self.nodes[id];
-            self.stack.push(node);
-        }
-        AppendChild(self, edit) {
-            const node = self.pop();
-            self.top().appendChild(node);
-        }
-        ReplaceWith(self, edit) {
-            const newNode = self.pop();
-            const oldNode = self.pop();
-            oldNode.replaceWith(newNode);
-            self.stack.push(newNode);
-        }
-        Remove(self, edit) {
-            const node = self.stack.pop();
-            node.remove();
-        }
-        RemoveAllChildren(self, edit) {
-        }
-        CreateTextNode(self, edit) {
-            self.stack.push(document.createTextNode(edit.text));
-        }
-        CreateElement(self, edit) {
-            const tagName = edit.tag;
-            console.log(`creating element: `, edit);
-            self.stack.push(document.createElement(tagName));
-        }
-        CreateElementNs(self, edit) {
-            self.stack.push(document.createElementNS(edit.ns, edit.tag));
-        }
-        CreatePlaceholder(self, edit) {
-            self.stack.push(document.createElement("pre"));
-        }
-        NewEventListener(self, edit) {
-        }
-        RemoveEventListener(self, edit) {
-        }
-        SetText(self, edit) {
-            self.top().textContent = edit.text;
-        }
-        SetAttribute(self, edit) {
-            const name = edit.field;
-            const value = edit.value;
-            const node = self.top(self.stack);
-            node.setAttribute(name, value);
-
-            if ((name === "value", self)) {
-                node.value = value;
-            }
-            if ((name === "checked", self)) {
-                node.checked = true;
-            }
-            if ((name === "selected", self)) {
-                node.selected = true;
-            }
-        }
-        RemoveAttribute(self, edit) {
-            const name = edit.field;
-            const node = self.top(self.stack);
-            node.removeAttribute(name);
-
-            if ((name === "value", self)) {
-                node.value = null;
-            }
-            if ((name === "checked", self)) {
-                node.checked = false;
-            }
-            if ((name === "selected", self)) {
-                node.selected = false;
-            }
-        }
-    }
-
-
-
-    function EditListReceived(rawEditList) {
-        let editList = JSON.parse(rawEditList);
-        console.warn("hnelllo");
-        editList.forEach(function (edit, index) {
-            console.log(edit);
-            op_table[edit.type](interpreter, edit);
-        });
-    }
-
-    const op_table = new OPTABLE();
-    const interpreter = new Interpreter(window.document.body);
-
-    async function initialize() {
-        const reply = await rpc.call('initiate');
-        console.log(reply);
-        reply.forEach(function (edit, index) {
-            console.log(edit);
-            op_table[edit.type](interpreter, edit);
-        });
-    }
-    console.log("initializing...");
-    initialize();
-</script>
 
 
 </html>

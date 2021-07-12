@@ -152,8 +152,6 @@ impl VirtualDom {
             })
             .unwrap();
 
-        log::debug!("base scope is {:#?}", base_scope);
-
         Self {
             base_scope,
             event_queue,
@@ -318,12 +316,6 @@ impl VirtualDom {
 
             let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
             diff_machine.diff_node(old, new);
-
-            // log::debug!(
-            //     "Processing update: {:#?} with height {}",
-            //     &update.idx,
-            //     cur_height
-            // );
         }
 
         Ok(())

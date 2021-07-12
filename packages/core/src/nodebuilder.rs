@@ -693,10 +693,11 @@ impl<'a> NodeFactory<'a> {
         VNode::Fragment(self.bump().alloc(VFragment {
             children,
             key: NodeKey::new_opt(key),
+            void_root: Cell::new(None),
         }))
     }
 
-    pub fn virtual_child<T: Properties + 'a, C>(
+    pub fn virtual_child<T, C>(
         &self,
         f: FC<T>,
         props: T,
@@ -705,6 +706,7 @@ impl<'a> NodeFactory<'a> {
     ) -> VNode<'a>
     where
         C: 'a + AsRef<[VNode<'a>]>,
+        T: Properties + 'a,
     {
         let children: &'a C = self.bump().alloc(children);
         VNode::Component(self.bump().alloc(crate::nodes::VComponent::new(

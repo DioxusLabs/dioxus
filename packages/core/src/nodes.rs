@@ -182,9 +182,9 @@ impl<'a> VNode<'a> {
         match self {
             VNode::Element(el) => Some(el.dom_id.get()),
             VNode::Text(te) => Some(te.dom_id.get()),
-            VNode::Fragment(_) => todo!(),
+            VNode::Fragment(frag) => frag.void_root.get(),
             VNode::Suspended { .. } => todo!(),
-            VNode::Component(el) => Some(el.mounted_root.get()),
+            VNode::Component(el) => todo!(),
         }
     }
 }
@@ -341,8 +341,7 @@ pub type VCompAssociatedScope = Option<ScopeIdx>;
 pub struct VComponent<'src> {
     pub key: NodeKey<'src>,
 
-    pub mounted_root: Cell<RealDomNode>,
-
+    // pub void_root: Cell<Option<RealDomNode>>,
     pub ass_scope: Cell<VCompAssociatedScope>,
 
     // todo: swap the RC out with
@@ -438,7 +437,7 @@ impl<'a> VComponent<'a> {
             key,
             caller,
             is_static,
-            mounted_root: Cell::new(RealDomNode::empty()),
+            // void_root: Cell::new(None),
         }
     }
 }
@@ -476,6 +475,7 @@ pub fn create_component_caller<'a, P: 'a>(
 pub struct VFragment<'src> {
     pub key: NodeKey<'src>,
     pub children: &'src [VNode<'src>],
+    pub void_root: Cell<Option<RealDomNode>>,
 }
 
 impl<'a> VFragment<'a> {
@@ -485,6 +485,10 @@ impl<'a> VFragment<'a> {
             None => NodeKey(None),
         };
 
-        Self { key, children }
+        Self {
+            key,
+            children,
+            void_root: Cell::new(None),
+        }
     }
 }

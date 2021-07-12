@@ -1,17 +1,38 @@
-use dioxus::prelude::*;
+//! Example: Iterators
+//! ------------------
+//!
+//! This example demonstrates how to use iterators with Dioxus.
+//! Iterators must be used through the curly braces item in element bodies.
+//! While you might be inclined to `.collect::<>` into Html, Dioxus prefers you provide an iterator that
+//! resolves to VNodes. It's more efficient and easier to write than having to `collect` everywhere.
+//!
+//! This also makes it easy to write "pull"-style iterators that don't have a known size.
+
 fn main() {}
 
+use dioxus::prelude::*;
 static Example: FC<()> = |cx| {
     let g = use_state(cx, || 0);
+
     let v = (0..10).map(|f| {
         rsx! {
             li {
-                onclick: move |_| g.set(10)
+                onclick: move |_| g.set(f)
+                "ID: {f}"
+                ul {
+                    {(0..10).map(|k| rsx!{
+                        li {
+                            "Sub iterator: {f}.{k}"
+                        }
+                    })}
+                }
             }
         }
     });
+
     cx.render(rsx! {
-        div {
+        h3 {"Selected: {g}"}
+        ul {
             {v}
         }
     })

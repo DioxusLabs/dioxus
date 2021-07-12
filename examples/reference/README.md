@@ -21,7 +21,6 @@ This folder holds a bunch of useful reference code. However, none of the code is
 | [NodeRef](./noderefs.rs)                            | How to handle futures with suspense |
 | [Signals](./signals.rs)                             | How to handle futures with suspense |
 | [ToString](./tostring.rs)                           | How to handle futures with suspense |
-| [Fiber](./fiber.rs)                                 | How to handle futures with suspense |
 | [Global CSS](./global_css.rs)                       | How to handle futures with suspense |
 | [State Management](./statemanagement.rs)            | How to handle futures with suspense |
 | [Testing](./testing.rs)                             | How to handle futures with suspense |

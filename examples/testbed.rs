@@ -1,15 +1,28 @@
 use dioxus::prelude::*;
 
-fn main() {}
+fn main() {
+    env_logger::init();
+    dioxus::desktop::launch(Example, |c| c);
+}
 
-static App: FC<()> = |cx| {
-    //
-    cx.render(rsx!(
-        div {
-            h1 {}
-        }
-    ))
+const STYLE: &str = r#"
+body {background-color: powderblue;}
+h1   {color: blue;}
+p    {color: red;}
+"#;
+
+const Example: FC<()> = |cx| {
+    cx.render(rsx! {
+        Child { }
+        Child { }
+    })
 };
 
-#[test]
-fn blah() {}
+const Child: FC<()> = |cx| {
+    cx.render(rsx!(
+        h1 {"1" }
+        h1 {"2" }
+        h1 {"3" }
+        h1 {"4" }
+    ))
+};
