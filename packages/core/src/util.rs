@@ -1,5 +1,5 @@
 use std::{
-    cell::{RefCell, RefMut},
+    cell::{Cell, RefCell, RefMut},
     rc::Rc,
     vec::Drain,
 };
@@ -64,6 +64,9 @@ impl RealDomNode {
     }
     pub const fn empty() -> Self {
         Self(u64::MIN)
+    }
+    pub const fn empty_cell() -> Cell<Self> {
+        Cell::new(Self::empty())
     }
 }
 

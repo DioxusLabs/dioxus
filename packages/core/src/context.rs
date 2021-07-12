@@ -270,17 +270,8 @@ Any function prefixed with "use" should not be called conditionally.
     ) -> VNode<'src> {
         use futures_util::FutureExt;
         match fut.now_or_never() {
-            Some(out) => {
-                let suspended_cx = SuspendedContext {};
-                let nodes = callback(suspended_cx, out);
-                return nodes;
-            }
-            None => {
-                // we need to register this task
-                VNode::Suspended {
-                    real: Cell::new(RealDomNode::empty()),
-                }
-            }
+            Some(out) => callback(SuspendedContext {}, out),
+            None => NodeFactory::suspended(),
         }
     }
 

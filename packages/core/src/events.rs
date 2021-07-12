@@ -125,7 +125,6 @@ pub mod on {
     use std::{fmt::Debug, ops::Deref, rc::Rc};
 
     use crate::{
-        innerlude::ElementBuilder,
         innerlude::NodeFactory,
         innerlude::{Attribute, Listener, RealDomNode, VNode},
     };

@@ -19,11 +19,9 @@ pub mod diff;
 pub mod error;
 pub mod events;
 pub mod hooklist;
-pub mod nodebuilder;
 pub mod nodes;
 pub mod scope;
 pub mod signals;
-pub mod styles;
 pub mod tasks;
 pub mod util;
 pub mod virtual_dom;
@@ -36,7 +34,6 @@ pub(crate) mod innerlude {
     pub use crate::diff::*;
     pub use crate::error::*;
     pub use crate::events::*;
-    pub use crate::nodebuilder::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
     pub use crate::serialize::*;
@@ -46,8 +43,6 @@ pub(crate) mod innerlude {
 
     pub type FC<P> = fn(Context<P>) -> VNode;
 
-    // Re-export the FC macro
-    pub use crate::nodebuilder as builder;
     pub use dioxus_core_macro::{html, rsx};
 }
 
@@ -61,8 +56,8 @@ pub use crate::{
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::context::Context;
+    pub use crate::innerlude::DioxusElement;
     pub use crate::innerlude::{LazyNodes, NodeFactory, FC};
-    pub use crate::nodebuilder::DioxusElement;
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
     pub use dioxus_core_macro::{format_args_f, html, rsx, Props};

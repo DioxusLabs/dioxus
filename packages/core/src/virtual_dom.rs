@@ -146,7 +146,7 @@ impl VirtualDom {
             .with(|arena| {
                 arena.insert_with_key(move |myidx| {
                     let event_channel = _event_queue.new_channel(0, myidx);
-                    let caller = crate::nodes::create_component_caller(root, props_ptr as *const _);
+                    let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
                     Scope::new(caller, myidx, None, 0, event_channel, link, &[], submitter)
                 })
             })

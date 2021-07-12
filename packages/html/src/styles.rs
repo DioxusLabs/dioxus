@@ -12,7 +12,7 @@
 //!
 //!
 
-use crate::{innerlude::Attribute, nodebuilder::NodeFactory};
+use crate::innerlude::{Attribute, NodeFactory};
 
 pub struct StyleBuilder;
 pub trait AsAttr<'a> {

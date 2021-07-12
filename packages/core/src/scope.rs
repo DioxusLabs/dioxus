@@ -212,18 +212,22 @@ impl Scope {
         (self.task_submitter)(DTask::new(task, self.arena_idx));
     }
 
+    #[inline]
     pub(crate) fn next_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
         self.frames.current_head_node()
     }
 
+    #[inline]
     pub(crate) fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
         self.frames.prev_head_node()
     }
 
+    #[inline]
     pub(crate) fn cur_frame(&self) -> &BumpFrame {
         self.frames.cur_frame()
     }
 
+    #[inline]
     pub fn root<'a>(&'a self) -> &'a VNode<'a> {
         &self.frames.cur_frame().head_node
     }

@@ -1,20 +1,7 @@
-use crate::hooklist::HookList;
-use crate::{arena::SharedArena, innerlude::*};
-use appendlist::AppendList;
+use crate::innerlude::*;
 use bumpalo::Bump;
-use slotmap::DefaultKey;
-use slotmap::SlotMap;
-use std::marker::PhantomData;
-use std::{
-    any::{Any, TypeId},
-    cell::{Cell, RefCell},
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Debug,
-    future::Future,
-    ops::Deref,
-    pin::Pin,
-    rc::{Rc, Weak},
-};
+
+use std::cell::RefCell;
 pub struct ActiveFrame {
     // We use a "generation" for users of contents in the bump frames to ensure their data isn't broken
     pub generation: RefCell<usize>,
@@ -33,11 +20,11 @@ impl ActiveFrame {
         Self::from_frames(
             BumpFrame {
                 bump: Bump::new(),
-                head_node: VNode::static_text(""),
+                head_node: NodeFactory::static_text(""),
             },
             BumpFrame {
                 bump: Bump::new(),
-                head_node: VNode::static_text(""),
+                head_node: NodeFactory::static_text(""),
             },
         )
     }
