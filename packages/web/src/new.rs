@@ -71,32 +71,46 @@ impl WebsysDom {
 }
 
 impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
-    fn push_root(&mut self, root: RealDomNode) {
+    fn push(&mut self, root: RealDomNode) {
         log::debug!("Called [push_root] {:?}", root);
         let key: DefaultKey = KeyData::from_ffi(root.0).into();
         let domnode = self.nodes.get(key).expect("Failed to pop know root");
         self.stack.push(domnode.clone());
     }
+    // drop the node off the stack
+    fn pop(&mut self) {
+        self.stack.pop();
+    }
 
     fn append_children(&mut self, many: u32) {
         log::debug!("Called [`append_child`]");
-        let child = self.stack.pop();
 
-        if child.dyn_ref::<web_sys::Text>().is_some() {
-            if self.last_node_was_text {
-                let comment_node = self
-                    .document
-                    .create_comment("dioxus")
-                    .dyn_into::<Node>()
-                    .unwrap();
-                self.stack.top().append_child(&comment_node).unwrap();
+        let mut root: Node = self
+            .stack
+            .list
+            .get(self.stack.list.len() - many as usize)
+            .unwrap()
+            .clone();
+
+        for _ in 0..many {
+            let child = self.stack.pop();
+
+            if child.dyn_ref::<web_sys::Text>().is_some() {
+                if self.last_node_was_text {
+                    let comment_node = self
+                        .document
+                        .create_comment("dioxus")
+                        .dyn_into::<Node>()
+                        .unwrap();
+                    self.stack.top().append_child(&comment_node).unwrap();
+                }
+                self.last_node_was_text = true;
+            } else {
+                self.last_node_was_text = false;
             }
-            self.last_node_was_text = true;
-        } else {
-            self.last_node_was_text = false;
-        }
 
-        self.stack.top().append_child(&child).unwrap();
+            root.append_child(&child).unwrap();
+        }
     }
 
     fn replace_with(&mut self, many: u32) {
@@ -104,34 +118,30 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         let new_node = self.stack.pop();
         let old_node = self.stack.pop();
 
-        if old_node.has_type::<Element>() {
-            old_node
-                .dyn_ref::<Element>()
-                .unwrap()
-                .replace_with_with_node_1(&new_node)
-                .unwrap();
-        } else if old_node.has_type::<web_sys::CharacterData>() {
-            old_node
-                .dyn_ref::<web_sys::CharacterData>()
-                .unwrap()
-                .replace_with_with_node_1(&new_node)
-                .unwrap();
-        } else if old_node.has_type::<web_sys::DocumentType>() {
-            old_node
-                .dyn_ref::<web_sys::DocumentType>()
-                .unwrap()
-                .replace_with_with_node_1(&new_node)
-                .unwrap();
-        } else {
-            panic!("Cannot replace node: {:?}", old_node);
+        // TODO: use different-sized replace withs
+        if many == 1 {
+            if old_node.has_type::<Element>() {
+                old_node
+                    .dyn_ref::<Element>()
+                    .unwrap()
+                    .replace_with_with_node_1(&new_node)
+                    .unwrap();
+            } else if old_node.has_type::<web_sys::CharacterData>() {
+                old_node
+                    .dyn_ref::<web_sys::CharacterData>()
+                    .unwrap()
+                    .replace_with_with_node_1(&new_node)
+                    .unwrap();
+            } else if old_node.has_type::<web_sys::DocumentType>() {
+                old_node
+                    .dyn_ref::<web_sys::DocumentType>()
+                    .unwrap()
+                    .replace_with_with_node_1(&new_node)
+                    .unwrap();
+            } else {
+                panic!("Cannot replace node: {:?}", old_node);
+            }
         }
-
-        // // poc to see if this is a valid solution
-        // if let Some(id) = self.current_known {
-        //     // update mapping
-        //     self.known_roots.insert(id, new_node.clone());
-        //     self.current_known = None;
-        // }
 
         self.stack.push(new_node);
     }
@@ -303,7 +313,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
 
 #[derive(Debug, Default)]
 pub struct Stack {
-    list: Vec<Node>,
+    pub list: Vec<Node>,
 }
 
 impl Stack {

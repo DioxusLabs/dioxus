@@ -62,3 +62,4 @@ attr
 derefed
 Tokio
 asynchronicity
+constified

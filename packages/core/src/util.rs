@@ -62,7 +62,7 @@ impl RealDomNode {
     pub fn new(id: u64) -> Self {
         Self(id)
     }
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self(u64::MIN)
     }
 }
@@ -86,7 +86,7 @@ impl DebugDom {
     }
 }
 impl<'a> RealDom<'a> for DebugDom {
-    fn push_root(&mut self, root: RealDomNode) {}
+    fn push(&mut self, root: RealDomNode) {}
     fn pop(&mut self) {}
 
     fn append_children(&mut self, many: u32) {}

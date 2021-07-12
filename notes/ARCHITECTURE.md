@@ -45,3 +45,8 @@ div {
     h4 { "{sig3}" }
 }
 ```
+
+
+## Subtree memoization
+
+The rsx! macro needs to be *really* smart. If it detects that no dynamics are pumped into the macro, then it opts to use the "const" flavors of the element build functions we know and love. This has to be done at build time rather than runtime since components may return basically anything. Using the const flavor enables is_static which encourages Dioxus to do a ptr compare instead of a value compare to short circuit through the diffing. Due to const folding in Rust, entire subtrees can be ruled out at compile time.

@@ -66,7 +66,7 @@ use std::any::Any;
 /// target-specific Node type as well as easily serializing the edits to be sent over a network or IPC connection.
 pub trait RealDom<'a> {
     // Navigation
-    fn push_root(&mut self, root: RealDomNode);
+    fn push(&mut self, root: RealDomNode);
     fn pop(&mut self);
 
     // Add Nodes to the dom
@@ -168,7 +168,7 @@ where
                 }
 
                 if old.text != new.text {
-                    self.dom.push_root(old.dom_id.get());
+                    self.dom.push(old.dom_id.get());
                     log::debug!("Text has changed {}, {}", old.text, new.text);
                     self.dom.set_text(new.text);
                     self.dom.pop();
@@ -183,7 +183,7 @@ where
                 //
                 // In Dioxus, this is less likely to occur unless through a fragment
                 if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                    self.dom.push_root(old.dom_id.get());
+                    self.dom.push(old.dom_id.get());
                     let meta = self.create(new_node);
                     self.dom.replace_with(meta.added_to_stack);
                     self.dom.pop();
@@ -194,7 +194,7 @@ where
                 new.dom_id.set(oldid);
 
                 // push it just in case
-                self.dom.push_root(oldid);
+                self.dom.push(oldid);
                 self.diff_listeners(old.listeners, new.listeners);
                 self.diff_attr(old.attributes, new.attributes, new.namespace);
                 self.diff_children(old.children, new.children);
@@ -210,65 +210,48 @@ where
                     let scope_id = old.ass_scope.get();
                     new.ass_scope.set(scope_id);
 
-                    // new.mounted_root.set(old.mounted_root.get());
-
                     // make sure the component's caller function is up to date
                     let scope = self.components.try_get_mut(scope_id.unwrap()).unwrap();
-                    // .with_scope(scope_id.unwrap(), |scope| {
+
                     scope.caller = new.caller.clone();
 
                     // ack - this doesn't work on its own!
                     scope.update_children(new.children);
 
-                    // })
-                    // .unwrap();
-
                     // React doesn't automatically memoize, but we do.
-                    // The cost is low enough to make it worth checking
-                    // Rust produces fairly performant comparison methods, sometimes SIMD accelerated
-                    // let should_render = match old.comparator {
-                    //     Some(comparator) => comparator(new),
-                    //     None => true,
-                    // };
+                    let should_render = match old.comparator {
+                        Some(comparator) => comparator(new),
+                        None => true,
+                    };
 
-                    // if should_render {
-                    // // self.dom.commit_traversal();
-                    // let f = self.components.try_get_mut(scope_id.unwrap()).unwrap();
-                    // self.components
-                    //     .with_scope(scope_id.unwrap(), |f| {
-                    // log::debug!("running scope during diff {:#?}", scope_id);
-                    scope.run_scope().unwrap();
-                    self.diff_node(scope.old_frame(), scope.next_frame());
-                    // log::debug!("scope completed {:#?}", scope_id);
+                    if should_render {
+                        scope.run_scope().unwrap();
+                        self.diff_node(scope.old_frame(), scope.next_frame());
+                    } else {
+                        //
+                    }
+
                     self.seen_nodes.insert(scope_id.unwrap());
-                    // })
-                    // .unwrap();
-
-                    // diff_machine.change_list.load_known_root(root_id);
-                    // run the scope
-                    //
-                    // } else {
-                    //     log::error!("Memoized componented");
-                    //     // Component has memoized itself and doesn't need to be re-rendered.
-                    //     // We still need to make sure the child's props are up-to-date.
-                    //     // Don't commit traversal
-                    // }
                 } else {
-                    // It's an entirely different component
+                    // this seems to be a fairy common code path that we could
+                    let mut old_iter = RealChildIterator::new(old_node, &self.components);
+                    let first = old_iter
+                        .next()
+                        .expect("Components should generate a placeholder root");
 
-                    // A new component has shown up! We need to destroy the old node
+                    // remove any leftovers
+                    for to_remove in old_iter {
+                        self.dom.push(to_remove);
+                        self.dom.remove();
+                    }
+
+                    // seems like we could combine this into a single instruction....
+                    self.dom.push(first);
+                    let meta = self.create(new_node);
+                    self.dom.replace_with(meta.added_to_stack);
+                    self.dom.pop();
 
                     // Wipe the old one and plant the new one
-                    // self.dom.commit_traversal();
-                    // self.dom.replace_node_with(old.dom_id, new.dom_id);
-                    // self.create(new_node);
-                    log::warn!("creating and replacing...");
-                    self.create(new_node);
-
-                    // self.dom.replace_with();
-                    // self.create_and_repalce(new_node, old.mounted_root.get());
-
-                    // Now we need to remove the old scope and all of its descendents
                     let old_scope = old.ass_scope.get().unwrap();
                     self.destroy_scopes(old_scope);
                 }
@@ -278,7 +261,7 @@ where
                 // This is the case where options or direct vnodes might be used.
                 // In this case, it's faster to just skip ahead to their diff
                 if old.children.len() == 1 && new.children.len() == 1 {
-                    self.diff_node(old.children.get(0).unwrap(), new.children.get(0).unwrap());
+                    self.diff_node(&old.children[0], &new.children[0]);
                     return;
                 }
 
@@ -300,6 +283,7 @@ where
             ) => {
                 // Choose the node to use as the placeholder for replacewith
                 let back_node = match old_node {
+                    // We special case these two types to avoid allocating the small-vecs
                     VNode::Element(_) | VNode::Text(_) => old_node
                         .get_mounted_id(&self.components)
                         .expect("Element and text always have a real node"),
@@ -313,7 +297,7 @@ where
 
                         // remove any leftovers
                         for to_remove in old_iter {
-                            self.dom.push_root(to_remove);
+                            self.dom.push(to_remove);
                             self.dom.remove();
                         }
 
@@ -322,9 +306,11 @@ where
                 };
 
                 // replace the placeholder or first node with the nodes generated from the "new"
-                self.dom.push_root(back_node);
+                self.dom.push(back_node);
                 let meta = self.create(new_node);
                 self.dom.replace_with(meta.added_to_stack);
+
+                // todo use the is_static metadata to update this subtree
             }
 
             // TODO
@@ -1317,9 +1303,10 @@ enum KeyedPrefixResult {
 struct RealChildIterator<'a> {
     scopes: &'a SharedArena,
 
-    // Heuristcally we should never bleed into 5 completely nested fragments/components
+    // Heuristcally we should never bleed into 4 completely nested fragments/components
     // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
-    stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 5]>,
+    // TODO: use const generics instead of the 4 estimation
+    stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 4]>,
 }
 
 impl<'a> RealChildIterator<'a> {

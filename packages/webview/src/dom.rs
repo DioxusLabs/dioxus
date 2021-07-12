@@ -31,8 +31,11 @@ impl WebviewDom<'_> {
     }
 }
 impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
-    fn push_root(&mut self, root: RealDomNode) {
+    fn push(&mut self, root: RealDomNode) {
         self.edits.push(PushRoot { root: root.0 });
+    }
+    fn pop(&mut self) {
+        self.edits.push(PopRoot {});
     }
 
     fn append_children(&mut self, many: u32) {

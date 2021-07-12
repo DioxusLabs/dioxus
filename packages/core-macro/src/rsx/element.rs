@@ -17,6 +17,7 @@ pub struct Element {
     attributes: Vec<ElementAttr>,
     listeners: Vec<ElementAttr>,
     children: Vec<Node>,
+    is_static: bool,
 }
 
 impl ToTokens for Element {
@@ -100,6 +101,7 @@ impl Parse for Element {
             attributes,
             children,
             listeners,
+            is_static: false,
         })
     }
 }
