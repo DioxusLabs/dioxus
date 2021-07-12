@@ -34,6 +34,14 @@
       API Docs
     </a>
     <span> | </span>
+    <a href="https://docs.rs/async-imap">
+      Website
+    </a>
+    <span> | </span>
+    <a href="https://docs.rs/async-imap">
+      Examples
+    </a>
+    <span> | </span>
     <a href="https://github.com/async-email/async-imap/releases">
       Releases
     </a>
