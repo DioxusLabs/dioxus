@@ -1,0 +1,15 @@
+
+- Rust's smart pointers make use_state extremely easy and fun to work with.
+- Multiple flavors (raw, html, rsx) of templating to pick-and-choose for the type of component.
+- Extensible DSL through traits and impls plus support for WebComponents.
+- Simple-to-implement trait for new reconcilers.
+- Fast retained-mode server-side-renderer that works with buffered writers, files, and strings.
+- Compile-time correct inline CSS as well as global styling.
+- Integrated "signal" system allows for near-instant updates by skipping the diff algorithm entirely.
+- Built-in cooperative scheduler (IE React's fiber mechanism).
+- Built-in asynchronous scheduler for coroutines and tasks within components.
+- Built-in suspense scheduler for Rust's futures.
+- Extremely fast diffing algorithm for the most complex of apps.
+- Runs natively on mobile and on desktop with no need for a 3rd party JS engine.
+- Drastically fewer runtime errors and crashes with first-class error handling.
+- Extremely powerful iterator and optional chaining integration for fast and robust apps.
