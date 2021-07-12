@@ -8,6 +8,7 @@ html {
 body {
   margin: 0;
   font: 100 14px 'Roboto';
+  overflow: hidden;
 }
 
 button {
@@ -52,7 +53,7 @@ button:active {
 }
 
 #wrapper .calculator {
-  box-shadow: 0px 0px 20px 0px #aaa;
+  /* box-shadow: 0px 0px 20px 0px #aaa; */
 }
 
 .calculator-display {

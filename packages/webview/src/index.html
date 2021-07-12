@@ -123,7 +123,7 @@
 
         async function initialize() {
             const reply = await rpc.call('initiate');
-            const interpreter = new Interpreter(window.document.getElementById("app").firstChild);
+            const interpreter = new Interpreter(window.document.getElementById("_dioxusroot").firstChild);
             console.log(reply);
 
             for (let x = 0; x < reply.length; x++) {
@@ -142,7 +142,7 @@
 
 
 <body>
-    <div id="app">
+    <div id="_dioxusroot">
         _
     </div>
 </body>
