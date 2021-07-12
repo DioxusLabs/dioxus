@@ -6,55 +6,45 @@
 //!
 //!
 
+use dioxus::{events::on::MouseEvent, prelude::*};
+use dioxus_html as dioxus_elements;
+use fxhash::{FxBuildHasher, FxHasher32};
 use std::rc::Rc;
 
-use dioxus::events::on::MouseEvent;
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
-use dioxus_web::WebsysRenderer;
-use dioxus_html as dioxus_elements;
-
-
-
 fn main() {
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    console_error_panic_hook::set_once();
     log::debug!("starting!");
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
+    dioxus::desktop::launch(App, |c| c);
 }
 
 // We use a special immutable hashmap to make hashmap operations efficient
 type RowList = im_rc::HashMap<usize, Rc<str>, FxBuildHasher>;
-// type RowList = im_rc::HashMap<usize, Rc<str>, nohash_hasher::BuildNoHashHasher<usize>>;
 
 static App: FC<()> = |cx| {
-    let (items, set_items) = use_state_classic(cx, || RowList::default());
-    let (selection, set_selection) = use_state_classic(cx, || None as Option<usize>);
+    let items = use_state(cx, || RowList::default());
 
-    let create_rendered_rows = move |from, num| move |_| set_items(create_row_list(from, num));
+    let create_rendered_rows = move |from, num| move |_| items.set(create_row_list(from, num));
 
     let append_1_000_rows =
-        move |_| set_items(create_row_list(items.len(), 1000).union(items.clone()));
+        move |_| items.set(create_row_list(items.len(), 1000).union((*items).clone()));
 
     let update_every_10th_row = move |_| {
-        let mut new_items = items.clone();
+        let mut new_items = (*items).clone();
         let mut small_rng = SmallRng::from_entropy();
-        new_items
-            .iter_mut()
-            .step_by(10)
-            .for_each(|(_, val)| *val = create_new_row_label(&mut small_rng));
-        set_items(new_items);
+        new_items.iter_mut().step_by(10).for_each(|(_, val)| {
+            *val = create_new_row_label(&mut String::with_capacity(30), &mut small_rng)
+        });
+        items.set(new_items);
     };
-    let clear_rows = move |_| set_items(RowList::default());
+    let clear_rows = move |_| items.set(RowList::default());
 
     let swap_rows = move |_| {
         // this looks a bit ugly because we're using a hashmap instead of a vec
         if items.len() > 998 {
-            let mut new_items = items.clone();
+            let mut new_items = (*items).clone();
             let a = new_items.get(&0).unwrap().clone();
             *new_items.get_mut(&0).unwrap() = new_items.get(&998).unwrap().clone();
             *new_items.get_mut(&998).unwrap() = a;
-            set_items(new_items);
+            items.set(new_items);
         }
     };
 
@@ -83,7 +73,7 @@ static App: FC<()> = |cx| {
                     }
                 }
             }
-            table { 
+            table {
                 tbody {
                     {rows}
                 }
@@ -93,22 +83,27 @@ static App: FC<()> = |cx| {
     })
 };
 
+#[derive(Clone)]
+struct RowController {}
+
 #[derive(Props)]
 struct ActionButtonProps<F: Fn(MouseEvent)> {
     name: &'static str,
     id: &'static str,
     action: F,
 }
-fn ActionButton<F: Fn(MouseEvent)>(cx: Context<ActionButtonProps<F>>) -> VNode {
+fn ActionButton<F>(cx: Context<ActionButtonProps<F>>) -> VNode
+where
+    F: Fn(MouseEvent),
+{
     cx.render(rsx! {
         div { class: "col-sm-6 smallpad"
-            button {class:"btn btn-primary btn-block", r#type: "button", id: "{cx.id}",  onclick: {&cx.action},
+            button { class:"btn btn-primary btn-block", r#type: "button", id: "{cx.id}",  onclick: {&cx.action},
                 "{cx.name}"
             }
         }
     })
 }
-
 
 #[derive(PartialEq, Props)]
 struct RowProps {
@@ -132,22 +127,25 @@ fn Row<'a>(cx: Context<'a, RowProps>) -> VNode {
     })
 }
 
-use fxhash::{FxBuildHasher, FxHasher32};
 use rand::prelude::*;
-fn create_new_row_label(rng: &mut SmallRng) -> Rc<str> {
-    let mut label = String::new();
+fn create_new_row_label(label: &mut String, rng: &mut SmallRng) -> Rc<str> {
     label.push_str(ADJECTIVES.choose(rng).unwrap());
     label.push(' ');
     label.push_str(COLOURS.choose(rng).unwrap());
     label.push(' ');
     label.push_str(NOUNS.choose(rng).unwrap());
-    Rc::from(label)
+    Rc::from(label.as_ref())
 }
 
 fn create_row_list(from: usize, num: usize) -> RowList {
     let mut small_rng = SmallRng::from_entropy();
+    let mut buf = String::with_capacity(35);
     (from..num + from)
-        .map(|f| (f, create_new_row_label(&mut small_rng)))
+        .map(|f| {
+            let o = (f, create_new_row_label(&mut buf, &mut small_rng));
+            buf.clear();
+            o
+        })
         .collect::<RowList>()
 }
 

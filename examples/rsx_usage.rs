@@ -100,7 +100,6 @@ static Example: FC<()> = |cx| {
                 // Using an "ID" associated with your data is a good idea.
                 data.into_iter().map(|(k, v)| rsx!(li { key: "{k}" "{v}" }))
             }}
-            
 
             // Matching
             // Matching will throw a Rust error about "no two closures are the same type"
@@ -147,7 +146,6 @@ static Example: FC<()> = |cx| {
                     }
                 }
             }
-            
 
             // Components
             // Can accept any paths

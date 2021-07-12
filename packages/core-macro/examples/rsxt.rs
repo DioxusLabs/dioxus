@@ -1,5 +1,3 @@
-
-
 pub mod dioxus {
     pub mod builder {
         pub struct Builder;
