@@ -5,6 +5,43 @@
   </p>
 </div>
 
+<div align="center">
+  <!-- Crates version -->
+  <a href="https://crates.io/crates/async-imap">
+    <img src="https://img.shields.io/crates/v/async-imap.svg?style=flat-square"
+    alt="Crates.io version" />
+  </a>
+  <!-- Downloads -->
+  <a href="https://crates.io/crates/async-imap">
+    <img src="https://img.shields.io/crates/d/async-imap.svg?style=flat-square"
+      alt="Download" />
+  </a>
+  <!-- docs.rs docs -->
+  <a href="https://docs.rs/async-imap">
+    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
+      alt="docs.rs docs" />
+  </a>
+  <!-- CI -->
+  <a href="https://github.com/async-email/async-imap/actions">
+    <img src="https://github.com/async-email/async-imap/workflows/CI/badge.svg"
+      alt="CI status" />
+  </a>
+</div>
+
+<div align="center">
+  <h3>
+    <a href="https://docs.rs/async-imap">
+      API Docs
+    </a>
+    <span> | </span>
+    <a href="https://github.com/async-email/async-imap/releases">
+      Releases
+    </a>
+  </h3>
+</div>
+
+<br/>
+
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
