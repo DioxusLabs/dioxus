@@ -296,7 +296,7 @@ impl<'a> NodeFactory<'a> {
 
             // submit any async tasks to the scope
             for task in tasks.borrow_mut().drain(..) {
-                scp.submit_task(task);
+                // scp.submit_task(task);
             }
 
             let g2 = unsafe { std::mem::transmute(res) };

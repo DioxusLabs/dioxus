@@ -22,3 +22,15 @@ const App: FC<()> = |cx| {
 
     todo!()
 };
+
+const Task: FC<()> = |cx| {
+    //
+
+    let s = cx.use_task(|| async { "hello world".to_string() });
+
+    todo!()
+};
+
+fn use_mut<P, T>(cx: Context<P>, f: impl FnOnce() -> T) -> &mut T {
+    todo!()
+}

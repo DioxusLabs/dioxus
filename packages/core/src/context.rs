@@ -2,9 +2,12 @@ use crate::hooklist::HookList;
 use crate::{arena::SharedArena, innerlude::*};
 use appendlist::AppendList;
 use bumpalo::Bump;
+use futures_util::{pin_mut, FutureExt};
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
+use std::borrow::BorrowMut;
 use std::marker::PhantomData;
+use std::sync::{Arc, RwLock};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -39,9 +42,9 @@ use std::{
 pub struct Context<'src, T> {
     pub props: &'src T,
     pub scope: &'src Scope,
-    pub tasks: &'src RefCell<Vec<&'src mut PinnedTask>>,
+    pub tasks: &'src RefCell<Vec<&'src mut dyn Future<Output = ()>>>,
 }
-pub type PinnedTask = Pin<Box<dyn Future<Output = ()>>>;
+// pub type PinnedTask = Pin<Box<dyn Future<Output = ()>>>;
 
 impl<'src, T> Copy for Context<'src, T> {}
 impl<'src, T> Clone for Context<'src, T> {
@@ -263,18 +266,6 @@ Any function prefixed with "use" should not be called conditionally.
         )
     }
 
-    pub fn suspend<Output: 'src, Fut: FnOnce(SuspendedContext, Output) -> VNode<'src> + 'src>(
-        &'src self,
-        fut: &'src mut Pin<Box<dyn Future<Output = Output> + 'static>>,
-        callback: Fut,
-    ) -> VNode<'src> {
-        use futures_util::FutureExt;
-        match fut.now_or_never() {
-            Some(out) => callback(SuspendedContext {}, out),
-            None => NodeFactory::suspended(),
-        }
-    }
-
     /// `submit_task` will submit the future to be polled.
     ///
     /// This is useful when you have some async task that needs to be progressed.
@@ -289,10 +280,95 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     ///
-    pub fn submit_task(&self, task: &'src mut PinnedTask) -> TaskHandle {
-        self.tasks.borrow_mut().push(task);
+    pub fn submit_task(&self, task: Pin<Box<dyn Future<Output = ()>>>) -> TaskHandle {
+        // let r = task.then(|f| async {
+        //     //
+        // });
+        // self.use_hook(|| Box::new(r), |_| {}, |_| {});
+        // *task = task.then(|f| async {
+        //     //
+        //     t
+        //     // ()
+        // });
+        todo!();
+        // let new_fut = task.then(|f| async {
+        //     //
+        //     ()
+        // });
+        // self.tasks.borrow_mut().push(new_fut);
 
         TaskHandle { _p: PhantomData {} }
+    }
+
+    /// Awaits the given task, forcing the component to re-render when the value is ready.
+    ///
+    ///
+    pub fn use_task<Out, Fut: 'static>(
+        &self,
+        task_initializer: impl FnOnce() -> Fut + 'src,
+    ) -> &mut Option<Out>
+    where
+        Out: 'static,
+        Fut: Future<Output = Out>,
+    {
+        struct TaskHook<T> {
+            task_dump: Rc<RefCell<Option<T>>>,
+            value: Option<T>,
+        }
+
+        // whenever the task is complete, save it into th
+        self.use_hook(
+            move || {
+                let task_fut = task_initializer();
+
+                let task_dump = Rc::new(RefCell::new(None));
+
+                let slot = task_dump.clone();
+
+                self.submit_task(Box::pin(task_fut.then(move |output| async move {
+                    *slot.as_ref().borrow_mut() = Some(output);
+                })));
+
+                TaskHook {
+                    task_dump,
+                    value: None,
+                }
+            },
+            |hook| {
+                if let Some(val) = hook.task_dump.as_ref().borrow_mut().take() {
+                    hook.value = Some(val);
+                }
+                &mut hook.value
+            },
+            |_| {},
+        )
+    }
+
+    /// Asynchronously render new nodes once the given future has completed.
+    ///
+    ///
+    ///
+    ///
+    /// # Easda
+    ///
+    ///
+    /// # Example
+    ///
+    pub fn suspend<Out, Fut: 'static>(
+        &'src self,
+        task_initializer: impl FnOnce() -> Fut + 'src,
+        callback: impl FnOnce(SuspendedContext, Out) -> VNode<'src> + 'src,
+    ) -> VNode<'src>
+    where
+        Out: 'src,
+        Fut: Future<Output = Out>,
+    {
+        todo!()
+        // use futures_util::FutureExt;
+        // match fut.now_or_never() {
+        //     Some(out) => callback(SuspendedContext {}, out),
+        //     None => NodeFactory::suspended(),
+        // }
     }
 }
 

@@ -343,9 +343,8 @@ where
         match &node.kind {
             VNodeKind::Text(text) => {
                 let real_id = self.dom.create_text_node(text.text);
-                todo!()
-                // text.dom_id.set(real_id);
-                // CreateMeta::new(text.is_static, 1)
+                node.dom_id.set(real_id);
+                CreateMeta::new(text.is_static, 1)
             }
             VNodeKind::Element(el) => {
                 // we have the potential to completely eliminate working on this node in the future(!)
@@ -371,7 +370,7 @@ where
                 } else {
                     self.dom.create_element(tag_name, None)
                 };
-                // dom_id.set(real_id);
+                node.dom_id.set(real_id);
 
                 listeners.iter().enumerate().for_each(|(idx, listener)| {
                     listener.mounted_node.set(real_id);
@@ -397,12 +396,12 @@ where
                 // Notice: this is a web-specific optimization and may be changed in the future
                 //
                 // TODO move over
-                // if children.len() == 1 {
-                //     if let VNodeKind::Text(text) = &children[0] {
-                //         self.dom.set_text(text.text);
-                //         return;
-                //     }
-                // }
+                if children.len() == 1 {
+                    if let VNodeKind::Text(text) = &children[0].kind {
+                        self.dom.set_text(text.text);
+                        return CreateMeta::new(is_static, 1);
+                    }
+                }
 
                 for child in *children {
                     let child_meta = self.create(child);
@@ -499,9 +498,8 @@ where
             }
 
             VNodeKind::Suspended => {
-                todo!();
-                // let id = self.dom.create_placeholder();
-                // real.set(id);
+                let id = self.dom.create_placeholder();
+                node.dom_id.set(id);
                 CreateMeta::new(false, 1)
             }
         }
@@ -603,7 +601,6 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         old: &'bump [Attribute<'bump>],
         new: &'bump [Attribute<'bump>],
         namespace: Option<&'bump str>,
-        // is_namespaced: bool,
     ) {
         // Do O(n^2) passes to add/update and remove attributes, since
         // there are almost always very few attributes.
