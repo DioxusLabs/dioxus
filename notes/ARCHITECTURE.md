@@ -50,3 +50,24 @@ div {
 ## Subtree memoization
 
 The rsx! macro needs to be *really* smart. If it detects that no dynamics are pumped into the macro, then it opts to use the "const" flavors of the element build functions we know and love. This has to be done at build time rather than runtime since components may return basically anything. Using the const flavor enables is_static which encourages Dioxus to do a ptr compare instead of a value compare to short circuit through the diffing. Due to const folding in Rust, entire subtrees can be ruled out at compile time.
+
+It would be interesting to fix the issue of dynamic subtrees by hashing each structure (or just the const structures) or the macro call itself. That way, each call gets its own identifier and we can make sure that two unique structures have different IDs and aren't just opaque to dioxus.
+
+```rust
+let s1 = LazyNodes::new("1", move |_| {
+    if rand() {
+        f.element()
+    } else {
+        f.element()
+    }
+});
+let s2 = LazyNodes::new("1", move |f| {
+    if rand() {
+        f.element()
+    } else {
+        f.element()
+    }
+});
+// produces the same ID with different structures
+// perhaps just make this
+```

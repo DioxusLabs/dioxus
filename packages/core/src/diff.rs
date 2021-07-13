@@ -1379,3 +1379,13 @@ impl<'a> Iterator for RealChildIterator<'a> {
         returned_node
     }
 }
+
+fn compare_strs(a: &str, b: &str) -> bool {
+    // Check by pointer, optimizing for static strs
+    if !std::ptr::eq(a, b) {
+        // If the pointers are different then check by value
+        a == b
+    } else {
+        true
+    }
+}

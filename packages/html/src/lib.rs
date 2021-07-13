@@ -68,6 +68,35 @@ macro_rules! aria_trait_methods {
 pub trait GlobalAttributes {
     no_namespace_trait_methods! {
         accesskey;
+
+        /// The HTML class attribute is used to specify a class for an HTML element.
+        ///
+        /// ## Details
+        /// Multiple HTML elements can share the same class.
+        ///
+        /// The class global attribute is a space-separated list of the case-sensitive classes of the element.
+        /// Classes allow CSS and Javascript to select and access specific elements via the class selectors or
+        /// functions like the DOM method document.getElementsByClassName.
+        ///
+        /// ## Example
+        ///
+        /// ### HTML:
+        /// ```html
+        /// <p class="note editorial">Above point sounds a bit obvious. Remove/rewrite?</p>
+        /// ```
+        ///
+        /// ### CSS:
+        /// ```css
+        /// .note {
+        ///     font-style: italic;
+        ///     font-weight: bold;
+        /// }
+        ///
+        /// .editorial {
+        ///     background: rgb(255, 0, 0, .25);
+        ///     padding: 10px;
+        /// }
+        /// ```
         class;
         contenteditable;
         data;

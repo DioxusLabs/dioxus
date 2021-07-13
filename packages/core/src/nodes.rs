@@ -455,8 +455,32 @@ impl Debug for VNode<'_> {
 mod tests {
     use super::*;
 
+    static B1: &str = "hello world!";
+    static B2: &str = "hello world!";
     #[test]
-    fn test() {}
+    fn test() {
+        dbg!("Hello world!" as *const _ as *const ());
+        dbg!("Hello world!" as *const _ as *const ());
+        // dbg!(B1 as *const _ as *const ());
+        // dbg!(B2 as *const _ as *const ());
+        // goal: elements as const
+
+        // let b = A.clone();
+        // A.dom_id.set(RealDomNode::new(10));
+
+        // let p = &A;
+        // p.dom_id.set(RealDomNode::new(10));
+        // dbg!(p.dom_id.get());
+
+        // dbg!(p as *const _ as *const ());
+        // dbg!(&A as *const _ as *const ());
+
+        // // dbg!(b.dom_id.get());
+        // dbg!(A.dom_id.get());
+
+        // A.dom_id.set(RealDomNode::empty());
+        // let g = A.dom_id.get();
+    }
 
     #[test]
     fn sizing() {
