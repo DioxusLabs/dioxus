@@ -1,18 +1,12 @@
+use crate::innerlude::*;
 
-use crate::{innerlude::*};
+use futures_util::FutureExt;
 
-
-use futures_util::{FutureExt};
-
-
-use std::borrow::BorrowMut;
 use std::marker::PhantomData;
 
 use std::{
-    any::{Any, TypeId},
-    cell::{Cell, RefCell},
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Debug,
+    any::TypeId,
+    cell::RefCell,
     future::Future,
     ops::Deref,
     pin::Pin,

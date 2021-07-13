@@ -5,7 +5,7 @@
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, Properties, RealDom, RealDomNode, Scope, ScopeIdx, FC},
+    innerlude::{Context, Properties, RealDomNode, Scope, ScopeIdx, FC},
 };
 use std::{
     cell::{Cell, RefCell},
