@@ -97,12 +97,16 @@ impl ToTokens for RsxRender {
             // The `in cx` pattern allows directly rendering
             Some(ident) => out_tokens.append_all(quote! {
                 #ident.render(dioxus::prelude::LazyNodes::new(move |__cx: NodeFactory|{
+                    use dioxus_elements::GlobalAttributes;
+
                     #inner
                 }))
             }),
             // Otherwise we just build the LazyNode wrapper
             None => out_tokens.append_all(quote! {
                 dioxus::prelude::LazyNodes::new(move |__cx: NodeFactory|{
+                    use dioxus_elements::GlobalAttributes;
+
                     #inner
                  })
             }),

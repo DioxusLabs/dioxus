@@ -21,4 +21,5 @@ mod dioxus_elements {
         const TAG_NAME: &'static str = "div";
         const NAME_SPACE: Option<&'static str> = None;
     }
+    pub trait GlobalAttributes {}
 }

@@ -188,7 +188,7 @@ impl ToTokens for Component {
                 #name,
                 #builder,
                 #key_token,
-                #children
+                __cx.bump().alloc(#children)
             )
         })
     }

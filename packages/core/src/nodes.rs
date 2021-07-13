@@ -46,8 +46,13 @@ pub struct VFragment<'src> {
 pub trait DioxusElement {
     const TAG_NAME: &'static str;
     const NAME_SPACE: Option<&'static str>;
+    #[inline]
     fn tag_name(&self) -> &'static str {
         Self::TAG_NAME
+    }
+    #[inline]
+    fn namespace(&self) -> Option<&'static str> {
+        Self::NAME_SPACE
     }
 }
 pub struct VElement<'a> {
@@ -172,10 +177,33 @@ impl<'a> NodeFactory<'a> {
         listeners: &[Listener],
         attributes: &[Attribute],
         children: &'a [VNode<'a>],
-    ) {
+    ) -> VNode<'a> {
+        todo!()
     }
 
-    pub fn element() {}
+    pub fn element(
+        &self,
+        el: impl DioxusElement,
+        listeners: &'a [Listener<'a>],
+        attributes: &'a [Attribute<'a>],
+        children: &'a [VNode<'a>],
+        key: Option<&'a str>,
+    ) -> VNode<'a> {
+        VNode {
+            dom_id: RealDomNode::empty_cell(),
+            key,
+            kind: VNodeKind::Element(self.bump().alloc(VElement {
+                tag_name: el.tag_name(),
+                namespace: el.namespace(),
+                static_listeners: false,
+                listeners,
+                static_attrs: false,
+                attributes,
+                static_children: false,
+                children,
+            })),
+        }
+    }
 
     pub fn suspended() -> VNode<'static> {
         VNode {
@@ -202,7 +230,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn virtual_child<P, C>(
+    pub fn virtual_child<P>(
         &self,
         component: FC<P>,
         props: P,

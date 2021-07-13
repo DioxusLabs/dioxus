@@ -19,48 +19,213 @@ use std::fmt::Arguments;
 
 use dioxus_core::{nodes::Attribute, DioxusElement, NodeFactory};
 
-trait GlobalAttributes {
-    fn accesskey<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("accesskey", val, None, false)
+macro_rules! no_namespace_trait_methods {
+    (
+        $(
+            $(#[$attr:meta])*
+            $name:ident;
+        )*
+    ) => {
+        $(
+            $(#[$attr])*
+            fn $name<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+                cx.attr(stringify!(name), val, None, false)
+            }
+        )*
+    };
+}
+macro_rules! style_trait_methods {
+    (
+        $(
+            $(#[$attr:meta])*
+            $name:ident: $lit:literal,
+        )*
+    ) => {
+        $(
+            $(#[$attr])*
+            fn $name<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+                cx.attr($lit, val, Some("style"), false)
+            }
+        )*
+    };
+}
+macro_rules! aria_trait_methods {
+    (
+        $(
+            $(#[$attr:meta])*
+            $name:ident: $lit:literal,
+        )*
+    ) => {
+        $(
+            $(#[$attr])*
+            fn $name<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+                cx.attr($lit, val, None, false)
+            }
+        )*
+    };
+}
+
+pub trait GlobalAttributes {
+    no_namespace_trait_methods! {
+        accesskey;
+        class;
+        contenteditable;
+        data;
+        dir;
+        draggable;
+        hidden;
+        id;
+        lang;
+        spellcheck;
+        style;
+        tabindex;
+        title;
+        translate;
     }
-    fn class<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("class", val, None, false)
+    style_trait_methods! {
+        background: "background",
+        background_attachment: "background-attachment",
+
+        /// ## Definition and Usage
+        ///
+        /// The background-color property sets the background color of an element.
+        ///
+        /// The background of an element is the total size of the element, including padding and border (but not the margin).
+        ///
+        /// Tip: Use a background color and a text color that makes the text easy to read.
+        ///
+        /// ## Example
+        ///
+        /// ```
+        /// body {
+        ///     style: {
+        ///         background_color: "coral"
+        ///     }
+        /// }
+        /// ```
+        background_color: "background-color",
+        background_image: "background-image",
+        background_position: "background-position",
+        background_repeat: "background-repeat",
+        border: "border",
+        border_bottom: "border-bottom",
+        border_bottom_color: "border-bottom-color",
+        border_bottom_style: "border-bottom-style",
+        border_bottom_width: "border-bottom-width",
+        border_color: "border-color",
+        border_left: "border-left",
+        border_left_color: "border-left-color",
+        border_left_style: "border-left-style",
+        border_left_width: "border-left-width",
+        border_right: "border-right",
+        border_right_color: "border-right-color",
+        border_right_style: "border-right-style",
+        border_right_width: "border-right-width",
+        border_style: "border-style",
+        border_top: "border-top",
+        border_top_color: "border-top-color",
+        border_top_style: "border-top-style",
+        border_top_width: "border-top-width",
+        border_width: "border-width",
+        clear: "clear",
+        clip: "clip",
+        color: "color",
+        cursor: "cursor",
+        display: "display",
+        filter: "filter",
+        css_float: "css-float",
+        font: "font",
+        font_family: "font-family",
+        font_size: "font-size",
+        font_variant: "font-variant",
+        font_weight: "font-weight",
+        height: "height",
+        left: "left",
+        letter_spacing: "letter-spacing",
+        line_height: "line-height",
+        list_style: "list-style",
+        list_style_image: "list-style-image",
+        list_style_position: "list-style-position",
+        list_style_type: "list-style-type",
+        margin: "margin",
+        margin_bottom: "margin-bottom",
+        margin_left: "margin-left",
+        margin_right: "margin-right",
+        margin_top: "margin-top",
+        overflow: "overflow",
+        padding: "padding",
+        padding_bottom: "padding-bottom",
+        padding_left: "padding-left",
+        padding_right: "padding-right",
+        padding_top: "padding-top",
+        page_break_after: "page-break-after",
+        page_break_before: "page-break-before",
+        position: "position",
+        stroke_dasharray: "stroke-dasharray",
+        stroke_dashoffset: "stroke-dashoffset",
+        text_align: "text-align",
+        text_decoration: "text-decoration",
+        text_indent: "text-indent",
+        text_transform: "text-transform",
+        top: "top",
+        vertical_align: "vertical-align",
+        visibility: "visibility",
+        width: "width",
+        z_index: "z-index",
     }
-    fn contenteditable<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("contenteditable", val, None, false)
-    }
-    fn data<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("data", val, None, false)
-    }
-    fn dir<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("dir", val, None, false)
-    }
-    fn draggable<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("draggable", val, None, false)
-    }
-    fn hidden<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("hidden", val, None, false)
-    }
-    fn id<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("id", val, None, false)
-    }
-    fn lang<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("lang", val, None, false)
-    }
-    fn spellcheck<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("spellcheck", val, None, false)
-    }
-    fn style<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("style", val, Some("style"), false)
-    }
-    fn tabindex<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("tabindex", val, None, false)
-    }
-    fn title<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("title", val, None, false)
-    }
-    fn translate<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
-        cx.attr("translate", val, None, false)
+    aria_trait_methods! {
+        aria_current: "aria-current",
+        aria_details: "aria-details",
+        aria_disabled: "aria-disabled",
+        aria_hidden: "aria-hidden",
+        aria_invalid: "aria-invalid",
+        aria_keyshortcuts: "aria-keyshortcuts",
+        aria_label: "aria-label",
+        aria_roledescription: "aria-roledescription",
+        // Widget Attributes
+        aria_autocomplete: "aria-autocomplete",
+        aria_checked: "aria-checked",
+        aria_expanded: "aria-expanded",
+        aria_haspopup: "aria-haspopup",
+        aria_level: "aria-level",
+        aria_modal: "aria-modal",
+        aria_multiline: "aria-multiline",
+        aria_multiselectable: "aria-multiselectable",
+        aria_orientation: "aria-orientation",
+        aria_placeholder: "aria-placeholder",
+        aria_pressed: "aria-pressed",
+        aria_readonly: "aria-readonly",
+        aria_required: "aria-required",
+        aria_selected: "aria-selected",
+        aria_sort: "aria-sort",
+        aria_valuemax: "aria-valuemax",
+        aria_valuemin: "aria-valuemin",
+        aria_valuenow: "aria-valuenow",
+        aria_valuetext: "aria-valuetext",
+        // Live Region Attributes
+        aria_atomic: "aria-atomic",
+        aria_busy: "aria-busy",
+        aria_live: "aria-live",
+        aria_relevant: "aria-relevant",
+
+        aria_dropeffect: "aria-dropeffect",
+        aria_grabbed: "aria-grabbed",
+        // Relationship Attributes
+        aria_activedescendant: "aria-activedescendant",
+        aria_colcount: "aria-colcount",
+        aria_colindex: "aria-colindex",
+        aria_colspan: "aria-colspan",
+        aria_controls: "aria-controls",
+        aria_describedby: "aria-describedby",
+        aria_errormessage: "aria-errormessage",
+        aria_flowto: "aria-flowto",
+        aria_labelledby: "aria-labelledby",
+        aria_owns: "aria-owns",
+        aria_posinset: "aria-posinset",
+        aria_rowcount: "aria-rowcount",
+        aria_rowindex: "aria-rowindex",
+        aria_rowspan: "aria-rowspan",
+        aria_setsize: "aria-setsize",
     }
 }
 
@@ -87,7 +252,7 @@ macro_rules! builder_constructors {
 
             impl $name {
                 $(
-                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments<'a>) -> Attribute<'a> {
+                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
                         cx.attr(stringify!($fil), val, None, false)
                     }
                 )*
@@ -149,7 +314,7 @@ builder_constructors! {
         rel: LinkType,
         sizes: String, // FIXME
         title: String, // FIXME
-        // type: Mime,
+        r#type: Mime,
     };
 
     /// Build a
@@ -166,7 +331,7 @@ builder_constructors! {
     /// [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style)
     /// element.
     style {
-        // type: Mime,
+        r#type: Mime,
         media: String, // FIXME media query
         nonce: Nonce,
         title: String, // FIXME
@@ -307,6 +472,25 @@ builder_constructors! {
     /// Build a
     /// [`<div>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div)
     /// element.
+    ///
+    /// ## Definition and Usage
+    /// - The <div> tag defines a division or a section in an HTML document.
+    /// - The <div> tag is used as a container for HTML elements - which is then styled with CSS or manipulated with  JavaScript.
+    /// - The <div> tag is easily styled by using the class or id attribute.
+    /// - Any sort of content can be put inside the <div> tag!
+    ///
+    /// Note: By default, browsers always place a line break before and after the <div> element.
+    ///
+    /// ## Usage
+    /// ```
+    /// html!(<div> A header element </div>)
+    /// rsx!(div { "A header element" })
+    /// LazyNodes::new(|f| f.element(div, &[], &[], &[], None))
+    /// ```
+    ///
+    /// ## References:
+    /// - https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div
+    /// - https://www.w3schools.com/tags/tag_div.asp
     div {};
 
     /// Build a
@@ -347,7 +531,7 @@ builder_constructors! {
     ol {
         reversed: Bool,
         start: isize,
-        // type: OrderedListType,
+        r#type: OrderedListType,
     };
 
     /// Build a
@@ -376,7 +560,7 @@ builder_constructors! {
         href: Uri,
         hreflang: LanguageTag,
         target: Target,
-        // type: Mime,
+        r#type: Mime,
         // ping: SpacedList<Uri>,
         // rel: SpacedList<LinkType>,
     };
@@ -553,10 +737,10 @@ builder_constructors! {
         autoplay: Bool,
         controls: Bool,
         crossorigin: CrossOrigin,
-        // loop: Bool,
         muted: Bool,
         preload: Preload,
         src: Uri,
+        r#loop: Bool,
     };
 
     /// Build a
@@ -601,7 +785,7 @@ builder_constructors! {
         controls: Bool,
         crossorigin: CrossOrigin,
         height: usize,
-        // loop: Bool,
+        r#loop: Bool,
         muted: Bool,
         preload: Preload,
         playsinline: Bool,
@@ -619,7 +803,7 @@ builder_constructors! {
     embed {
         height: usize,
         src: Uri,
-        // type: Mime,
+        r#type: Mime,
         width: usize,
     };
 
@@ -647,7 +831,7 @@ builder_constructors! {
         form: Id,
         height: usize,
         name: Id,
-        // type: Mime,
+        r#type: Mime,
         typemustmatch: Bool,
         usemap: String, // TODO should be a fragment starting with '#'
         width: usize,
@@ -671,7 +855,7 @@ builder_constructors! {
     /// element.
     source {
         src: Uri,
-        // type: Mime,
+        r#type: Mime,
     };
 
 
@@ -701,8 +885,8 @@ builder_constructors! {
         nonce: Nonce,
         src: Uri,
         text: String,
-        // async: Bool,
-        // type: String, // TODO could be an enum
+        r#async: Bool,
+        r#type: String, // TODO could be an enum
     };
 
 
@@ -807,7 +991,7 @@ builder_constructors! {
         formnovalidate: Bool,
         formtarget: Target,
         name: Id,
-        // type: ButtonType,
+        r#type: ButtonType,
         value: String,
     };
 
@@ -869,7 +1053,7 @@ builder_constructors! {
         src: Uri,
         step: String,
         tabindex: usize,
-        // type: InputType,
+        r#type: InputType,
         value: String,
         width: isize,
     };
@@ -878,7 +1062,7 @@ builder_constructors! {
     /// [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/label)
     /// element.
     label {
-        // for: Id,
+        r#for: Id,
         form: Id,
     };
 
@@ -924,7 +1108,7 @@ builder_constructors! {
     output {
         form: Id,
         name: Id,
-        // for: SpacedSet<Id>,
+        // r#for: SpacedSet<Id>,
     };
 
     /// Build a
