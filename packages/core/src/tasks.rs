@@ -16,7 +16,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures_util::{Future, Stream, StreamExt};
+use futures_util::{Future, Stream};
 use slotmap::{DefaultKey, SlotMap};
 
 use crate::{events::EventTrigger, innerlude::ScopeIdx};
@@ -64,19 +64,19 @@ impl Stream for TaskQueue {
 
     /// We can never be finished polling
     fn poll_next(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         // let yield_every = self.len();
         // let mut polled = 0;
 
         let mut slots = self.slots.write().unwrap();
-        for (key, slot) in slots.iter_mut() {
+        for (_key, slot) in slots.iter_mut() {
             if slot.dead.get() {
                 continue;
             }
             let r = slot.fut;
-            let mut fut = unsafe { &mut *r };
+            let fut = unsafe { &mut *r };
             // use futures::{future::Future, poll, FutureExt};
 
             let f2 = fut.as_mut();

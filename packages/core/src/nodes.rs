@@ -173,10 +173,10 @@ impl<'a> NodeFactory<'a> {
 
     pub fn raw_element(
         &self,
-        tag: &'static str,
-        listeners: &[Listener],
-        attributes: &[Attribute],
-        children: &'a [VNode<'a>],
+        _tag: &'static str,
+        _listeners: &[Listener],
+        _attributes: &[Attribute],
+        _children: &'a [VNode<'a>],
     ) -> VNode<'a> {
         todo!()
     }
@@ -295,7 +295,7 @@ impl<'a> NodeFactory<'a> {
             let res = component(cx);
 
             // submit any async tasks to the scope
-            for task in tasks.borrow_mut().drain(..) {
+            for _task in tasks.borrow_mut().drain(..) {
                 // scp.submit_task(task);
             }
 
@@ -453,7 +453,7 @@ impl Debug for VNode<'_> {
 }
 
 mod tests {
-    use super::*;
+    
 
     static B1: &str = "hello world!";
     static B2: &str = "hello world!";

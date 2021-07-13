@@ -1,13 +1,13 @@
-use crate::hooklist::HookList;
-use crate::{arena::SharedArena, innerlude::*};
-use appendlist::AppendList;
-use bumpalo::Bump;
-use futures_util::{pin_mut, FutureExt};
-use slotmap::DefaultKey;
-use slotmap::SlotMap;
+
+use crate::{innerlude::*};
+
+
+use futures_util::{FutureExt};
+
+
 use std::borrow::BorrowMut;
 use std::marker::PhantomData;
-use std::sync::{Arc, RwLock};
+
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -137,7 +137,7 @@ impl<'src, P> Context<'src, P> {
         self,
         initializer: Init,
         runner: Run,
-        cleanup: Cleanup,
+        _cleanup: Cleanup,
     ) -> Output
     where
         State: 'static,
@@ -280,7 +280,7 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     ///
-    pub fn submit_task(&self, task: Pin<Box<dyn Future<Output = ()>>>) -> TaskHandle {
+    pub fn submit_task(&self, _task: Pin<Box<dyn Future<Output = ()>>>) -> TaskHandle {
         // let r = task.then(|f| async {
         //     //
         // });
@@ -356,8 +356,8 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     pub fn suspend<Out, Fut: 'static>(
         &'src self,
-        task_initializer: impl FnOnce() -> Fut + 'src,
-        callback: impl FnOnce(SuspendedContext, Out) -> VNode<'src> + 'src,
+        _task_initializer: impl FnOnce() -> Fut + 'src,
+        _callback: impl FnOnce(SuspendedContext, Out) -> VNode<'src> + 'src,
     ) -> VNode<'src>
     where
         Out: 'src,

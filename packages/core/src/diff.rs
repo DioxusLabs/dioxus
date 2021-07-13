@@ -49,7 +49,7 @@
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
 use crate::{arena::SharedArena, innerlude::*, tasks::TaskQueue};
-use fxhash::{FxHashMap, FxHashSet};
+use fxhash::{FxHashSet};
 
 use std::any::Any;
 
@@ -360,9 +360,9 @@ where
                     attributes,
                     children,
                     namespace,
-                    static_attrs,
-                    static_children,
-                    static_listeners,
+                    static_attrs: _,
+                    static_children: _,
+                    static_listeners: _,
                 } = el;
 
                 let real_id = if let Some(namespace) = namespace {
@@ -559,7 +559,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             // if any characteristics changed, remove and then re-add
 
             // if nothing changed, then just move on
-            let event_type = new_l.event;
+            let _event_type = new_l.event;
 
             for old_l in old {
                 if new_l.event == old_l.event {
@@ -821,8 +821,8 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // Upon exit, the change list stack is the same.
     fn diff_keyed_prefix(
         &self,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
+        _old: &'bump [VNode<'bump>],
+        _new: &'bump [VNode<'bump>],
     ) -> KeyedPrefixResult {
         todo!()
         // self.dom.go_down();
@@ -910,11 +910,11 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // Upon exit from this function, it will be restored to that same state.
     fn diff_keyed_middle(
         &self,
-        old: &[VNode<'bump>],
-        mut new: &[VNode<'bump>],
-        shared_prefix_count: usize,
-        shared_suffix_count: usize,
-        old_shared_suffix_start: usize,
+        _old: &[VNode<'bump>],
+        _new: &[VNode<'bump>],
+        _shared_prefix_count: usize,
+        _shared_suffix_count: usize,
+        _old_shared_suffix_start: usize,
     ) {
         todo!()
         // // Should have already diffed the shared-key prefixes and suffixes.
@@ -1138,9 +1138,9 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // When this function exits, the change list stack remains the same.
     fn diff_keyed_suffix(
         &self,
-        old: &[VNode<'bump>],
-        new: &[VNode<'bump>],
-        new_shared_suffix_start: usize,
+        _old: &[VNode<'bump>],
+        _new: &[VNode<'bump>],
+        _new_shared_suffix_start: usize,
     ) {
         todo!()
         //     debug_assert_eq!(old.len(), new.len());
@@ -1178,7 +1178,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //     [... parent child]
 
         // todo!()
-        for (i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
+        for (_i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
             // [... parent prev_child]
             // self.dom.go_to_sibling(i);
             // [... parent this_child]
@@ -1247,7 +1247,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     pub fn remove_self_and_next_siblings(&self, old: &[VNode<'bump>]) {
         // debug_assert!(self.dom.traversal_is_committed());
         for child in old {
-            if let VNodeKind::Component(vcomp) = child.kind {
+            if let VNodeKind::Component(_vcomp) = child.kind {
                 // dom
                 //     .create_text_node("placeholder for vcomponent");
 

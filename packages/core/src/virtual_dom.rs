@@ -21,13 +21,13 @@
 
 use crate::tasks::TaskQueue;
 use crate::{arena::SharedArena, innerlude::*};
-use appendlist::AppendList;
+
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
 use std::any::Any;
-use std::cell::RefCell;
+
 use std::pin::Pin;
-use std::{any::TypeId, fmt::Debug, rc::Rc};
+use std::{any::TypeId};
 
 pub type ScopeIdx = DefaultKey;
 

@@ -1,11 +1,11 @@
 use crate::hooklist::HookList;
 use crate::{arena::SharedArena, innerlude::*};
-use appendlist::AppendList;
-use bumpalo::Bump;
-use slotmap::DefaultKey;
-use slotmap::SlotMap;
-use std::marker::PhantomData;
-use std::sync::Arc;
+
+
+
+
+
+
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -182,7 +182,7 @@ impl Scope {
             self.arena_idx
         );
 
-        let mut listners = self.listeners.borrow_mut();
+        let listners = self.listeners.borrow_mut();
 
         // let listener = listners.get(trigger);
         let raw_listener = listners.iter().find(|(domptr, _)| {
