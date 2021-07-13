@@ -7,7 +7,7 @@
 fn main() {}
 
 use dioxus_core::prelude::*;
-use dioxus_core::*;
+
 use std::rc::Rc;
 
 struct AppProps {
@@ -61,7 +61,7 @@ fn ChildItem<'a>(cx: Context<'a, ChildProps>) -> VNode {
 }
 
 impl PartialEq for ChildProps {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }
