@@ -3,8 +3,8 @@ use std::ops::{Deref, DerefMut};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 
-use dioxus_core::virtual_dom::VirtualDom;
-use dioxus_core::{prelude::*, serialize::DomEdit};
+use dioxus_core::*;
+
 use wry::{
     application::window::{Window, WindowBuilder},
     webview::{RpcRequest, RpcResponse},

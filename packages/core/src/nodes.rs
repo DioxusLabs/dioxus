@@ -40,6 +40,7 @@ pub struct VText<'src> {
 
 pub struct VFragment<'src> {
     pub children: &'src [VNode<'src>],
+    pub is_static: bool,
 }
 
 pub trait DioxusElement {
@@ -52,6 +53,7 @@ pub trait DioxusElement {
 pub struct VElement<'a> {
     // tag is always static
     pub tag_name: &'static str,
+    pub namespace: Option<&'static str>,
 
     pub static_listeners: bool,
     pub listeners: &'a [Listener<'a>],
@@ -61,9 +63,6 @@ pub struct VElement<'a> {
 
     pub static_children: bool,
     pub children: &'a [VNode<'a>],
-
-    // namespace is always static
-    pub namespace: Option<&'static str>,
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or
@@ -92,14 +91,16 @@ pub struct Listener<'bump> {
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
     pub ass_scope: Cell<Option<ScopeIdx>>,
-    pub caller: Rc<dyn Fn(&Scope) -> VNode>,
-    pub children: &'src [VNode<'src>],
-    pub comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
-    // a pointer into the bump arena (given by the 'src lifetime)
-    raw_props: *const (),
-    // a pointer to the raw fn typ
-    pub user_fc: *const (),
+    pub(crate) caller: Rc<dyn Fn(&Scope) -> VNode>,
+    pub(crate) children: &'src [VNode<'src>],
+    pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
     pub is_static: bool,
+
+    // a pointer into the bump arena (given by the 'src lifetime)
+    pub(crate) raw_props: *const (),
+
+    // a pointer to the raw fn typ
+    pub(crate) user_fc: *const (),
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -116,6 +117,20 @@ impl<'a> NodeFactory<'a> {
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
         &self.scope_ref.cur_frame().bump
+    }
+
+    pub const fn const_text(&self, text: &'static str) -> VNodeKind<'static> {
+        VNodeKind::Text(VText {
+            is_static: true,
+            text,
+        })
+    }
+
+    pub const fn const_fragment(&self, children: &'static [VNode<'static>]) -> VNodeKind<'static> {
+        VNodeKind::Fragment(VFragment {
+            children,
+            is_static: true,
+        })
     }
 
     pub fn static_text(text: &'static str) -> VNode {
@@ -150,8 +165,6 @@ impl<'a> NodeFactory<'a> {
             kind: VNodeKind::Text(VText { text, is_static }),
         }
     }
-
-    pub const fn const_el(&self) {}
 
     pub fn raw_element(
         &self,
@@ -279,6 +292,7 @@ impl<'a> NodeFactory<'a> {
             key: None,
             kind: VNodeKind::Fragment(VFragment {
                 children: nodes.into_bump_slice(),
+                is_static: false,
             }),
         }
     }
@@ -385,12 +399,16 @@ impl<'a> Clone for VNode<'a> {
             }),
             VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
                 children: fragment.children,
+                is_static: fragment.is_static,
             }),
             VNodeKind::Component(component) => VNodeKind::Component(component),
             VNodeKind::Suspended => VNodeKind::Suspended,
         };
-
-        todo!()
+        VNode {
+            kind,
+            dom_id: self.dom_id.clone(),
+            key: self.key.clone(),
+        }
     }
 }
 

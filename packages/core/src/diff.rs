@@ -107,18 +107,6 @@ pub trait RealDom<'a> {
     fn raw_node_as_any_mut(&self) -> &mut dyn Any;
 }
 
-/// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
-/// diffing trees of components. This means we can "re-enter" a subtree of a component by queuing a "NeedToDiff" event.
-///
-/// By re-entering via NodeDiff, we can connect disparate edits together into a single EditList. This batching of edits
-/// leads to very fast re-renders (all done in a single animation frame).
-///
-/// It also means diffing two trees is only ever complex as diffing a single smaller tree, and then re-entering at a
-/// different cursor position.
-///
-/// The order of these re-entrances is stored in the DiffState itself. The DiffState comes pre-loaded with a set of components
-/// that were modified by the eventtrigger. This prevents doubly evaluating components if they were both updated via
-/// subscriptions and props changes.
 pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub dom: &'real mut Dom,
     pub components: &'bump SharedArena,
@@ -170,6 +158,7 @@ where
                     self.dom.set_text(new.text);
                     self.dom.pop();
                 }
+
                 new_node.dom_id.set(root);
             }
 

@@ -1,3 +1,6 @@
+use dioxus_core as dioxus;
+use dioxus_core::prelude::*;
+
 fn main() {
     dioxus_webview::launch(App, |f| f.with_focus().with_maximized(true)).expect("Failed");
 }
@@ -11,8 +14,6 @@ static App: FC<()> = |cx| {
     ))
 };
 
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
 mod dioxus_elements {
     use super::*;
     pub struct div;
