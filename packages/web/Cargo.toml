@@ -8,10 +8,10 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path="../core", version="0.1.2" }
-dioxus-html = { path="../html" }
+dioxus-core = { path = "../core", version = "0.1.2" }
+dioxus-html = { path = "../html" }
 js-sys = "0.3"
-wasm-bindgen = { version="0.2.71", features=["enable-interning"] }
+wasm-bindgen = { version = "0.2.71", features = ["enable-interning"] }
 lazy_static = "1.4.0"
 wasm-bindgen-futures = "0.4.20"
 wasm-logger = "0.2.0"
@@ -22,7 +22,7 @@ console_error_panic_hook = "0.1.6"
 generational-arena = "0.2.8"
 wasm-bindgen-test = "0.3.21"
 once_cell = "1.7.2"
-atoms = { path="../atoms" }
+atoms = { path = "../atoms" }
 async-channel = "1.6.1"
 anyhow = "1.0.41"
 slotmap = "1.0.3"
@@ -75,7 +75,11 @@ crate-type = ["cdylib", "rlib"]
 im-rc = "15.0.0"
 # rand = { version="0.8.4", features=["small_rng"] }
 separator = "0.4.1"
-uuid = { version="0.8.2", features=["v4", "wasm-bindgen"] }
-dioxus-hooks = { path="../hooks" }
-gloo-timers = { version="0.2.1", features=["futures"] }
+uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
+dioxus-hooks = { path = "../hooks" }
+gloo-timers = { version = "0.2.1", features = ["futures"] }
+serde = { version = "1.0.126", features = ["derive"] }
+surf = { version = "2.2.0", default-features = false, features = [
+    "wasm-client",
+] }
 # wasm-timer = "0.2.5"

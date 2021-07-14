@@ -41,5 +41,5 @@ smallvec = "1.6.1"
 
 
 [features]
-default = []
+default = ["serialize"]
 serialize = ["slotmap/serde", "serde"]

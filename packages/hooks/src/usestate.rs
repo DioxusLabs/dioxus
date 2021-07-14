@@ -57,7 +57,7 @@ pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
         move || UseStateInner {
             current_val: initial_state_fn(),
             callback: cx.schedule_update(),
-            wip: RefCell::new(None),
+            wip: Rc::new(RefCell::new(None)),
             update_scheuled: Cell::new(false),
         },
         move |hook| {
@@ -76,7 +76,7 @@ struct UseStateInner<T: 'static> {
     current_val: T,
     update_scheuled: Cell<bool>,
     callback: Rc<dyn Fn()>,
-    wip: RefCell<Option<T>>,
+    wip: Rc<RefCell<Option<T>>>,
 }
 
 pub struct UseState<'a, T: 'static> {
@@ -117,6 +117,11 @@ impl<'a, T: 'static> UseState<'a, T> {
 
     pub fn classic(self) -> (&'a T, &'a Rc<dyn Fn(T)>) {
         todo!()
+    }
+
+    pub fn setter(&self) -> Rc<dyn Fn(T)> {
+        let slot = self.inner.wip.clone();
+        Rc::new(move |new| *slot.borrow_mut() = Some(new))
     }
 }
 impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {

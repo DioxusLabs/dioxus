@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use dioxus::prelude::*;
 use dioxus_core::{
-    nodes::{NodeKey, VElement, VText},
+    nodes::{VElement, VText},
     RealDomNode,
 };
 
@@ -23,6 +23,9 @@ const Example: FC<()> = |cx| {
             Fragment {
                 Fragment {
                     "h1"
+                    div {
+
+                    }
                 }
                 "h2"
             }

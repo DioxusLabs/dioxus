@@ -89,7 +89,7 @@ static Example: FC<()> = |cx| {
 
             // Expressions can be used in element position too:
             {rsx!(p { "More templating!" })}
-            {html!(<p>"Even HTML templating!!"</p>)}
+            // {html!(<p>"Even HTML templating!!"</p>)}
 
             // Iterators
             {(0..10).map(|i| rsx!(li { "{i}" }))}

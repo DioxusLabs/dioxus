@@ -68,7 +68,7 @@ impl BasicElement for div {
         todo!()
     }
 
-    fn new(factory: Factory) -> Self {
+    fn new(_factory: Factory) -> Self {
         todo!()
     }
 }

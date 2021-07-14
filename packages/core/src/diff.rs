@@ -49,7 +49,7 @@
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
 use crate::{arena::SharedArena, innerlude::*, tasks::TaskQueue};
-use fxhash::{FxHashMap, FxHashSet};
+use fxhash::FxHashSet;
 
 use std::any::Any;
 
@@ -107,18 +107,6 @@ pub trait RealDom<'a> {
     fn raw_node_as_any_mut(&self) -> &mut dyn Any;
 }
 
-/// The DiffState is a cursor internal to the VirtualDOM's diffing algorithm that allows persistence of state while
-/// diffing trees of components. This means we can "re-enter" a subtree of a component by queuing a "NeedToDiff" event.
-///
-/// By re-entering via NodeDiff, we can connect disparate edits together into a single EditList. This batching of edits
-/// leads to very fast re-renders (all done in a single animation frame).
-///
-/// It also means diffing two trees is only ever complex as diffing a single smaller tree, and then re-entering at a
-/// different cursor position.
-///
-/// The order of these re-entrances is stored in the DiffState itself. The DiffState comes pre-loaded with a set of components
-/// that were modified by the eventtrigger. This prevents doubly evaluating components if they were both updated via
-/// subscriptions and props changes.
 pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub dom: &'real mut Dom,
     pub components: &'bump SharedArena,
@@ -158,50 +146,48 @@ where
     //
     // each function call assumes the stack is fresh (empty).
     pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
-        match (old_node, new_node) {
+        match (&old_node.kind, &new_node.kind) {
             // Handle the "sane" cases first.
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
             // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
-            (VNode::Text(old), VNode::Text(new)) => {
-                if old.is_static {
-                    log::debug!("encountered static text node: {:?}", old.text);
-                }
-
+            (VNodeKind::Text(old), VNodeKind::Text(new)) => {
+                let root = old_node.dom_id.get();
                 if old.text != new.text {
-                    self.dom.push(old.dom_id.get());
+                    self.dom.push(root);
                     log::debug!("Text has changed {}, {}", old.text, new.text);
                     self.dom.set_text(new.text);
                     self.dom.pop();
                 }
 
-                new.dom_id.set(old.dom_id.get());
+                new_node.dom_id.set(root);
             }
 
-            (VNode::Element(old), VNode::Element(new)) => {
+            (VNodeKind::Element(old), VNodeKind::Element(new)) => {
                 // If the element type is completely different, the element needs to be re-rendered completely
                 // This is an optimization React makes due to how users structure their code
                 //
                 // In Dioxus, this is less likely to occur unless through a fragment
+                let root = old_node.dom_id.get();
                 if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                    self.dom.push(old.dom_id.get());
+                    self.dom.push(root);
                     let meta = self.create(new_node);
                     self.dom.replace_with(meta.added_to_stack);
                     self.dom.pop();
                     return;
                 }
 
-                let oldid = old.dom_id.get();
-                new.dom_id.set(oldid);
+                new_node.dom_id.set(root);
 
                 // push it just in case
-                self.dom.push(oldid);
+                // TODO: remove this - it clogs up things and is inefficient
+                self.dom.push(root);
                 self.diff_listeners(old.listeners, new.listeners);
                 self.diff_attr(old.attributes, new.attributes, new.namespace);
                 self.diff_children(old.children, new.children);
                 self.dom.pop();
             }
 
-            (VNode::Component(old), VNode::Component(new)) => {
+            (VNodeKind::Component(old), VNodeKind::Component(new)) => {
                 log::warn!("diffing components? {:#?}", new.user_fc);
                 if old.user_fc == new.user_fc {
                     // Make sure we're dealing with the same component (by function pointer)
@@ -257,7 +243,7 @@ where
                 }
             }
 
-            (VNode::Fragment(old), VNode::Fragment(new)) => {
+            (VNodeKind::Fragment(old), VNodeKind::Fragment(new)) => {
                 // This is the case where options or direct vnodes might be used.
                 // In this case, it's faster to just skip ahead to their diff
                 if old.children.len() == 1 && new.children.len() == 1 {
@@ -278,15 +264,19 @@ where
             // We also walk the "real node" list to make sure all latent roots are claened up
             // This covers the case any time a fragment or component shows up with pretty much anything else
             (
-                VNode::Component(_) | VNode::Fragment(_) | VNode::Text(_) | VNode::Element(_),
-                VNode::Component(_) | VNode::Fragment(_) | VNode::Text(_) | VNode::Element(_),
+                VNodeKind::Component(_)
+                | VNodeKind::Fragment(_)
+                | VNodeKind::Text(_)
+                | VNodeKind::Element(_),
+                VNodeKind::Component(_)
+                | VNodeKind::Fragment(_)
+                | VNodeKind::Text(_)
+                | VNodeKind::Element(_),
             ) => {
                 // Choose the node to use as the placeholder for replacewith
-                let back_node = match old_node {
+                let back_node = match old_node.kind {
                     // We special case these two types to avoid allocating the small-vecs
-                    VNode::Element(_) | VNode::Text(_) => old_node
-                        .get_mounted_id(&self.components)
-                        .expect("Element and text always have a real node"),
+                    VNodeKind::Element(_) | VNodeKind::Text(_) => old_node.dom_id.get(),
 
                     _ => {
                         let mut old_iter = RealChildIterator::new(old_node, &self.components);
@@ -314,17 +304,17 @@ where
             }
 
             // TODO
-            (VNode::Suspended { .. }, _) => todo!(),
-            (_, VNode::Suspended { .. }) => todo!(),
+            (VNodeKind::Suspended { .. }, _) => todo!(),
+            (_, VNodeKind::Suspended { .. }) => todo!(),
         }
     }
 }
 
 // When we create new nodes, we need to propagate some information back up the call chain.
 // This gives the caller some information on how to handle things like insertins, appending, and subtree discarding.
-struct CreateMeta {
-    is_static: bool,
-    added_to_stack: u32,
+pub struct CreateMeta {
+    pub is_static: bool,
+    pub added_to_stack: u32,
 }
 
 impl CreateMeta {
@@ -349,15 +339,15 @@ where
     // When this function returns, the new node is on top of the change list stack:
     //
     //     [... node]
-    fn create(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
+    pub fn create(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
         log::warn!("Creating node! ... {:#?}", node);
-        match node {
-            VNode::Text(text) => {
+        match &node.kind {
+            VNodeKind::Text(text) => {
                 let real_id = self.dom.create_text_node(text.text);
-                text.dom_id.set(real_id);
+                node.dom_id.set(real_id);
                 CreateMeta::new(text.is_static, 1)
             }
-            VNode::Element(el) => {
+            VNodeKind::Element(el) => {
                 // we have the potential to completely eliminate working on this node in the future(!)
                 //
                 // This can only be done if all of the elements properties (attrs, children, listeners, etc) are static
@@ -366,14 +356,14 @@ where
                 let mut is_static: bool = true;
 
                 let VElement {
-                    key,
                     tag_name,
                     listeners,
                     attributes,
                     children,
                     namespace,
-                    dom_id,
-                    is_static: el_is_static,
+                    static_attrs: _,
+                    static_children: _,
+                    static_listeners: _,
                 } = el;
 
                 let real_id = if let Some(namespace) = namespace {
@@ -381,9 +371,10 @@ where
                 } else {
                     self.dom.create_element(tag_name, None)
                 };
-                dom_id.set(real_id);
+                node.dom_id.set(real_id);
 
                 listeners.iter().enumerate().for_each(|(idx, listener)| {
+                    log::info!("setting listener id to {:#?}", real_id);
                     listener.mounted_node.set(real_id);
                     self.dom
                         .new_event_listener(listener.event, listener.scope, idx, real_id);
@@ -408,9 +399,9 @@ where
                 //
                 // TODO move over
                 // if children.len() == 1 {
-                //     if let VNode::Text(text) = &children[0] {
+                //     if let VNodeKind::Text(text) = &children[0].kind {
                 //         self.dom.set_text(text.text);
-                //         return;
+                //         return CreateMeta::new(is_static, 1);
                 //     }
                 // }
 
@@ -422,17 +413,17 @@ where
                     self.dom.append_children(child_meta.added_to_stack);
                 }
 
-                if is_static {
-                    log::debug!("created a static node {:#?}", node);
-                } else {
-                    log::debug!("created a dynamic node {:#?}", node);
-                }
+                // if is_static {
+                //     log::debug!("created a static node {:#?}", node);
+                // } else {
+                //     log::debug!("created a dynamic node {:#?}", node);
+                // }
 
-                el_is_static.set(is_static);
+                // el_is_static.set(is_static);
                 CreateMeta::new(is_static, 1)
             }
 
-            VNode::Component(vcomponent) => {
+            VNodeKind::Component(vcomponent) => {
                 log::debug!("Mounting a new component");
                 let caller = vcomponent.caller.clone();
 
@@ -493,7 +484,7 @@ where
             // Fragments are the only nodes that can contain dynamic content (IE through curlies or iterators).
             // We can never ignore their contents, so the prescence of a fragment indicates that we need always diff them.
             // Fragments will just put all their nodes onto the stack after creation
-            VNode::Fragment(frag) => {
+            VNodeKind::Fragment(frag) => {
                 let mut nodes_added = 0;
                 for child in frag.children.iter().rev() {
                     // different types of nodes will generate different amounts on the stack
@@ -508,9 +499,9 @@ where
                 CreateMeta::new(false, nodes_added)
             }
 
-            VNode::Suspended { real } => {
+            VNodeKind::Suspended => {
                 let id = self.dom.create_placeholder();
-                real.set(id);
+                node.dom_id.set(id);
                 CreateMeta::new(false, 1)
             }
         }
@@ -570,7 +561,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             // if any characteristics changed, remove and then re-add
 
             // if nothing changed, then just move on
-            let event_type = new_l.event;
+            let _event_type = new_l.event;
 
             for old_l in old {
                 if new_l.event == old_l.event {
@@ -612,7 +603,6 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         old: &'bump [Attribute<'bump>],
         new: &'bump [Attribute<'bump>],
         namespace: Option<&'bump str>,
-        // is_namespaced: bool,
     ) {
         // Do O(n^2) passes to add/update and remove attributes, since
         // there are almost always very few attributes.
@@ -620,7 +610,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // The "fast" path is when the list of attributes name is identical and in the same order
         // With the Rsx and Html macros, this will almost always be the case
         'outer: for new_attr in new {
-            if new_attr.is_volatile() {
+            if new_attr.is_volatile {
                 // self.dom.commit_traversal();
                 self.dom
                     .set_attribute(new_attr.name, new_attr.value, namespace);
@@ -675,13 +665,13 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
 
         if new.len() == 1 {
             match (&old.first(), &new[0]) {
-                (Some(VNode::Text(old_vtext)), VNode::Text(new_vtext))
-                    if old_vtext.text == new_vtext.text =>
-                {
-                    // Don't take this fast path...
-                }
+                // (Some(VNodeKind::Text(old_vtext)), VNodeKind::Text(new_vtext))
+                //     if old_vtext.text == new_vtext.text =>
+                // {
+                //     // Don't take this fast path...
+                // }
 
-                // (_, VNode::Text(text)) => {
+                // (_, VNodeKind::Text(text)) => {
                 //     // self.dom.commit_traversal();
                 //     log::debug!("using optimized text set");
                 //     self.dom.set_text(text.text);
@@ -701,15 +691,15 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             return;
         }
 
-        let new_is_keyed = new[0].key().is_some();
-        let old_is_keyed = old[0].key().is_some();
+        let new_is_keyed = new[0].key.is_some();
+        let old_is_keyed = old[0].key.is_some();
 
         debug_assert!(
-            new.iter().all(|n| n.key().is_some() == new_is_keyed),
+            new.iter().all(|n| n.key.is_some() == new_is_keyed),
             "all siblings must be keyed or all siblings must be non-keyed"
         );
         debug_assert!(
-            old.iter().all(|o| o.key().is_some() == old_is_keyed),
+            old.iter().all(|o| o.key.is_some() == old_is_keyed),
             "all siblings must be keyed or all siblings must be non-keyed"
         );
 
@@ -754,7 +744,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             let mut assert_unique_keys = |children: &'bump [VNode<'bump>]| {
                 keys.clear();
                 for child in children {
-                    let key = child.key();
+                    let key = child.key;
                     debug_assert!(
                         key.is_some(),
                         "if any sibling is keyed, all siblings must be keyed"
@@ -797,7 +787,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             .iter()
             .rev()
             .zip(new[shared_prefix_count..].iter().rev())
-            .take_while(|&(old, new)| old.key() == new.key())
+            .take_while(|&(old, new)| old.key == new.key)
             .count();
 
         let old_shared_suffix_start = old.len() - shared_suffix_count;
@@ -833,8 +823,8 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // Upon exit, the change list stack is the same.
     fn diff_keyed_prefix(
         &self,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
+        _old: &'bump [VNode<'bump>],
+        _new: &'bump [VNode<'bump>],
     ) -> KeyedPrefixResult {
         todo!()
         // self.dom.go_down();
@@ -922,11 +912,11 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // Upon exit from this function, it will be restored to that same state.
     fn diff_keyed_middle(
         &self,
-        old: &[VNode<'bump>],
-        mut new: &[VNode<'bump>],
-        shared_prefix_count: usize,
-        shared_suffix_count: usize,
-        old_shared_suffix_start: usize,
+        _old: &[VNode<'bump>],
+        _new: &[VNode<'bump>],
+        _shared_prefix_count: usize,
+        _shared_suffix_count: usize,
+        _old_shared_suffix_start: usize,
     ) {
         todo!()
         // // Should have already diffed the shared-key prefixes and suffixes.
@@ -1150,9 +1140,9 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // When this function exits, the change list stack remains the same.
     fn diff_keyed_suffix(
         &self,
-        old: &[VNode<'bump>],
-        new: &[VNode<'bump>],
-        new_shared_suffix_start: usize,
+        _old: &[VNode<'bump>],
+        _new: &[VNode<'bump>],
+        _new_shared_suffix_start: usize,
     ) {
         todo!()
         //     debug_assert_eq!(old.len(), new.len());
@@ -1190,7 +1180,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //     [... parent child]
 
         // todo!()
-        for (i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
+        for (_i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
             // [... parent prev_child]
             // self.dom.go_to_sibling(i);
             // [... parent this_child]
@@ -1259,7 +1249,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     pub fn remove_self_and_next_siblings(&self, old: &[VNode<'bump>]) {
         // debug_assert!(self.dom.traversal_is_committed());
         for child in old {
-            if let VNode::Component(vcomp) = child {
+            if let VNodeKind::Component(_vcomp) = child.kind {
                 // dom
                 //     .create_text_node("placeholder for vcomponent");
 
@@ -1328,23 +1318,23 @@ impl<'a> Iterator for RealChildIterator<'a> {
 
         while returned_node.is_none() {
             if let Some((count, node)) = self.stack.last_mut() {
-                match node {
+                match &node.kind {
                     // We can only exit our looping when we get "real" nodes
                     // This includes fragments and components when they're empty (have a single root)
-                    VNode::Element(_) | VNode::Text(_) => {
+                    VNodeKind::Element(_) | VNodeKind::Text(_) => {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         should_pop = true;
-                        returned_node = node.get_mounted_id(&self.scopes);
+                        returned_node = Some(node.dom_id.get());
                     }
 
                     // If we get a fragment we push the next child
-                    VNode::Fragment(frag) => {
+                    VNodeKind::Fragment(frag) => {
                         let subcount = *count as usize;
 
                         if frag.children.len() == 0 {
                             should_pop = true;
-                            returned_node = node.get_mounted_id(&self.scopes);
+                            returned_node = Some(node.dom_id.get());
                         }
 
                         if subcount >= frag.children.len() {
@@ -1355,11 +1345,11 @@ impl<'a> Iterator for RealChildIterator<'a> {
                     }
 
                     // Immediately abort suspended nodes - can't do anything with them yet
-                    // VNode::Suspended => should_pop = true,
-                    VNode::Suspended { real } => todo!(),
+                    // VNodeKind::Suspended => should_pop = true,
+                    VNodeKind::Suspended => todo!(),
 
                     // For components, we load their root and push them onto the stack
-                    VNode::Component(sc) => {
+                    VNodeKind::Component(sc) => {
                         let scope = self.scopes.try_get(sc.ass_scope.get().unwrap()).unwrap();
 
                         // Simply swap the current node on the stack with the root of the component
@@ -1386,5 +1376,15 @@ impl<'a> Iterator for RealChildIterator<'a> {
         }
 
         returned_node
+    }
+}
+
+fn compare_strs(a: &str, b: &str) -> bool {
+    // Check by pointer, optimizing for static strs
+    if !std::ptr::eq(a, b) {
+        // If the pointers are different then check by value
+        a == b
+    } else {
+        true
     }
 }

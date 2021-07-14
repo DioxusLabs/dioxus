@@ -20,14 +20,14 @@ dioxus-ssr = { path = "./packages/ssr", optional = true }
 [features]
 default = [
     "core",
-    "atoms",
     "macro",
-    "ssr",
     "hooks",
-    "router",
     "html",
+    "ssr",
     "web",
     "desktop",
+    # "atoms",
+    # "router",
 ]
 atoms = []
 macro = ["dioxus-core-macro"]
@@ -63,8 +63,8 @@ members = [
     "packages/html",
     "packages/hooks",
     "packages/web",
-    "packages/webview",
     "packages/ssr",
+    "packages/webview",
     # "packages/atoms",
     # "packages/docsite",
 ]

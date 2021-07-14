@@ -4,7 +4,7 @@
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
-use std::{cell::Cell, ops::Deref, rc::Rc};
+
 
 use crate::innerlude::{RealDomNode, ScopeIdx};
 
@@ -125,7 +125,6 @@ pub mod on {
     use std::{fmt::Debug, ops::Deref, rc::Rc};
 
     use crate::{
-        innerlude::ElementBuilder,
         innerlude::NodeFactory,
         innerlude::{Attribute, Listener, RealDomNode, VNode},
     };

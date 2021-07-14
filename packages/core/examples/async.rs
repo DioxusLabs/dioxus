@@ -1,13 +1,13 @@
-use std::pin::Pin;
+
 
 use dioxus_core::prelude::*;
-use std::future::Future;
+
 
 fn main() {}
 
 const App: FC<()> = |cx| {
     // create a new future
-    let mut fut = cx.use_hook(
+    let _fut = cx.use_hook(
         || {
             //
             async { loop {} }
@@ -22,3 +22,15 @@ const App: FC<()> = |cx| {
 
     todo!()
 };
+
+const Task: FC<()> = |cx| {
+    //
+
+    let _s = cx.use_task(|| async { "hello world".to_string() });
+
+    todo!()
+};
+
+fn use_mut<P, T>(_cx: Context<P>, _f: impl FnOnce() -> T) -> &mut T {
+    todo!()
+}

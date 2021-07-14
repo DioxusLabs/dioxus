@@ -23,37 +23,18 @@ pub struct Element {
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
+        let attr = &self.attributes;
+        let childs = &self.children;
+        let listeners = &self.listeners;
 
         tokens.append_all(quote! {
-            __cx.element(dioxus_elements::#name)
-        });
-
-        // By gating these methods, we can keep the output of `cargo expand` readable.
-        // We also prevent the issue where zero-sized arrays fail to have propery type inference.
-
-        if self.attributes.len() > 0 {
-            let attr = &self.attributes;
-            tokens.append_all(quote! {
-                .attributes([ #(#attr),* ])
-            })
-        }
-
-        if self.children.len() > 0 {
-            let childs = &self.children;
-            tokens.append_all(quote! {
-                .children([ #(#childs),* ])
-            });
-        }
-
-        if self.listeners.len() > 0 {
-            let listeners = &self.listeners;
-            tokens.append_all(quote! {
-                .listeners([ #(#listeners),* ])
-            });
-        }
-
-        tokens.append_all(quote! {
-            .finish()
+            __cx.element(
+                dioxus_elements::#name,
+                __cx.bump().alloc([ #(#listeners),* ]),
+                __cx.bump().alloc([ #(#attr),* ]),
+                __cx.bump().alloc([ #(#childs),* ]),
+                None,
+            )
         });
     }
 }
@@ -83,7 +64,13 @@ impl Parse for Element {
             }
 
             if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                parse_element_body(&content, &mut attributes, &mut listeners, &mut key)?;
+                parse_element_body(
+                    &content,
+                    &mut attributes,
+                    &mut listeners,
+                    &mut key,
+                    name.clone(),
+                )?;
             } else {
                 children.push(content.parse::<Node>()?);
             }
@@ -110,6 +97,7 @@ impl Parse for Element {
 /// Parse a VElement's Attributes
 /// =======================================
 struct ElementAttr {
+    element_name: Ident,
     name: Ident,
     value: AttrType,
     namespace: Option<String>,
@@ -130,6 +118,7 @@ fn parse_element_body(
     attrs: &mut Vec<ElementAttr>,
     listeners: &mut Vec<ElementAttr>,
     key: &mut Option<AttrType>,
+    element_name: Ident,
 ) -> Result<()> {
     let mut name = Ident::parse_any(stream)?;
     let name_str = name.to_string();
@@ -159,6 +148,7 @@ fn parse_element_body(
             name,
             value: ty,
             namespace: None,
+            element_name: element_name.clone(),
         });
         return Ok(());
     }
@@ -186,6 +176,7 @@ fn parse_element_body(
                     name,
                     value: ty,
                     namespace: Some("style".to_string()),
+                    element_name: element_name.clone(),
                 });
             }
 
@@ -227,13 +218,15 @@ fn parse_element_body(
         name,
         value: ty,
         namespace: None,
+        element_name,
     });
     Ok(())
 }
 
 impl ToTokens for ElementAttr {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = self.name.to_string();
+        let el_name = &self.element_name;
+        let name_str = self.name.to_string();
         let nameident = &self.name;
 
         let namespace = match &self.namespace {
@@ -243,12 +236,22 @@ impl ToTokens for ElementAttr {
 
         match &self.value {
             AttrType::BumpText(value) => tokens.append_all(quote! {
-                __cx.attr(#name, format_args_f!(#value), #namespace)
+                dioxus_elements::#el_name.#nameident(__cx, format_args_f!(#value))
             }),
-
+            // __cx.attr(#name, format_args_f!(#value), #namespace, false)
+            //
+            // AttrType::BumpText(value) => tokens.append_all(quote! {
+            //     __cx.attr(#name, format_args_f!(#value), #namespace, false)
+            // }),
             AttrType::FieldTokens(exp) => tokens.append_all(quote! {
-                __cx.attr(#name, #exp, #namespace)
+                dioxus_elements::#el_name.#nameident(__cx, #exp)
             }),
+            // __cx.attr(#name_str, #exp, #namespace, false)
+
+            // AttrType::FieldTokens(exp) => tokens.append_all(quote! {
+            //     dioxus_elements::#el_name.#nameident(__cx, format_args_f!(#value))
+            //     __cx.attr(#name_str, #exp, #namespace, false)
+            // }),
 
             // todo: move event handlers on to the elements or onto the nodefactory
             AttrType::Event(event) => tokens.append_all(quote! {

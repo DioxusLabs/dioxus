@@ -8,7 +8,7 @@
 
 use std::fmt::{Display, Formatter};
 
-use dioxus_core::{nodes::VNode, virtual_dom::VirtualDom};
+use dioxus_core::*;
 
 pub fn render_root(vdom: &VirtualDom) -> String {
     format!("{:}", TextRenderer::new(vdom))
@@ -69,8 +69,8 @@ impl<'a> TextRenderer<'a> {
     }
 
     fn html_render(&self, node: &VNode, f: &mut std::fmt::Formatter, il: u16) -> std::fmt::Result {
-        match node {
-            VNode::Text(text) => {
+        match &node.kind {
+            VNodeKind::Text(text) => {
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
@@ -78,7 +78,7 @@ impl<'a> TextRenderer<'a> {
                 }
                 write!(f, "{}", text.text)?
             }
-            VNode::Element(el) => {
+            VNodeKind::Element(el) => {
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
@@ -112,12 +112,12 @@ impl<'a> TextRenderer<'a> {
                     write!(f, "\n")?;
                 }
             }
-            VNode::Fragment(frag) => {
+            VNodeKind::Fragment(frag) => {
                 for child in frag.children {
                     self.html_render(child, f, il + 1)?;
                 }
             }
-            VNode::Component(vcomp) => {
+            VNodeKind::Component(vcomp) => {
                 let idx = vcomp.ass_scope.get().unwrap();
 
                 let new_node = self
@@ -130,7 +130,7 @@ impl<'a> TextRenderer<'a> {
 
                 self.html_render(new_node, f, il + 1)?;
             }
-            VNode::Suspended { .. } => todo!(),
+            VNodeKind::Suspended => todo!(),
         }
         Ok(())
     }
@@ -151,6 +151,7 @@ mod tests {
     use dioxus_core as dioxus;
     use dioxus_core::prelude::*;
     use dioxus_html as dioxus_elements;
+    use dioxus_html::GlobalAttributes;
 
     const SIMPLE_APP: FC<()> = |cx| {
         cx.render(rsx!(div {

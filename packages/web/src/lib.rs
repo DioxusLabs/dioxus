@@ -62,20 +62,27 @@ impl WebsysRenderer {
     }
 
     pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
-        let body_element = prepare_websys_dom();
+        use wasm_bindgen::JsCast;
 
-        let root_node = body_element.first_child().unwrap();
+        let root = prepare_websys_dom();
+        let root_node = root.clone().dyn_into::<Node>().unwrap();
 
-        let mut websys_dom = crate::new::WebsysDom::new(body_element.clone());
+        let mut websys_dom = crate::new::WebsysDom::new(root.clone());
 
+        websys_dom.stack.push(root_node.clone());
         websys_dom.stack.push(root_node);
 
         self.internal_dom.rebuild(&mut websys_dom)?;
 
         log::info!("Going into event loop");
-        loop {
-            let trigger = {
-                let real_queue = websys_dom.wait_for_event();
+        // loop {
+        let trigger = {
+            let real_queue = websys_dom.wait_for_event();
+            if self.internal_dom.tasks.is_empty() {
+                log::info!("tasks is empty, waiting for dom event to trigger soemthing");
+                real_queue.await
+            } else {
+                log::info!("tasks is not empty, waiting for either tasks or event system");
                 let task_queue = (&mut self.internal_dom.tasks).next();
 
                 pin_mut!(real_queue);
@@ -85,26 +92,30 @@ impl WebsysRenderer {
                     futures_util::future::Either::Left((trigger, _)) => trigger,
                     futures_util::future::Either::Right((trigger, _)) => trigger,
                 }
-            };
+            }
+        };
 
+        if let Some(real_trigger) = trigger {
             log::info!("event received");
-            let root_node = body_element.first_child().unwrap();
-            websys_dom.stack.push(root_node.clone());
-            self.internal_dom
-                .progress_with_event(&mut websys_dom, trigger.unwrap())?;
+            // let root_node = body_element.first_child().unwrap();
+            // websys_dom.stack.push(root_node.clone());
 
-            // let t2 = self.internal_dom.tasks.next();
-            // futures::select! {
-            //     trigger = t1 => {
-            //         log::info!("event received");
-            //         let root_node = body_element.first_child().unwrap();
-            //         websys_dom.stack.push(root_node.clone());
-            //         self.internal_dom
-            //             .progress_with_event(&mut websys_dom, trigger)?;
-            //     },
-            //     () = t2 => {}
-            // };
+            self.internal_dom
+                .progress_with_event(&mut websys_dom, real_trigger)?;
         }
+
+        // let t2 = self.internal_dom.tasks.next();
+        // futures::select! {
+        //     trigger = t1 => {
+        //         log::info!("event received");
+        //         let root_node = body_element.first_child().unwrap();
+        //         websys_dom.stack.push(root_node.clone());
+        //         self.internal_dom
+        //             .progress_with_event(&mut websys_dom, trigger)?;
+        //     },
+        //     () = t2 => {}
+        // };
+        // }
         // while let Some(trigger) = websys_dom.wait_for_event().await {
         // }
 
@@ -119,21 +130,23 @@ fn prepare_websys_dom() -> Element {
     let document = window
         .document()
         .expect("should have access to the Document");
-    let body = document.body().unwrap();
+
+    // let body = document.body().unwrap();
+    let el = document.get_element_by_id("dioxusroot").unwrap();
 
     // Build a dummy div
-    let container: &Element = body.as_ref();
+    // let container: &Element = body.as_ref();
     // container.set_inner_html("");
-    container
-        .append_child(
-            document
-                .create_element("div")
-                .expect("should create element OK")
-                .as_ref(),
-        )
-        .expect("should append child OK");
-
-    container.clone()
+    // container
+    //     .append_child(
+    //         document
+    //             .create_element("div")
+    //             .expect("should create element OK")
+    //             .as_ref(),
+    //     )
+    //     .expect("should append child OK");
+    el
+    // container.clone()
 }
 
 // Progress the mount of the root component

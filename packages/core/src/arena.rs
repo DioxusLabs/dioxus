@@ -59,8 +59,8 @@ impl SharedArena {
 
     pub fn with_scope<'b, O: 'static>(
         &'b self,
-        id: ScopeIdx,
-        f: impl FnOnce(&'b mut Scope) -> O,
+        _id: ScopeIdx,
+        _f: impl FnOnce(&'b mut Scope) -> O,
     ) -> Result<O> {
         todo!()
     }
@@ -69,8 +69,8 @@ impl SharedArena {
     // this is useful for merging lifetimes
     pub fn with_scope_vnode<'b>(
         &self,
-        id: ScopeIdx,
-        f: impl FnOnce(&mut Scope) -> &VNode<'b>,
+        _id: ScopeIdx,
+        _f: impl FnOnce(&mut Scope) -> &VNode<'b>,
     ) -> Result<&VNode<'b>> {
         todo!()
     }
