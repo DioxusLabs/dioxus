@@ -66,8 +66,8 @@ use std::any::Any;
 /// target-specific Node type as well as easily serializing the edits to be sent over a network or IPC connection.
 pub trait RealDom<'a> {
     fn request_available_node(&mut self) -> RealDomNode;
-    // node ref
-    fn raw_node_as_any_mut(&self) -> &mut dyn Any;
+
+    fn raw_node_as_any(&self) -> &mut dyn Any;
 }
 
 pub struct DomEditor<'real, 'bump> {
@@ -77,7 +77,7 @@ use DomEdit::*;
 impl<'real, 'bump> DomEditor<'real, 'bump> {
     // Navigation
     pub(crate) fn push(&mut self, root: RealDomNode) {
-        self.edits.push(PushRoot { root: root.0 });
+        self.edits.push(PushRoot { root });
     }
     pub(crate) fn pop(&mut self) {
         self.edits.push(PopRoot {});
@@ -105,7 +105,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
 
     // Create
     pub(crate) fn create_text_node(&mut self, text: &'bump str, id: RealDomNode) {
-        self.edits.push(CreateTextNode { text, id: id.0 });
+        self.edits.push(CreateTextNode { text, id });
     }
     pub(crate) fn create_element(
         &mut self,
@@ -114,14 +114,14 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
         id: RealDomNode,
     ) {
         match ns {
-            Some(ns) => self.edits.push(CreateElementNs { id: id.0, ns, tag }),
-            None => self.edits.push(CreateElement { id: id.0, tag }),
+            Some(ns) => self.edits.push(CreateElementNs { id, ns, tag }),
+            None => self.edits.push(CreateElement { id, tag }),
         }
     }
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     pub(crate) fn create_placeholder(&mut self, id: RealDomNode) {
-        self.edits.push(CreatePlaceholder { id: id.0 });
+        self.edits.push(CreatePlaceholder { id });
     }
 
     // events
@@ -136,7 +136,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
             scope,
             event,
             idx: element_id,
-            node: realnode.0,
+            node: realnode,
         });
     }
     pub(crate) fn remove_event_listener(&mut self, event: &'static str) {

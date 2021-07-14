@@ -36,7 +36,7 @@ static App: FC<()> = |cx| {
     let state = use_state(cx, || 0);
     let set_val = state.setter();
 
-    let g = cx.use_task(|| async move {
+    let (tas, g) = cx.use_task(|| async move {
         let mut tick: i32 = 0;
         log::debug!("yeet!");
         // loop {
@@ -47,10 +47,9 @@ static App: FC<()> = |cx| {
         //         break;
         //     }
         // }
-
+        // String::from("Huzza!")
         set_val(10);
         surf::get(ENDPOINT).recv_json::<DogApi>().await
-        // String::from("Huzza!")
     });
 
     let dog_node = match g.as_ref().and_then(|f| f.as_ref().ok()) {

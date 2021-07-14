@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use dioxus_core::{
     events::{EventTrigger, VirtualEvent},
-    RealDomNode, ScopeIdx,
+    DomEdit, RealDomNode, ScopeIdx,
 };
 use fxhash::FxHashMap;
 use slotmap::{DefaultKey, Key, KeyData};
@@ -69,12 +69,35 @@ impl WebsysDom {
         let v = self.event_receiver.recv().await.unwrap();
         Some(v)
     }
-}
 
-impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
+    pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
+        for edit in edits.drain(..) {
+            match edit {
+                DomEdit::PushRoot { root } => self.push(root),
+                DomEdit::PopRoot => self.pop(),
+                DomEdit::AppendChildren { many } => self.append_children(many),
+                DomEdit::ReplaceWith { many } => self.replace_with(many),
+                DomEdit::Remove => self.remove(),
+                DomEdit::RemoveAllChildren => self.remove_all_children(),
+                DomEdit::CreateTextNode { text, id } => self.create_text_node(text, id),
+                DomEdit::CreateElement { tag, id } => self.create_element(tag, None, id),
+                DomEdit::CreateElementNs { tag, id, ns } => self.create_element(tag, Some(ns), id),
+                DomEdit::CreatePlaceholder { id } => self.create_placeholder(id),
+                DomEdit::NewEventListener {
+                    event,
+                    scope,
+                    node,
+                    idx,
+                } => self.new_event_listener(event, scope, idx, node),
+                DomEdit::RemoveEventListener { event } => todo!(),
+                DomEdit::SetText { text } => todo!(),
+                DomEdit::SetAttribute { field, value, ns } => todo!(),
+                DomEdit::RemoveAttribute { name } => todo!(),
+            }
+        }
+    }
     fn push(&mut self, root: RealDomNode) {
-        log::debug!("Called [push_root] {:#?}", root);
-        let key: DefaultKey = KeyData::from_ffi(root.0).into();
+        let key = root.0;
         let domnode = self
             .nodes
             .get(key)
@@ -161,10 +184,10 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         todo!()
     }
 
-    fn create_placeholder(&mut self) -> RealDomNode {
-        self.create_element("pre", None)
+    fn create_placeholder(&mut self, id: RealDomNode) {
+        self.create_element("pre", None, id)
     }
-    fn create_text_node(&mut self, text: &str) -> RealDomNode {
+    fn create_text_node(&mut self, text: &str, id: RealDomNode) {
         // let nid = self.node_counter.next();
         let textnode = self
             .document
@@ -172,15 +195,17 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
             .dyn_into::<Node>()
             .unwrap();
         self.stack.push(textnode.clone());
-        let nid = self.nodes.insert(textnode);
-        let nid = nid.data().as_ffi();
 
-        log::debug!("Called [`create_text_node`]: {}, {}", text, nid);
+        todo!();
+        // let nid = self.nodes.insert(textnode);
+        // let nid = nid.data().as_ffi();
 
-        RealDomNode::new(nid)
+        // log::debug!("Called [`create_text_node`]: {}, {}", text, nid);
+
+        // RealDomNode::new(nid)
     }
 
-    fn create_element(&mut self, tag: &str, ns: Option<&'static str>) -> RealDomNode {
+    fn create_element(&mut self, tag: &str, ns: Option<&'static str>, id: RealDomNode) {
         let tag = wasm_bindgen::intern(tag);
         let el = match ns {
             Some(ns) => self
@@ -199,9 +224,9 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
 
         self.stack.push(el.clone());
         // let nid = self.node_counter.?next();
-        let nid = self.nodes.insert(el).data().as_ffi();
-        log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
-        RealDomNode::new(nid)
+        // let nid = self.nodes.insert(el).data().as_ffi();
+        // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
+        // RealDomNode::new(nid)
     }
 
     fn new_event_listener(
@@ -213,13 +238,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     ) {
         let (_on, event) = event.split_at(2);
         let event = wasm_bindgen::intern(event);
-        log::debug!(
-            "Called [`new_event_listener`]: {}, {:?}, {}, {:?}",
-            event,
-            scope,
-            _element_id,
-            real_id
-        );
+
         // attach the correct attributes to the element
         // these will be used by accessing the event's target
         // This ensures we only ever have one handler attached to the root, but decide
@@ -234,8 +253,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         let scope_id = scope.data().as_ffi();
         el.set_attribute(
             &format!("dioxus-event-{}", event),
-            &format!("{}.{}", scope_id, real_id.0),
-            // &format!("{}.{}.{}", gi_id, el_id, real_id.0),
+            &format!("{}.{}", scope_id, real_id.0.data().as_ffi()),
         )
         .unwrap();
 
@@ -265,17 +283,14 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     }
 
     fn remove_event_listener(&mut self, event: &str) {
-        log::debug!("Called [`remove_event_listener`]: {}", event);
         todo!()
     }
 
     fn set_text(&mut self, text: &str) {
-        log::debug!("Called [`set_text`]: {}", text);
         self.stack.top().set_text_content(Some(text))
     }
 
     fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
-        log::debug!("Called [`set_attribute`]: {}, {}", name, value);
         if name == "class" {
             if let Some(el) = self.stack.top().dyn_ref::<Element>() {
                 el.set_class_name(value);
@@ -288,7 +303,6 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     }
 
     fn remove_attribute(&mut self, name: &str) {
-        log::debug!("Called [`remove_attribute`]: {}", name);
         let node = self.stack.top();
         if let Some(node) = node.dyn_ref::<web_sys::Element>() {
             node.remove_attribute(name).unwrap();
@@ -310,8 +324,17 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
         }
     }
 
-    fn raw_node_as_any_mut(&self) -> &mut dyn std::any::Any {
-        log::debug!("Called [`raw_node_as_any_mut`]");
+    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
+        todo!()
+    }
+}
+
+impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
+    fn request_available_node(&mut self) -> RealDomNode {
+        todo!()
+    }
+
+    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
         todo!()
     }
 }
@@ -583,13 +606,16 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
         .next()
         .and_then(|f| f.parse::<u64>().ok())
         .context("failed to parse gi id")?;
-    // let el_id = fields
-    //     .next()
-    //     .and_then(|f| f.parse::<usize>().ok())
-    //     .context("failed to parse el id")?;
+
     let real_id = fields
         .next()
-        .and_then(|f| f.parse::<u64>().ok().map(RealDomNode::new))
+        .and_then(|raw_id| {
+            raw_id
+                .parse::<u64>()
+                .ok()
+                .map(|value| KeyData::from_ffi(value))
+                .map(|f| RealDomNode(f.into()))
+        })
         .context("failed to parse real id")?;
 
     // Call the trigger

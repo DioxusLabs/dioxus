@@ -4,6 +4,7 @@ use std::{
 };
 
 use futures_util::StreamExt;
+use slotmap::{DefaultKey, KeyData};
 
 use crate::innerlude::*;
 
@@ -55,16 +56,17 @@ impl PartialOrd for HeightMarker {
 /// "u64" was chosen for two reasons
 /// - 0 cost hashing
 /// - use with slotmap and other versioned slot arenas
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RealDomNode(pub u64);
+pub struct RealDomNode(pub DefaultKey);
 impl RealDomNode {
-    pub fn new(id: u64) -> Self {
-        Self(id)
+    pub fn empty() -> Self {
+        let data = KeyData::from_ffi(u64::MIN);
+        let key: DefaultKey = data.into();
+        Self(key)
     }
-    pub const fn empty() -> Self {
-        Self(u64::MIN)
-    }
-    pub const fn empty_cell() -> Cell<Self> {
+    pub fn empty_cell() -> Cell<Self> {
         Cell::new(Self::empty())
     }
 }
@@ -88,7 +90,7 @@ impl DebugDom {
     }
 }
 impl<'a> RealDom<'a> for DebugDom {
-    fn raw_node_as_any_mut(&self) -> &mut dyn std::any::Any {
+    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
         todo!()
     }
 

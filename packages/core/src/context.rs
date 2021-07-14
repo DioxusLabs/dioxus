@@ -305,8 +305,7 @@ Any function prefixed with "use" should not be called conditionally.
     ) -> (&TaskHandle, &mut Option<Out>)
     where
         Out: 'static,
-        Fut: Future<Output = Out>,
-        Fut: 'static,
+        Fut: Future<Output = Out> + 'static,
         Init: FnOnce() -> Fut + 'src,
     {
         struct TaskHook<T> {
