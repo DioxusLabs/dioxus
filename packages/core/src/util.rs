@@ -88,50 +88,11 @@ impl DebugDom {
     }
 }
 impl<'a> RealDom<'a> for DebugDom {
-    fn push(&mut self, _root: RealDomNode) {}
-    fn pop(&mut self) {}
-
-    fn append_children(&mut self, _many: u32) {}
-
-    fn replace_with(&mut self, _many: u32) {}
-
-    fn remove(&mut self) {}
-
-    fn remove_all_children(&mut self) {}
-
-    fn create_text_node(&mut self, _text: &str) -> RealDomNode {
-        self.counter += 1;
-        RealDomNode::new(self.counter)
-    }
-
-    fn create_element(&mut self, _tag: &str, _ns: Option<&'a str>) -> RealDomNode {
-        self.counter += 1;
-        RealDomNode::new(self.counter)
-    }
-
-    fn create_placeholder(&mut self) -> RealDomNode {
-        self.counter += 1;
-        RealDomNode::new(self.counter)
-    }
-
-    fn new_event_listener(
-        &mut self,
-        _event: &str,
-        _scope: ScopeIdx,
-        _element_id: usize,
-        _realnode: RealDomNode,
-    ) {
-    }
-
-    fn remove_event_listener(&mut self, _event: &str) {}
-
-    fn set_text(&mut self, _text: &str) {}
-
-    fn set_attribute(&mut self, _name: &str, _value: &str, _namespace: Option<&str>) {}
-
-    fn remove_attribute(&mut self, _name: &str) {}
-
     fn raw_node_as_any_mut(&self) -> &mut dyn std::any::Any {
+        todo!()
+    }
+
+    fn request_available_node(&mut self) -> RealDomNode {
         todo!()
     }
 }

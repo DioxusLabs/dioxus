@@ -100,8 +100,11 @@ impl WebsysRenderer {
             // let root_node = body_element.first_child().unwrap();
             // websys_dom.stack.push(root_node.clone());
 
+            self.internal_dom.queue_event(real_trigger)?;
+
             self.internal_dom
-                .progress_with_event(&mut websys_dom, real_trigger)?;
+                .progress_with_event(&mut websys_dom)
+                .await?;
         }
 
         // let t2 = self.internal_dom.tasks.next();

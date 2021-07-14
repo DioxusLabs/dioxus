@@ -1,7 +1,4 @@
-
-
 use dioxus_core::prelude::*;
-
 
 fn main() {}
 
@@ -24,6 +21,12 @@ const App: FC<()> = |cx| {
 };
 
 const Task: FC<()> = |cx| {
+    let (task, res) = cx.use_task(|| async { true });
+    // task.pause();
+    // task.restart();
+    // task.stop();
+    // task.drop();
+
     //
 
     let _s = cx.use_task(|| async { "hello world".to_string() });

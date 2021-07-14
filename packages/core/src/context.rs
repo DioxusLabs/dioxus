@@ -299,7 +299,10 @@ Any function prefixed with "use" should not be called conditionally.
     /// Awaits the given task, forcing the component to re-render when the value is ready.
     ///
     ///
-    pub fn use_task<Out, Fut, Init>(&self, task_initializer: Init) -> &mut Option<Out>
+    pub fn use_task<Out, Fut, Init>(
+        &self,
+        task_initializer: Init,
+    ) -> (&TaskHandle, &mut Option<Out>)
     where
         Out: 'static,
         Fut: Future<Output = Out>,
@@ -342,7 +345,7 @@ Any function prefixed with "use" should not be called conditionally.
                 if let Some(val) = hook.task_dump.as_ref().borrow_mut().take() {
                     hook.value = Some(val);
                 }
-                &mut hook.value
+                (&TaskHandle { _p: PhantomData }, &mut hook.value)
             },
             |_| {},
         )

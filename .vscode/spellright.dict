@@ -63,3 +63,4 @@ derefed
 Tokio
 asynchronicity
 constified
+SegVec

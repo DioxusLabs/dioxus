@@ -65,50 +65,104 @@ use std::any::Any;
 /// any modifications that follow. This technique enables the diffing algorithm to avoid directly handling or storing any
 /// target-specific Node type as well as easily serializing the edits to be sent over a network or IPC connection.
 pub trait RealDom<'a> {
+    fn request_available_node(&mut self) -> RealDomNode;
+    // node ref
+    fn raw_node_as_any_mut(&self) -> &mut dyn Any;
+}
+
+pub struct DomEditor<'real, 'bump> {
+    edits: &'real mut Vec<DomEdit<'bump>>,
+}
+use DomEdit::*;
+impl<'real, 'bump> DomEditor<'real, 'bump> {
     // Navigation
-    fn push(&mut self, root: RealDomNode);
-    fn pop(&mut self);
+    pub(crate) fn push(&mut self, root: RealDomNode) {
+        self.edits.push(PushRoot { root: root.0 });
+    }
+    pub(crate) fn pop(&mut self) {
+        self.edits.push(PopRoot {});
+    }
 
     // Add Nodes to the dom
     // add m nodes from the stack
-    fn append_children(&mut self, many: u32);
+    pub(crate) fn append_children(&mut self, many: u32) {
+        self.edits.push(AppendChildren { many });
+    }
 
     // replace the n-m node on the stack with the m nodes
     // ends with the last element of the chain on the top of the stack
-    fn replace_with(&mut self, many: u32);
+    pub(crate) fn replace_with(&mut self, many: u32) {
+        self.edits.push(ReplaceWith { many });
+    }
 
     // Remove Nodesfrom the dom
-    fn remove(&mut self);
-    fn remove_all_children(&mut self);
+    pub(crate) fn remove(&mut self) {
+        self.edits.push(Remove);
+    }
+    pub(crate) fn remove_all_children(&mut self) {
+        self.edits.push(RemoveAllChildren);
+    }
 
     // Create
-    fn create_text_node(&mut self, text: &'a str) -> RealDomNode;
-    fn create_element(&mut self, tag: &'static str, ns: Option<&'static str>) -> RealDomNode;
+    pub(crate) fn create_text_node(&mut self, text: &'bump str, id: RealDomNode) {
+        self.edits.push(CreateTextNode { text, id: id.0 });
+    }
+    pub(crate) fn create_element(
+        &mut self,
+        tag: &'static str,
+        ns: Option<&'static str>,
+        id: RealDomNode,
+    ) {
+        match ns {
+            Some(ns) => self.edits.push(CreateElementNs { id: id.0, ns, tag }),
+            None => self.edits.push(CreateElement { id: id.0, tag }),
+        }
+    }
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
-    fn create_placeholder(&mut self) -> RealDomNode;
+    pub(crate) fn create_placeholder(&mut self, id: RealDomNode) {
+        self.edits.push(CreatePlaceholder { id: id.0 });
+    }
 
     // events
-    fn new_event_listener(
+    pub(crate) fn new_event_listener(
         &mut self,
         event: &'static str,
         scope: ScopeIdx,
         element_id: usize,
         realnode: RealDomNode,
-    );
-    fn remove_event_listener(&mut self, event: &'static str);
+    ) {
+        self.edits.push(NewEventListener {
+            scope,
+            event,
+            idx: element_id,
+            node: realnode.0,
+        });
+    }
+    pub(crate) fn remove_event_listener(&mut self, event: &'static str) {
+        self.edits.push(RemoveEventListener { event });
+    }
 
     // modify
-    fn set_text(&mut self, text: &'a str);
-    fn set_attribute(&mut self, name: &'static str, value: &'a str, ns: Option<&'a str>);
-    fn remove_attribute(&mut self, name: &'static str);
-
-    // node ref
-    fn raw_node_as_any_mut(&self) -> &mut dyn Any;
+    pub(crate) fn set_text(&mut self, text: &'bump str) {
+        self.edits.push(SetText { text });
+    }
+    pub(crate) fn set_attribute(
+        &mut self,
+        field: &'static str,
+        value: &'bump str,
+        ns: Option<&'static str>,
+    ) {
+        self.edits.push(SetAttribute { field, value, ns });
+    }
+    pub(crate) fn remove_attribute(&mut self, name: &'static str) {
+        self.edits.push(RemoveAttribute { name });
+    }
 }
 
 pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub dom: &'real mut Dom,
+    pub edits: DomEditor<'real, 'bump>,
     pub components: &'bump SharedArena,
     pub task_queue: &'bump TaskQueue,
     pub cur_idx: ScopeIdx,
@@ -122,6 +176,7 @@ where
     Dom: RealDom<'bump>,
 {
     pub fn new(
+        edits: &'real mut Vec<DomEdit<'bump>>,
         dom: &'real mut Dom,
         components: &'bump SharedArena,
         cur_idx: ScopeIdx,
@@ -129,6 +184,7 @@ where
         task_queue: &'bump TaskQueue,
     ) -> Self {
         Self {
+            edits: DomEditor { edits },
             components,
             dom,
             cur_idx,
@@ -153,10 +209,10 @@ where
             (VNodeKind::Text(old), VNodeKind::Text(new)) => {
                 let root = old_node.dom_id.get();
                 if old.text != new.text {
-                    self.dom.push(root);
+                    self.edits.push(root);
                     log::debug!("Text has changed {}, {}", old.text, new.text);
-                    self.dom.set_text(new.text);
-                    self.dom.pop();
+                    self.edits.set_text(new.text);
+                    self.edits.pop();
                 }
 
                 new_node.dom_id.set(root);
@@ -169,10 +225,10 @@ where
                 // In Dioxus, this is less likely to occur unless through a fragment
                 let root = old_node.dom_id.get();
                 if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                    self.dom.push(root);
+                    self.edits.push(root);
                     let meta = self.create(new_node);
-                    self.dom.replace_with(meta.added_to_stack);
-                    self.dom.pop();
+                    self.edits.replace_with(meta.added_to_stack);
+                    self.edits.pop();
                     return;
                 }
 
@@ -180,11 +236,11 @@ where
 
                 // push it just in case
                 // TODO: remove this - it clogs up things and is inefficient
-                self.dom.push(root);
+                self.edits.push(root);
                 self.diff_listeners(old.listeners, new.listeners);
                 self.diff_attr(old.attributes, new.attributes, new.namespace);
                 self.diff_children(old.children, new.children);
-                self.dom.pop();
+                self.edits.pop();
             }
 
             (VNodeKind::Component(old), VNodeKind::Component(new)) => {
@@ -227,15 +283,15 @@ where
 
                     // remove any leftovers
                     for to_remove in old_iter {
-                        self.dom.push(to_remove);
-                        self.dom.remove();
+                        self.edits.push(to_remove);
+                        self.edits.remove();
                     }
 
                     // seems like we could combine this into a single instruction....
-                    self.dom.push(first);
+                    self.edits.push(first);
                     let meta = self.create(new_node);
-                    self.dom.replace_with(meta.added_to_stack);
-                    self.dom.pop();
+                    self.edits.replace_with(meta.added_to_stack);
+                    self.edits.pop();
 
                     // Wipe the old one and plant the new one
                     let old_scope = old.ass_scope.get().unwrap();
@@ -287,8 +343,8 @@ where
 
                         // remove any leftovers
                         for to_remove in old_iter {
-                            self.dom.push(to_remove);
-                            self.dom.remove();
+                            self.edits.push(to_remove);
+                            self.edits.remove();
                         }
 
                         back_node
@@ -296,9 +352,9 @@ where
                 };
 
                 // replace the placeholder or first node with the nodes generated from the "new"
-                self.dom.push(back_node);
+                self.edits.push(back_node);
                 let meta = self.create(new_node);
-                self.dom.replace_with(meta.added_to_stack);
+                self.edits.replace_with(meta.added_to_stack);
 
                 // todo use the is_static metadata to update this subtree
             }
@@ -343,7 +399,8 @@ where
         log::warn!("Creating node! ... {:#?}", node);
         match &node.kind {
             VNodeKind::Text(text) => {
-                let real_id = self.dom.create_text_node(text.text);
+                let real_id = self.dom.request_available_node();
+                self.edits.create_text_node(text.text, real_id);
                 node.dom_id.set(real_id);
                 CreateMeta::new(text.is_static, 1)
             }
@@ -366,17 +423,19 @@ where
                     static_listeners: _,
                 } = el;
 
-                let real_id = if let Some(namespace) = namespace {
-                    self.dom.create_element(tag_name, Some(namespace))
+                let real_id = self.dom.request_available_node();
+                if let Some(namespace) = namespace {
+                    self.edits
+                        .create_element(tag_name, Some(namespace), real_id)
                 } else {
-                    self.dom.create_element(tag_name, None)
+                    self.edits.create_element(tag_name, None, real_id)
                 };
                 node.dom_id.set(real_id);
 
                 listeners.iter().enumerate().for_each(|(idx, listener)| {
                     log::info!("setting listener id to {:#?}", real_id);
                     listener.mounted_node.set(real_id);
-                    self.dom
+                    self.edits
                         .new_event_listener(listener.event, listener.scope, idx, real_id);
 
                     // if the node has an event listener, then it must be visited ?
@@ -385,7 +444,8 @@ where
 
                 for attr in *attributes {
                     is_static = is_static && attr.is_static;
-                    self.dom.set_attribute(&attr.name, &attr.value, *namespace);
+                    self.edits
+                        .set_attribute(&attr.name, &attr.value, *namespace);
                 }
 
                 // Fast path: if there is a single text child, it is faster to
@@ -400,7 +460,7 @@ where
                 // TODO move over
                 // if children.len() == 1 {
                 //     if let VNodeKind::Text(text) = &children[0].kind {
-                //         self.dom.set_text(text.text);
+                //         self.edits.set_text(text.text);
                 //         return CreateMeta::new(is_static, 1);
                 //     }
                 // }
@@ -410,7 +470,7 @@ where
                     is_static = is_static && child_meta.is_static;
 
                     // append whatever children were generated by this call
-                    self.dom.append_children(child_meta.added_to_stack);
+                    self.edits.append_children(child_meta.added_to_stack);
                 }
 
                 // if is_static {
@@ -500,7 +560,8 @@ where
             }
 
             VNodeKind::Suspended => {
-                let id = self.dom.create_placeholder();
+                let id = self.dom.request_available_node();
+                self.edits.create_placeholder(id);
                 node.dom_id.set(id);
                 CreateMeta::new(false, 1)
             }
@@ -550,7 +611,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // The change list stack is left unchanged.
     fn diff_listeners(&mut self, old: &[Listener<'_>], new: &[Listener<'_>]) {
         if !old.is_empty() || !new.is_empty() {
-            // self.dom.commit_traversal();
+            // self.edits.commit_traversal();
         }
         // TODO
         // what does "diffing listeners" even mean?
@@ -567,9 +628,9 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
                 if new_l.event == old_l.event {
                     new_l.mounted_node.set(old_l.mounted_node.get());
                     // if new_l.id != old_l.id {
-                    //     self.dom.remove_event_listener(event_type);
+                    //     self.edits.remove_event_listener(event_type);
                     //     // TODO! we need to mess with events and assign them by RealDomNode
-                    //     // self.dom
+                    //     // self.edits
                     //     //     .update_event_listener(event_type, new_l.scope, new_l.id)
                     // }
 
@@ -577,7 +638,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
                 }
             }
 
-            // self.dom
+            // self.edits
             //     .new_event_listener(event_type, new_l.scope, new_l.id);
         }
 
@@ -587,7 +648,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //             continue 'outer2;
         //         }
         //     }
-        //     self.dom.remove_event_listener(old_l.event);
+        //     self.edits.remove_event_listener(old_l.event);
         // }
     }
 
@@ -602,7 +663,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         &mut self,
         old: &'bump [Attribute<'bump>],
         new: &'bump [Attribute<'bump>],
-        namespace: Option<&'bump str>,
+        namespace: Option<&'static str>,
     ) {
         // Do O(n^2) passes to add/update and remove attributes, since
         // there are almost always very few attributes.
@@ -611,15 +672,15 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // With the Rsx and Html macros, this will almost always be the case
         'outer: for new_attr in new {
             if new_attr.is_volatile {
-                // self.dom.commit_traversal();
-                self.dom
+                // self.edits.commit_traversal();
+                self.edits
                     .set_attribute(new_attr.name, new_attr.value, namespace);
             } else {
                 for old_attr in old {
                     if old_attr.name == new_attr.name {
                         if old_attr.value != new_attr.value {
-                            // self.dom.commit_traversal();
-                            self.dom
+                            // self.edits.commit_traversal();
+                            self.edits
                                 .set_attribute(new_attr.name, new_attr.value, namespace);
                         }
                         continue 'outer;
@@ -628,8 +689,8 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
                     }
                 }
 
-                // self.dom.commit_traversal();
-                self.dom
+                // self.edits.commit_traversal();
+                self.edits
                     .set_attribute(new_attr.name, new_attr.value, namespace);
             }
         }
@@ -641,8 +702,8 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
                 }
             }
 
-            // self.dom.commit_traversal();
-            self.dom.remove_attribute(old_attr.name);
+            // self.edits.commit_traversal();
+            self.edits.remove_attribute(old_attr.name);
         }
     }
 
@@ -657,7 +718,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         if new.is_empty() {
             if !old.is_empty() {
-                // self.dom.commit_traversal();
+                // self.edits.commit_traversal();
                 self.remove_all_children(old);
             }
             return;
@@ -672,9 +733,9 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
                 // }
 
                 // (_, VNodeKind::Text(text)) => {
-                //     // self.dom.commit_traversal();
+                //     // self.edits.commit_traversal();
                 //     log::debug!("using optimized text set");
-                //     self.dom.set_text(text.text);
+                //     self.edits.set_text(text.text);
                 //     return;
                 // }
 
@@ -685,7 +746,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
 
         if old.is_empty() {
             if !new.is_empty() {
-                // self.dom.commit_traversal();
+                // self.edits.commit_traversal();
                 self.create_and_append_children(new);
             }
             return;
@@ -707,9 +768,9 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             log::warn!("using the wrong approach");
             self.diff_non_keyed_children(old, new);
             // todo!("Not yet implemented a migration away from temporaries");
-            // let t = self.dom.next_temporary();
+            // let t = self.edits.next_temporary();
             // self.diff_keyed_children(old, new);
-            // self.dom.set_next_temporary(t);
+            // self.edits.set_next_temporary(t);
         } else {
             // log::debug!("diffing non keyed children");
             self.diff_non_keyed_children(old, new);
@@ -827,7 +888,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         _new: &'bump [VNode<'bump>],
     ) -> KeyedPrefixResult {
         todo!()
-        // self.dom.go_down();
+        // self.edits.go_down();
         // let mut shared_prefix_count = 0;
 
         // for (i, (old, new)) in old.iter().zip(new.iter()).enumerate() {
@@ -835,7 +896,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //         break;
         //     }
 
-        //     self.dom.go_to_sibling(i);
+        //     self.edits.go_to_sibling(i);
 
         //     self.diff_node(old, new);
 
@@ -845,8 +906,8 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // // If that was all of the old children, then create and append the remaining
         // // new children and we're finished.
         // if shared_prefix_count == old.len() {
-        //     self.dom.go_up();
-        //     // self.dom.commit_traversal();
+        //     self.edits.go_up();
+        //     // self.edits.commit_traversal();
         //     self.create_and_append_children(&new[shared_prefix_count..]);
         //     return KeyedPrefixResult::Finished;
         // }
@@ -854,13 +915,13 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // // And if that was all of the new children, then remove all of the remaining
         // // old children and we're finished.
         // if shared_prefix_count == new.len() {
-        //     self.dom.go_to_sibling(shared_prefix_count);
-        //     // self.dom.commit_traversal();
+        //     self.edits.go_to_sibling(shared_prefix_count);
+        //     // self.edits.commit_traversal();
         //     self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
         //     return KeyedPrefixResult::Finished;
         // }
 
-        // self.dom.go_up();
+        // self.edits.go_up();
         // KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
     }
 
@@ -872,7 +933,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     //
     // When this function returns, the change list stack is in the same state.
     pub fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
-        // debug_assert!(self.dom.traversal_is_committed());
+        // debug_assert!(self.edits.traversal_is_committed());
         log::debug!("REMOVING CHILDREN");
         for _child in old {
             // registry.remove_subtree(child);
@@ -880,7 +941,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // Fast way to remove all children: set the node's textContent to an empty
         // string.
         todo!()
-        // self.dom.set_inner_text("");
+        // self.edits.set_inner_text("");
     }
 
     // Create the given children and append them to the parent node.
@@ -893,7 +954,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     pub fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
         for child in new {
             let meta = self.create(child);
-            self.dom.append_children(meta.added_to_stack);
+            self.edits.append_children(meta.added_to_stack);
         }
     }
 
@@ -955,11 +1016,11 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // // afresh.
         // if shared_suffix_count == 0 && shared_keys.is_empty() {
         //     if shared_prefix_count == 0 {
-        //         // self.dom.commit_traversal();
+        //         // self.edits.commit_traversal();
         //         self.remove_all_children(old);
         //     } else {
-        //         self.dom.go_down_to_child(shared_prefix_count);
-        //         // self.dom.commit_traversal();
+        //         self.edits.go_down_to_child(shared_prefix_count);
+        //         // self.edits.commit_traversal();
         //         self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
         //     }
 
@@ -981,8 +1042,8 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //         .unwrap_or(old.len());
 
         //     if end - start > 0 {
-        //         // self.dom.commit_traversal();
-        //         let mut t = self.dom.save_children_to_temporaries(
+        //         // self.edits.commit_traversal();
+        //         let mut t = self.edits.save_children_to_temporaries(
         //             shared_prefix_count + start,
         //             shared_prefix_count + end,
         //         );
@@ -1007,8 +1068,8 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //     if !shared_keys.contains(&old_child.key()) {
         //         // registry.remove_subtree(old_child);
         //         // todo
-        //         // self.dom.commit_traversal();
-        //         self.dom.remove_child(i + shared_prefix_count);
+        //         // self.edits.commit_traversal();
+        //         self.edits.remove_child(i + shared_prefix_count);
         //         removed_count += 1;
         //     }
         // }
@@ -1051,7 +1112,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //     // shared suffix to the change list stack.
         //     //
         //     // [... parent]
-        //     self.dom
+        //     self.edits
         //         .go_down_to_child(old_shared_suffix_start - removed_count);
         // // [... parent first_child_of_shared_suffix]
         // } else {
@@ -1067,29 +1128,29 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //         let old_index = new_index_to_old_index[last_index];
         //         let temp = old_index_to_temp[old_index];
         //         // [... parent]
-        //         self.dom.go_down_to_temp_child(temp);
+        //         self.edits.go_down_to_temp_child(temp);
         //         // [... parent last]
         //         self.diff_node(&old[old_index], last);
 
         //         if new_index_is_in_lis.contains(&last_index) {
         //             // Don't move it, since it is already where it needs to be.
         //         } else {
-        //             // self.dom.commit_traversal();
+        //             // self.edits.commit_traversal();
         //             // [... parent last]
-        //             self.dom.append_child();
+        //             self.edits.append_child();
         //             // [... parent]
-        //             self.dom.go_down_to_temp_child(temp);
+        //             self.edits.go_down_to_temp_child(temp);
         //             // [... parent last]
         //         }
         //     } else {
-        //         // self.dom.commit_traversal();
+        //         // self.edits.commit_traversal();
         //         // [... parent]
         //         self.create(last);
 
         //         // [... parent last]
-        //         self.dom.append_child();
+        //         self.edits.append_child();
         //         // [... parent]
-        //         self.dom.go_down_to_reverse_child(0);
+        //         self.edits.go_down_to_reverse_child(0);
         //         // [... parent last]
         //     }
         // }
@@ -1098,11 +1159,11 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //     let old_index = new_index_to_old_index[new_index];
         //     if old_index == u32::MAX as usize {
         //         debug_assert!(!shared_keys.contains(&new_child.key()));
-        //         // self.dom.commit_traversal();
+        //         // self.edits.commit_traversal();
         //         // [... parent successor]
         //         self.create(new_child);
         //         // [... parent successor new_child]
-        //         self.dom.insert_before();
+        //         self.edits.insert_before();
         //     // [... parent new_child]
         //     } else {
         //         debug_assert!(shared_keys.contains(&new_child.key()));
@@ -1111,14 +1172,14 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
 
         //         if new_index_is_in_lis.contains(&new_index) {
         //             // [... parent successor]
-        //             self.dom.go_to_temp_sibling(temp);
+        //             self.edits.go_to_temp_sibling(temp);
         //         // [... parent new_child]
         //         } else {
-        //             // self.dom.commit_traversal();
+        //             // self.edits.commit_traversal();
         //             // [... parent successor]
-        //             self.dom.push_temporary(temp);
+        //             self.edits.push_temporary(temp);
         //             // [... parent successor new_child]
-        //             self.dom.insert_before();
+        //             self.edits.insert_before();
         //             // [... parent new_child]
         //         }
 
@@ -1127,7 +1188,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // }
 
         // // [... parent child]
-        // self.dom.go_up();
+        // self.edits.go_up();
         // [... parent]
     }
 
@@ -1149,16 +1210,16 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //     debug_assert!(!old.is_empty());
 
         //     // [... parent]
-        //     self.dom.go_down();
+        //     self.edits.go_down();
         //     // [... parent new_child]
 
         //     for (i, (old_child, new_child)) in old.iter().zip(new.iter()).enumerate() {
-        //         self.dom.go_to_sibling(new_shared_suffix_start + i);
+        //         self.edits.go_to_sibling(new_shared_suffix_start + i);
         //         self.diff_node(old_child, new_child);
         //     }
 
         //     // [... parent]
-        //     self.dom.go_up();
+        //     self.edits.go_up();
     }
 
     // Diff children that are not keyed.
@@ -1175,21 +1236,21 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         debug_assert!(!old.is_empty());
 
         //     [... parent]
-        // self.dom.go_down();
-        // self.dom.push_root()
+        // self.edits.go_down();
+        // self.edits.push_root()
         //     [... parent child]
 
         // todo!()
         for (_i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
             // [... parent prev_child]
-            // self.dom.go_to_sibling(i);
+            // self.edits.go_to_sibling(i);
             // [... parent this_child]
 
             // let did = old_child.get_mounted_id(self.components).unwrap();
             // if did.0 == 0 {
             //     log::debug!("Root is bad: {:#?}", old_child);
             // }
-            // self.dom.push_root(did);
+            // self.edits.push_root(did);
             self.diff_node(old_child, new_child);
 
             // let old_id = old_child.get_mounted_id(self.components).unwrap();
@@ -1209,9 +1270,9 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //     // old.len > new.len -> removing some nodes
         //     Ordering::Greater => {
         //         // [... parent prev_child]
-        //         self.dom.go_to_sibling(new.len());
+        //         self.edits.go_to_sibling(new.len());
         //         // [... parent first_child_to_remove]
-        //         // self.dom.commit_traversal();
+        //         // self.edits.commit_traversal();
         //         // support::remove_self_and_next_siblings(state, &old[new.len()..]);
         //         self.remove_self_and_next_siblings(&old[new.len()..]);
         //         // [... parent]
@@ -1219,15 +1280,15 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //     // old.len < new.len -> adding some nodes
         //     Ordering::Less => {
         //         // [... parent last_child]
-        //         self.dom.go_up();
+        //         self.edits.go_up();
         //         // [... parent]
-        //         // self.dom.commit_traversal();
+        //         // self.edits.commit_traversal();
         //         self.create_and_append_children(&new[old.len()..]);
         //     }
         //     // old.len == new.len -> no nodes added/removed, but πerhaps changed
         //     Ordering::Equal => {
         //         // [... parent child]
-        //         self.dom.go_up();
+        //         self.edits.go_up();
         //         // [... parent]
         //     }
         // }
@@ -1247,7 +1308,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     //
     //     [... parent]
     pub fn remove_self_and_next_siblings(&self, old: &[VNode<'bump>]) {
-        // debug_assert!(self.dom.traversal_is_committed());
+        // debug_assert!(self.edits.traversal_is_committed());
         for child in old {
             if let VNodeKind::Component(_vcomp) = child.kind {
                 // dom
@@ -1261,7 +1322,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
                 // })
                 // let id = get_id();
                 // *component.stable_addr.as_ref().borrow_mut() = Some(id);
-                // self.dom.save_known_root(id);
+                // self.edits.save_known_root(id);
                 // let scope = Rc::downgrade(&component.ass_scope);
                 // self.lifecycle_events.push_back(LifeCycleEvent::Mount {
                 //     caller: Rc::downgrade(&component.caller),
@@ -1273,7 +1334,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
             // registry.remove_subtree(child);
         }
         todo!()
-        // self.dom.remove_self_and_next_siblings();
+        // self.edits.remove_self_and_next_siblings();
     }
 }
 

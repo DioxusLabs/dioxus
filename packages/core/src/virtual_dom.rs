@@ -27,6 +27,7 @@ use slotmap::SlotMap;
 use std::any::Any;
 
 use std::any::TypeId;
+use std::cell::RefCell;
 use std::pin::Pin;
 
 pub type ScopeIdx = DefaultKey;
@@ -44,6 +45,8 @@ pub struct VirtualDom {
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
     pub base_scope: ScopeIdx,
+
+    pub triggers: RefCell<Vec<EventTrigger>>,
 
     /// All components dump their updates into a queue to be processed
     pub event_queue: EventQueue,
@@ -158,6 +161,7 @@ impl VirtualDom {
             components,
             root_props,
             tasks,
+            triggers: Default::default(),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
@@ -196,7 +200,9 @@ impl VirtualDom {
     ///
     /// The diff machine expects the RealDom's stack to be the root of the application
     pub fn rebuild<'s, Dom: RealDom<'s>>(&'s mut self, realdom: &mut Dom) -> Result<()> {
+        let mut edits = Vec::new();
         let mut diff_machine = DiffMachine::new(
+            &mut edits,
             realdom,
             &self.components,
             self.base_scope,
@@ -209,24 +215,23 @@ impl VirtualDom {
         cur_component.run_scope()?;
 
         let meta = diff_machine.create(cur_component.next_frame());
-        log::info!(
-            "nodes created! appending to body {:#?}",
-            meta.added_to_stack
-        );
-        diff_machine.dom.append_children(meta.added_to_stack);
 
-        // Schedule an update and then immediately call it on the root component
-        // This is akin to a hook being called from a listener and requring a re-render
-        // Instead, this is done on top-level component
-        // let base = self.components.try_get(self.base_scope)?;
-
-        // let update = &base.event_channel;
-        // update();
-
-        // self.progress_completely(&mut diff_machine)?;
+        diff_machine.edits.append_children(meta.added_to_stack);
 
         Ok(())
     }
+
+    ///
+    ///
+    ///
+    ///
+    ///
+    pub fn queue_event(&self, trigger: EventTrigger) -> Result<()> {
+        let mut triggers = self.triggers.borrow_mut();
+        triggers.push(trigger);
+        Ok(())
+    }
+
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
     ///  
     /// Given a synthetic event, the component that triggered the event, and the index of the callback, this runs the virtual
@@ -270,74 +275,78 @@ impl VirtualDom {
     // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
     //
     // A good project would be to remove all unsafe from this crate and move the unsafety into safer abstractions.
-    pub fn progress_with_event<'s, Dom: RealDom<'s>>(
+    pub async fn progress_with_event<'s, Dom: RealDom<'s>>(
         &'s mut self,
         realdom: &'_ mut Dom,
-        trigger: EventTrigger,
     ) -> Result<()> {
-        let id = trigger.originator.clone();
+        let trigger = self.triggers.borrow_mut().pop().expect("failed");
 
-        self.components.try_get_mut(id)?.call_listener(trigger)?;
-
+        let mut edits = Vec::new();
         let mut diff_machine = DiffMachine::new(
+            &mut edits,
             realdom,
             &self.components,
-            id,
+            trigger.originator,
             self.event_queue.clone(),
             &self.tasks,
         );
 
-        self.progress_completely(&mut diff_machine)?;
+        match &trigger.event {
+            VirtualEvent::OtherEvent => todo!(),
 
-        Ok(())
-    }
-
-    /// Consume the event queue, descending depth-first.
-    /// Only ever run each component once.
-    ///
-    /// The DiffMachine logs its progress as it goes which might be useful for certain types of renderers.
-    pub(crate) fn progress_completely<'a, 'bump, Dom: RealDom<'bump>>(
-        &'bump self,
-        diff_machine: &'_ mut DiffMachine<'a, 'bump, Dom>,
-    ) -> Result<()> {
-        // Now, there are events in the queue
-        let mut updates = self.event_queue.queue.as_ref().borrow_mut();
-
-        // Order the nodes by their height, we want the nodes with the smallest depth on top
-        // This prevents us from running the same component multiple times
-        updates.sort_unstable();
-
-        log::debug!("There are: {:#?} updates to be processed", updates.len());
-
-        // Iterate through the triggered nodes (sorted by height) and begin to diff them
-        for update in updates.drain(..) {
-            log::debug!("Running updates for: {:#?}", update);
-
-            // Make sure this isn't a node we've already seen, we don't want to double-render anything
-            // If we double-renderer something, this would cause memory safety issues
-            if diff_machine.seen_nodes.contains(&update.idx) {
-                continue;
+            // Fiber events
+            VirtualEvent::FiberEvent => {
+                //
             }
 
-            // Now, all the "seen nodes" are nodes that got notified by running this listener
-            diff_machine.seen_nodes.insert(update.idx.clone());
+            // This is the "meat" of our cooperative scheduler
+            // As updates flow in, we re-evalute the event queue and decide if we should be switching the type of work
+            //
+            // We use the reconciler to request new IDs and then commit/uncommit the IDs when the scheduler is finished
+            _ => {
+                self.components
+                    .try_get_mut(trigger.originator)?
+                    .call_listener(trigger)?;
 
-            // Start a new mutable borrow to components
-            // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
-            let cur_component = self.components.try_get_mut(update.idx).unwrap();
+                // Now, there are events in the queue
+                let mut updates = self.event_queue.queue.as_ref().borrow_mut();
 
-            cur_component.run_scope()?;
+                // Order the nodes by their height, we want the nodes with the smallest depth on top
+                // This prevents us from running the same component multiple times
+                updates.sort_unstable();
 
-            let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
-            diff_machine.diff_node(old, new);
+                log::debug!("There are: {:#?} updates to be processed", updates.len());
+
+                // Iterate through the triggered nodes (sorted by height) and begin to diff them
+                for update in updates.drain(..) {
+                    log::debug!("Running updates for: {:#?}", update);
+
+                    // Make sure this isn't a node we've already seen, we don't want to double-render anything
+                    // If we double-renderer something, this would cause memory safety issues
+                    if diff_machine.seen_nodes.contains(&update.idx) {
+                        continue;
+                    }
+
+                    // Now, all the "seen nodes" are nodes that got notified by running this listener
+                    diff_machine.seen_nodes.insert(update.idx.clone());
+
+                    // Start a new mutable borrow to components
+                    // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
+                    let cur_component = self.components.try_get_mut(update.idx).unwrap();
+
+                    cur_component.run_scope()?;
+
+                    let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
+                    diff_machine.diff_node(old, new);
+                }
+            }
         }
 
         Ok(())
     }
 
     pub fn base_scope(&self) -> &Scope {
-        let idx = self.base_scope;
-        self.components.try_get(idx).unwrap()
+        self.components.try_get(self.base_scope).unwrap()
     }
 }
 
