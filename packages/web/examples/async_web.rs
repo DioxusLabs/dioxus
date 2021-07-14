@@ -26,25 +26,26 @@ fn main() {
 
 static App: FC<()> = |cx| {
     // let mut count = use_state(cx, || 0);
-    let fut = cx.use_hook(
-        move || {
-            Box::pin(async {
-                let mut tick: i32 = 0;
-                log::debug!("yeet!");
-                loop {
-                    gloo_timers::future::TimeoutFuture::new(250).await;
-                    log::debug!("ticking forward... {}", tick);
-                    tick += 1;
-                }
-            }) as Pin<Box<dyn Future<Output = ()> + 'static>>
-        },
-        |h| h,
-        |_| {},
-    );
-
-    cx.submit_task(fut);
-
     let state = use_state(cx, || 0);
+    let set_val = state.setter();
+
+    let g = cx.use_task(|| async move {
+        let mut tick: i32 = 0;
+        log::debug!("yeet!");
+        loop {
+            gloo_timers::future::TimeoutFuture::new(250).await;
+            log::debug!("ticking forward... {}", tick);
+            tick += 1;
+            if tick > 10 {
+                break;
+            }
+        }
+        set_val(10);
+        String::from("Huzza!")
+    });
+
+    log::debug!("Value from component was {:#?}", g);
+
     cx.render(rsx! {
         div {
             section { class: "py-12 px-4 text-center"

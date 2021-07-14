@@ -26,8 +26,8 @@ use slotmap::DefaultKey;
 use slotmap::SlotMap;
 use std::any::Any;
 
+use std::any::TypeId;
 use std::pin::Pin;
-use std::{any::TypeId};
 
 pub type ScopeIdx = DefaultKey;
 
@@ -191,7 +191,10 @@ impl VirtualDom {
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
+    ///
     /// Currently this doesn't do what we want it to do
+    ///
+    /// The diff machine expects the RealDom's stack to be the root of the application
     pub fn rebuild<'s, Dom: RealDom<'s>>(&'s mut self, realdom: &mut Dom) -> Result<()> {
         let mut diff_machine = DiffMachine::new(
             realdom,
@@ -201,15 +204,26 @@ impl VirtualDom {
             &self.tasks,
         );
 
+        let cur_component = self.components.try_get_mut(self.base_scope).unwrap();
+
+        cur_component.run_scope()?;
+
+        let meta = diff_machine.create(cur_component.next_frame());
+        log::info!(
+            "nodes created! appending to body {:#?}",
+            meta.added_to_stack
+        );
+        diff_machine.dom.append_children(meta.added_to_stack);
+
         // Schedule an update and then immediately call it on the root component
         // This is akin to a hook being called from a listener and requring a re-render
         // Instead, this is done on top-level component
-        let base = self.components.try_get(self.base_scope)?;
+        // let base = self.components.try_get(self.base_scope)?;
 
-        let update = &base.event_channel;
-        update();
+        // let update = &base.event_channel;
+        // update();
 
-        self.progress_completely(&mut diff_machine)?;
+        // self.progress_completely(&mut diff_machine)?;
 
         Ok(())
     }

@@ -36,7 +36,6 @@ use std::{
 pub struct Context<'src, T> {
     pub props: &'src T,
     pub scope: &'src Scope,
-    pub tasks: &'src RefCell<Vec<&'src mut dyn Future<Output = ()>>>,
 }
 // pub type PinnedTask = Pin<Box<dyn Future<Output = ()>>>;
 
@@ -46,7 +45,6 @@ impl<'src, T> Clone for Context<'src, T> {
         Self {
             props: self.props,
             scope: self.scope,
-            tasks: self.tasks,
         }
     }
 }
@@ -264,6 +262,9 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     /// This is useful when you have some async task that needs to be progressed.
     ///
+    /// This method takes ownership over the task you've provided, and must return (). This means any work that needs to
+    /// happen must occur within the future or scheduled for after the future completes (through schedule_update )
+    ///
     /// ## Explanation
     /// Dioxus will step its internal event loop if the future returns if the future completes while waiting.
     ///
@@ -274,7 +275,9 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     ///
-    pub fn submit_task(&self, _task: Pin<Box<dyn Future<Output = ()>>>) -> TaskHandle {
+    pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
+        let r = (self.scope.task_submitter)(task);
+        // self.scope.submit_task(task);
         // let r = task.then(|f| async {
         //     //
         // });
@@ -284,7 +287,6 @@ Any function prefixed with "use" should not be called conditionally.
         //     t
         //     // ()
         // });
-        todo!();
         // let new_fut = task.then(|f| async {
         //     //
         //     ()
@@ -297,13 +299,12 @@ Any function prefixed with "use" should not be called conditionally.
     /// Awaits the given task, forcing the component to re-render when the value is ready.
     ///
     ///
-    pub fn use_task<Out, Fut: 'static>(
-        &self,
-        task_initializer: impl FnOnce() -> Fut + 'src,
-    ) -> &mut Option<Out>
+    pub fn use_task<Out, Fut, Init>(&self, task_initializer: Init) -> &mut Option<Out>
     where
         Out: 'static,
         Fut: Future<Output = Out>,
+        Fut: 'static,
+        Init: FnOnce() -> Fut + 'src,
     {
         struct TaskHook<T> {
             task_dump: Rc<RefCell<Option<T>>>,
@@ -318,9 +319,18 @@ Any function prefixed with "use" should not be called conditionally.
                 let task_dump = Rc::new(RefCell::new(None));
 
                 let slot = task_dump.clone();
+                let update = self.schedule_update();
+                let originator = self.scope.arena_idx.clone();
 
                 self.submit_task(Box::pin(task_fut.then(move |output| async move {
                     *slot.as_ref().borrow_mut() = Some(output);
+                    update();
+                    EventTrigger {
+                        event: VirtualEvent::FiberEvent,
+                        originator,
+                        priority: EventPriority::Low,
+                        real_node_id: None,
+                    }
                 })));
 
                 TaskHook {
@@ -340,29 +350,26 @@ Any function prefixed with "use" should not be called conditionally.
 
     /// Asynchronously render new nodes once the given future has completed.
     ///
-    ///
-    ///
-    ///
     /// # Easda
+    ///
+    ///
     ///
     ///
     /// # Example
     ///
-    pub fn suspend<Out, Fut: 'static>(
+    ///
+    pub fn use_suspense<Out, Fut: 'static>(
         &'src self,
-        _task_initializer: impl FnOnce() -> Fut + 'src,
+        _task_initializer: impl FnOnce() -> Fut,
         _callback: impl FnOnce(SuspendedContext, Out) -> VNode<'src> + 'src,
     ) -> VNode<'src>
     where
         Out: 'src,
         Fut: Future<Output = Out>,
     {
+        // self.use_hook(|| , runner, cleanup)
+
         todo!()
-        // use futures_util::FutureExt;
-        // match fut.now_or_never() {
-        //     Some(out) => callback(SuspendedContext {}, out),
-        //     None => NodeFactory::suspended(),
-        // }
     }
 }
 

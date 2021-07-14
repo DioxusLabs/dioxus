@@ -49,7 +49,7 @@
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
 use crate::{arena::SharedArena, innerlude::*, tasks::TaskQueue};
-use fxhash::{FxHashSet};
+use fxhash::FxHashSet;
 
 use std::any::Any;
 
@@ -179,6 +179,7 @@ where
                 new_node.dom_id.set(root);
 
                 // push it just in case
+                // TODO: remove this - it clogs up things and is inefficient
                 self.dom.push(root);
                 self.diff_listeners(old.listeners, new.listeners);
                 self.diff_attr(old.attributes, new.attributes, new.namespace);
@@ -311,9 +312,9 @@ where
 
 // When we create new nodes, we need to propagate some information back up the call chain.
 // This gives the caller some information on how to handle things like insertins, appending, and subtree discarding.
-struct CreateMeta {
-    is_static: bool,
-    added_to_stack: u32,
+pub struct CreateMeta {
+    pub is_static: bool,
+    pub added_to_stack: u32,
 }
 
 impl CreateMeta {
@@ -338,7 +339,7 @@ where
     // When this function returns, the new node is on top of the change list stack:
     //
     //     [... node]
-    fn create(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
+    pub fn create(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
         log::warn!("Creating node! ... {:#?}", node);
         match &node.kind {
             VNodeKind::Text(text) => {
@@ -373,6 +374,7 @@ where
                 node.dom_id.set(real_id);
 
                 listeners.iter().enumerate().for_each(|(idx, listener)| {
+                    log::info!("setting listener id to {:#?}", real_id);
                     listener.mounted_node.set(real_id);
                     self.dom
                         .new_event_listener(listener.event, listener.scope, idx, real_id);
@@ -396,12 +398,12 @@ where
                 // Notice: this is a web-specific optimization and may be changed in the future
                 //
                 // TODO move over
-                if children.len() == 1 {
-                    if let VNodeKind::Text(text) = &children[0].kind {
-                        self.dom.set_text(text.text);
-                        return CreateMeta::new(is_static, 1);
-                    }
-                }
+                // if children.len() == 1 {
+                //     if let VNodeKind::Text(text) = &children[0].kind {
+                //         self.dom.set_text(text.text);
+                //         return CreateMeta::new(is_static, 1);
+                //     }
+                // }
 
                 for child in *children {
                     let child_meta = self.create(child);
@@ -411,11 +413,11 @@ where
                     self.dom.append_children(child_meta.added_to_stack);
                 }
 
-                if is_static {
-                    log::debug!("created a static node {:#?}", node);
-                } else {
-                    log::debug!("created a dynamic node {:#?}", node);
-                }
+                // if is_static {
+                //     log::debug!("created a static node {:#?}", node);
+                // } else {
+                //     log::debug!("created a dynamic node {:#?}", node);
+                // }
 
                 // el_is_static.set(is_static);
                 CreateMeta::new(is_static, 1)

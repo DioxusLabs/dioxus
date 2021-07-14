@@ -71,6 +71,8 @@ pub struct Scope {
     pub(crate) suspended_tasks: Vec<*mut Pin<Box<dyn Future<Output = VNode<'static>>>>>,
 }
 
+pub type FiberTask = Pin<Box<dyn Future<Output = EventTrigger>>>;
+
 impl Scope {
     // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
     // we are going to break this lifetime by force in order to save it on ourselves.
@@ -148,6 +150,17 @@ impl Scope {
         Ok(())
     }
 
+    /// Progress a suspended node
+    pub fn progress_suspended(&mut self) -> Result<()> {
+        // load the hook
+        // downcast to our special state
+        // run just this hook
+        // create a new vnode
+        // diff this new vnode with the original suspended vnode
+
+        Ok(())
+    }
+
     // this is its own function so we can preciesly control how lifetimes flow
     unsafe fn call_user_component<'a>(&'a self, caller: &WrappedCaller) -> VNode<'static> {
         let new_head: VNode<'a> = caller(self);
@@ -163,6 +176,11 @@ impl Scope {
             event,
             ..
         } = trigger;
+
+        if let &VirtualEvent::FiberEvent = &event {
+            log::info!("arrived a fiber event");
+            return Ok(());
+        }
 
         // todo: implement scanning for outdated events
 
@@ -200,9 +218,9 @@ impl Scope {
         Ok(())
     }
 
-    pub fn submit_task(&self, task: &mut Pin<Box<dyn Future<Output = ()>>>) {
+    pub fn submit_task(&self, task: FiberTask) {
         log::debug!("Task submitted into scope");
-        (self.task_submitter)(DTask::new(task, self.arena_idx));
+        (self.task_submitter)(task);
     }
 
     #[inline]

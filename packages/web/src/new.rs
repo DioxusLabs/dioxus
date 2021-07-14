@@ -52,6 +52,7 @@ impl WebsysDom {
         let mut nodes = slotmap::SlotMap::with_capacity(1000);
 
         let root_id = nodes.insert(root.clone().dyn_into::<Node>().unwrap());
+
         Self {
             stack: Stack::with_capacity(10),
             nodes,
@@ -72,9 +73,13 @@ impl WebsysDom {
 
 impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     fn push(&mut self, root: RealDomNode) {
-        log::debug!("Called [push_root] {:?}", root);
+        log::debug!("Called [push_root] {:#?}", root);
         let key: DefaultKey = KeyData::from_ffi(root.0).into();
-        let domnode = self.nodes.get(key).expect("Failed to pop know root");
+        let domnode = self
+            .nodes
+            .get(key)
+            .expect(&format!("Failed to pop know root: {:#?}", key));
+
         self.stack.push(domnode.clone());
     }
     // drop the node off the stack
@@ -85,10 +90,10 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     fn append_children(&mut self, many: u32) {
         log::debug!("Called [`append_child`]");
 
-        let mut root: Node = self
+        let root: Node = self
             .stack
             .list
-            .get(self.stack.list.len() - many as usize)
+            .get(self.stack.list.len() - (1 + many as usize))
             .unwrap()
             .clone();
 

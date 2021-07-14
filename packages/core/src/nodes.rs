@@ -189,6 +189,13 @@ impl<'a> NodeFactory<'a> {
         children: &'a [VNode<'a>],
         key: Option<&'a str>,
     ) -> VNode<'a> {
+        let mut queue = self.scope_ref.listeners.borrow_mut();
+        for listener in listeners {
+            let mounted = listener.mounted_node as *const _ as *mut _;
+            let callback = listener.callback as *const _ as *mut _;
+            queue.push((mounted, callback))
+        }
+
         VNode {
             dom_id: RealDomNode::empty_cell(),
             key,
@@ -285,19 +292,12 @@ impl<'a> NodeFactory<'a> {
         let caller: Captured = Rc::new(move |scp: &Scope| -> VNode {
             // cast back into the right lifetime
             let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
-            let tasks = RefCell::new(Vec::new());
             let cx: Context<P> = Context {
                 props: safe_props,
                 scope: scp,
-                tasks: &tasks,
             };
 
             let res = component(cx);
-
-            // submit any async tasks to the scope
-            for _task in tasks.borrow_mut().drain(..) {
-                // scp.submit_task(task);
-            }
 
             let g2 = unsafe { std::mem::transmute(res) };
 
