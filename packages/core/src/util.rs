@@ -66,6 +66,11 @@ impl RealDomNode {
         let key: DefaultKey = data.into();
         Self(key)
     }
+    pub fn from_u64(id: u64) -> Self {
+        let data = KeyData::from_ffi(id);
+        let key: DefaultKey = data.into();
+        Self(key)
+    }
     pub fn empty_cell() -> Cell<Self> {
         Cell::new(Self::empty())
     }
@@ -102,7 +107,8 @@ impl<'a> RealDom<'a> for DebugDom {
 async fn launch_demo(app: FC<()>) {
     let mut dom = VirtualDom::new(app);
     let mut real_dom = DebugDom::new();
-    dom.rebuild(&mut real_dom).unwrap();
+    let mut edits = Vec::new();
+    dom.rebuild(&mut real_dom, &mut edits).unwrap();
 
     while let Some(evt) = dom.tasks.next().await {
         //

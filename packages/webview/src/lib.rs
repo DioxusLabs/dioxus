@@ -87,8 +87,9 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
 
                             // Serialize the edit stream
                             let edits = {
-                                lock.rebuild(&mut real).unwrap();
-                                serde_json::to_value(&real.edits).unwrap()
+                                let mut edits = Vec::new();
+                                lock.rebuild(&mut real, &mut edits).unwrap();
+                                serde_json::to_value(edits).unwrap()
                             };
 
                             // Give back the registry into its slot
@@ -108,8 +109,9 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
 
                         // Serialize the edit stream
                         let edits = {
-                            lock.rebuild(&mut real).unwrap();
-                            serde_json::to_value(&real.edits).unwrap()
+                            let mut edits = Vec::new();
+                            lock.rebuild(&mut real, &mut edits).unwrap();
+                            serde_json::to_value(edits).unwrap()
                         };
 
                         // Give back the registry into its slot

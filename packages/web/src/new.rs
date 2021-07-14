@@ -13,7 +13,7 @@ use web_sys::{
 
 pub struct WebsysDom {
     pub stack: Stack,
-    nodes: slotmap::SlotMap<DefaultKey, Node>,
+    nodes: slotmap::SlotMap<DefaultKey, Option<Node>>,
     document: Document,
     root: Element,
 
@@ -51,7 +51,7 @@ impl WebsysDom {
 
         let mut nodes = slotmap::SlotMap::with_capacity(1000);
 
-        let root_id = nodes.insert(root.clone().dyn_into::<Node>().unwrap());
+        let root_id = nodes.insert(Some(root.clone().dyn_into::<Node>().unwrap()));
 
         Self {
             stack: Stack::with_capacity(10),
@@ -72,6 +72,7 @@ impl WebsysDom {
 
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
         for edit in edits.drain(..) {
+            log::info!("Handling edit: {:#?}", edit);
             match edit {
                 DomEdit::PushRoot { root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
@@ -90,18 +91,19 @@ impl WebsysDom {
                     idx,
                 } => self.new_event_listener(event, scope, idx, node),
                 DomEdit::RemoveEventListener { event } => todo!(),
-                DomEdit::SetText { text } => todo!(),
-                DomEdit::SetAttribute { field, value, ns } => todo!(),
-                DomEdit::RemoveAttribute { name } => todo!(),
+                DomEdit::SetText { text } => self.set_text(text),
+                DomEdit::SetAttribute { field, value, ns } => self.set_attribute(field, value, ns),
+                DomEdit::RemoveAttribute { name } => self.remove_attribute(name),
             }
         }
     }
     fn push(&mut self, root: RealDomNode) {
         let key = root.0;
-        let domnode = self
-            .nodes
-            .get(key)
-            .expect(&format!("Failed to pop know root: {:#?}", key));
+        let domnode = self.nodes.get_mut(key);
+
+        let domnode = domnode.unwrap().as_mut().unwrap();
+        // .expect(&format!("Failed to pop know root: {:#?}", key))
+        // .unwrap();
 
         self.stack.push(domnode.clone());
     }
@@ -189,14 +191,17 @@ impl WebsysDom {
     }
     fn create_text_node(&mut self, text: &str, id: RealDomNode) {
         // let nid = self.node_counter.next();
+
         let textnode = self
             .document
             .create_text_node(text)
             .dyn_into::<Node>()
             .unwrap();
-        self.stack.push(textnode.clone());
 
-        todo!();
+        self.stack.push(textnode.clone());
+        let mut slot = self.nodes.get_mut(id.0).unwrap();
+        *slot = Some(textnode);
+
         // let nid = self.nodes.insert(textnode);
         // let nid = nid.data().as_ffi();
 
@@ -223,6 +228,8 @@ impl WebsysDom {
         };
 
         self.stack.push(el.clone());
+        let mut slot = self.nodes.get_mut(id.0).unwrap();
+        *slot = Some(el);
         // let nid = self.node_counter.?next();
         // let nid = self.nodes.insert(el).data().as_ffi();
         // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
@@ -331,7 +338,9 @@ impl WebsysDom {
 
 impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     fn request_available_node(&mut self) -> RealDomNode {
-        todo!()
+        let key = self.nodes.insert(None);
+        log::debug!("making new key: {:#?}", key);
+        RealDomNode(key)
     }
 
     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {

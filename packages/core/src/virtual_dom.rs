@@ -191,7 +191,8 @@ impl VirtualDom {
     /// SSR takes advantage of this by using Dioxus itself as the source of truth, and rendering from the tree directly.
     pub fn rebuild_in_place(&mut self) -> Result<()> {
         let mut realdom = DebugDom::new();
-        self.rebuild(&mut realdom)
+        let mut edits = Vec::new();
+        self.rebuild(&mut realdom, &mut edits)
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
@@ -199,10 +200,13 @@ impl VirtualDom {
     /// Currently this doesn't do what we want it to do
     ///
     /// The diff machine expects the RealDom's stack to be the root of the application
-    pub fn rebuild<'s, Dom: RealDom<'s>>(&'s mut self, realdom: &mut Dom) -> Result<()> {
-        let mut edits = Vec::new();
+    pub fn rebuild<'s, Dom: RealDom<'s>>(
+        &'s mut self,
+        realdom: &mut Dom,
+        edits: &mut Vec<DomEdit<'s>>,
+    ) -> Result<()> {
         let mut diff_machine = DiffMachine::new(
-            &mut edits,
+            edits,
             realdom,
             &self.components,
             self.base_scope,
@@ -211,7 +215,6 @@ impl VirtualDom {
         );
 
         let cur_component = self.components.try_get_mut(self.base_scope).unwrap();
-
         cur_component.run_scope()?;
 
         let meta = diff_machine.create(cur_component.next_frame());
@@ -278,12 +281,12 @@ impl VirtualDom {
     pub async fn progress_with_event<'s, Dom: RealDom<'s>>(
         &'s mut self,
         realdom: &'_ mut Dom,
+        edits: &mut Vec<DomEdit<'s>>,
     ) -> Result<()> {
         let trigger = self.triggers.borrow_mut().pop().expect("failed");
 
-        let mut edits = Vec::new();
         let mut diff_machine = DiffMachine::new(
-            &mut edits,
+            edits,
             realdom,
             &self.components,
             trigger.originator,
@@ -295,9 +298,9 @@ impl VirtualDom {
             VirtualEvent::OtherEvent => todo!(),
 
             // Fiber events
-            VirtualEvent::FiberEvent => {
-                //
-            }
+            // VirtualEvent::FiberEvent => {
+            //     //
+            // }
 
             // This is the "meat" of our cooperative scheduler
             // As updates flow in, we re-evalute the event queue and decide if we should be switching the type of work

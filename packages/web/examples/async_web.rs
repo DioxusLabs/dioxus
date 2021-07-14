@@ -17,7 +17,7 @@ use dioxus_web::*;
 
 fn main() {
     // Setup logging
-    // wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
     // Run the app
@@ -37,17 +37,6 @@ static App: FC<()> = |cx| {
     let set_val = state.setter();
 
     let (tas, g) = cx.use_task(|| async move {
-        let mut tick: i32 = 0;
-        log::debug!("yeet!");
-        // loop {
-        //     gloo_timers::future::TimeoutFuture::new(250).await;
-        //     log::debug!("ticking forward... {}", tick);
-        //     tick += 1;
-        //     if tick > 10 {
-        //         break;
-        //     }
-        // }
-        // String::from("Huzza!")
         set_val(10);
         surf::get(ENDPOINT).recv_json::<DogApi>().await
     });

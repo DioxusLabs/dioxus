@@ -37,6 +37,7 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
     }
 
     fn request_available_node(&mut self) -> RealDomNode {
-        todo!()
+        self.node_counter += 1;
+        RealDomNode::from_u64(self.node_counter)
     }
 }

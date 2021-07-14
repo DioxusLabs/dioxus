@@ -72,53 +72,57 @@ impl WebsysRenderer {
         websys_dom.stack.push(root_node.clone());
         websys_dom.stack.push(root_node);
 
-        self.internal_dom.rebuild(&mut websys_dom)?;
+        let mut edits = Vec::new();
+        self.internal_dom.rebuild(&mut websys_dom, &mut edits)?;
+        websys_dom.process_edits(&mut edits);
 
         log::info!("Going into event loop");
-        // loop {
-        let trigger = {
-            let real_queue = websys_dom.wait_for_event();
-            if self.internal_dom.tasks.is_empty() {
-                log::info!("tasks is empty, waiting for dom event to trigger soemthing");
-                real_queue.await
-            } else {
-                log::info!("tasks is not empty, waiting for either tasks or event system");
-                let task_queue = (&mut self.internal_dom.tasks).next();
+        loop {
+            let trigger = {
+                let real_queue = websys_dom.wait_for_event();
+                if self.internal_dom.tasks.is_empty() {
+                    log::info!("tasks is empty, waiting for dom event to trigger soemthing");
+                    real_queue.await
+                } else {
+                    log::info!("tasks is not empty, waiting for either tasks or event system");
+                    let task_queue = (&mut self.internal_dom.tasks).next();
 
-                pin_mut!(real_queue);
-                pin_mut!(task_queue);
+                    pin_mut!(real_queue);
+                    pin_mut!(task_queue);
 
-                match futures_util::future::select(real_queue, task_queue).await {
-                    futures_util::future::Either::Left((trigger, _)) => trigger,
-                    futures_util::future::Either::Right((trigger, _)) => trigger,
+                    match futures_util::future::select(real_queue, task_queue).await {
+                        futures_util::future::Either::Left((trigger, _)) => trigger,
+                        futures_util::future::Either::Right((trigger, _)) => trigger,
+                    }
                 }
+            };
+
+            if let Some(real_trigger) = trigger {
+                log::info!("event received");
+                // let root_node = body_element.first_child().unwrap();
+                // websys_dom.stack.push(root_node.clone());
+
+                self.internal_dom.queue_event(real_trigger)?;
+
+                let mut edits = Vec::new();
+                self.internal_dom
+                    .progress_with_event(&mut websys_dom, &mut edits)
+                    .await?;
+                websys_dom.process_edits(&mut edits);
             }
-        };
 
-        if let Some(real_trigger) = trigger {
-            log::info!("event received");
-            // let root_node = body_element.first_child().unwrap();
-            // websys_dom.stack.push(root_node.clone());
-
-            self.internal_dom.queue_event(real_trigger)?;
-
-            self.internal_dom
-                .progress_with_event(&mut websys_dom)
-                .await?;
+            // let t2 = self.internal_dom.tasks.next();
+            // futures::select! {
+            //     trigger = t1 => {
+            //         log::info!("event received");
+            //         let root_node = body_element.first_child().unwrap();
+            //         websys_dom.stack.push(root_node.clone());
+            //         self.internal_dom
+            //             .progress_with_event(&mut websys_dom, trigger)?;
+            //     },
+            //     () = t2 => {}
+            // };
         }
-
-        // let t2 = self.internal_dom.tasks.next();
-        // futures::select! {
-        //     trigger = t1 => {
-        //         log::info!("event received");
-        //         let root_node = body_element.first_child().unwrap();
-        //         websys_dom.stack.push(root_node.clone());
-        //         self.internal_dom
-        //             .progress_with_event(&mut websys_dom, trigger)?;
-        //     },
-        //     () = t2 => {}
-        // };
-        // }
         // while let Some(trigger) = websys_dom.wait_for_event().await {
         // }
 
