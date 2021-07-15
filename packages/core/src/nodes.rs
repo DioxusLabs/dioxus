@@ -30,7 +30,7 @@ pub enum VNodeKind<'src> {
     Element(&'src VElement<'src>),
     Fragment(VFragment<'src>),
     Component(&'src VComponent<'src>),
-    Suspended,
+    Suspended { node: Rc<Cell<RealDomNode>> },
 }
 
 pub struct VText<'src> {
@@ -216,7 +216,9 @@ impl<'a> NodeFactory<'a> {
         VNode {
             dom_id: RealDomNode::empty_cell(),
             key: None,
-            kind: VNodeKind::Suspended,
+            kind: VNodeKind::Suspended {
+                node: Rc::new(RealDomNode::empty_cell()),
+            },
         }
     }
 
@@ -430,7 +432,7 @@ impl<'a> Clone for VNode<'a> {
                 is_static: fragment.is_static,
             }),
             VNodeKind::Component(component) => VNodeKind::Component(component),
-            VNodeKind::Suspended => VNodeKind::Suspended,
+            VNodeKind::Suspended { node } => VNodeKind::Suspended { node: node.clone() },
         };
         VNode {
             kind,

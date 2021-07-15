@@ -163,13 +163,13 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Controlled Inputs       | ✅      | ✅     | stateful wrappers around inputs                             |
 | CSS/Inline Styles       | ✅      | ✅     | syntax for inline styles/attribute groups                   |
 | Custom elements         | ✅      | ✅     | Define new element primitives                               |
-| Suspense                | 🛠      | ✅     | schedule future render from future/promise                  |
+| Suspense                | ✅      | ✅     | schedule future render from future/promise                  |
 | Cooperative Scheduling  | 🛠      | ✅     | Prioritize important events over non-important events       |
-| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                         |
 | Runs natively           | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)              |
 | 1st class global state  | ✅      | ❓     | redux/recoil/mobx on top of context                         |
 | Subtree Memoization     | ✅      | ❓     | skip diffing static element subtrees                        |
 | Compile-time correct    | ✅      | ❓     | Throw errors on invalid template layouts                    |
+| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                         |
 | Heuristic Engine        | 🛠      | ❓     | track component memory usage to minimize future allocations |
 | NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                             |
 

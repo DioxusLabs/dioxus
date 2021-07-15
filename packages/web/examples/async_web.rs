@@ -34,13 +34,15 @@ const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random/";
 static App: FC<()> = |cx| {
     let state = use_state(cx, || 0);
 
-    let request = cx.use_task(|| surf::get(ENDPOINT).recv_json::<DogApi>()).1;
+    let dog_node = cx.use_suspense(
+        || surf::get(ENDPOINT).recv_json::<DogApi>(),
+        |cx, res| match res {
+            Ok(res) => rsx!(in cx, img { src: "{res.message}" }),
+            Err(err) => rsx!(in cx, div { "No doggos for you :(" }),
+        },
+    );
 
-    let dog_node = if let Some(Ok(res)) = request {
-        rsx!(in cx, img { src: "{res.message}" })
-    } else {
-        rsx!(in cx, div { "No doggos for you :(" })
-    };
+    log::error!("RIP WE RAN THE COMPONENT");
 
     cx.render(rsx! {
         div {

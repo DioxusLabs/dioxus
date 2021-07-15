@@ -70,100 +70,6 @@ pub trait RealDom<'a> {
     fn raw_node_as_any(&self) -> &mut dyn Any;
 }
 
-pub struct DomEditor<'real, 'bump> {
-    edits: &'real mut Vec<DomEdit<'bump>>,
-}
-use DomEdit::*;
-impl<'real, 'bump> DomEditor<'real, 'bump> {
-    // Navigation
-    pub(crate) fn push(&mut self, root: RealDomNode) {
-        let id = root.as_u64();
-        self.edits.push(PushRoot { id });
-    }
-    pub(crate) fn pop(&mut self) {
-        self.edits.push(PopRoot {});
-    }
-
-    // Add Nodes to the dom
-    // add m nodes from the stack
-    pub(crate) fn append_children(&mut self, many: u32) {
-        self.edits.push(AppendChildren { many });
-    }
-
-    // replace the n-m node on the stack with the m nodes
-    // ends with the last element of the chain on the top of the stack
-    pub(crate) fn replace_with(&mut self, many: u32) {
-        self.edits.push(ReplaceWith { many });
-    }
-
-    // Remove Nodesfrom the dom
-    pub(crate) fn remove(&mut self) {
-        self.edits.push(Remove);
-    }
-    pub(crate) fn remove_all_children(&mut self) {
-        self.edits.push(RemoveAllChildren);
-    }
-
-    // Create
-    pub(crate) fn create_text_node(&mut self, text: &'bump str, id: RealDomNode) {
-        let id = id.as_u64();
-        self.edits.push(CreateTextNode { text, id });
-    }
-    pub(crate) fn create_element(
-        &mut self,
-        tag: &'static str,
-        ns: Option<&'static str>,
-        id: RealDomNode,
-    ) {
-        let id = id.as_u64();
-        match ns {
-            Some(ns) => self.edits.push(CreateElementNs { id, ns, tag }),
-            None => self.edits.push(CreateElement { id, tag }),
-        }
-    }
-
-    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
-    pub(crate) fn create_placeholder(&mut self, id: RealDomNode) {
-        let id = id.as_u64();
-        self.edits.push(CreatePlaceholder { id });
-    }
-
-    // events
-    pub(crate) fn new_event_listener(
-        &mut self,
-        event: &'static str,
-        scope: ScopeIdx,
-        element_id: usize,
-        realnode: RealDomNode,
-    ) {
-        self.edits.push(NewEventListener {
-            scope,
-            event,
-            idx: element_id,
-            node: realnode.as_u64(),
-        });
-    }
-    pub(crate) fn remove_event_listener(&mut self, event: &'static str) {
-        self.edits.push(RemoveEventListener { event });
-    }
-
-    // modify
-    pub(crate) fn set_text(&mut self, text: &'bump str) {
-        self.edits.push(SetText { text });
-    }
-    pub(crate) fn set_attribute(
-        &mut self,
-        field: &'static str,
-        value: &'bump str,
-        ns: Option<&'static str>,
-    ) {
-        self.edits.push(SetAttribute { field, value, ns });
-    }
-    pub(crate) fn remove_attribute(&mut self, name: &'static str) {
-        self.edits.push(RemoveAttribute { name });
-    }
-}
-
 pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub dom: &'real mut Dom,
     pub edits: DomEditor<'real, 'bump>,
@@ -188,7 +94,7 @@ where
         task_queue: &'bump TaskQueue,
     ) -> Self {
         Self {
-            edits: DomEditor { edits },
+            edits: DomEditor::new(edits),
             components,
             dom,
             cur_idx,
@@ -364,8 +270,11 @@ where
             }
 
             // TODO
-            (VNodeKind::Suspended { .. }, _) => todo!(),
-            (_, VNodeKind::Suspended { .. }) => todo!(),
+            (VNodeKind::Suspended { node }, new) => todo!(),
+            (old, VNodeKind::Suspended { .. }) => {
+                // a node that was once real is now suspended
+                //
+            }
         }
     }
 }
@@ -563,10 +472,11 @@ where
                 CreateMeta::new(false, nodes_added)
             }
 
-            VNodeKind::Suspended => {
+            VNodeKind::Suspended { node: real_node } => {
                 let id = self.dom.request_available_node();
                 self.edits.create_placeholder(id);
                 node.dom_id.set(id);
+                real_node.set(id);
                 CreateMeta::new(false, 1)
             }
         }
@@ -1411,7 +1321,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
 
                     // Immediately abort suspended nodes - can't do anything with them yet
                     // VNodeKind::Suspended => should_pop = true,
-                    VNodeKind::Suspended => todo!(),
+                    VNodeKind::Suspended { .. } => todo!(),
 
                     // For components, we load their root and push them onto the stack
                     VNodeKind::Component(sc) => {

@@ -4,6 +4,11 @@
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
+
 use crate::innerlude::{RealDomNode, ScopeIdx};
 
 #[derive(Debug)]
@@ -108,10 +113,15 @@ pub enum VirtualEvent {
     //
     // Async events don't necessarily propagate into a scope being ran. It's up to the event itself
     // to force an update for itself.
-    AsyncEvent { hook_idx: usize },
+    AsyncEvent {
+        hook_idx: usize,
+    },
 
     // These are more intrusive than the rest
-    SuspenseEvent { hook_idx: usize },
+    SuspenseEvent {
+        hook_idx: usize,
+        domnode: Rc<Cell<RealDomNode>>,
+    },
 
     OtherEvent,
 }

@@ -30,11 +30,11 @@ pub(crate) mod innerlude {
     pub use crate::component::*;
     pub use crate::context::*;
     pub use crate::diff::*;
+    pub use crate::editor::*;
     pub use crate::error::*;
     pub use crate::events::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
-    pub use crate::serialize::*;
     pub use crate::tasks::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
@@ -53,13 +53,12 @@ pub mod bumpframe;
 pub mod component;
 pub mod context;
 pub mod diff;
+pub mod editor;
 pub mod error;
 pub mod events;
 pub mod hooklist;
 pub mod nodes;
 pub mod scope;
-#[cfg(feature = "serialize")]
-pub mod serialize;
 pub mod signals;
 pub mod tasks;
 pub mod util;

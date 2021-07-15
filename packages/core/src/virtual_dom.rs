@@ -301,24 +301,26 @@ impl VirtualDom {
             VirtualEvent::AsyncEvent { .. } => {}
 
             // Suspense Events! A component's suspended node is updated
-            VirtualEvent::SuspenseEvent { hook_idx } => {
+            VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
                 let scope = self.components.try_get_mut(trigger.originator).unwrap();
 
                 // safety: we are sure that there are no other references to the inner content of this hook
                 let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
 
-                let cx = SuspendedContext {
-                    bump: &scope.cur_frame().bump,
-                };
+                let cx = Context { scope, props: &() };
 
                 // generate the new node!
-                let callback: VNode<'s> = (&hook.callback)(cx);
+                let nodes: VNode<'s> = (&hook.callback)(cx);
+                let nodes = scope.cur_frame().bump.alloc(nodes);
 
-                // diff that node with the node that was originally suspended!
+                // push the old node's root onto the stack
+                diff_machine.edits.push(domnode.get());
 
-                // hook.callback;
+                // push these new nodes onto the diff machines stack
+                let meta = diff_machine.create(&*nodes);
 
-                //
+                // replace the placeholder with the new nodes we just pushed on the stack
+                diff_machine.edits.replace_with(meta.added_to_stack);
             }
 
             // This is the "meat" of our cooperative scheduler

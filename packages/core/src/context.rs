@@ -4,6 +4,7 @@ use bumpalo::Bump;
 use futures_util::FutureExt;
 
 use std::any::Any;
+use std::cell::Cell;
 use std::marker::PhantomData;
 
 use std::{
@@ -355,8 +356,9 @@ Any function prefixed with "use" should not be called conditionally.
 pub(crate) struct SuspenseHook {
     pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
     pub callback: SuspendedCallback,
+    pub dom_node_id: Rc<Cell<RealDomNode>>,
 }
-type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> VNode<'a>>;
+type SuspendedCallback = Box<dyn for<'a> Fn(Context<'a, ()>) -> VNode<'a>>;
 
 impl<'src, P> Context<'src, P> {
     /// Asynchronously render new nodes once the given future has completed.
@@ -370,29 +372,48 @@ impl<'src, P> Context<'src, P> {
     ///
     ///
     pub fn use_suspense<Out, Fut, Cb>(
-        &'src self,
+        self,
         task_initializer: impl FnOnce() -> Fut,
         user_callback: Cb,
     ) -> VNode<'src>
     where
         Fut: Future<Output = Out> + 'static,
         Out: 'static,
-        Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> VNode<'a> + 'static,
+        Cb: for<'a> Fn(Context<'a, ()>, &Out) -> VNode<'a> + 'static,
     {
         self.use_hook(
             move |hook_idx| {
                 let value = Rc::new(RefCell::new(None));
 
+                let dom_node_id = Rc::new(RealDomNode::empty_cell());
+                let domnode = dom_node_id.clone();
+
                 let slot = value.clone();
-                let callback: SuspendedCallback = Box::new(move |ctx: SuspendedContext| {
+
+                let callback: SuspendedCallback = Box::new(move |ctx: Context<()>| {
                     let v: std::cell::Ref<Option<Box<dyn Any>>> = slot.as_ref().borrow();
-                    let v: &dyn Any = v.as_ref().unwrap().as_ref();
-                    let real_val = v.downcast_ref::<Out>().unwrap();
-                    user_callback(ctx, real_val)
+                    match v.as_ref() {
+                        Some(a) => {
+                            let v: &dyn Any = a.as_ref();
+                            let real_val = v.downcast_ref::<Out>().unwrap();
+                            user_callback(ctx, real_val)
+                        }
+                        None => {
+                            //
+                            VNode {
+                                dom_id: RealDomNode::empty_cell(),
+                                key: None,
+                                kind: VNodeKind::Suspended {
+                                    node: domnode.clone(),
+                                },
+                            }
+                        }
+                    }
                 });
 
                 let originator = self.scope.arena_idx.clone();
                 let task_fut = task_initializer();
+                let domnode = dom_node_id.clone();
 
                 let slot = value.clone();
                 self.submit_task(Box::pin(task_fut.then(move |output| async move {
@@ -400,33 +421,25 @@ impl<'src, P> Context<'src, P> {
                     // Dioxus will call the user's callback to generate new nodes outside of the diffing system
                     *slot.borrow_mut() = Some(Box::new(output) as Box<dyn Any>);
                     EventTrigger {
-                        event: VirtualEvent::SuspenseEvent { hook_idx },
+                        event: VirtualEvent::SuspenseEvent { hook_idx, domnode },
                         originator,
                         priority: EventPriority::Low,
                         real_node_id: None,
                     }
                 })));
 
-                SuspenseHook { value, callback }
+                SuspenseHook {
+                    value,
+                    callback,
+                    dom_node_id,
+                }
             },
             move |hook| {
-                match hook.value.borrow().as_ref() {
-                    Some(val) => {
-                        let cx = SuspendedContext {
-                            bump: &self.scope.cur_frame().bump,
-                        };
-                        (&hook.callback)(cx)
-                    }
-                    None => {
-                        //
-                        VNode {
-                            dom_id: RealDomNode::empty_cell(),
-                            key: None,
-                            kind: VNodeKind::Suspended,
-                        }
-                    }
-                }
-                //
+                let cx = Context {
+                    scope: &self.scope,
+                    props: &(),
+                };
+                (&hook.callback)(cx)
             },
             |_| {},
         )
@@ -435,8 +448,4 @@ impl<'src, P> Context<'src, P> {
 
 pub struct TaskHandle<'src> {
     _p: PhantomData<&'src ()>,
-}
-#[derive(Clone)]
-pub struct SuspendedContext<'a> {
-    pub bump: &'a Bump,
 }
