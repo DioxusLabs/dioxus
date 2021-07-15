@@ -34,6 +34,7 @@ pub(crate) mod innerlude {
     pub use crate::editor::*;
     pub use crate::error::*;
     pub use crate::events::*;
+    pub use crate::heuristics::*;
     pub use crate::hooklist::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
@@ -59,6 +60,7 @@ pub mod diff;
 pub mod editor;
 pub mod error;
 pub mod events;
+pub mod heuristics;
 pub mod hooklist;
 pub mod nodes;
 pub mod scope;

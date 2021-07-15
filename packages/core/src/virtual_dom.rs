@@ -60,6 +60,8 @@ pub struct VirtualDom {
 
     pub tasks: TaskQueue,
 
+    heuristics: HeuristicsEngine,
+
     root_props: std::pin::Pin<Box<dyn std::any::Any>>,
 
     /// Type of the original props. This is stored as TypeId so VirtualDom does not need to be generic.
@@ -168,6 +170,7 @@ impl VirtualDom {
             components,
             root_props,
             tasks,
+            heuristics: HeuristicsEngine::new(),
             triggers: Default::default(),
             _root_prop_type: TypeId::of::<P>(),
         }
