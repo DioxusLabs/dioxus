@@ -86,9 +86,31 @@ impl<'a> TextRenderer<'a> {
                 }
 
                 write!(f, "<{}", el.tag_name)?;
-                for attr in el.attributes {
-                    write!(f, " {}=\"{}\"", attr.name, attr.value)?;
+                let mut attr_iter = el.attributes.iter().peekable();
+
+                while let Some(attr) = attr_iter.next() {
+                    match attr.namespace {
+                        None => write!(f, " {}=\"{}\"", attr.name, attr.value)?,
+
+                        Some(ns) => {
+                            // write the opening tag
+                            write!(f, " {}=\"", ns)?;
+                            let mut cur_ns_el = attr;
+                            'ns_parse: loop {
+                                write!(f, "{}:{};", cur_ns_el.name, cur_ns_el.value)?;
+                                match attr_iter.peek() {
+                                    Some(next_attr) if next_attr.namespace == Some(ns) => {
+                                        cur_ns_el = attr_iter.next().unwrap();
+                                    }
+                                    _ => break 'ns_parse,
+                                }
+                            }
+                            // write the closing tag
+                            write!(f, "\"")?;
+                        }
+                    }
                 }
+
                 match self.cfg.newline {
                     true => write!(f, ">\n")?,
                     false => write!(f, ">")?,
@@ -223,5 +245,24 @@ mod tests {
 
         file.write_fmt(format_args!("{}", TextRenderer::new(&dom)))
             .unwrap();
+    }
+
+    #[test]
+    fn styles() {
+        const STLYE_APP: FC<()> = |cx| {
+            //
+            cx.render(rsx! {
+                div {
+                    style: {
+                        color: "blue",
+                        font_size: "46px"
+                    }
+                }
+            })
+        };
+
+        let mut dom = VirtualDom::new(STLYE_APP);
+        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dbg!(render_root(&dom));
     }
 }

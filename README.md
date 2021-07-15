@@ -164,14 +164,15 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | CSS/Inline Styles       | ✅      | ✅     | syntax for inline styles/attribute groups                   |
 | Custom elements         | ✅      | ✅     | Define new element primitives                               |
 | Suspense                | ✅      | ✅     | schedule future render from future/promise                  |
+| Effects                 | 🛠      | ✅     | Run effects after a component has been committed to render  |
 | Cooperative Scheduling  | 🛠      | ✅     | Prioritize important events over non-important events       |
+| NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                             |
 | Runs natively           | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)              |
 | 1st class global state  | ✅      | ❓     | redux/recoil/mobx on top of context                         |
 | Subtree Memoization     | ✅      | ❓     | skip diffing static element subtrees                        |
 | Compile-time correct    | ✅      | ❓     | Throw errors on invalid template layouts                    |
-| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                         |
 | Heuristic Engine        | 🛠      | ❓     | track component memory usage to minimize future allocations |
-| NodeRef                 | 🛠      | ✅     | gain direct access to nodes [1]                             |
+| Fine-grained reactivity | 🛠      | ❓     | Skip diffing for fine-grain updates                         |
 
 - [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
 
@@ -184,8 +185,8 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Integrated classnames | 🛠      | ❓     | built-in `classnames`              |
 | Transition            | 👀      | 🛠     | High-level control over suspense   |
 | Animation             | 👀      | ✅     | Spring-style animations            |
-| Mobile                | 👀      | ✅     | Render with cacao                  |
-| Desktop (native)      | 👀      | ✅     | Render with native desktop         |
+| Native Mobile         | 👀      | ✅     | Render with cacao                  |
+| Native Desktop        | 👀      | ✅     | Render with native desktop         |
 | 3D Renderer           | 👀      | ✅     | react-three-fiber                  |
 
 ### Phase 3: Additional Complexity
