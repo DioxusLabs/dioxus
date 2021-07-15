@@ -1,6 +1,5 @@
 use crate::innerlude::*;
 
-use bumpalo::Bump;
 use futures_util::FutureExt;
 
 use std::any::Any;
@@ -12,7 +11,6 @@ use std::{
     cell::RefCell,
     future::Future,
     ops::Deref,
-    pin::Pin,
     rc::{Rc, Weak},
 };
 
@@ -34,13 +32,20 @@ use std::{
 ///     }
 /// }
 /// ```
-// todo: force lifetime of source into T as a valid lifetime too
-// it's definitely possible, just needs some more messing around
+///
+/// ## Available Methods:
+/// - render
+/// - use_hook
+/// - use_task
+/// - use_suspense
+/// - submit_task
+/// - children
+/// - use_effect
+///
 pub struct Context<'src, T> {
     pub props: &'src T,
     pub scope: &'src Scope,
 }
-// pub type PinnedTask = Pin<Box<dyn Future<Output = ()>>>;
 
 impl<'src, T> Copy for Context<'src, T> {}
 impl<'src, T> Clone for Context<'src, T> {
@@ -52,9 +57,10 @@ impl<'src, T> Clone for Context<'src, T> {
     }
 }
 
+// We currently deref to props, but it might make more sense to deref to Scope?
+// This allows for code that takes cx.xyz instead of cx.props.xyz
 impl<'a, T> Deref for Context<'a, T> {
     type Target = &'a T;
-
     fn deref(&self) -> &Self::Target {
         &self.props
     }
@@ -62,14 +68,42 @@ impl<'a, T> Deref for Context<'a, T> {
 
 impl<'src, P> Context<'src, P> {
     /// Access the children elements passed into the component
+    ///
+    /// This enables patterns where a component is passed children from its parent.
+    ///
+    /// ## Details
+    ///
+    /// Unlike React, Dioxus allows *only* lists of children to be passed from parent to child - not arbitrary functions
+    /// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
+    /// on the props that takes Context.
+    ///
+    /// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
+    /// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
+    /// props are valid for the static lifetime.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// const App: FC<()> = |cx| {
+    ///     cx.render(rsx!{
+    ///         CustomCard {
+    ///             h1 {}
+    ///             p {}
+    ///         }
+    ///     })
+    /// }
+    ///
+    /// const CustomCard: FC<()> = |cx| {
+    ///     cx.render(rsx!{
+    ///         div {
+    ///             h1 {"Title card"}
+    ///             {cx.children()}
+    ///         }
+    ///     })
+    /// }
+    /// ```
     pub fn children(&self) -> &'src [VNode<'src>] {
-        // We're re-casting the nodes back out
-        // They don't really have a static lifetime
-        unsafe {
-            let scope = self.scope;
-            let nodes = scope.child_nodes;
-            nodes
-        }
+        self.scope.child_nodes
     }
 
     /// Create a subscription that schedules a future render for the reference component
@@ -227,7 +261,10 @@ Any function prefixed with "use" should not be called conditionally.
 
                 let ty = TypeId::of::<T>();
                 while let Some(inner) = scope {
-                    log::debug!("Searching {:#?} for valid shared_context", inner.arena_idx);
+                    log::debug!(
+                        "Searching {:#?} for valid shared_context",
+                        inner.our_arena_idx
+                    );
                     let shared_contexts = inner.shared_contexts.borrow();
 
                     if let Some(shared_cx) = shared_contexts.get(&ty) {
@@ -241,7 +278,7 @@ Any function prefixed with "use" should not be called conditionally.
                         hook.par = Some(rc);
                         return Ok(hook.par.as_ref().unwrap());
                     } else {
-                        match inner.parent {
+                        match inner.parent_idx {
                             Some(parent_id) => {
                                 let parent = inner
                                     .arena_link
@@ -324,7 +361,7 @@ Any function prefixed with "use" should not be called conditionally.
 
                 let slot = task_dump.clone();
                 let update = self.schedule_update();
-                let originator = self.scope.arena_idx.clone();
+                let originator = self.scope.our_arena_idx.clone();
 
                 self.submit_task(Box::pin(task_fut.then(move |output| async move {
                     *slot.as_ref().borrow_mut() = Some(output);
@@ -411,7 +448,7 @@ impl<'src, P> Context<'src, P> {
                     }
                 });
 
-                let originator = self.scope.arena_idx.clone();
+                let originator = self.scope.our_arena_idx.clone();
                 let task_fut = task_initializer();
                 let domnode = dom_node_id.clone();
 

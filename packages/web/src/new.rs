@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use dioxus_core::{
     events::{EventTrigger, VirtualEvent},
-    DomEdit, RealDomNode, ScopeIdx,
+    DomEdit, RealDomNode, ScopeId,
 };
 use fxhash::FxHashMap;
 use slotmap::{DefaultKey, Key, KeyData};
@@ -85,10 +85,10 @@ impl WebsysDom {
                 DomEdit::CreateElementNs { tag, id, ns } => self.create_element(tag, Some(ns), id),
                 DomEdit::CreatePlaceholder { id } => self.create_placeholder(id),
                 DomEdit::NewEventListener {
-                    event,
+                    event_name: event,
                     scope,
-                    node,
-                    idx,
+                    mounted_node_id: node,
+                    element_id: idx,
                 } => self.new_event_listener(event, scope, idx, node),
                 DomEdit::RemoveEventListener { event } => todo!(),
                 DomEdit::SetText { text } => self.set_text(text),
@@ -234,7 +234,7 @@ impl WebsysDom {
     fn new_event_listener(
         &mut self,
         event: &'static str,
-        scope: ScopeIdx,
+        scope: ScopeId,
         _element_id: usize,
         real_id: u64,
     ) {
@@ -335,7 +335,7 @@ impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
     fn request_available_node(&mut self) -> RealDomNode {
         let key = self.nodes.insert(None);
         log::debug!("making new key: {:#?}", key);
-        RealDomNode(key)
+        RealDomNode(key.data().as_ffi())
     }
 
     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
@@ -349,22 +349,24 @@ pub struct Stack {
 }
 
 impl Stack {
+    #[inline]
     pub fn with_capacity(cap: usize) -> Self {
         Stack {
             list: Vec::with_capacity(cap),
         }
     }
 
+    #[inline]
     pub fn push(&mut self, node: Node) {
-        // debug!("stack-push: {:?}", node);
         self.list.push(node);
     }
 
+    #[inline]
     pub fn pop(&mut self) -> Node {
-        let res = self.list.pop().unwrap();
-        res
+        self.list.pop().unwrap()
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         self.list.clear();
     }
@@ -588,16 +590,11 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
 
     use anyhow::Context;
 
-    // for attr in  {
     let attrs = target.attributes();
     for x in 0..attrs.length() {
         let attr = attrs.item(x).unwrap();
         log::debug!("attrs include: {:#?}", attr);
     }
-    // }
-    // for attr in target.attributes() {
-    //     log::debug!("attrs include: {:#?}", attr);
-    // }
 
     // The error handling here is not very descriptive and needs to be replaced with a zero-cost error system
     let val: String = target
@@ -613,34 +610,18 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
 
     let real_id = fields
         .next()
-        .and_then(|raw_id| {
-            raw_id
-                .parse::<u64>()
-                .ok()
-                .map(|value| KeyData::from_ffi(value))
-                .map(|f| RealDomNode(f.into()))
-        })
+        .and_then(|raw_id| raw_id.parse::<u64>().ok())
         .context("failed to parse real id")?;
 
     // Call the trigger
     log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
 
-    let triggered_scope: ScopeIdx = KeyData::from_ffi(gi_id).into();
+    let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
     Ok(EventTrigger::new(
         virtual_event_from_websys_event(event),
         triggered_scope,
-        Some(real_id),
+        Some(RealDomNode::from_u64(real_id)),
         dioxus_core::events::EventPriority::High,
     ))
 }
-
-struct ListenerMap {}
-impl ListenerMap {
-    fn get(&self, event: &'static str) -> bool {
-        false
-    }
-}
-
-struct JsStringCache {}
-impl JsStringCache {}

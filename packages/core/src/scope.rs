@@ -22,53 +22,36 @@ pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> VNode<'b>;
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
 pub struct Scope {
-    // The parent's scope ID
-    pub parent: Option<ScopeIdx>,
+    // Book-keeping about the arena
+    pub(crate) parent_idx: Option<ScopeId>,
+    pub(crate) descendents: RefCell<HashSet<ScopeId>>,
+    pub(crate) our_arena_idx: ScopeId,
+    pub(crate) height: u32,
 
-    // IDs of children that this scope has created
-    // This enables us to drop the children and their children when this scope is destroyed
-    pub(crate) descendents: RefCell<HashSet<ScopeIdx>>,
+    // Nodes
+    // an internal, highly efficient storage of vnodes
+    pub(crate) frames: ActiveFrame,
+    pub(crate) child_nodes: &'static [VNode<'static>],
+    pub(crate) caller: Rc<WrappedCaller>,
 
-    pub child_nodes: &'static [VNode<'static>],
+    // Listeners
+    pub(crate) listeners: RefCell<Vec<(*mut Cell<RealDomNode>, *mut dyn FnMut(VirtualEvent))>>,
+    pub(crate) listener_idx: Cell<usize>,
+
+    // State
+    pub(crate) hooks: HookList,
+    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
+
+    // Events
+    pub(crate) event_channel: Rc<dyn Fn() + 'static>,
+
+    // Tasks
+    pub(crate) task_submitter: TaskSubmitter,
+    pub(crate) suspended_tasks: Vec<*mut Pin<Box<dyn Future<Output = VNode<'static>>>>>,
 
     // A reference to the list of components.
     // This lets us traverse the component list whenever we need to access our parent or children.
-    pub arena_link: SharedArena,
-
-    pub shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
-
-    // Our own ID accessible from the component map
-    pub arena_idx: ScopeIdx,
-
-    pub height: u32,
-
-    pub event_channel: Rc<dyn Fn() + 'static>,
-
-    pub caller: Rc<WrappedCaller>,
-
-    // ==========================
-    // slightly unsafe stuff
-    // ==========================
-    // an internal, highly efficient storage of vnodes
-    pub frames: ActiveFrame,
-
-    // These hooks are actually references into the hook arena
-    // These two could be combined with "OwningRef" to remove unsafe usage
-    // or we could dedicate a tiny bump arena just for them
-    // could also use ourborous
-    pub hooks: HookList,
-
-    pub(crate) listener_idx: Cell<usize>,
-
-    // Unsafety:
-    // - is self-refenrential and therefore needs to point into the bump
-    // Stores references into the listeners attached to the vnodes
-    // NEEDS TO BE PRIVATE
-    pub(crate) listeners: RefCell<Vec<(*mut Cell<RealDomNode>, *mut dyn FnMut(VirtualEvent))>>,
-
-    pub task_submitter: TaskSubmitter,
-
-    pub(crate) suspended_tasks: Vec<*mut Pin<Box<dyn Future<Output = VNode<'static>>>>>,
+    pub(crate) arena_link: SharedArena,
 }
 
 pub type FiberTask = Pin<Box<dyn Future<Output = EventTrigger>>>;
@@ -83,8 +66,8 @@ impl Scope {
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub fn new<'creator_node>(
         caller: Rc<WrappedCaller>,
-        arena_idx: ScopeIdx,
-        parent: Option<ScopeIdx>,
+        arena_idx: ScopeId,
+        parent: Option<ScopeId>,
         height: u32,
         event_channel: EventChannel,
         arena_link: SharedArena,
@@ -102,8 +85,8 @@ impl Scope {
         Self {
             child_nodes,
             caller,
-            parent,
-            arena_idx,
+            parent_idx: parent,
+            our_arena_idx: arena_idx,
             height,
             event_channel,
             arena_link,
@@ -190,7 +173,7 @@ impl Scope {
         log::debug!(
             "There are  {:?} listeners associated with this scope {:#?}",
             self.listeners.borrow().len(),
-            self.arena_idx
+            self.our_arena_idx
         );
 
         let listners = self.listeners.borrow_mut();

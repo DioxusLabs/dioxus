@@ -5,10 +5,10 @@
 
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, Properties, RealDomNode, Scope, ScopeIdx, FC},
+    innerlude::{Context, Properties, RealDomNode, Scope, ScopeId, FC},
 };
 use std::{
-    cell::{Cell, RefCell},
+    cell::Cell,
     fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
     rc::Rc,
@@ -87,7 +87,7 @@ pub struct Attribute<'a> {
 pub struct Listener<'bump> {
     /// The type of event to listen for.
     pub(crate) event: &'static str,
-    pub scope: ScopeIdx,
+    pub scope: ScopeId,
     pub mounted_node: &'bump Cell<RealDomNode>,
     pub(crate) callback: &'bump dyn FnMut(VirtualEvent),
 }
@@ -95,7 +95,7 @@ pub struct Listener<'bump> {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
-    pub ass_scope: Cell<Option<ScopeIdx>>,
+    pub ass_scope: Cell<Option<ScopeId>>,
     pub(crate) caller: Rc<dyn Fn(&Scope) -> VNode>,
     pub(crate) children: &'src [VNode<'src>],
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
@@ -328,6 +328,26 @@ impl<'a> NodeFactory<'a> {
     }
 }
 
+/// Trait implementations for use in the rsx! and html! macros.
+///
+/// ## Details
+///
+/// This section provides convenience methods and trait implementations for converting common structs into a format accepted
+/// by the macros.
+///
+/// All dynamic content in the macros must flow in through `fragment_from_iter`. Everything else must be statically layed out.
+/// We pipe basically everything through `fragment_from_iter`, so we expect a very specific type:
+/// ```
+/// impl IntoIterator<Item = impl IntoVNode<'a>>
+/// ```
+///
+/// As such, all node creation must go through the factory, which is only availble in the component context.
+/// These strict requirements make it possible to manage lifetimes and state.
+pub trait IntoVNode<'a> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
+}
+
+// For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoIterator for VNode<'a> {
     type Item = VNode<'a>;
     type IntoIter = std::iter::Once<Self::Item>;
@@ -335,25 +355,53 @@ impl<'a> IntoIterator for VNode<'a> {
         std::iter::once(self)
     }
 }
+
+// For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoVNode<'a> for VNode<'a> {
     fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
         self
     }
 }
 
+// For the case where a rendered VNode is by reference passed into the rsx! macro through curly braces
+// This behavior is designed for the cx.children method where child nodes are passed by reference.
+//
+// Designed to support indexing
 impl<'a> IntoVNode<'a> for &VNode<'a> {
     fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
-        self.clone()
+        let kind = match &self.kind {
+            VNodeKind::Element(element) => VNodeKind::Element(element),
+            VNodeKind::Text(old) => VNodeKind::Text(VText {
+                text: old.text,
+                is_static: old.is_static,
+            }),
+            VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
+                children: fragment.children,
+                is_static: fragment.is_static,
+            }),
+            VNodeKind::Component(component) => VNodeKind::Component(component),
+
+            // todo: it doesn't make much sense to pass in suspended nodes
+            // I think this is right but I'm not too sure.
+            VNodeKind::Suspended { node } => VNodeKind::Suspended { node: node.clone() },
+        };
+        VNode {
+            kind,
+            dom_id: self.dom_id.clone(),
+            key: self.key.clone(),
+        }
     }
 }
 
-pub trait IntoVNode<'a> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
-}
-
-// Wrap the the node-builder closure in a concrete type.
-// ---
-// This is a bit of a hack to implement the IntoVNode trait for closure types.
+/// A concrete type provider for closures that build VNode structures.
+///
+/// This struct wraps lazy structs that build VNode trees Normally, we cannot perform a blanket implementation over
+/// closures, but if we wrap the closure in a concrete type, we can maintain separate implementations of IntoVNode.
+///
+///
+/// ```rust
+/// LazyNodes::new(|f| f.element("div", [], [], [] None))
+/// ```
 pub struct LazyNodes<'a, G>
 where
     G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
@@ -374,11 +422,7 @@ where
     }
 }
 
-// Cover the cases where nodes are used by macro.
-// Likely used directly.
-// ---
-//  let nodes = rsx!{ ... };
-//  rsx! { {nodes } }
+// Our blanket impl
 impl<'a, G> IntoVNode<'a> for LazyNodes<'a, G>
 where
     G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
@@ -388,7 +432,7 @@ where
     }
 }
 
-// Required because anything that enters brackets in the rsx! macro needs to implement IntoIterator
+// Our blanket impl
 impl<'a, G> IntoIterator for LazyNodes<'a, G>
 where
     G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
@@ -400,12 +444,14 @@ where
     }
 }
 
+// Conveniently, we also support "null" (nothing) passed in
 impl IntoVNode<'_> for () {
     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
         cx.fragment_from_iter(None as Option<VNode>)
     }
 }
 
+// Conveniently, we also support "None"
 impl IntoVNode<'_> for Option<()> {
     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
         cx.fragment_from_iter(None as Option<VNode>)
@@ -415,30 +461,6 @@ impl IntoVNode<'_> for Option<()> {
 impl Debug for NodeFactory<'_> {
     fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
-    }
-}
-
-// it's okay to clone because vnodes are just references to places into the bump
-impl<'a> Clone for VNode<'a> {
-    fn clone(&self) -> Self {
-        let kind = match &self.kind {
-            VNodeKind::Element(element) => VNodeKind::Element(element),
-            VNodeKind::Text(old) => VNodeKind::Text(VText {
-                text: old.text,
-                is_static: old.is_static,
-            }),
-            VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
-                children: fragment.children,
-                is_static: fragment.is_static,
-            }),
-            VNodeKind::Component(component) => VNodeKind::Component(component),
-            VNodeKind::Suspended { node } => VNodeKind::Suspended { node: node.clone() },
-        };
-        VNode {
-            kind,
-            dom_id: self.dom_id.clone(),
-            key: self.key.clone(),
-        }
     }
 }
 

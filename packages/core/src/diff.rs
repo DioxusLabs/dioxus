@@ -75,10 +75,10 @@ pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub edits: DomEditor<'real, 'bump>,
     pub components: &'bump SharedArena,
     pub task_queue: &'bump TaskQueue,
-    pub cur_idx: ScopeIdx,
-    pub diffed: FxHashSet<ScopeIdx>,
+    pub cur_idx: ScopeId,
+    pub diffed: FxHashSet<ScopeId>,
     pub event_queue: EventQueue,
-    pub seen_nodes: FxHashSet<ScopeIdx>,
+    pub seen_nodes: FxHashSet<ScopeId>,
 }
 
 impl<'real, 'bump, Dom> DiffMachine<'real, 'bump, Dom>
@@ -89,7 +89,7 @@ where
         edits: &'real mut Vec<DomEdit<'bump>>,
         dom: &'real mut Dom,
         components: &'bump SharedArena,
-        cur_idx: ScopeIdx,
+        cur_idx: ScopeId,
         event_queue: EventQueue,
         task_queue: &'bump TaskQueue,
     ) -> Self {
@@ -488,7 +488,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     ///
     /// Calling this will run the destuctors on all hooks in the tree.
     /// It will also add the destroyed nodes to the `seen_nodes` cache to prevent them from being renderered.
-    fn destroy_scopes(&mut self, old_scope: ScopeIdx) {
+    fn destroy_scopes(&mut self, old_scope: ScopeId) {
         let mut nodes_to_delete = vec![old_scope];
         let mut scopes_to_explore = vec![old_scope];
 

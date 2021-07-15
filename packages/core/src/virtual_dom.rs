@@ -30,10 +30,17 @@ use std::any::TypeId;
 use std::cell::RefCell;
 use std::pin::Pin;
 
-pub type ScopeIdx = DefaultKey;
+pub type ScopeId = DefaultKey;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
+///
+///
+///
+///
+///
+///
+///
 pub struct VirtualDom {
     /// All mounted components are arena allocated to make additions, removals, and references easy to work with
     /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
@@ -44,7 +51,7 @@ pub struct VirtualDom {
 
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
-    pub base_scope: ScopeIdx,
+    pub base_scope: ScopeId,
 
     pub triggers: RefCell<Vec<EventTrigger>>,
 
@@ -55,7 +62,7 @@ pub struct VirtualDom {
 
     root_props: std::pin::Pin<Box<dyn std::any::Any>>,
 
-    /// Type of the original cx. This is stored as TypeId so VirtualDom does not need to be generic.
+    /// Type of the original props. This is stored as TypeId so VirtualDom does not need to be generic.
     ///
     /// Whenver props need to be updated, an Error will be thrown if the new props do not
     /// match the props used to create the VirtualDom.

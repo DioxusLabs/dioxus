@@ -27,7 +27,7 @@ impl SharedArena {
 
     /// THIS METHOD IS CURRENTLY UNSAFE
     /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
-    pub fn try_get(&self, idx: ScopeIdx) -> Result<&Scope> {
+    pub fn try_get(&self, idx: ScopeId) -> Result<&Scope> {
         let inner = unsafe { &*self.components.get() };
         let scope = inner.get(idx);
         scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
@@ -35,7 +35,7 @@ impl SharedArena {
 
     /// THIS METHOD IS CURRENTLY UNSAFE
     /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
-    pub fn try_get_mut(&self, idx: ScopeIdx) -> Result<&mut Scope> {
+    pub fn try_get_mut(&self, idx: ScopeId) -> Result<&mut Scope> {
         let inner = unsafe { &mut *self.components.get() };
         let scope = inner.get_mut(idx);
         scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
@@ -59,7 +59,7 @@ impl SharedArena {
 
     pub fn with_scope<'b, O: 'static>(
         &'b self,
-        _id: ScopeIdx,
+        _id: ScopeId,
         _f: impl FnOnce(&'b mut Scope) -> O,
     ) -> Result<O> {
         todo!()
@@ -69,13 +69,13 @@ impl SharedArena {
     // this is useful for merging lifetimes
     pub fn with_scope_vnode<'b>(
         &self,
-        _id: ScopeIdx,
+        _id: ScopeId,
         _f: impl FnOnce(&mut Scope) -> &VNode<'b>,
     ) -> Result<&VNode<'b>> {
         todo!()
     }
 
-    pub fn try_remove(&self, id: ScopeIdx) -> Result<Scope> {
+    pub fn try_remove(&self, id: ScopeId) -> Result<Scope> {
         let inner = unsafe { &mut *self.components.get() };
         inner
             .remove(id)

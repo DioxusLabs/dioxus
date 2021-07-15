@@ -130,7 +130,9 @@ impl<'a> TextRenderer<'a> {
 
                 self.html_render(new_node, f, il + 1)?;
             }
-            VNodeKind::Suspended => todo!(),
+            VNodeKind::Suspended { .. } => {
+                // we can't do anything with suspended nodes
+            }
         }
         Ok(())
     }

@@ -4,17 +4,14 @@
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use std::{cell::Cell, rc::Rc};
 
-use crate::innerlude::{RealDomNode, ScopeIdx};
+use crate::innerlude::{RealDomNode, ScopeId};
 
 #[derive(Debug)]
 pub struct EventTrigger {
     /// The originator of the event trigger
-    pub originator: ScopeIdx,
+    pub originator: ScopeId,
 
     /// The optional real node associated with the trigger
     pub real_node_id: Option<RealDomNode>,
@@ -27,7 +24,7 @@ pub struct EventTrigger {
 }
 
 impl EventTrigger {
-    pub fn new_from_task(originator: ScopeIdx, hook_idx: usize) -> Self {
+    pub fn new_from_task(originator: ScopeId, hook_idx: usize) -> Self {
         Self {
             originator,
             event: VirtualEvent::AsyncEvent { hook_idx },
@@ -74,7 +71,7 @@ pub enum EventPriority {
 impl EventTrigger {
     pub fn new(
         event: VirtualEvent,
-        scope: ScopeIdx,
+        scope: ScopeId,
         mounted_dom_id: Option<RealDomNode>,
         priority: EventPriority,
     ) -> Self {
@@ -184,7 +181,7 @@ pub mod on {
                         Listener {
                             event: stringify!($name),
                             mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
-                            scope: c.scope_ref.arena_idx,
+                            scope: c.scope_ref.our_arena_idx,
                             callback: bump.alloc(move |evt: VirtualEvent| match evt {
                                 VirtualEvent::$wrapper(event) => callback(event),
                                 _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")

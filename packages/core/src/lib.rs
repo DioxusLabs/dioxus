@@ -1,4 +1,4 @@
-#![allow(non_snake_case, dead_code, unused_must_use, unreachable_code)]
+#![allow(non_snake_case)]
 //! Dioxus Core
 //! ----------
 //!
@@ -11,7 +11,7 @@
 
 pub use crate::innerlude::{
     format_args_f, html, rsx, DioxusElement, DomEdit, EventTrigger, LazyNodes, NodeFactory,
-    Properties, RealDom, RealDomNode, ScopeIdx, VNode, VNodeKind, VirtualDom, VirtualEvent, FC,
+    Properties, RealDom, RealDomNode, ScopeId, VNode, VNodeKind, VirtualDom, VirtualEvent, FC,
 };
 
 pub mod prelude {

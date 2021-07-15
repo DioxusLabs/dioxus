@@ -11,15 +11,13 @@
 
 use std::{
     cell::Cell,
-    pin::Pin,
     sync::{Arc, RwLock},
-    task::{Context, Poll},
 };
 
 use futures_util::{stream::FuturesUnordered, Future, Stream, StreamExt};
 use slotmap::{DefaultKey, SlotMap};
 
-use crate::innerlude::{EventTrigger, FiberTask, ScopeIdx};
+use crate::innerlude::{EventTrigger, FiberTask, ScopeId};
 
 pub type TaskSubmitter = Arc<dyn Fn(FiberTask)>;
 
@@ -117,11 +115,11 @@ pub struct TaskHandle {
 
 pub struct DTask {
     fut: FiberTask,
-    originator: ScopeIdx,
+    originator: ScopeId,
     dead: Cell<bool>,
 }
 impl DTask {
-    pub fn new(fut: FiberTask, originator: ScopeIdx) -> Self {
+    pub fn new(fut: FiberTask, originator: ScopeId) -> Self {
         Self {
             fut,
             originator,
@@ -129,7 +127,7 @@ impl DTask {
         }
     }
     pub fn debug_new(fut: FiberTask) -> Self {
-        let originator = ScopeIdx::default();
+        let originator = ScopeId::default();
         Self {
             fut,
             originator,

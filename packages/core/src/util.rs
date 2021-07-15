@@ -14,7 +14,7 @@ pub struct EventQueue {
 }
 
 impl EventQueue {
-    pub fn new_channel(&self, height: u32, idx: ScopeIdx) -> Rc<dyn Fn()> {
+    pub fn new_channel(&self, height: u32, idx: ScopeId) -> Rc<dyn Fn()> {
         let inner = self.clone();
         let marker = HeightMarker { height, idx };
         Rc::new(move || {
@@ -35,7 +35,7 @@ impl EventQueue {
 /// A helper type that lets scopes be ordered by their height
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeightMarker {
-    pub idx: ScopeIdx,
+    pub idx: ScopeId,
     pub height: u32,
 }
 
@@ -59,23 +59,29 @@ impl PartialOrd for HeightMarker {
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RealDomNode(pub DefaultKey);
+pub struct RealDomNode(pub u64);
 impl RealDomNode {
+    #[inline]
     pub fn empty() -> Self {
-        let data = KeyData::from_ffi(u64::MIN);
-        let key: DefaultKey = data.into();
-        Self(key)
+        // let data = KeyData::from_ffi(u64::MIN);
+        // let key: DefaultKey = data.into();
+        Self(u64::MIN)
     }
+    #[inline]
     pub fn empty_cell() -> Cell<Self> {
         Cell::new(Self::empty())
     }
+    #[inline]
     pub fn from_u64(id: u64) -> Self {
-        let data = KeyData::from_ffi(id);
-        let key: DefaultKey = data.into();
-        Self(key)
+        // let data = KeyData::from_ffi(id);
+        // let key: DefaultKey = data.into();
+        Self(id)
     }
+
+    #[inline]
     pub fn as_u64(&self) -> u64 {
-        self.0.data().as_ffi()
+        // self.0.data().as_ffi()
+        self.0
     }
 }
 

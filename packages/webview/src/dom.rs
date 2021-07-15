@@ -1,6 +1,6 @@
 //! webview dom
 
-use dioxus_core::{DomEdit, RealDom, RealDomNode, ScopeIdx};
+use dioxus_core::{DomEdit, RealDom, RealDomNode, ScopeId};
 use DomEdit::*;
 
 pub struct WebviewRegistry {}
