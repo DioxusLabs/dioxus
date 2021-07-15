@@ -61,7 +61,7 @@ pub struct TextRenderer<'a> {
 }
 
 impl<'a> TextRenderer<'a> {
-    fn new(vdom: &'a VirtualDom) -> Self {
+    pub fn new(vdom: &'a VirtualDom) -> Self {
         Self {
             vdom,
             cfg: SsrConfig::default(),

@@ -1207,6 +1207,7 @@ builder_constructors! {
         srcset: String, // FIXME this is much more complicated
         usemap: String, // FIXME should be a fragment starting with '#'
         width: usize,
+        referrerpolicy: String,
         // sizes: SpacedList<String>, // FIXME it's not really just a string
     };
 

@@ -176,6 +176,9 @@ pub use dioxus_core::events;
 #[cfg(feature = "web")]
 pub use dioxus_web as web;
 
+#[cfg(feature = "mobile")]
+pub use dioxus_mobile as mobile;
+
 #[cfg(feature = "ssr")]
 pub use dioxus_ssr as ssr;
 

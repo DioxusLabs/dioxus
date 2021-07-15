@@ -12,34 +12,28 @@ dioxus-core = { path = "./packages/core" }
 dioxus-core-macro = { path = "./packages/core-macro", optional = true }
 dioxus-html = { path = "./packages/html", optional = true }
 dioxus-web = { path = "./packages/web", optional = true }
-dioxus-webview = { path = "./packages/webview", optional = true }
+dioxus-desktop = { path = "./packages/desktop", optional = true }
 dioxus-hooks = { path = "./packages/hooks", optional = true }
 dioxus-ssr = { path = "./packages/ssr", optional = true }
-
+dioxus-mobile = { path = "./packages/mobile", optional = true }
 
 [features]
-default = [
-    "core",
-    "macro",
-    "hooks",
-    "ssr",
-    "html",
-    "web",
-    "desktop",
-    # "atoms",
-    # "router",
-]
-atoms = []
+# core
+default = ["core"]
+core = ["macro", "hooks", "html"]
 macro = ["dioxus-core-macro"]
-ssr = ["dioxus-ssr"]
 hooks = ["dioxus-hooks"]
-router = []
 html = ["dioxus-html"]
-web = ["dioxus-web"]
-desktop = ["dioxus-webview"]
 
-# Core just includes dioxus-core (the only required package)
-core = []
+# utilities
+atoms = []
+router = []
+
+# targets
+ssr = ["dioxus-ssr"]
+web = ["dioxus-web"]
+desktop = ["dioxus-desktop"]
+mobile = ["dioxus-mobile"]
 
 
 [dev-dependencies]
@@ -64,7 +58,6 @@ members = [
     "packages/hooks",
     "packages/web",
     "packages/ssr",
-    "packages/webview",
-    # "packages/atoms",
-    # "packages/docsite",
+    "packages/desktop",
+    # "packages/mobile",
 ]

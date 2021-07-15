@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-ios"
+name = "dioxus-mobile"
 version = "0.0.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"
@@ -7,6 +7,19 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cacao = { git = "https://github.com/ryanmcgrath/cacao" }
+anyhow = "1.0.42"
+# cacao = { git = "https://github.com/ryanmcgrath/cacao" }
 dioxus-core = { path = "../core", version = "0.1.2" }
 log = "0.4.14"
+serde = "1.0.126"
+serde_json = "1.0.64"
+wry = "0.11.0"
+
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.9.0"
+log = "0.4.11"
+ndk-glue = "0.2.1"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+simple_logger = "1.11.0"

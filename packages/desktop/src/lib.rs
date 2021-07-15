@@ -4,6 +4,7 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 
 use dioxus_core::*;
+pub use wry;
 
 use wry::application::event::{Event, WindowEvent};
 use wry::application::event_loop::{ControlFlow, EventLoop};
@@ -72,6 +73,8 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
         let registry = Arc::new(RwLock::new(Some(WebviewRegistry::new())));
 
         let webview = WebViewBuilder::new(window)?
+            // .with_visible(false)
+            // .with_transparent(true)
             .with_url(&format!("data:text/html,{}", HTML_CONTENT))?
             .with_rpc_handler(move |_window: &Window, mut req: RpcRequest| {
                 match req.method.as_str() {
@@ -126,19 +129,33 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
             .build()?;
 
         event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Wait;
+            *control_flow = ControlFlow::Poll;
 
             match event {
-                Event::WindowEvent { event, .. } => {
-                    //
-                    match event {
-                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                        _ => {}
+                Event::WindowEvent {
+                    event, window_id, ..
+                } => match event {
+                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
+                        let _ = webview.resize();
                     }
+                    _ => {}
+                },
+                Event::MainEventsCleared => {
+                    webview.resize();
+                    // window.request_redraw();
                 }
-                _ => {
-                    // let _ = webview.resize();
-                }
+
+                _ => {} // Event::WindowEvent { event, .. } => {
+                        //     //
+                        //     match event {
+                        //         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        //         _ => {}
+                        //     }
+                        // }
+                        // _ => {
+                        //     // let _ = webview.resize();
+                        // }
             }
         });
     }

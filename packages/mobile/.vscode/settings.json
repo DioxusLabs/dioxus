@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.inlayHints.enable": true,
+    "rust-analyzer.checkOnSave.allTargets": true,
+    "rust-analyzer.cargo.target": "aarch64-apple-ios"
+}
