@@ -29,7 +29,7 @@ macro_rules! no_namespace_trait_methods {
         $(
             $(#[$attr])*
             fn $name<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                cx.attr(stringify!(name), val, None, false)
+                cx.attr(stringify!($name), val, None, false)
             }
         )*
     };
@@ -701,7 +701,9 @@ macro_rules! builder_constructors {
 
     ( $(
         $(#[$attr:meta])*
-        $name:ident <> $namespace:tt;
+        $name:ident <> $namespace:tt {
+            $($fil:ident: $vil:ident,)*
+        };
     )* ) => {
         $(
             #[allow(non_camel_case_types)]
@@ -710,7 +712,17 @@ macro_rules! builder_constructors {
 
             impl DioxusElement for $name {
                 const TAG_NAME: &'static str = stringify!($name);
-                const NAME_SPACE: Option<&'static str> = Some(stringify!($namespace));
+                const NAME_SPACE: Option<&'static str> = Some($namespace);
+            }
+
+            impl SvgAttributes for $name {}
+
+            impl $name {
+                $(
+                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+                        cx.attr(stringify!($fil), val, Some(stringify!($namespace)), false)
+                    }
+                )*
             }
         )*
     };
@@ -1622,52 +1634,321 @@ builder_constructors! {
     template {};
 }
 
+pub trait SvgAttributes {
+    aria_trait_methods! {
+        accent_height: "accent-height",
+        accumulate: "accumulate",
+        additive: "additive",
+        alignment_baseline: "alignment-baseline",
+        alphabetic: "alphabetic",
+        amplitude: "amplitude",
+        arabic_form: "arabic-form",
+        ascent: "ascent",
+        attributeName: "attributeName",
+        attributeType: "attributeType",
+        azimuth: "azimuth",
+        baseFrequency: "baseFrequency",
+        baseline_shift: "baseline-shift",
+        baseProfile: "baseProfile",
+        bbox: "bbox",
+        begin: "begin",
+        bias: "bias",
+        by: "by",
+        calcMode: "calcMode",
+        cap_height: "cap-height",
+        class: "class",
+        clip: "clip",
+        clipPathUnits: "clipPathUnits",
+        clip_path: "clip-path",
+        clip_rule: "clip-rule",
+        color: "color",
+        color_interpolation: "color-interpolation",
+        color_interpolation_filters: "color-interpolation-filters",
+        color_profile: "color-profile",
+        color_rendering: "color-rendering",
+        contentScriptType: "contentScriptType",
+        contentStyleType: "contentStyleType",
+        crossorigin: "crossorigin",
+        cursor: "cursor",
+        cx: "cx",
+        cy: "cy",
+        d: "d",
+        decelerate: "decelerate",
+        descent: "descent",
+        diffuseConstant: "diffuseConstant",
+        direction: "direction",
+        display: "display",
+        divisor: "divisor",
+        dominant_baseline: "dominant-baseline",
+        dur: "dur",
+        dx: "dx",
+        dy: "dy",
+        edgeMode: "edgeMode",
+        elevation: "elevation",
+        enable_background: "enable-background",
+        end: "end",
+        exponent: "exponent",
+        fill: "fill",
+        fill_opacity: "fill-opacity",
+        fill_rule: "fill-rule",
+        filter: "filter",
+        filterRes: "filterRes",
+        filterUnits: "filterUnits",
+        flood_color: "flood-color",
+        flood_opacity: "flood-opacity",
+        font_family: "font-family",
+        font_size: "font-size",
+        font_size_adjust: "font-size-adjust",
+        font_stretch: "font-stretch",
+        font_style: "font-style",
+        font_variant: "font-variant",
+        font_weight: "font-weight",
+        format: "format",
+        from: "from",
+        fr: "fr",
+        fx: "fx",
+        fy: "fy",
+        g1: "g1",
+        g2: "g2",
+        glyph_name: "glyph-name",
+        glyph_orientation_horizontal: "glyph-orientation-horizontal",
+        glyph_orientation_vertical: "glyph-orientation-vertical",
+        glyphRef: "glyphRef",
+        gradientTransform: "gradientTransform",
+        gradientUnits: "gradientUnits",
+        hanging: "hanging",
+        height: "height",
+        href: "href",
+        hreflang: "hreflang",
+        horiz_adv_x: "horiz-adv-x",
+        horiz_origin_x: "horiz-origin-x",
+        id: "id",
+        ideographic: "ideographic",
+        image_rendering: "image-rendering",
+        _in: "_in",
+        in2: "in2",
+        intercept: "intercept",
+        k: "k",
+        k1: "k1",
+        k2: "k2",
+        k3: "k3",
+        k4: "k4",
+        kernelMatrix: "kernelMatrix",
+        kernelUnitLength: "kernelUnitLength",
+        kerning: "kerning",
+        keyPoints: "keyPoints",
+        keySplines: "keySplines",
+        keyTimes: "keyTimes",
+        lang: "lang",
+        lengthAdjust: "lengthAdjust",
+        letter_spacing: "letter-spacing",
+        lighting_color: "lighting-color",
+        limitingConeAngle: "limitingConeAngle",
+        local: "local",
+        marker_end: "marker-end",
+        marker_mid: "marker-mid",
+        marker_start: "marker_start",
+        markerHeight: "markerHeight",
+        markerUnits: "markerUnits",
+        markerWidth: "markerWidth",
+        mask: "mask",
+        maskContentUnits: "maskContentUnits",
+        maskUnits: "maskUnits",
+        mathematical: "mathematical",
+        max: "max",
+        media: "media",
+        method: "method",
+        min: "min",
+        mode: "mode",
+        name: "name",
+        numOctaves: "numOctaves",
+        offset: "offset",
+        opacity: "opacity",
+        operator: "operator",
+        order: "order",
+        orient: "orient",
+        orientation: "orientation",
+        origin: "origin",
+        overflow: "overflow",
+        overline_position: "overline-position",
+        overline_thickness: "overline-thickness",
+        panose_1: "panose-1",
+        paint_order: "paint-order",
+        path: "path",
+        pathLength: "pathLength",
+        patternContentUnits: "patternContentUnits",
+        patternTransform: "patternTransform",
+        patternUnits: "patternUnits",
+        ping: "ping",
+        pointer_events: "pointer-events",
+        points: "points",
+        pointsAtX: "pointsAtX",
+        pointsAtY: "pointsAtY",
+        pointsAtZ: "pointsAtZ",
+        preserveAlpha: "preserveAlpha",
+        preserveAspectRatio: "preserveAspectRatio",
+        primitiveUnits: "primitiveUnits",
+        r: "r",
+        radius: "radius",
+        referrerPolicy: "referrerPolicy",
+        refX: "refX",
+        refY: "refY",
+        rel: "rel",
+        rendering_intent: "rendering-intent",
+        repeatCount: "repeatCount",
+        repeatDur: "repeatDur",
+        requiredExtensions: "requiredExtensions",
+        requiredFeatures: "requiredFeatures",
+        restart: "restart",
+        result: "result",
+        rotate: "rotate",
+        rx: "rx",
+        ry: "ry",
+        scale: "scale",
+        seed: "seed",
+        shape_rendering: "shape-rendering",
+        slope: "slope",
+        spacing: "spacing",
+        specularConstant: "specularConstant",
+        specularExponent: "specularExponent",
+        speed: "speed",
+        spreadMethod: "spreadMethod",
+        startOffset: "startOffset",
+        stdDeviation: "stdDeviation",
+        stemh: "stemh",
+        stemv: "stemv",
+        stitchTiles: "stitchTiles",
+        stop_color: "stop_color",
+        stop_opacity: "stop_opacity",
+        strikethrough_position: "strikethrough-position",
+        strikethrough_thickness: "strikethrough-thickness",
+        string: "string",
+        stroke: "stroke",
+        stroke_dasharray: "stroke-dasharray",
+        stroke_dashoffset: "stroke-dashoffset",
+        stroke_linecap: "stroke-linecap",
+        stroke_linejoin: "stroke-linejoin",
+        stroke_miterlimit: "stroke-miterlimit",
+        stroke_opacity: "stroke-opacity",
+        stroke_width: "stroke-width",
+        style: "style",
+        surfaceScale: "surfaceScale",
+        systemLanguage: "systemLanguage",
+        tabindex: "tabindex",
+        tableValues: "tableValues",
+        target: "target",
+        targetX: "targetX",
+        targetY: "targetY",
+        text_anchor: "text-anchor",
+        text_decoration: "text-decoration",
+        text_rendering: "text-rendering",
+        textLength: "textLength",
+        to: "to",
+        transform: "transform",
+        transform_origin: "transform-origin",
+        _type: "_type",
+        u1: "u1",
+        u2: "u2",
+        underline_position: "underline-position",
+        underline_thickness: "underline-thickness",
+        unicode: "unicode",
+        unicode_bidi: "unicode-bidi",
+        unicode_range: "unicode-range",
+        units_per_em: "units-per-em",
+        v_alphabetic: "v-alphabetic",
+        v_hanging: "v-hanging",
+        v_ideographic: "v-ideographic",
+        v_mathematical: "v-mathematical",
+        values: "values",
+        vector_effect: "vector-effect",
+        version: "version",
+        vert_adv_y: "vert-adv-y",
+        vert_origin_x: "vert-origin-x",
+        vert_origin_y: "vert-origin-y",
+        viewBox: "viewBox",
+        viewTarget: "viewTarget",
+        visibility: "visibility",
+        width: "width",
+        widths: "widths",
+        word_spacing: "word-spacing",
+        writing_mode: "writing-mode",
+        x: "x",
+        x_height: "x-height",
+        x1: "x1",
+        x2: "x2",
+        xmlns: "xmlns",
+        xChannelSelector: "xChannelSelector",
+        y: "y",
+        y1: "y1",
+        y2: "y2",
+        yChannelSelector: "yChannelSelector",
+        z: "z",
+        zoomAndPan: "zoomAndPan",
+    }
+}
+
 builder_constructors! {
     // SVG components
     /// Build a
     /// [`<svg>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg)
     /// element.
-    svg <> "http://www.w3.org/2000/svg" ;
+    svg <> "http://www.w3.org/2000/svg" { };
 
     /// Build a
     /// [`<path>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/path)
     /// element.
-    path <> "http://www.w3.org/2000/svg";
+    path <> "http://www.w3.org/2000/svg" {
+
+    };
 
     /// Build a
     /// [`<circle>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/circle)
     /// element.
-    circle <>  "http://www.w3.org/2000/svg";
+    circle <>  "http://www.w3.org/2000/svg" {
+
+    };
 
     /// Build a
     /// [`<ellipse>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/ellipse)
     /// element.
-    ellipse <> "http://www.w3.org/2000/svg";
+    ellipse <> "http://www.w3.org/2000/svg" {
+
+    };
 
     /// Build a
     /// [`<line>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/line)
     /// element.
-    line <> "http://www.w3.org/2000/svg";
+    line <> "http://www.w3.org/2000/svg" {
+
+    };
 
     /// Build a
     /// [`<polygon>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polygon)
     /// element.
-    polygon <> "http://www.w3.org/2000/svg";
+    polygon <> "http://www.w3.org/2000/svg" {
+
+    };
 
     /// Build a
     /// [`<polyline>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polyline)
     /// element.
-    polyline <> "http://www.w3.org/2000/svg";
+    polyline <> "http://www.w3.org/2000/svg" {
+
+    };
 
     /// Build a
     /// [`<rect>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/rect)
     /// element.
-    rect <> "http://www.w3.org/2000/svg";
+    rect <> "http://www.w3.org/2000/svg" {
+
+    };
 
     /// Build a
     /// [`<image>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/image)
     /// element.
-    image <> "http://www.w3.org/2000/svg";
+    image <> "http://www.w3.org/2000/svg" {
+
+    };
 
 }
 

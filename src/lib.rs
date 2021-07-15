@@ -188,7 +188,7 @@ pub use dioxus_webview as desktop;
 pub mod prelude {
     //! A glob import that includes helper types like FC, rsx!, html!, and required traits
     pub use dioxus_core::prelude::*;
-    pub use dioxus_elements::GlobalAttributes;
+    pub use dioxus_elements::{GlobalAttributes, SvgAttributes};
     pub use dioxus_hooks::*;
     pub use dioxus_html as dioxus_elements;
 }

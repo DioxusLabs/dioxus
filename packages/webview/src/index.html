@@ -2,8 +2,6 @@
 <html>
 
 <head>
-    <!-- <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet" /> -->
-
     <script>
         class Interpreter {
             constructor(root) {
@@ -110,20 +108,11 @@
             }
         }
 
-        function EditListReceived(rawEditList) {
-            let editList = JSON.parse(rawEditList);
-            console.warn("hnelllo");
-            editList.forEach(function (edit, index) {
-                console.log(edit);
-                op_table[edit.type](interpreter, edit);
-            });
-        }
-
         const op_table = new OPTABLE();
 
         async function initialize() {
             const reply = await rpc.call('initiate');
-            const interpreter = new Interpreter(window.document.getElementById("_dioxusroot").firstChild);
+            const interpreter = new Interpreter(window.document.getElementById("_dioxusroot"));
             console.log(reply);
 
             for (let x = 0; x < reply.length; x++) {
@@ -143,7 +132,9 @@
 
 <body>
     <div id="_dioxusroot">
-        _
+        <div>
+
+        </div>
     </div>
 </body>
 
