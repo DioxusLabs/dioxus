@@ -1,7 +1,9 @@
 use crate::innerlude::*;
 
+use bumpalo::Bump;
 use futures_util::FutureExt;
 
+use std::any::Any;
 use std::marker::PhantomData;
 
 use std::{
@@ -134,13 +136,13 @@ impl<'src, P> Context<'src, P> {
     where
         State: 'static,
         Output: 'src,
-        Init: FnOnce() -> State,
+        Init: FnOnce(usize) -> State,
         Run: FnOnce(&'src mut State) -> Output,
         Cleanup: FnOnce(State),
     {
         // If the idx is the same as the hook length, then we need to add the current hook
         if self.scope.hooks.at_end() {
-            let new_state = initializer();
+            let new_state = initializer(self.scope.hooks.len());
             self.scope.hooks.push(new_state);
         }
 
@@ -172,7 +174,7 @@ Any function prefixed with "use" should not be called conditionally.
         let ty = TypeId::of::<T>();
 
         let is_initialized = self.use_hook(
-            || false,
+            |_| false,
             |s| {
                 let i = s.clone();
                 *s = true;
@@ -208,7 +210,7 @@ Any function prefixed with "use" should not be called conditionally.
         }
 
         self.use_hook(
-            move || UseContextHook {
+            move |_| UseContextHook {
                 par: None as Option<Rc<T>>,
                 we: None as Option<Weak<T>>,
             },
@@ -299,10 +301,9 @@ Any function prefixed with "use" should not be called conditionally.
     /// Awaits the given task, forcing the component to re-render when the value is ready.
     ///
     ///
-    pub fn use_task<Out, Fut, Init>(
-        &self,
-        task_initializer: Init,
-    ) -> (&TaskHandle, &mut Option<Out>)
+    ///
+    ///
+    pub fn use_task<Out, Fut, Init>(&self, task_initializer: Init) -> (&TaskHandle, &Option<Out>)
     where
         Out: 'static,
         Fut: Future<Output = Out> + 'static,
@@ -315,7 +316,7 @@ Any function prefixed with "use" should not be called conditionally.
 
         // whenever the task is complete, save it into th
         self.use_hook(
-            move || {
+            move |hook_idx| {
                 let task_fut = task_initializer();
 
                 let task_dump = Rc::new(RefCell::new(None));
@@ -328,7 +329,7 @@ Any function prefixed with "use" should not be called conditionally.
                     *slot.as_ref().borrow_mut() = Some(output);
                     update();
                     EventTrigger {
-                        event: VirtualEvent::FiberEvent,
+                        event: VirtualEvent::AsyncEvent { hook_idx },
                         originator,
                         priority: EventPriority::Low,
                         real_node_id: None,
@@ -344,12 +345,20 @@ Any function prefixed with "use" should not be called conditionally.
                 if let Some(val) = hook.task_dump.as_ref().borrow_mut().take() {
                     hook.value = Some(val);
                 }
-                (&TaskHandle { _p: PhantomData }, &mut hook.value)
+                (&TaskHandle { _p: PhantomData }, &hook.value)
             },
             |_| {},
         )
     }
+}
 
+pub(crate) struct SuspenseHook {
+    pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
+    pub callback: SuspendedCallback,
+}
+type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> VNode<'a>>;
+
+impl<'src, P> Context<'src, P> {
     /// Asynchronously render new nodes once the given future has completed.
     ///
     /// # Easda
@@ -360,18 +369,67 @@ Any function prefixed with "use" should not be called conditionally.
     /// # Example
     ///
     ///
-    pub fn use_suspense<Out, Fut: 'static>(
+    pub fn use_suspense<Out, Fut, Cb>(
         &'src self,
-        _task_initializer: impl FnOnce() -> Fut,
-        _callback: impl FnOnce(SuspendedContext, Out) -> VNode<'src> + 'src,
+        task_initializer: impl FnOnce() -> Fut,
+        user_callback: Cb,
     ) -> VNode<'src>
     where
-        Out: 'src,
-        Fut: Future<Output = Out>,
+        Fut: Future<Output = Out> + 'static,
+        Out: 'static,
+        Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> VNode<'a> + 'static,
     {
-        // self.use_hook(|| , runner, cleanup)
+        self.use_hook(
+            move |hook_idx| {
+                let value = Rc::new(RefCell::new(None));
 
-        todo!()
+                let slot = value.clone();
+                let callback: SuspendedCallback = Box::new(move |ctx: SuspendedContext| {
+                    let v: std::cell::Ref<Option<Box<dyn Any>>> = slot.as_ref().borrow();
+                    let v: &dyn Any = v.as_ref().unwrap().as_ref();
+                    let real_val = v.downcast_ref::<Out>().unwrap();
+                    user_callback(ctx, real_val)
+                });
+
+                let originator = self.scope.arena_idx.clone();
+                let task_fut = task_initializer();
+
+                let slot = value.clone();
+                self.submit_task(Box::pin(task_fut.then(move |output| async move {
+                    // When the new value arrives, set the hooks internal slot
+                    // Dioxus will call the user's callback to generate new nodes outside of the diffing system
+                    *slot.borrow_mut() = Some(Box::new(output) as Box<dyn Any>);
+                    EventTrigger {
+                        event: VirtualEvent::SuspenseEvent { hook_idx },
+                        originator,
+                        priority: EventPriority::Low,
+                        real_node_id: None,
+                    }
+                })));
+
+                SuspenseHook { value, callback }
+            },
+            move |hook| {
+                match hook.value.borrow().as_ref() {
+                    Some(val) => {
+                        let cx = SuspendedContext {
+                            bump: &self.scope.cur_frame().bump,
+                        };
+                        (&hook.callback)(cx)
+                    }
+                    None => {
+                        //
+                        VNode {
+                            dom_id: RealDomNode::empty_cell(),
+                            key: None,
+                            kind: VNodeKind::Suspended,
+                        }
+                    }
+                }
+                //
+            },
+            |_| {},
+        )
     }
 }
 
@@ -379,4 +437,6 @@ pub struct TaskHandle<'src> {
     _p: PhantomData<&'src ()>,
 }
 #[derive(Clone)]
-pub struct SuspendedContext {}
+pub struct SuspendedContext<'a> {
+    pub bump: &'a Bump,
+}

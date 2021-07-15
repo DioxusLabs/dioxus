@@ -32,33 +32,32 @@ struct DogApi {
 const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random/";
 
 static App: FC<()> = |cx| {
-    // let mut count = use_state(cx, || 0);
     let state = use_state(cx, || 0);
-    let set_val = state.setter();
 
-    let (tas, g) = cx.use_task(|| async move {
-        set_val(10);
-        surf::get(ENDPOINT).recv_json::<DogApi>().await
-    });
+    let request = cx.use_task(|| surf::get(ENDPOINT).recv_json::<DogApi>()).1;
 
-    let dog_node = match g.as_ref().and_then(|f| f.as_ref().ok()) {
-        Some(res) => rsx!(in cx, img { src: "{res.message}" }),
-        None => rsx!(in cx, div { "No doggos for you :(" }),
+    let dog_node = if let Some(Ok(res)) = request {
+        rsx!(in cx, img { src: "{res.message}" })
+    } else {
+        rsx!(in cx, div { "No doggos for you :(" })
     };
 
     cx.render(rsx! {
         div {
+            style: {
+                align_items: "center"
+            }
             section { class: "py-12 px-4 text-center"
                 div { class: "w-full max-w-2xl mx-auto"
                     span { class: "text-sm font-semibold"
                         "count: {state}"
                     }
+                    br {}
                     div {
                         button {
                             onclick: move |_| state.set(state + 1)
                             "incr"
                         }
-                        br {}
                         br {}
                         button {
                             onclick: move |_| state.set(state - 1)

@@ -5,7 +5,7 @@ fn main() {}
 const App: FC<()> = |cx| {
     // create a new future
     let _fut = cx.use_hook(
-        || {
+        |_| {
             //
             async { loop {} }
             // Box::pin(async { loop {} }) as Pin<Box<dyn Future<Output = ()>>>

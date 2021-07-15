@@ -392,7 +392,7 @@ mod hooks {
     ) -> &'a Rc<dyn Fn(T)> {
         let api = use_recoil_api(cx);
         cx.use_hook(
-            move || {
+            move |_| {
                 let api = api.clone();
                 let raw_id = writable.static_id();
                 Rc::new(move |new_val| {
@@ -423,7 +423,7 @@ mod hooks {
 
         let api = use_recoil_api(cx);
         cx.use_hook(
-            move || {
+            move |_| {
                 let mut api = api.as_ref().borrow_mut();
 
                 let update = cx.schedule_update();

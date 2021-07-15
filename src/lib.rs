@@ -108,7 +108,7 @@
 //! fn my_hook<'a>(cx: &impl Scoped<'a>) -> &'a String {
 //!     cx.use_hook(
 //!         // Initializer stores a value
-//!         || String::new("stored_data"),
+//!         |hook_idx| String::new("stored_data"),
 //!           
 //!         // Runner returns the hook value every time the component is rendered
 //!         |hook| &*hook,

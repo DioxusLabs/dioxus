@@ -4,8 +4,6 @@
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
-
-
 use crate::innerlude::{RealDomNode, ScopeIdx};
 
 #[derive(Debug)]
@@ -24,10 +22,10 @@ pub struct EventTrigger {
 }
 
 impl EventTrigger {
-    pub fn new_from_task(originator: ScopeIdx) -> Self {
+    pub fn new_from_task(originator: ScopeIdx, hook_idx: usize) -> Self {
         Self {
             originator,
-            event: VirtualEvent::FiberEvent,
+            event: VirtualEvent::AsyncEvent { hook_idx },
             priority: EventPriority::Low,
             real_node_id: None,
         }
@@ -103,11 +101,18 @@ pub enum VirtualEvent {
     MouseEvent(on::MouseEvent),
     PointerEvent(on::PointerEvent),
 
-    // Whenever a task is ready (complete) Dioxus produces this "FiberEvent"
-    FiberEvent,
-
     // image event has conflicting method types
     // ImageEvent(event_data::ImageEvent),
+
+    // Whenever a task is ready (complete) Dioxus produces this "AsyncEvent"
+    //
+    // Async events don't necessarily propagate into a scope being ran. It's up to the event itself
+    // to force an update for itself.
+    AsyncEvent { hook_idx: usize },
+
+    // These are more intrusive than the rest
+    SuspenseEvent { hook_idx: usize },
+
     OtherEvent,
 }
 
@@ -159,10 +164,12 @@ pub mod on {
 
                 $(
                     $(#[$method_attr])*
-                    pub fn $name<'a, F: FnMut($wrapper) + 'a>(
+                    pub fn $name<'a, F>(
                         c: NodeFactory<'a>,
                         mut callback: F,
-                    ) -> Listener<'a> {
+                    ) -> Listener<'a>
+                        where F: FnMut($wrapper) + 'a
+                    {
                         let bump = &c.bump();
                         Listener {
                             event: stringify!($name),

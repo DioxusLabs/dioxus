@@ -99,8 +99,6 @@ impl WebsysRenderer {
 
             if let Some(real_trigger) = trigger {
                 log::info!("event received");
-                // let root_node = body_element.first_child().unwrap();
-                // websys_dom.stack.push(root_node.clone());
 
                 self.internal_dom.queue_event(real_trigger)?;
 
@@ -110,23 +108,10 @@ impl WebsysRenderer {
                     .await?;
                 websys_dom.process_edits(&mut edits);
             }
-
-            // let t2 = self.internal_dom.tasks.next();
-            // futures::select! {
-            //     trigger = t1 => {
-            //         log::info!("event received");
-            //         let root_node = body_element.first_child().unwrap();
-            //         websys_dom.stack.push(root_node.clone());
-            //         self.internal_dom
-            //             .progress_with_event(&mut websys_dom, trigger)?;
-            //     },
-            //     () = t2 => {}
-            // };
         }
-        // while let Some(trigger) = websys_dom.wait_for_event().await {
-        // }
 
-        Ok(()) // should actually never return from this, should be an error, rustc just cant see it
+        // should actually never return from this, should be an error, rustc just cant see it
+        Ok(())
     }
 }
 

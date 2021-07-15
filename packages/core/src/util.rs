@@ -4,7 +4,7 @@ use std::{
 };
 
 use futures_util::StreamExt;
-use slotmap::{DefaultKey, KeyData};
+use slotmap::{DefaultKey, Key, KeyData};
 
 use crate::innerlude::*;
 
@@ -66,13 +66,16 @@ impl RealDomNode {
         let key: DefaultKey = data.into();
         Self(key)
     }
+    pub fn empty_cell() -> Cell<Self> {
+        Cell::new(Self::empty())
+    }
     pub fn from_u64(id: u64) -> Self {
         let data = KeyData::from_ffi(id);
         let key: DefaultKey = data.into();
         Self(key)
     }
-    pub fn empty_cell() -> Cell<Self> {
-        Cell::new(Self::empty())
+    pub fn as_u64(&self) -> u64 {
+        self.0.data().as_ffi()
     }
 }
 

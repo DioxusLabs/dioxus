@@ -74,7 +74,7 @@ impl WebsysDom {
         for edit in edits.drain(..) {
             log::info!("Handling edit: {:#?}", edit);
             match edit {
-                DomEdit::PushRoot { root } => self.push(root),
+                DomEdit::PushRoot { id: root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
                 DomEdit::AppendChildren { many } => self.append_children(many),
                 DomEdit::ReplaceWith { many } => self.replace_with(many),
@@ -97,8 +97,8 @@ impl WebsysDom {
             }
         }
     }
-    fn push(&mut self, root: RealDomNode) {
-        let key = root.0;
+    fn push(&mut self, root: u64) {
+        let key = DefaultKey::from(KeyData::from_ffi(root));
         let domnode = self.nodes.get_mut(key);
 
         let domnode = domnode.unwrap().as_mut().unwrap();
@@ -186,10 +186,10 @@ impl WebsysDom {
         todo!()
     }
 
-    fn create_placeholder(&mut self, id: RealDomNode) {
+    fn create_placeholder(&mut self, id: u64) {
         self.create_element("pre", None, id)
     }
-    fn create_text_node(&mut self, text: &str, id: RealDomNode) {
+    fn create_text_node(&mut self, text: &str, id: u64) {
         // let nid = self.node_counter.next();
 
         let textnode = self
@@ -199,18 +199,13 @@ impl WebsysDom {
             .unwrap();
 
         self.stack.push(textnode.clone());
-        let mut slot = self.nodes.get_mut(id.0).unwrap();
-        *slot = Some(textnode);
-
-        // let nid = self.nodes.insert(textnode);
-        // let nid = nid.data().as_ffi();
-
-        // log::debug!("Called [`create_text_node`]: {}, {}", text, nid);
-
-        // RealDomNode::new(nid)
+        *self
+            .nodes
+            .get_mut(DefaultKey::from(KeyData::from_ffi(id)))
+            .unwrap() = Some(textnode);
     }
 
-    fn create_element(&mut self, tag: &str, ns: Option<&'static str>, id: RealDomNode) {
+    fn create_element(&mut self, tag: &str, ns: Option<&'static str>, id: u64) {
         let tag = wasm_bindgen::intern(tag);
         let el = match ns {
             Some(ns) => self
@@ -226,10 +221,10 @@ impl WebsysDom {
                 .dyn_into::<Node>()
                 .unwrap(),
         };
+        let id = DefaultKey::from(KeyData::from_ffi(id));
 
         self.stack.push(el.clone());
-        let mut slot = self.nodes.get_mut(id.0).unwrap();
-        *slot = Some(el);
+        *self.nodes.get_mut(id).unwrap() = Some(el);
         // let nid = self.node_counter.?next();
         // let nid = self.nodes.insert(el).data().as_ffi();
         // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
@@ -241,7 +236,7 @@ impl WebsysDom {
         event: &'static str,
         scope: ScopeIdx,
         _element_id: usize,
-        real_id: RealDomNode,
+        real_id: u64,
     ) {
         let (_on, event) = event.split_at(2);
         let event = wasm_bindgen::intern(event);
@@ -260,7 +255,7 @@ impl WebsysDom {
         let scope_id = scope.data().as_ffi();
         el.set_attribute(
             &format!("dioxus-event-{}", event),
-            &format!("{}.{}", scope_id, real_id.0.data().as_ffi()),
+            &format!("{}.{}", scope_id, real_id),
         )
         .unwrap();
 

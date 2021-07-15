@@ -177,7 +177,7 @@ impl Scope {
             ..
         } = trigger;
 
-        if let &VirtualEvent::FiberEvent = &event {
+        if let &VirtualEvent::AsyncEvent { .. } = &event {
             log::info!("arrived a fiber event");
             return Ok(());
         }

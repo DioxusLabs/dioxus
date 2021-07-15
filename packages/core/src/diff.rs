@@ -77,7 +77,8 @@ use DomEdit::*;
 impl<'real, 'bump> DomEditor<'real, 'bump> {
     // Navigation
     pub(crate) fn push(&mut self, root: RealDomNode) {
-        self.edits.push(PushRoot { root });
+        let id = root.as_u64();
+        self.edits.push(PushRoot { id });
     }
     pub(crate) fn pop(&mut self) {
         self.edits.push(PopRoot {});
@@ -105,6 +106,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
 
     // Create
     pub(crate) fn create_text_node(&mut self, text: &'bump str, id: RealDomNode) {
+        let id = id.as_u64();
         self.edits.push(CreateTextNode { text, id });
     }
     pub(crate) fn create_element(
@@ -113,6 +115,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
         ns: Option<&'static str>,
         id: RealDomNode,
     ) {
+        let id = id.as_u64();
         match ns {
             Some(ns) => self.edits.push(CreateElementNs { id, ns, tag }),
             None => self.edits.push(CreateElement { id, tag }),
@@ -121,6 +124,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     pub(crate) fn create_placeholder(&mut self, id: RealDomNode) {
+        let id = id.as_u64();
         self.edits.push(CreatePlaceholder { id });
     }
 
@@ -136,7 +140,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
             scope,
             event,
             idx: element_id,
-            node: realnode,
+            node: realnode.as_u64(),
         });
     }
     pub(crate) fn remove_event_listener(&mut self, event: &'static str) {

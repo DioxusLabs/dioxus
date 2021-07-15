@@ -297,10 +297,29 @@ impl VirtualDom {
         match &trigger.event {
             VirtualEvent::OtherEvent => todo!(),
 
-            // Fiber events
-            // VirtualEvent::FiberEvent => {
-            //     //
-            // }
+            // Nothing yet
+            VirtualEvent::AsyncEvent { .. } => {}
+
+            // Suspense Events! A component's suspended node is updated
+            VirtualEvent::SuspenseEvent { hook_idx } => {
+                let scope = self.components.try_get_mut(trigger.originator).unwrap();
+
+                // safety: we are sure that there are no other references to the inner content of this hook
+                let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
+
+                let cx = SuspendedContext {
+                    bump: &scope.cur_frame().bump,
+                };
+
+                // generate the new node!
+                let callback: VNode<'s> = (&hook.callback)(cx);
+
+                // diff that node with the node that was originally suspended!
+
+                // hook.callback;
+
+                //
+            }
 
             // This is the "meat" of our cooperative scheduler
             // As updates flow in, we re-evalute the event queue and decide if we should be switching the type of work

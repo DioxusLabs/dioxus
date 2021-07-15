@@ -28,6 +28,9 @@ static App: FC<()> = |cx| {
     let mut state = use_state(cx, || 0);
     cx.render(rsx! {
         div {
+            style: {
+                align_items: "center"
+            }
             section { class: "py-12 px-4 text-center"
                 div { class: "w-full max-w-2xl mx-auto"
                     span { class: "text-sm font-semibold"

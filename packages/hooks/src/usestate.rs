@@ -54,7 +54,7 @@ pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
     initial_state_fn: F,
 ) -> UseState<T> {
     cx.use_hook(
-        move || UseStateInner {
+        move |_| UseStateInner {
             current_val: initial_state_fn(),
             callback: cx.schedule_update(),
             wip: Rc::new(RefCell::new(None)),

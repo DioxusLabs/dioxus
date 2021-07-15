@@ -7,7 +7,7 @@
 //!
 //!
 
-use crate::{innerlude::ScopeIdx, RealDomNode};
+use crate::innerlude::ScopeIdx;
 use serde::{Deserialize, Serialize};
 
 /// A `DomEdit` represents a serialzied form of the VirtualDom's trait-based API. This allows streaming edits across the
@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type")]
 pub enum DomEdit<'bump> {
     PushRoot {
-        root: RealDomNode,
+        id: u64,
     },
     PopRoot,
     AppendChildren {
@@ -29,24 +29,24 @@ pub enum DomEdit<'bump> {
     RemoveAllChildren,
     CreateTextNode {
         text: &'bump str,
-        id: RealDomNode,
+        id: u64,
     },
     CreateElement {
         tag: &'bump str,
-        id: RealDomNode,
+        id: u64,
     },
     CreateElementNs {
         tag: &'bump str,
-        id: RealDomNode,
+        id: u64,
         ns: &'static str,
     },
     CreatePlaceholder {
-        id: RealDomNode,
+        id: u64,
     },
     NewEventListener {
         event: &'static str,
         scope: ScopeIdx,
-        node: RealDomNode,
+        node: u64,
         idx: usize,
     },
     RemoveEventListener {

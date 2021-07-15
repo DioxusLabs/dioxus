@@ -21,25 +21,18 @@ const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random";
 
 static App: FC<()> = |cx| {
     let mut count = use_state(cx, || 0);
-    let mut fut = cx.use_hook(
-        move || {
-            Box::pin(async {
-                //
-                let mut tick = 0;
-                loop {
-                    async_std::task::sleep(Duration::from_millis(250)).await;
-                    log::debug!("ticking forward... {}", tick);
-                    tick += 1;
-                    // match surf::get(ENDPOINT).recv_json::<DogApi>().await {
-                    //     Ok(_) => (),
-                    //     Err(_) => (),
-                    // }
-                }
-            }) as Pin<Box<dyn Future<Output = ()> + 'static>>
-        },
-        |h| h,
-        |_| {},
-    );
+    let mut fut = Box::pin(async {
+        let mut tick: i32 = 0;
+        loop {
+            async_std::task::sleep(Duration::from_millis(250)).await;
+            log::debug!("ticking forward... {}", tick);
+            tick += 1;
+            // match surf::get(ENDPOINT).recv_json::<DogApi>().await {
+            //     Ok(_) => (),
+            //     Err(_) => (),
+            // }
+        }
+    });
 
     cx.submit_task(fut);
 

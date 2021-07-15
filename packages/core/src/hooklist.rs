@@ -29,8 +29,20 @@ impl<T> InnerHook<T> {
 }
 
 impl HookList {
-    pub(crate) fn push<T: 'static>(&self, new: T) {
-        self.vals.push(InnerHook::new(Box::new(new)))
+    /// Unsafely get a mutable reference to any of the hooks
+    ///
+    /// This is unsafe because an &mut T might be aliased if the hook data is already borrowed/in use in the component
+    ///
+    /// This method should be reserved for internal methods that are guaranteed that this hook is not aliased anyhwere
+    /// inside the component body, or outside into children components.
+    ///
+    /// This method is currently used only by the suspense system whose hook implementation guarantees that all &T is dropped
+    /// before the suspense handler is ran.
+    pub(crate) unsafe fn get_mut<T: 'static>(&self, idx: usize) -> Option<&mut T> {
+        self.vals.get(idx).and_then(|inn| {
+            let raw_box = unsafe { &mut *inn.cell.get() };
+            raw_box.downcast_mut::<T>()
+        })
     }
 
     pub(crate) fn next<T: 'static>(&self) -> Option<&mut T> {
@@ -41,9 +53,17 @@ impl HookList {
         })
     }
 
+    #[inline]
+    pub(crate) fn push<T: 'static>(&self, new: T) {
+        self.vals.push(InnerHook::new(Box::new(new)))
+    }
+
     /// This resets the internal iterator count
     /// It's okay that we've given out each hook, but now we have the opportunity to give it out again
     /// Therefore, resetting is cosudered unsafe
+    ///
+    /// This should only be ran by Dioxus itself before "running scope".
+    /// Dioxus knows how to descened through the tree to prevent mutable aliasing.
     pub(crate) unsafe fn reset(&mut self) {
         self.idx.set(0);
     }
