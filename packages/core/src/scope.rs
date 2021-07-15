@@ -1,6 +1,4 @@
-use crate::hooklist::HookList;
-use crate::{arena::SharedArena, innerlude::*};
-
+use crate::innerlude::*;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -10,17 +8,15 @@ use std::{
     rc::Rc,
 };
 
-// We need to pin the hook so it doesn't move as we initialize the list of hooks
-type Hook = Box<dyn std::any::Any>;
-type EventChannel = Rc<dyn Fn()>;
-pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> VNode<'b>;
-
 /// Every component in Dioxus is represented by a `Scope`.
 ///
 /// Scopes contain the state for hooks, the component's props, and other lifecycle information.
 ///
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
+///
+/// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
+/// usecase they might have.
 pub struct Scope {
     // Book-keeping about the arena
     pub(crate) parent_idx: Option<ScopeId>,
@@ -47,13 +43,19 @@ pub struct Scope {
 
     // Tasks
     pub(crate) task_submitter: TaskSubmitter,
-    pub(crate) suspended_tasks: Vec<*mut Pin<Box<dyn Future<Output = VNode<'static>>>>>,
 
     // A reference to the list of components.
     // This lets us traverse the component list whenever we need to access our parent or children.
     pub(crate) arena_link: SharedArena,
 }
 
+// The type of the channel function
+type EventChannel = Rc<dyn Fn()>;
+
+// The type of closure that wraps calling components
+pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> VNode<'b>;
+
+// The type of task that gets sent to the task scheduler
 pub type FiberTask = Pin<Box<dyn Future<Output = EventTrigger>>>;
 
 impl Scope {
@@ -74,14 +76,7 @@ impl Scope {
         child_nodes: &'creator_node [VNode<'creator_node>],
         task_submitter: TaskSubmitter,
     ) -> Self {
-        log::debug!(
-            "New scope created, height is {}, idx is {:?}",
-            height,
-            arena_idx
-        );
-
         let child_nodes = unsafe { std::mem::transmute(child_nodes) };
-
         Self {
             child_nodes,
             caller,
@@ -97,15 +92,14 @@ impl Scope {
             shared_contexts: Default::default(),
             listeners: Default::default(),
             descendents: Default::default(),
-            suspended_tasks: Default::default(),
         }
     }
 
-    pub fn update_caller<'creator_node>(&mut self, caller: Rc<WrappedCaller>) {
+    pub(crate) fn update_caller<'creator_node>(&mut self, caller: Rc<WrappedCaller>) {
         self.caller = caller;
     }
 
-    pub fn update_children<'creator_node>(
+    pub(crate) fn update_children<'creator_node>(
         &mut self,
         child_nodes: &'creator_node [VNode<'creator_node>],
     ) {
@@ -113,13 +107,14 @@ impl Scope {
         self.child_nodes = child_nodes;
     }
 
-    pub fn run_scope<'sel>(&'sel mut self) -> Result<()> {
+    pub(crate) fn run_scope<'sel>(&'sel mut self) -> Result<()> {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
+        // Remove all the outdated listeners
+
+        // This is a very dangerous operation
         self.frames.next().bump.reset();
 
-        log::debug!("clearing listeners!");
-        // Remove all the outdated listeners
         self.listeners.borrow_mut().clear();
 
         unsafe { self.hooks.reset() };
@@ -133,17 +128,6 @@ impl Scope {
         Ok(())
     }
 
-    /// Progress a suspended node
-    pub fn progress_suspended(&mut self) -> Result<()> {
-        // load the hook
-        // downcast to our special state
-        // run just this hook
-        // create a new vnode
-        // diff this new vnode with the original suspended vnode
-
-        Ok(())
-    }
-
     // this is its own function so we can preciesly control how lifetimes flow
     unsafe fn call_user_component<'a>(&'a self, caller: &WrappedCaller) -> VNode<'static> {
         let new_head: VNode<'a> = caller(self);
@@ -153,7 +137,7 @@ impl Scope {
     // A safe wrapper around calling listeners
     // calling listeners will invalidate the list of listeners
     // The listener list will be completely drained because the next frame will write over previous listeners
-    pub fn call_listener(&mut self, trigger: EventTrigger) -> Result<()> {
+    pub(crate) fn call_listener(&mut self, trigger: EventTrigger) -> Result<()> {
         let EventTrigger {
             real_node_id,
             event,
@@ -165,11 +149,6 @@ impl Scope {
             return Ok(());
         }
 
-        // todo: implement scanning for outdated events
-
-        // Convert the raw ptr into an actual object
-        // This operation is assumed to be safe
-
         log::debug!(
             "There are  {:?} listeners associated with this scope {:#?}",
             self.listeners.borrow().len(),
@@ -178,7 +157,6 @@ impl Scope {
 
         let listners = self.listeners.borrow_mut();
 
-        // let listener = listners.get(trigger);
         let raw_listener = listners.iter().find(|(domptr, _)| {
             let search = unsafe { &**domptr };
             let search_id = search.get();
@@ -201,7 +179,7 @@ impl Scope {
         Ok(())
     }
 
-    pub fn submit_task(&self, task: FiberTask) {
+    pub(crate) fn submit_task(&self, task: FiberTask) {
         log::debug!("Task submitted into scope");
         (self.task_submitter)(task);
     }
@@ -221,6 +199,7 @@ impl Scope {
         self.frames.cur_frame()
     }
 
+    /// Get the root VNode of this component
     #[inline]
     pub fn root<'a>(&'a self) -> &'a VNode<'a> {
         &self.frames.cur_frame().head_node

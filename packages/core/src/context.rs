@@ -1,15 +1,11 @@
 use crate::innerlude::*;
 
 use futures_util::FutureExt;
-
-use std::any::Any;
-use std::cell::Cell;
-use std::marker::PhantomData;
-
 use std::{
-    any::TypeId,
-    cell::RefCell,
+    any::{Any, TypeId},
+    cell::{Cell, RefCell},
     future::Future,
+    marker::PhantomData,
     ops::Deref,
     rc::{Rc, Weak},
 };
@@ -316,23 +312,7 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
-        let r = (self.scope.task_submitter)(task);
-        // self.scope.submit_task(task);
-        // let r = task.then(|f| async {
-        //     //
-        // });
-        // self.use_hook(|| Box::new(r), |_| {}, |_| {});
-        // *task = task.then(|f| async {
-        //     //
-        //     t
-        //     // ()
-        // });
-        // let new_fut = task.then(|f| async {
-        //     //
-        //     ()
-        // });
-        // self.tasks.borrow_mut().push(new_fut);
-
+        (self.scope.task_submitter)(task);
         TaskHandle { _p: PhantomData {} }
     }
 

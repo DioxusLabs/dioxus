@@ -76,35 +76,3 @@ impl DebugRenderer {
         Ok(())
     }
 }
-
-pub struct DebugVNodeSource {
-    bump: Bump,
-}
-impl DebugVNodeSource {
-    fn new() -> Self {
-        Self { bump: Bump::new() }
-    }
-
-    fn render_nodes(&self) -> VNode {
-        // let cx = NodeFactory
-        todo!()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ensure_creation() -> Result<(), ()> {
-        // static Example: FC<()> = |cx| {
-        //     //
-        //     cx.render(html! { <div> "hello world" </div> })
-        // };
-
-        // let mut dom = VirtualDom::new(Example);
-        // let machine = DiffMachine::new();
-
-        Ok(())
-    }
-}

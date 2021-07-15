@@ -1,8 +1,8 @@
 //! Virtual Node Support
+//! --------------------
 //! VNodes represent lazily-constructed VDom trees that support diffing and event handlers.
 //!
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
-
 use crate::{
     events::VirtualEvent,
     innerlude::{Context, Properties, RealDomNode, Scope, ScopeId, FC},
@@ -16,8 +16,13 @@ use std::{
 
 pub struct VNode<'src> {
     pub kind: VNodeKind<'src>,
-    pub dom_id: Cell<RealDomNode>,
-    pub key: Option<&'src str>,
+    pub(crate) dom_id: Cell<RealDomNode>,
+    pub(crate) key: Option<&'src str>,
+}
+impl VNode<'_> {
+    fn key(&self) -> Option<&str> {
+        self.key
+    }
 }
 
 /// Tools for the base unit of the virtual dom - the VNode
@@ -27,9 +32,13 @@ pub struct VNode<'src> {
 /// limit the amount of heap allocations / overly large enum sizes.
 pub enum VNodeKind<'src> {
     Text(VText<'src>),
+
     Element(&'src VElement<'src>),
+
     Fragment(VFragment<'src>),
+
     Component(&'src VComponent<'src>),
+
     Suspended { node: Rc<Cell<RealDomNode>> },
 }
 
@@ -55,6 +64,7 @@ pub trait DioxusElement {
         Self::NAME_SPACE
     }
 }
+
 pub struct VElement<'a> {
     // tag is always static
     pub tag_name: &'static str,
@@ -75,9 +85,13 @@ pub struct VElement<'a> {
 #[derive(Clone, Debug)]
 pub struct Attribute<'a> {
     pub name: &'static str,
+
     pub value: &'a str,
+
     pub is_static: bool,
+
     pub is_volatile: bool,
+
     // Doesn't exist in the html spec, mostly used to denote "style" tags - could be for any type of group
     pub namespace: Option<&'static str>,
 }
@@ -87,8 +101,11 @@ pub struct Attribute<'a> {
 pub struct Listener<'bump> {
     /// The type of event to listen for.
     pub(crate) event: &'static str,
+
     pub scope: ScopeId,
-    pub mounted_node: &'bump Cell<RealDomNode>,
+
+    pub mounted_node: &'bump mut Cell<RealDomNode>,
+
     pub(crate) callback: &'bump dyn FnMut(VirtualEvent),
 }
 
@@ -96,9 +113,13 @@ pub struct Listener<'bump> {
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
     pub ass_scope: Cell<Option<ScopeId>>,
+
     pub(crate) caller: Rc<dyn Fn(&Scope) -> VNode>,
+
     pub(crate) children: &'src [VNode<'src>],
+
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
+
     pub is_static: bool,
 
     // a pointer into the bump arena (given by the 'src lifetime)
@@ -124,20 +145,7 @@ impl<'a> NodeFactory<'a> {
         &self.scope_ref.cur_frame().bump
     }
 
-    pub const fn const_text(&self, text: &'static str) -> VNodeKind<'static> {
-        VNodeKind::Text(VText {
-            is_static: true,
-            text,
-        })
-    }
-
-    pub const fn const_fragment(&self, children: &'static [VNode<'static>]) -> VNodeKind<'static> {
-        VNodeKind::Fragment(VFragment {
-            children,
-            is_static: true,
-        })
-    }
-
+    /// Used in a place or two to make it easier to build vnodes from dummy text
     pub fn static_text(text: &'static str) -> VNode {
         VNode {
             dom_id: RealDomNode::empty_cell(),
@@ -149,6 +157,9 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    /// Parses a lazy text Arguments and returns a string and a flag indicating if the text is 'static
+    ///
+    /// Text that's static may be pointer compared, making it cheaper to diff
     pub fn raw_text(&self, args: Arguments) -> (&'a str, bool) {
         match args.as_str() {
             Some(static_str) => (static_str, true),
@@ -162,6 +173,7 @@ impl<'a> NodeFactory<'a> {
     }
 
     /// Create some text that's allocated along with the other vnodes
+    ///
     pub fn text(&self, args: Arguments) -> VNode<'a> {
         let (text, is_static) = self.raw_text(args);
         VNode {
@@ -171,27 +183,40 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn raw_element(
-        &self,
-        _tag: &'static str,
-        _listeners: &[Listener],
-        _attributes: &[Attribute],
-        _children: &'a [VNode<'a>],
-    ) -> VNode<'a> {
-        todo!()
-    }
-
     pub fn element(
         &self,
         el: impl DioxusElement,
-        listeners: &'a [Listener<'a>],
+        listeners: &'a mut [Listener<'a>],
         attributes: &'a [Attribute<'a>],
         children: &'a [VNode<'a>],
         key: Option<&'a str>,
     ) -> VNode<'a> {
+        self.raw_element(
+            el.tag_name(),
+            el.namespace(),
+            listeners,
+            attributes,
+            children,
+            key,
+        )
+    }
+
+    pub fn raw_element(
+        &self,
+        tag: &'static str,
+        namespace: Option<&'static str>,
+        listeners: &'a mut [Listener],
+        attributes: &'a [Attribute],
+        children: &'a [VNode<'a>],
+        key: Option<&'a str>,
+    ) -> VNode<'a> {
+        // We take the references directly from the bump arena
+        // TODO: this code shouldn't necessarily be here of all places
+        // It would make more sense to do this in diffing
+
         let mut queue = self.scope_ref.listeners.borrow_mut();
-        for listener in listeners {
-            let mounted = listener.mounted_node as *const _ as *mut _;
+        for listener in listeners.iter_mut() {
+            let mounted = listener.mounted_node as *mut _;
             let callback = listener.callback as *const _ as *mut _;
             queue.push((mounted, callback))
         }
@@ -200,14 +225,16 @@ impl<'a> NodeFactory<'a> {
             dom_id: RealDomNode::empty_cell(),
             key,
             kind: VNodeKind::Element(self.bump().alloc(VElement {
-                tag_name: el.tag_name(),
-                namespace: el.namespace(),
-                static_listeners: false,
+                tag_name: tag,
+                namespace,
                 listeners,
-                static_attrs: false,
                 attributes,
-                static_children: false,
                 children,
+
+                // todo: wire up more constization
+                static_listeners: false,
+                static_attrs: false,
+                static_children: false,
             })),
         }
     }
@@ -243,12 +270,15 @@ impl<'a> NodeFactory<'a> {
         &self,
         component: FC<P>,
         props: P,
-        key: Option<&'a str>, // key: NodeKey<'a>,
+        key: Option<&'a str>,
         children: &'a [VNode<'a>],
     ) -> VNode<'a>
     where
         P: Properties + 'a,
     {
+        // TODO
+        // It's somewhat wrong to go about props like this
+
         // We don't want the fat part of the fat pointer
         // This function does static dispatch so we don't need any VTable stuff
         let props = self.bump().alloc(props);
@@ -271,6 +301,8 @@ impl<'a> NodeFactory<'a> {
             }
         }));
 
+        let is_static = children.len() == 0 && P::IS_STATIC && key.is_none();
+
         VNode {
             key,
             dom_id: Cell::new(RealDomNode::empty()),
@@ -280,7 +312,7 @@ impl<'a> NodeFactory<'a> {
                 raw_props,
                 children,
                 caller: NodeFactory::create_component_caller(component, raw_props),
-                is_static: children.len() == 0 && P::IS_STATIC && key.is_none(),
+                is_static,
                 ass_scope: Cell::new(None),
             })),
         }
@@ -313,9 +345,25 @@ impl<'a> NodeFactory<'a> {
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
     ) -> VNode<'a> {
         let mut nodes = bumpalo::collections::Vec::new_in(self.bump());
-        // TODO throw an error if there are nodes without keys
+
         for node in node_iter.into_iter() {
             nodes.push(node.into_vnode(self));
+        }
+
+        if cfg!(debug_assertions) {
+            if nodes.len() > 1 {
+                if nodes.last().unwrap().key().is_none() {
+                    log::error!(
+                        r#"
+Warning: Each child in an array or iterator should have a unique "key" prop. 
+Not providing a key will lead to poor performance with lists.
+See docs.rs/dioxus for more information. 
+---
+To help you identify where this error is coming from, we've generated a backtrace.
+                        "#,
+                    );
+                }
+            }
         }
         VNode {
             dom_id: RealDomNode::empty_cell(),

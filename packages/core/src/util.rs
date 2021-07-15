@@ -63,8 +63,6 @@ pub struct RealDomNode(pub u64);
 impl RealDomNode {
     #[inline]
     pub fn empty() -> Self {
-        // let data = KeyData::from_ffi(u64::MIN);
-        // let key: DefaultKey = data.into();
         Self(u64::MIN)
     }
     #[inline]
@@ -73,101 +71,31 @@ impl RealDomNode {
     }
     #[inline]
     pub fn from_u64(id: u64) -> Self {
-        // let data = KeyData::from_ffi(id);
-        // let key: DefaultKey = data.into();
         Self(id)
     }
 
     #[inline]
     pub fn as_u64(&self) -> u64 {
-        // self.0.data().as_ffi()
         self.0
     }
 }
 
 pub struct DebugDom {
     counter: u64,
-    logging: bool,
 }
 impl DebugDom {
     pub fn new() -> Self {
-        Self {
-            counter: 0,
-            logging: false,
-        }
-    }
-    pub fn with_logging_enabled() -> Self {
-        Self {
-            counter: 0,
-            logging: true,
-        }
+        Self { counter: 0 }
     }
 }
+
 impl<'a> RealDom<'a> for DebugDom {
     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
         todo!()
     }
 
     fn request_available_node(&mut self) -> RealDomNode {
-        todo!()
+        self.counter += 1;
+        RealDomNode::from_u64(self.counter)
     }
 }
-
-async fn launch_demo(app: FC<()>) {
-    let mut dom = VirtualDom::new(app);
-    let mut real_dom = DebugDom::new();
-    let mut edits = Vec::new();
-    dom.rebuild(&mut real_dom, &mut edits).unwrap();
-
-    while let Some(evt) = dom.tasks.next().await {
-        //
-        log::debug!("Event triggered! {:#?}", evt);
-    }
-}
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate as dioxus;
-//     use std::{pin::Pin, time::Duration};
-
-//     use crate::builder::DioxusElement;
-//     use dioxus::prelude::*;
-//     use futures::Future;
-
-//     #[async_std::test]
-//     async fn async_tick() {
-//         static App: FC<()> = |cx| {
-//             // let mut count = use_state(cx, || 0);
-//             let mut fut = cx.use_hook(
-//                 move || {
-//                     Box::pin(async {
-//                         //
-//                         let mut tick: i32 = 0;
-//                         loop {
-//                             async_std::task::sleep(Duration::from_millis(250)).await;
-//                             log::debug!("ticking forward... {}", tick);
-//                             tick += 1;
-//                             // match surf::get(ENDPOINT).recv_json::<DogApi>().await {
-//                             //     Ok(_) => (),
-//                             //     Err(_) => (),
-//                             // }
-//                         }
-//                     }) as Pin<Box<dyn Future<Output = ()> + 'static>>
-//                 },
-//                 |h| h,
-//                 |_| {},
-//             );
-
-//             cx.submit_task(fut);
-
-//             cx.render(LazyNodes::new(move |f| {
-//                 f.text(format_args!("it's sorta working"))
-//             }))
-//         };
-
-//         std::env::set_var("RUST_LOG", "debug");
-//         env_logger::init();
-//         launch_demo(App).await;
-//     }
-// }

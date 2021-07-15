@@ -1,16 +1,11 @@
-use std::{
-    cell::{RefCell, UnsafeCell},
-    collections::HashMap,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{cell::UnsafeCell, rc::Rc};
 
 use crate::innerlude::*;
 use slotmap::{DefaultKey, SlotMap};
 
 #[derive(Clone)]
 pub struct SharedArena {
-    pub components: Arc<UnsafeCell<ScopeMap>>,
+    pub components: Rc<UnsafeCell<ScopeMap>>,
 }
 pub type ScopeMap = SlotMap<DefaultKey, Scope>;
 
@@ -21,7 +16,7 @@ enum MutStatus {
 
 impl SharedArena {
     pub fn new(arena: ScopeMap) -> Self {
-        let components = Arc::new(UnsafeCell::new(arena));
+        let components = Rc::new(UnsafeCell::new(arena));
         SharedArena { components }
     }
 

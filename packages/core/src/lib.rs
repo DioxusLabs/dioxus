@@ -26,6 +26,7 @@ pub mod prelude {
 
 // types used internally that are important
 pub(crate) mod innerlude {
+    pub use crate::arena::*;
     pub use crate::bumpframe::*;
     pub use crate::component::*;
     pub use crate::context::*;
@@ -33,6 +34,7 @@ pub(crate) mod innerlude {
     pub use crate::editor::*;
     pub use crate::error::*;
     pub use crate::events::*;
+    pub use crate::hooklist::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
     pub use crate::tasks::*;
@@ -46,6 +48,7 @@ pub(crate) mod innerlude {
 
 pub mod exports {
     // export important things here
+    pub use bumpalo;
 }
 
 pub mod arena;

@@ -12,7 +12,7 @@ use crate::{innerlude::ScopeId, RealDomNode};
 /// However, the DomEditor only builds a change list - it does not apply them. In contrast with the "RealDom", the DomEditor
 /// is cancellable and flushable. At any moment in time, Dioxus may choose to completely clear the edit list and start over.
 ///
-/// This behavior is used in the cooperative scheduling algorithm
+/// This behavior is used in the cooperative scheduling algorithm.
 pub struct DomEditor<'real, 'bump> {
     pub edits: &'real mut Vec<DomEdit<'bump>>,
 }

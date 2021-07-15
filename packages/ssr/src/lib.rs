@@ -120,13 +120,7 @@ impl<'a> TextRenderer<'a> {
             VNodeKind::Component(vcomp) => {
                 let idx = vcomp.ass_scope.get().unwrap();
 
-                let new_node = self
-                    .vdom
-                    .components
-                    .try_get(idx)
-                    .unwrap()
-                    .frames
-                    .current_head_node();
+                let new_node = self.vdom.components.try_get(idx).unwrap().root();
 
                 self.html_render(new_node, f, il + 1)?;
             }
