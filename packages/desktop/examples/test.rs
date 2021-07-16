@@ -2,7 +2,7 @@ use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 
 fn main() {
-    dioxus_webview::launch(App, |f| f.with_maximized(true)).expect("Failed");
+    dioxus_desktop::launch(App, |f| f.with_maximized(true)).expect("Failed");
 }
 
 static App: FC<()> = |cx| {

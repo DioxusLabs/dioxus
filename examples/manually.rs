@@ -17,7 +17,7 @@ fn main() {
         AppendChildren { many: 1 },
         // ReplaceWith { many: 1 },
     ];
-    dioxus_webview::WebviewRenderer::run_with_edits(App, (), |c| c, Some(edits)).expect("failed");
+    dioxus_desktop::WebviewRenderer::run_with_edits(App, (), |c| c, Some(edits)).expect("failed");
 }
 
 const App: FC<()> = |cx| todo!();

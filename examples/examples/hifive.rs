@@ -3,7 +3,7 @@
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 fn main() {
-    dioxus_webview::launch(
+    dioxus_desktop::launch(
         |builder| {
             builder
                 .title("Test Dioxus App")

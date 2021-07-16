@@ -10,13 +10,13 @@ use syn::{
 // ==============================================
 // Parse any div {} as a VElement
 // ==============================================
-pub enum Node {
+pub enum BodyNode {
     Element(AmbiguousElement),
     Text(TextNode),
     RawExpr(Expr),
 }
 
-impl Parse for Node {
+impl Parse for BodyNode {
     fn parse(stream: ParseStream) -> Result<Self> {
         // Supposedly this approach is discouraged due to inability to return proper errors
         // TODO: Rework this to provide more informative errors
@@ -24,23 +24,23 @@ impl Parse for Node {
         if stream.peek(token::Brace) {
             let content;
             syn::braced!(content in stream);
-            return Ok(Node::RawExpr(content.parse::<Expr>()?));
+            return Ok(BodyNode::RawExpr(content.parse::<Expr>()?));
         }
 
         if stream.peek(LitStr) {
-            return Ok(Node::Text(stream.parse::<TextNode>()?));
+            return Ok(BodyNode::Text(stream.parse::<TextNode>()?));
         }
 
-        Ok(Node::Element(stream.parse::<AmbiguousElement>()?))
+        Ok(BodyNode::Element(stream.parse::<AmbiguousElement>()?))
     }
 }
 
-impl ToTokens for Node {
+impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self {
-            Node::Element(el) => el.to_tokens(tokens),
-            Node::Text(txt) => txt.to_tokens(tokens),
-            Node::RawExpr(exp) => tokens.append_all(quote! {
+            BodyNode::Element(el) => el.to_tokens(tokens),
+            BodyNode::Text(txt) => txt.to_tokens(tokens),
+            BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)
             }),
         }

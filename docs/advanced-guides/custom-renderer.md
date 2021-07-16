@@ -18,48 +18,145 @@ Internally, Dioxus handles the tree relationship, diffing, memory management, an
 
 For reference, check out the WebSys renderer as a starting point for your custom renderer.
 
-## Trait implementation
+## Trait implementation and DomEdits
 
-The current `RealDom` trait lives in `dioxus_core/diff`. A version of it is provided here:
+The current `RealDom` trait lives in `dioxus_core/diff`. A version of it is provided here (but might not be up-to-date):
 
 ```rust
-pub trait RealDom {
-    // Navigation
-    fn push_root(&mut self, root: RealDomNode);
-
-    // Add Nodes to the dom
-    fn append_child(&mut self);
-    fn replace_with(&mut self);
-
-    // Remove Nodes from the dom
-    fn remove(&mut self);
-    fn remove_all_children(&mut self);
-
-    // Create
-    fn create_text_node(&mut self, text: &str) -> RealDomNode;
-    fn create_element(&mut self, tag: &str, namespace: Option<&str>) -> RealDomNode;
-
-    // Events
-    fn new_event_listener(
-        &mut self,
-        event: &str,
-        scope: ScopeIdx,
-        element_id: usize,
-        realnode: RealDomNode,
-    );
-    fn remove_event_listener(&mut self, event: &str);
-
-    // modify
-    fn set_text(&mut self, text: &str);
-    fn set_attribute(&mut self, name: &str, value: &str, is_namespaced: bool);
-    fn remove_attribute(&mut self, name: &str);
-
-    // node ref
-    fn raw_node_as_any_mut(&self) -> &mut dyn Any;
+pub trait RealDom<'a> {
+    fn handle_edit(&mut self, edit: DomEdit);
+    fn request_available_node(&mut self) -> RealDomNode;
+    fn raw_node_as_any(&self) -> &mut dyn Any;
 }
 ```
 
-This trait defines what the Dioxus VirtualDOM expects a "RealDom" abstraction to implement for the Dioxus diffing mechanism to function properly. The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.org/wiki/Stack_machine) where the "push_root" method pushes a new "real" DOM node onto the stack and "append_child" and "replace_with" both remove nodes from the stack. When the RealDOM creates new nodes, it must return the `RealDomNode` type... which is just an abstraction over u32. We strongly recommend the use of `nohash-hasher`'s IntMap for managing the mapping of `RealDomNode` (ids) to their corresponding real node. For an IntMap of 1M+ nodes, an index time takes about 7ns which is very performant when compared to the traditional hasher.
+For reference, the "DomEdit" type is a serialized enum that represents an atomic operation occurring on the RealDom. The variants roughly follow this set:
+
+```rust
+enum DomEdit {
+    PushRoot,
+    AppendChildren,
+    ReplaceWith,
+    CreateTextNode,
+    CreateElement,
+    CreateElementNs,
+    CreatePlaceholder,
+    NewEventListener,
+    RemoveEventListener,
+    SetText,
+    SetAttribute,
+    RemoveAttribute,
+}
+```
+
+The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.org/wiki/Stack_machine) where the "push_root" method pushes a new "real" DOM node onto the stack and "append_child" and "replace_with" both remove nodes from the stack. 
+
+
+### An example
+
+For the sake of understanding, lets consider this example - a very simple UI declaration:
+
+```rust
+rsx!( h1 {"hello world"} )
+```
+
+To get things started, Dioxus must first navigate to the container of this h1 tag. To "navigate" here, the internal diffing algorithm generates the DomEdit `PushRoot` where the ID of the root is the container. 
+
+When the renderer receives this instruction, it pushes the actual Node onto its own stack. The real renderer's stack will look like this:
+
+```rust
+instructions: [
+    PushRoot(Container)
+]
+stack: [
+    ContainerNode,
+]
+```
+
+Next, Dioxus will encounter the h1 node. The diff algorithm decides that this node needs to be created, so Dioxus will generate the DomEdit `CreateElement`. When the renderer receives this instruction, it will create an unmounted node and push into its own stack:
+
+```rust
+instructions: [
+    PushRoot(Container),
+    CreateElement(h1),
+]
+stack: [
+    ContainerNode,
+    h1,
+]
+```
+Next, Dioxus sees the text node, and generates the `CreateTextNode` DomEdit:
+```rust
+instructions: [
+    PushRoot(Container),
+    CreateElement(h1),
+    CreateTextNode("hello world")
+]
+stack: [
+    ContainerNode,
+    h1,
+    "hello world"
+]
+```
+Remember, the text node is not attached to anything (it is unmounted) so Dioxus needs to generate an Edit that connects the text node to the h1 element. It depends on the situation, but in this case we use `AppendChildren`. This pops the text node off the stack, leaving the h1 element as the next element in line.
+
+```rust
+instructions: [
+    PushRoot(Container),
+    CreateElement(h1),
+    CreateTextNode("hello world"),
+    AppendChildren(1)
+]
+stack: [
+    ContainerNode,
+    h1
+]
+```
+We call `AppendChildren` again, popping off the h1 node and attaching it to the parent:
+```rust
+instructions: [
+    PushRoot(Container),
+    CreateElement(h1),
+    CreateTextNode("hello world"),
+    AppendChildren(1),
+    AppendChildren(1)
+]
+stack: [
+    ContainerNode,
+]
+```
+Finally, the container is popped since we don't need it anymore.
+```rust
+instructions: [
+    PushRoot(Container),
+    CreateElement(h1),
+    CreateTextNode("hello world"),
+    AppendChildren(1),
+    AppendChildren(1),
+    Pop(1)
+]
+stack: []
+```
+Over time, our stack looked like this:
+```rust
+[]
+[Container]
+[Container, h1]
+[Container, h1, "hello world"]
+[Container, h1]
+[Container]
+[]
+```
+
+Notice how our stack is empty once UI has been mounted. Conveniently, this approach completely separates the VirtualDOM and the Real DOM. Additionally, these edits are serializable, meaning we can even manage UIs across a network connection. This little stack machine and serialized edits makes Dioxus independent of platform specifics.
+
+Dioxus is also really fast. Because Dioxus splits the diff and patch phase, it's able to make all the edits to the RealDOM in a very short amount of time (less than a single frame) making rendering very snappy. It also allows Dioxus to cancel large diffing operations if higher priority work comes in while it's diffing.
+
+It's important to note that there _is_ one layer of connectedness between Dioxus and the renderer. Dioxus saves and loads elements (the PushRoot edit) with an ID. Inside the VirtualDOM, this is just tracked as a u64.
+
+Whenever a `CreateElement` edit is generated during diffing, Dioxus increments its node counter and assigns that new element its current NodeCount. The RealDom is responsible for remembering this ID and pushing the correct node when PushRoot(ID) is generated. Dioxus doesn't reclaim IDs of elements its removed, but your renderer probably will want to. To do this, we suggest using a `SecondarySlotMap` if implementing the renderer in Rust, or just deferring to a HashMap-type approach.
+
+This little demo serves to show exactly how a Renderer would need to process an edit stream to build UIs. A set of serialized EditStreams for various demos is available for you to test your custom renderer against.
 
 ## Event loop
 
@@ -70,14 +167,24 @@ The code for the WebSys implementation is straightforward, so we'll add it here 
 ```rust
 pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
     // Push the body element onto the WebsysDom's stack machine
-    let mut websys_dom = crate::new::WebsysDom::new(prepare_websys_dom().first_child().unwrap());
+    let mut websys_dom = crate::new::WebsysDom::new(prepare_websys_dom());
     websys_dom.stack.push(root_node);
 
     // Rebuild or hydrate the virtualdom
     self.internal_dom.rebuild(&mut websys_dom)?;
 
     // Wait for updates from the real dom and progress the virtual dom
-    while let Some(trigger) = websys_dom.wait_for_event().await {
+    loop {
+        let user_input_future = websys_dom.wait_for_event();
+        let internal_event_future = self.internal_dom.wait_for_event();
+
+        match select(user_input_future, internal_event_future).await {
+            Either::Left((trigger, _)) => trigger,
+            Either::Right((trigger, _)) => trigger,
+        }
+    }
+
+    while let Some(trigger) =  {
         websys_dom.stack.push(body_element.first_child().unwrap());
         self.internal_dom
             .progress_with_event(&mut websys_dom, trigger)?;
@@ -85,7 +192,7 @@ pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
 }
 ```
 
-It's important that you decode the real events from your event system into Dioxus' synthetic event system (synthetic meaning abstracted). This simply means matching your event type and creating a Dioxus `VirtualEvent` type. Your custom event must implement the corresponding event trait:
+It's important that you decode the real events from your event system into Dioxus' synthetic event system (synthetic meaning abstracted). This simply means matching your event type and creating a Dioxus `VirtualEvent` type. Your custom event must implement the corresponding event trait. Right now, the VirtualEvent system is modeled almost entirely around the HTML spec, but we are interested in slimming it down.
 
 ```rust
 fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
@@ -114,28 +221,23 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
 
 If you need to go as far as relying on custom elements for your renderer - you totally can. This still enables you to use Dioxus' reactive nature, component system, shared state, and other features, but will ultimately generate different nodes. All attributes and listeners for the HTML and SVG namespace are shuttled through helper structs that essentially compile away (pose no runtime overhead). You can drop in your own elements any time you want, with little hassle. However, you must be absolutely sure your renderer can handle the new type, or it will crash and burn.
 
+These custom elements are defined as unit structs with trait implementations.
+
 For example, the `div` element is (approximately!) defined as such:
 
 ```rust
-struct div(NodeBuilder);
-impl<'a> div {
+struct div;
+impl div {
+    /// Some glorious documentaiton about the class proeprty.
     #[inline]
-    fn new(factory: &NodeFactory<'a>) -> Self {
-        Self(factory.new_element("div"))
+    fn class<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("class", val, None, false)
     }
-    #[inline]
-    fn onclick(mut self, callback: impl Fn(MouseEvent) + 'a) -> Self {
-        self.0.add_listener("onclick", |evt: VirtualEvent| match evt {
-            MouseEvent(evt) => callback(evt),
-            _ => {}
-        });
-        self
-    }
-    // etc
+    // more attributes
 }
 ```
+You've probably noticed that many elements in the `rsx!` and `html!` macros support on-hover documentation. The approach we take to custom elements means that the unit struct is created immediately where the element is used in the macro. When the macro is expanded, the doc comments still apply to the unit struct, giving tons of in-editor feedback, even inside a proc macro.
 
-The rsx! and html! macros just use the `div` struct as a compile-time guard around the NodeFactory.
 
 ## Compatibility
 
@@ -143,22 +245,22 @@ Forewarning: not every hook and service will work on your platform. Dioxus wraps
 
 There are three opportunities for platform incompatibilities to break your program:
 
-1. When downcasting elements via `Ref.to_native<T>()`
-2. When downcasting events via `Event.to_native<T>()`
+1. When downcasting elements via `Ref.downcast_ref<T>()`
+2. When downcasting events via `Event.downcast_ref<T>()`
 3. Calling platform-specific APIs that don't exist
 
 The best hooks will properly detect the target platform and still provide functionality, failing gracefully when a platform is not supported. We encourage - and provide - an indication to the user on what platforms a hook supports. For issues 1 and 2, these return a result as to not cause panics on unsupported platforms. When designing your hooks, we recommend propagating this error upwards into user facing code, making it obvious that this particular service is not supported.
 
-This particular code _will panic_ due to the unwrap. Try to avoid these types of patterns.
+This particular code _will panic_ due to the unwrap on downcast_ref. Try to avoid these types of patterns. 
 
 ```rust
-let div_ref = use_node_ref(&cx);
+let div_ref = use_node_ref(cx);
 
 cx.render(rsx!{
     div { ref: div_ref, class: "custom class",
         button { "click me to see my parent's class"
             onclick: move |_| if let Some(div_ref) = div_ref {
-                panic!("Div class is {}", div_ref.to_native::<web_sys::Element>().unwrap().class())
+                log::info!("Div class is {}", div_ref.downcast_ref::<web_sys::Element>().unwrap().class())
             }
         }
     }

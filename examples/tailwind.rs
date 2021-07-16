@@ -1,27 +1,21 @@
-use dioxus::virtual_dom::VirtualDom;
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
-use dioxus_hooks::use_state;
-use dioxus_html as dioxus_elements;
-use dioxus_html::{GlobalAttributes, SvgAttributes};
-use dioxus_ssr::TextRenderer;
+use dioxus::desktop::wry::application::platform::macos::*;
+use dioxus::prelude::*;
 
 fn main() {
-    use std::fs::File;
-    use std::io::Write;
-
-    let mut file = File::create("example.html").unwrap();
-
-    let mut dom = VirtualDom::new(App);
-    dom.rebuild_in_place().expect("failed to run virtualdom");
-
-    file.write_fmt(format_args!("{}", TextRenderer::new(&dom)))
-        .unwrap();
+    dioxus::desktop::launch(App, |c| {
+        c.with_fullsize_content_view(true)
+            .with_titlebar_buttons_hidden(false)
+            .with_titlebar_transparent(true)
+            .with_movable_by_window_background(true)
+    });
 }
+
+const STYLE: &str = "body {overflow:hidden;}";
 
 pub const App: FC<()> = |cx| {
     cx.render(rsx!(
         div { class: "overflow-hidden"
+        style { "{STYLE}" }
             link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel:"stylesheet" }
             Header {}
             Entry {}
@@ -120,7 +114,7 @@ pub const StacksIcon: FC<()> = |cx| {
             stroke_linecap: "round"
             stroke_linejoin: "round"
             stroke_width: "2"
-            // class: "w-10 h-10 text-white p-2 bg-indigo-500 rounded-full"
+            class: "w-10 h-10 text-white p-2 bg-indigo-500 rounded-full"
             viewBox: "0 0 24 24"
             path { d: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"}
         }
@@ -134,7 +128,7 @@ pub const RightArrowIcon: FC<()> = |cx| {
             stroke_linecap: "round"
             stroke_linejoin: "round"
             stroke_width: "2"
-            // class: "w-4 h-4 ml-1"
+            class: "w-4 h-4 ml-1"
             viewBox: "0 0 24 24"
             path { d: "M5 12h14M12 5l7 7-7 7"}
         }

@@ -26,7 +26,7 @@ pub struct Component {
     // accept any path-like argument
     name: syn::Path,
     body: Vec<ComponentField>,
-    children: Vec<Node>,
+    children: Vec<BodyNode>,
     manual_props: Option<Expr>,
 }
 
@@ -42,7 +42,7 @@ impl Parse for Component {
         syn::braced!(content in stream);
 
         let mut body: Vec<ComponentField> = Vec::new();
-        let mut children: Vec<Node> = Vec::new();
+        let mut children: Vec<BodyNode> = Vec::new();
         let mut manual_props = None;
 
         parse_component_body(
@@ -78,7 +78,7 @@ pub fn parse_component_body(
     content: &ParseBuffer,
     cfg: &BodyParseConfig,
     body: &mut Vec<ComponentField>,
-    children: &mut Vec<Node>,
+    children: &mut Vec<BodyNode>,
     manual_props: &mut Option<Expr>,
 ) -> Result<()> {
     'parsing: loop {
@@ -111,7 +111,7 @@ pub fn parse_component_body(
                     "This item is not allowed to accept children.",
                 ));
             }
-            children.push(content.parse::<Node>()?);
+            children.push(content.parse::<BodyNode>()?);
         }
 
         // consume comma if it exists

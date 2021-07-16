@@ -49,7 +49,6 @@ im-rc = "15.0.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
 fxhash = "0.2.1"
 
-
 [workspace]
 members = [
     "packages/core",
@@ -59,5 +58,16 @@ members = [
     "packages/web",
     "packages/ssr",
     "packages/desktop",
-    # "packages/mobile",
+    "packages/mobile",
 ]
+
+
+[[example]]
+required-features = ["desktop"]
+name = "webview"
+path = "./examples/webview.rs"
+
+[[example]]
+required-features = ["desktop"]
+name = "tailwind"
+path = "./examples/tailwind.rs"

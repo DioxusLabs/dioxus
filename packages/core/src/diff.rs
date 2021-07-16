@@ -66,7 +66,6 @@ use std::any::Any;
 /// target-specific Node type as well as easily serializing the edits to be sent over a network or IPC connection.
 pub trait RealDom<'a> {
     fn request_available_node(&mut self) -> RealDomNode;
-
     fn raw_node_as_any(&self) -> &mut dyn Any;
 }
 

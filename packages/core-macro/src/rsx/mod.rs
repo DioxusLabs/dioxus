@@ -32,12 +32,12 @@ use syn::{
     Error, Ident, LitStr, Result, Token,
 };
 
-pub struct RsxRender {
+pub struct RsxBody {
     custom_context: Option<Ident>,
-    roots: Vec<Node>,
+    roots: Vec<BodyNode>,
 }
 
-impl Parse for RsxRender {
+impl Parse for RsxBody {
     fn parse(input: ParseStream) -> Result<Self> {
         // if input.peek(LitStr) {
         //     return input.parse::<LitStr>()?.parse::<RsxRender>();
@@ -83,7 +83,7 @@ impl Parse for RsxRender {
     }
 }
 
-impl ToTokens for RsxRender {
+impl ToTokens for RsxBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let inner = if self.roots.len() == 1 {
             let inner = &self.roots[0];

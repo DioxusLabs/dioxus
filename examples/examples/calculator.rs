@@ -5,7 +5,7 @@ use dioxus_core as dioxus;
 const STYLE: &str = include_str!("../../../examples/assets/calculator.css");
 
 fn main() {
-    dioxus_webview::launch(
+    dioxus_desktop::launch(
         |builder| {
             builder
                 .title("Test Dioxus App")

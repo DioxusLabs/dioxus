@@ -186,7 +186,7 @@ pub use dioxus_ssr as ssr;
 pub use dioxus_hooks as hooks;
 
 #[cfg(feature = "desktop")]
-pub use dioxus_webview as desktop;
+pub use dioxus_desktop as desktop;
 
 pub mod prelude {
     //! A glob import that includes helper types like FC, rsx!, html!, and required traits

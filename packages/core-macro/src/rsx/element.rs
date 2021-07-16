@@ -16,7 +16,7 @@ pub struct Element {
     key: Option<AttrType>,
     attributes: Vec<ElementAttr>,
     listeners: Vec<ElementAttr>,
-    children: Vec<Node>,
+    children: Vec<BodyNode>,
     is_static: bool,
 }
 
@@ -54,7 +54,7 @@ impl Parse for Element {
 
         let mut attributes: Vec<ElementAttr> = vec![];
         let mut listeners: Vec<ElementAttr> = vec![];
-        let mut children: Vec<Node> = vec![];
+        let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
 
         'parsing: loop {
@@ -72,7 +72,7 @@ impl Parse for Element {
                     name.clone(),
                 )?;
             } else {
-                children.push(content.parse::<Node>()?);
+                children.push(content.parse::<BodyNode>()?);
             }
 
             // consume comma if it exists
@@ -238,20 +238,9 @@ impl ToTokens for ElementAttr {
             AttrType::BumpText(value) => tokens.append_all(quote! {
                 dioxus_elements::#el_name.#nameident(__cx, format_args_f!(#value))
             }),
-            // __cx.attr(#name, format_args_f!(#value), #namespace, false)
-            //
-            // AttrType::BumpText(value) => tokens.append_all(quote! {
-            //     __cx.attr(#name, format_args_f!(#value), #namespace, false)
-            // }),
             AttrType::FieldTokens(exp) => tokens.append_all(quote! {
                 dioxus_elements::#el_name.#nameident(__cx, #exp)
             }),
-            // __cx.attr(#name_str, #exp, #namespace, false)
-
-            // AttrType::FieldTokens(exp) => tokens.append_all(quote! {
-            //     dioxus_elements::#el_name.#nameident(__cx, format_args_f!(#value))
-            //     __cx.attr(#name_str, #exp, #namespace, false)
-            // }),
 
             // todo: move event handlers on to the elements or onto the nodefactory
             AttrType::Event(event) => tokens.append_all(quote! {
@@ -264,3 +253,15 @@ impl ToTokens for ElementAttr {
         }
     }
 }
+
+// __cx.attr(#name, format_args_f!(#value), #namespace, false)
+//
+// AttrType::BumpText(value) => tokens.append_all(quote! {
+//     __cx.attr(#name, format_args_f!(#value), #namespace, false)
+// }),
+// __cx.attr(#name_str, #exp, #namespace, false)
+
+// AttrType::FieldTokens(exp) => tokens.append_all(quote! {
+//     dioxus_elements::#el_name.#nameident(__cx, format_args_f!(#value))
+//     __cx.attr(#name_str, #exp, #namespace, false)
+// }),

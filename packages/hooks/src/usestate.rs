@@ -148,7 +148,8 @@ impl<'a, T: 'static> std::ops::Deref for UseState<'a, T> {
     }
 }
 
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
+
 impl<'a, T: Copy + Add<T, Output = T>> Add<T> for UseState<'a, T> {
     type Output = T;
 

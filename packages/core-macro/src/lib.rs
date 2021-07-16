@@ -4,6 +4,7 @@ use syn::parse_macro_input;
 
 pub(crate) mod fc;
 pub(crate) mod htm;
+pub(crate) mod html;
 pub(crate) mod ifmt;
 pub(crate) mod props;
 pub(crate) mod rsx;
@@ -237,7 +238,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 /// ```
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsx::RsxRender>(s) {
+    match syn::parse::<rsx::RsxBody>(s) {
         Err(e) => e.to_compile_error().into(),
         Ok(s) => s.to_token_stream().into(),
     }

@@ -41,10 +41,7 @@ pub struct WebviewRenderer<T> {
     root: FC<T>,
 }
 enum RpcEvent<'a> {
-    Initialize {
-        //
-        edits: Vec<DomEdit<'a>>,
-    },
+    Initialize { edits: Vec<DomEdit<'a>> },
 }
 
 impl<T: Properties + 'static> WebviewRenderer<T> {
@@ -129,7 +126,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
             .build()?;
 
         event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Poll;
+            *control_flow = ControlFlow::Wait;
 
             match event {
                 Event::WindowEvent {

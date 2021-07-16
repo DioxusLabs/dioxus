@@ -1,4 +1,4 @@
-use crate::{rsx::RsxRender, util::is_valid_svg_tag};
+use crate::{rsx::RsxBody, util::is_valid_svg_tag};
 
 use {
     proc_macro::TokenStream,
@@ -15,7 +15,7 @@ use {
 // Parse any stream coming from the html! macro
 // ==============================================
 pub struct RsxTemplate {
-    inner: RsxRender,
+    inner: RsxBody,
 }
 
 impl Parse for RsxTemplate {
@@ -35,7 +35,7 @@ impl Parse for RsxTemplate {
             let lit = LitStr::new(&value, lit.span());
 
             // panic!("{:#?}", lit);
-            match lit.parse::<crate::rsx::RsxRender>() {
+            match lit.parse::<crate::rsx::RsxBody>() {
                 Ok(r) => Ok(Self { inner: r }),
                 Err(e) => Err(e),
             }
