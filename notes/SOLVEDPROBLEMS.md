@@ -153,13 +153,13 @@ Notice that LiveComponent receivers (the client-side interpretation of a LiveCom
 The `VNodeTree` type is a very special type that allows VNodes to be created using a pluggable allocator. The html! macro creates something that looks like:
 
 ```rust
-static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
     html! { <div> "blah" </div> }
 };
 
 // expands to...
 
-static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
     // This function converts a Fn(allocator) -> VNode closure to a VNode struct that will later be evaluated.
     html_macro_to_vnodetree(move |allocator| {
         let mut node0 = allocator.alloc(VElement::div);

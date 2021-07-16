@@ -924,6 +924,8 @@ builder_constructors! {
     /// [`<div>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div)
     /// element.
     ///
+    /// Part of the HTML namespace. Only works in HTML-compatible renderers
+    ///
     /// ## Definition and Usage
     /// - The <div> tag defines a division or a section in an HTML document.
     /// - The <div> tag is used as a container for HTML elements - which is then styled with CSS or manipulated with  JavaScript.
@@ -1575,6 +1577,7 @@ builder_constructors! {
     /// [`<select>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select)
     /// element.
     select {
+        value: String,
         autocomplete: String,
         autofocus: Bool,
         disabled: Bool,

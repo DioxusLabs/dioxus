@@ -27,7 +27,7 @@ struct ExampleProps {
     initial_name: &'static str,
 }
 
-static Example: FC<ExampleProps> = |cx| {
+pub static Example: FC<ExampleProps> = |cx| {
     let name = use_state(cx, move || cx.initial_name);
 
     cx.render(rsx! {

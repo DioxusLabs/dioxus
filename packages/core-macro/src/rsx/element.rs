@@ -43,11 +43,6 @@ impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
         let name = Ident::parse(stream)?;
 
-        // TODO: remove this in favor of the compile-time validation system
-        if !crate::util::is_valid_tag(&name.to_string()) {
-            return Err(Error::new(name.span(), "Not a valid Html tag"));
-        }
-
         // parse the guts
         let content: ParseBuffer;
         syn::braced!(content in stream);

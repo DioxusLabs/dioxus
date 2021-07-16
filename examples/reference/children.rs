@@ -17,9 +17,8 @@
 //! In the future, this might become a runtime error, so consider it an error today.
 
 use dioxus::prelude::*;
-fn main() {}
 
-static App: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
     cx.render(rsx! {
         div {
             Banner {
@@ -32,7 +31,7 @@ static App: FC<()> = |cx| {
     })
 };
 
-static Banner: FC<()> = |cx| {
+pub static Banner: FC<()> = |cx| {
     cx.render(rsx! {
         div {
             h1 { "This is a great banner!" }

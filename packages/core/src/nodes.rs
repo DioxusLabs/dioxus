@@ -266,7 +266,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn virtual_child<P>(
+    pub fn component<P>(
         &self,
         component: FC<P>,
         props: P,

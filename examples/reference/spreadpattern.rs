@@ -8,27 +8,26 @@
 //! values, using the manual props as the base and then modifying fields specified with non-spread attributes.
 
 use dioxus::prelude::*;
-fn main() {}
 
-static App: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
     let props = MyProps {
         count: 0,
         live: true,
         name: "Dioxus",
     };
     cx.render(rsx! {
-        Example { ..props, count: 10, div {"child"} }
+        Example1 { ..props, count: 10, div {"child"} }
     })
 };
 
 #[derive(PartialEq, Props)]
-struct MyProps {
+pub struct MyProps {
     count: u32,
     live: bool,
     name: &'static str,
 }
 
-static Example: FC<MyProps> = |cx| {
+pub static Example1: FC<MyProps> = |cx| {
     cx.render(rsx! {
         div {
             h1 { "Hello, {cx.name}"}

@@ -4,7 +4,7 @@ fn main() {}
 // use dioxus_core as dioxus;
 // use dioxus_core::prelude::*;
 
-// static Example: FC<()> = |cx| {
+// pub static Example: FC<()> = |cx| {
 //     let list = (0..10).map(|f| LazyNodes::new(move |f| todo!()));
 
 //     cx.render(LazyNodes::new(move |cx| {

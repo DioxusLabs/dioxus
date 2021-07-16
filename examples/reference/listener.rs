@@ -7,7 +7,13 @@
 
 use dioxus::prelude::*;
 
-fn main() {}
+pub static Example: FC<()> = |cx| {
+    cx.render(rsx! {
+        ButtonList {}
+        NonUpdatingEvents {}
+        DisablePropogation {}
+    })
+};
 
 /// We can use `set_name` in multiple closures; the closures automatically *copy* the reference to set_name.
 static ButtonList: FC<()> = |cx| {

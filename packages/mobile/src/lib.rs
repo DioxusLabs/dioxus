@@ -9,7 +9,8 @@ use wry::application::window::Fullscreen;
 use wry::application::{
     dpi::LogicalSize,
     event::StartCause,
-    platform::ios::{ScreenEdge, WindowBuilderExtIOS, WindowExtIOS},
+    // platform::ios::{ScreenEdge, WindowBuilderExtIOS, WindowExtIOS},
+    // platform::ios::{ScreenEdge, WindowBuilderExtIOS, WindowExtIOS},
 };
 use wry::webview::WebViewBuilder;
 use wry::{
@@ -23,7 +24,7 @@ fn init_logging() {
     simple_logger::SimpleLogger::new().init().unwrap();
 }
 
-static HTML_CONTENT: &'static str = include_str!("./../../webview/src/index.html");
+static HTML_CONTENT: &'static str = include_str!("../../desktop/src/index.html");
 
 pub fn launch(root: FC<()>, builder: fn(WindowBuilder) -> WindowBuilder) -> anyhow::Result<()> {
     launch_with_props(root, (), builder)

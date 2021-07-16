@@ -16,8 +16,6 @@
 //! Feel free to file a PR or Issue if you run into another antipattern that you think users of Dioxus should know about.
 use dioxus::prelude::*;
 
-fn main() {}
-
 /// Antipattern: Iterators without keys
 /// -----------------------------------
 ///
@@ -174,3 +172,10 @@ static _example: FC<()> = |cx| todo!();
 /// This will only include the `core` dioxus crate which is relatively slim and fast to compile and avoids target-specific
 /// libraries.
 static __example: FC<()> = |cx| todo!();
+
+pub static Example: FC<()> = |cx| {
+    cx.render(rsx! {
+        AntipatternNoKeys { data: std::collections::HashMap::new() }
+        AntipatternNestedFragments {}
+    })
+};

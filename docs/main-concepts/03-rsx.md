@@ -60,7 +60,7 @@ Commas are entirely optional, but might be useful to delineate between elements 
 The `render` function provides an **extremely efficient** allocator for VNodes and text, so try not to use the `format!` macro in your components. Rust's default `ToString` methods pass through the global allocator, but all text in components is allocated inside a manually-managed Bump arena. To push you in the right direction, all text-based attributes take `std::fmt::Arguments` directly, so you'll want to reach for `format_args!` when the built-in `f-string` interpolation just doesn't cut it.
 
 ```rust
-static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
 
     let text = "example";
 

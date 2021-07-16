@@ -321,7 +321,10 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     ///
-    pub fn use_task<Out, Fut, Init>(&self, task_initializer: Init) -> (&TaskHandle, &Option<Out>)
+    pub fn use_task<Out, Fut, Init>(
+        self,
+        task_initializer: Init,
+    ) -> (TaskHandle<'src>, &'src Option<Out>)
     where
         Out: 'static,
         Fut: Future<Output = Out> + 'static,
@@ -363,7 +366,7 @@ Any function prefixed with "use" should not be called conditionally.
                 if let Some(val) = hook.task_dump.as_ref().borrow_mut().take() {
                     hook.value = Some(val);
                 }
-                (&TaskHandle { _p: PhantomData }, &hook.value)
+                (TaskHandle { _p: PhantomData }, &hook.value)
             },
             |_| {},
         )
@@ -463,6 +466,14 @@ impl<'src, P> Context<'src, P> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct TaskHandle<'src> {
     _p: PhantomData<&'src ()>,
+}
+
+impl<'src> TaskHandle<'src> {
+    pub fn toggle(&self) {}
+    pub fn start(&self) {}
+    pub fn stop(&self) {}
+    pub fn restart(&self) {}
 }

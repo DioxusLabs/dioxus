@@ -12,7 +12,7 @@ https://github.com/rustwasm/gloo
 For example, resize observer would function like this:
 
 ```rust
-static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
     let observer = use_resize_observer();
 
     cx.render(rsx!(
@@ -29,18 +29,18 @@ For other services, we shell out to gloo. If the gloo service doesn't exist, the
 
 | Service                      | Hook examples | Current Projects |
 | ---------------------------- | ------------- | ---------------- |
-| Fetch                        | 👀            | Reqwest/surf     |
-| Local storage (cache)        | 👀            | Gloo             |
-| Persistent storage (IndexDB) | 👀            | 👀               |
-| WebSocket                    | 👀            | Gloo             |
-| 3D Renderer / WebGL          | 👀            | Gloo             |
-| Web Worker                   | 👀            | 👀               |
-| Router                       | 👀            | 👀               |
-| Notifications                | 👀            | 👀               |
-| WebRTC Client                | 👀            | 👀               |
-| Service Workers              | 👀            | 👀               |
-| Resize Observer              | 👀            | 👀               |
-| Canvas                       | 👀            | 👀               |
-| Clipboard                    | 👀            | 👀               |
-| Fullscreen                   | 👀            | 👀               |
-| History API                  | 👀            | 👀               |
+| Fetch                        | 👀             | Reqwest/surf     |
+| Local storage (cache)        | 👀             | Gloo             |
+| Persistent storage (IndexDB) | 👀             | 👀                |
+| WebSocket                    | 👀             | Gloo             |
+| 3D Renderer / WebGL          | 👀             | Gloo             |
+| Web Worker                   | 👀             | 👀                |
+| Router                       | 👀             | 👀                |
+| Notifications                | 👀             | 👀                |
+| WebRTC Client                | 👀             | 👀                |
+| Service Workers              | 👀             | 👀                |
+| Resize Observer              | 👀             | 👀                |
+| Canvas                       | 👀             | 👀                |
+| Clipboard                    | 👀             | 👀                |
+| Fullscreen                   | 👀             | 👀                |
+| History API                  | 👀             | 👀                |

@@ -96,7 +96,7 @@ pub fn parse_component_body(
             }
             content.parse::<Token![..]>()?;
             *manual_props = Some(content.parse::<Expr>()?);
-        } else if content.peek(Ident) && content.peek2(Token![:]) {
+        } else if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
             if !cfg.allow_fields {
                 return Err(Error::new(
                     content.span(),
@@ -184,7 +184,7 @@ impl ToTokens for Component {
         };
 
         tokens.append_all(quote! {
-            __cx.virtual_child(
+            __cx.component(
                 #name,
                 #builder,
                 #key_token,

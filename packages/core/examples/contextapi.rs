@@ -5,12 +5,8 @@ struct SomeContext {
     items: Vec<String>,
 }
 
-struct Props {
-    name: String,
-}
-
 #[allow(unused)]
-static Example: FC<Props> = |cpt| {
+static Example: FC<()> = |cpt| {
     todo!()
 
     // let value = cx.use_context(|c: &SomeContext| c.items.last().unwrap());

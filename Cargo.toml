@@ -19,7 +19,7 @@ dioxus-mobile = { path = "./packages/mobile", optional = true }
 
 [features]
 # core
-default = ["core"]
+default = ["core", "ssr"]
 core = ["macro", "hooks", "html"]
 macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
@@ -48,6 +48,7 @@ async-std = { version = "1.9.0", features = ["attributes"] }
 im-rc = "15.0.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
 fxhash = "0.2.1"
+gloo-timers = "0.2.1"
 
 [workspace]
 members = [

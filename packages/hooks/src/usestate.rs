@@ -123,7 +123,14 @@ impl<'a, T: 'static> UseState<'a, T> {
         let slot = self.inner.wip.clone();
         Rc::new(move |new| *slot.borrow_mut() = Some(new))
     }
+
+    pub fn for_async(&self) -> AsyncUseState<T> {
+        AsyncUseState {
+            wip: self.inner.wip.clone(),
+        }
+    }
 }
+
 impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
     pub fn get_mut(self) -> RefMut<'a, T> {
         // make sure we get processed
@@ -175,9 +182,55 @@ impl<'a, T: Copy + Sub<T, Output = T>> SubAssign<T> for UseState<'a, T> {
     }
 }
 
+/// MUL
+impl<'a, T: Copy + Mul<T, Output = T>> Mul<T> for UseState<'a, T> {
+    type Output = T;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        self.inner.current_val.mul(rhs)
+    }
+}
+impl<'a, T: Copy + Mul<T, Output = T>> MulAssign<T> for UseState<'a, T> {
+    fn mul_assign(&mut self, rhs: T) {
+        self.set(self.inner.current_val.mul(rhs));
+    }
+}
+/// DIV
+impl<'a, T: Copy + Div<T, Output = T>> Div<T> for UseState<'a, T> {
+    type Output = T;
+
+    fn div(self, rhs: T) -> Self::Output {
+        self.inner.current_val.div(rhs)
+    }
+}
+impl<'a, T: Copy + Div<T, Output = T>> DivAssign<T> for UseState<'a, T> {
+    fn div_assign(&mut self, rhs: T) {
+        self.set(self.inner.current_val.div(rhs));
+    }
+}
+
 // enable displaty for the handle
 impl<'a, T: 'static + Display> std::fmt::Display for UseState<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.inner.current_val)
+    }
+}
+
+/// A less ergonmic but still capable form of use_state that's valid for `static lifetime
+pub struct AsyncUseState<T: 'static> {
+    wip: Rc<RefCell<Option<T>>>,
+}
+
+impl<T: ToOwned> AsyncUseState<T> {
+    pub fn get_mut<'a>(&'a self) -> RefMut<'a, T> {
+        // make sure we get processed
+        // self.needs_update();
+
+        // Bring out the new value, cloning if it we need to
+        // "get_mut" is locked behind "ToOwned" to make it explicit that cloning occurs to use this
+        RefMut::map(self.wip.borrow_mut(), |slot| {
+            //
+            slot.as_mut().unwrap()
+        })
     }
 }

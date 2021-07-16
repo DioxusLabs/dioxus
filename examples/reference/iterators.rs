@@ -7,17 +7,17 @@
 //! resolves to VNodes. It's more efficient and easier to write than having to `collect` everywhere.
 //!
 //! This also makes it easy to write "pull"-style iterators that don't have a known size.
-
-fn main() {}
+//!
+//! However, when the size of an iterator needs to be know for display purposes, collecting is fine.
 
 use dioxus::prelude::*;
-static Example: FC<()> = |cx| {
-    let g = use_state(cx, || 0);
+
+pub static Example: FC<()> = |cx| {
+    let example_data = use_state(cx, || 0);
 
     let v = (0..10).map(|f| {
         rsx! {
-            li {
-                onclick: move |_| g.set(f)
+            li { onclick: move |_| example_data.set(f)
                 "ID: {f}"
                 ul {
                     {(0..10).map(|k| rsx!{
@@ -31,7 +31,7 @@ static Example: FC<()> = |cx| {
     });
 
     cx.render(rsx! {
-        h3 {"Selected: {g}"}
+        h3 {"Selected: {example_data}"}
         ul {
             {v}
         }

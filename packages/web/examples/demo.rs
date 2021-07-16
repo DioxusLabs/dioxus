@@ -25,7 +25,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-pub const App: FC<()> = |cx| {
+pub static App: FC<()> = |cx| {
     cx.render(rsx!(
         div { class: "overflow-hidden"
             link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel:"stylesheet" }
@@ -40,7 +40,7 @@ pub const App: FC<()> = |cx| {
     ))
 };
 
-pub const Header: FC<()> = |cx| {
+pub static Header: FC<()> = |cx| {
     cx.render(rsx! {
         div {
             header { class: "text-gray-400 bg-gray-900 body-font"
@@ -66,7 +66,7 @@ pub const Header: FC<()> = |cx| {
     })
 };
 
-pub const Hero: FC<()> = |cx| {
+pub static Hero: FC<()> = |cx| {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -104,7 +104,7 @@ pub const Hero: FC<()> = |cx| {
         }
     })
 };
-pub const Entry: FC<()> = |cx| {
+pub static Entry: FC<()> = |cx| {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -117,7 +117,7 @@ pub const Entry: FC<()> = |cx| {
     })
 };
 
-pub const StacksIcon: FC<()> = |cx| {
+pub static StacksIcon: FC<()> = |cx| {
     cx.render(rsx!(
         svg {
             // xmlns: "http://www.w3.org/2000/svg"
@@ -132,7 +132,7 @@ pub const StacksIcon: FC<()> = |cx| {
         }
     ))
 };
-pub const RightArrowIcon: FC<()> = |cx| {
+pub static RightArrowIcon: FC<()> = |cx| {
     cx.render(rsx!(
         svg {
             fill: "none"

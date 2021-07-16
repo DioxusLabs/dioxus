@@ -25,7 +25,7 @@ fn Example(cx: Context, name: String) -> VNode {
 // or
 
 #[functional_component]
-static Example: FC = |cx, name: String| html! { <div> "Hello {name}!" </div> };
+pub static Example: FC = |cx, name: String| html! { <div> "Hello {name}!" </div> };
 ```
 
 The final output of components must be a tree of VNodes. We provide an html macro for using JSX-style syntax to write these, though, you could use any macro, DSL, templating engine, or the constructors directly.

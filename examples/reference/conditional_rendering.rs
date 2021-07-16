@@ -11,14 +11,12 @@
 
 use dioxus::prelude::*;
 
-fn main() {}
-
 // Convert a boolean conditional into a hide/show
 #[derive(PartialEq, Props)]
-struct MyProps {
+pub struct MyProps {
     should_show: bool,
 }
-static Example: FC<MyProps> = |cx| {
+pub static Example0: FC<MyProps> = |cx| {
     cx.render(rsx! {
         div {
             {cx.should_show.then(|| rsx!{
@@ -38,10 +36,10 @@ static Example: FC<MyProps> = |cx| {
 // In short:
 // `rsx!(in cx, ...)` is shorthand for `cx.render(rsx!(...))`
 #[derive(PartialEq, Props)]
-struct MyProps1 {
+pub struct MyProps1 {
     should_show: bool,
 }
-static Example1: FC<MyProps1> = |cx| {
+pub static Example1: FC<MyProps1> = |cx| {
     cx.render(rsx! {
         div {
             // With matching
@@ -70,16 +68,16 @@ static Example1: FC<MyProps1> = |cx| {
 /// Matching can be expanded
 
 #[derive(PartialEq)]
-enum Color {
+pub enum Color {
     Green,
     Yellow,
     Red,
 }
 #[derive(PartialEq, Props)]
-struct MyProps2 {
+pub struct MyProps2 {
     color: Color,
 }
-static Example2: FC<MyProps2> = |cx| {
+pub static Example2: FC<MyProps2> = |cx| {
     cx.render(rsx! {
         div {
             {match cx.color {
@@ -87,6 +85,32 @@ static Example2: FC<MyProps2> = |cx| {
                 Color::Yellow => rsx!(in cx, div {"it is Yellow!"}),
                 Color::Red => rsx!(in cx, div {"it is Red!"}),
             }}
+        }
+    })
+};
+
+pub static Example: FC<()> = |cx| {
+    let should_show = use_state(cx, || false);
+    let mut color_index = use_state(cx, || 0);
+    let color = match *color_index % 2 {
+        2 => Color::Green,
+        1 => Color::Yellow,
+        _ => Color::Red,
+    };
+
+    cx.render(rsx! {
+        div {
+            button {
+                onclick: move |_| should_show.set(!*should_show)
+                "click to toggle showing the examples"
+            }
+            button {
+                onclick: move |_| color_index += 1
+                "click to for the enxt color"
+            }
+            Example0 { should_show: *should_show }
+            Example1 { should_show: *should_show }
+            Example2 { color: color }
         }
     })
 };

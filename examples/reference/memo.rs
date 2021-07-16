@@ -18,11 +18,10 @@
 //! memoized collections like im-rc which are designed for this use case.
 
 use dioxus::prelude::*;
-fn main() {}
 
 // By default, components with no props are always memoized.
 // A props of () is considered empty.
-static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
     cx.render(rsx! {
         div { "100% memoized!" }
     })
@@ -32,11 +31,11 @@ static Example: FC<()> = |cx| {
 // However, the parent *must* create a new string on every render.
 // Notice how these props implement PartialEq - this is required for 'static props
 #[derive(PartialEq, Props)]
-struct MyProps1 {
+pub struct MyProps1 {
     name: String,
 }
 
-static Example1: FC<MyProps1> = |cx| {
+pub static Example1: FC<MyProps1> = |cx| {
     cx.render(rsx! {
         div { "100% memoized! {cx.name}" }
     })
@@ -46,11 +45,11 @@ static Example1: FC<MyProps1> = |cx| {
 // In contrast with the `String` example, these props use `Rc<str>` which operates similar to strings in JavaScript.
 // These strings cannot be modified, but may be cheaply shared in many places without issue.
 #[derive(PartialEq, Props)]
-struct MyProps2 {
+pub struct MyProps2 {
     name: std::rc::Rc<str>,
 }
 
-static Example2: FC<MyProps2> = |cx| {
+pub static Example2: FC<MyProps2> = |cx| {
     cx.render(rsx! {
         div { "100% memoized! {cx.name}" }
     })
@@ -58,11 +57,11 @@ static Example2: FC<MyProps2> = |cx| {
 
 // These props *do* borrow any content, and therefore cannot be safely memoized!.
 #[derive(PartialEq, Props)]
-struct MyProps3<'a> {
+pub struct MyProps3<'a> {
     name: &'a str,
 }
 // We need to manually specify a lifetime that ensures props and scope (the component's state) share the same lifetime.
-// Using the `static Example: FC<()>` pattern _will_ specify a lifetime, but that lifetime will be static which might
+// Using the `pub static Example: FC<()>` pattern _will_ specify a lifetime, but that lifetime will be static which might
 // not exactly be what you want
 fn Example3<'a>(cx: Context<'a, MyProps3<'a>>) -> VNode {
     cx.render(rsx! {
@@ -73,7 +72,7 @@ fn Example3<'a>(cx: Context<'a, MyProps3<'a>>) -> VNode {
 // These props *do* borrow any content, and therefore cannot be safely memoized!.
 // However, they cannot be compared, so we don't need the PartialEq flag.
 #[derive(Props)]
-struct MyProps4<'a> {
+pub struct MyProps4<'a> {
     onhandle: &'a dyn Fn(),
 }
 

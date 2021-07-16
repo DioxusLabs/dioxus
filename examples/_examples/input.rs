@@ -37,7 +37,7 @@ static App: FC<()> = |cx| {
     })
 };
 
-static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
     cx.render(rsx! {
         div { class: "max-w-lg max-w-xs bg-blue-800 shadow-2xl rounded-lg mx-auto text-center py-12 mt-4 rounded-xl"
             div { class: "container py-5 max-w-md mx-auto"

@@ -39,32 +39,18 @@ impl Parse for AmbiguousElement {
             }
         }
 
-        // if input.peek(Ident) {
-        //     let name_str = input.fork().parse::<Ident>().unwrap().to_string();
-        // } else {
-        // }
-
         if let Ok(name) = input.fork().parse::<Ident>() {
             let name_str = name.to_string();
 
-            match is_valid_tag(&name_str) {
-                true => input
+            let first_char = name_str.chars().next().unwrap();
+            if first_char.is_ascii_uppercase() {
+                input
+                    .parse::<Component>()
+                    .map(|c| AmbiguousElement::Component(c))
+            } else {
+                input
                     .parse::<Element>()
-                    .map(|c| AmbiguousElement::Element(c)),
-                false => {
-                    let first_char = name_str.chars().next().unwrap();
-                    if first_char.is_ascii_uppercase() {
-                        input
-                            .parse::<Component>()
-                            .map(|c| AmbiguousElement::Component(c))
-                    } else {
-                        let name = input.parse::<Ident>().unwrap();
-                        Err(Error::new(
-                            name.span(),
-                            "Components must be uppercased, perhaps you mispelled a html tag",
-                        ))
-                    }
-                }
+                    .map(|c| AmbiguousElement::Element(c))
             }
         } else {
             if input.peek(LitStr) {

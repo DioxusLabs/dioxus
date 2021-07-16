@@ -38,7 +38,7 @@ struct ExampleProps {
     initial_name: String,
 }
 
-static Example: FC<ExampleProps> = |cx| {
+pub static Example: FC<ExampleProps> = |cx| {
     let dispaly_name = use_state(cx, move || cx.initial_name.clone());
 
     cx.render(rsx! {

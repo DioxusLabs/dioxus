@@ -12,7 +12,6 @@
 //! A coming update with the assets system will make it possible to include global css from child components.
 
 use dioxus::prelude::*;
-fn main() {}
 
 const STYLE: &str = r#"
 body {background-color: powderblue;}
@@ -20,7 +19,7 @@ h1   {color: blue;}
 p    {color: red;}
 "#;
 
-const Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx| {
     cx.render(rsx! {
         head { style { "{STYLE}" } }
         body {

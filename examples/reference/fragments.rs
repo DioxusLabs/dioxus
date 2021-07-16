@@ -9,21 +9,18 @@
 //! - By using the fragment() method on the node factory
 
 use dioxus::prelude::*;
-fn main() {}
 
 // Returning multiple elements with rsx! or html!
-static Example1: FC<()> = |cx| {
+static App1: FC<()> = |cx| {
     cx.render(rsx! {
         h1 { }
         h2 { }
         h3 { }
-        // {}
-        // "hello world"
     })
 };
 
 // Using the Fragment component
-static Example2: FC<()> = |cx| {
+static App2: FC<()> = |cx| {
     cx.render(rsx! {
         Fragment {
             div {}
@@ -34,7 +31,7 @@ static Example2: FC<()> = |cx| {
 };
 
 // Using the `fragment` method on the NodeFactory
-static Example3: FC<()> = |cx| {
+static App3: FC<()> = |cx| {
     cx.render(LazyNodes::new(move |fac| {
         fac.fragment_from_iter([
             fac.text(format_args!("A")),
@@ -43,4 +40,12 @@ static Example3: FC<()> = |cx| {
             fac.text(format_args!("B")),
         ])
     }))
+};
+
+pub static Example: FC<()> = |cx| {
+    cx.render(rsx! {
+        App1 {}
+        App2 {}
+        App3 {}
+    })
 };

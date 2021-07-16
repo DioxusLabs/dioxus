@@ -20,12 +20,8 @@ use dioxus::prelude::*;
 
 const STYLE: &str = include_str!("./assets/calculator.css");
 fn main() {
-    dioxus::desktop::launch(App, |cfg| {
-        cfg.with_title("Calculator Demo")
-            .with_resizable(true)
-            .with_skip_taskbar(true)
-    })
-    .expect("failed to launch dioxus app");
+    dioxus::desktop::launch(App, |cfg| cfg.with_title("Calculator Demo"))
+        .expect("failed to launch dioxus app");
 }
 
 static App: FC<()> = |cx| {
