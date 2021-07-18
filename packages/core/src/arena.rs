@@ -22,18 +22,16 @@ impl SharedArena {
 
     /// THIS METHOD IS CURRENTLY UNSAFE
     /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
-    pub fn try_get(&self, idx: ScopeId) -> Result<&Scope> {
+    pub fn get(&self, idx: ScopeId) -> Option<&Scope> {
         let inner = unsafe { &*self.components.get() };
-        let scope = inner.get(idx);
-        scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
+        inner.get(idx)
     }
 
     /// THIS METHOD IS CURRENTLY UNSAFE
     /// THERE ARE NO CHECKS TO VERIFY THAT WE ARE ALLOWED TO DO THIS
-    pub fn try_get_mut(&self, idx: ScopeId) -> Result<&mut Scope> {
+    pub fn get_mut(&self, idx: ScopeId) -> Option<&mut Scope> {
         let inner = unsafe { &mut *self.components.get() };
-        let scope = inner.get_mut(idx);
-        scope.ok_or_else(|| Error::FatalInternal("Scope not found"))
+        inner.get_mut(idx)
     }
 
     fn inner(&self) -> &ScopeMap {

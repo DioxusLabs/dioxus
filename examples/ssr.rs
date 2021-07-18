@@ -4,7 +4,7 @@ use dioxus::ssr;
 fn main() {
     let mut vdom = VirtualDom::new(App);
     vdom.rebuild_in_place();
-    println!("{}", ssr::render_root(&vdom));
+    println!("{}", ssr::render_vdom(&vdom));
 }
 
 const App: FC<()> = |cx| {

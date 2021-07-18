@@ -22,7 +22,7 @@ async fn main() -> Result<(), std::io::Error> {
         let dom = VirtualDom::launch_with_props_in_place(Example, ExampleProps { initial_name });
 
         Ok(Response::builder(200)
-            .body(format!("{}", dioxus_ssr::render_root(&dom)))
+            .body(format!("{}", dioxus_ssr::render_vdom(&dom)))
             .content_type(tide::http::mime::HTML)
             .build())
     });
@@ -38,7 +38,7 @@ struct ExampleProps {
     initial_name: String,
 }
 
-pub static Example: FC<ExampleProps> = |cx| {
+static Example: FC<ExampleProps> = |cx| {
     let dispaly_name = use_state(cx, move || cx.initial_name.clone());
 
     cx.render(rsx! {

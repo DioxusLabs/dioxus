@@ -10,8 +10,9 @@
 //!
 
 pub use crate::innerlude::{
-    format_args_f, html, rsx, DioxusElement, DomEdit, EventTrigger, LazyNodes, NodeFactory,
-    Properties, RealDom, RealDomNode, ScopeId, VNode, VNodeKind, VirtualDom, VirtualEvent, FC,
+    format_args_f, html, rsx, Context, DioxusElement, DomEdit, EventTrigger, LazyNodes,
+    NodeFactory, Properties, RealDom, RealDomNode, ScopeId, VNode, VNodeKind, VirtualDom,
+    VirtualEvent, FC,
 };
 
 pub mod prelude {

@@ -10,8 +10,21 @@ use std::fmt::{Display, Formatter};
 
 use dioxus_core::*;
 
-pub fn render_root(vdom: &VirtualDom) -> String {
-    format!("{:}", TextRenderer::new(vdom))
+pub fn render_vnode(vnode: &VNode, string: &mut String) {}
+
+pub fn render_vdom(vdom: &VirtualDom) -> String {
+    format!("{:}", TextRenderer::from_vdom(vdom))
+}
+
+pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
+    Some(format!(
+        "{:}",
+        TextRenderer {
+            cfg: SsrConfig::default(),
+            root: vdom.components.get(scope).unwrap().root(),
+            vdom: Some(vdom)
+        }
+    ))
 }
 
 pub struct SsrConfig {
@@ -56,14 +69,22 @@ impl Default for SsrConfig {
 /// assert_eq!(output, "<div>hello world</div>");
 /// ```
 pub struct TextRenderer<'a> {
-    vdom: &'a VirtualDom,
+    vdom: Option<&'a VirtualDom>,
+    root: &'a VNode<'a>,
     cfg: SsrConfig,
 }
 
+impl Display for TextRenderer<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.html_render(self.root, f, 0)
+    }
+}
+
 impl<'a> TextRenderer<'a> {
-    pub fn new(vdom: &'a VirtualDom) -> Self {
+    pub fn from_vdom(vdom: &'a VirtualDom) -> Self {
         Self {
-            vdom,
+            root: vdom.base_scope().root(),
+            vdom: Some(vdom),
             cfg: SsrConfig::default(),
         }
     }
@@ -141,24 +162,16 @@ impl<'a> TextRenderer<'a> {
             }
             VNodeKind::Component(vcomp) => {
                 let idx = vcomp.ass_scope.get().unwrap();
-
-                let new_node = self.vdom.components.try_get(idx).unwrap().root();
-
-                self.html_render(new_node, f, il + 1)?;
+                if let Some(vdom) = self.vdom {
+                    let new_node = vdom.components.get(idx).unwrap().root();
+                    self.html_render(new_node, f, il + 1)?;
+                }
             }
             VNodeKind::Suspended { .. } => {
                 // we can't do anything with suspended nodes
             }
         }
         Ok(())
-    }
-}
-
-impl Display for TextRenderer<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let root = self.vdom.base_scope();
-        let root_node = root.root();
-        self.html_render(root_node, f, 0)
     }
 }
 
@@ -216,21 +229,21 @@ mod tests {
     fn to_string_works() {
         let mut dom = VirtualDom::new(SIMPLE_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_root(&dom));
+        dbg!(render_vdom(&dom));
     }
 
     #[test]
     fn nested() {
         let mut dom = VirtualDom::new(NESTED_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_root(&dom));
+        dbg!(render_vdom(&dom));
     }
 
     #[test]
     fn fragment_app() {
         let mut dom = VirtualDom::new(FRAGMENT_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_root(&dom));
+        dbg!(render_vdom(&dom));
     }
 
     #[test]
@@ -243,7 +256,7 @@ mod tests {
         let mut dom = VirtualDom::new(SLIGHTLY_MORE_COMPLEX);
         dom.rebuild_in_place().expect("failed to run virtualdom");
 
-        file.write_fmt(format_args!("{}", TextRenderer::new(&dom)))
+        file.write_fmt(format_args!("{}", TextRenderer::from_vdom(&dom)))
             .unwrap();
     }
 
@@ -263,6 +276,6 @@ mod tests {
 
         let mut dom = VirtualDom::new(STLYE_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_root(&dom));
+        dbg!(render_vdom(&dom));
     }
 }

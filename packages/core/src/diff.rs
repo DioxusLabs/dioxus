@@ -162,7 +162,7 @@ where
                     new.ass_scope.set(scope_id);
 
                     // make sure the component's caller function is up to date
-                    let scope = self.components.try_get_mut(scope_id.unwrap()).unwrap();
+                    let scope = self.components.get_mut(scope_id.unwrap()).unwrap();
 
                     scope.caller = new.caller.clone();
 
@@ -406,7 +406,7 @@ where
                     .components
                     .with(|components| {
                         components.insert_with_key(|new_idx| {
-                            let parent_scope = self.components.try_get(parent_idx).unwrap();
+                            let parent_scope = self.components.get(parent_idx).unwrap();
                             let height = parent_scope.height + 1;
                             Scope::new(
                                 caller,
@@ -495,7 +495,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         while let Some(scope_id) = scopes_to_explore.pop() {
             // If we're planning on deleting this node, then we don't need to both rendering it
             self.seen_nodes.insert(scope_id);
-            let scope = self.components.try_get(scope_id).unwrap();
+            let scope = self.components.get(scope_id).unwrap();
             for child in scope.descendents.borrow().iter() {
                 // Add this node to be explored
                 scopes_to_explore.push(child.clone());
@@ -1324,7 +1324,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
 
                     // For components, we load their root and push them onto the stack
                     VNodeKind::Component(sc) => {
-                        let scope = self.scopes.try_get(sc.ass_scope.get().unwrap()).unwrap();
+                        let scope = self.scopes.get(sc.ass_scope.get().unwrap()).unwrap();
 
                         // Simply swap the current node on the stack with the root of the component
                         *node = scope.root();

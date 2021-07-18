@@ -224,7 +224,7 @@ impl VirtualDom {
             &self.tasks,
         );
 
-        let cur_component = self.components.try_get_mut(self.base_scope).unwrap();
+        let cur_component = self.components.get_mut(self.base_scope).unwrap();
         cur_component.run_scope()?;
 
         let meta = diff_machine.create(cur_component.next_frame());
@@ -312,7 +312,7 @@ impl VirtualDom {
 
             // Suspense Events! A component's suspended node is updated
             VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
-                let scope = self.components.try_get_mut(trigger.originator).unwrap();
+                let scope = self.components.get_mut(trigger.originator).unwrap();
 
                 // safety: we are sure that there are no other references to the inner content of this hook
                 let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
@@ -339,8 +339,8 @@ impl VirtualDom {
             // We use the reconciler to request new IDs and then commit/uncommit the IDs when the scheduler is finished
             _ => {
                 self.components
-                    .try_get_mut(trigger.originator)?
-                    .call_listener(trigger)?;
+                    .get_mut(trigger.originator)
+                    .map(|f| f.call_listener(trigger));
 
                 // Now, there are events in the queue
                 let mut updates = self.event_queue.queue.as_ref().borrow_mut();
@@ -366,7 +366,7 @@ impl VirtualDom {
 
                     // Start a new mutable borrow to components
                     // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
-                    let cur_component = self.components.try_get_mut(update.idx).unwrap();
+                    let cur_component = self.components.get_mut(update.idx).unwrap();
 
                     cur_component.run_scope()?;
 
@@ -380,7 +380,7 @@ impl VirtualDom {
     }
 
     pub fn base_scope(&self) -> &Scope {
-        self.components.try_get(self.base_scope).unwrap()
+        self.components.get(self.base_scope).unwrap()
     }
 }
 

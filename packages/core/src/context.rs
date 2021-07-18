@@ -278,8 +278,8 @@ Any function prefixed with "use" should not be called conditionally.
                             Some(parent_id) => {
                                 let parent = inner
                                     .arena_link
-                                    .try_get(parent_id)
-                                    .map_err(|_| Error::FatalInternal("Failed to find parent"))?;
+                                    .get(parent_id)
+                                    .ok_or_else(|| Error::FatalInternal("Failed to find parent"))?;
 
                                 scope = Some(parent);
                             }

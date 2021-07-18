@@ -423,7 +423,7 @@ pub trait GlobalAttributes {
         list_style_position: "list-style-position",
 
         /// Specifies the marker style for a list_item.
-        list_style_type: "list-style-type",
+        list_styler_type: "list-style-type",
 
         /// Sets the margin on all four sides of the element.
         margin: "margin",
@@ -1016,6 +1016,8 @@ builder_constructors! {
         r#type: Mime,
         // ping: SpacedList<Uri>,
         // rel: SpacedList<LinkType>,
+        ping: SpacedList,
+        rel: SpacedList,
     };
 
     /// Build a
@@ -1274,6 +1276,14 @@ builder_constructors! {
         src: Uri,
         srcdoc: Uri,
         width: usize,
+
+        marginWidth: String,
+        align: String,
+        longdesc: String,
+
+        scrolling: String,
+        marginHeight: String,
+        frameBorder: String,
         // sandbox: SpacedSet<Sandbox>,
     };
 
@@ -1850,7 +1860,7 @@ pub trait SvgAttributes {
         to: "to",
         transform: "transform",
         transform_origin: "transform-origin",
-        _type: "_type",
+        r#type: "_type",
         u1: "u1",
         u2: "u2",
         underline_position: "underline-position",

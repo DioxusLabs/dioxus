@@ -49,7 +49,7 @@
 //! }
 //! ```
 //!
-//! Props that are valid for the `'static` lifetime automatically get memoized by Diouxs. This means the component won't
+//! Props that are valid for the `'pub static` lifetime automatically get memoized by Diouxs. This means the component won't
 //! re-render if its Props didn't change. However, Props that borrow data from their parent cannot be safely memoized, and
 //! will always re-render if their parent changes. To borrow data from a parent, your component needs to add explicit lifetimes,
 //! otherwise Rust will get confused about whether data is borrowed from either Props or Context. Since Dioxus manages
@@ -67,7 +67,7 @@
 //!
 //!
 //! The lifetimes might look a little messy, but are crucially important for Dioxus's efficiency and overall ergonimics.
-//! Components can also be crafted as static closures, enabling type inference without all the type signature noise. However,
+//! Components can also be crafted as pub static closures, enabling type inference without all the type signature noise. However,
 //! closure-style components cannot work with borrowed data due to limitations in Rust's lifetime system.
 //!
 //! To use custom properties for components, you'll need to derive the `Props` trait for your properties. This trait
@@ -93,7 +93,7 @@
 //! Dioxus uses hooks for state management. Hooks are a form of state persisted between calls of the function component.
 //!
 //! ```
-//! pub static Example: FC<()> = |cx| {
+//! pub pub static Example: FC<()> = |cx| {
 //!     let (val, set_val) = use_state(cx, || 0);
 //!     cx.render(rsx!(
 //!         button { onclick: move |_| set_val(val + 1) }
@@ -156,7 +156,7 @@
 //!     diouxs::web::launch(Example);
 //! }
 //!
-//! pub static Example: FC<()> = |cx| {
+//! pub pub static Example: FC<()> = |cx| {
 //!     cx.render(rsx! {
 //!         div { "Hello World!" }
 //!     })

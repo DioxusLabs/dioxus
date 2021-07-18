@@ -13,15 +13,12 @@ use std::{pin::Pin, time::Duration};
 
 use dioxus::prelude::*;
 
-use dioxus_web::*;
-
 fn main() {
     // Setup logging
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
 
-    // Run the app
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
+    dioxus_web::launch(App, |c| c)
 }
 
 #[derive(serde::Deserialize)]
@@ -38,17 +35,12 @@ static App: FC<()> = |cx| {
         || surf::get(ENDPOINT).recv_json::<DogApi>(),
         |cx, res| match res {
             Ok(res) => rsx!(in cx, img { src: "{res.message}" }),
-            Err(err) => rsx!(in cx, div { "No doggos for you :(" }),
+            Err(_err) => rsx!(in cx, div { "No doggos for you :(" }),
         },
     );
 
-    log::error!("RIP WE RAN THE COMPONENT");
-
     cx.render(rsx! {
-        div {
-            style: {
-                align_items: "center"
-            }
+        div { style: { align_items: "center" }
             section { class: "py-12 px-4 text-center"
                 div { class: "w-full max-w-2xl mx-auto"
                     span { class: "text-sm font-semibold"
