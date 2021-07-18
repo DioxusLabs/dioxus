@@ -17,7 +17,7 @@ Originally the syntax of the FC macro was meant to look like:
 
 ```rust
 #[fc]
-fn example(cx: &Context<{ name: String }>) -> VNode {
+fn example(cx: &Context<{ name: String }>) -> DomTree {
     html! { <div> "Hello, {name}!" </div> }
 }
 ```
@@ -26,7 +26,7 @@ fn example(cx: &Context<{ name: String }>) -> VNode {
 
 ```rust
 #[fc]
-fn example(cx: &Context, name: String) -> VNode {
+fn example(cx: &Context, name: String) -> DomTree {
     html! { <div> "Hello, {name}!" </div> }
 }
 ```
@@ -71,7 +71,7 @@ mod Example {
         name: String
     }
 
-    fn component(cx: &Context<Props>) -> VNode {
+    fn component(cx: &Context<Props>) -> DomTree {
         html! { <div> "Hello, {name}!" </div> }
     }
 }
@@ -84,7 +84,7 @@ struct Props {
     name: String
 }
 
-fn component(cx: &Context<Props>) -> VNode {
+fn component(cx: &Context<Props>) -> DomTree {
     html! { <div> "Hello, {name}!" </div> }
 }
 ```
@@ -93,7 +93,7 @@ These definitions might be ugly, but the fc macro cleans it all up. The fc macro
 
 ```rust
 #[fc]
-fn example(cx: &Context, name: String) -> VNode {
+fn example(cx: &Context, name: String) -> DomTree {
     html! { <div> "Hello, {name}!" </div> }
 }
 
@@ -105,7 +105,7 @@ mod Example {
     struct Props {
         name: String
     }
-    fn component(cx: &Context<Props>) -> VNode {
+    fn component(cx: &Context<Props>) -> DomTree {
         html! { <div> "Hello, {name}!" </div> }
     }
 }
@@ -160,7 +160,7 @@ pub static Example: FC<()> = |cx| {
 // expands to...
 
 pub static Example: FC<()> = |cx| {
-    // This function converts a Fn(allocator) -> VNode closure to a VNode struct that will later be evaluated.
+    // This function converts a Fn(allocator) -> DomTree closure to a VNode struct that will later be evaluated.
     html_macro_to_vnodetree(move |allocator| {
         let mut node0 = allocator.alloc(VElement::div);
         let node1 = allocator.alloc_text("blah");
@@ -216,7 +216,7 @@ struct ExampleContext {
     items: Vec<String>
 }
 
-fn Example<'src>(cx: Context<'src, ()>) -> VNode<'src> {
+fn Example<'src>(cx: Context<'src, ()>) -> DomTree<'src> {
     let val: &'b ContextGuard<ExampleContext> = (&'b cx).use_context(|context: &'other ExampleContext| {
         // always select the last element
         context.items.last()
@@ -348,7 +348,7 @@ An update to the use_context subscription will mark the node as dirty. The node 
 The FC layout was altered to make life easier for us inside the VirtualDom. The "view" function returns an unbounded VNode object. Calling the "view" function is unsafe under the hood, but prevents lifetimes from leaking out of the function call. Plus, it's easier to write. Because there are no lifetimes on the output (occur purely under the hood), we can escape needing to annotate them.
 
 ```rust
-fn component(cx: Context, props: &Props) -> VNode {
+fn component(cx: Context, props: &Props) -> DomTree {
 
 }
 ```

@@ -8,7 +8,7 @@ struct MyProps {
     name: String
 }
 
-fn Example(cx: Context<MyProps>) -> VNode {
+fn Example(cx: Context<MyProps>) -> DomTree {
     html! { <div> "Hello {cx.cx.name}!" </div> }
 }
 ```
@@ -18,7 +18,7 @@ Here, the `Context` object is used to access hook state, create subscriptions, a
 ```rust
 // A very terse component!
 #[fc]
-fn Example(cx: Context, name: String) -> VNode {
+fn Example(cx: Context, name: String) -> DomTree {
     html! { <div> "Hello {name}!" </div> }
 }
 

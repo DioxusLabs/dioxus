@@ -91,7 +91,7 @@ pub struct TodoEntryProps {
     todo: std::rc::Rc<TodoItem>,
 }
 
-pub fn TodoEntry(cx: Context<TodoEntryProps>) -> VNode {
+pub fn TodoEntry(cx: Context<TodoEntryProps>) -> DomTree {
     let TodoEntryProps { todo } = *cx;
     let is_editing = use_state(cx, || false);
     let contents = "";

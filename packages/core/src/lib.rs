@@ -18,8 +18,7 @@ pub use crate::innerlude::{
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::context::Context;
-    pub use crate::innerlude::DioxusElement;
-    pub use crate::innerlude::{LazyNodes, NodeFactory, FC};
+    pub use crate::innerlude::{DioxusElement, DomTree, LazyNodes, NodeFactory, FC};
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
     pub use dioxus_core_macro::{format_args_f, html, rsx, Props};
@@ -43,7 +42,8 @@ pub(crate) mod innerlude {
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
-    pub type FC<P> = fn(Context<P>) -> VNode;
+    pub type DomTree<'a> = Option<VNode<'a>>;
+    pub type FC<P> = fn(Context<P>) -> DomTree;
 
     pub use dioxus_core_macro::{format_args_f, html, rsx};
 }

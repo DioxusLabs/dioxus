@@ -62,7 +62,7 @@ async fn ExampleLoader(cx: Context<()>) -> Vnode {
 ```
 
 ```rust
-async fn Example(cx: Context<()>) -> VNode {
+async fn Example(cx: Context<()>) -> DomTree {
     // Diff this set between the last set
     // Check if we have any outstanding tasks?
     //

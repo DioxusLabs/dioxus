@@ -25,7 +25,7 @@ pub struct TodoItem {
     pub contents: String,
 }
 
-pub fn App(cx: Context<()>) -> VNode {
+pub fn App(cx: Context<()>) -> DomTree {
     let (draft, set_draft) = use_state_classic(cx, || "".to_string());
     let (todos, set_todos) = use_state_classic(cx, || HashMap::<uuid::Uuid, Rc<TodoItem>>::new());
     let (filter, set_filter) = use_state_classic(cx, || FilterState::All);
@@ -99,7 +99,7 @@ pub struct TodoEntryProps {
     item: Rc<TodoItem>,
 }
 
-pub fn TodoEntry(cx: Context<TodoEntryProps>) -> VNode {
+pub fn TodoEntry(cx: Context<TodoEntryProps>) -> DomTree {
     let (is_editing, set_is_editing) = use_state_classic(cx, || false);
     let contents = "";
     let todo = TodoItem {

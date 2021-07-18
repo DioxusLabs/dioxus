@@ -21,7 +21,7 @@ fn main() {
     console_error_panic_hook::set_once();
 
     // Run the app
-    wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
+    dioxus_web::launch(App, |c| c)
 }
 
 static App: FC<()> = |cx| {

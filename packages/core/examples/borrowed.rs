@@ -20,7 +20,7 @@ struct ListItem {
     age: u32,
 }
 
-fn app(cx: Context<AppProps>) -> VNode {
+fn app(cx: Context<AppProps>) -> DomTree {
     // let (val, set_val) = use_state_classic(cx, || 0);
 
     cx.render(LazyNodes::new(move |_nodecx| {
@@ -56,7 +56,7 @@ struct ChildProps {
     item_handler: Rc<dyn Fn(i32)>,
 }
 
-fn ChildItem<'a>(cx: Context<'a, ChildProps>) -> VNode {
+fn ChildItem<'a>(cx: Context<'a, ChildProps>) -> DomTree {
     cx.render(LazyNodes::new(move |__cx| todo!()))
 }
 

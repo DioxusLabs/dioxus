@@ -52,7 +52,7 @@ struct ButtonProps {
     id: u8,
 }
 
-fn CustomButton(cx: Context<ButtonProps>) -> VNode {
+fn CustomButton(cx: Context<ButtonProps>) -> DomTree {
     let names = cx.use_context::<CustomContext>();
     let name = names.0[cx.id as usize];
 

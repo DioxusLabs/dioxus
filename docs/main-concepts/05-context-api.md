@@ -5,19 +5,19 @@
 // Only one context can be associated with any given component
 // This is known as "exposed state". Children can access this context,
 // but will not be automatically subscribed.
-fn ContextCreate(cx: &mut Context<()>) -> VNode {
+fn ContextCreate(cx: &mut Context<()>) -> DomTree {
     let context = cx.set_context(|| CustomContext::new());
     html! { <> {cx.children()} </> }
 }
 
-fn ContextRead(cx: &mut Context<()>) -> VNode {
+fn ContextRead(cx: &mut Context<()>) -> DomTree {
     // Panics if context is not available
     let some_cx = cx.get_context::<CustomContext>();
     let text = some_cx.select("some_selector");
     html! { <div> "{text}" </div> }
 }
 
-fn Subscription(cx: &mut Context<()>) -> VNode {
+fn Subscription(cx: &mut Context<()>) -> DomTree {
     // Open a "port" on the component for actions to trigger a re-evaluation
     let subscription = cx.new_subscription();
 

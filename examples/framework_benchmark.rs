@@ -92,7 +92,7 @@ struct ActionButtonProps<F: Fn(MouseEvent)> {
     id: &'static str,
     action: F,
 }
-fn ActionButton<F>(cx: Context<ActionButtonProps<F>>) -> VNode
+fn ActionButton<F>(cx: Context<ActionButtonProps<F>>) -> DomTree
 where
     F: Fn(MouseEvent),
 {
@@ -110,7 +110,7 @@ struct RowProps {
     row_id: usize,
     label: Rc<str>,
 }
-fn Row<'a>(cx: Context<'a, RowProps>) -> VNode {
+fn Row<'a>(cx: Context<'a, RowProps>) -> DomTree {
     cx.render(rsx! {
         tr {
             td { class:"col-md-1", "{cx.row_id}" }

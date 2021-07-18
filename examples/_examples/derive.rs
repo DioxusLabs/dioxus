@@ -9,7 +9,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-fn App(cx: Context<()>) -> VNode {
+fn App(cx: Context<()>) -> DomTree {
     let cansee = use_state(cx, || false);
     rsx! { in cx,
         div {
@@ -22,7 +22,7 @@ fn App(cx: Context<()>) -> VNode {
     }
 }
 
-fn Child(cx: Context<()>) -> VNode {
+fn Child(cx: Context<()>) -> DomTree {
     rsx! { in cx,
         section { class: "py-6 bg-coolGray-100 text-coolGray-900"
             div { class: "container mx-auto flex flex-col items-center justify-center p-4 space-y-8 md:p-10 md:px-24 xl:px-48"

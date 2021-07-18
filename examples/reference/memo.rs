@@ -63,7 +63,7 @@ pub struct MyProps3<'a> {
 // We need to manually specify a lifetime that ensures props and scope (the component's state) share the same lifetime.
 // Using the `pub static Example: FC<()>` pattern _will_ specify a lifetime, but that lifetime will be static which might
 // not exactly be what you want
-fn Example3<'a>(cx: Context<'a, MyProps3<'a>>) -> VNode {
+fn Example3<'a>(cx: Context<'a, MyProps3<'a>>) -> DomTree {
     cx.render(rsx! {
         div { "Not memoized! {cx.name}" }
     })
@@ -77,7 +77,7 @@ pub struct MyProps4<'a> {
 }
 
 // We need to manually specify a lifetime that ensures props and scope (the component's state) share the same lifetime.
-fn Example4<'a>(cx: Context<'a, MyProps4<'a>>) -> VNode {
+fn Example4<'a>(cx: Context<'a, MyProps4<'a>>) -> DomTree {
     cx.render(rsx! {
         div { "Not memoized!", onclick: move |_| (cx.onhandle)() }
     })

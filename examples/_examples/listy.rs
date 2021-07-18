@@ -11,7 +11,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(JonsFavoriteCustomApp));
 }
 
-fn JonsFavoriteCustomApp(cx: Context<()>) -> VNode {
+fn JonsFavoriteCustomApp(cx: Context<()>) -> DomTree {
     let items = (0..20).map(|f| {
         rsx! {
             li {"{f}"}

@@ -53,7 +53,7 @@ pub struct Scope {
 type EventChannel = Rc<dyn Fn()>;
 
 // The type of closure that wraps calling components
-pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> VNode<'b>;
+pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> DomTree<'b>;
 
 // The type of task that gets sent to the task scheduler
 pub type FiberTask = Pin<Box<dyn Future<Output = EventTrigger>>>;
@@ -130,7 +130,8 @@ impl Scope {
 
     // this is its own function so we can preciesly control how lifetimes flow
     unsafe fn call_user_component<'a>(&'a self, caller: &WrappedCaller) -> VNode<'static> {
-        let new_head: VNode<'a> = caller(self);
+        let new_head: Option<VNode<'a>> = caller(self);
+        let new_head = new_head.unwrap_or(errored_fragment());
         std::mem::transmute(new_head)
     }
 
@@ -203,5 +204,17 @@ impl Scope {
     #[inline]
     pub fn root<'a>(&'a self) -> &'a VNode<'a> {
         &self.frames.cur_frame().head_node
+    }
+}
+
+pub fn errored_fragment() -> VNode<'static> {
+    VNode {
+        dom_id: RealDomNode::empty_cell(),
+        key: None,
+        kind: VNodeKind::Fragment(VFragment {
+            children: &[],
+            is_static: false,
+            is_error: true,
+        }),
     }
 }

@@ -45,7 +45,7 @@ struct IncrementerProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn C1<'a, 'b>(cx: Context<'a, IncrementerProps<'b>>) -> VNode<'a> {
+fn C1<'a, 'b>(cx: Context<'a, IncrementerProps<'b>>) -> DomTree<'a> {
     cx.render(rsx! {
         button {
             class: "inline-block py-4 px-8 mr-6 leading-none text-white bg-indigo-600 hover:bg-indigo-900 font-semibold rounded shadow"

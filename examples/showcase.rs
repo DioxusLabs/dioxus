@@ -33,7 +33,7 @@ struct ScrollSelectorProps<'a> {
     onselect: &'a dyn Fn(Option<usize>),
 }
 
-fn ScrollSelector<'a>(cx: Context<'a, ScrollSelectorProps>) -> VNode<'a> {
+fn ScrollSelector<'a>(cx: Context<'a, ScrollSelectorProps>) -> DomTree<'a> {
     let selection_list = (&REFERENCES).iter().enumerate().map(|(id, _)| {
         rsx! {
             li {

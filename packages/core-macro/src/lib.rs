@@ -52,7 +52,7 @@ pub fn html_template(s: TokenStream) -> TokenStream {
 /// ```ignore
 ///
 /// #[fc]
-/// fn Example(cx: Context, name: &str) -> VNode {
+/// fn Example(cx: Context, name: &str) -> DomTree {
 ///     cx.render(rsx! { h1 {"hello {name}"} })
 /// }
 /// ```
@@ -220,7 +220,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 ///     pub struct BallerProps {}
 ///
 ///     /// This component totally balls
-///     pub fn Baller(cx: Context<()>) -> VNode {
+///     pub fn Baller(cx: Context<()>) -> DomTree {
 ///         todo!()
 ///     }
 /// }
@@ -231,7 +231,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 /// }
 ///
 /// /// This component is taller than most :)
-/// pub fn Taller(cx: Context<TallerProps>) -> VNode {
+/// pub fn Taller(cx: Context<TallerProps>) -> DomTree {
 ///     let b = true;
 ///     todo!()
 /// }

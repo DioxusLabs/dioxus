@@ -14,7 +14,7 @@ You'll want to write RSX where you can, and in a future release we'll have a too
 #[derive(PartialEq, Props)]
 struct ExampleProps { name: &str, pending: bool, count: i32 }
 
-fn Example(cx: Context<ExampleProps> ) -> VNode {
+fn Example(cx: Context<ExampleProps> ) -> DomTree {
     let ExampleProps { name, pending, count } = cx.props;
     cx.render(html! {
         <div>
@@ -35,7 +35,7 @@ The Dioxus VSCode extension will eventually provide a macro to convert a selecti
 It's also a bit easier on the eyes 🙂 than HTML.
 
 ```rust
-fn Example(cx: Context<ExampleProps>) -> VNode {
+fn Example(cx: Context<ExampleProps>) -> DomTree {
     cx.render(rsx! {
         div {
             // cx derefs to props so you can access fields directly
