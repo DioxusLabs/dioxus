@@ -5,7 +5,7 @@
 //! if the type suppports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
-use crate::innerlude::{Context, LazyNodes, VNode, FC};
+use crate::innerlude::{Context, DomTree, LazyNodes, VNode, FC};
 
 pub trait Properties: Sized {
     type Builder;
@@ -51,6 +51,6 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
 /// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
 /// Try to avoid nesting fragments if you can. Infinitely nested Fragments *will* cause diffing to crash.
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>(cx: Context<'a, ()>) -> VNode<'a> {
+pub fn Fragment<'a>(cx: Context<'a, ()>) -> DomTree<'a> {
     cx.render(LazyNodes::new(move |f| f.fragment_from_iter(cx.children())))
 }

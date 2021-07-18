@@ -123,7 +123,7 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> VNode<'a> {
+fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> DomTree<'a> {
     cx.render(rsx! {
         button {
             class: "calculator-key {cx.name}"
@@ -138,7 +138,7 @@ struct CalculatorDisplayProps {
     val: f64,
 }
 
-fn CalculatorDisplay(cx: Context<CalculatorDisplayProps>) -> VNode {
+fn CalculatorDisplay(cx: Context<CalculatorDisplayProps>) -> DomTree {
     use separator::Separatable;
     // Todo, add float support to the num-format crate
     let formatted = cx.val.separated_string();

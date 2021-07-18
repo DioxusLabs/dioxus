@@ -5,7 +5,7 @@
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, Properties, RealDomNode, Scope, ScopeId, FC},
+    innerlude::{Context, DomTree, Properties, RealDomNode, Scope, ScopeId, FC},
 };
 use std::{
     cell::Cell,
@@ -50,6 +50,7 @@ pub struct VText<'src> {
 pub struct VFragment<'src> {
     pub children: &'src [VNode<'src>],
     pub is_static: bool,
+    pub is_error: bool,
 }
 
 pub trait DioxusElement {
@@ -114,7 +115,7 @@ pub struct Listener<'bump> {
 pub struct VComponent<'src> {
     pub ass_scope: Cell<Option<ScopeId>>,
 
-    pub(crate) caller: Rc<dyn Fn(&Scope) -> VNode>,
+    pub(crate) caller: Rc<dyn Fn(&Scope) -> DomTree>,
 
     pub(crate) children: &'src [VNode<'src>],
 
@@ -321,9 +322,9 @@ impl<'a> NodeFactory<'a> {
     pub fn create_component_caller<'g, P: 'g>(
         component: FC<P>,
         raw_props: *const (),
-    ) -> Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r>> {
-        type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> VNode<'r> + 'a>;
-        let caller: Captured = Rc::new(move |scp: &Scope| -> VNode {
+    ) -> Rc<dyn for<'r> Fn(&'r Scope) -> DomTree<'r>> {
+        type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> DomTree<'r> + 'a>;
+        let caller: Captured = Rc::new(move |scp: &Scope| -> DomTree {
             // cast back into the right lifetime
             let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
             let cx: Context<P> = Context {
@@ -371,6 +372,7 @@ To help you identify where this error is coming from, we've generated a backtrac
             kind: VNodeKind::Fragment(VFragment {
                 children: nodes.into_bump_slice(),
                 is_static: false,
+                is_error: false,
             }),
         }
     }
@@ -426,6 +428,7 @@ impl<'a> IntoVNode<'a> for &VNode<'a> {
             VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
                 children: fragment.children,
                 is_static: fragment.is_static,
+                is_error: false,
             }),
             VNodeKind::Component(component) => VNodeKind::Component(component),
 

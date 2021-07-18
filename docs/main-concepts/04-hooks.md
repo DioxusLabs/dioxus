@@ -1,5 +1,5 @@
 ```rust
-fn Example(cx: &mut Context<()>) -> VNode {
+fn Example(cx: &mut Context<()>) -> DomTree {
     let service = use_combubulator(cx);
     let Status { name, pending, count } = service.info();
     html! {

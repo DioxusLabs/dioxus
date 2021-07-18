@@ -132,7 +132,7 @@ static App: FC<()> = |cx| {
     ))
 };
 
-pub fn FilterToggles(cx: Context<()>) -> VNode {
+pub fn FilterToggles(cx: Context<()>) -> DomTree {
     // let reducer = recoil::use_callback(&cx, || ());
     // let items_left = recoil::use_atom_family(&cx, &TODOS, uuid::Uuid::new_v4());
 

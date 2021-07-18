@@ -11,7 +11,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(dioxus_web::WebsysRenderer::start(CustomA))
 }
 
-fn CustomA(cx: Context<()>) -> VNode {
+fn CustomA(cx: Context<()>) -> DomTree {
     let (val, set_val) = use_state_classic(cx, || "abcdef".to_string() as String);
 
     cx.render(rsx! {
@@ -43,7 +43,7 @@ mod components {
         val: String,
     }
 
-    pub fn CustomB(cx: Context<PropsB>) -> VNode {
+    pub fn CustomB(cx: Context<PropsB>) -> DomTree {
         let (first, last) = cx.val.split_at(3);
         cx.render(rsx! {
             div {
@@ -64,7 +64,7 @@ mod components {
         val: String,
     }
 
-    fn CustomC(cx: Context<PropsC>) -> VNode {
+    fn CustomC(cx: Context<PropsC>) -> DomTree {
         cx.render(rsx! {
             div {
                 class: "m-8"

@@ -8,7 +8,7 @@ struct MyProps {
     name: String
 }
 
-fn Example(cx: Context<MyProps>) -> VNode {
+fn Example(cx: Context<MyProps>) -> DomTree {
     cx.render(html! {
         <div> "Hello {cx.name}!" </div>
     })

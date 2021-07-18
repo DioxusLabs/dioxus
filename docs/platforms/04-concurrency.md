@@ -3,7 +3,7 @@
 In Dioxus, VNodes are asynchronous and can their rendering can be paused at any time by awaiting a future. Hooks can combine this functionality with the Context and Subscription APIs to craft dynamic and efficient user experiences.
 
 ```rust
-fn user_data(cx: Context<()>) -> VNode {
+fn user_data(cx: Context<()>) -> DomTree {
     // Register this future as a task
     use_suspense(cx, async {
         // Continue on with the component as usual, waiting for data to arrive

@@ -183,7 +183,7 @@ mod baller {
     pub struct BallerProps {}
 
     /// This component totally balls
-    pub fn Baller(cx: Context<()>) -> VNode {
+    pub fn Baller(cx: Context<()>) -> DomTree {
         todo!()
     }
 }
@@ -194,7 +194,7 @@ pub struct TallerProps {
 }
 
 /// This component is taller than most :)
-pub fn Taller(cx: Context<TallerProps>) -> VNode {
+pub fn Taller(cx: Context<TallerProps>) -> DomTree {
     let b = true;
     todo!()
 }

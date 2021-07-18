@@ -9,7 +9,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App))
 }
 
-fn App(cx: Context<()>) -> VNode {
+fn App(cx: Context<()>) -> DomTree {
     cx.render(rsx! {
         div { class: "dark:bg-gray-800 bg-white relative h-screen"
             NavBar {}
@@ -18,7 +18,7 @@ fn App(cx: Context<()>) -> VNode {
     })
 }
 
-fn NavBar(cx: Context<()>) -> VNode {
+fn NavBar(cx: Context<()>) -> DomTree {
     cx.render(rsx!{
         header { class: "h-24 sm:h-32 flex items-center z-30 w-full"
             div { class: "container mx-auto px-6 flex items-center justify-between"
@@ -58,7 +58,7 @@ fn NavBar(cx: Context<()>) -> VNode {
     })
 }
 
-fn Landing(cx: Context<()>) -> VNode {
+fn Landing(cx: Context<()>) -> DomTree {
     cx.render(rsx!{
         div { class: "bg-white dark:bg-gray-800 flex relative z-20 items-center"
             div { class: "container mx-auto px-6 flex flex-col justify-between items-center relative py-8"

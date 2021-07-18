@@ -5,7 +5,7 @@ With the Context, Subscription, and Asynchronous APIs, we've built Dioxus Livevi
 These set of features are still experimental. Currently, we're still working on making these components more ergonomic
 
 ```rust
-fn live_component(cx: &Context<()>) -> VNode {
+fn live_component(cx: &Context<()>) -> DomTree {
     use_live_component(
         cx,
         // Rendered via the client

@@ -57,7 +57,7 @@ fn main() {}
 //     }
 // }
 
-// fn component<'a>(cx: Context<'a, Props>) -> VNode<'a> {
+// fn component<'a>(cx: Context<'a, Props>) -> DomTree<'a> {
 //     // Write asynchronous rendering code that immediately returns a "suspended" VNode
 //     // The concurrent API will then progress this component when the future finishes
 //     // You can suspend the entire component, or just parts of it
@@ -82,7 +82,7 @@ fn main() {}
 //     })
 // }
 
-// fn BuilderComp<'a>(cx: Context<'a, Props>) -> VNode<'a> {
+// fn BuilderComp<'a>(cx: Context<'a, Props>) -> DomTree<'a> {
 //     // VNodes can be constructed via a builder or the html! macro
 //     // However, both of these are "lazy" - they need to be evaluated (aka, "viewed")
 //     // We can "view" them with Context for ultimate speed while inside components
@@ -96,7 +96,7 @@ fn main() {}
 // }
 
 // #[fc]
-// fn EffcComp(cx: Context, name: &str) -> VNode {
+// fn EffcComp(cx: Context, name: &str) -> DomTree {
 //     // VNodes can be constructed via a builder or the html! macro
 //     // However, both of these are "lazy" - they need to be evaluated (aka, "viewed")
 //     // We can "view" them with Context for ultimate speed while inside components
@@ -110,7 +110,7 @@ fn main() {}
 //     })
 // }
 
-// fn FullySuspended<'a>(cx: &'a Context<Props>) -> VNode<'a> {
+// fn FullySuspended<'a>(cx: &'a Context<Props>) -> DomTree<'a> {
 //     cx.suspend(async {
 //         let i: i32 = 0;
 

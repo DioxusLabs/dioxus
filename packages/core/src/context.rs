@@ -133,13 +133,13 @@ impl<'src, P> Context<'src, P> {
     pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
         self,
         lazy_nodes: LazyNodes<'src, F>,
-    ) -> VNode<'src> {
+    ) -> DomTree<'src> {
         let scope_ref = self.scope;
         let listener_id = &scope_ref.listener_idx;
-        lazy_nodes.into_vnode(NodeFactory {
+        Some(lazy_nodes.into_vnode(NodeFactory {
             scope_ref,
             listener_id,
-        })
+        }))
     }
 
     /// Store a value between renders
@@ -378,7 +378,7 @@ pub(crate) struct SuspenseHook {
     pub callback: SuspendedCallback,
     pub dom_node_id: Rc<Cell<RealDomNode>>,
 }
-type SuspendedCallback = Box<dyn for<'a> Fn(Context<'a, ()>) -> VNode<'a>>;
+type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> DomTree<'a>>;
 
 impl<'src, P> Context<'src, P> {
     /// Asynchronously render new nodes once the given future has completed.
@@ -395,11 +395,11 @@ impl<'src, P> Context<'src, P> {
         self,
         task_initializer: impl FnOnce() -> Fut,
         user_callback: Cb,
-    ) -> VNode<'src>
+    ) -> DomTree<'src>
     where
         Fut: Future<Output = Out> + 'static,
         Out: 'static,
-        Cb: for<'a> Fn(Context<'a, ()>, &Out) -> VNode<'a> + 'static,
+        Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> DomTree<'a> + 'static,
     {
         self.use_hook(
             move |hook_idx| {
@@ -410,7 +410,7 @@ impl<'src, P> Context<'src, P> {
 
                 let slot = value.clone();
 
-                let callback: SuspendedCallback = Box::new(move |ctx: Context<()>| {
+                let callback: SuspendedCallback = Box::new(move |ctx: SuspendedContext| {
                     let v: std::cell::Ref<Option<Box<dyn Any>>> = slot.as_ref().borrow();
                     match v.as_ref() {
                         Some(a) => {
@@ -420,13 +420,13 @@ impl<'src, P> Context<'src, P> {
                         }
                         None => {
                             //
-                            VNode {
+                            Some(VNode {
                                 dom_id: RealDomNode::empty_cell(),
                                 key: None,
                                 kind: VNodeKind::Suspended {
                                     node: domnode.clone(),
                                 },
-                            }
+                            })
                         }
                     }
                 });
@@ -459,10 +459,28 @@ impl<'src, P> Context<'src, P> {
                     scope: &self.scope,
                     props: &(),
                 };
-                (&hook.callback)(cx)
+                let csx = SuspendedContext { inner: cx };
+                (&hook.callback)(csx)
             },
             |_| {},
         )
+    }
+}
+
+pub struct SuspendedContext<'a> {
+    pub(crate) inner: Context<'a, ()>,
+}
+impl<'src> SuspendedContext<'src> {
+    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+        self,
+        lazy_nodes: LazyNodes<'src, F>,
+    ) -> DomTree<'src> {
+        let scope_ref = self.inner.scope;
+        let listener_id = &scope_ref.listener_idx;
+        Some(lazy_nodes.into_vnode(NodeFactory {
+            scope_ref,
+            listener_id,
+        }))
     }
 }
 

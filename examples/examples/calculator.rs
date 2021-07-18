@@ -66,7 +66,7 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> VNode<'a> {
+fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> DomTree<'a> {
     cx.render(rsx! {
         button {
             class: "calculator-key {cx.name}"

@@ -32,7 +32,7 @@
 //! ```
 //! use dioxus::prelude::*;
 //!
-//! fn Example(cx: Context<()>) -> VNode {
+//! fn Example(cx: Context<()>) -> DomTree {
 //!     html! { <div> "Hello, world!" </div> }
 //! }
 //! ```
@@ -44,7 +44,7 @@
 //! #[derive(Props)]
 //! struct Props { name: String }
 //!
-//! fn Example(cx: Context<Props>) -> VNode {
+//! fn Example(cx: Context<Props>) -> DomTree {
 //!     html! { <div> "Hello {cx.props.name}!" </div> }
 //! }
 //! ```
@@ -59,7 +59,7 @@
 //! #[derive(Props)]
 //! struct Props<'a> { name: &'a str }
 //!
-//! fn Example<'a>(cx: Context<'a, Props<'a>>) -> VNode {
+//! fn Example<'a>(cx: Context<'a, Props<'a>>) -> DomTree {
 //!     html! { <div> "Hello {cx.props.name}!" </div> }
 //! }
 //! ```

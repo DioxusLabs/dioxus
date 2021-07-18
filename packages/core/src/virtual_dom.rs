@@ -101,7 +101,7 @@ impl VirtualDom {
     ///
     /// // or directly from a fn
     ///
-    /// fn Example(cx: Context<()>) -> VNode  {
+    /// fn Example(cx: Context<()>) -> DomTree  {
     ///     cx.render(rsx!{ div{"hello world"} })
     /// }
     ///
@@ -318,9 +318,11 @@ impl VirtualDom {
                 let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
 
                 let cx = Context { scope, props: &() };
+                let scx = SuspendedContext { inner: cx };
 
                 // generate the new node!
-                let nodes: VNode<'s> = (&hook.callback)(cx);
+                let nodes: Option<VNode<'s>> = (&hook.callback)(scx);
+                let nodes = nodes.unwrap_or_else(|| errored_fragment());
                 let nodes = scope.cur_frame().bump.alloc(nodes);
 
                 // push the old node's root onto the stack
