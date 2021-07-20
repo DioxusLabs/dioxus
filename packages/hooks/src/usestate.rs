@@ -106,7 +106,7 @@ impl<'a, T: 'static> UseState<'a, T> {
         *self.inner.wip.borrow_mut() = Some(new_val);
     }
 
-    pub fn get(&self) -> &T {
+    pub fn get(&self) -> &'a T {
         &self.inner.current_val
     }
 

@@ -115,6 +115,11 @@ impl<'src, P> Context<'src, P> {
         todo!()
     }
 
+    /// Get's this context's ScopeId
+    pub fn get_scope_id(&self) -> ScopeId {
+        self.scope.our_arena_idx.clone()
+    }
+
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
     ///
     /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
@@ -200,7 +205,11 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     ///
-    pub fn use_create_context<T: 'static>(&self, init: impl Fn() -> T) {
+    pub fn use_context_provider<T, F>(self, init: F) -> &'src Rc<T>
+    where
+        T: 'static,
+        F: FnOnce() -> T,
+    {
         let mut cxs = self.scope.shared_contexts.borrow_mut();
         let ty = TypeId::of::<T>();
 
@@ -225,7 +234,8 @@ Any function prefixed with "use" should not be called conditionally.
             }
 
             _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
-        }
+        };
+        self.use_context::<T>()
     }
 
     /// There are hooks going on here!
@@ -234,26 +244,19 @@ Any function prefixed with "use" should not be called conditionally.
     }
 
     /// Uses a context, storing the cached value around
-    pub fn try_use_context<T: 'static>(self) -> Result<&'src Rc<T>> {
+    ///
+    /// If a context is not found on the first search, then this call will be  "dud", always returning "None" even if a
+    /// context was added later. This allows using another hook as a fallback
+    ///
+    pub fn try_use_context<T: 'static>(self) -> Option<&'src Rc<T>> {
         struct UseContextHook<C> {
             par: Option<Rc<C>>,
-            we: Option<Weak<C>>,
         }
 
         self.use_hook(
-            move |_| UseContextHook {
-                par: None as Option<Rc<T>>,
-                we: None as Option<Weak<T>>,
-            },
-            move |hook| {
+            move |_| {
                 let mut scope = Some(self.scope);
-
-                if let Some(we) = &hook.we {
-                    if let Some(re) = we.upgrade() {
-                        hook.par = Some(re);
-                        return Ok(hook.par.as_ref().unwrap());
-                    }
-                }
+                let mut par = None;
 
                 let ty = TypeId::of::<T>();
                 while let Some(inner) = scope {
@@ -270,26 +273,21 @@ Any function prefixed with "use" should not be called conditionally.
                             .downcast::<T>()
                             .expect("Should not fail, already validated the type from the hashmap");
 
-                        hook.we = Some(Rc::downgrade(&rc));
-                        hook.par = Some(rc);
-                        return Ok(hook.par.as_ref().unwrap());
+                        par = Some(rc);
+                        break;
                     } else {
                         match inner.parent_idx {
                             Some(parent_id) => {
-                                let parent = inner
-                                    .arena_link
-                                    .get(parent_id)
-                                    .ok_or_else(|| Error::FatalInternal("Failed to find parent"))?;
-
-                                scope = Some(parent);
+                                scope = inner.arena_link.get(parent_id);
                             }
-                            None => return Err(Error::MissingSharedContext),
+                            None => break,
                         }
                     }
                 }
-
-                Err(Error::MissingSharedContext)
+                //
+                UseContextHook { par }
             },
+            move |hook| hook.par.as_ref(),
             |_| {},
         )
     }

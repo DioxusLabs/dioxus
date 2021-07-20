@@ -1,13 +1,13 @@
 use std::{cell::UnsafeCell, rc::Rc};
 
 use crate::innerlude::*;
-use slotmap::{DefaultKey, SlotMap};
+use slotmap::SlotMap;
 
 #[derive(Clone)]
 pub struct SharedArena {
     pub components: Rc<UnsafeCell<ScopeMap>>,
 }
-pub type ScopeMap = SlotMap<DefaultKey, Scope>;
+pub type ScopeMap = SlotMap<ScopeId, Scope>;
 
 enum MutStatus {
     Immut,

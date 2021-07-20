@@ -267,6 +267,22 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    pub fn attr_with_alloc_val(
+        &self,
+        name: &'static str,
+        val: &'a str,
+        namespace: Option<&'static str>,
+        is_volatile: bool,
+    ) -> Attribute<'a> {
+        Attribute {
+            name,
+            value: val,
+            is_static: false,
+            namespace,
+            is_volatile,
+        }
+    }
+
     pub fn component<P>(
         &self,
         component: FC<P>,
@@ -506,6 +522,14 @@ impl IntoVNode<'_> for () {
 impl IntoVNode<'_> for Option<()> {
     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
         cx.fragment_from_iter(None as Option<VNode>)
+    }
+}
+impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        match self {
+            Some(n) => n,
+            None => cx.fragment_from_iter(None as Option<VNode>),
+        }
     }
 }
 

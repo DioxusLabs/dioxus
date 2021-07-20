@@ -113,7 +113,8 @@ impl Scope {
         // Remove all the outdated listeners
 
         // This is a very dangerous operation
-        self.frames.next().bump.reset();
+        let next_frame = self.frames.old_frame_mut();
+        next_frame.bump.reset();
 
         self.listeners.borrow_mut().clear();
 
@@ -123,16 +124,19 @@ impl Scope {
         // Cast the caller ptr from static to one with our own reference
         let c3: &WrappedCaller = self.caller.as_ref();
 
-        self.frames.cur_frame_mut().head_node = unsafe { self.call_user_component(c3) };
-
-        Ok(())
-    }
-
-    // this is its own function so we can preciesly control how lifetimes flow
-    unsafe fn call_user_component<'a>(&'a self, caller: &WrappedCaller) -> VNode<'static> {
-        let new_head: Option<VNode<'a>> = caller(self);
-        let new_head = new_head.unwrap_or(errored_fragment());
-        std::mem::transmute(new_head)
+        match c3(self) {
+            None => {
+                // the user's component failed. We avoid cycling to the next frame
+                log::error!("Running your component failed! It will no longer receive events.");
+                Err(Error::ComponentFailed)
+            }
+            Some(new_head) => {
+                // the user's component succeeded. We can safely cycle to the next frame
+                self.frames.old_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
+                self.frames.cycle_frame();
+                Ok(())
+            }
+        }
     }
 
     // A safe wrapper around calling listeners
