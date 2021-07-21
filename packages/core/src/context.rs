@@ -205,13 +205,13 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     ///
-    pub fn use_context_provider<T, F>(self, init: F) -> &'src Rc<T>
+    pub fn use_provide_context<T, F>(self, init: F) -> &'src Rc<T>
     where
         T: 'static,
         F: FnOnce() -> T,
     {
-        let mut cxs = self.scope.shared_contexts.borrow_mut();
         let ty = TypeId::of::<T>();
+        let contains_key = self.scope.shared_contexts.borrow().contains_key(&ty);
 
         let is_initialized = self.use_hook(
             |_| false,
@@ -223,18 +223,29 @@ Any function prefixed with "use" should not be called conditionally.
             |_| {},
         );
 
-        match (is_initialized, cxs.contains_key(&ty)) {
+        match (is_initialized, contains_key) {
             // Do nothing, already initialized and already exists
             (true, true) => {}
 
             // Needs to be initialized
             (false, false) => {
                 log::debug!("Initializing context...");
-                cxs.insert(ty, Rc::new(init()));
+                let initialized = Rc::new(init());
+                let p = self
+                    .scope
+                    .shared_contexts
+                    .borrow_mut()
+                    .insert(ty, initialized);
+                log::info!(
+                    "There are now {} shared contexts for scope {:?}",
+                    self.scope.shared_contexts.borrow().len(),
+                    self.scope.our_arena_idx,
+                );
             }
 
             _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
         };
+
         self.use_context::<T>()
     }
 
@@ -264,9 +275,17 @@ Any function prefixed with "use" should not be called conditionally.
                         "Searching {:#?} for valid shared_context",
                         inner.our_arena_idx
                     );
-                    let shared_contexts = inner.shared_contexts.borrow();
+                    let shared_ctx = {
+                        let shared_contexts = inner.shared_contexts.borrow();
 
-                    if let Some(shared_cx) = shared_contexts.get(&ty) {
+                        log::debug!(
+                            "This component has {} shared contexts",
+                            shared_contexts.len()
+                        );
+                        shared_contexts.get(&ty).map(|f| f.clone())
+                    };
+
+                    if let Some(shared_cx) = shared_ctx {
                         log::debug!("found matching cx");
                         let rc = shared_cx
                             .clone()

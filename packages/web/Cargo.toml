@@ -17,7 +17,6 @@ wasm-bindgen-futures = "0.4.20"
 wasm-logger = "0.2.0"
 log = "0.4.14"
 fxhash = "0.2.1"
-pretty_env_logger = "0.4.0"
 console_error_panic_hook = "0.1.6"
 generational-arena = "0.2.8"
 wasm-bindgen-test = "0.3.21"
@@ -60,6 +59,8 @@ features = [
     "CompositionEvent",
     "DocumentType",
     "CharacterData",
+    "SvgElement",
+    "SvgAnimatedString",
     "HtmlOptionElement",
 ]
 

@@ -533,6 +533,17 @@ impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
     }
 }
 
+impl IntoVNode<'_> for &'static str {
+    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        NodeFactory::static_text(self)
+    }
+}
+impl IntoVNode<'_> for Arguments<'_> {
+    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        cx.text(self)
+    }
+}
+
 impl Debug for NodeFactory<'_> {
     fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())

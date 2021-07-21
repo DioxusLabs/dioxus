@@ -51,8 +51,7 @@
                 const node = self.stack.pop();
                 node.remove();
             }
-            RemoveAllChildren(self, edit) {
-            }
+            RemoveAllChildren(self, edit) {}
             CreateTextNode(self, edit) {
                 self.stack.push(document.createTextNode(edit.text));
             }
@@ -62,24 +61,32 @@
                 self.stack.push(document.createElement(tagName));
             }
             CreateElementNs(self, edit) {
+                const tagName = edit.tag;
+                console.log(`creating namespaced element: `, edit);
                 self.stack.push(document.createElementNS(edit.ns, edit.tag));
             }
             CreatePlaceholder(self, edit) {
                 const a = `self.stack.push(document.createElement("pre"))`;
                 self.stack.push(document.createComment("vroot"));
             }
-            NewEventListener(self, edit) {
-            }
-            RemoveEventListener(self, edit) {
-            }
+            NewEventListener(self, edit) {}
+            RemoveEventListener(self, edit) {}
             SetText(self, edit) {
                 self.top().textContent = edit.text;
             }
             SetAttribute(self, edit) {
                 const name = edit.field;
                 const value = edit.value;
+                const ns = edit.ns;
+
                 const node = self.top(self.stack);
-                node.setAttribute(name, value);
+                if (ns == "style") {
+                    node.style[name] = value;
+                } else if (ns !== undefined) {
+                    node.setAttributeNS(ns, name, value);
+                } else {
+                    node.setAttribute(name, value);
+                }
 
                 if ((name === "value", self)) {
                     node.value = value;
@@ -94,6 +101,7 @@
             RemoveAttribute(self, edit) {
                 const name = edit.field;
                 const node = self.top(self.stack);
+
                 node.removeAttribute(name);
 
                 if ((name === "value", self)) {

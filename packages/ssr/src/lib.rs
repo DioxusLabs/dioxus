@@ -12,8 +12,8 @@ use dioxus_core::*;
 
 pub fn render_vnode(vnode: &VNode, string: &mut String) {}
 
-pub fn render_vdom(vdom: &VirtualDom) -> String {
-    format!("{:}", TextRenderer::from_vdom(vdom))
+pub fn render_vdom(dom: &VirtualDom) -> String {
+    format!("{:}", TextRenderer::from_vdom(dom))
 }
 
 pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
