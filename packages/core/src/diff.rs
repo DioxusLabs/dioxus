@@ -50,6 +50,7 @@
 
 use crate::{arena::SharedArena, innerlude::*, tasks::TaskQueue};
 use fxhash::FxHashSet;
+use smallvec::{smallvec, SmallVec};
 
 use std::any::Any;
 
@@ -74,7 +75,7 @@ pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
     pub edits: DomEditor<'real, 'bump>,
     pub components: &'bump SharedArena,
     pub task_queue: &'bump TaskQueue,
-    pub cur_idx: ScopeId,
+    pub cur_idxs: SmallVec<[ScopeId; 5]>,
     pub diffed: FxHashSet<ScopeId>,
     pub event_queue: EventQueue,
     pub seen_nodes: FxHashSet<ScopeId>,
@@ -96,7 +97,7 @@ where
             edits: DomEditor::new(edits),
             components,
             dom,
-            cur_idx,
+            cur_idxs: smallvec![cur_idx],
             event_queue,
             task_queue,
             diffed: FxHashSet::default(),
@@ -156,6 +157,7 @@ where
                 log::warn!("diffing components? {:#?}", new.user_fc);
                 if old.user_fc == new.user_fc {
                     // Make sure we're dealing with the same component (by function pointer)
+                    self.cur_idxs.push(old.ass_scope.get().unwrap());
 
                     // Make sure the new component vnode is referencing the right scope id
                     let scope_id = old.ass_scope.get();
@@ -181,6 +183,7 @@ where
                     } else {
                         //
                     }
+                    self.cur_idxs.pop();
 
                     self.seen_nodes.insert(scope_id.unwrap());
                 } else {
@@ -399,10 +402,10 @@ where
                 log::debug!("Mounting a new component");
                 let caller = vcomponent.caller.clone();
 
-                let parent_idx = self.cur_idx;
+                let parent_idx = self.cur_idxs.last().unwrap().clone();
 
                 // Insert a new scope into our component list
-                let idx = self
+                let new_idx = self
                     .components
                     .with(|components| {
                         components.insert_with_key(|new_idx| {
@@ -435,20 +438,22 @@ where
 
                 // TODO: abstract this unsafe into the arena abstraction
                 let inner: &'bump mut _ = unsafe { &mut *self.components.components.get() };
-                let new_component = inner.get_mut(idx).unwrap();
+                let new_component = inner.get_mut(new_idx).unwrap();
 
                 // Actually initialize the caller's slot with the right address
-                vcomponent.ass_scope.set(Some(idx));
+                vcomponent.ass_scope.set(Some(new_idx));
 
                 // Run the scope for one iteration to initialize it
                 new_component.run_scope().unwrap();
 
                 // TODO: we need to delete (IE relcaim this node, otherwise the arena will grow infinitely)
                 let nextnode = new_component.next_frame();
+                self.cur_idxs.push(new_idx);
                 let meta = self.create(nextnode);
+                self.cur_idxs.pop();
 
                 // Finally, insert this node as a seen node.
-                self.seen_nodes.insert(idx);
+                self.seen_nodes.insert(new_idx);
 
                 CreateMeta::new(vcomponent.is_static, meta.added_to_stack)
             }

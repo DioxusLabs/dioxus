@@ -30,7 +30,9 @@ use std::any::TypeId;
 use std::cell::RefCell;
 use std::pin::Pin;
 
-pub type ScopeId = DefaultKey;
+slotmap::new_key_type! {
+    pub struct ScopeId;
+}
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -140,7 +142,7 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Example);
     /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let components = SharedArena::new(SlotMap::new());
+        let components = SharedArena::new(SlotMap::<ScopeId, Scope>::with_key());
 
         let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
         let props_ptr = root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
@@ -225,11 +227,12 @@ impl VirtualDom {
         );
 
         let cur_component = self.components.get_mut(self.base_scope).unwrap();
-        cur_component.run_scope()?;
 
-        let meta = diff_machine.create(cur_component.next_frame());
-
-        diff_machine.edits.append_children(meta.added_to_stack);
+        // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
+        if cur_component.run_scope().is_ok() {
+            let meta = diff_machine.create(cur_component.next_frame());
+            diff_machine.edits.append_children(meta.added_to_stack);
+        }
 
         Ok(())
     }
@@ -370,10 +373,10 @@ impl VirtualDom {
                     // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
                     let cur_component = self.components.get_mut(update.idx).unwrap();
 
-                    cur_component.run_scope()?;
-
-                    let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
-                    diff_machine.diff_node(old, new);
+                    if cur_component.run_scope().is_ok() {
+                        let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
+                        diff_machine.diff_node(old, new);
+                    }
                 }
             }
         }

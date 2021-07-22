@@ -19,6 +19,9 @@ pub enum Error {
     #[error("Wrong Properties Type")]
     WrongProps,
 
+    #[error("The component failed to return VNodes")]
+    ComponentFailed,
+
     #[error("Base scope has not been mounted yet")]
     NotMounted,
 

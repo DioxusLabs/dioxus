@@ -165,15 +165,16 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Custom elements           | ✅      | ✅     | Define new element primitives                               |
 | Suspense                  | ✅      | ✅     | schedule future render from future/promise                  |
 | Integrated error handling | ✅      | ✅     | Gracefully handle errors with ? syntax                      |
-| Effects                   | 🛠      | ✅     | Run effects after a component has been committed to render  |
+| Re-hydration              | 🛠      | ✅     | Pre-render to HTML to speed up first contentful paint       |
 | Cooperative Scheduling    | 🛠      | ✅     | Prioritize important events over non-important events       |
-| NodeRef                   | 🛠      | ✅     | gain direct access to nodes [1]                             |
 | Runs natively             | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)              |
 | 1st class global state    | ✅      | ❓     | redux/recoil/mobx on top of context                         |
 | Subtree Memoization       | ✅      | ❓     | skip diffing static element subtrees                        |
 | Compile-time correct      | ✅      | ❓     | Throw errors on invalid template layouts                    |
 | Heuristic Engine          | 🛠      | ❓     | track component memory usage to minimize future allocations |
 | Fine-grained reactivity   | 🛠      | ❓     | Skip diffing for fine-grain updates                         |
+| Effects                   | 🛠      | ✅     | Run effects after a component has been committed to render  |
+| NodeRef                   | 🛠      | ✅     | gain direct access to nodes [1]                             |
 
 - [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
 
@@ -195,7 +196,7 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Feature              | Dioxus | React | Notes for Dioxus                     |
 | -------------------- | ------ | ----- | ------------------------------------ |
 | Portal               | ❓      | ✅     | cast elements through tree           |
-| Error/Panic boundary | ❓      | ✅     | catch panics and display custom BSOD |
+| Error/Panic boundary | 👀      | ✅     | catch panics and display custom BSOD |
 | Code-splitting       | 👀      | ✅     | Make bundle smaller/lazy             |
 | LiveView             | 👀      | ❓     | Example for SSR + WASM apps          |
 

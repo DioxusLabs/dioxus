@@ -2,13 +2,13 @@ use dioxus_core::prelude::Context;
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     fmt::Display,
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Not},
     rc::Rc,
 };
 
 /// Store state between component renders!
 ///
-/// ## The "King" of state hooks
+/// ## The "Pinnacle" of state hooks
 ///
 /// The Dioxus version of `useState` is the "king daddy" of state management. It allows you to ergonomically store and
 /// modify state between component renders. When the state is updated, the component will re-render.
@@ -106,7 +106,7 @@ impl<'a, T: 'static> UseState<'a, T> {
         *self.inner.wip.borrow_mut() = Some(new_val);
     }
 
-    pub fn get(&self) -> &T {
+    pub fn get(&self) -> &'a T {
         &self.inner.current_val
     }
 
@@ -129,6 +129,10 @@ impl<'a, T: 'static> UseState<'a, T> {
             wip: self.inner.wip.clone(),
         }
     }
+
+    pub fn split_for_async(&'a self) -> (&'a Self, AsyncUseState<T>) {
+        (self, self.for_async())
+    }
 }
 
 impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
@@ -147,15 +151,15 @@ impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
     }
 }
 
-impl<'a, T: 'static> std::ops::Deref for UseState<'a, T> {
+impl<'a, T> std::ops::Deref for UseState<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner.current_val
+        self.get()
     }
 }
 
-use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 impl<'a, T: Copy + Add<T, Output = T>> Add<T> for UseState<'a, T> {
     type Output = T;
@@ -208,6 +212,18 @@ impl<'a, T: Copy + Div<T, Output = T>> DivAssign<T> for UseState<'a, T> {
         self.set(self.inner.current_val.div(rhs));
     }
 }
+impl<'a, T: PartialEq<T>> PartialEq<T> for UseState<'a, T> {
+    fn eq(&self, other: &T) -> bool {
+        self.get() == other
+    }
+}
+impl<'a, O, T: Not<Output = O> + Copy> Not for UseState<'a, T> {
+    type Output = O;
+
+    fn not(self) -> Self::Output {
+        !*self.get()
+    }
+}
 
 // enable displaty for the handle
 impl<'a, T: 'static + Display> std::fmt::Display for UseState<'a, T> {
@@ -232,5 +248,8 @@ impl<T: ToOwned> AsyncUseState<T> {
             //
             slot.as_mut().unwrap()
         })
+    }
+    pub fn set(&mut self, val: T) {
+        *self.wip.borrow_mut() = Some(val);
     }
 }

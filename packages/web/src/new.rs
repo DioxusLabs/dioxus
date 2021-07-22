@@ -294,8 +294,20 @@ impl WebsysDom {
 
     fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
         if name == "class" {
-            if let Some(el) = self.stack.top().dyn_ref::<Element>() {
-                el.set_class_name(value);
+            match ns {
+                Some("http://www.w3.org/2000/svg") => {
+                    //
+                    if let Some(el) = self.stack.top().dyn_ref::<web_sys::SvgElement>() {
+                        let r: web_sys::SvgAnimatedString = el.class_name();
+                        r.set_base_val(value);
+                        // el.set_class_name(value);
+                    }
+                }
+                _ => {
+                    if let Some(el) = self.stack.top().dyn_ref::<Element>() {
+                        el.set_class_name(value);
+                    }
+                }
             }
         } else {
             if let Some(el) = self.stack.top().dyn_ref::<Element>() {

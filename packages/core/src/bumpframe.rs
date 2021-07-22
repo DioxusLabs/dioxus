@@ -77,13 +77,14 @@ impl ActiveFrame {
         }
     }
 
-    pub fn next(&mut self) -> &mut BumpFrame {
-        *self.generation.borrow_mut() += 1;
-
-        if *self.generation.borrow() % 2 == 0 {
-            &mut self.frames[0]
-        } else {
-            &mut self.frames[1]
+    pub fn old_frame_mut(&mut self) -> &mut BumpFrame {
+        match *self.generation.borrow() & 1 == 0 {
+            true => &mut self.frames[1],
+            false => &mut self.frames[0],
         }
+    }
+
+    pub fn cycle_frame(&mut self) {
+        *self.generation.borrow_mut() += 1;
     }
 }
