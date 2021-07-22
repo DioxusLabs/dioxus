@@ -10,7 +10,7 @@
 
 use syn::parse::ParseBuffer;
 
-use super::AmbiguousElement;
+use super::{AmbiguousElement, AS_HTML, AS_RSX, HTML_OR_RSX};
 
 use {
     proc_macro::TokenStream,
@@ -23,10 +23,11 @@ use {
     },
 };
 
-pub struct Fragment {
-    children: Vec<AmbiguousElement>,
+pub struct Fragment<const AS: HTML_OR_RSX> {
+    children: Vec<AmbiguousElement<AS>>,
 }
-impl Parse for Fragment {
+
+impl Parse for Fragment<AS_RSX> {
     fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Ident>()?;
 
@@ -36,7 +37,7 @@ impl Parse for Fragment {
         let content: ParseBuffer;
         syn::braced!(content in input);
         while !content.is_empty() {
-            content.parse::<AmbiguousElement>()?;
+            content.parse::<AmbiguousElement<AS_RSX>>()?;
 
             if content.peek(Token![,]) {
                 let _ = content.parse::<Token![,]>();
@@ -46,7 +47,27 @@ impl Parse for Fragment {
     }
 }
 
-impl ToTokens for Fragment {
+impl Parse for Fragment<AS_HTML> {
+    fn parse(input: ParseStream) -> Result<Self> {
+        input.parse::<Ident>()?;
+
+        let children = Vec::new();
+
+        // parse the guts
+        let content: ParseBuffer;
+        syn::braced!(content in input);
+        while !content.is_empty() {
+            content.parse::<AmbiguousElement<AS_HTML>>()?;
+
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>();
+            }
+        }
+        Ok(Self { children })
+    }
+}
+
+impl<const AS: HTML_OR_RSX> ToTokens for Fragment<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let childs = &self.children;
         let children = quote! {

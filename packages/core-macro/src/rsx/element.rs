@@ -11,35 +11,16 @@ use syn::{
 // =======================================
 // Parse the VNode::Element type
 // =======================================
-pub struct Element {
+pub struct Element<const AS: HTML_OR_RSX> {
     name: Ident,
     key: Option<AttrType>,
     attributes: Vec<ElementAttr>,
     listeners: Vec<ElementAttr>,
-    children: Vec<BodyNode>,
+    children: Vec<BodyNode<AS>>,
     is_static: bool,
 }
 
-impl ToTokens for Element {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = &self.name;
-        let attr = &self.attributes;
-        let childs = &self.children;
-        let listeners = &self.listeners;
-
-        tokens.append_all(quote! {
-            __cx.element(
-                dioxus_elements::#name,
-                __cx.bump().alloc([ #(#listeners),* ]),
-                __cx.bump().alloc([ #(#attr),* ]),
-                __cx.bump().alloc([ #(#childs),* ]),
-                None,
-            )
-        });
-    }
-}
-
-impl Parse for Element {
+impl Parse for Element<AS_RSX> {
     fn parse(stream: ParseStream) -> Result<Self> {
         let name = Ident::parse(stream)?;
 
@@ -49,7 +30,7 @@ impl Parse for Element {
 
         let mut attributes: Vec<ElementAttr> = vec![];
         let mut listeners: Vec<ElementAttr> = vec![];
-        let mut children: Vec<BodyNode> = vec![];
+        let mut children: Vec<BodyNode<AS_RSX>> = vec![];
         let mut key = None;
 
         'parsing: loop {
@@ -67,7 +48,7 @@ impl Parse for Element {
                     name.clone(),
                 )?;
             } else {
-                children.push(content.parse::<BodyNode>()?);
+                children.push(content.parse::<BodyNode<AS_RSX>>()?);
             }
 
             // consume comma if it exists
@@ -85,6 +66,74 @@ impl Parse for Element {
             listeners,
             is_static: false,
         })
+    }
+}
+
+impl Parse for Element<AS_HTML> {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        let name = Ident::parse(stream)?;
+
+        // parse the guts
+        let content: ParseBuffer;
+        syn::braced!(content in stream);
+
+        let mut attributes: Vec<ElementAttr> = vec![];
+        let mut listeners: Vec<ElementAttr> = vec![];
+        let mut children: Vec<BodyNode<AS_HTML>> = vec![];
+        let mut key = None;
+
+        'parsing: loop {
+            // [1] Break if empty
+            if content.is_empty() {
+                break 'parsing;
+            }
+
+            if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
+                parse_element_body(
+                    &content,
+                    &mut attributes,
+                    &mut listeners,
+                    &mut key,
+                    name.clone(),
+                )?;
+            } else {
+                children.push(content.parse::<BodyNode<AS_HTML>>()?);
+            }
+
+            // consume comma if it exists
+            // we don't actually care if there *are* commas after elements/text
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>();
+            }
+        }
+
+        Ok(Self {
+            key,
+            name,
+            attributes,
+            children,
+            listeners,
+            is_static: false,
+        })
+    }
+}
+
+impl<const AS: HTML_OR_RSX> ToTokens for Element<AS> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let name = &self.name;
+        let attr = &self.attributes;
+        let childs = &self.children;
+        let listeners = &self.listeners;
+
+        tokens.append_all(quote! {
+            __cx.element(
+                dioxus_elements::#name,
+                __cx.bump().alloc([ #(#listeners),* ]),
+                __cx.bump().alloc([ #(#attr),* ]),
+                __cx.bump().alloc([ #(#childs),* ]),
+                None,
+            )
+        });
     }
 }
 
