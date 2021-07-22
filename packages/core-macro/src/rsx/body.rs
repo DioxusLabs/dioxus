@@ -16,41 +16,12 @@ pub struct RsxBody<const AS: HTML_OR_RSX> {
 /// The custom rusty variant of parsing rsx!
 impl Parse for RsxBody<AS_RSX> {
     fn parse(input: ParseStream) -> Result<Self> {
-        // if input.peek(LitStr) {
-        //     return input.parse::<LitStr>()?.parse::<RsxRender>();
-        // }
-
-        // try to parse the first ident and comma
-        let custom_context =
-            if input.peek(Token![in]) && input.peek2(Ident) && input.peek3(Token![,]) {
-                let _ = input.parse::<Token![in]>()?;
-                let name = input.parse::<Ident>()?;
-                if is_valid_tag(&name.to_string()) {
-                    return Err(Error::new(
-                        input.span(),
-                        "Custom context cannot be an html element name",
-                    ));
-                } else {
-                    input.parse::<Token![,]>().unwrap();
-                    Some(name)
-                }
-            } else {
-                None
-            };
-
-        let mut body = Vec::new();
-        let mut children = Vec::new();
-        let mut manual_props = None;
-        let cfg: BodyParseConfig<AS_RSX> = BodyParseConfig {
-            allow_children: true,
-            allow_fields: false,
-            allow_manual_props: false,
-        };
-        cfg.parse_component_body(input, &mut body, &mut children, &mut manual_props)?;
-
+        let custom_context = try_parse_custom_context(input)?;
+        let (_, roots, _) =
+            BodyParseConfig::<AS_RSX>::new_as_body().parse_component_body(&input)?;
         Ok(Self {
-            roots: children,
             custom_context,
+            roots,
         })
     }
 }
@@ -58,44 +29,26 @@ impl Parse for RsxBody<AS_RSX> {
 /// The HTML variant of parsing rsx!
 impl Parse for RsxBody<AS_HTML> {
     fn parse(input: ParseStream) -> Result<Self> {
-        // if input.peek(LitStr) {
-        //     return input.parse::<LitStr>()?.parse::<RsxRender>();
-        // }
-
-        // try to parse the first ident and comma
-        let custom_context =
-            if input.peek(Token![in]) && input.peek2(Ident) && input.peek3(Token![,]) {
-                let _ = input.parse::<Token![in]>()?;
-                let name = input.parse::<Ident>()?;
-                if is_valid_tag(&name.to_string()) {
-                    return Err(Error::new(
-                        input.span(),
-                        "Custom context cannot be an html element name",
-                    ));
-                } else {
-                    input.parse::<Token![,]>().unwrap();
-                    Some(name)
-                }
-            } else {
-                None
-            };
-
-        let mut body = Vec::new();
-        let mut children = Vec::new();
-        let mut manual_props = None;
-
-        let cfg: BodyParseConfig<AS_HTML> = BodyParseConfig {
-            allow_children: true,
-            allow_fields: false,
-            allow_manual_props: false,
-        };
-        cfg.parse_component_body(input, &mut body, &mut children, &mut manual_props)?;
-
+        let custom_context = try_parse_custom_context(input)?;
+        let (_, roots, _) =
+            BodyParseConfig::<AS_HTML>::new_as_body().parse_component_body(&input)?;
         Ok(Self {
-            roots: children,
             custom_context,
+            roots,
         })
     }
+}
+
+fn try_parse_custom_context(input: ParseStream) -> Result<Option<Ident>> {
+    let res = if input.peek(Token![in]) && input.peek2(Ident) && input.peek3(Token![,]) {
+        let _ = input.parse::<Token![in]>()?;
+        let name = input.parse::<Ident>()?;
+        input.parse::<Token![,]>()?;
+        Some(name)
+    } else {
+        None
+    };
+    Ok(res)
 }
 
 /// Serialize the same way, regardless of flavor
@@ -113,7 +66,7 @@ impl<const A: HTML_OR_RSX> ToTokens for RsxBody<A> {
             // The `in cx` pattern allows directly rendering
             Some(ident) => out_tokens.append_all(quote! {
                 #ident.render(dioxus::prelude::LazyNodes::new(move |__cx: NodeFactory|{
-                    use dioxus_elements::GlobalAttributes;
+                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
 
                     #inner
                 }))
@@ -121,7 +74,7 @@ impl<const A: HTML_OR_RSX> ToTokens for RsxBody<A> {
             // Otherwise we just build the LazyNode wrapper
             None => out_tokens.append_all(quote! {
                 dioxus::prelude::LazyNodes::new(move |__cx: NodeFactory|{
-                    use dioxus_elements::GlobalAttributes;
+                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
 
                     #inner
                  })

@@ -41,17 +41,13 @@ impl Parse for Component<AS_RSX> {
         let content: ParseBuffer;
         syn::braced!(content in stream);
 
-        let mut body: Vec<ComponentField<AS_RSX>> = Vec::new();
-        let mut children: Vec<BodyNode<AS_RSX>> = Vec::new();
-        let mut manual_props = None;
-
         let cfg: BodyParseConfig<AS_RSX> = BodyParseConfig {
             allow_children: true,
             allow_fields: true,
             allow_manual_props: true,
         };
 
-        cfg.parse_component_body(&content, &mut body, &mut children, &mut manual_props)?;
+        let (body, children, manual_props) = cfg.parse_component_body(&content)?;
 
         Ok(Self {
             name,
@@ -69,17 +65,13 @@ impl Parse for Component<AS_HTML> {
         let content: ParseBuffer;
         syn::braced!(content in stream);
 
-        let mut body: Vec<ComponentField<AS_HTML>> = Vec::new();
-        let mut children: Vec<BodyNode<AS_HTML>> = Vec::new();
-        let mut manual_props = None;
-
         let cfg: BodyParseConfig<AS_HTML> = BodyParseConfig {
             allow_children: true,
             allow_fields: true,
             allow_manual_props: true,
         };
 
-        cfg.parse_component_body(&content, &mut body, &mut children, &mut manual_props)?;
+        let (body, children, manual_props) = cfg.parse_component_body(&content)?;
 
         Ok(Self {
             name,
@@ -95,16 +87,33 @@ pub struct BodyParseConfig<const AS: HTML_OR_RSX> {
     pub allow_children: bool,
     pub allow_manual_props: bool,
 }
+
+impl<const AS: HTML_OR_RSX> BodyParseConfig<AS> {
+    /// The configuration to parse the root
+    pub fn new_as_body() -> Self {
+        Self {
+            allow_children: true,
+            allow_fields: false,
+            allow_manual_props: false,
+        }
+    }
+}
+
 impl BodyParseConfig<AS_RSX> {
     // todo: unify this body parsing for both elements and components
     // both are style rather ad-hoc, though components are currently more configured
     pub fn parse_component_body(
         &self,
         content: &ParseBuffer,
-        body: &mut Vec<ComponentField<AS_RSX>>,
-        children: &mut Vec<BodyNode<AS_RSX>>,
-        manual_props: &mut Option<Expr>,
-    ) -> Result<()> {
+    ) -> Result<(
+        Vec<ComponentField<AS_RSX>>,
+        Vec<BodyNode<AS_RSX>>,
+        Option<Expr>,
+    )> {
+        let mut body = Vec::new();
+        let mut children = Vec::new();
+        let mut manual_props = None;
+
         'parsing: loop {
             // [1] Break if empty
             if content.is_empty() {
@@ -119,7 +128,7 @@ impl BodyParseConfig<AS_RSX> {
                     ));
                 }
                 content.parse::<Token![..]>()?;
-                *manual_props = Some(content.parse::<Expr>()?);
+                manual_props = Some(content.parse::<Expr>()?);
             } else if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 if !self.allow_fields {
                     return Err(Error::new(
@@ -144,7 +153,7 @@ impl BodyParseConfig<AS_RSX> {
                 let _ = content.parse::<Token![,]>();
             }
         }
-        Ok(())
+        Ok((body, children, manual_props))
     }
 }
 impl BodyParseConfig<AS_HTML> {
@@ -153,10 +162,15 @@ impl BodyParseConfig<AS_HTML> {
     pub fn parse_component_body(
         &self,
         content: &ParseBuffer,
-        body: &mut Vec<ComponentField<AS_HTML>>,
-        children: &mut Vec<BodyNode<AS_HTML>>,
-        manual_props: &mut Option<Expr>,
-    ) -> Result<()> {
+    ) -> Result<(
+        Vec<ComponentField<AS_HTML>>,
+        Vec<BodyNode<AS_HTML>>,
+        Option<Expr>,
+    )> {
+        let mut body = Vec::new();
+        let mut children = Vec::new();
+        let mut manual_props = None;
+
         'parsing: loop {
             // [1] Break if empty
             if content.is_empty() {
@@ -171,7 +185,7 @@ impl BodyParseConfig<AS_HTML> {
                     ));
                 }
                 content.parse::<Token![..]>()?;
-                *manual_props = Some(content.parse::<Expr>()?);
+                manual_props = Some(content.parse::<Expr>()?);
             } else if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 if !self.allow_fields {
                     return Err(Error::new(
@@ -196,7 +210,7 @@ impl BodyParseConfig<AS_HTML> {
                 let _ = content.parse::<Token![,]>();
             }
         }
-        Ok(())
+        Ok((body, children, manual_props))
     }
 }
 
