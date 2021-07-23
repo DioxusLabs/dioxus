@@ -36,10 +36,9 @@
 //!
 //! ## Garbage Collection
 //! ---------------------
-//! We roughly place the role of garbage collection onto the reconciler. Dioxus needs to manage the lifecycle of components
-//! but will not spend any time cleaning up old elements. It's the Reconciler's duty to understand which elements need to
-//! be cleaned up *after* the diffing is completed. The reconciler should schedule this garbage collection as the absolute
-//! lowest priority task, after all edits have been applied.
+//! Dioxus uses a passive garbage collection system to clean up old nodes once the work has been completed. This garabge
+//! collection is done internally once the main diffing work is complete. After the "garbage" is collected, Dioxus will then
+//! start to re-use old keys for new nodes. This results in a passive memory management system that is very efficient.
 //!
 //!
 //! Further Reading and Thoughts
@@ -54,8 +53,6 @@ use smallvec::{smallvec, SmallVec};
 
 use std::{any::Any, borrow::Borrow};
 
-/// The accompanying "real dom" exposes an imperative API for controlling the UI layout
-///
 /// Instead of having handles directly over nodes, Dioxus uses simple u64s as node IDs.
 /// The expectation is that the underlying renderer will mainain their Nodes in something like slotmap or an ECS memory
 /// where indexing is very fast. For reference, the slotmap in the WebSys renderer takes about 3ns to randomly access any
@@ -69,39 +66,36 @@ pub trait RealDom<'a> {
     fn raw_node_as_any(&self) -> &mut dyn Any;
 }
 
-pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
-    pub real_dom: &'real mut Dom,
+pub struct DiffMachine<'real, 'bump> {
+    pub real_dom: &'real dyn RealDom<'bump>,
     pub vdom: &'bump SharedResources,
     pub edits: DomEditor<'real, 'bump>,
+
+    pub scheduled_garbage: Vec<&'bump VNode<'bump>>,
 
     pub cur_idxs: SmallVec<[ScopeId; 5]>,
     pub diffed: FxHashSet<ScopeId>,
     pub seen_nodes: FxHashSet<ScopeId>,
 }
 
-impl<'r, 'b, D: RealDom<'b>> DiffMachine<'r, 'b, D> {
+impl<'r, 'b> DiffMachine<'r, 'b> {
     pub fn get_scope_mut(&mut self, id: &ScopeId) -> Option<&'b mut Scope> {
         // ensure we haven't seen this scope before
         // if we have, then we're trying to alias it, which is not allowed
         debug_assert!(!self.seen_nodes.contains(id));
-        let compon = unsafe { &mut *self.vdom.components.get() };
-        compon.get_mut(*id)
+        unsafe { self.vdom.get_scope_mut(*id) }
     }
     pub fn get_scope(&mut self, id: &ScopeId) -> Option<&'b Scope> {
         // ensure we haven't seen this scope before
         // if we have, then we're trying to alias it, which is not allowed
-        let compon = unsafe { &*self.vdom.components.get() };
-        compon.get(*id)
+        unsafe { self.vdom.get_scope(*id) }
     }
 }
 
-impl<'real, 'bump, Dom> DiffMachine<'real, 'bump, Dom>
-where
-    Dom: RealDom<'bump>,
-{
+impl<'real, 'bump> DiffMachine<'real, 'bump> {
     pub fn new(
         edits: &'real mut Vec<DomEdit<'bump>>,
-        dom: &'real mut Dom,
+        dom: &'real dyn RealDom<'bump>,
         cur_idx: ScopeId,
         shared: &'bump SharedResources,
     ) -> Self {
@@ -110,6 +104,7 @@ where
             edits: DomEditor::new(edits),
             cur_idxs: smallvec![cur_idx],
             vdom: shared,
+            scheduled_garbage: vec![],
             diffed: FxHashSet::default(),
             seen_nodes: FxHashSet::default(),
         }
@@ -151,6 +146,7 @@ where
                     self.edits.push_root(root);
                     let meta = self.create(new_node);
                     self.edits.replace_with(meta.added_to_stack);
+                    self.scheduled_garbage.push(old_node);
                     self.edits.pop();
                     return;
                 }
@@ -208,14 +204,15 @@ where
 
                     // remove any leftovers
                     for to_remove in old_iter {
-                        self.edits.push_root(to_remove);
+                        self.edits.push_root(to_remove.element_id().unwrap());
                         self.edits.remove();
                     }
 
                     // seems like we could combine this into a single instruction....
-                    self.edits.push_root(first);
+                    self.edits.push_root(first.element_id().unwrap());
                     let meta = self.create(new_node);
                     self.edits.replace_with(meta.added_to_stack);
+                    self.scheduled_garbage.push(old_node);
                     self.edits.pop();
 
                     // Wipe the old one and plant the new one
@@ -272,11 +269,11 @@ where
 
                         // remove any leftovers
                         for to_remove in old_iter {
-                            self.edits.push_root(to_remove);
+                            self.edits.push_root(to_remove.element_id().unwrap());
                             self.edits.remove();
                         }
 
-                        back_node
+                        back_node.element_id().unwrap()
                     }
                 };
 
@@ -314,10 +311,7 @@ impl CreateMeta {
     }
 }
 
-impl<'real, 'bump, Dom> DiffMachine<'real, 'bump, Dom>
-where
-    Dom: RealDom<'bump>,
-{
+impl<'real, 'bump> DiffMachine<'real, 'bump> {
     // Emit instructions to create the given virtual node.
     //
     // The change list stack may have any shape upon entering this function:
@@ -448,8 +442,7 @@ where
                 //     .insert(idx);
 
                 // TODO: abstract this unsafe into the arena abstraction
-                let inner: &'bump mut _ = unsafe { &mut *self.vdom.components.get() };
-                let new_component = inner.get_mut(new_idx).unwrap();
+                let new_component = self.get_scope_mut(&new_idx).unwrap();
 
                 // Actually initialize the caller's slot with the right address
                 vcomponent.ass_scope.set(Some(new_idx));
@@ -498,7 +491,7 @@ where
     }
 }
 
-impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
+impl<'a, 'bump> DiffMachine<'a, 'bump> {
     /// Destroy a scope and all of its descendents.
     ///
     /// Calling this will run the destuctors on all hooks in the tree.
@@ -727,7 +720,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     //     [... parent]
     //
     // Upon exiting, the change list stack is in the same state.
-    fn diff_keyed_children(&self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
+    fn diff_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // todo!();
         if cfg!(debug_assertions) {
             let mut keys = fxhash::FxHashSet::default();
@@ -757,11 +750,6 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // `shared_prefix_count` is the count of how many nodes at the start of
         // `new` and `old` share the same keys.
         let shared_prefix_count = match self.diff_keyed_prefix(old, new) {
-            KeyedPrefixResult::Finished => return,
-            KeyedPrefixResult::MoreWorkToDo(count) => count,
-        };
-
-        match self.diff_keyed_prefix(old, new) {
             KeyedPrefixResult::Finished => return,
             KeyedPrefixResult::MoreWorkToDo(count) => count,
         };
@@ -812,46 +800,47 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     //
     // Upon exit, the change list stack is the same.
     fn diff_keyed_prefix(
-        &self,
-        _old: &'bump [VNode<'bump>],
-        _new: &'bump [VNode<'bump>],
+        &mut self,
+        old: &'bump [VNode<'bump>],
+        new: &'bump [VNode<'bump>],
     ) -> KeyedPrefixResult {
-        todo!()
         // self.edits.go_down();
-        // let mut shared_prefix_count = 0;
 
-        // for (i, (old, new)) in old.iter().zip(new.iter()).enumerate() {
-        //     if old.key() != new.key() {
-        //         break;
-        //     }
+        let mut shared_prefix_count = 0;
 
-        //     self.edits.go_to_sibling(i);
+        for (i, (old, new)) in old.iter().zip(new.iter()).enumerate() {
+            // abort early if we finally run into nodes with different keys
+            if old.key() != new.key() {
+                break;
+            }
 
-        //     self.diff_node(old, new);
+            // self.edits.go_to_sibling(i);
 
-        //     shared_prefix_count += 1;
-        // }
+            self.diff_node(old, new);
 
-        // // If that was all of the old children, then create and append the remaining
-        // // new children and we're finished.
-        // if shared_prefix_count == old.len() {
-        //     self.edits.go_up();
-        //     // self.edits.commit_traversal();
-        //     self.create_and_append_children(&new[shared_prefix_count..]);
-        //     return KeyedPrefixResult::Finished;
-        // }
+            shared_prefix_count += 1;
+        }
 
-        // // And if that was all of the new children, then remove all of the remaining
-        // // old children and we're finished.
-        // if shared_prefix_count == new.len() {
-        //     self.edits.go_to_sibling(shared_prefix_count);
-        //     // self.edits.commit_traversal();
-        //     self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
-        //     return KeyedPrefixResult::Finished;
-        // }
+        // If that was all of the old children, then create and append the remaining
+        // new children and we're finished.
+        if shared_prefix_count == old.len() {
+            // self.edits.go_up();
+            // self.edits.commit_traversal();
+            self.create_and_append_children(&new[shared_prefix_count..]);
+            return KeyedPrefixResult::Finished;
+        }
 
+        // And if that was all of the new children, then remove all of the remaining
+        // old children and we're finished.
+        if shared_prefix_count == new.len() {
+            // self.edits.go_to_sibling(shared_prefix_count);
+            // self.edits.commit_traversal();
+            self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
+            return KeyedPrefixResult::Finished;
+        }
+        //
         // self.edits.go_up();
-        // KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
+        KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
     }
 
     // Remove all of a node's children.
@@ -902,13 +891,12 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     // Upon exit from this function, it will be restored to that same state.
     fn diff_keyed_middle(
         &self,
-        _old: &[VNode<'bump>],
-        _new: &[VNode<'bump>],
-        _shared_prefix_count: usize,
-        _shared_suffix_count: usize,
-        _old_shared_suffix_start: usize,
+        old: &[VNode<'bump>],
+        new: &[VNode<'bump>],
+        shared_prefix_count: usize,
+        shared_suffix_count: usize,
+        old_shared_suffix_start: usize,
     ) {
-        todo!()
         // // Should have already diffed the shared-key prefixes and suffixes.
         // debug_assert_ne!(new.first().map(|n| n.key()), old.first().map(|o| o.key()));
         // debug_assert_ne!(new.last().map(|n| n.key()), old.last().map(|o| o.key()));
@@ -921,24 +909,30 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // debug_assert!(new.len() < u32::MAX as usize);
 
         // // Map from each `old` node's key to its index within `old`.
-        // let mut old_key_to_old_index = FxHashMap::default();
-        // old_key_to_old_index.reserve(old.len());
-        // old_key_to_old_index.extend(old.iter().enumerate().map(|(i, o)| (o.key(), i)));
+        // // IE if the keys were A B C, then we would have (A, 1) (B, 2) (C, 3).
+        // let mut old_key_to_old_index = old
+        //     .iter()
+        //     .enumerate()
+        //     .map(|(i, o)| (o.key(), i))
+        //     .collect::<FxHashMap<_, _>>();
 
         // // The set of shared keys between `new` and `old`.
         // let mut shared_keys = FxHashSet::default();
+
         // // Map from each index in `new` to the index of the node in `old` that
         // // has the same key.
-        // let mut new_index_to_old_index = Vec::with_capacity(new.len());
-        // new_index_to_old_index.extend(new.iter().map(|n| {
-        //     let key = n.key();
-        //     if let Some(&i) = old_key_to_old_index.get(&key) {
-        //         shared_keys.insert(key);
-        //         i
-        //     } else {
-        //         u32::MAX as usize
-        //     }
-        // }));
+        // let mut new_index_to_old_index = new
+        //     .iter()
+        //     .map(|n| {
+        //         let key = n.key();
+        //         if let Some(&i) = old_key_to_old_index.get(&key) {
+        //             shared_keys.insert(key);
+        //             i
+        //         } else {
+        //             u32::MAX as usize
+        //         }
+        //     })
+        //     .collect::<Vec<_>>();
 
         // // If none of the old keys are reused by the new children, then we
         // // remove all the remaining old children and create the new children
@@ -948,7 +942,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //         // self.edits.commit_traversal();
         //         self.remove_all_children(old);
         //     } else {
-        //         self.edits.go_down_to_child(shared_prefix_count);
+        //         // self.edits.go_down_to_child(shared_prefix_count);
         //         // self.edits.commit_traversal();
         //         self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
         //     }
@@ -998,6 +992,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //         // registry.remove_subtree(old_child);
         //         // todo
         //         // self.edits.commit_traversal();
+        //         self.edits.remove(old_child.dom_id.get());
         //         self.edits.remove_child(i + shared_prefix_count);
         //         removed_count += 1;
         //     }
@@ -1115,10 +1110,6 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         //         self.diff_node(&old[old_index], new_child);
         //     }
         // }
-
-        // // [... parent child]
-        // self.edits.go_up();
-        // [... parent]
     }
 
     // Diff the suffix of keyed children that share the same keys in the same order.
@@ -1129,26 +1120,17 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     //
     // When this function exits, the change list stack remains the same.
     fn diff_keyed_suffix(
-        &self,
-        _old: &[VNode<'bump>],
-        _new: &[VNode<'bump>],
-        _new_shared_suffix_start: usize,
+        &mut self,
+        old: &'bump [VNode<'bump>],
+        new: &'bump [VNode<'bump>],
+        new_shared_suffix_start: usize,
     ) {
-        todo!()
-        //     debug_assert_eq!(old.len(), new.len());
-        //     debug_assert!(!old.is_empty());
+        debug_assert_eq!(old.len(), new.len());
+        debug_assert!(!old.is_empty());
 
-        //     // [... parent]
-        //     self.edits.go_down();
-        //     // [... parent new_child]
-
-        //     for (i, (old_child, new_child)) in old.iter().zip(new.iter()).enumerate() {
-        //         self.edits.go_to_sibling(new_shared_suffix_start + i);
-        //         self.diff_node(old_child, new_child);
-        //     }
-
-        //     // [... parent]
-        //     self.edits.go_up();
+        for (i, (old_child, new_child)) in old.iter().zip(new.iter()).enumerate() {
+            self.diff_node(old_child, new_child);
+        }
     }
 
     // Diff children that are not keyed.
@@ -1299,11 +1281,11 @@ impl<'a> RealChildIterator<'a> {
 }
 
 impl<'a> Iterator for RealChildIterator<'a> {
-    type Item = ElementId;
+    type Item = &'a VNode<'a>;
 
-    fn next(&mut self) -> Option<ElementId> {
+    fn next(&mut self) -> Option<&'a VNode<'a>> {
         let mut should_pop = false;
-        let mut returned_node = None;
+        let mut returned_node: Option<&'a VNode<'a>> = None;
         let mut should_push = None;
 
         while returned_node.is_none() {
@@ -1315,7 +1297,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         should_pop = true;
-                        returned_node = node.dom_id.get();
+                        returned_node = Some(&*node);
                     }
 
                     // If we get a fragment we push the next child
@@ -1324,7 +1306,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
 
                         if frag.children.len() == 0 {
                             should_pop = true;
-                            returned_node = node.dom_id.get();
+                            returned_node = Some(&*node);
                         }
 
                         if subcount >= frag.children.len() {

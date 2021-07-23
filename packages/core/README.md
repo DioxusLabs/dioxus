@@ -21,6 +21,8 @@ Dioxus-core leverages some really cool techniques and hits a very high level of 
 - suspended nodes (task/fiber endpoints) for asynchronous vnodes
 - custom memory allocator for vnodes and all text content
 - support for fragments w/ lazy normalization
+- slab allocator for scopes
+- mirrored-slab approach for remote vdoms
 
 There's certainly more to the story, but these optimizations make Dioxus memory use and allocation count extremely minimal. For an average application, it is likely that zero allocations will need to be performed once the app has been mounted. Only when new components are added to the dom will allocations occur - and only en mass. The space of old VNodes is dynamically recycled as new nodes are added. Additionally, Dioxus tracks the average memory footprint of previous components to estimate how much memory allocate for future components.
 

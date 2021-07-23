@@ -17,16 +17,17 @@ use std::{
 pub struct VNode<'src> {
     pub kind: VNodeKind<'src>,
 
-    ///
-    /// ElementId supports NonZero32 and Cell is zero cost, so the size of this field is unaffected
-    ///
-    ///
-    pub(crate) dom_id: Cell<Option<ElementId>>,
     pub(crate) key: Option<&'src str>,
+
+    /// ElementId supports NonZero32 and Cell is zero cost, so the size of this field is unaffected
+    pub(crate) dom_id: Cell<Option<ElementId>>,
 }
 impl VNode<'_> {
-    fn key(&self) -> Option<&str> {
+    pub fn key(&self) -> Option<&str> {
         self.key
+    }
+    pub fn element_id(&self) -> Option<ElementId> {
+        self.dom_id.get()
     }
 }
 

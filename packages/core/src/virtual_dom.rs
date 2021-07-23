@@ -21,8 +21,6 @@
 
 use crate::{arena::SharedResources, innerlude::*};
 
-use slotmap::DefaultKey;
-use slotmap::SlotMap;
 use std::any::Any;
 
 use std::any::TypeId;
@@ -181,10 +179,10 @@ impl VirtualDom {
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     ///
     /// The diff machine expects the RealDom's stack to be the root of the application
-    pub fn rebuild<'s, Dom: RealDom<'s>>(
+    pub fn rebuild<'s>(
         &'s mut self,
-        realdom: &mut Dom,
-        edits: &mut Vec<DomEdit<'s>>,
+        realdom: &'s mut dyn RealDom<'s>,
+        edits: &'s mut Vec<DomEdit<'s>>,
     ) -> Result<()> {
         let mut diff_machine = DiffMachine::new(edits, realdom, self.base_scope, &self.shared);
 
@@ -260,9 +258,9 @@ impl VirtualDom {
     // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
     //
     // A good project would be to remove all unsafe from this crate and move the unsafety into safer abstractions.
-    pub async fn progress_with_event<'s, Dom: RealDom<'s>>(
+    pub async fn progress_with_event<'s>(
         &'s mut self,
-        realdom: &'_ mut Dom,
+        realdom: &'s mut dyn RealDom<'s>,
         edits: &mut Vec<DomEdit<'s>>,
     ) -> Result<()> {
         let trigger = self.triggers.borrow_mut().pop().expect("failed");

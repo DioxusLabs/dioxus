@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use dioxus_core::{
     events::{EventTrigger, VirtualEvent},
-    DomEdit, RealDomNode, ScopeId,
+    DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
 use slotmap::{DefaultKey, Key, KeyData};
@@ -588,7 +588,6 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
             // let evt: web_sys::ToggleEvent = event.clone().dyn_into().unwrap();
             todo!()
         }
-        _ => VirtualEvent::OtherEvent,
     }
 }
 

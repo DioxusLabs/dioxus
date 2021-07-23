@@ -4,24 +4,24 @@ use std::{cell::UnsafeCell, rc::Rc};
 use crate::heuristics::*;
 use crate::innerlude::*;
 use futures_util::stream::FuturesUnordered;
-use slotmap::SlotMap;
+use slab::Slab;
 
-slotmap::new_key_type! {
-    // A dedicated key type for the all the scopes
-    pub struct ScopeId;
-}
+// slotmap::new_key_type! {
+//     // A dedicated key type for the all the scopes
+//     pub struct ScopeId;
+// }
+// #[cfg(feature = "serialize", serde::Serialize)]
+// #[cfg(feature = "serialize", serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ScopeId(usize);
 
-slotmap::new_key_type! {
-    // A dedicated key type for every real element that the virtualdom creates.
-    //
-    // This is a slotmap key because we expect the "mirror" realdom to also maintain a slotmap mapping
-    // of virtual element to real element.
-    pub struct ElementId;
-}
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ElementId(usize);
 
 impl ElementId {
     pub fn as_u64(self) -> u64 {
-        self.0.as_ffi()
+        todo!()
+        // self.0.as_ffi()
     }
 }
 
@@ -30,7 +30,7 @@ type Shared<T> = Rc<RefCell<T>>;
 /// These are resources shared among all the components and the virtualdom itself
 #[derive(Clone)]
 pub struct SharedResources {
-    pub components: Rc<UnsafeCell<SlotMap<ScopeId, Scope>>>,
+    pub components: Rc<UnsafeCell<Slab<Scope>>>,
 
     pub event_queue: Shared<Vec<HeightMarker>>,
 
@@ -42,34 +42,38 @@ pub struct SharedResources {
 
     /// We use a SlotSet to keep track of the keys that are currently being used.
     /// However, we don't store any specific data since the "mirror"
-    pub raw_elements: Shared<SlotMap<ElementId, ()>>,
+    pub raw_elements: Shared<Slab<()>>,
 
     pub task_setter: Rc<dyn Fn(ScopeId)>,
 }
 
 impl SharedResources {
     pub fn new() -> Self {
-        // preallocate 1000 elements and 20 scopes to avoid dynamic allocation
-        let components = Rc::new(UnsafeCell::new(
-            SlotMap::<ScopeId, Scope>::with_capacity_and_key(20),
-        ));
-        let raw_elements = SlotMap::<ElementId, ()>::with_capacity_and_key(1000);
+        // preallocate 2000 elements and 20 scopes to avoid dynamic allocation
+        let components: Rc<UnsafeCell<Slab<Scope>>> =
+            Rc::new(UnsafeCell::new(Slab::with_capacity(100)));
+
+        // elements are super cheap - the value takes no space
+        let raw_elements = Slab::with_capacity(2000);
 
         let event_queue = Rc::new(RefCell::new(Vec::new()));
         let tasks = Vec::new();
         let heuristics = HeuristicsEngine::new();
 
-        let queue = event_queue.clone();
-        let _components = components.clone();
-        let task_setter = Rc::new(move |idx| {
-            let comps = unsafe { &*_components.get() };
-            if let Some(scope) = comps.get(idx) {
-                queue.borrow_mut().push(HeightMarker {
-                    height: scope.height,
-                    idx,
-                })
-            }
-        });
+        let task_setter = {
+            let queue = event_queue.clone();
+            let components = components.clone();
+            Rc::new(move |idx: ScopeId| {
+                let comps = unsafe { &*components.get() };
+
+                if let Some(scope) = comps.get(idx.0) {
+                    queue.borrow_mut().push(HeightMarker {
+                        height: scope.height,
+                        idx,
+                    })
+                }
+            })
+        };
 
         Self {
             event_queue,
@@ -85,13 +89,13 @@ impl SharedResources {
     /// this is unsafe because the caller needs to track which other scopes it's already using
     pub unsafe fn get_scope(&self, idx: ScopeId) -> Option<&Scope> {
         let inner = &*self.components.get();
-        inner.get(idx)
+        inner.get(idx.0)
     }
 
     /// this is unsafe because the caller needs to track which other scopes it's already using
-    pub unsafe fn get_sope_mut(&self, idx: ScopeId) -> Option<&mut Scope> {
+    pub unsafe fn get_scope_mut(&self, idx: ScopeId) -> Option<&mut Scope> {
         let inner = &mut *self.components.get();
-        inner.get_mut(idx)
+        inner.get_mut(idx.0)
     }
 
     pub fn with_scope<'b, O: 'static>(
@@ -114,13 +118,13 @@ impl SharedResources {
 
     pub fn try_remove(&self, id: ScopeId) -> Result<Scope> {
         let inner = unsafe { &mut *self.components.get() };
-        inner
-            .remove(id)
-            .ok_or_else(|| Error::FatalInternal("Scope not found"))
+        Ok(inner.remove(id.0))
+        // .try_remove(id.0)
+        // .ok_or_else(|| Error::FatalInternal("Scope not found"))
     }
 
     pub fn reserve_node(&self) -> ElementId {
-        self.raw_elements.borrow_mut().insert(())
+        ElementId(self.raw_elements.borrow_mut().insert(()))
     }
 
     /// return the id, freeing the space of the original node
@@ -132,7 +136,10 @@ impl SharedResources {
 
     pub fn insert_scope_with_key(&self, f: impl FnOnce(ScopeId) -> Scope) -> ScopeId {
         let g = unsafe { &mut *self.components.get() };
-        g.insert_with_key(f)
+        let entry = g.vacant_entry();
+        let id = ScopeId(entry.key());
+        entry.insert(f(id));
+        id
     }
 
     pub fn schedule_update(&self) -> Rc<dyn Fn(ScopeId)> {
