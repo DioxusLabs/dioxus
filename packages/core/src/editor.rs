@@ -5,7 +5,7 @@
 //!
 //!
 
-use crate::{innerlude::ScopeId, RealDomNode};
+use crate::{innerlude::ScopeId, ElementId};
 
 /// The `DomEditor` provides an imperative interface for the Diffing algorithm to plan out its changes.
 ///
@@ -24,7 +24,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
     }
 
     // Navigation
-    pub(crate) fn push(&mut self, root: RealDomNode) {
+    pub(crate) fn push_root(&mut self, root: ElementId) {
         let id = root.as_u64();
         self.edits.push(PushRoot { id });
     }
@@ -61,7 +61,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
 
     // Create
     #[inline]
-    pub(crate) fn create_text_node(&mut self, text: &'bump str, id: RealDomNode) {
+    pub(crate) fn create_text_node(&mut self, text: &'bump str, id: ElementId) {
         let id = id.as_u64();
         self.edits.push(CreateTextNode { text, id });
     }
@@ -70,7 +70,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
         &mut self,
         tag: &'static str,
         ns: Option<&'static str>,
-        id: RealDomNode,
+        id: ElementId,
     ) {
         let id = id.as_u64();
         match ns {
@@ -80,7 +80,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
     }
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
-    pub(crate) fn create_placeholder(&mut self, id: RealDomNode) {
+    pub(crate) fn create_placeholder(&mut self, id: ElementId) {
         let id = id.as_u64();
         self.edits.push(CreatePlaceholder { id });
     }
@@ -91,7 +91,7 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
         event: &'static str,
         scope: ScopeId,
         element_id: usize,
-        realnode: RealDomNode,
+        realnode: ElementId,
     ) {
         self.edits.push(NewEventListener {
             scope,

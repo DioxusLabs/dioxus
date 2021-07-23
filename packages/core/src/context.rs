@@ -99,12 +99,21 @@ impl<'src, P> Context<'src, P> {
     /// }
     /// ```
     pub fn children(&self) -> &'src [VNode<'src>] {
-        self.scope.child_nodes
+        self.scope.child_nodes()
     }
 
     /// Create a subscription that schedules a future render for the reference component
+    ///
+    /// ## Notice: you should prefer using prepare_update and get_scope_id
+    ///
     pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
-        self.scope.event_channel.clone()
+        let cb = self.scope.vdom.schedule_update();
+        let id = self.get_scope_id();
+        Rc::new(move || cb(id))
+    }
+
+    fn prepare_update(&self) -> Rc<dyn Fn(ScopeId)> {
+        self.scope.vdom.schedule_update()
     }
 
     pub fn schedule_effect(&self) -> Rc<dyn Fn() + 'static> {
@@ -142,7 +151,7 @@ impl<'src, P> Context<'src, P> {
         let scope_ref = self.scope;
         let listener_id = &scope_ref.listener_idx;
         Some(lazy_nodes.into_vnode(NodeFactory {
-            scope_ref,
+            scope: scope_ref,
             listener_id,
         }))
     }
@@ -297,7 +306,7 @@ Any function prefixed with "use" should not be called conditionally.
                     } else {
                         match inner.parent_idx {
                             Some(parent_id) => {
-                                scope = inner.arena_link.get(parent_id);
+                                scope = unsafe { inner.vdom.get_scope(parent_id) };
                             }
                             None => break,
                         }
@@ -329,8 +338,7 @@ Any function prefixed with "use" should not be called conditionally.
     ///
     ///
     pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
-        (self.scope.task_submitter)(task);
-        TaskHandle { _p: PhantomData {} }
+        self.scope.vdom.submit_task(task)
     }
 
     /// Awaits the given task, forcing the component to re-render when the value is ready.
@@ -341,13 +349,14 @@ Any function prefixed with "use" should not be called conditionally.
     pub fn use_task<Out, Fut, Init>(
         self,
         task_initializer: Init,
-    ) -> (TaskHandle<'src>, &'src Option<Out>)
+    ) -> (&'src TaskHandle, &'src Option<Out>)
     where
         Out: 'static,
         Fut: Future<Output = Out> + 'static,
         Init: FnOnce() -> Fut + 'src,
     {
         struct TaskHook<T> {
+            handle: TaskHandle,
             task_dump: Rc<RefCell<Option<T>>>,
             value: Option<T>,
         }
@@ -360,12 +369,15 @@ Any function prefixed with "use" should not be called conditionally.
                 let task_dump = Rc::new(RefCell::new(None));
 
                 let slot = task_dump.clone();
-                let update = self.schedule_update();
+
+                let updater = self.prepare_update();
+                let update_id = self.get_scope_id();
+
                 let originator = self.scope.our_arena_idx.clone();
 
-                self.submit_task(Box::pin(task_fut.then(move |output| async move {
+                let handle = self.submit_task(Box::pin(task_fut.then(move |output| async move {
                     *slot.as_ref().borrow_mut() = Some(output);
-                    update();
+                    updater(update_id);
                     EventTrigger {
                         event: VirtualEvent::AsyncEvent { hook_idx },
                         originator,
@@ -377,13 +389,14 @@ Any function prefixed with "use" should not be called conditionally.
                 TaskHook {
                     task_dump,
                     value: None,
+                    handle,
                 }
             },
             |hook| {
                 if let Some(val) = hook.task_dump.as_ref().borrow_mut().take() {
                     hook.value = Some(val);
                 }
-                (TaskHandle { _p: PhantomData }, &hook.value)
+                (&hook.handle, &hook.value)
             },
             |_| {},
         )
@@ -393,7 +406,7 @@ Any function prefixed with "use" should not be called conditionally.
 pub(crate) struct SuspenseHook {
     pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
     pub callback: SuspendedCallback,
-    pub dom_node_id: Rc<Cell<RealDomNode>>,
+    pub dom_node_id: Rc<Cell<Option<ElementId>>>,
 }
 type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> DomTree<'a>>;
 
@@ -422,7 +435,7 @@ impl<'src, P> Context<'src, P> {
             move |hook_idx| {
                 let value = Rc::new(RefCell::new(None));
 
-                let dom_node_id = Rc::new(RealDomNode::empty_cell());
+                let dom_node_id = Rc::new(empty_cell());
                 let domnode = dom_node_id.clone();
 
                 let slot = value.clone();
@@ -438,7 +451,7 @@ impl<'src, P> Context<'src, P> {
                         None => {
                             //
                             Some(VNode {
-                                dom_id: RealDomNode::empty_cell(),
+                                dom_id: empty_cell(),
                                 key: None,
                                 kind: VNodeKind::Suspended {
                                     node: domnode.clone(),
@@ -495,20 +508,8 @@ impl<'src> SuspendedContext<'src> {
         let scope_ref = self.inner.scope;
         let listener_id = &scope_ref.listener_idx;
         Some(lazy_nodes.into_vnode(NodeFactory {
-            scope_ref,
+            scope: scope_ref,
             listener_id,
         }))
     }
-}
-
-#[derive(Clone, Copy)]
-pub struct TaskHandle<'src> {
-    _p: PhantomData<&'src ()>,
-}
-
-impl<'src> TaskHandle<'src> {
-    pub fn toggle(&self) {}
-    pub fn start(&self) {}
-    pub fn stop(&self) {}
-    pub fn restart(&self) {}
 }

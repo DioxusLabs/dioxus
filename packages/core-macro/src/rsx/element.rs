@@ -109,20 +109,29 @@ impl Parse for Element<AS_HTML> {
             let name_str = name.to_string();
             stream.parse::<Token![=]>()?;
             if name_str.starts_with("on") {
-                todo!()
+                let inner;
+                syn::braced!(inner in stream);
+                let toks = inner.parse::<Expr>()?;
+                let ty = AttrType::EventTokens(toks);
+                listeners.push(ElementAttr {
+                    element_name: el_name.clone(),
+                    name,
+                    value: ty,
+                    namespace: None,
+                })
             } else {
                 match name_str.as_str() {
-                    "style" => todo!(),
-                    "key" => todo!(),
-                    "classes" => todo!(),
-                    "namespace" => todo!(),
-                    "ref" => todo!(),
-                    _ => {
+                    "style" => {}
+                    "key" => {}
+                    "classes" | "namespace" | "ref" | _ => {
                         let ty = if stream.peek(LitStr) {
                             let rawtext = stream.parse::<LitStr>().unwrap();
                             AttrType::BumpText(rawtext)
                         } else {
-                            let toks = stream.parse::<Expr>()?;
+                            // like JSX, we expect raw expressions
+                            let inner;
+                            syn::braced!(inner in stream);
+                            let toks = inner.parse::<Expr>()?;
                             AttrType::FieldTokens(toks)
                         };
                         attributes.push(ElementAttr {
@@ -134,13 +143,6 @@ impl Parse for Element<AS_HTML> {
                     }
                 }
             };
-            // if stream.peek(LitStr) {
-
-            // } else {
-            // }
-            // if name_str.starts_with("on") {}
-
-            // attributes.push(stream.parse()?);
         }
         stream.parse::<Token![>]>()?;
 

@@ -10,8 +10,8 @@
 //!
 
 pub use crate::innerlude::{
-    format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, EventTrigger, LazyNodes,
-    NodeFactory, Properties, RealDom, RealDomNode, ScopeId, VNode, VNodeKind, VirtualDom,
+    format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, ElementId, EventTrigger,
+    LazyNodes, NodeFactory, Properties, RealDom, ScopeId, VNode, VNodeKind, VirtualDom,
     VirtualEvent, FC,
 };
 
@@ -38,7 +38,6 @@ pub(crate) mod innerlude {
     pub use crate::hooklist::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
-    pub use crate::tasks::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -66,6 +65,5 @@ pub mod hooklist;
 pub mod nodes;
 pub mod scope;
 pub mod signals;
-pub mod tasks;
 pub mod util;
 pub mod virtual_dom;

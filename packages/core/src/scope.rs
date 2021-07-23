@@ -18,39 +18,29 @@ use std::{
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// usecase they might have.
 pub struct Scope {
-    // Book-keeping about the arena
+    // Book-keeping about our spot in the arena
     pub(crate) parent_idx: Option<ScopeId>,
-    pub(crate) descendents: RefCell<HashSet<ScopeId>>,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
+    pub(crate) descendents: RefCell<HashSet<ScopeId>>,
 
     // Nodes
     // an internal, highly efficient storage of vnodes
     pub(crate) frames: ActiveFrame,
-    pub(crate) child_nodes: &'static [VNode<'static>],
     pub(crate) caller: Rc<WrappedCaller>,
+    pub(crate) child_nodes: &'static [VNode<'static>],
 
     // Listeners
-    pub(crate) listeners: RefCell<Vec<(*mut Cell<RealDomNode>, *mut dyn FnMut(VirtualEvent))>>,
+    pub(crate) listeners: RefCell<Vec<*mut Listener<'static>>>,
     pub(crate) listener_idx: Cell<usize>,
 
     // State
     pub(crate) hooks: HookList,
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
-    // Events
-    pub(crate) event_channel: Rc<dyn Fn() + 'static>,
-
-    // Tasks
-    pub(crate) task_submitter: TaskSubmitter,
-
-    // A reference to the list of components.
-    // This lets us traverse the component list whenever we need to access our parent or children.
-    pub(crate) arena_link: SharedArena,
+    // A reference to the resources shared by all the comonents
+    pub(crate) vdom: SharedResources,
 }
-
-// The type of the channel function
-type EventChannel = Rc<dyn Fn()>;
 
 // The type of closure that wraps calling components
 pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> DomTree<'b>;
@@ -68,13 +58,16 @@ impl Scope {
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub fn new<'creator_node>(
         caller: Rc<WrappedCaller>,
+
         arena_idx: ScopeId,
+
         parent: Option<ScopeId>,
+
         height: u32,
-        event_channel: EventChannel,
-        arena_link: SharedArena,
+
         child_nodes: &'creator_node [VNode<'creator_node>],
-        task_submitter: TaskSubmitter,
+
+        vdom: SharedResources,
     ) -> Self {
         let child_nodes = unsafe { std::mem::transmute(child_nodes) };
         Self {
@@ -83,9 +76,7 @@ impl Scope {
             parent_idx: parent,
             our_arena_idx: arena_idx,
             height,
-            event_channel,
-            arena_link,
-            task_submitter,
+            vdom,
             listener_idx: Default::default(),
             frames: ActiveFrame::new(),
             hooks: Default::default(),
@@ -113,7 +104,7 @@ impl Scope {
         // Remove all the outdated listeners
 
         // This is a very dangerous operation
-        let next_frame = self.frames.old_frame_mut();
+        let next_frame = self.frames.prev_frame_mut();
         next_frame.bump.reset();
 
         self.listeners.borrow_mut().clear();
@@ -132,7 +123,7 @@ impl Scope {
             }
             Some(new_head) => {
                 // the user's component succeeded. We can safely cycle to the next frame
-                self.frames.old_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
+                self.frames.prev_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
                 self.frames.cycle_frame();
                 Ok(())
             }
@@ -162,31 +153,25 @@ impl Scope {
 
         let listners = self.listeners.borrow_mut();
 
-        let raw_listener = listners.iter().find(|(domptr, _)| {
-            let search = unsafe { &**domptr };
-            let search_id = search.get();
+        let raw_listener = listners.iter().find(|lis| {
+            let search = unsafe { &mut ***lis };
+            let search_id = search.mounted_node.get();
             log::info!("searching listener {:#?}", search_id);
-            match real_node_id {
-                Some(e) => search_id == e,
-                None => false,
+
+            match (real_node_id, search_id) {
+                (Some(e), Some(search_id)) => search_id == e,
+                _ => false,
             }
         });
 
-        match raw_listener {
-            Some((_node, listener)) => unsafe {
-                // TODO: Don'tdo a linear scan! Do a hashmap lookup! It'll be faster!
-                let listener_fn = &mut **listener;
-                listener_fn(event);
-            },
-            None => todo!(),
+        if let Some(raw_listener) = raw_listener {
+            let listener = unsafe { &mut **raw_listener };
+            (listener.callback)(event);
+        } else {
+            log::warn!("An event was triggered but there was no listener to handle it");
         }
 
         Ok(())
-    }
-
-    pub(crate) fn submit_task(&self, task: FiberTask) {
-        log::debug!("Task submitted into scope");
-        (self.task_submitter)(task);
     }
 
     #[inline]
@@ -207,18 +192,10 @@ impl Scope {
     /// Get the root VNode of this component
     #[inline]
     pub fn root<'a>(&'a self) -> &'a VNode<'a> {
-        &self.frames.cur_frame().head_node
+        &self.frames.current_head_node()
     }
-}
-
-pub fn errored_fragment() -> VNode<'static> {
-    VNode {
-        dom_id: RealDomNode::empty_cell(),
-        key: None,
-        kind: VNodeKind::Fragment(VFragment {
-            children: &[],
-            is_static: false,
-            is_error: true,
-        }),
+    #[inline]
+    pub fn child_nodes<'a>(&'a self) -> &'a [VNode<'a>] {
+        unsafe { std::mem::transmute(self.child_nodes) }
     }
 }

@@ -5,7 +5,7 @@
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, DomTree, Properties, RealDomNode, Scope, ScopeId, FC},
+    innerlude::{empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, FC},
 };
 use std::{
     cell::Cell,
@@ -16,7 +16,12 @@ use std::{
 
 pub struct VNode<'src> {
     pub kind: VNodeKind<'src>,
-    pub(crate) dom_id: Cell<RealDomNode>,
+
+    ///
+    /// ElementId supports NonZero32 and Cell is zero cost, so the size of this field is unaffected
+    ///
+    ///
+    pub(crate) dom_id: Cell<Option<ElementId>>,
     pub(crate) key: Option<&'src str>,
 }
 impl VNode<'_> {
@@ -39,7 +44,7 @@ pub enum VNodeKind<'src> {
 
     Component(&'src VComponent<'src>),
 
-    Suspended { node: Rc<Cell<RealDomNode>> },
+    Suspended { node: Rc<Cell<Option<ElementId>>> },
 }
 
 pub struct VText<'src> {
@@ -50,7 +55,6 @@ pub struct VText<'src> {
 pub struct VFragment<'src> {
     pub children: &'src [VNode<'src>],
     pub is_static: bool,
-    pub is_error: bool,
 }
 
 pub trait DioxusElement {
@@ -72,7 +76,7 @@ pub struct VElement<'a> {
     pub namespace: Option<&'static str>,
 
     pub static_listeners: bool,
-    pub listeners: &'a [Listener<'a>],
+    pub listeners: &'a [&'a mut Listener<'a>],
 
     pub static_attrs: bool,
     pub attributes: &'a [Attribute<'a>],
@@ -105,9 +109,9 @@ pub struct Listener<'bump> {
 
     pub scope: ScopeId,
 
-    pub mounted_node: &'bump mut Cell<RealDomNode>,
+    pub mounted_node: Cell<Option<ElementId>>,
 
-    pub(crate) callback: &'bump dyn FnMut(VirtualEvent),
+    pub(crate) callback: &'bump mut dyn FnMut(VirtualEvent),
 }
 
 /// Virtual Components for custom user-defined components
@@ -136,20 +140,31 @@ pub struct VComponent<'src> {
 /// This struct adds metadata to the final VNode about listeners, attributes, and children
 #[derive(Copy, Clone)]
 pub struct NodeFactory<'a> {
-    pub scope_ref: &'a Scope,
+    pub scope: &'a Scope,
     pub listener_id: &'a Cell<usize>,
 }
 
 impl<'a> NodeFactory<'a> {
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        &self.scope_ref.cur_frame().bump
+        &self.scope.cur_frame().bump
+    }
+
+    pub fn unstable_place_holder() -> VNode<'static> {
+        VNode {
+            dom_id: empty_cell(),
+            key: None,
+            kind: VNodeKind::Text(VText {
+                text: "",
+                is_static: true,
+            }),
+        }
     }
 
     /// Used in a place or two to make it easier to build vnodes from dummy text
-    pub fn static_text(text: &'static str) -> VNode {
+    pub fn static_text(&self, text: &'static str) -> VNode<'a> {
         VNode {
-            dom_id: RealDomNode::empty_cell(),
+            dom_id: empty_cell(),
             key: None,
             kind: VNodeKind::Text(VText {
                 text,
@@ -178,7 +193,7 @@ impl<'a> NodeFactory<'a> {
     pub fn text(&self, args: Arguments) -> VNode<'a> {
         let (text, is_static) = self.raw_text(args);
         VNode {
-            dom_id: RealDomNode::empty_cell(),
+            dom_id: empty_cell(),
             key: None,
             kind: VNodeKind::Text(VText { text, is_static }),
         }
@@ -187,7 +202,7 @@ impl<'a> NodeFactory<'a> {
     pub fn element(
         &self,
         el: impl DioxusElement,
-        listeners: &'a mut [Listener<'a>],
+        listeners: &'a mut [&'a mut Listener<'a>],
         attributes: &'a [Attribute<'a>],
         children: &'a [VNode<'a>],
         key: Option<&'a str>,
@@ -206,7 +221,7 @@ impl<'a> NodeFactory<'a> {
         &self,
         tag: &'static str,
         namespace: Option<&'static str>,
-        listeners: &'a mut [Listener],
+        listeners: &'a mut [&'a mut Listener<'a>],
         attributes: &'a [Attribute],
         children: &'a [VNode<'a>],
         key: Option<&'a str>,
@@ -215,15 +230,17 @@ impl<'a> NodeFactory<'a> {
         // TODO: this code shouldn't necessarily be here of all places
         // It would make more sense to do this in diffing
 
-        let mut queue = self.scope_ref.listeners.borrow_mut();
+        let mut queue = self.scope.listeners.borrow_mut();
         for listener in listeners.iter_mut() {
-            let mounted = listener.mounted_node as *mut _;
-            let callback = listener.callback as *const _ as *mut _;
-            queue.push((mounted, callback))
+            let raw_listener = &mut **listener;
+
+            let long_listener: &mut Listener<'static> =
+                unsafe { std::mem::transmute(raw_listener) };
+            queue.push(long_listener as *mut _)
         }
 
         VNode {
-            dom_id: RealDomNode::empty_cell(),
+            dom_id: empty_cell(),
             key,
             kind: VNodeKind::Element(self.bump().alloc(VElement {
                 tag_name: tag,
@@ -242,10 +259,10 @@ impl<'a> NodeFactory<'a> {
 
     pub fn suspended() -> VNode<'static> {
         VNode {
-            dom_id: RealDomNode::empty_cell(),
+            dom_id: empty_cell(),
             key: None,
             kind: VNodeKind::Suspended {
-                node: Rc::new(RealDomNode::empty_cell()),
+                node: Rc::new(empty_cell()),
             },
         }
     }
@@ -322,7 +339,7 @@ impl<'a> NodeFactory<'a> {
 
         VNode {
             key,
-            dom_id: Cell::new(RealDomNode::empty()),
+            dom_id: empty_cell(),
             kind: VNodeKind::Component(self.bump().alloc_with(|| VComponent {
                 user_fc,
                 comparator,
@@ -383,12 +400,11 @@ To help you identify where this error is coming from, we've generated a backtrac
             }
         }
         VNode {
-            dom_id: RealDomNode::empty_cell(),
+            dom_id: empty_cell(),
             key: None,
             kind: VNodeKind::Fragment(VFragment {
                 children: nodes.into_bump_slice(),
                 is_static: false,
-                is_error: false,
             }),
         }
     }
@@ -444,7 +460,6 @@ impl<'a> IntoVNode<'a> for &VNode<'a> {
             VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
                 children: fragment.children,
                 is_static: fragment.is_static,
-                is_error: false,
             }),
             VNodeKind::Component(component) => VNodeKind::Component(component),
 
@@ -535,7 +550,7 @@ impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
 
 impl IntoVNode<'_> for &'static str {
     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        NodeFactory::static_text(self)
+        cx.static_text(self)
     }
 }
 impl IntoVNode<'_> for Arguments<'_> {

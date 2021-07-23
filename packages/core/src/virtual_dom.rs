@@ -19,8 +19,7 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
-use crate::tasks::TaskQueue;
-use crate::{arena::SharedArena, innerlude::*};
+use crate::{arena::SharedResources, innerlude::*};
 
 use slotmap::DefaultKey;
 use slotmap::SlotMap;
@@ -29,10 +28,6 @@ use std::any::Any;
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::pin::Pin;
-
-slotmap::new_key_type! {
-    pub struct ScopeId;
-}
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -49,7 +44,7 @@ pub struct VirtualDom {
     ///
     /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
     /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    pub components: SharedArena,
+    pub shared: SharedResources,
 
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
@@ -57,21 +52,12 @@ pub struct VirtualDom {
 
     pub triggers: RefCell<Vec<EventTrigger>>,
 
-    /// All components dump their updates into a queue to be processed
-    pub event_queue: EventQueue,
-
-    pub tasks: TaskQueue,
-
-    heuristics: HeuristicsEngine,
-
-    root_props: std::pin::Pin<Box<dyn std::any::Any>>,
-
-    /// Type of the original props. This is stored as TypeId so VirtualDom does not need to be generic.
-    ///
-    /// Whenver props need to be updated, an Error will be thrown if the new props do not
-    /// match the props used to create the VirtualDom.
+    // for managing the props that were used to create the dom
     #[doc(hidden)]
     _root_prop_type: std::any::TypeId,
+
+    #[doc(hidden)]
+    _root_props: std::pin::Pin<Box<dyn std::any::Any>>,
 }
 
 // ======================================
@@ -142,37 +128,22 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Example);
     /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let components = SharedArena::new(SlotMap::<ScopeId, Scope>::with_key());
+        let components = SharedResources::new();
 
         let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
         let props_ptr = root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
 
-        // Build a funnel for hooks to send their updates into. The `use_hook` method will call into the update funnel.
-        let event_queue = EventQueue::default();
-        let _event_queue = event_queue.clone();
-
         let link = components.clone();
 
-        let tasks = TaskQueue::new();
-        let submitter = tasks.new_submitter();
-
-        let base_scope = components
-            .with(|arena| {
-                arena.insert_with_key(move |myidx| {
-                    let event_channel = _event_queue.new_channel(0, myidx);
-                    let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
-                    Scope::new(caller, myidx, None, 0, event_channel, link, &[], submitter)
-                })
-            })
-            .unwrap();
+        let base_scope = components.insert_scope_with_key(move |myidx| {
+            let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
+            Scope::new(caller, myidx, None, 0, &[], link)
+        });
 
         Self {
             base_scope,
-            event_queue,
-            components,
-            root_props,
-            tasks,
-            heuristics: HeuristicsEngine::new(),
+            _root_props: root_props,
+            shared: components,
             triggers: Default::default(),
             _root_prop_type: TypeId::of::<P>(),
         }
@@ -209,29 +180,28 @@ impl VirtualDom {
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     ///
-    /// Currently this doesn't do what we want it to do
-    ///
     /// The diff machine expects the RealDom's stack to be the root of the application
     pub fn rebuild<'s, Dom: RealDom<'s>>(
         &'s mut self,
         realdom: &mut Dom,
         edits: &mut Vec<DomEdit<'s>>,
     ) -> Result<()> {
-        let mut diff_machine = DiffMachine::new(
-            edits,
-            realdom,
-            &self.components,
-            self.base_scope,
-            self.event_queue.clone(),
-            &self.tasks,
-        );
+        let mut diff_machine = DiffMachine::new(edits, realdom, self.base_scope, &self.shared);
 
-        let cur_component = self.components.get_mut(self.base_scope).unwrap();
+        let cur_component = diff_machine
+            .get_scope_mut(&self.base_scope)
+            .expect("The base scope should never be moved");
 
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
             let meta = diff_machine.create(cur_component.next_frame());
             diff_machine.edits.append_children(meta.added_to_stack);
+        } else {
+            // todo: should this be a hard error?
+            log::warn!(
+                "Component failed to run succesfully during rebuild.
+                This does not result in a failed rebuild, but indicates a logic failure within your app."
+            );
         }
 
         Ok(())
@@ -242,10 +212,9 @@ impl VirtualDom {
     ///
     ///
     ///
-    pub fn queue_event(&self, trigger: EventTrigger) -> Result<()> {
+    pub fn queue_event(&self, trigger: EventTrigger) {
         let mut triggers = self.triggers.borrow_mut();
         triggers.push(trigger);
-        Ok(())
     }
 
     /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
@@ -298,26 +267,18 @@ impl VirtualDom {
     ) -> Result<()> {
         let trigger = self.triggers.borrow_mut().pop().expect("failed");
 
-        let mut diff_machine = DiffMachine::new(
-            edits,
-            realdom,
-            &self.components,
-            trigger.originator,
-            self.event_queue.clone(),
-            &self.tasks,
-        );
+        let mut diff_machine = DiffMachine::new(edits, realdom, trigger.originator, &self.shared);
 
         match &trigger.event {
-            VirtualEvent::OtherEvent => todo!(),
-
             // Nothing yet
             VirtualEvent::AsyncEvent { .. } => {}
 
             // Suspense Events! A component's suspended node is updated
             VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
-                let scope = self.components.get_mut(trigger.originator).unwrap();
+                // Safety: this handler is the only thing that can mutate shared items at this moment in tim
+                let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
 
-                // safety: we are sure that there are no other references to the inner content of this hook
+                // safety: we are sure that there are no other references to the inner content of suspense hooks
                 let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
 
                 let cx = Context { scope, props: &() };
@@ -325,17 +286,24 @@ impl VirtualDom {
 
                 // generate the new node!
                 let nodes: Option<VNode<'s>> = (&hook.callback)(scx);
-                let nodes = nodes.unwrap_or_else(|| errored_fragment());
-                let nodes = scope.cur_frame().bump.alloc(nodes);
+                match nodes {
+                    None => {
+                        log::warn!("Suspense event came through, but there was no mounted node to update >:(");
+                    }
+                    Some(nodes) => {
+                        let nodes = scope.cur_frame().bump.alloc(nodes);
 
-                // push the old node's root onto the stack
-                diff_machine.edits.push(domnode.get());
+                        // push the old node's root onto the stack
+                        let real_id = domnode.get().ok_or(Error::NotMounted)?;
+                        diff_machine.edits.push_root(real_id);
 
-                // push these new nodes onto the diff machines stack
-                let meta = diff_machine.create(&*nodes);
+                        // push these new nodes onto the diff machines stack
+                        let meta = diff_machine.create(&*nodes);
 
-                // replace the placeholder with the new nodes we just pushed on the stack
-                diff_machine.edits.replace_with(meta.added_to_stack);
+                        // replace the placeholder with the new nodes we just pushed on the stack
+                        diff_machine.edits.replace_with(meta.added_to_stack);
+                    }
+                }
             }
 
             // This is the "meat" of our cooperative scheduler
@@ -343,12 +311,12 @@ impl VirtualDom {
             //
             // We use the reconciler to request new IDs and then commit/uncommit the IDs when the scheduler is finished
             _ => {
-                self.components
-                    .get_mut(trigger.originator)
+                diff_machine
+                    .get_scope_mut(&trigger.originator)
                     .map(|f| f.call_listener(trigger));
 
                 // Now, there are events in the queue
-                let mut updates = self.event_queue.queue.as_ref().borrow_mut();
+                let mut updates = self.shared.borrow_queue();
 
                 // Order the nodes by their height, we want the nodes with the smallest depth on top
                 // This prevents us from running the same component multiple times
@@ -370,8 +338,10 @@ impl VirtualDom {
                     diff_machine.seen_nodes.insert(update.idx.clone());
 
                     // Start a new mutable borrow to components
-                    // We are guaranteeed that this scope is unique because we are tracking which nodes have modified
-                    let cur_component = self.components.get_mut(update.idx).unwrap();
+                    // We are guaranteeed that this scope is unique because we are tracking which nodes have modified in the diff machine
+                    let cur_component = diff_machine
+                        .get_scope_mut(&update.idx)
+                        .expect("Failed to find scope or borrow would be aliasing");
 
                     if cur_component.run_scope().is_ok() {
                         let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
@@ -385,7 +355,7 @@ impl VirtualDom {
     }
 
     pub fn base_scope(&self) -> &Scope {
-        self.components.get(self.base_scope).unwrap()
+        unsafe { self.shared.get_scope(self.base_scope).unwrap() }
     }
 }
 

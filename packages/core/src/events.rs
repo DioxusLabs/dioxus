@@ -6,7 +6,7 @@
 
 use std::{cell::Cell, rc::Rc};
 
-use crate::innerlude::{RealDomNode, ScopeId};
+use crate::innerlude::{ElementId, HeightMarker, ScopeId};
 
 #[derive(Debug)]
 pub struct EventTrigger {
@@ -14,7 +14,7 @@ pub struct EventTrigger {
     pub originator: ScopeId,
 
     /// The optional real node associated with the trigger
-    pub real_node_id: Option<RealDomNode>,
+    pub real_node_id: Option<ElementId>,
 
     /// The type of event
     pub event: VirtualEvent,
@@ -72,7 +72,7 @@ impl EventTrigger {
     pub fn new(
         event: VirtualEvent,
         scope: ScopeId,
-        mounted_dom_id: Option<RealDomNode>,
+        mounted_dom_id: Option<ElementId>,
         priority: EventPriority,
     ) -> Self {
         Self {
@@ -105,6 +105,9 @@ pub enum VirtualEvent {
 
     // image event has conflicting method types
     // ImageEvent(event_data::ImageEvent),
+    SetStateEvent {
+        height: HeightMarker,
+    },
 
     // Whenever a task is ready (complete) Dioxus produces this "AsyncEvent"
     //
@@ -117,10 +120,8 @@ pub enum VirtualEvent {
     // These are more intrusive than the rest
     SuspenseEvent {
         hook_idx: usize,
-        domnode: Rc<Cell<RealDomNode>>,
+        domnode: Rc<Cell<Option<ElementId>>>,
     },
-
-    OtherEvent,
 }
 
 pub mod on {
@@ -138,7 +139,7 @@ pub mod on {
 
     use crate::{
         innerlude::NodeFactory,
-        innerlude::{Attribute, Listener, RealDomNode, VNode},
+        innerlude::{Attribute, ElementId, Listener, VNode},
     };
     use std::cell::Cell;
 
@@ -180,8 +181,8 @@ pub mod on {
                         let bump = &c.bump();
                         Listener {
                             event: stringify!($name),
-                            mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
-                            scope: c.scope_ref.our_arena_idx,
+                            mounted_node: Cell::new(None),
+                            scope: c.scope.our_arena_idx,
                             callback: bump.alloc(move |evt: VirtualEvent| match evt {
                                 VirtualEvent::$wrapper(event) => callback(event),
                                 _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")

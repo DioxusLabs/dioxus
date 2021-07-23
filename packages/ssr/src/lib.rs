@@ -21,7 +21,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
         "{:}",
         TextRenderer {
             cfg: SsrConfig::default(),
-            root: vdom.components.get(scope).unwrap().root(),
+            root: vdom.shared.get_scope(scope).unwrap().root(),
             vdom: Some(vdom)
         }
     ))
@@ -163,7 +163,7 @@ impl<'a> TextRenderer<'a> {
             VNodeKind::Component(vcomp) => {
                 let idx = vcomp.ass_scope.get().unwrap();
                 if let Some(vdom) = self.vdom {
-                    let new_node = vdom.components.get(idx).unwrap().root();
+                    let new_node = vdom.shared.get_scope(idx).unwrap().root();
                     self.html_render(new_node, f, il + 1)?;
                 }
             }

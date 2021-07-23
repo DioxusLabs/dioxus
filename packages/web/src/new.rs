@@ -13,7 +13,7 @@ use web_sys::{
 
 pub struct WebsysDom {
     pub stack: Stack,
-    nodes: slotmap::SlotMap<DefaultKey, Option<Node>>,
+    nodes: slotmap::SlotMap<DefaultKey, Node>,
     document: Document,
     root: Element,
 
@@ -51,7 +51,7 @@ impl WebsysDom {
 
         let mut nodes = slotmap::SlotMap::with_capacity(1000);
 
-        let root_id = nodes.insert(Some(root.clone().dyn_into::<Node>().unwrap()));
+        let root_id = nodes.insert(root.clone().dyn_into::<Node>().unwrap());
 
         Self {
             stack: Stack::with_capacity(10),
@@ -101,11 +101,16 @@ impl WebsysDom {
         let key = DefaultKey::from(KeyData::from_ffi(root));
         let domnode = self.nodes.get_mut(key);
 
-        let domnode = domnode.unwrap().as_mut().unwrap();
+        let real_node: Node = match domnode {
+            Some(n) => n.clone(),
+            None => todo!(),
+        };
+
+        // let domnode = domnode.unwrap().as_mut().unwrap();
         // .expect(&format!("Failed to pop know root: {:#?}", key))
         // .unwrap();
 
-        self.stack.push(domnode.clone());
+        self.stack.push(real_node);
     }
     // drop the node off the stack
     fn pop(&mut self) {
@@ -202,7 +207,7 @@ impl WebsysDom {
         *self
             .nodes
             .get_mut(DefaultKey::from(KeyData::from_ffi(id)))
-            .unwrap() = Some(textnode);
+            .unwrap() = textnode;
     }
 
     fn create_element(&mut self, tag: &str, ns: Option<&'static str>, id: u64) {
@@ -224,7 +229,7 @@ impl WebsysDom {
         let id = DefaultKey::from(KeyData::from_ffi(id));
 
         self.stack.push(el.clone());
-        *self.nodes.get_mut(id).unwrap() = Some(el);
+        *self.nodes.get_mut(id).unwrap() = el;
         // let nid = self.node_counter.?next();
         // let nid = self.nodes.insert(el).data().as_ffi();
         // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
@@ -344,11 +349,11 @@ impl WebsysDom {
 }
 
 impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
-    fn request_available_node(&mut self) -> RealDomNode {
-        let key = self.nodes.insert(None);
-        log::debug!("making new key: {:#?}", key);
-        RealDomNode(key.data().as_ffi())
-    }
+    // fn request_available_node(&mut self) -> RealDomNode {
+    //     let key = self.nodes.insert(None);
+    //     log::debug!("making new key: {:#?}", key);
+    //     RealDomNode(key.data().as_ffi())
+    // }
 
     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
         todo!()

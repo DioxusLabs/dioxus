@@ -15,7 +15,7 @@
 //! whose keys can be converted to u64 on FFI boundaries.
 //!
 //! When new nodes are created through `render`, they won't know which real node they correspond to. During diffing, we
-//! always make sure to copy over the ID. If we don't do this properly, the realdomnode will be populated incorrectly and
+//! always make sure to copy over the ID. If we don't do this properly, the ElementId will be populated incorrectly and
 //! brick the user's page.
 //!
 //! ## Subtree Memoization
@@ -48,11 +48,11 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
-use crate::{arena::SharedArena, innerlude::*, tasks::TaskQueue};
-use fxhash::FxHashSet;
+use crate::{arena::SharedResources, innerlude::*};
+use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-use std::any::Any;
+use std::{any::Any, borrow::Borrow};
 
 /// The accompanying "real dom" exposes an imperative API for controlling the UI layout
 ///
@@ -66,19 +66,33 @@ use std::any::Any;
 /// any modifications that follow. This technique enables the diffing algorithm to avoid directly handling or storing any
 /// target-specific Node type as well as easily serializing the edits to be sent over a network or IPC connection.
 pub trait RealDom<'a> {
-    fn request_available_node(&mut self) -> RealDomNode;
     fn raw_node_as_any(&self) -> &mut dyn Any;
 }
 
 pub struct DiffMachine<'real, 'bump, Dom: RealDom<'bump>> {
-    pub dom: &'real mut Dom,
+    pub real_dom: &'real mut Dom,
+    pub vdom: &'bump SharedResources,
     pub edits: DomEditor<'real, 'bump>,
-    pub components: &'bump SharedArena,
-    pub task_queue: &'bump TaskQueue,
+
     pub cur_idxs: SmallVec<[ScopeId; 5]>,
     pub diffed: FxHashSet<ScopeId>,
-    pub event_queue: EventQueue,
     pub seen_nodes: FxHashSet<ScopeId>,
+}
+
+impl<'r, 'b, D: RealDom<'b>> DiffMachine<'r, 'b, D> {
+    pub fn get_scope_mut(&mut self, id: &ScopeId) -> Option<&'b mut Scope> {
+        // ensure we haven't seen this scope before
+        // if we have, then we're trying to alias it, which is not allowed
+        debug_assert!(!self.seen_nodes.contains(id));
+        let compon = unsafe { &mut *self.vdom.components.get() };
+        compon.get_mut(*id)
+    }
+    pub fn get_scope(&mut self, id: &ScopeId) -> Option<&'b Scope> {
+        // ensure we haven't seen this scope before
+        // if we have, then we're trying to alias it, which is not allowed
+        let compon = unsafe { &*self.vdom.components.get() };
+        compon.get(*id)
+    }
 }
 
 impl<'real, 'bump, Dom> DiffMachine<'real, 'bump, Dom>
@@ -88,18 +102,14 @@ where
     pub fn new(
         edits: &'real mut Vec<DomEdit<'bump>>,
         dom: &'real mut Dom,
-        components: &'bump SharedArena,
         cur_idx: ScopeId,
-        event_queue: EventQueue,
-        task_queue: &'bump TaskQueue,
+        shared: &'bump SharedResources,
     ) -> Self {
         Self {
+            real_dom: dom,
             edits: DomEditor::new(edits),
-            components,
-            dom,
             cur_idxs: smallvec![cur_idx],
-            event_queue,
-            task_queue,
+            vdom: shared,
             diffed: FxHashSet::default(),
             seen_nodes: FxHashSet::default(),
         }
@@ -112,20 +122,24 @@ where
     //
     // each function call assumes the stack is fresh (empty).
     pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
+        let root = old_node
+            .dom_id
+            .get()
+            .expect("Should not be diffing old nodes that were never assigned");
+
         match (&old_node.kind, &new_node.kind) {
             // Handle the "sane" cases first.
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
             // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
             (VNodeKind::Text(old), VNodeKind::Text(new)) => {
-                let root = old_node.dom_id.get();
                 if old.text != new.text {
-                    self.edits.push(root);
+                    self.edits.push_root(root);
                     log::debug!("Text has changed {}, {}", old.text, new.text);
                     self.edits.set_text(new.text);
                     self.edits.pop();
                 }
 
-                new_node.dom_id.set(root);
+                new_node.dom_id.set(Some(root));
             }
 
             (VNodeKind::Element(old), VNodeKind::Element(new)) => {
@@ -133,20 +147,19 @@ where
                 // This is an optimization React makes due to how users structure their code
                 //
                 // In Dioxus, this is less likely to occur unless through a fragment
-                let root = old_node.dom_id.get();
                 if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                    self.edits.push(root);
+                    self.edits.push_root(root);
                     let meta = self.create(new_node);
                     self.edits.replace_with(meta.added_to_stack);
                     self.edits.pop();
                     return;
                 }
 
-                new_node.dom_id.set(root);
+                new_node.dom_id.set(Some(root));
 
                 // push it just in case
                 // TODO: remove this - it clogs up things and is inefficient
-                self.edits.push(root);
+                self.edits.push_root(root);
                 self.diff_listeners(old.listeners, new.listeners);
                 self.diff_attr(old.attributes, new.attributes, new.namespace);
                 self.diff_children(old.children, new.children);
@@ -160,11 +173,11 @@ where
                     self.cur_idxs.push(old.ass_scope.get().unwrap());
 
                     // Make sure the new component vnode is referencing the right scope id
-                    let scope_id = old.ass_scope.get();
-                    new.ass_scope.set(scope_id);
+                    let scope_addr = old.ass_scope.get().unwrap();
+                    new.ass_scope.set(Some(scope_addr));
 
                     // make sure the component's caller function is up to date
-                    let scope = self.components.get_mut(scope_id.unwrap()).unwrap();
+                    let scope = self.get_scope_mut(&scope_addr).unwrap();
 
                     scope.caller = new.caller.clone();
 
@@ -185,22 +198,22 @@ where
                     }
                     self.cur_idxs.pop();
 
-                    self.seen_nodes.insert(scope_id.unwrap());
+                    self.seen_nodes.insert(scope_addr);
                 } else {
                     // this seems to be a fairy common code path that we could
-                    let mut old_iter = RealChildIterator::new(old_node, &self.components);
+                    let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
                     let first = old_iter
                         .next()
                         .expect("Components should generate a placeholder root");
 
                     // remove any leftovers
                     for to_remove in old_iter {
-                        self.edits.push(to_remove);
+                        self.edits.push_root(to_remove);
                         self.edits.remove();
                     }
 
                     // seems like we could combine this into a single instruction....
-                    self.edits.push(first);
+                    self.edits.push_root(first);
                     let meta = self.create(new_node);
                     self.edits.replace_with(meta.added_to_stack);
                     self.edits.pop();
@@ -229,8 +242,12 @@ where
             }
 
             // The strategy here is to pick the first possible node from the previous set and use that as our replace with root
+            //
             // We also walk the "real node" list to make sure all latent roots are claened up
             // This covers the case any time a fragment or component shows up with pretty much anything else
+            //
+            // This likely isn't the fastest way to go about replacing one node with a virtual node, but the "insane" cases
+            // are pretty rare.  IE replacing a list (component or fragment) with a single node.
             (
                 VNodeKind::Component(_)
                 | VNodeKind::Fragment(_)
@@ -242,12 +259,12 @@ where
                 | VNodeKind::Element(_),
             ) => {
                 // Choose the node to use as the placeholder for replacewith
-                let back_node = match old_node.kind {
+                let back_node_id = match old_node.kind {
                     // We special case these two types to avoid allocating the small-vecs
-                    VNodeKind::Element(_) | VNodeKind::Text(_) => old_node.dom_id.get(),
+                    VNodeKind::Element(_) | VNodeKind::Text(_) => root,
 
                     _ => {
-                        let mut old_iter = RealChildIterator::new(old_node, &self.components);
+                        let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
 
                         let back_node = old_iter
                             .next()
@@ -255,7 +272,7 @@ where
 
                         // remove any leftovers
                         for to_remove in old_iter {
-                            self.edits.push(to_remove);
+                            self.edits.push_root(to_remove);
                             self.edits.remove();
                         }
 
@@ -264,7 +281,7 @@ where
                 };
 
                 // replace the placeholder or first node with the nodes generated from the "new"
-                self.edits.push(back_node);
+                self.edits.push_root(back_node_id);
                 let meta = self.create(new_node);
                 self.edits.replace_with(meta.added_to_stack);
 
@@ -314,9 +331,10 @@ where
         log::warn!("Creating node! ... {:#?}", node);
         match &node.kind {
             VNodeKind::Text(text) => {
-                let real_id = self.dom.request_available_node();
+                let real_id = self.vdom.reserve_node();
                 self.edits.create_text_node(text.text, real_id);
-                node.dom_id.set(real_id);
+                node.dom_id.set(Some(real_id));
+
                 CreateMeta::new(text.is_static, 1)
             }
             VNodeKind::Element(el) => {
@@ -338,18 +356,18 @@ where
                     static_listeners: _,
                 } = el;
 
-                let real_id = self.dom.request_available_node();
+                let real_id = self.vdom.reserve_node();
                 if let Some(namespace) = namespace {
                     self.edits
                         .create_element(tag_name, Some(namespace), real_id)
                 } else {
                     self.edits.create_element(tag_name, None, real_id)
                 };
-                node.dom_id.set(real_id);
+                node.dom_id.set(Some(real_id));
 
                 listeners.iter().enumerate().for_each(|(idx, listener)| {
                     log::info!("setting listener id to {:#?}", real_id);
-                    listener.mounted_node.set(real_id);
+                    listener.mounted_node.set(Some(real_id));
                     self.edits
                         .new_event_listener(listener.event, listener.scope, idx, real_id);
 
@@ -405,25 +423,18 @@ where
                 let parent_idx = self.cur_idxs.last().unwrap().clone();
 
                 // Insert a new scope into our component list
-                let new_idx = self
-                    .components
-                    .with(|components| {
-                        components.insert_with_key(|new_idx| {
-                            let parent_scope = self.components.get(parent_idx).unwrap();
-                            let height = parent_scope.height + 1;
-                            Scope::new(
-                                caller,
-                                new_idx,
-                                Some(parent_idx),
-                                height,
-                                self.event_queue.new_channel(height, new_idx),
-                                self.components.clone(),
-                                vcomponent.children,
-                                self.task_queue.new_submitter(),
-                            )
-                        })
-                    })
-                    .unwrap();
+                let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
+                    let parent_scope = self.get_scope(&parent_idx).unwrap();
+                    let height = parent_scope.height + 1;
+                    Scope::new(
+                        caller,
+                        new_idx,
+                        Some(parent_idx),
+                        height,
+                        vcomponent.children,
+                        self.vdom.clone(),
+                    )
+                });
 
                 // This code is supposed to insert the new idx into the parent's descendent list, but it doesn't really work.
                 // This is mostly used for cleanup - to remove old scopes when components are destroyed.
@@ -437,7 +448,7 @@ where
                 //     .insert(idx);
 
                 // TODO: abstract this unsafe into the arena abstraction
-                let inner: &'bump mut _ = unsafe { &mut *self.components.components.get() };
+                let inner: &'bump mut _ = unsafe { &mut *self.vdom.components.get() };
                 let new_component = inner.get_mut(new_idx).unwrap();
 
                 // Actually initialize the caller's slot with the right address
@@ -477,10 +488,10 @@ where
             }
 
             VNodeKind::Suspended { node: real_node } => {
-                let id = self.dom.request_available_node();
+                let id = self.vdom.reserve_node();
                 self.edits.create_placeholder(id);
-                node.dom_id.set(id);
-                real_node.set(id);
+                node.dom_id.set(Some(id));
+                real_node.set(Some(id));
                 CreateMeta::new(false, 1)
             }
         }
@@ -500,7 +511,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         while let Some(scope_id) = scopes_to_explore.pop() {
             // If we're planning on deleting this node, then we don't need to both rendering it
             self.seen_nodes.insert(scope_id);
-            let scope = self.components.get(scope_id).unwrap();
+            let scope = self.get_scope(&scope_id).unwrap();
             for child in scope.descendents.borrow().iter() {
                 // Add this node to be explored
                 scopes_to_explore.push(child.clone());
@@ -513,7 +524,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
         // Delete all scopes that we found as part of this subtree
         for node in nodes_to_delete {
             log::debug!("Removing scope {:#?}", node);
-            let _scope = self.components.try_remove(node).unwrap();
+            let _scope = self.vdom.try_remove(node).unwrap();
             // do anything we need to do to delete the scope
             // I think we need to run the destructors on the hooks
             // TODO
@@ -527,7 +538,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
     //     [... node]
     //
     // The change list stack is left unchanged.
-    fn diff_listeners(&mut self, old: &[Listener<'_>], new: &[Listener<'_>]) {
+    fn diff_listeners(&mut self, old: &[&mut Listener<'_>], new: &[&mut Listener<'_>]) {
         if !old.is_empty() || !new.is_empty() {
             // self.edits.commit_traversal();
         }
@@ -547,7 +558,7 @@ impl<'a, 'bump, Dom: RealDom<'bump>> DiffMachine<'a, 'bump, Dom> {
                     new_l.mounted_node.set(old_l.mounted_node.get());
                     // if new_l.id != old_l.id {
                     //     self.edits.remove_event_listener(event_type);
-                    //     // TODO! we need to mess with events and assign them by RealDomNode
+                    //     // TODO! we need to mess with events and assign them by ElementId
                     //     // self.edits
                     //     //     .update_event_listener(event_type, new_l.scope, new_l.id)
                     // }
@@ -1270,7 +1281,7 @@ enum KeyedPrefixResult {
 /// This iterator is useful when it's important to load the next real root onto the top of the stack for operations like
 /// "InsertBefore".
 struct RealChildIterator<'a> {
-    scopes: &'a SharedArena,
+    scopes: &'a SharedResources,
 
     // Heuristcally we should never bleed into 4 completely nested fragments/components
     // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
@@ -1279,7 +1290,7 @@ struct RealChildIterator<'a> {
 }
 
 impl<'a> RealChildIterator<'a> {
-    fn new(starter: &'a VNode<'a>, scopes: &'a SharedArena) -> Self {
+    fn new(starter: &'a VNode<'a>, scopes: &'a SharedResources) -> Self {
         Self {
             scopes,
             stack: smallvec::smallvec![(0, starter)],
@@ -1288,9 +1299,9 @@ impl<'a> RealChildIterator<'a> {
 }
 
 impl<'a> Iterator for RealChildIterator<'a> {
-    type Item = RealDomNode;
+    type Item = ElementId;
 
-    fn next(&mut self) -> Option<RealDomNode> {
+    fn next(&mut self) -> Option<ElementId> {
         let mut should_pop = false;
         let mut returned_node = None;
         let mut should_push = None;
@@ -1304,7 +1315,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         should_pop = true;
-                        returned_node = Some(node.dom_id.get());
+                        returned_node = node.dom_id.get();
                     }
 
                     // If we get a fragment we push the next child
@@ -1313,7 +1324,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
 
                         if frag.children.len() == 0 {
                             should_pop = true;
-                            returned_node = Some(node.dom_id.get());
+                            returned_node = node.dom_id.get();
                         }
 
                         if subcount >= frag.children.len() {
@@ -1325,11 +1336,16 @@ impl<'a> Iterator for RealChildIterator<'a> {
 
                     // Immediately abort suspended nodes - can't do anything with them yet
                     // VNodeKind::Suspended => should_pop = true,
-                    VNodeKind::Suspended { .. } => todo!(),
+                    VNodeKind::Suspended { node, .. } => {
+                        todo!()
+                        // *node = node.as_ref().borrow().get().expect("msg");
+                    }
 
                     // For components, we load their root and push them onto the stack
                     VNodeKind::Component(sc) => {
-                        let scope = self.scopes.get(sc.ass_scope.get().unwrap()).unwrap();
+                        let scope =
+                            unsafe { self.scopes.get_scope(sc.ass_scope.get().unwrap()) }.unwrap();
+                        // let scope = self.scopes.get(sc.ass_scope.get().unwrap()).unwrap();
 
                         // Simply swap the current node on the stack with the root of the component
                         *node = scope.root();
