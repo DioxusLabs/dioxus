@@ -13,10 +13,10 @@ use slab::Slab;
 // #[cfg(feature = "serialize", serde::Serialize)]
 // #[cfg(feature = "serialize", serde::Serialize)]
 #[derive(serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ScopeId(usize);
+pub struct ScopeId(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ElementId(usize);
+pub struct ElementId(pub usize);
 
 impl ElementId {
     pub fn as_u64(self) -> u64 {

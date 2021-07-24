@@ -5,7 +5,6 @@ use dioxus_core::{
     DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
-use slotmap::{DefaultKey, Key, KeyData};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     window, Document, Element, Event, HtmlElement, HtmlInputElement, HtmlOptionElement, Node,
@@ -13,7 +12,7 @@ use web_sys::{
 
 pub struct WebsysDom {
     pub stack: Stack,
-    nodes: slotmap::SlotMap<DefaultKey, Node>,
+    nodes: Vec<Node>,
     document: Document,
     root: Element,
 
@@ -49,9 +48,9 @@ impl WebsysDom {
             });
         });
 
-        let mut nodes = slotmap::SlotMap::with_capacity(1000);
+        let mut nodes = Vec::with_capacity(1000);
 
-        let root_id = nodes.insert(root.clone().dyn_into::<Node>().unwrap());
+        // let root_id = nodes.insert(root.clone().dyn_into::<Node>().unwrap());
 
         Self {
             stack: Stack::with_capacity(10),
@@ -98,7 +97,8 @@ impl WebsysDom {
         }
     }
     fn push(&mut self, root: u64) {
-        let key = DefaultKey::from(KeyData::from_ffi(root));
+        // let key = DefaultKey::from(KeyData::from_ffi(root));
+        let key = root as usize;
         let domnode = self.nodes.get_mut(key);
 
         let real_node: Node = match domnode {
@@ -203,11 +203,9 @@ impl WebsysDom {
             .dyn_into::<Node>()
             .unwrap();
 
+        let id = id as usize;
         self.stack.push(textnode.clone());
-        *self
-            .nodes
-            .get_mut(DefaultKey::from(KeyData::from_ffi(id)))
-            .unwrap() = textnode;
+        *self.nodes.get_mut(id).unwrap() = textnode;
     }
 
     fn create_element(&mut self, tag: &str, ns: Option<&'static str>, id: u64) {
@@ -226,14 +224,14 @@ impl WebsysDom {
                 .dyn_into::<Node>()
                 .unwrap(),
         };
-        let id = DefaultKey::from(KeyData::from_ffi(id));
+        let id = id as usize;
 
         self.stack.push(el.clone());
         *self.nodes.get_mut(id).unwrap() = el;
         // let nid = self.node_counter.?next();
         // let nid = self.nodes.insert(el).data().as_ffi();
         // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
-        // RealDomNode::new(nid)
+        // ElementId::new(nid)
     }
 
     fn new_event_listener(
@@ -257,7 +255,9 @@ impl WebsysDom {
             .dyn_ref::<Element>()
             .expect(&format!("not an element: {:?}", el));
 
-        let scope_id = scope.data().as_ffi();
+        // let scope_id = scope.data().as_ffi();
+        let scope_id = scope.0 as u64;
+
         el.set_attribute(
             &format!("dioxus-event-{}", event),
             &format!("{}.{}", scope_id, real_id),
@@ -349,10 +349,10 @@ impl WebsysDom {
 }
 
 impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
-    // fn request_available_node(&mut self) -> RealDomNode {
+    // fn request_available_node(&mut self) -> ElementId {
     //     let key = self.nodes.insert(None);
     //     log::debug!("making new key: {:#?}", key);
-    //     RealDomNode(key.data().as_ffi())
+    //     ElementId(key.data().as_ffi())
     // }
 
     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
@@ -588,6 +588,9 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
             // let evt: web_sys::ToggleEvent = event.clone().dyn_into().unwrap();
             todo!()
         }
+        _ => {
+            todo!()
+        }
     }
 }
 
@@ -632,12 +635,13 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
     // Call the trigger
     log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
 
-    let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
+    let triggered_scope = gi_id;
+    // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
     Ok(EventTrigger::new(
         virtual_event_from_websys_event(event),
-        triggered_scope,
-        Some(RealDomNode::from_u64(real_id)),
+        ScopeId(triggered_scope as usize),
+        Some(ElementId(real_id as usize)),
         dioxus_core::events::EventPriority::High,
     ))
 }

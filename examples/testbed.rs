@@ -3,7 +3,7 @@ use std::cell::Cell;
 use dioxus::prelude::*;
 use dioxus_core::{
     nodes::{VElement, VText},
-    RealDomNode,
+    ElementId,
 };
 
 fn main() {
@@ -33,6 +33,7 @@ const Example: FC<()> = |cx| {
         }
         "h4"
         div { "h5" }
+        button { }
         Child {}
     })
 };

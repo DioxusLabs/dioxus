@@ -1,4 +1,5 @@
 use crate::innerlude::*;
+use bumpalo::boxed::Box as BumpBox;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -31,7 +32,7 @@ pub struct Scope {
     pub(crate) child_nodes: &'static [VNode<'static>],
 
     // Listeners
-    pub(crate) listeners: RefCell<Vec<*mut Listener<'static>>>,
+    pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
     pub(crate) listener_idx: Cell<usize>,
 
     // State
@@ -154,7 +155,7 @@ impl Scope {
         let listners = self.listeners.borrow_mut();
 
         let raw_listener = listners.iter().find(|lis| {
-            let search = unsafe { &mut ***lis };
+            let search = unsafe { &***lis };
             let search_id = search.mounted_node.get();
             log::info!("searching listener {:#?}", search_id);
 
@@ -165,8 +166,9 @@ impl Scope {
         });
 
         if let Some(raw_listener) = raw_listener {
-            let listener = unsafe { &mut **raw_listener };
-            (listener.callback)(event);
+            let listener = unsafe { &**raw_listener };
+            let mut cb = listener.callback.borrow_mut();
+            (cb)(event);
         } else {
             log::warn!("An event was triggered but there was no listener to handle it");
         }

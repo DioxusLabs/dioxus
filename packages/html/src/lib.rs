@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 //! # Dioxus Namespace for HTML
 //!
 //! This crate provides a set of compile-time correct HTML elements that can be used with the Rsx and Html macros.
@@ -2100,33 +2101,3 @@ summary
 slot
 template
 */
-
-trait AsAttributeValue: Sized {
-    fn into_attribute_value<'a>(self, cx: NodeFactory<'a>) -> AttributeValue<'a>;
-}
-enum AttributeValue<'a> {
-    Int(i32),
-    Float(f32),
-    Str(&'a str),
-    Bool(bool),
-}
-impl<'b> AsAttributeValue for Arguments<'b> {
-    fn into_attribute_value<'a>(self, cx: NodeFactory<'a>) -> AttributeValue<'a> {
-        todo!()
-    }
-}
-impl AsAttributeValue for &'static str {
-    fn into_attribute_value<'a>(self, cx: NodeFactory<'a>) -> AttributeValue<'a> {
-        todo!()
-    }
-}
-impl AsAttributeValue for f32 {
-    fn into_attribute_value<'a>(self, cx: NodeFactory<'a>) -> AttributeValue<'a> {
-        todo!()
-    }
-}
-impl AsAttributeValue for i32 {
-    fn into_attribute_value<'a>(self, cx: NodeFactory<'a>) -> AttributeValue<'a> {
-        todo!()
-    }
-}

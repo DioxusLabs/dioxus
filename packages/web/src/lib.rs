@@ -68,36 +68,37 @@ pub async fn event_loop(mut internal_dom: VirtualDom) -> dioxus_core::error::Res
 
     log::info!("Going into event loop");
     loop {
-        let trigger = {
-            let real_queue = websys_dom.wait_for_event();
-            if internal_dom.tasks.is_empty() {
-                log::info!("tasks is empty, waiting for dom event to trigger soemthing");
-                real_queue.await
-            } else {
-                log::info!("tasks is not empty, waiting for either tasks or event system");
-                let task_queue = (&mut internal_dom.tasks).next();
+        todo!();
+        // let trigger = {
+        //     let real_queue = websys_dom.wait_for_event();
+        //     if internal_dom.tasks.is_empty() {
+        //         log::info!("tasks is empty, waiting for dom event to trigger soemthing");
+        //         real_queue.await
+        //     } else {
+        //         log::info!("tasks is not empty, waiting for either tasks or event system");
+        //         let task_queue = (&mut internal_dom.tasks).next();
 
-                pin_mut!(real_queue);
-                pin_mut!(task_queue);
+        //         pin_mut!(real_queue);
+        //         pin_mut!(task_queue);
 
-                match futures_util::future::select(real_queue, task_queue).await {
-                    futures_util::future::Either::Left((trigger, _)) => trigger,
-                    futures_util::future::Either::Right((trigger, _)) => trigger,
-                }
-            }
-        };
+        //         match futures_util::future::select(real_queue, task_queue).await {
+        //             futures_util::future::Either::Left((trigger, _)) => trigger,
+        //             futures_util::future::Either::Right((trigger, _)) => trigger,
+        //         }
+        //     }
+        // };
 
-        if let Some(real_trigger) = trigger {
-            log::info!("event received");
+        // if let Some(real_trigger) = trigger {
+        //     log::info!("event received");
 
-            internal_dom.queue_event(real_trigger)?;
+        //     internal_dom.queue_event(real_trigger);
 
-            let mut edits = Vec::new();
-            internal_dom
-                .progress_with_event(&mut websys_dom, &mut edits)
-                .await?;
-            websys_dom.process_edits(&mut edits);
-        }
+        //     let mut edits = Vec::new();
+        //     internal_dom
+        //         .progress_with_event(&mut websys_dom, &mut edits)
+        //         .await?;
+        //     websys_dom.process_edits(&mut edits);
+        // }
     }
 
     // should actually never return from this, should be an error, rustc just cant see it

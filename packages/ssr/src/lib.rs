@@ -21,7 +21,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
         "{:}",
         TextRenderer {
             cfg: SsrConfig::default(),
-            root: vdom.shared.get_scope(scope).unwrap().root(),
+            root: vdom.get_scope(scope).unwrap().root(),
             vdom: Some(vdom)
         }
     ))
@@ -163,7 +163,7 @@ impl<'a> TextRenderer<'a> {
             VNodeKind::Component(vcomp) => {
                 let idx = vcomp.ass_scope.get().unwrap();
                 if let Some(vdom) = self.vdom {
-                    let new_node = vdom.shared.get_scope(idx).unwrap().root();
+                    let new_node = vdom.get_scope(idx).unwrap().root();
                     self.html_render(new_node, f, il + 1)?;
                 }
             }
@@ -260,22 +260,22 @@ mod tests {
             .unwrap();
     }
 
-    #[test]
-    fn styles() {
-        const STLYE_APP: FC<()> = |cx| {
-            //
-            cx.render(rsx! {
-                div {
-                    style: {
-                        color: "blue",
-                        font_size: "46px"
-                    }
-                }
-            })
-        };
+    // #[test]
+    // fn styles() {
+    //     const STLYE_APP: FC<()> = |cx| {
+    //         //
+    //         cx.render(rsx! {
+    //             div {
+    //                 style: {
+    //                     color: "blue",
+    //                     font_size: "46px"
+    //                 }
+    //             }
+    //         })
+    //     };
 
-        let mut dom = VirtualDom::new(STLYE_APP);
-        dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_vdom(&dom));
-    }
+    //     let mut dom = VirtualDom::new(STLYE_APP);
+    //     dom.rebuild_in_place().expect("failed to run virtualdom");
+    //     dbg!(render_vdom(&dom));
+    // }
 }

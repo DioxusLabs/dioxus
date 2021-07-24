@@ -25,7 +25,7 @@ The current `RealDom` trait lives in `dioxus_core/diff`. A version of it is prov
 ```rust
 pub trait RealDom<'a> {
     fn handle_edit(&mut self, edit: DomEdit);
-    fn request_available_node(&mut self) -> RealDomNode;
+    fn request_available_node(&mut self) -> ElementId;
     fn raw_node_as_any(&self) -> &mut dyn Any;
 }
 ```

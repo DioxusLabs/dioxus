@@ -8,7 +8,7 @@ use crate::{
     innerlude::{empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, FC},
 };
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
     rc::Rc,
@@ -77,7 +77,7 @@ pub struct VElement<'a> {
     pub namespace: Option<&'static str>,
 
     pub static_listeners: bool,
-    pub listeners: &'a [&'a mut Listener<'a>],
+    pub listeners: &'a [Listener<'a>],
 
     pub static_attrs: bool,
     pub attributes: &'a [Attribute<'a>],
@@ -112,7 +112,7 @@ pub struct Listener<'bump> {
 
     pub mounted_node: Cell<Option<ElementId>>,
 
-    pub(crate) callback: &'bump mut dyn FnMut(VirtualEvent),
+    pub(crate) callback: RefCell<&'bump mut dyn FnMut(VirtualEvent)>,
 }
 
 /// Virtual Components for custom user-defined components
@@ -200,14 +200,19 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn element(
+    pub fn element<L, A, V>(
         &self,
         el: impl DioxusElement,
-        listeners: &'a mut [&'a mut Listener<'a>],
-        attributes: &'a [Attribute<'a>],
-        children: &'a [VNode<'a>],
+        listeners: L,
+        attributes: A,
+        children: V,
         key: Option<&'a str>,
-    ) -> VNode<'a> {
+    ) -> VNode<'a>
+    where
+        L: 'a + AsRef<[Listener<'a>]>,
+        A: 'a + AsRef<[Attribute<'a>]>,
+        V: 'a + AsRef<[VNode<'a>]>,
+    {
         self.raw_element(
             el.tag_name(),
             el.namespace(),
@@ -218,26 +223,39 @@ impl<'a> NodeFactory<'a> {
         )
     }
 
-    pub fn raw_element(
+    pub fn raw_element<L, A, V>(
         &self,
         tag: &'static str,
         namespace: Option<&'static str>,
-        listeners: &'a mut [&'a mut Listener<'a>],
-        attributes: &'a [Attribute],
-        children: &'a [VNode<'a>],
+        listeners: L,
+        attributes: A,
+        children: V,
         key: Option<&'a str>,
-    ) -> VNode<'a> {
+    ) -> VNode<'a>
+    where
+        L: 'a + AsRef<[Listener<'a>]>,
+        A: 'a + AsRef<[Attribute<'a>]>,
+        V: 'a + AsRef<[VNode<'a>]>,
+    {
+        let listeners: &'a L = self.bump().alloc(listeners);
+        let listeners = listeners.as_ref();
+
+        let attributes: &'a A = self.bump().alloc(attributes);
+        let attributes = attributes.as_ref();
+
+        let children: &'a V = self.bump().alloc(children);
+        let children = children.as_ref();
+
         // We take the references directly from the bump arena
+        //
+        //
         // TODO: this code shouldn't necessarily be here of all places
         // It would make more sense to do this in diffing
 
         let mut queue = self.scope.listeners.borrow_mut();
-        for listener in listeners.iter_mut() {
-            let raw_listener = &mut **listener;
-
-            let long_listener: &mut Listener<'static> =
-                unsafe { std::mem::transmute(raw_listener) };
-            queue.push(long_listener as *mut _)
+        for listener in listeners.iter() {
+            let long_listener: &Listener<'static> = unsafe { std::mem::transmute(listener) };
+            queue.push(long_listener as *const _)
         }
 
         VNode {

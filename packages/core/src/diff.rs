@@ -34,12 +34,16 @@
 //! For all components, we employ some basic heuristics to speed up allocations and pre-size bump arenas. The heuristics are
 //! currently very rough, but will get better as time goes on. For FFI, we recommend using a bloom filter to cache strings.
 //!
+//!
 //! ## Garbage Collection
 //! ---------------------
 //! Dioxus uses a passive garbage collection system to clean up old nodes once the work has been completed. This garabge
 //! collection is done internally once the main diffing work is complete. After the "garbage" is collected, Dioxus will then
 //! start to re-use old keys for new nodes. This results in a passive memory management system that is very efficient.
 //!
+//! The IDs used by the key/map are just an index into a vec. This means that Dioxus will drive the key allocation strategy
+//! so the client only needs to maintain a simple list of nodes. By default, Dioxus will not manually clean up old nodes
+//! for the client. As new nodes are created, old nodes will be over-written.
 //!
 //! Further Reading and Thoughts
 //! ----------------------------
@@ -53,10 +57,9 @@ use smallvec::{smallvec, SmallVec};
 
 use std::{any::Any, borrow::Borrow};
 
-/// Instead of having handles directly over nodes, Dioxus uses simple u64s as node IDs.
-/// The expectation is that the underlying renderer will mainain their Nodes in something like slotmap or an ECS memory
-/// where indexing is very fast. For reference, the slotmap in the WebSys renderer takes about 3ns to randomly access any
-/// node.
+/// Instead of having handles directly over nodes, Dioxus uses simple u32 as node IDs.
+/// The expectation is that the underlying renderer will mainain their Nodes in vec where the ids are the index. This allows
+/// for a form of passive garbage collection where nodes aren't immedately cleaned up.
 ///
 /// The "RealDom" abstracts over the... real dom. The RealDom trait assumes that the renderer maintains a stack of real
 /// nodes as the diffing algorithm descenes through the tree. This means that whatever is on top of the stack will receive
@@ -531,7 +534,7 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     //     [... node]
     //
     // The change list stack is left unchanged.
-    fn diff_listeners(&mut self, old: &[&mut Listener<'_>], new: &[&mut Listener<'_>]) {
+    fn diff_listeners(&mut self, old: &[Listener<'_>], new: &[Listener<'_>]) {
         if !old.is_empty() || !new.is_empty() {
             // self.edits.commit_traversal();
         }
@@ -721,7 +724,6 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     //
     // Upon exiting, the change list stack is in the same state.
     fn diff_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
-        // todo!();
         if cfg!(debug_assertions) {
             let mut keys = fxhash::FxHashSet::default();
             let mut assert_unique_keys = |children: &'bump [VNode<'bump>]| {

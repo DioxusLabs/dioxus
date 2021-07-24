@@ -181,8 +181,8 @@ impl VirtualDom {
     /// The diff machine expects the RealDom's stack to be the root of the application
     pub fn rebuild<'s>(
         &'s mut self,
-        realdom: &'s mut dyn RealDom<'s>,
-        edits: &'s mut Vec<DomEdit<'s>>,
+        realdom: &'_ mut dyn RealDom<'s>,
+        edits: &'_ mut Vec<DomEdit<'s>>,
     ) -> Result<()> {
         let mut diff_machine = DiffMachine::new(edits, realdom, self.base_scope, &self.shared);
 
@@ -354,6 +354,10 @@ impl VirtualDom {
 
     pub fn base_scope(&self) -> &Scope {
         unsafe { self.shared.get_scope(self.base_scope).unwrap() }
+    }
+
+    pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
+        unsafe { self.shared.get_scope(id) }
     }
 }
 

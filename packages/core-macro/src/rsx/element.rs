@@ -199,9 +199,12 @@ impl<const AS: HTML_OR_RSX> ToTokens for Element<AS> {
         tokens.append_all(quote! {
             __cx.element(
                 dioxus_elements::#name,
-                __cx.bump().alloc([ #(#listeners),* ]),
-                __cx.bump().alloc([ #(#attr),* ]),
-                __cx.bump().alloc([ #(#childs),* ]),
+                [ #(#listeners),* ],
+                [ #(#attr),* ],
+                [ #(#childs),* ],
+                // __cx.bump().alloc([ #(#listeners),* ]),
+                // __cx.bump().alloc([ #(#attr),* ]),
+                // __cx.bump().alloc([ #(#childs),* ]),
                 None,
             )
         });

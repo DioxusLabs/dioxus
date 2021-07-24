@@ -4,7 +4,10 @@
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 use crate::innerlude::{ElementId, HeightMarker, ScopeId};
 
@@ -135,7 +138,7 @@ pub mod on {
     //!
 
     #![allow(unused)]
-    use std::{fmt::Debug, ops::Deref, rc::Rc};
+    use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
     use crate::{
         innerlude::NodeFactory,
@@ -183,10 +186,10 @@ pub mod on {
                             event: stringify!($name),
                             mounted_node: Cell::new(None),
                             scope: c.scope.our_arena_idx,
-                            callback: bump.alloc(move |evt: VirtualEvent| match evt {
+                            callback: RefCell::new(bump.alloc(move |evt: VirtualEvent| match evt {
                                 VirtualEvent::$wrapper(event) => callback(event),
                                 _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
-                            }),
+                            })),
                         }
                     }
                 )*

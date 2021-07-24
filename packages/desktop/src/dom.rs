@@ -1,7 +1,6 @@
 //! webview dom
 
-use dioxus_core::{DomEdit, RealDom, RealDomNode, ScopeId};
-use DomEdit::*;
+use dioxus_core::{DomEdit, RealDom};
 
 pub struct WebviewRegistry {}
 
@@ -34,10 +33,5 @@ impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
         todo!()
         // self.edits.push(PushRoot { root });
-    }
-
-    fn request_available_node(&mut self) -> RealDomNode {
-        self.node_counter += 1;
-        RealDomNode::from_u64(self.node_counter)
     }
 }
