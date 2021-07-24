@@ -7,6 +7,7 @@ use crate::{
     events::VirtualEvent,
     innerlude::{empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, FC},
 };
+use bumpalo::boxed::Box as BumpBox;
 use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
@@ -112,7 +113,7 @@ pub struct Listener<'bump> {
 
     pub mounted_node: Cell<Option<ElementId>>,
 
-    pub(crate) callback: RefCell<&'bump mut dyn FnMut(VirtualEvent)>,
+    pub(crate) callback: RefCell<BumpBox<'bump, dyn FnMut(VirtualEvent) + 'bump>>,
 }
 
 /// Virtual Components for custom user-defined components

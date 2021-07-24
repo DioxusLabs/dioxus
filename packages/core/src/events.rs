@@ -138,6 +138,7 @@ pub mod on {
     //!
 
     #![allow(unused)]
+    use bumpalo::boxed::Box as BumpBox;
     use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
     use crate::{
@@ -182,14 +183,18 @@ pub mod on {
                         where F: FnMut($wrapper) + 'a
                     {
                         let bump = &c.bump();
+                        let cb: &mut dyn FnMut(VirtualEvent) = bump.alloc(move |evt: VirtualEvent| match evt {
+                            VirtualEvent::$wrapper(event) => callback(event),
+                            _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
+                        });
+
+                        let callback: BumpBox<dyn FnMut(VirtualEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
+
                         Listener {
                             event: stringify!($name),
                             mounted_node: Cell::new(None),
                             scope: c.scope.our_arena_idx,
-                            callback: RefCell::new(bump.alloc(move |evt: VirtualEvent| match evt {
-                                VirtualEvent::$wrapper(event) => callback(event),
-                                _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
-                            })),
+                            callback: RefCell::new(callback),
                         }
                     }
                 )*
