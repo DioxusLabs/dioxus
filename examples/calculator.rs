@@ -5,6 +5,7 @@
 // use dioxus::prelude::*;
 
 fn main() {
+    env_logger::init();
     dioxus::desktop::launch(App, |cfg| cfg);
 }
 
@@ -23,7 +24,7 @@ const App: FC<()> = |cx| {
     let operator = use_state(cx, || None as Option<Operator>);
     let display_value = use_state(cx, || "".to_string());
 
-    let clear_display = display_value.eq("0");
+    let clear_display = display_value == "0";
     let clear_text = if clear_display { "C" } else { "AC" };
 
     let input_digit = move |num: u8| display_value.get_mut().push_str(num.to_string().as_str());

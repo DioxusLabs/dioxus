@@ -20,8 +20,7 @@ pub struct ElementId(pub usize);
 
 impl ElementId {
     pub fn as_u64(self) -> u64 {
-        todo!()
-        // self.0.as_ffi()
+        self.0 as u64
     }
 }
 

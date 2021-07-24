@@ -273,8 +273,7 @@ fn parse_rsx_element_field(
 
     let ty: AttrType = match name_str.as_str() {
         // short circuit early if style is using the special syntax
-        "style" if stream.peek(Token![:]) => {
-            stream.parse::<Token![:]>().unwrap();
+        "style" if stream.peek(token::Brace) => {
             let inner;
             syn::braced!(inner in stream);
 

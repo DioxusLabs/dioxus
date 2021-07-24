@@ -212,8 +212,8 @@ impl<'a, T: Copy + Div<T, Output = T>> DivAssign<T> for UseState<'a, T> {
         self.set(self.inner.current_val.div(rhs));
     }
 }
-impl<'a, T: PartialEq<T>> PartialEq<T> for UseState<'a, T> {
-    fn eq(&self, other: &T) -> bool {
+impl<'a, V, T: PartialEq<V>> PartialEq<V> for UseState<'a, T> {
+    fn eq(&self, other: &V) -> bool {
         self.get() == other
     }
 }

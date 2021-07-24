@@ -12,6 +12,7 @@
 use dioxus::prelude::*;
 
 fn main() {
+    env_logger::init();
     dioxus::desktop::launch(App, |c| c);
 }
 

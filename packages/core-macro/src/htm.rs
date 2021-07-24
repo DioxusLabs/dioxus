@@ -13,8 +13,6 @@
 //!
 //!
 
-use crate::util::is_valid_svg_tag;
-
 use {
     proc_macro::TokenStream,
     proc_macro2::{Span, TokenStream as TokenStream2},
@@ -163,11 +161,11 @@ impl ToTokens for ToToksCtx<&Element> {
             self.recurse(attr).to_tokens(tokens);
         }
 
-        if is_valid_svg_tag(&name.to_string()) {
-            tokens.append_all(quote! {
-                .namespace(Some("http://www.w3.org/2000/svg"))
-            });
-        }
+        // if is_valid_svg_tag(&name.to_string()) {
+        //     tokens.append_all(quote! {
+        //         .namespace(Some("http://www.w3.org/2000/svg"))
+        //     });
+        // }
 
         match &self.inner.children {
             MaybeExpr::Expr(expr) => tokens.append_all(quote! {

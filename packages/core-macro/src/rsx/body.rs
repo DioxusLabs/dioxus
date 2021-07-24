@@ -1,4 +1,3 @@
-use crate::util::is_valid_tag;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{

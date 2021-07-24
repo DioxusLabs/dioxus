@@ -5,10 +5,13 @@
     <script>
         class Interpreter {
             constructor(root) {
+                this.root = root;
                 this.stack = [root];
-                this.listeners = {};
+                this.listeners = {
+                    "onclick": {}
+                };
                 this.lastNodeWasText = false;
-                this.nodes = [];
+                this.nodes = [root, root, root, root];
             }
 
             top() {
@@ -18,66 +21,125 @@
             pop() {
                 return this.stack.pop();
             }
-        }
 
-        class OPTABLE {
-            PushRoot(self, edit) {
-                const id = edit.root;
-                const node = self.nodes[id];
-                self.stack.push(node);
+            PushRoot(edit) {
+                const id = edit.id;
+                const node = this.nodes[id];
+                console.log("pushing root ", node, "with id", id);
+                this.stack.push(node);
             }
-            AppendChildren(self, edit) {
-                let root = self.stack[self.stack.length - (edit.many + 1)];
+
+            AppendChildren(edit) {
+                let root = this.stack[this.stack.length - (edit.many + 1)];
                 for (let i = 0; i < edit.many; i++) {
                     console.log("popping ", i, edit.many);
-                    let node = self.pop();
+                    let node = this.pop();
                     root.appendChild(node);
                 }
             }
-            ReplaceWith(self, edit) {
 
-                let root = self.stack[self.stack.length - (edit.many + 1)];
+            ReplaceWith(edit) {
+
+                let root = this.stack[this.stack.length - (edit.many + 1)];
                 let els = [];
 
                 for (let i = 0; i < edit.many; i++) {
-                    els.push(self.pop());
+                    els.push(this.pop());
                 }
 
                 root.replaceWith(...els);
             }
-            Remove(self, edit) {
-                const node = self.stack.pop();
+
+            Remove(edit) {
+                const node = this.stack.pop();
                 node.remove();
             }
-            RemoveAllChildren(self, edit) {}
-            CreateTextNode(self, edit) {
-                self.stack.push(document.createTextNode(edit.text));
+
+            RemoveAllChildren(edit) {}
+
+            CreateTextNode(edit) {
+                const node = document.createTextNode(edit.text);
+                this.nodes[edit.id] = node;
+                this.stack.push(node);
             }
-            CreateElement(self, edit) {
+
+            CreateElement(edit) {
                 const tagName = edit.tag;
+                const el = document.createElement(tagName);
+                this.nodes[edit.id] = el;
                 console.log(`creating element: `, edit);
-                self.stack.push(document.createElement(tagName));
+                this.stack.push(el);
             }
-            CreateElementNs(self, edit) {
+
+            CreateElementNs(edit) {
                 const tagName = edit.tag;
                 console.log(`creating namespaced element: `, edit);
-                self.stack.push(document.createElementNS(edit.ns, edit.tag));
+                this.stack.push(document.createElementNS(edit.ns, edit.tag));
             }
-            CreatePlaceholder(self, edit) {
-                const a = `self.stack.push(document.createElement("pre"))`;
-                self.stack.push(document.createComment("vroot"));
+
+            CreatePlaceholder(edit) {
+                const a = `this.stack.push(document.createElement(" pre"))`;
+                this.stack.push(document.createComment("vroot"));
             }
-            NewEventListener(self, edit) {}
-            RemoveEventListener(self, edit) {}
-            SetText(self, edit) {
-                self.top().textContent = edit.text;
+
+            NewEventListener(edit) {
+                const element_id = edit.element_id;
+                const event_name = edit.event_name;
+                const mounted_node_id = edit.mounted_node_id;
+                const scope = edit.scope;
+
+                const element = this.top();
+                element.setAttribute(`dioxus-event-${event_name}`, `${scope}.${mounted_node_id}`);
+
+                console.log("listener map is", this.listeners);
+                if (this.listeners[event_name] === undefined) {
+                    console.log("adding listener!");
+                    this.listeners[event_name] = "bla";
+                    this.root.addEventListener(event_name, (event) => {
+                        const target = event.target;
+                        const type = event.type;
+                        const val = target.getAttribute(`dioxus-event-${event_name}`);
+                        const fields = val.split(".");
+                        const scope_id = parseInt(fields[0]);
+                        const real_id = parseInt(fields[1]);
+
+                        console.log(`parsed event with scope_id ${scope_id} and real_id ${real_id}`);
+
+                        rpc.call('user_event', {
+                            event: event_name,
+                            scope: scope_id,
+                            mounted_dom_id: real_id,
+                        }).then((reply) => {
+                            console.log(reply);
+                            this.stack.push(this.root);
+
+                            for (let x = 0; x < reply.length; x++) {
+                                let edit = reply[x];
+                                console.log(edit);
+
+                                let f = this[edit.type];
+                                f.call(this, edit);
+                            }
+
+                            console.log("initiated");
+                        }).catch((err) => {
+                            console.log("failed to initiate", err);
+                        });
+                    });
+                }
             }
-            SetAttribute(self, edit) {
+
+            RemoveEventListener(edit) {}
+
+            SetText(edit) {
+                this.top().textContent = edit.text;
+            }
+
+            SetAttribute(edit) {
                 const name = edit.field;
                 const value = edit.value;
                 const ns = edit.ns;
-
-                const node = self.top(self.stack);
+                const node = this.top(this.stack);
                 if (ns == "style") {
                     node.style[name] = value;
                 } else if (ns !== undefined) {
@@ -85,36 +147,35 @@
                 } else {
                     node.setAttribute(name, value);
                 }
-
-                if ((name === "value", self)) {
+                if (name === "value") {
                     node.value = value;
                 }
-                if ((name === "checked", self)) {
+                if (name === "checked") {
                     node.checked = true;
                 }
-                if ((name === "selected", self)) {
+                if (name === "selected") {
                     node.selected = true;
                 }
             }
-            RemoveAttribute(self, edit) {
+            RemoveAttribute(edit) {
                 const name = edit.field;
-                const node = self.top(self.stack);
-
+                const node = this.top(this.stack);
                 node.removeAttribute(name);
 
-                if ((name === "value", self)) {
+                if (name === "value") {
                     node.value = null;
                 }
-                if ((name === "checked", self)) {
+                if (name === "checked") {
                     node.checked = false;
                 }
-                if ((name === "selected", self)) {
+                if (name === "selected") {
                     node.selected = false;
                 }
             }
         }
 
-        const op_table = new OPTABLE();
+
+
 
         async function initialize() {
             const reply = await rpc.call('initiate');
@@ -124,7 +185,9 @@
             for (let x = 0; x < reply.length; x++) {
                 let edit = reply[x];
                 console.log(edit);
-                op_table[edit.type](interpreter, edit);
+
+                let f = interpreter[edit.type];
+                f.call(interpreter, edit);
             }
 
             console.log("stack completed: ", interpreter.stack);

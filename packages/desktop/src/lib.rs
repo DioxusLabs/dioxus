@@ -17,6 +17,8 @@ use wry::{
 
 mod dom;
 mod escape;
+mod events;
+use events::*;
 
 static HTML_CONTENT: &'static str = include_str!("./index.html");
 
@@ -59,6 +61,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
         user_builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
         redits: Option<Vec<DomEdit<'static>>>,
     ) -> anyhow::Result<()> {
+        log::info!("hello edits");
         let event_loop = EventLoop::new();
 
         let window = user_builder(WindowBuilder::new()).build(&event_loop)?;
@@ -101,24 +104,42 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                         Some(RpcResponse::new_result(req.id.take(), Some(edits)))
                     }
                     "user_event" => {
-                        let mut lock = vdom.write().unwrap();
-                        let mut reg_lock = registry.write().unwrap();
+                        log::debug!("User event received");
 
-                        // Create the thin wrapper around the registry to collect the edits into
-                        let mut real = dom::WebviewDom::new(reg_lock.take().unwrap());
+                        let registry = registry.clone();
+                        let vdom = vdom.clone();
+                        let response = async_std::task::block_on(async move {
+                            let mut lock = vdom.write().unwrap();
+                            let mut reg_lock = registry.write().unwrap();
 
-                        // Serialize the edit stream
-                        let edits = {
+                            // a deserialized event
+                            let data = req.params.unwrap();
+                            log::debug!("Data: {:#?}", data);
+                            let event = trigger_from_serialized(data);
+
+                            lock.queue_event(event);
+
+                            // Create the thin wrapper around the registry to collect the edits into
+                            let mut real = dom::WebviewDom::new(reg_lock.take().unwrap());
+
+                            // Serialize the edit stream
+                            //
                             let mut edits = Vec::new();
-                            lock.rebuild(&mut real, &mut edits).unwrap();
-                            serde_json::to_value(edits).unwrap()
-                        };
+                            lock.progress_with_event(&mut real, &mut edits)
+                                .await
+                                .expect("failed to progress");
+                            let edits = serde_json::to_value(edits).unwrap();
 
-                        // Give back the registry into its slot
-                        *reg_lock = Some(real.consume());
+                            // Give back the registry into its slot
+                            *reg_lock = Some(real.consume());
 
-                        // Return the edits into the webview runtime
-                        Some(RpcResponse::new_result(req.id.take(), Some(edits)))
+                            // Return the edits into the webview runtime
+                            Some(RpcResponse::new_result(req.id.take(), Some(edits)))
+                        });
+
+                        response
+
+                        // spawn a task to clean up the garbage
                     }
                     _ => todo!("this message failed"),
                 }

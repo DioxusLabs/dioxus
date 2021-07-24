@@ -125,6 +125,8 @@ pub enum VirtualEvent {
         hook_idx: usize,
         domnode: Rc<Cell<Option<ElementId>>>,
     },
+    // TOOD: make garbage collection its own dedicated event
+    // GarbageCollection {}
 }
 
 pub mod on {
@@ -183,6 +185,7 @@ pub mod on {
                         where F: FnMut($wrapper) + 'a
                     {
                         let bump = &c.bump();
+
                         let cb: &mut dyn FnMut(VirtualEvent) = bump.alloc(move |evt: VirtualEvent| match evt {
                             VirtualEvent::$wrapper(event) => callback(event),
                             _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
@@ -190,8 +193,10 @@ pub mod on {
 
                         let callback: BumpBox<dyn FnMut(VirtualEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
 
+                        let event_name = stringify!($name);
+                        let shortname: &'static str = &event_name[2..];
                         Listener {
-                            event: stringify!($name),
+                            event: shortname,
                             mounted_node: Cell::new(None),
                             scope: c.scope.our_arena_idx,
                             callback: RefCell::new(callback),

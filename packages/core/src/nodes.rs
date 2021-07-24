@@ -249,13 +249,12 @@ impl<'a> NodeFactory<'a> {
 
         // We take the references directly from the bump arena
         //
-        //
         // TODO: this code shouldn't necessarily be here of all places
         // It would make more sense to do this in diffing
 
         let mut queue = self.scope.listeners.borrow_mut();
         for listener in listeners.iter() {
-            let long_listener: &Listener<'static> = unsafe { std::mem::transmute(listener) };
+            let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
             queue.push(long_listener as *const _)
         }
 

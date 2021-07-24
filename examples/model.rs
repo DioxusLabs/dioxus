@@ -20,6 +20,7 @@ use dioxus::prelude::*;
 
 const STYLE: &str = include_str!("./assets/calculator.css");
 fn main() {
+    env_logger::init();
     dioxus::desktop::launch(App, |cfg| cfg.with_title("Calculator Demo"))
         .expect("failed to launch dioxus app");
 }

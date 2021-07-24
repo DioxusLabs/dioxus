@@ -7,7 +7,6 @@ pub(crate) mod htm;
 pub(crate) mod ifmt;
 pub(crate) mod props;
 pub(crate) mod rsx;
-pub(crate) mod util;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {

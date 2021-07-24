@@ -85,7 +85,7 @@ impl<'r, 'b> DiffMachine<'r, 'b> {
     pub fn get_scope_mut(&mut self, id: &ScopeId) -> Option<&'b mut Scope> {
         // ensure we haven't seen this scope before
         // if we have, then we're trying to alias it, which is not allowed
-        debug_assert!(!self.seen_nodes.contains(id));
+        // debug_assert!(!self.seen_nodes.contains(id));
         unsafe { self.vdom.get_scope_mut(*id) }
     }
     pub fn get_scope(&mut self, id: &ScopeId) -> Option<&'b Scope> {
@@ -120,10 +120,11 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     //
     // each function call assumes the stack is fresh (empty).
     pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
-        let root = old_node
-            .dom_id
-            .get()
-            .expect("Should not be diffing old nodes that were never assigned");
+        // currently busted for components - need to fid
+        let root = old_node.dom_id.get().expect(&format!(
+            "Should not be diffing old nodes that were never assigned, {:#?}",
+            old_node
+        ));
 
         match (&old_node.kind, &new_node.kind) {
             // Handle the "sane" cases first.

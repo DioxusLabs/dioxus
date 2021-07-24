@@ -258,10 +258,10 @@ impl VirtualDom {
     // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
     //
     // A good project would be to remove all unsafe from this crate and move the unsafety into safer abstractions.
-    pub async fn progress_with_event<'s>(
+    pub async fn progress_with_event<'a, 's>(
         &'s mut self,
-        realdom: &'s mut dyn RealDom<'s>,
-        edits: &mut Vec<DomEdit<'s>>,
+        realdom: &'a mut dyn RealDom<'s>,
+        edits: &'a mut Vec<DomEdit<'s>>,
     ) -> Result<()> {
         let trigger = self.triggers.borrow_mut().pop().expect("failed");
 

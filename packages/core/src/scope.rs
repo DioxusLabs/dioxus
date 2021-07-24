@@ -108,6 +108,8 @@ impl Scope {
         let next_frame = self.frames.prev_frame_mut();
         next_frame.bump.reset();
 
+        // make sure we call the drop implementation on all the listeners
+        // this is important to not leak memory
         self.listeners.borrow_mut().clear();
 
         unsafe { self.hooks.reset() };
