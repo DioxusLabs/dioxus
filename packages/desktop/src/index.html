@@ -29,6 +29,10 @@
                 this.stack.push(node);
             }
 
+            PopRoot(edit) {
+                this.stack.pop();
+            }
+
             AppendChildren(edit) {
                 let root = this.stack[this.stack.length - (edit.many + 1)];
                 for (let i = 0; i < edit.many; i++) {

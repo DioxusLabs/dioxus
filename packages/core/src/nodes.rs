@@ -113,7 +113,7 @@ pub struct Listener<'bump> {
 
     pub mounted_node: Cell<Option<ElementId>>,
 
-    pub(crate) callback: RefCell<BumpBox<'bump, dyn FnMut(VirtualEvent) + 'bump>>,
+    pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(VirtualEvent) + 'bump>>>,
 }
 
 /// Virtual Components for custom user-defined components
@@ -133,6 +133,7 @@ pub struct VComponent<'src> {
     pub(crate) raw_props: *const (),
 
     // a pointer to the raw fn typ
+    // pub(crate) user_fc: BumpB\,
     pub(crate) user_fc: *const (),
 }
 
@@ -149,7 +150,8 @@ pub struct NodeFactory<'a> {
 impl<'a> NodeFactory<'a> {
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        &self.scope.cur_frame().bump
+        &self.scope.frames.wip_frame().bump
+        // &self.scope.cur_frame().bump
     }
 
     pub fn unstable_place_holder() -> VNode<'static> {
@@ -393,36 +395,14 @@ impl<'a> NodeFactory<'a> {
         unsafe { std::mem::transmute::<_, Captured<'static>>(caller) }
     }
 
-    pub fn fragment_from_iter(
-        self,
-        node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
-    ) -> VNode<'a> {
-        let mut nodes = bumpalo::collections::Vec::new_in(self.bump());
+    pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a> + 'a) -> VNode<'a> {
+        let children = node_iter.into_vnode_list(self);
 
-        for node in node_iter.into_iter() {
-            nodes.push(node.into_vnode(self));
-        }
-
-        if cfg!(debug_assertions) {
-            if nodes.len() > 1 {
-                if nodes.last().unwrap().key().is_none() {
-                    log::error!(
-                        r#"
-Warning: Each child in an array or iterator should have a unique "key" prop. 
-Not providing a key will lead to poor performance with lists.
-See docs.rs/dioxus for more information. 
----
-To help you identify where this error is coming from, we've generated a backtrace.
-                        "#,
-                    );
-                }
-            }
-        }
         VNode {
             dom_id: empty_cell(),
             key: None,
             kind: VNodeKind::Fragment(VFragment {
-                children: nodes.into_bump_slice(),
+                children,
                 is_static: false,
             }),
         }
@@ -448,6 +428,63 @@ pub trait IntoVNode<'a> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 
+pub trait IntoVNodeList<'a> {
+    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>];
+}
+
+impl<'a, T, V> IntoVNodeList<'a> for T
+where
+    T: IntoIterator<Item = V>,
+    V: IntoVNode<'a>,
+{
+    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
+        let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
+
+        for node in self.into_iter() {
+            nodes.push(node.into_vnode(cx));
+        }
+
+        if cfg!(debug_assertions) {
+            if nodes.len() > 1 {
+                if nodes.last().unwrap().key().is_none() {
+                    log::error!(
+                        r#"
+        Warning: Each child in an array or iterator should have a unique "key" prop.
+        Not providing a key will lead to poor performance with lists.
+        See docs.rs/dioxus for more information.
+        ---
+        To help you identify where this error is coming from, we've generated a backtrace.
+                                "#,
+                    );
+                }
+            }
+        }
+
+        nodes.into_bump_slice()
+    }
+}
+
+pub struct ScopeChildren<'a>(pub &'a [VNode<'a>]);
+impl Copy for ScopeChildren<'_> {}
+impl<'a> Clone for ScopeChildren<'a> {
+    fn clone(&self) -> Self {
+        ScopeChildren(self.0)
+    }
+}
+impl ScopeChildren<'_> {
+    pub unsafe fn extend_lifetime(self) -> ScopeChildren<'static> {
+        std::mem::transmute(self)
+    }
+    pub unsafe fn unextend_lfetime<'a>(self) -> ScopeChildren<'a> {
+        std::mem::transmute(self)
+    }
+}
+impl<'a> IntoVNodeList<'a> for ScopeChildren<'a> {
+    fn into_vnode_list(self, _: NodeFactory<'a>) -> &'a [VNode<'a>] {
+        self.0
+    }
+}
+
 // For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoIterator for VNode<'a> {
     type Item = VNode<'a>;
@@ -470,27 +507,28 @@ impl<'a> IntoVNode<'a> for VNode<'a> {
 // Designed to support indexing
 impl<'a> IntoVNode<'a> for &VNode<'a> {
     fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
-        let kind = match &self.kind {
-            VNodeKind::Element(element) => VNodeKind::Element(element),
-            VNodeKind::Text(old) => VNodeKind::Text(VText {
-                text: old.text,
-                is_static: old.is_static,
-            }),
-            VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
-                children: fragment.children,
-                is_static: fragment.is_static,
-            }),
-            VNodeKind::Component(component) => VNodeKind::Component(component),
+        todo!()
+        // let kind = match &self.kind {
+        //     VNodeKind::Element(element) => VNodeKind::Element(element),
+        //     VNodeKind::Text(old) => VNodeKind::Text(VText {
+        //         text: old.text,
+        //         is_static: old.is_static,
+        //     }),
+        //     VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
+        //         children: fragment.children,
+        //         is_static: fragment.is_static,
+        //     }),
+        //     VNodeKind::Component(component) => VNodeKind::Component(component),
 
-            // todo: it doesn't make much sense to pass in suspended nodes
-            // I think this is right but I'm not too sure.
-            VNodeKind::Suspended { node } => VNodeKind::Suspended { node: node.clone() },
-        };
-        VNode {
-            kind,
-            dom_id: self.dom_id.clone(),
-            key: self.key.clone(),
-        }
+        //     // todo: it doesn't make much sense to pass in suspended nodes
+        //     // I think this is right but I'm not too sure.
+        //     VNodeKind::Suspended { node } => VNodeKind::Suspended { node: node.clone() },
+        // };
+        // VNode {
+        //     kind,
+        //     dom_id: self.dom_id.clone(),
+        //     key: self.key.clone(),
+        // }
     }
 }
 

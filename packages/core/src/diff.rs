@@ -85,7 +85,8 @@ impl<'r, 'b> DiffMachine<'r, 'b> {
     pub fn get_scope_mut(&mut self, id: &ScopeId) -> Option<&'b mut Scope> {
         // ensure we haven't seen this scope before
         // if we have, then we're trying to alias it, which is not allowed
-        // debug_assert!(!self.seen_nodes.contains(id));
+        debug_assert!(!self.seen_nodes.contains(id));
+
         unsafe { self.vdom.get_scope_mut(*id) }
     }
     pub fn get_scope(&mut self, id: &ScopeId) -> Option<&'b Scope> {
@@ -120,17 +121,17 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     //
     // each function call assumes the stack is fresh (empty).
     pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
-        // currently busted for components - need to fid
-        let root = old_node.dom_id.get().expect(&format!(
-            "Should not be diffing old nodes that were never assigned, {:#?}",
-            old_node
-        ));
-
         match (&old_node.kind, &new_node.kind) {
             // Handle the "sane" cases first.
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
             // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
             (VNodeKind::Text(old), VNodeKind::Text(new)) => {
+                // currently busted for components - need to fid
+                let root = old_node.dom_id.get().expect(&format!(
+                    "Should not be diffing old nodes that were never assigned, {:#?}",
+                    old_node
+                ));
+
                 if old.text != new.text {
                     self.edits.push_root(root);
                     log::debug!("Text has changed {}, {}", old.text, new.text);
@@ -142,6 +143,12 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             }
 
             (VNodeKind::Element(old), VNodeKind::Element(new)) => {
+                // currently busted for components - need to fid
+                let root = old_node.dom_id.get().expect(&format!(
+                    "Should not be diffing old nodes that were never assigned, {:#?}",
+                    old_node
+                ));
+
                 // If the element type is completely different, the element needs to be re-rendered completely
                 // This is an optimization React makes due to how users structure their code
                 //
@@ -159,11 +166,25 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                 // push it just in case
                 // TODO: remove this - it clogs up things and is inefficient
+                // self.edits.push_root(root);
+
+                let mut has_comitted = false;
                 self.edits.push_root(root);
-                self.diff_listeners(old.listeners, new.listeners);
-                self.diff_attr(old.attributes, new.attributes, new.namespace);
-                self.diff_children(old.children, new.children);
+                // dbg!("diffing listeners");
+                self.diff_listeners(&mut has_comitted, old.listeners, new.listeners);
+                // dbg!("diffing attrs");
+                self.diff_attr(
+                    &mut has_comitted,
+                    old.attributes,
+                    new.attributes,
+                    new.namespace,
+                );
+                // dbg!("diffing childrne");
+                self.diff_children(&mut has_comitted, old.children, new.children);
                 self.edits.pop();
+                // if has_comitted {
+                //     self.edits.pop();
+                // }
             }
 
             (VNodeKind::Component(old), VNodeKind::Component(new)) => {
@@ -182,17 +203,18 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     scope.caller = new.caller.clone();
 
                     // ack - this doesn't work on its own!
-                    scope.update_children(new.children);
+                    scope.update_children(ScopeChildren(new.children));
 
                     // React doesn't automatically memoize, but we do.
-                    let should_render = match old.comparator {
-                        Some(comparator) => comparator(new),
-                        None => true,
-                    };
+                    let should_render = true;
+                    // let should_render = match old.comparator {
+                    //     Some(comparator) => comparator(new),
+                    //     None => true,
+                    // };
 
                     if should_render {
                         scope.run_scope().unwrap();
-                        self.diff_node(scope.old_frame(), scope.next_frame());
+                        self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
                     } else {
                         //
                     }
@@ -239,7 +261,8 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 // Diff where we think the elements are the same
                 if old.children.len() == new.children.len() {}
 
-                self.diff_children(old.children, new.children);
+                let mut has_comitted = false;
+                self.diff_children(&mut has_comitted, old.children, new.children);
             }
 
             // The strategy here is to pick the first possible node from the previous set and use that as our replace with root
@@ -259,6 +282,16 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 | VNodeKind::Text(_)
                 | VNodeKind::Element(_),
             ) => {
+                log::info!(
+                    "taking the awkard diffing path {:#?}, {:#?}",
+                    old_node,
+                    new_node
+                );
+                // currently busted for components - need to fid
+                let root = old_node.dom_id.get().expect(&format!(
+                    "Should not be diffing old nodes that were never assigned, {:#?}",
+                    old_node
+                ));
                 // Choose the node to use as the placeholder for replacewith
                 let back_node_id = match old_node.kind {
                     // We special case these two types to avoid allocating the small-vecs
@@ -429,7 +462,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                         new_idx,
                         Some(parent_idx),
                         height,
-                        vcomponent.children,
+                        ScopeChildren(vcomponent.children),
                         self.vdom.clone(),
                     )
                 });
@@ -455,10 +488,11 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 new_component.run_scope().unwrap();
 
                 // TODO: we need to delete (IE relcaim this node, otherwise the arena will grow infinitely)
-                let nextnode = new_component.next_frame();
+                let nextnode = new_component.frames.fin_head();
                 self.cur_idxs.push(new_idx);
                 let meta = self.create(nextnode);
                 self.cur_idxs.pop();
+                node.dom_id.set(nextnode.dom_id.get());
 
                 // Finally, insert this node as a seen node.
                 self.seen_nodes.insert(new_idx);
@@ -535,38 +569,49 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     //     [... node]
     //
     // The change list stack is left unchanged.
-    fn diff_listeners(&mut self, old: &[Listener<'_>], new: &[Listener<'_>]) {
+    fn diff_listeners(&mut self, committed: &mut bool, old: &[Listener<'_>], new: &[Listener<'_>]) {
         if !old.is_empty() || !new.is_empty() {
             // self.edits.commit_traversal();
         }
         // TODO
         // what does "diffing listeners" even mean?
 
-        'outer1: for (_l_idx, new_l) in new.iter().enumerate() {
-            // go through each new listener
-            // find its corresponding partner in the old list
-            // if any characteristics changed, remove and then re-add
-
-            // if nothing changed, then just move on
-            let _event_type = new_l.event;
-
-            for old_l in old {
-                if new_l.event == old_l.event {
-                    new_l.mounted_node.set(old_l.mounted_node.get());
-                    // if new_l.id != old_l.id {
-                    //     self.edits.remove_event_listener(event_type);
-                    //     // TODO! we need to mess with events and assign them by ElementId
-                    //     // self.edits
-                    //     //     .update_event_listener(event_type, new_l.scope, new_l.id)
-                    // }
-
-                    continue 'outer1;
-                }
-            }
-
-            // self.edits
-            //     .new_event_listener(event_type, new_l.scope, new_l.id);
+        for (old_l, new_l) in old.iter().zip(new.iter()) {
+            log::info!(
+                "moving listener forward with event. old: {:#?}",
+                old_l.mounted_node.get()
+            );
+            new_l.mounted_node.set(old_l.mounted_node.get());
         }
+        // 'outer1: for (_l_idx, new_l) in new.iter().enumerate() {
+        //     // go through each new listener
+        //     // find its corresponding partner in the old list
+        //     // if any characteristics changed, remove and then re-add
+
+        //     // if nothing changed, then just move on
+        //     let _event_type = new_l.event;
+
+        //     for old_l in old {
+        //         if new_l.event == old_l.event {
+        //             log::info!(
+        //                 "moving listener forward with event. old: {:#?}",
+        //                 old_l.mounted_node.get()
+        //             );
+        //             new_l.mounted_node.set(old_l.mounted_node.get());
+        //             // if new_l.id != old_l.id {
+        //             //     self.edits.remove_event_listener(event_type);
+        //             //     // TODO! we need to mess with events and assign them by ElementId
+        //             //     // self.edits
+        //             //     //     .update_event_listener(event_type, new_l.scope, new_l.id)
+        //             // }
+
+        //             continue 'outer1;
+        //         }
+        //     }
+
+        // self.edits
+        //     .new_event_listener(event_type, new_l.scope, new_l.id);
+        // }
 
         // 'outer2: for old_l in old {
         //     for new_l in new {
@@ -587,50 +632,61 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     // The change list stack is left unchanged.
     fn diff_attr(
         &mut self,
+        committed: &mut bool,
         old: &'bump [Attribute<'bump>],
         new: &'bump [Attribute<'bump>],
         namespace: Option<&'static str>,
     ) {
+        for (old_attr, new_attr) in old.iter().zip(new.iter()) {
+            if old_attr.value != new_attr.value {
+                if !*committed {
+                    *committed = true;
+                    // self.edits.push_root();
+                }
+            }
+            // if old_attr.name == new_attr.name {
+            // }
+        }
         // Do O(n^2) passes to add/update and remove attributes, since
         // there are almost always very few attributes.
         //
         // The "fast" path is when the list of attributes name is identical and in the same order
         // With the Rsx and Html macros, this will almost always be the case
-        'outer: for new_attr in new {
-            if new_attr.is_volatile {
-                // self.edits.commit_traversal();
-                self.edits
-                    .set_attribute(new_attr.name, new_attr.value, namespace);
-            } else {
-                for old_attr in old {
-                    if old_attr.name == new_attr.name {
-                        if old_attr.value != new_attr.value {
-                            // self.edits.commit_traversal();
-                            self.edits
-                                .set_attribute(new_attr.name, new_attr.value, namespace);
-                        }
-                        continue 'outer;
-                    } else {
-                        // names are different, a varying order of attributes has arrived
-                    }
-                }
+        // 'outer: for new_attr in new {
+        //     if new_attr.is_volatile {
+        //         // self.edits.commit_traversal();
+        //         self.edits
+        //             .set_attribute(new_attr.name, new_attr.value, namespace);
+        //     } else {
+        //         for old_attr in old {
+        //             if old_attr.name == new_attr.name {
+        //                 if old_attr.value != new_attr.value {
+        //                     // self.edits.commit_traversal();
+        //                     self.edits
+        //                         .set_attribute(new_attr.name, new_attr.value, namespace);
+        //                 }
+        //                 continue 'outer;
+        //             } else {
+        //                 // names are different, a varying order of attributes has arrived
+        //             }
+        //         }
 
-                // self.edits.commit_traversal();
-                self.edits
-                    .set_attribute(new_attr.name, new_attr.value, namespace);
-            }
-        }
+        //         // self.edits.commit_traversal();
+        //         self.edits
+        //             .set_attribute(new_attr.name, new_attr.value, namespace);
+        //     }
+        // }
 
-        'outer2: for old_attr in old {
-            for new_attr in new {
-                if old_attr.name == new_attr.name {
-                    continue 'outer2;
-                }
-            }
+        // 'outer2: for old_attr in old {
+        //     for new_attr in new {
+        //         if old_attr.name == new_attr.name {
+        //             continue 'outer2;
+        //         }
+        //     }
 
-            // self.edits.commit_traversal();
-            self.edits.remove_attribute(old_attr.name);
-        }
+        //     // self.edits.commit_traversal();
+        //     self.edits.remove_attribute(old_attr.name);
+        // }
     }
 
     // Diff the given set of old and new children.
@@ -641,66 +697,72 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
-        if new.is_empty() {
-            if !old.is_empty() {
-                // self.edits.commit_traversal();
-                self.remove_all_children(old);
-            }
-            return;
-        }
+    fn diff_children(
+        &mut self,
+        committed: &mut bool,
+        old: &'bump [VNode<'bump>],
+        new: &'bump [VNode<'bump>],
+    ) {
+        // if new.is_empty() {
+        //     if !old.is_empty() {
+        //         // self.edits.commit_traversal();
+        //         self.remove_all_children(old);
+        //     }
+        //     return;
+        // }
 
-        if new.len() == 1 {
-            match (&old.first(), &new[0]) {
-                // (Some(VNodeKind::Text(old_vtext)), VNodeKind::Text(new_vtext))
-                //     if old_vtext.text == new_vtext.text =>
-                // {
-                //     // Don't take this fast path...
-                // }
+        // if new.len() == 1 {
+        //     match (&old.first(), &new[0]) {
+        // (Some(VNodeKind::Text(old_vtext)), VNodeKind::Text(new_vtext))
+        //     if old_vtext.text == new_vtext.text =>
+        // {
+        //     // Don't take this fast path...
+        // }
 
-                // (_, VNodeKind::Text(text)) => {
-                //     // self.edits.commit_traversal();
-                //     log::debug!("using optimized text set");
-                //     self.edits.set_text(text.text);
-                //     return;
-                // }
+        // (_, VNodeKind::Text(text)) => {
+        //     // self.edits.commit_traversal();
+        //     log::debug!("using optimized text set");
+        //     self.edits.set_text(text.text);
+        //     return;
+        // }
 
-                // todo: any more optimizations
-                (_, _) => {}
-            }
-        }
+        // todo: any more optimizations
+        //         (_, _) => {}
+        //     }
+        // }
 
-        if old.is_empty() {
-            if !new.is_empty() {
-                // self.edits.commit_traversal();
-                self.create_and_append_children(new);
-            }
-            return;
-        }
+        // if old.is_empty() {
+        //     if !new.is_empty() {
+        //         // self.edits.commit_traversal();
+        //         self.create_and_append_children(new);
+        //     }
+        //     return;
+        // }
 
-        let new_is_keyed = new[0].key.is_some();
-        let old_is_keyed = old[0].key.is_some();
+        // let new_is_keyed = new[0].key.is_some();
+        // let old_is_keyed = old[0].key.is_some();
 
-        debug_assert!(
-            new.iter().all(|n| n.key.is_some() == new_is_keyed),
-            "all siblings must be keyed or all siblings must be non-keyed"
-        );
-        debug_assert!(
-            old.iter().all(|o| o.key.is_some() == old_is_keyed),
-            "all siblings must be keyed or all siblings must be non-keyed"
-        );
+        // debug_assert!(
+        //     new.iter().all(|n| n.key.is_some() == new_is_keyed),
+        //     "all siblings must be keyed or all siblings must be non-keyed"
+        // );
+        // debug_assert!(
+        //     old.iter().all(|o| o.key.is_some() == old_is_keyed),
+        //     "all siblings must be keyed or all siblings must be non-keyed"
+        // );
 
-        if new_is_keyed && old_is_keyed {
-            log::warn!("using the wrong approach");
-            self.diff_non_keyed_children(old, new);
-            // todo!("Not yet implemented a migration away from temporaries");
-            // let t = self.edits.next_temporary();
-            // self.diff_keyed_children(old, new);
-            // self.edits.set_next_temporary(t);
-        } else {
-            // log::debug!("diffing non keyed children");
-            self.diff_non_keyed_children(old, new);
-        }
+        // if new_is_keyed && old_is_keyed {
+        //     // log::warn!("using the wrong approach");
+        //     self.diff_non_keyed_children(old, new);
+        //     // todo!("Not yet implemented a migration away from temporaries");
+        //     // let t = self.edits.next_temporary();
+        //     // self.diff_keyed_children(old, new);
+        //     // self.edits.set_next_temporary(t);
+        // } else {
+        //     // log::debug!("diffing non keyed children");
+        //     self.diff_non_keyed_children(old, new);
+        // }
+        self.diff_non_keyed_children(old, new);
     }
 
     // Diffing "keyed" children.
@@ -1146,8 +1208,8 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Handled these cases in `diff_children` before calling this function.
-        debug_assert!(!new.is_empty());
-        debug_assert!(!old.is_empty());
+        // debug_assert!(!new.is_empty());
+        // debug_assert!(!old.is_empty());
 
         //     [... parent]
         // self.edits.go_down();
@@ -1165,6 +1227,7 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
             //     log::debug!("Root is bad: {:#?}", old_child);
             // }
             // self.edits.push_root(did);
+            // dbg!("dffing child", new_child, old_child);
             self.diff_node(old_child, new_child);
 
             // let old_id = old_child.get_mounted_id(self.components).unwrap();
@@ -1333,7 +1396,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
                         // let scope = self.scopes.get(sc.ass_scope.get().unwrap()).unwrap();
 
                         // Simply swap the current node on the stack with the root of the component
-                        *node = scope.root();
+                        *node = scope.frames.fin_head();
                     }
                 }
             } else {

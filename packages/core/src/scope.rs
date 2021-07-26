@@ -2,6 +2,7 @@ use crate::innerlude::*;
 use bumpalo::boxed::Box as BumpBox;
 use std::{
     any::{Any, TypeId},
+    borrow::BorrowMut,
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
@@ -29,7 +30,7 @@ pub struct Scope {
     // an internal, highly efficient storage of vnodes
     pub(crate) frames: ActiveFrame,
     pub(crate) caller: Rc<WrappedCaller>,
-    pub(crate) child_nodes: &'static [VNode<'static>],
+    pub(crate) child_nodes: ScopeChildren<'static>,
 
     // Listeners
     pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
@@ -66,11 +67,14 @@ impl Scope {
 
         height: u32,
 
-        child_nodes: &'creator_node [VNode<'creator_node>],
-
+        child_nodes: ScopeChildren,
+        // child_nodes: &'creator_node [VNode<'creator_node>],
         vdom: SharedResources,
     ) -> Self {
-        let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+        let child_nodes = unsafe { child_nodes.extend_lifetime() };
+        // let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+
+        // dbg!(child_nodes);
         Self {
             child_nodes,
             caller,
@@ -93,9 +97,11 @@ impl Scope {
 
     pub(crate) fn update_children<'creator_node>(
         &mut self,
-        child_nodes: &'creator_node [VNode<'creator_node>],
+        child_nodes: ScopeChildren,
+        // child_nodes: &'creator_node [VNode<'creator_node>],
     ) {
-        let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+        // let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+        let child_nodes = unsafe { child_nodes.extend_lifetime() };
         self.child_nodes = child_nodes;
     }
 
@@ -104,16 +110,28 @@ impl Scope {
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
 
-        // This is a very dangerous operation
-        let next_frame = self.frames.prev_frame_mut();
-        next_frame.bump.reset();
+        log::debug!("reset okay");
 
         // make sure we call the drop implementation on all the listeners
         // this is important to not leak memory
-        self.listeners.borrow_mut().clear();
+        for li in self.listeners.borrow_mut().drain(..) {
+            log::debug!("dropping listener");
+            let d = unsafe { &*li };
+            let mut r = d.callback.borrow_mut();
+            let p = r.take().unwrap();
+            std::mem::drop(p);
+            // d.callback.borrow_mut();
+        }
+
+        // self.listeners.borrow_mut().clear();
 
         unsafe { self.hooks.reset() };
+
         self.listener_idx.set(0);
+
+        // This is a very dangerous operation
+        let next_frame = self.frames.wip_frame_mut();
+        next_frame.bump.reset();
 
         // Cast the caller ptr from static to one with our own reference
         let c3: &WrappedCaller = self.caller.as_ref();
@@ -126,8 +144,9 @@ impl Scope {
             }
             Some(new_head) => {
                 // the user's component succeeded. We can safely cycle to the next frame
-                self.frames.prev_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
+                self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
                 self.frames.cycle_frame();
+                log::debug!("Cycle okay");
                 Ok(())
             }
         }
@@ -159,7 +178,11 @@ impl Scope {
         let raw_listener = listners.iter().find(|lis| {
             let search = unsafe { &***lis };
             let search_id = search.mounted_node.get();
-            log::info!("searching listener {:#?}", search_id);
+            log::info!(
+                "searching listener {:#?} for real {:?}",
+                search_id,
+                real_node_id
+            );
 
             match (real_node_id, search_id) {
                 (Some(e), Some(search_id)) => search_id == e,
@@ -169,8 +192,16 @@ impl Scope {
 
         if let Some(raw_listener) = raw_listener {
             let listener = unsafe { &**raw_listener };
+
+            log::info!(
+                "calling listener {:?}, {:?}",
+                listener.event,
+                listener.scope
+            );
             let mut cb = listener.callback.borrow_mut();
-            (cb)(event);
+            if let Some(cb) = cb.as_mut() {
+                (cb)(event);
+            }
         } else {
             log::warn!("An event was triggered but there was no listener to handle it");
         }
@@ -178,28 +209,14 @@ impl Scope {
         Ok(())
     }
 
-    #[inline]
-    pub(crate) fn next_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        self.frames.current_head_node()
+    pub fn root(&self) -> &VNode {
+        self.frames.fin_head()
     }
 
-    #[inline]
-    pub(crate) fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        self.frames.prev_head_node()
-    }
-
-    #[inline]
-    pub(crate) fn cur_frame(&self) -> &BumpFrame {
-        self.frames.cur_frame()
-    }
-
-    /// Get the root VNode of this component
-    #[inline]
-    pub fn root<'a>(&'a self) -> &'a VNode<'a> {
-        &self.frames.current_head_node()
-    }
-    #[inline]
-    pub fn child_nodes<'a>(&'a self) -> &'a [VNode<'a>] {
-        unsafe { std::mem::transmute(self.child_nodes) }
+    // #[inline]
+    pub fn child_nodes<'a>(&'a self) -> ScopeChildren {
+        // self.child_nodes
+        unsafe { self.child_nodes.unextend_lfetime() }
+        // unsafe { std::mem::transmute(self.child_nodes) }
     }
 }

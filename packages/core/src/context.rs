@@ -5,9 +5,8 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     future::Future,
-    marker::PhantomData,
     ops::Deref,
-    rc::{Rc, Weak},
+    rc::Rc,
 };
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
@@ -98,7 +97,7 @@ impl<'src, P> Context<'src, P> {
     ///     })
     /// }
     /// ```
-    pub fn children(&self) -> &'src [VNode<'src>] {
+    pub fn children(&self) -> ScopeChildren<'src> {
         self.scope.child_nodes()
     }
 

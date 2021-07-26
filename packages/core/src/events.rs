@@ -199,7 +199,7 @@ pub mod on {
                             event: shortname,
                             mounted_node: Cell::new(None),
                             scope: c.scope.our_arena_idx,
-                            callback: RefCell::new(callback),
+                            callback: RefCell::new(Some(callback)),
                         }
                     }
                 )*

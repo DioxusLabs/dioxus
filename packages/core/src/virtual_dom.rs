@@ -135,7 +135,7 @@ impl VirtualDom {
 
         let base_scope = components.insert_scope_with_key(move |myidx| {
             let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
-            Scope::new(caller, myidx, None, 0, &[], link)
+            Scope::new(caller, myidx, None, 0, ScopeChildren(&[]), link)
         });
 
         Self {
@@ -192,7 +192,7 @@ impl VirtualDom {
 
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
-            let meta = diff_machine.create(cur_component.next_frame());
+            let meta = diff_machine.create(cur_component.frames.fin_head());
             diff_machine.edits.append_children(meta.added_to_stack);
         } else {
             // todo: should this be a hard error?
@@ -289,7 +289,8 @@ impl VirtualDom {
                         log::warn!("Suspense event came through, but there was no mounted node to update >:(");
                     }
                     Some(nodes) => {
-                        let nodes = scope.cur_frame().bump.alloc(nodes);
+                        todo!("using the wrong frame");
+                        let nodes = scope.frames.finished_frame().bump.alloc(nodes);
 
                         // push the old node's root onto the stack
                         let real_id = domnode.get().ok_or(Error::NotMounted)?;
@@ -329,11 +330,9 @@ impl VirtualDom {
                     // Make sure this isn't a node we've already seen, we don't want to double-render anything
                     // If we double-renderer something, this would cause memory safety issues
                     if diff_machine.seen_nodes.contains(&update.idx) {
+                        log::debug!("Skipping update for: {:#?}", update);
                         continue;
                     }
-
-                    // Now, all the "seen nodes" are nodes that got notified by running this listener
-                    diff_machine.seen_nodes.insert(update.idx.clone());
 
                     // Start a new mutable borrow to components
                     // We are guaranteeed that this scope is unique because we are tracking which nodes have modified in the diff machine
@@ -341,8 +340,14 @@ impl VirtualDom {
                         .get_scope_mut(&update.idx)
                         .expect("Failed to find scope or borrow would be aliasing");
 
+                    // Now, all the "seen nodes" are nodes that got notified by running this listener
+                    diff_machine.seen_nodes.insert(update.idx.clone());
+
                     if cur_component.run_scope().is_ok() {
-                        let (old, new) = (cur_component.old_frame(), cur_component.next_frame());
+                        let (old, new) = (
+                            cur_component.frames.wip_head(),
+                            cur_component.frames.fin_head(),
+                        );
                         diff_machine.diff_node(old, new);
                     }
                 }

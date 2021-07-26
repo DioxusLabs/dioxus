@@ -70,7 +70,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
 
         // todo: combine these or something
         let vdom = Arc::new(RwLock::new(vir));
-        let registry = Arc::new(RwLock::new(Some(WebviewRegistry::new())));
+        // let registry = Arc::new(RwLock::new(Some(WebviewRegistry::new())));
 
         let webview = WebViewBuilder::new(window)?
             // .with_visible(false)
@@ -83,10 +83,10 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                             serde_json::to_value(edits).unwrap()
                         } else {
                             let mut lock = vdom.write().unwrap();
-                            let mut reg_lock = registry.write().unwrap();
+                            // let mut reg_lock = registry.write().unwrap();
 
                             // Create the thin wrapper around the registry to collect the edits into
-                            let mut real = dom::WebviewDom::new(reg_lock.take().unwrap());
+                            let mut real = dom::WebviewDom::new();
 
                             // Serialize the edit stream
                             let edits = {
@@ -96,7 +96,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                             };
 
                             // Give back the registry into its slot
-                            *reg_lock = Some(real.consume());
+                            // *reg_lock = Some(real.consume());
                             edits
                         };
 
@@ -106,11 +106,11 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                     "user_event" => {
                         log::debug!("User event received");
 
-                        let registry = registry.clone();
+                        // let registry = registry.clone();
                         let vdom = vdom.clone();
                         let response = async_std::task::block_on(async move {
                             let mut lock = vdom.write().unwrap();
-                            let mut reg_lock = registry.write().unwrap();
+                            // let mut reg_lock = registry.write().unwrap();
 
                             // a deserialized event
                             let data = req.params.unwrap();
@@ -120,7 +120,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                             lock.queue_event(event);
 
                             // Create the thin wrapper around the registry to collect the edits into
-                            let mut real = dom::WebviewDom::new(reg_lock.take().unwrap());
+                            let mut real = dom::WebviewDom::new();
 
                             // Serialize the edit stream
                             //
@@ -131,7 +131,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                             let edits = serde_json::to_value(edits).unwrap();
 
                             // Give back the registry into its slot
-                            *reg_lock = Some(real.consume());
+                            // *reg_lock = Some(real.consume());
 
                             // Return the edits into the webview runtime
                             Some(RpcResponse::new_result(req.id.take(), Some(edits)))
@@ -206,7 +206,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::dom::WebviewRegistry;
+// use crate::dom::WebviewRegistry;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct MessageParameters {
