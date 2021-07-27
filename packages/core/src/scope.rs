@@ -34,7 +34,6 @@ pub struct Scope {
 
     // Listeners
     pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
-    pub(crate) listener_idx: Cell<usize>,
 
     // State
     pub(crate) hooks: HookList,
@@ -72,9 +71,7 @@ impl Scope {
         vdom: SharedResources,
     ) -> Self {
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
-        // let child_nodes = unsafe { std::mem::transmute(child_nodes) };
 
-        // dbg!(child_nodes);
         Self {
             child_nodes,
             caller,
@@ -82,7 +79,6 @@ impl Scope {
             our_arena_idx: arena_idx,
             height,
             vdom,
-            listener_idx: Default::default(),
             frames: ActiveFrame::new(),
             hooks: Default::default(),
             shared_contexts: Default::default(),
@@ -114,24 +110,27 @@ impl Scope {
 
         // make sure we call the drop implementation on all the listeners
         // this is important to not leak memory
-        for li in self.listeners.borrow_mut().drain(..) {
-            log::debug!("dropping listener");
-            let d = unsafe { &*li };
-            let mut r = d.callback.borrow_mut();
-            let p = r.take().unwrap();
-            std::mem::drop(p);
-            // d.callback.borrow_mut();
+        for listener in self
+            .listeners
+            .borrow_mut()
+            .drain(..)
+            .map(|li| unsafe { &*li })
+        {
+            let mut cb = listener.callback.borrow_mut();
+            match cb.take() {
+                Some(val) => std::mem::drop(val),
+                None => log::info!("no callback to drop. component must be broken"),
+            };
         }
 
-        // self.listeners.borrow_mut().clear();
-
+        // Safety:
+        // - We dropped the listeners, so no more &mut T can be used while these are held
+        // - All children nodes that rely on &mut T are replaced with a new reference
         unsafe { self.hooks.reset() };
 
-        self.listener_idx.set(0);
-
-        // This is a very dangerous operation
-        let next_frame = self.frames.wip_frame_mut();
-        next_frame.bump.reset();
+        // Safety:
+        // - We've dropped all references to the wip bump frame
+        unsafe { self.frames.reset_wip_frame() };
 
         // Cast the caller ptr from static to one with our own reference
         let c3: &WrappedCaller = self.caller.as_ref();

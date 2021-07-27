@@ -185,6 +185,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
         });
     }
 }
+// brad johnson go chat
 
 fn main() {
     init_logging();

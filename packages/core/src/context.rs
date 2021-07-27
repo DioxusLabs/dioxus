@@ -148,10 +148,10 @@ impl<'src, P> Context<'src, P> {
         lazy_nodes: LazyNodes<'src, F>,
     ) -> DomTree<'src> {
         let scope_ref = self.scope;
-        let listener_id = &scope_ref.listener_idx;
+        // let listener_id = &scope_ref.listener_idx;
         Some(lazy_nodes.into_vnode(NodeFactory {
             scope: scope_ref,
-            listener_id,
+            // listener_id,
         }))
     }
 
@@ -505,10 +505,7 @@ impl<'src> SuspendedContext<'src> {
         lazy_nodes: LazyNodes<'src, F>,
     ) -> DomTree<'src> {
         let scope_ref = self.inner.scope;
-        let listener_id = &scope_ref.listener_idx;
-        Some(lazy_nodes.into_vnode(NodeFactory {
-            scope: scope_ref,
-            listener_id,
-        }))
+
+        Some(lazy_nodes.into_vnode(NodeFactory { scope: scope_ref }))
     }
 }

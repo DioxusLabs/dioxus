@@ -144,14 +144,12 @@ pub struct VComponent<'src> {
 #[derive(Copy, Clone)]
 pub struct NodeFactory<'a> {
     pub scope: &'a Scope,
-    pub listener_id: &'a Cell<usize>,
 }
 
 impl<'a> NodeFactory<'a> {
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
         &self.scope.frames.wip_frame().bump
-        // &self.scope.cur_frame().bump
     }
 
     pub fn unstable_place_holder() -> VNode<'static> {
@@ -346,6 +344,9 @@ impl<'a> NodeFactory<'a> {
                 if user_fc == other.user_fc {
                     let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
                     let props_memoized = unsafe { props.memoize(&real_other) };
+
+                    // It's only okay to memoize if there are no children and the props can be memoized
+                    // Implementing memoize is unsafe and done automatically with the props trait
                     match (props_memoized, children.len() == 0) {
                         (true, true) => true,
                         _ => false,
@@ -395,7 +396,7 @@ impl<'a> NodeFactory<'a> {
         unsafe { std::mem::transmute::<_, Captured<'static>>(caller) }
     }
 
-    pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a> + 'a) -> VNode<'a> {
+    pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a>) -> VNode<'a> {
         let children = node_iter.into_vnode_list(self);
 
         VNode {
@@ -498,37 +499,6 @@ impl<'a> IntoIterator for VNode<'a> {
 impl<'a> IntoVNode<'a> for VNode<'a> {
     fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
         self
-    }
-}
-
-// For the case where a rendered VNode is by reference passed into the rsx! macro through curly braces
-// This behavior is designed for the cx.children method where child nodes are passed by reference.
-//
-// Designed to support indexing
-impl<'a> IntoVNode<'a> for &VNode<'a> {
-    fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
-        todo!()
-        // let kind = match &self.kind {
-        //     VNodeKind::Element(element) => VNodeKind::Element(element),
-        //     VNodeKind::Text(old) => VNodeKind::Text(VText {
-        //         text: old.text,
-        //         is_static: old.is_static,
-        //     }),
-        //     VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
-        //         children: fragment.children,
-        //         is_static: fragment.is_static,
-        //     }),
-        //     VNodeKind::Component(component) => VNodeKind::Component(component),
-
-        //     // todo: it doesn't make much sense to pass in suspended nodes
-        //     // I think this is right but I'm not too sure.
-        //     VNodeKind::Suspended { node } => VNodeKind::Suspended { node: node.clone() },
-        // };
-        // VNode {
-        //     kind,
-        //     dom_id: self.dom_id.clone(),
-        //     key: self.key.clone(),
-        // }
     }
 }
 

@@ -55,7 +55,7 @@ use crate::{arena::SharedResources, innerlude::*};
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-use std::{any::Any, borrow::Borrow};
+use std::{any::Any, borrow::Borrow, cmp::Ordering};
 
 /// Instead of having handles directly over nodes, Dioxus uses simple u32 as node IDs.
 /// The expectation is that the underlying renderer will mainain their Nodes in vec where the ids are the index. This allows
@@ -206,13 +206,12 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     scope.update_children(ScopeChildren(new.children));
 
                     // React doesn't automatically memoize, but we do.
-                    let should_render = true;
-                    // let should_render = match old.comparator {
-                    //     Some(comparator) => comparator(new),
-                    //     None => true,
-                    // };
+                    let are_the_same = match old.comparator {
+                        Some(comparator) => comparator(new),
+                        None => false,
+                    };
 
-                    if should_render {
+                    if !are_the_same {
                         scope.run_scope().unwrap();
                         self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
                     } else {
@@ -915,7 +914,7 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     //     [... parent]
     //
     // When this function returns, the change list stack is in the same state.
-    pub fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
+    fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
         // debug_assert!(self.edits.traversal_is_committed());
         log::debug!("REMOVING CHILDREN");
         for _child in old {
@@ -1208,67 +1207,35 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Handled these cases in `diff_children` before calling this function.
+        //
         // debug_assert!(!new.is_empty());
         // debug_assert!(!old.is_empty());
 
-        //     [... parent]
-        // self.edits.go_down();
-        // self.edits.push_root()
-        //     [... parent child]
-
-        // todo!()
         for (_i, (new_child, old_child)) in new.iter().zip(old.iter()).enumerate() {
-            // [... parent prev_child]
-            // self.edits.go_to_sibling(i);
-            // [... parent this_child]
-
-            // let did = old_child.get_mounted_id(self.components).unwrap();
-            // if did.0 == 0 {
-            //     log::debug!("Root is bad: {:#?}", old_child);
-            // }
-            // self.edits.push_root(did);
-            // dbg!("dffing child", new_child, old_child);
             self.diff_node(old_child, new_child);
-
-            // let old_id = old_child.get_mounted_id(self.components).unwrap();
-            // let new_id = new_child.get_mounted_id(self.components).unwrap();
-
-            // log::debug!(
-            //     "pushed root. {:?}, {:?}",
-            //     old_child.get_mounted_id(self.components).unwrap(),
-            //     new_child.get_mounted_id(self.components).unwrap()
-            // );
-            // if old_id != new_id {
-            //     log::debug!("Mismatch: {:?}", new_child);
-            // }
         }
 
-        // match old.len().cmp(&new.len()) {
-        //     // old.len > new.len -> removing some nodes
-        //     Ordering::Greater => {
-        //         // [... parent prev_child]
-        //         self.edits.go_to_sibling(new.len());
-        //         // [... parent first_child_to_remove]
-        //         // self.edits.commit_traversal();
-        //         // support::remove_self_and_next_siblings(state, &old[new.len()..]);
-        //         self.remove_self_and_next_siblings(&old[new.len()..]);
-        //         // [... parent]
-        //     }
-        //     // old.len < new.len -> adding some nodes
-        //     Ordering::Less => {
-        //         // [... parent last_child]
-        //         self.edits.go_up();
-        //         // [... parent]
-        //         // self.edits.commit_traversal();
-        //         self.create_and_append_children(&new[old.len()..]);
-        //     }
-        //     // old.len == new.len -> no nodes added/removed, but πerhaps changed
-        //     Ordering::Equal => {
-        //         // [... parent child]
-        //         self.edits.go_up();
-        //         // [... parent]
-        //     }
-        // }
+        match old.len().cmp(&new.len()) {
+            // old.len > new.len -> removing some nodes
+            Ordering::Greater => {
+                for item in &old[new.len()..] {
+                    for i in RealChildIterator::new(item, self.vdom) {
+                        self.edits.push_root(i.element_id().unwrap());
+                        self.edits.remove();
+                    }
+                }
+            }
+            // old.len < new.len -> adding some nodes
+            Ordering::Less => {
+                // [... parent last_child]
+                // self.edits.go_up();
+                // [... parent]
+                // self.edits.commit_traversal();
+                self.create_and_append_children(&new[old.len()..]);
+            }
+            // old.len == new.len -> no nodes added/removed, but πerhaps changed
+            Ordering::Equal => {}
+        }
     }
 
     // ======================
@@ -1284,7 +1251,7 @@ impl<'a, 'bump> DiffMachine<'a, 'bump> {
     // After the function returns, the child is no longer on the change list stack:
     //
     //     [... parent]
-    pub fn remove_self_and_next_siblings(&self, old: &[VNode<'bump>]) {
+    fn remove_self_and_next_siblings(&self, old: &[VNode<'bump>]) {
         // debug_assert!(self.edits.traversal_is_committed());
         for child in old {
             if let VNodeKind::Component(_vcomp) = child.kind {

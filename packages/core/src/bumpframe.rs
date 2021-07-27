@@ -12,7 +12,7 @@ pub struct ActiveFrame {
 
 pub struct BumpFrame {
     pub bump: Bump,
-    pub head_node: VNode<'static>,
+    pub(crate) head_node: VNode<'static>,
 
     // used internally for debugging
     name: &'static str,
@@ -34,6 +34,14 @@ impl ActiveFrame {
             generation: 0.into(),
             frames: [frame_a, frame_b],
         }
+    }
+
+    pub unsafe fn reset_wip_frame(&mut self) {
+        self.wip_frame_mut().bump.reset()
+    }
+
+    pub fn update_head_node<'a>(&mut self, node: VNode<'a>) {
+        self.wip_frame_mut().head_node = unsafe { std::mem::transmute(node) };
     }
 
     /// The "work in progress frame" represents the frame that is currently being worked on.

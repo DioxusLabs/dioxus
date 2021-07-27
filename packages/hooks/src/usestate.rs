@@ -52,7 +52,7 @@ use std::{
 pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
     cx: Context<'a, P>,
     initial_state_fn: F,
-) -> UseState<T> {
+) -> UseState<'a, T> {
     cx.use_hook(
         move |_| UseStateInner {
             current_val: initial_state_fn(),
