@@ -12,6 +12,7 @@ use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
+    mem::ManuallyDrop,
     rc::Rc,
 };
 
@@ -126,6 +127,8 @@ pub struct VComponent<'src> {
     pub(crate) children: &'src [VNode<'src>],
 
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
+
+    pub(crate) drop_props: Option<&'src dyn FnOnce()>,
 
     pub is_static: bool,
 
@@ -335,15 +338,22 @@ impl<'a> NodeFactory<'a> {
         // We don't want the fat part of the fat pointer
         // This function does static dispatch so we don't need any VTable stuff
         let props = self.bump().alloc(props);
-        let raw_props = props as *const P as *const ();
 
+        let raw_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
 
         let comparator: Option<&dyn Fn(&VComponent) -> bool> = Some(self.bump().alloc_with(|| {
             move |other: &VComponent| {
                 if user_fc == other.user_fc {
-                    let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
-                    let props_memoized = unsafe { props.memoize(&real_other) };
+                    // Safety
+                    // - We guarantee that FC<P> is the same by function pointer
+                    // - Because FC<P> is the same, then P must be the same (even with generics)
+                    // - Non-static P are autoderived to memoize as false
+                    // - This comparator is only called on a corresponding set of bumpframes
+                    let props_memoized = unsafe {
+                        let real_other: &P = &*(other.raw_props as *const _ as *const P);
+                        props.memoize(&real_other)
+                    };
 
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
@@ -354,6 +364,15 @@ impl<'a> NodeFactory<'a> {
                 } else {
                     false
                 }
+            }
+        }));
+
+        // create a closure to drop the props
+        let drop_props: Option<&dyn FnOnce()> = Some(self.bump().alloc_with(|| {
+            move || unsafe {
+                let real_other = raw_props as *mut _ as *mut P;
+                let b = BumpBox::from_raw(real_other);
+                std::mem::drop(b);
             }
         }));
 
@@ -369,6 +388,7 @@ impl<'a> NodeFactory<'a> {
                 children,
                 caller: NodeFactory::create_component_caller(component, raw_props),
                 is_static,
+                drop_props,
                 ass_scope: Cell::new(None),
             })),
         }

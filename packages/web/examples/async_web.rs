@@ -31,7 +31,8 @@ const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random/";
 static App: FC<()> = |cx| {
     let state = use_state(cx, || 0);
 
-    let dog_node = cx.use_suspense(
+    let dog_node = use_suspense(
+        cx,
         || surf::get(ENDPOINT).recv_json::<DogApi>(),
         |cx, res| match res {
             Ok(res) => rsx!(in cx, img { src: "{res.message}" }),

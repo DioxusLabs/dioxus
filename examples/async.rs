@@ -12,7 +12,7 @@ pub static App: FC<()> = |cx| {
     let mut direction = use_state(cx, || 1);
 
     let (async_count, dir) = (count.for_async(), *direction);
-    let (task, _result) = cx.use_task(move || async move {
+    let (task, _result) = use_task(cx, move || async move {
         loop {
             gloo_timers::future::TimeoutFuture::new(250).await;
             *async_count.get_mut() += dir;

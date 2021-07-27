@@ -19,6 +19,7 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
+use crate::hooks::{SuspendedContext, SuspenseHook};
 use crate::{arena::SharedResources, innerlude::*};
 
 use std::any::Any;

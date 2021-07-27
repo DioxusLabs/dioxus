@@ -21,7 +21,7 @@ const App: FC<()> = |cx| {
 };
 
 const Task: FC<()> = |cx| {
-    let (task, res) = cx.use_task(|| async { true });
+    let (task, res) = use_task(cx, || async { true });
     // task.pause();
     // task.restart();
     // task.stop();
@@ -29,7 +29,7 @@ const Task: FC<()> = |cx| {
 
     //
 
-    let _s = cx.use_task(|| async { "hello world".to_string() });
+    let _s = use_task(cx, || async { "hello world".to_string() });
 
     todo!()
 };

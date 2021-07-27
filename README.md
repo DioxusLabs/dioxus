@@ -84,6 +84,7 @@ If you know React, then you already know Dioxus.
 - Starting a new app takes zero templates or special tools - get a new app running in just seconds.
 - Desktop apps running natively (no Electron!) in less than 10 lines of code.
 - The most ergonomic and powerful state management of any Rust UI toolkit.
+- Multithreaded asynchronous coroutine scheduler for powerful async code.
 - And more! Read the full release post here.
 
 ## Get Started with...

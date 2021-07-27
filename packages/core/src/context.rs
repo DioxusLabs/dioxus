@@ -111,7 +111,7 @@ impl<'src, P> Context<'src, P> {
         Rc::new(move || cb(id))
     }
 
-    fn prepare_update(&self) -> Rc<dyn Fn(ScopeId)> {
+    pub fn prepare_update(&self) -> Rc<dyn Fn(ScopeId)> {
         self.scope.vdom.schedule_update()
     }
 
@@ -155,7 +155,81 @@ impl<'src, P> Context<'src, P> {
         }))
     }
 
+    /// `submit_task` will submit the future to be polled.
+    ///
+    /// This is useful when you have some async task that needs to be progressed.
+    ///
+    /// This method takes ownership over the task you've provided, and must return (). This means any work that needs to
+    /// happen must occur within the future or scheduled for after the future completes (through schedule_update )
+    ///
+    /// ## Explanation
+    /// Dioxus will step its internal event loop if the future returns if the future completes while waiting.
+    ///
+    /// Tasks can't return anything, but they can be controlled with the returned handle
+    ///
+    /// Tasks will only run until the component renders again. Because `submit_task` is valid for the &'src lifetime, it
+    /// is considered "stable"
+    ///
+    ///
+    ///
+    pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
+        self.scope.vdom.submit_task(task)
+    }
+
+    /// Add a state globally accessible to child components via tree walking
+    pub fn add_shared_state<T: 'static>(self, val: T) -> Option<Rc<dyn Any>> {
+        self.scope
+            .shared_contexts
+            .borrow_mut()
+            .insert(TypeId::of::<T>(), Rc::new(val))
+    }
+
+    /// Walk the tree to find a shared state with the TypeId of the generic type
+    ///
+    pub fn consume_shared_state<T: 'static>(self) -> Option<Rc<T>> {
+        let mut scope = Some(self.scope);
+        let mut par = None;
+
+        let ty = TypeId::of::<T>();
+        while let Some(inner) = scope {
+            log::debug!(
+                "Searching {:#?} for valid shared_context",
+                inner.our_arena_idx
+            );
+            let shared_ctx = {
+                let shared_contexts = inner.shared_contexts.borrow();
+
+                log::debug!(
+                    "This component has {} shared contexts",
+                    shared_contexts.len()
+                );
+                shared_contexts.get(&ty).map(|f| f.clone())
+            };
+
+            if let Some(shared_cx) = shared_ctx {
+                log::debug!("found matching cx");
+                let rc = shared_cx
+                    .clone()
+                    .downcast::<T>()
+                    .expect("Should not fail, already validated the type from the hashmap");
+
+                par = Some(rc);
+                break;
+            } else {
+                match inner.parent_idx {
+                    Some(parent_id) => {
+                        scope = unsafe { inner.vdom.get_scope(parent_id) };
+                    }
+                    None => break,
+                }
+            }
+        }
+        par
+    }
+
     /// Store a value between renders
+    ///
+    /// This is *the* foundational hook for all other hooks.
     ///
     /// - Initializer: closure used to create the initial hook state
     /// - Runner: closure used to output a value every time the hook is used
@@ -199,313 +273,5 @@ Any function prefixed with "use" should not be called conditionally.
 "###;
 
         runner(self.scope.hooks.next::<State>().expect(ERR_MSG))
-    }
-
-    /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
-    ///
-    /// This is a hook, so it may not be called conditionally!
-    ///
-    /// The init method is ran *only* on first use, otherwise it is ignored. However, it uses hooks (ie `use`)
-    /// so don't put it in a conditional.
-    ///
-    /// When the component is dropped, so is the context. Be aware of this behavior when consuming
-    /// the context via Rc/Weak.
-    ///
-    ///
-    ///
-    pub fn use_provide_context<T, F>(self, init: F) -> &'src Rc<T>
-    where
-        T: 'static,
-        F: FnOnce() -> T,
-    {
-        let ty = TypeId::of::<T>();
-        let contains_key = self.scope.shared_contexts.borrow().contains_key(&ty);
-
-        let is_initialized = self.use_hook(
-            |_| false,
-            |s| {
-                let i = s.clone();
-                *s = true;
-                i
-            },
-            |_| {},
-        );
-
-        match (is_initialized, contains_key) {
-            // Do nothing, already initialized and already exists
-            (true, true) => {}
-
-            // Needs to be initialized
-            (false, false) => {
-                log::debug!("Initializing context...");
-                let initialized = Rc::new(init());
-                let p = self
-                    .scope
-                    .shared_contexts
-                    .borrow_mut()
-                    .insert(ty, initialized);
-                log::info!(
-                    "There are now {} shared contexts for scope {:?}",
-                    self.scope.shared_contexts.borrow().len(),
-                    self.scope.our_arena_idx,
-                );
-            }
-
-            _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
-        };
-
-        self.use_context::<T>()
-    }
-
-    /// There are hooks going on here!
-    pub fn use_context<T: 'static>(self) -> &'src Rc<T> {
-        self.try_use_context().unwrap()
-    }
-
-    /// Uses a context, storing the cached value around
-    ///
-    /// If a context is not found on the first search, then this call will be  "dud", always returning "None" even if a
-    /// context was added later. This allows using another hook as a fallback
-    ///
-    pub fn try_use_context<T: 'static>(self) -> Option<&'src Rc<T>> {
-        struct UseContextHook<C> {
-            par: Option<Rc<C>>,
-        }
-
-        self.use_hook(
-            move |_| {
-                let mut scope = Some(self.scope);
-                let mut par = None;
-
-                let ty = TypeId::of::<T>();
-                while let Some(inner) = scope {
-                    log::debug!(
-                        "Searching {:#?} for valid shared_context",
-                        inner.our_arena_idx
-                    );
-                    let shared_ctx = {
-                        let shared_contexts = inner.shared_contexts.borrow();
-
-                        log::debug!(
-                            "This component has {} shared contexts",
-                            shared_contexts.len()
-                        );
-                        shared_contexts.get(&ty).map(|f| f.clone())
-                    };
-
-                    if let Some(shared_cx) = shared_ctx {
-                        log::debug!("found matching cx");
-                        let rc = shared_cx
-                            .clone()
-                            .downcast::<T>()
-                            .expect("Should not fail, already validated the type from the hashmap");
-
-                        par = Some(rc);
-                        break;
-                    } else {
-                        match inner.parent_idx {
-                            Some(parent_id) => {
-                                scope = unsafe { inner.vdom.get_scope(parent_id) };
-                            }
-                            None => break,
-                        }
-                    }
-                }
-                //
-                UseContextHook { par }
-            },
-            move |hook| hook.par.as_ref(),
-            |_| {},
-        )
-    }
-
-    /// `submit_task` will submit the future to be polled.
-    ///
-    /// This is useful when you have some async task that needs to be progressed.
-    ///
-    /// This method takes ownership over the task you've provided, and must return (). This means any work that needs to
-    /// happen must occur within the future or scheduled for after the future completes (through schedule_update )
-    ///
-    /// ## Explanation
-    /// Dioxus will step its internal event loop if the future returns if the future completes while waiting.
-    ///
-    /// Tasks can't return anything, but they can be controlled with the returned handle
-    ///
-    /// Tasks will only run until the component renders again. Because `submit_task` is valid for the &'src lifetime, it
-    /// is considered "stable"
-    ///
-    ///
-    ///
-    pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
-        self.scope.vdom.submit_task(task)
-    }
-
-    /// Awaits the given task, forcing the component to re-render when the value is ready.
-    ///
-    ///
-    ///
-    ///
-    pub fn use_task<Out, Fut, Init>(
-        self,
-        task_initializer: Init,
-    ) -> (&'src TaskHandle, &'src Option<Out>)
-    where
-        Out: 'static,
-        Fut: Future<Output = Out> + 'static,
-        Init: FnOnce() -> Fut + 'src,
-    {
-        struct TaskHook<T> {
-            handle: TaskHandle,
-            task_dump: Rc<RefCell<Option<T>>>,
-            value: Option<T>,
-        }
-
-        // whenever the task is complete, save it into th
-        self.use_hook(
-            move |hook_idx| {
-                let task_fut = task_initializer();
-
-                let task_dump = Rc::new(RefCell::new(None));
-
-                let slot = task_dump.clone();
-
-                let updater = self.prepare_update();
-                let update_id = self.get_scope_id();
-
-                let originator = self.scope.our_arena_idx.clone();
-
-                let handle = self.submit_task(Box::pin(task_fut.then(move |output| async move {
-                    *slot.as_ref().borrow_mut() = Some(output);
-                    updater(update_id);
-                    EventTrigger {
-                        event: VirtualEvent::AsyncEvent { hook_idx },
-                        originator,
-                        priority: EventPriority::Low,
-                        real_node_id: None,
-                    }
-                })));
-
-                TaskHook {
-                    task_dump,
-                    value: None,
-                    handle,
-                }
-            },
-            |hook| {
-                if let Some(val) = hook.task_dump.as_ref().borrow_mut().take() {
-                    hook.value = Some(val);
-                }
-                (&hook.handle, &hook.value)
-            },
-            |_| {},
-        )
-    }
-}
-
-pub(crate) struct SuspenseHook {
-    pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
-    pub callback: SuspendedCallback,
-    pub dom_node_id: Rc<Cell<Option<ElementId>>>,
-}
-type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> DomTree<'a>>;
-
-impl<'src, P> Context<'src, P> {
-    /// Asynchronously render new nodes once the given future has completed.
-    ///
-    /// # Easda
-    ///
-    ///
-    ///
-    ///
-    /// # Example
-    ///
-    ///
-    pub fn use_suspense<Out, Fut, Cb>(
-        self,
-        task_initializer: impl FnOnce() -> Fut,
-        user_callback: Cb,
-    ) -> DomTree<'src>
-    where
-        Fut: Future<Output = Out> + 'static,
-        Out: 'static,
-        Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> DomTree<'a> + 'static,
-    {
-        self.use_hook(
-            move |hook_idx| {
-                let value = Rc::new(RefCell::new(None));
-
-                let dom_node_id = Rc::new(empty_cell());
-                let domnode = dom_node_id.clone();
-
-                let slot = value.clone();
-
-                let callback: SuspendedCallback = Box::new(move |ctx: SuspendedContext| {
-                    let v: std::cell::Ref<Option<Box<dyn Any>>> = slot.as_ref().borrow();
-                    match v.as_ref() {
-                        Some(a) => {
-                            let v: &dyn Any = a.as_ref();
-                            let real_val = v.downcast_ref::<Out>().unwrap();
-                            user_callback(ctx, real_val)
-                        }
-                        None => {
-                            //
-                            Some(VNode {
-                                dom_id: empty_cell(),
-                                key: None,
-                                kind: VNodeKind::Suspended {
-                                    node: domnode.clone(),
-                                },
-                            })
-                        }
-                    }
-                });
-
-                let originator = self.scope.our_arena_idx.clone();
-                let task_fut = task_initializer();
-                let domnode = dom_node_id.clone();
-
-                let slot = value.clone();
-                self.submit_task(Box::pin(task_fut.then(move |output| async move {
-                    // When the new value arrives, set the hooks internal slot
-                    // Dioxus will call the user's callback to generate new nodes outside of the diffing system
-                    *slot.borrow_mut() = Some(Box::new(output) as Box<dyn Any>);
-                    EventTrigger {
-                        event: VirtualEvent::SuspenseEvent { hook_idx, domnode },
-                        originator,
-                        priority: EventPriority::Low,
-                        real_node_id: None,
-                    }
-                })));
-
-                SuspenseHook {
-                    value,
-                    callback,
-                    dom_node_id,
-                }
-            },
-            move |hook| {
-                let cx = Context {
-                    scope: &self.scope,
-                    props: &(),
-                };
-                let csx = SuspendedContext { inner: cx };
-                (&hook.callback)(csx)
-            },
-            |_| {},
-        )
-    }
-}
-
-pub struct SuspendedContext<'a> {
-    pub(crate) inner: Context<'a, ()>,
-}
-impl<'src> SuspendedContext<'src> {
-    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
-        self,
-        lazy_nodes: LazyNodes<'src, F>,
-    ) -> DomTree<'src> {
-        let scope_ref = self.inner.scope;
-
-        Some(lazy_nodes.into_vnode(NodeFactory { scope: scope_ref }))
     }
 }
