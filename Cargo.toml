@@ -1,0 +1,17 @@
+[package]
+name = "rink"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+stretch = "0.3.2"
+tui = { version = "0.15.0", features = ["crossterm"] }
+crossterm = "0.20.0"
+anyhow = "1.0.42"
+thiserror = "1.0.24"
+dioxus = { path = "../../dioxus", features = ["core"] }
+hecs = "0.6.0"
+tui-template = { path = "../../Tinkering/tui-builder" }
+# tui-template = { git = "https://github.com/jkelleyrtp/tui-builder.git" }
