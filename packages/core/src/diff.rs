@@ -334,53 +334,14 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 | VNodeKind::Element(_)
                 | VNodeKind::Anchor(_),
             ) => {
-                todo!();
-                // log::info!(
-                //     "taking the awkard diffing path {:#?}, {:#?}",
-                //     old_node,
-                //     new_node
-                // );
-                // // currently busted for components - need to fid
-                // let root = old_node.dom_id.get().expect(&format!(
-                //     "Should not be diffing old nodes that were never assigned, {:#?}",
-                //     old_node
-                // ));
-                // // Choose the node to use as the placeholder for replacewith
-                // let back_node_id = match old_node.kind {
-                //     // We special case these two types to avoid allocating the small-vecs
-                //     VNodeKind::Element(_) | VNodeKind::Text(_) => root,
-
-                //     _ => {
-                //         let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
-
-                //         let back_node = old_iter
-                //             .next()
-                //             .expect("Empty fragments should generate a placeholder.");
-
-                //         // remove any leftovers
-                //         for to_remove in old_iter {
-                //             self.edit_push_root(to_remove.dom_id().unwrap());
-                //             self.edit_remove();
-                //         }
-
-                //         back_node.dom_id().unwrap()
-                //     }
-                // };
-
-                // // replace the placeholder or first node with the nodes generated from the "new"
-                // self.edit_push_root(back_node_id);
-                // let meta = self.create_vnode(new_node);
-                // self.edit_replace_with(meta.added_to_stack);
-
-                // // todo use the is_static metadata to update this subtree
+                self.replace_many_with_many([old_node], new_node);
             }
 
             // TODO
-            (VNodeKind::Suspended(node), new) => todo!(),
-            (old, VNodeKind::Suspended { .. }) => {
-                // a node that was once real is now suspended
-                //
-            }
+            (VNodeKind::Suspended(_), new) => todo!(),
+
+            // a node that was once real is now suspended
+            (old, VNodeKind::Suspended(_)) => todo!(),
         }
     }
 
@@ -636,17 +597,28 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 let first_new = &new[0];
 
                 match (&first_old.kind, &first_new.kind) {
+                    // Anchors can only appear in empty fragments
                     (VNodeKind::Anchor(old_anchor), VNodeKind::Anchor(new_anchor)) => {
                         old_anchor.dom_id.set(new_anchor.dom_id.get());
                     }
+
+                    // Replace the anchor with whatever new nodes are coming down the pipe
                     (VNodeKind::Anchor(anchor), _) => {
-                        // replace new anchor with many
-                        todo!();
+                        self.edit_push_root(anchor.dom_id.get().unwrap());
+                        let mut added = 0;
+                        for el in new {
+                            let meta = self.create_vnode(el);
+                            added += meta.added_to_stack;
+                        }
+                        self.edit_replace_with(1, added);
                     }
+
+                    // Replace whatever nodes are sitting there with the anchor
                     (_, VNodeKind::Anchor(anchor)) => {
-                        // replace many with new anchor
-                        todo!();
+                        self.replace_many_with_many(old, first_new);
                     }
+
+                    // Use the complex diff algorithm to diff the nodes
                     _ => {
                         let new_is_keyed = new[0].key.is_some();
                         let old_is_keyed = old[0].key.is_some();
@@ -1175,6 +1147,53 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // self.remove_self_and_next_siblings();
     }
 
+    fn replace_many_with_many(
+        &mut self,
+        old_node: impl IntoIterator<Item = &'bump VNode<'bump>>,
+        // old_node: &'bump VNode<'bump>,
+        new_node: &'bump VNode<'bump>,
+    ) {
+        let mut nodes_to_replace = Vec::new();
+        let mut nodes_to_search = old_node.into_iter().collect::<Vec<_>>();
+        let mut scopes_obliterated = Vec::new();
+        while let Some(node) = nodes_to_search.pop() {
+            match &node.kind {
+                // the ones that have a direct id
+                VNodeKind::Text(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
+                VNodeKind::Element(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
+                VNodeKind::Anchor(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
+                VNodeKind::Suspended(el) => nodes_to_replace.push(el.node.get().unwrap()),
+
+                VNodeKind::Fragment(frag) => {
+                    for child in frag.children {
+                        nodes_to_search.push(child);
+                    }
+                }
+                VNodeKind::Component(el) => {
+                    let scope_id = el.ass_scope.get().unwrap();
+                    let scope = self.get_scope(&scope_id).unwrap();
+                    let root = scope.root();
+                    nodes_to_search.push(root);
+                    scopes_obliterated.push(scope_id);
+                }
+            }
+        }
+
+        let n = nodes_to_replace.len();
+        for node in nodes_to_replace {
+            self.edit_push_root(node);
+        }
+
+        let meta = self.create_vnode(new_node);
+
+        self.edit_replace_with(n as u32, meta.added_to_stack);
+
+        // obliterate!
+        for scope in scopes_obliterated {
+            self.destroy_scopes(scope);
+        }
+    }
+
     fn create_garbage(&mut self, node: &'bump VNode<'bump>) {
         let cur_scope = self.current_scope().unwrap();
         let scope = self.get_scope(&cur_scope).unwrap();
@@ -1194,14 +1213,9 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     ) {
         self.edit_push_root(anchor);
         let meta = self.create_vnode(new_node);
-        self.edit_replace_with(meta.added_to_stack);
+        self.edit_replace_with(1, meta.added_to_stack);
         self.create_garbage(old_node);
         self.edit_pop();
-    }
-
-    // assumes
-    fn remove_many_and_return_the_first_root(&mut self) -> ElementId {
-        todo!()
     }
 
     fn remove_vnode(&mut self, node: &'bump VNode<'bump>) {
@@ -1274,8 +1288,8 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
     // replace the n-m node on the stack with the m nodes
     // ends with the last element of the chain on the top of the stack
-    pub(crate) fn edit_replace_with(&mut self, many: u32) {
-        self.edits.push(ReplaceWith { many });
+    pub(crate) fn edit_replace_with(&mut self, n: u32, m: u32) {
+        self.edits.push(ReplaceWith { n, m });
     }
 
     // Remove Nodesfrom the dom

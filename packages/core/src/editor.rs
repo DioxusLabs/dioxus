@@ -24,7 +24,11 @@ pub enum DomEdit<'bump> {
         many: u32,
     },
     ReplaceWith {
-        many: u32,
+        // the first n elements
+        n: u32,
+
+        // the last m elements
+        m: u32,
     },
     Remove,
     RemoveAllChildren,

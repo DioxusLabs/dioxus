@@ -342,7 +342,7 @@ impl VirtualDom {
                         let meta = diff_machine.create_vnode(&*nodes);
 
                         // replace the placeholder with the new nodes we just pushed on the stack
-                        diff_machine.edit_replace_with(meta.added_to_stack);
+                        diff_machine.edit_replace_with(1, meta.added_to_stack);
                     }
                 }
             }
