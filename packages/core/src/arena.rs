@@ -5,7 +5,9 @@ use std::{cell::UnsafeCell, rc::Rc};
 use crate::heuristics::*;
 use crate::innerlude::*;
 use futures_util::stream::FuturesUnordered;
+use fxhash::{FxHashMap, FxHashSet};
 use slab::Slab;
+use smallvec::SmallVec;
 
 // slotmap::new_key_type! {
 //     // A dedicated key type for the all the scopes
@@ -47,7 +49,7 @@ pub struct SharedResources {
 
     /// We use a SlotSet to keep track of the keys that are currently being used.
     /// However, we don't store any specific data since the "mirror"
-    pub raw_elements: Shared<Slab<()>>,
+    pub raw_elements: Rc<RefCell<Slab<()>>>,
 
     pub task_setter: Rc<dyn Fn(ScopeId)>,
 }
@@ -133,7 +135,10 @@ impl SharedResources {
     }
 
     /// return the id, freeing the space of the original node
-    pub fn collect_garbage(&self, id: ElementId) {}
+    pub fn collect_garbage(&self, id: ElementId) {
+        let mut r: RefMut<Slab<()>> = self.raw_elements.borrow_mut();
+        r.remove(id.0);
+    }
 
     pub fn borrow_queue(&self) -> RefMut<Vec<HeightMarker>> {
         self.event_queue.borrow_mut()

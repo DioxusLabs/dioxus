@@ -18,6 +18,14 @@
 //! always make sure to copy over the ID. If we don't do this properly, the ElementId will be populated incorrectly and
 //! brick the user's page.
 //!
+//! ### Fragment Support
+//!
+//! Fragments (nodes without a parent) are supported through a combination of "replace with" and anchor vnodes. Fragments
+//! can be particularly challenging when they are empty, so the placeholder node lets us "reserve" a spot for the empty
+//! fragment to be replaced with when it is no longer empty. This is guaranteed by logic in the NodeFactory - it is
+//! impossible to craft a fragment with 0 elements - they must always have at least a single placeholder element. This is
+//! slightly inefficient, but represents a such an uncommon use case that it is not worth optimizing.
+//!
 //! ## Subtree Memoization
 //! -----------------------
 //! We also employ "subtree memoization" which saves us from having to check trees which take no dynamic content. We can
@@ -44,6 +52,11 @@
 //! The IDs used by the key/map are just an index into a vec. This means that Dioxus will drive the key allocation strategy
 //! so the client only needs to maintain a simple list of nodes. By default, Dioxus will not manually clean up old nodes
 //! for the client. As new nodes are created, old nodes will be over-written.
+//!
+//! HEADS-UP:
+//!     For now, deferred garabge collection is disabled. The code-paths are almost wired up, but it's quite complex to
+//!     get working safely and efficiently. For now, garabge is collected immediately during diffing. This adds extra
+//!     overhead, but is faster to implement in the short term.
 //!
 //! Further Reading and Thoughts
 //! ----------------------------
@@ -77,30 +90,48 @@ pub struct DiffMachine<'real, 'bump> {
 
     pub edits: &'real mut Vec<DomEdit<'bump>>,
 
-    pub scheduled_garbage: Vec<&'bump VNode<'bump>>,
-
-    pub cur_idxs: SmallVec<[ScopeId; 5]>,
+    pub scope_stack: SmallVec<[ScopeId; 5]>,
 
     pub diffed: FxHashSet<ScopeId>,
 
-    pub seen_nodes: FxHashSet<ScopeId>,
+    // will be used later for garbage collection
+    // we check every seen node and then schedule its eventual deletion
+    pub seen_scopes: FxHashSet<ScopeId>,
 }
 
 impl<'real, 'bump> DiffMachine<'real, 'bump> {
-    pub fn new(
+    pub(crate) fn new(
         edits: &'real mut Vec<DomEdit<'bump>>,
         dom: &'real dyn RealDom<'bump>,
-        cur_idx: ScopeId,
+        cur_scope: ScopeId,
         shared: &'bump SharedResources,
     ) -> Self {
         Self {
             real_dom: dom,
             edits,
-            cur_idxs: smallvec![cur_idx],
+            scope_stack: smallvec![cur_scope],
             vdom: shared,
-            scheduled_garbage: vec![],
             diffed: FxHashSet::default(),
-            seen_nodes: FxHashSet::default(),
+            seen_scopes: FxHashSet::default(),
+        }
+    }
+
+    /// Allows the creation of a diff machine without the concept of scopes or a virtualdom
+    /// this is mostly useful for testing
+    ///
+    /// This will PANIC if any component elements are passed in.
+    pub fn new_headless(
+        edits: &'real mut Vec<DomEdit<'bump>>,
+        dom: &'real dyn RealDom<'bump>,
+        shared: &'bump SharedResources,
+    ) -> Self {
+        Self {
+            real_dom: dom,
+            edits,
+            scope_stack: smallvec![ScopeId(0)],
+            vdom: shared,
+            diffed: FxHashSet::default(),
+            seen_scopes: FxHashSet::default(),
         }
     }
 
@@ -111,41 +142,35 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     //
     // each function call assumes the stack is fresh (empty).
     pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
-        let root = old_node.dom_id.get();
-
         match (&old_node.kind, &new_node.kind) {
             // Handle the "sane" cases first.
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
             // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
             (VNodeKind::Text(old), VNodeKind::Text(new)) => {
-                let root = root.unwrap();
+                let root = old_node.direct_id();
 
                 if old.text != new.text {
-                    self.push_root(root);
-                    self.set_text(new.text);
-                    self.pop();
+                    self.edit_push_root(root);
+                    self.edit_set_text(new.text);
+                    self.edit_pop();
                 }
 
-                new_node.dom_id.set(Some(root));
+                new.dom_id.set(Some(root));
             }
 
             (VNodeKind::Element(old), VNodeKind::Element(new)) => {
-                let root = root.unwrap();
+                let root = old_node.direct_id();
 
                 // If the element type is completely different, the element needs to be re-rendered completely
                 // This is an optimization React makes due to how users structure their code
                 //
                 // This case is rather rare (typically only in non-keyed lists)
                 if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                    self.push_root(root);
-                    let meta = self.create(new_node);
-                    self.replace_with(meta.added_to_stack);
-                    self.scheduled_garbage.push(old_node);
-                    self.pop();
+                    self.replace_node_with_node(root, old_node, new_node);
                     return;
                 }
 
-                new_node.dom_id.set(Some(root));
+                new.dom_id.set(Some(root));
 
                 // Don't push the root if we don't have to
                 let mut has_comitted = false;
@@ -166,17 +191,17 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                         if old_attr.value != new_attr.value {
                             please_commit(&mut self.edits);
-                            self.set_attribute(new_attr);
+                            self.edit_set_attribute(new_attr);
                         }
                     }
                 } else {
                     // TODO: provide some sort of report on how "good" the diffing was
                     please_commit(&mut self.edits);
                     for attribute in old.attributes {
-                        self.remove_attribute(attribute);
+                        self.edit_remove_attribute(attribute);
                     }
                     for attribute in new.attributes {
-                        self.set_attribute(attribute)
+                        self.edit_set_attribute(attribute)
                     }
                 }
 
@@ -186,33 +211,38 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 // In the cases where the listeners change, we completely wipe the data attributes and add new ones
                 //
                 // TODO: take a more efficient path than this
+                let cur_scope: ScopeId = self.scope_stack.last().unwrap().clone();
                 if old.listeners.len() == new.listeners.len() {
                     for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                         if old_l.event != new_l.event {
                             please_commit(&mut self.edits);
-                            self.remove_event_listener(old_l.event);
-                            self.new_event_listener(new_l);
+                            self.edit_remove_event_listener(old_l.event);
+                            self.edit_new_event_listener(new_l, cur_scope);
                         }
                         new_l.mounted_node.set(old_l.mounted_node.get());
+                        self.fix_listener(new_l);
                     }
                 } else {
                     please_commit(&mut self.edits);
                     for listener in old.listeners {
-                        self.remove_event_listener(listener.event);
+                        self.edit_remove_event_listener(listener.event);
                     }
                     for listener in new.listeners {
                         listener.mounted_node.set(Some(root));
-                        self.new_event_listener(listener);
+                        self.edit_new_event_listener(listener, cur_scope);
+
+                        // Make sure the listener gets attached to the scope list
+                        self.fix_listener(listener);
                     }
                 }
 
                 if has_comitted {
-                    self.pop();
+                    self.edit_pop();
                 }
 
                 // Each child pushes its own root, so it doesn't need our current root
 
-                self.diff_children(old.children, new.children, None, &mut None);
+                self.diff_children(old.children, new.children);
             }
 
             (VNodeKind::Component(old), VNodeKind::Component(new)) => {
@@ -221,7 +251,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 // Make sure we're dealing with the same component (by function pointer)
                 if old.user_fc == new.user_fc {
                     //
-                    self.cur_idxs.push(scope_addr);
+                    self.scope_stack.push(scope_addr);
 
                     // Make sure the new component vnode is referencing the right scope id
                     new.ass_scope.set(Some(scope_addr));
@@ -246,9 +276,9 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                         }
                     }
 
-                    self.cur_idxs.pop();
+                    self.scope_stack.pop();
 
-                    self.seen_nodes.insert(scope_addr);
+                    self.seen_scopes.insert(scope_addr);
                 } else {
                     let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
                     let first = old_iter
@@ -257,16 +287,12 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                     // remove any leftovers
                     for to_remove in old_iter {
-                        self.push_root(to_remove.element_id().unwrap());
-                        self.remove();
+                        self.edit_push_root(to_remove.direct_id());
+                        self.edit_remove();
                     }
 
                     // seems like we could combine this into a single instruction....
-                    self.push_root(first.element_id().unwrap());
-                    let meta = self.create(new_node);
-                    self.replace_with(meta.added_to_stack);
-                    self.scheduled_garbage.push(old_node);
-                    self.pop();
+                    self.replace_node_with_node(first.direct_id(), old_node, new_node);
 
                     // Wipe the old one and plant the new one
                     let old_scope = old.ass_scope.get().unwrap();
@@ -282,16 +308,11 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     return;
                 }
 
-                let mut new_anchor = None;
-                self.diff_children(
-                    old.children,
-                    new.children,
-                    old_node.dom_id.get(),
-                    &mut new_anchor,
-                );
-                if let Some(anchor) = new_anchor {
-                    new_node.dom_id.set(Some(anchor));
-                }
+                self.diff_children(old.children, new.children);
+            }
+
+            (VNodeKind::Anchor(old), VNodeKind::Anchor(new)) => {
+                new.dom_id.set(old.dom_id.get());
             }
 
             // The strategy here is to pick the first possible node from the previous set and use that as our replace with root
@@ -305,54 +326,57 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 VNodeKind::Component(_)
                 | VNodeKind::Fragment(_)
                 | VNodeKind::Text(_)
-                | VNodeKind::Element(_),
+                | VNodeKind::Element(_)
+                | VNodeKind::Anchor(_),
                 VNodeKind::Component(_)
                 | VNodeKind::Fragment(_)
                 | VNodeKind::Text(_)
-                | VNodeKind::Element(_),
+                | VNodeKind::Element(_)
+                | VNodeKind::Anchor(_),
             ) => {
-                log::info!(
-                    "taking the awkard diffing path {:#?}, {:#?}",
-                    old_node,
-                    new_node
-                );
-                // currently busted for components - need to fid
-                let root = old_node.dom_id.get().expect(&format!(
-                    "Should not be diffing old nodes that were never assigned, {:#?}",
-                    old_node
-                ));
-                // Choose the node to use as the placeholder for replacewith
-                let back_node_id = match old_node.kind {
-                    // We special case these two types to avoid allocating the small-vecs
-                    VNodeKind::Element(_) | VNodeKind::Text(_) => root,
+                todo!();
+                // log::info!(
+                //     "taking the awkard diffing path {:#?}, {:#?}",
+                //     old_node,
+                //     new_node
+                // );
+                // // currently busted for components - need to fid
+                // let root = old_node.dom_id.get().expect(&format!(
+                //     "Should not be diffing old nodes that were never assigned, {:#?}",
+                //     old_node
+                // ));
+                // // Choose the node to use as the placeholder for replacewith
+                // let back_node_id = match old_node.kind {
+                //     // We special case these two types to avoid allocating the small-vecs
+                //     VNodeKind::Element(_) | VNodeKind::Text(_) => root,
 
-                    _ => {
-                        let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
+                //     _ => {
+                //         let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
 
-                        let back_node = old_iter
-                            .next()
-                            .expect("Empty fragments should generate a placeholder.");
+                //         let back_node = old_iter
+                //             .next()
+                //             .expect("Empty fragments should generate a placeholder.");
 
-                        // remove any leftovers
-                        for to_remove in old_iter {
-                            self.push_root(to_remove.element_id().unwrap());
-                            self.remove();
-                        }
+                //         // remove any leftovers
+                //         for to_remove in old_iter {
+                //             self.edit_push_root(to_remove.dom_id().unwrap());
+                //             self.edit_remove();
+                //         }
 
-                        back_node.element_id().unwrap()
-                    }
-                };
+                //         back_node.dom_id().unwrap()
+                //     }
+                // };
 
-                // replace the placeholder or first node with the nodes generated from the "new"
-                self.push_root(back_node_id);
-                let meta = self.create(new_node);
-                self.replace_with(meta.added_to_stack);
+                // // replace the placeholder or first node with the nodes generated from the "new"
+                // self.edit_push_root(back_node_id);
+                // let meta = self.create_vnode(new_node);
+                // self.edit_replace_with(meta.added_to_stack);
 
-                // todo use the is_static metadata to update this subtree
+                // // todo use the is_static metadata to update this subtree
             }
 
             // TODO
-            (VNodeKind::Suspended { node }, new) => todo!(),
+            (VNodeKind::Suspended(node), new) => todo!(),
             (old, VNodeKind::Suspended { .. }) => {
                 // a node that was once real is now suspended
                 //
@@ -369,16 +393,23 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     // When this function returns, the new node is on top of the change list stack:
     //
     //     [... node]
-    pub fn create(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
+    pub fn create_vnode(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
         log::warn!("Creating node! ... {:#?}", node);
         match &node.kind {
             VNodeKind::Text(text) => {
                 let real_id = self.vdom.reserve_node();
-                self.create_text_node(text.text, real_id);
-                node.dom_id.set(Some(real_id));
-
+                self.edit_create_text_node(text.text, real_id);
+                text.dom_id.set(Some(real_id));
                 CreateMeta::new(text.is_static, 1)
             }
+
+            VNodeKind::Anchor(anchor) => {
+                let real_id = self.vdom.reserve_node();
+                self.edit_create_placeholder(real_id);
+                anchor.dom_id.set(Some(real_id));
+                CreateMeta::new(false, 1)
+            }
+
             VNodeKind::Element(el) => {
                 // we have the potential to completely eliminate working on this node in the future(!)
                 //
@@ -396,20 +427,23 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     static_attrs: _,
                     static_children: _,
                     static_listeners: _,
+                    dom_id,
                 } = el;
 
                 let real_id = self.vdom.reserve_node();
                 if let Some(namespace) = namespace {
-                    self.create_element(tag_name, Some(namespace), real_id)
+                    self.edit_create_element(tag_name, Some(namespace), real_id)
                 } else {
-                    self.create_element(tag_name, None, real_id)
+                    self.edit_create_element(tag_name, None, real_id)
                 };
-                node.dom_id.set(Some(real_id));
+                dom_id.set(Some(real_id));
 
+                let cur_scope = self.current_scope().unwrap();
                 listeners.iter().for_each(|listener| {
                     log::info!("setting listener id to {:#?}", real_id);
+                    self.fix_listener(listener);
                     listener.mounted_node.set(Some(real_id));
-                    self.new_event_listener(listener);
+                    self.edit_new_event_listener(listener, cur_scope.clone());
 
                     // if the node has an event listener, then it must be visited ?
                     is_static = false;
@@ -417,7 +451,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                 for attr in *attributes {
                     is_static = is_static && attr.is_static;
-                    self.set_attribute(attr);
+                    self.edit_set_attribute(attr);
                 }
 
                 // Fast path: if there is a single text child, it is faster to
@@ -438,20 +472,13 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 // }
 
                 for child in *children {
-                    let child_meta = self.create(child);
+                    let child_meta = self.create_vnode(child);
                     is_static = is_static && child_meta.is_static;
 
                     // append whatever children were generated by this call
-                    self.append_children(child_meta.added_to_stack);
+                    self.edit_append_children(child_meta.added_to_stack);
                 }
 
-                // if is_static {
-                //     log::debug!("created a static node {:#?}", node);
-                // } else {
-                //     log::debug!("created a dynamic node {:#?}", node);
-                // }
-
-                // el_is_static.set(is_static);
                 CreateMeta::new(is_static, 1)
             }
 
@@ -459,7 +486,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 log::debug!("Mounting a new component");
                 let caller = vcomponent.caller.clone();
 
-                let parent_idx = self.cur_idxs.last().unwrap().clone();
+                let parent_idx = self.scope_stack.last().unwrap().clone();
 
                 // Insert a new scope into our component list
                 let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
@@ -475,17 +502,6 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     )
                 });
 
-                // This code is supposed to insert the new idx into the parent's descendent list, but it doesn't really work.
-                // This is mostly used for cleanup - to remove old scopes when components are destroyed.
-                // TODO
-                //
-                // self.components
-                //     .try_get_mut(idx)
-                //     .unwrap()
-                //     .descendents
-                //     .borrow_mut()
-                //     .insert(idx);
-
                 // TODO: abstract this unsafe into the arena abstraction
                 let new_component = self.get_scope_mut(&new_idx).unwrap();
 
@@ -495,15 +511,24 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 // Run the scope for one iteration to initialize it
                 new_component.run_scope().unwrap();
 
-                // TODO: we need to delete (IE relcaim this node, otherwise the arena will grow infinitely)
+                // Take the node that was just generated from running the component
                 let nextnode = new_component.frames.fin_head();
-                self.cur_idxs.push(new_idx);
-                let meta = self.create(nextnode);
-                self.cur_idxs.pop();
-                node.dom_id.set(nextnode.dom_id.get());
 
-                // Finally, insert this node as a seen node.
-                self.seen_nodes.insert(new_idx);
+                // Push the new scope onto the stack
+                self.scope_stack.push(new_idx);
+
+                // Run the creation algorithm with this scope on the stack
+                let meta = self.create_vnode(nextnode);
+
+                // pop the scope off the stack
+                self.scope_stack.pop();
+
+                if meta.added_to_stack == 0 {
+                    panic!("This should never happen");
+                }
+
+                // Finally, insert this scope as a seen node.
+                self.seen_scopes.insert(new_idx);
 
                 CreateMeta::new(vcomponent.is_static, meta.added_to_stack)
             }
@@ -511,27 +536,15 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             // Fragments are the only nodes that can contain dynamic content (IE through curlies or iterators).
             // We can never ignore their contents, so the prescence of a fragment indicates that we need always diff them.
             // Fragments will just put all their nodes onto the stack after creation
-            VNodeKind::Fragment(frag) => {
-                let mut nodes_added = 0;
-                for child in frag.children.iter().rev() {
-                    // different types of nodes will generate different amounts on the stack
-                    // nested fragments will spew a ton of nodes onto the stack
-                    // TODO: make sure that our order (.rev) makes sense in a nested situation
-                    let new_meta = self.create(child);
-                    nodes_added += new_meta.added_to_stack;
-                }
-                log::info!("This fragment added {} nodes to the stack", nodes_added);
+            VNodeKind::Fragment(frag) => self.create_children(frag.children),
 
-                // Never ignore
-                CreateMeta::new(false, nodes_added)
-            }
-
-            VNodeKind::Suspended { node: real_node } => {
-                let id = self.vdom.reserve_node();
-                self.create_placeholder(id);
-                node.dom_id.set(Some(id));
-                real_node.set(Some(id));
-                CreateMeta::new(false, 1)
+            VNodeKind::Suspended(VSuspended { node: real_node }) => {
+                todo!("wip on adding suspense back in");
+                // let id = self.vdom.reserve_node();
+                // self.edit_create_placeholder(id);
+                // node.dom_id.set(Some(id));
+                // real_node.set(Some(id));
+                // CreateMeta::new(false, 1)
             }
         }
     }
@@ -541,7 +554,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         let mut added_to_stack = 0;
 
         for child in children {
-            let child_meta = self.create(child);
+            let child_meta = self.create_vnode(child);
             is_static = is_static && child_meta.is_static;
             added_to_stack += child_meta.added_to_stack;
         }
@@ -551,8 +564,6 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             added_to_stack,
         }
     }
-
-    pub fn replace_vnode(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {}
 
     /// Destroy a scope and all of its descendents.
     ///
@@ -565,7 +576,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // explore the scope tree breadth first
         while let Some(scope_id) = scopes_to_explore.pop() {
             // If we're planning on deleting this node, then we don't need to both rendering it
-            self.seen_nodes.insert(scope_id);
+            self.seen_scopes.insert(scope_id);
             let scope = self.get_scope(&scope_id).unwrap();
             for child in scope.descendents.borrow().iter() {
                 // Add this node to be explored
@@ -598,94 +609,63 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     // If old no anchors are provided, then it's assumed that we can freely append to the parent.
     //
     // Remember, non-empty lists does not mean that there are real elements, just that there are virtual elements.
-    fn diff_children(
-        &mut self,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
-        old_anchor: Option<ElementId>,
-        new_anchor: &mut Option<ElementId>,
-    ) {
+    fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         const IS_EMPTY: bool = true;
         const IS_NOT_EMPTY: bool = false;
 
-        match (old_anchor, new.is_empty()) {
-            // Both are empty, dealing only with potential anchors
-            (Some(anchor), IS_EMPTY) => {
-                // new_anchor.set(Some(anchor));
-                if old.len() > 0 {
-                    // clean up these virtual nodes (components, fragments, etc)
-                }
-            }
+        match (old.is_empty(), new.is_empty()) {
+            (IS_EMPTY, IS_EMPTY) => {}
 
             // Completely adding new nodes, removing any placeholder if it exists
-            (Some(anchor), IS_NOT_EMPTY) => {
-                //
-                // match old_anchor {
-                // If there's anchor to work from, then we replace it with the new children
-                // Some(anchor) => {
-                self.push_root(anchor);
+            (IS_EMPTY, IS_NOT_EMPTY) => {
                 let meta = self.create_children(new);
-                if meta.added_to_stack > 0 {
-                    self.replace_with(meta.added_to_stack)
-                } else {
-                    // no items added to the stack... hmmmm....
-                    *new_anchor = old_anchor;
-                }
-                // }
-
-                // If there's no anchor to work with, we just straight up append them
-                // None => {
-                let meta = self.create_children(new);
-                self.append_children(meta.added_to_stack);
-                // }
-                // }
+                self.edit_append_children(meta.added_to_stack);
             }
 
             // Completely removing old nodes and putting an anchor in its place
             // no anchor (old has nodes) and the new is empty
             // remove all the old nodes
-            (None, IS_EMPTY) => {
-                // load the first real
-                if let Some(to_replace) = find_first_real_node(old, self.vdom) {
-                    //
-                    self.push_root(to_replace.dom_id.get().unwrap());
-
-                    // Create the anchor
-                    let anchor_id = self.vdom.reserve_node();
-                    self.create_placeholder(anchor_id);
-                    // *new_anchor = Some(anchor_id);
-
-                    // Replace that node
-                    self.replace_with(1);
-                } else {
-                    // no real nodes -
-                    // new_anchor.set(old_anchor);
-                }
-
-                // remove the rest
-                for child in &old[1..] {
-                    self.push_root(child.element_id().unwrap());
-                    self.remove();
+            (IS_NOT_EMPTY, IS_EMPTY) => {
+                for node in old {
+                    self.remove_vnode(node);
                 }
             }
 
-            (None, IS_NOT_EMPTY) => {
-                let new_is_keyed = new[0].key.is_some();
-                let old_is_keyed = old[0].key.is_some();
+            (IS_NOT_EMPTY, IS_NOT_EMPTY) => {
+                let first_old = &old[0];
+                let first_new = &new[0];
 
-                debug_assert!(
-                    new.iter().all(|n| n.key.is_some() == new_is_keyed),
-                    "all siblings must be keyed or all siblings must be non-keyed"
-                );
-                debug_assert!(
-                    old.iter().all(|o| o.key.is_some() == old_is_keyed),
-                    "all siblings must be keyed or all siblings must be non-keyed"
-                );
+                match (&first_old.kind, &first_new.kind) {
+                    (VNodeKind::Anchor(old_anchor), VNodeKind::Anchor(new_anchor)) => {
+                        old_anchor.dom_id.set(new_anchor.dom_id.get());
+                    }
+                    (VNodeKind::Anchor(anchor), _) => {
+                        // replace new anchor with many
+                        todo!();
+                    }
+                    (_, VNodeKind::Anchor(anchor)) => {
+                        // replace many with new anchor
+                        todo!();
+                    }
+                    _ => {
+                        let new_is_keyed = new[0].key.is_some();
+                        let old_is_keyed = old[0].key.is_some();
 
-                if new_is_keyed && old_is_keyed {
-                    self.diff_keyed_children(old, new);
-                } else {
-                    self.diff_non_keyed_children(old, new);
+                        debug_assert!(
+                            new.iter().all(|n| n.key.is_some() == new_is_keyed),
+                            "all siblings must be keyed or all siblings must be non-keyed"
+                        );
+                        debug_assert!(
+                            old.iter().all(|o| o.key.is_some() == old_is_keyed),
+                            "all siblings must be keyed or all siblings must be non-keyed"
+                        );
+
+                        if new_is_keyed && old_is_keyed {
+                            self.diff_keyed_children(old, new);
+                        } else {
+                            self.diff_non_keyed_children(old, new);
+                        }
+                    }
                 }
             }
         }
@@ -795,8 +775,6 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         old: &'bump [VNode<'bump>],
         new: &'bump [VNode<'bump>],
     ) -> KeyedPrefixResult {
-        // self.go_down();
-
         let mut shared_prefix_count = 0;
 
         for (i, (old, new)) in old.iter().zip(new.iter()).enumerate() {
@@ -804,8 +782,6 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             if old.key() != new.key() {
                 break;
             }
-
-            // self.go_to_sibling(i);
 
             self.diff_node(old, new);
 
@@ -815,8 +791,6 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if shared_prefix_count == old.len() {
-            // self.go_up();
-            // self.commit_traversal();
             self.create_and_append_children(&new[shared_prefix_count..]);
             return KeyedPrefixResult::Finished;
         }
@@ -829,28 +803,8 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
             return KeyedPrefixResult::Finished;
         }
-        //
-        // self.go_up();
-        KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
-    }
 
-    // Remove all of a node's children.
-    //
-    // The change list stack must have this shape upon entry to this function:
-    //
-    //     [... parent]
-    //
-    // When this function returns, the change list stack is in the same state.
-    fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
-        // debug_assert!(self.traversal_is_committed());
-        log::debug!("REMOVING CHILDREN");
-        for _child in old {
-            // registry.remove_subtree(child);
-        }
-        // Fast way to remove all children: set the node's textContent to an empty
-        // string.
-        todo!()
-        // self.set_inner_text("");
+        KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
     }
 
     // Create the given children and append them to the parent node.
@@ -862,8 +816,8 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     // When this function returns, the change list stack is in the same state.
     pub fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
         for child in new {
-            let meta = self.create(child);
-            self.append_children(meta.added_to_stack);
+            let meta = self.create_vnode(child);
+            self.edit_append_children(meta.added_to_stack);
         }
     }
 
@@ -881,99 +835,99 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     //
     // Upon exit from this function, it will be restored to that same state.
     fn diff_keyed_middle(
-        &self,
-        old: &[VNode<'bump>],
-        new: &[VNode<'bump>],
+        &mut self,
+        old: &'bump [VNode<'bump>],
+        new: &'bump [VNode<'bump>],
         shared_prefix_count: usize,
         shared_suffix_count: usize,
         old_shared_suffix_start: usize,
     ) {
-        // // Should have already diffed the shared-key prefixes and suffixes.
-        // debug_assert_ne!(new.first().map(|n| n.key()), old.first().map(|o| o.key()));
-        // debug_assert_ne!(new.last().map(|n| n.key()), old.last().map(|o| o.key()));
+        // Should have already diffed the shared-key prefixes and suffixes.
+        debug_assert_ne!(new.first().map(|n| n.key()), old.first().map(|o| o.key()));
+        debug_assert_ne!(new.last().map(|n| n.key()), old.last().map(|o| o.key()));
 
-        // // The algorithm below relies upon using `u32::MAX` as a sentinel
-        // // value, so if we have that many new nodes, it won't work. This
-        // // check is a bit academic (hence only enabled in debug), since
-        // // wasm32 doesn't have enough address space to hold that many nodes
-        // // in memory.
-        // debug_assert!(new.len() < u32::MAX as usize);
+        // The algorithm below relies upon using `u32::MAX` as a sentinel
+        // value, so if we have that many new nodes, it won't work. This
+        // check is a bit academic (hence only enabled in debug), since
+        // wasm32 doesn't have enough address space to hold that many nodes
+        // in memory.
+        debug_assert!(new.len() < u32::MAX as usize);
 
-        // // Map from each `old` node's key to its index within `old`.
-        // // IE if the keys were A B C, then we would have (A, 1) (B, 2) (C, 3).
-        // let mut old_key_to_old_index = old
-        //     .iter()
-        //     .enumerate()
-        //     .map(|(i, o)| (o.key(), i))
-        //     .collect::<FxHashMap<_, _>>();
+        // Map from each `old` node's key to its index within `old`.
+        // IE if the keys were A B C, then we would have (A, 1) (B, 2) (C, 3).
+        let mut old_key_to_old_index = old
+            .iter()
+            .enumerate()
+            .map(|(i, o)| (o.key(), i))
+            .collect::<FxHashMap<_, _>>();
 
-        // // The set of shared keys between `new` and `old`.
-        // let mut shared_keys = FxHashSet::default();
+        // The set of shared keys between `new` and `old`.
+        let mut shared_keys = FxHashSet::default();
 
-        // // Map from each index in `new` to the index of the node in `old` that
-        // // has the same key.
-        // let mut new_index_to_old_index = new
-        //     .iter()
-        //     .map(|n| {
-        //         let key = n.key();
-        //         if let Some(&i) = old_key_to_old_index.get(&key) {
-        //             shared_keys.insert(key);
-        //             i
-        //         } else {
-        //             u32::MAX as usize
-        //         }
-        //     })
-        //     .collect::<Vec<_>>();
+        // Map from each index in `new` to the index of the node in `old` that
+        // has the same key.
+        let mut new_index_to_old_index = new
+            .iter()
+            .map(|n| {
+                let key = n.key();
+                if let Some(&i) = old_key_to_old_index.get(&key) {
+                    shared_keys.insert(key);
+                    i
+                } else {
+                    u32::MAX as usize
+                }
+            })
+            .collect::<Vec<_>>();
 
-        // // If none of the old keys are reused by the new children, then we
-        // // remove all the remaining old children and create the new children
-        // // afresh.
-        // if shared_suffix_count == 0 && shared_keys.is_empty() {
-        //     if shared_prefix_count == 0 {
-        //         // self.commit_traversal();
-        //         self.remove_all_children(old);
-        //     } else {
-        //         // self.go_down_to_child(shared_prefix_count);
-        //         // self.commit_traversal();
-        //         self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
-        //     }
+        // If none of the old keys are reused by the new children, then we
+        // remove all the remaining old children and create the new children
+        // afresh.
+        if shared_suffix_count == 0 && shared_keys.is_empty() {
+            if shared_prefix_count == 0 {
+                // self.commit_traversal();
+                self.remove_all_children(old);
+            } else {
+                // self.go_down_to_child(shared_prefix_count);
+                // self.commit_traversal();
+                self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
+            }
 
-        //     self.create_and_append_children(new);
+            self.create_and_append_children(new);
 
-        //     return;
-        // }
+            return;
+        }
 
-        // // Save each of the old children whose keys are reused in the new
-        // // children.
-        // let mut old_index_to_temp = vec![u32::MAX; old.len()];
-        // let mut start = 0;
-        // loop {
-        //     let end = (start..old.len())
-        //         .find(|&i| {
-        //             let key = old[i].key();
-        //             !shared_keys.contains(&key)
-        //         })
-        //         .unwrap_or(old.len());
+        // Save each of the old children whose keys are reused in the new
+        // children.
+        let mut old_index_to_temp = vec![u32::MAX; old.len()];
+        let mut start = 0;
+        loop {
+            let end = (start..old.len())
+                .find(|&i| {
+                    let key = old[i].key();
+                    !shared_keys.contains(&key)
+                })
+                .unwrap_or(old.len());
 
-        //     if end - start > 0 {
-        //         // self.commit_traversal();
-        //         let mut t = self.save_children_to_temporaries(
-        //             shared_prefix_count + start,
-        //             shared_prefix_count + end,
-        //         );
-        //         for i in start..end {
-        //             old_index_to_temp[i] = t;
-        //             t += 1;
-        //         }
-        //     }
+            if end - start > 0 {
+                // self.commit_traversal();
+                // let mut t = self.save_children_to_temporaries(
+                //     shared_prefix_count + start,
+                //     shared_prefix_count + end,
+                // );
+                // for i in start..end {
+                //     old_index_to_temp[i] = t;
+                //     t += 1;
+                // }
+            }
 
-        //     debug_assert!(end <= old.len());
-        //     if end == old.len() {
-        //         break;
-        //     } else {
-        //         start = end + 1;
-        //     }
-        // }
+            debug_assert!(end <= old.len());
+            if end == old.len() {
+                break;
+            } else {
+                start = end + 1;
+            }
+        }
 
         // // Remove any old children whose keys were not reused in the new
         // // children. Remove from the end first so that we don't mess up indices.
@@ -1147,17 +1101,13 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             Ordering::Greater => {
                 for item in &old[new.len()..] {
                     for i in RealChildIterator::new(item, self.vdom) {
-                        self.push_root(i.element_id().unwrap());
-                        self.remove();
+                        self.edit_push_root(i.direct_id());
+                        self.edit_remove();
                     }
                 }
             }
             // old.len < new.len -> adding some nodes
             Ordering::Less => {
-                // [... parent last_child]
-                // self.go_up();
-                // [... parent]
-                // self.commit_traversal();
                 self.create_and_append_children(&new[old.len()..]);
             }
             // old.len == new.len -> no nodes added/removed, but πerhaps changed
@@ -1168,7 +1118,24 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     // ======================
     // Support methods
     // ======================
-
+    // Remove all of a node's children.
+    //
+    // The change list stack must have this shape upon entry to this function:
+    //
+    //     [... parent]
+    //
+    // When this function returns, the change list stack is in the same state.
+    fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
+        // debug_assert!(self.traversal_is_committed());
+        log::debug!("REMOVING CHILDREN");
+        for _child in old {
+            // registry.remove_subtree(child);
+        }
+        // Fast way to remove all children: set the node's textContent to an empty
+        // string.
+        todo!()
+        // self.set_inner_text("");
+    }
     // Remove the current child and all of its following siblings.
     //
     // The change list stack must have this shape upon entry to this function:
@@ -1208,10 +1175,78 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // self.remove_self_and_next_siblings();
     }
 
+    fn create_garbage(&mut self, node: &'bump VNode<'bump>) {
+        let cur_scope = self.current_scope().unwrap();
+        let scope = self.get_scope(&cur_scope).unwrap();
+        let garbage: &'bump VNode<'static> = unsafe { std::mem::transmute(node) };
+        scope.pending_garbage.borrow_mut().push(garbage);
+    }
+
+    fn immediately_dispose_garabage(&mut self, node: ElementId) {
+        self.vdom.collect_garbage(node)
+    }
+
+    fn replace_node_with_node(
+        &mut self,
+        anchor: ElementId,
+        old_node: &'bump VNode<'bump>,
+        new_node: &'bump VNode<'bump>,
+    ) {
+        self.edit_push_root(anchor);
+        let meta = self.create_vnode(new_node);
+        self.edit_replace_with(meta.added_to_stack);
+        self.create_garbage(old_node);
+        self.edit_pop();
+    }
+
+    // assumes
+    fn remove_many_and_return_the_first_root(&mut self) -> ElementId {
+        todo!()
+    }
+
+    fn remove_vnode(&mut self, node: &'bump VNode<'bump>) {
+        match &node.kind {
+            VNodeKind::Text(el) => self.immediately_dispose_garabage(node.direct_id()),
+            VNodeKind::Element(el) => {
+                self.immediately_dispose_garabage(node.direct_id());
+                for child in el.children {
+                    self.remove_vnode(&child);
+                }
+            }
+            VNodeKind::Anchor(a) => {
+                //
+            }
+            VNodeKind::Fragment(frag) => {
+                for child in frag.children {
+                    self.remove_vnode(&child);
+                }
+            }
+            VNodeKind::Component(el) => {
+                //
+                // self.destroy_scopes(old_scope)
+            }
+            VNodeKind::Suspended(_) => todo!(),
+        }
+    }
+
+    fn current_scope(&self) -> Option<ScopeId> {
+        self.scope_stack.last().map(|f| f.clone())
+    }
+
+    fn fix_listener<'a>(&mut self, listener: &'a Listener<'a>) {
+        let scope_id = self.current_scope();
+        if let Some(scope_id) = scope_id {
+            let scope = self.get_scope(&scope_id).unwrap();
+            let mut queue = scope.listeners.borrow_mut();
+            let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
+            queue.push(long_listener as *const _)
+        }
+    }
+
     pub fn get_scope_mut(&mut self, id: &ScopeId) -> Option<&'bump mut Scope> {
         // ensure we haven't seen this scope before
         // if we have, then we're trying to alias it, which is not allowed
-        debug_assert!(!self.seen_nodes.contains(id));
+        debug_assert!(!self.seen_scopes.contains(id));
 
         unsafe { self.vdom.get_scope_mut(*id) }
     }
@@ -1222,39 +1257,39 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     }
 
     // Navigation
-    pub(crate) fn push_root(&mut self, root: ElementId) {
+    pub(crate) fn edit_push_root(&mut self, root: ElementId) {
         let id = root.as_u64();
         self.edits.push(PushRoot { id });
     }
 
-    pub(crate) fn pop(&mut self) {
+    pub(crate) fn edit_pop(&mut self) {
         self.edits.push(PopRoot {});
     }
 
     // Add Nodes to the dom
     // add m nodes from the stack
-    pub(crate) fn append_children(&mut self, many: u32) {
+    pub(crate) fn edit_append_children(&mut self, many: u32) {
         self.edits.push(AppendChildren { many });
     }
 
     // replace the n-m node on the stack with the m nodes
     // ends with the last element of the chain on the top of the stack
-    pub(crate) fn replace_with(&mut self, many: u32) {
+    pub(crate) fn edit_replace_with(&mut self, many: u32) {
         self.edits.push(ReplaceWith { many });
     }
 
     // Remove Nodesfrom the dom
-    pub(crate) fn remove(&mut self) {
+    pub(crate) fn edit_remove(&mut self) {
         self.edits.push(Remove);
     }
 
     // Create
-    pub(crate) fn create_text_node(&mut self, text: &'bump str, id: ElementId) {
+    pub(crate) fn edit_create_text_node(&mut self, text: &'bump str, id: ElementId) {
         let id = id.as_u64();
         self.edits.push(CreateTextNode { text, id });
     }
 
-    pub(crate) fn create_element(
+    pub(crate) fn edit_create_element(
         &mut self,
         tag: &'static str,
         ns: Option<&'static str>,
@@ -1268,16 +1303,15 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     }
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
-    pub(crate) fn create_placeholder(&mut self, id: ElementId) {
+    pub(crate) fn edit_create_placeholder(&mut self, id: ElementId) {
         let id = id.as_u64();
         self.edits.push(CreatePlaceholder { id });
     }
 
     // events
-    pub(crate) fn new_event_listener(&mut self, listener: &Listener) {
+    pub(crate) fn edit_new_event_listener(&mut self, listener: &Listener, scope: ScopeId) {
         let Listener {
             event,
-            scope,
             mounted_node,
             ..
         } = listener;
@@ -1285,22 +1319,22 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         let element_id = mounted_node.get().unwrap().as_u64();
 
         self.edits.push(NewEventListener {
-            scope: scope.clone(),
+            scope,
             event_name: event,
             mounted_node_id: element_id,
         });
     }
 
-    pub(crate) fn remove_event_listener(&mut self, event: &'static str) {
+    pub(crate) fn edit_remove_event_listener(&mut self, event: &'static str) {
         self.edits.push(RemoveEventListener { event });
     }
 
     // modify
-    pub(crate) fn set_text(&mut self, text: &'bump str) {
+    pub(crate) fn edit_set_text(&mut self, text: &'bump str) {
         self.edits.push(SetText { text });
     }
 
-    pub(crate) fn set_attribute(&mut self, attribute: &'bump Attribute) {
+    pub(crate) fn edit_set_attribute(&mut self, attribute: &'bump Attribute) {
         let Attribute {
             name,
             value,
@@ -1318,7 +1352,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         });
     }
 
-    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute) {
+    pub(crate) fn edit_remove_attribute(&mut self, attribute: &Attribute) {
         let name = attribute.name;
         self.edits.push(RemoveAttribute { name });
     }
@@ -1367,7 +1401,7 @@ fn find_first_real_node<'a>(
 ///
 /// This iterator is useful when it's important to load the next real root onto the top of the stack for operations like
 /// "InsertBefore".
-struct RealChildIterator<'a> {
+pub struct RealChildIterator<'a> {
     scopes: &'a SharedResources,
 
     // Heuristcally we should never bleed into 4 completely nested fragments/components
@@ -1377,7 +1411,7 @@ struct RealChildIterator<'a> {
 }
 
 impl<'a> RealChildIterator<'a> {
-    fn new(starter: &'a VNode<'a>, scopes: &'a SharedResources) -> Self {
+    pub fn new(starter: &'a VNode<'a>, scopes: &'a SharedResources) -> Self {
         Self {
             scopes,
             stack: smallvec::smallvec![(0, starter)],
@@ -1420,12 +1454,30 @@ impl<'a> Iterator for RealChildIterator<'a> {
                             should_push = Some(&frag.children[subcount]);
                         }
                     }
+                    // // If we get a fragment we push the next child
+                    // VNodeKind::Fragment(frag) => {
+                    //     let subcount = *count as usize;
+
+                    //     if frag.children.len() == 0 {
+                    //         should_pop = true;
+                    //         returned_node = Some(&*node);
+                    //     }
+
+                    //     if subcount >= frag.children.len() {
+                    //         should_pop = true;
+                    //     } else {
+                    //         should_push = Some(&frag.children[subcount]);
+                    //     }
+                    // }
 
                     // Immediately abort suspended nodes - can't do anything with them yet
-                    // VNodeKind::Suspended => should_pop = true,
-                    VNodeKind::Suspended { node, .. } => {
+                    VNodeKind::Suspended(node) => {
+                        // VNodeKind::Suspended => should_pop = true,
                         todo!()
-                        // *node = node.as_ref().borrow().get().expect("msg");
+                    }
+
+                    VNodeKind::Anchor(a) => {
+                        todo!()
                     }
 
                     // For components, we load their root and push them onto the stack

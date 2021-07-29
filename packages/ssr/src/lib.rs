@@ -120,7 +120,7 @@ impl<'a> TextRenderer<'a> {
                 //
                 // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
                 // them interpreter's stack
-                match (self.cfg.pre_render, node.element_id()) {
+                match (self.cfg.pre_render, node.dom_id()) {
                     (true, Some(id)) => {
                         write!(f, " dio_el=\"{}\"", id)?;
                         //

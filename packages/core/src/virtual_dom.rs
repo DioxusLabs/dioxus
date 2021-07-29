@@ -25,7 +25,7 @@ use crate::{arena::SharedResources, innerlude::*};
 use std::any::Any;
 
 use std::any::TypeId;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::pin::Pin;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
@@ -193,8 +193,8 @@ impl VirtualDom {
 
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
-            let meta = diff_machine.create(cur_component.frames.fin_head());
-            diff_machine.append_children(meta.added_to_stack);
+            let meta = diff_machine.create_vnode(cur_component.frames.fin_head());
+            diff_machine.edit_append_children(meta.added_to_stack);
         } else {
             // todo: should this be a hard error?
             log::warn!(
@@ -269,6 +269,47 @@ impl VirtualDom {
         let mut diff_machine = DiffMachine::new(edits, realdom, trigger.originator, &self.shared);
 
         match &trigger.event {
+            // When a scope gets destroyed during a diff, it gets its own garbage collection event
+            // However, an old scope might be attached
+            VirtualEvent::GarbageCollection => {
+                let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
+
+                let mut garbage_list = scope.consume_garbage();
+
+                while let Some(node) = garbage_list.pop() {
+                    match &node.kind {
+                        VNodeKind::Text(_) => {
+                            //
+                            self.shared.collect_garbage(node.direct_id())
+                        }
+                        VNodeKind::Anchor(anchor) => {
+                            //
+                        }
+
+                        VNodeKind::Element(el) => {
+                            self.shared.collect_garbage(node.direct_id());
+                            for child in el.children {
+                                garbage_list.push(child);
+                            }
+                        }
+
+                        VNodeKind::Fragment(frag) => {
+                            for child in frag.children {
+                                garbage_list.push(child);
+                            }
+                        }
+                        VNodeKind::Component(comp) => {
+                            // run the destructors
+                            todo!();
+                        }
+                        VNodeKind::Suspended(node) => {
+                            // make sure the task goes away
+                            todo!();
+                        }
+                    }
+                }
+            }
+
             // Nothing yet
             VirtualEvent::AsyncEvent { .. } => {}
 
@@ -295,13 +336,13 @@ impl VirtualDom {
 
                         // push the old node's root onto the stack
                         let real_id = domnode.get().ok_or(Error::NotMounted)?;
-                        diff_machine.push_root(real_id);
+                        diff_machine.edit_push_root(real_id);
 
                         // push these new nodes onto the diff machines stack
-                        let meta = diff_machine.create(&*nodes);
+                        let meta = diff_machine.create_vnode(&*nodes);
 
                         // replace the placeholder with the new nodes we just pushed on the stack
-                        diff_machine.replace_with(meta.added_to_stack);
+                        diff_machine.edit_replace_with(meta.added_to_stack);
                     }
                 }
             }
@@ -330,7 +371,7 @@ impl VirtualDom {
 
                     // Make sure this isn't a node we've already seen, we don't want to double-render anything
                     // If we double-renderer something, this would cause memory safety issues
-                    if diff_machine.seen_nodes.contains(&update.idx) {
+                    if diff_machine.seen_scopes.contains(&update.idx) {
                         log::debug!("Skipping update for: {:#?}", update);
                         continue;
                     }
@@ -342,7 +383,7 @@ impl VirtualDom {
                         .expect("Failed to find scope or borrow would be aliasing");
 
                     // Now, all the "seen nodes" are nodes that got notified by running this listener
-                    diff_machine.seen_nodes.insert(update.idx.clone());
+                    diff_machine.seen_scopes.insert(update.idx.clone());
 
                     if cur_component.run_scope().is_ok() {
                         let (old, new) = (

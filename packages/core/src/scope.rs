@@ -1,5 +1,6 @@
 use crate::innerlude::*;
 use bumpalo::boxed::Box as BumpBox;
+use fxhash::FxHashSet;
 use std::{
     any::{Any, TypeId},
     borrow::BorrowMut,
@@ -24,13 +25,15 @@ pub struct Scope {
     pub(crate) parent_idx: Option<ScopeId>,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
-    pub(crate) descendents: RefCell<HashSet<ScopeId>>,
+    pub(crate) descendents: RefCell<FxHashSet<ScopeId>>,
 
     // Nodes
     // an internal, highly efficient storage of vnodes
+    // lots of safety condsiderations
     pub(crate) frames: ActiveFrame,
     pub(crate) caller: Rc<WrappedCaller>,
     pub(crate) child_nodes: ScopeChildren<'static>,
+    pub(crate) pending_garbage: RefCell<Vec<*const VNode<'static>>>,
 
     // Listeners
     pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
@@ -67,10 +70,17 @@ impl Scope {
         height: u32,
 
         child_nodes: ScopeChildren,
-        // child_nodes: &'creator_node [VNode<'creator_node>],
+
         vdom: SharedResources,
     ) -> Self {
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
+
+        // insert ourself as a descendent of the parent
+        // when the parent is removed, this map will be traversed, and we will also be cleaned up.
+        if let Some(parent) = &parent {
+            let parent = unsafe { vdom.get_scope(*parent) }.unwrap();
+            parent.descendents.borrow_mut().insert(arena_idx);
+        }
 
         Self {
             child_nodes,
@@ -80,10 +90,12 @@ impl Scope {
             height,
             vdom,
             frames: ActiveFrame::new(),
+
             hooks: Default::default(),
             shared_contexts: Default::default(),
             listeners: Default::default(),
             descendents: Default::default(),
+            pending_garbage: Default::default(),
         }
     }
 
@@ -102,6 +114,9 @@ impl Scope {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
+        if !self.pending_garbage.borrow().is_empty() {
+            panic!("cannot run scope while garbage is pending! Please clean up your mess first");
+        }
 
         log::debug!("reset okay");
 
@@ -189,11 +204,11 @@ impl Scope {
         if let Some(raw_listener) = raw_listener {
             let listener = unsafe { &**raw_listener };
 
-            log::info!(
-                "calling listener {:?}, {:?}",
-                listener.event,
-                listener.scope
-            );
+            // log::info!(
+            //     "calling listener {:?}, {:?}",
+            //     listener.event,
+            //     // listener.scope
+            // );
             let mut cb = listener.callback.borrow_mut();
             if let Some(cb) = cb.as_mut() {
                 (cb)(event);
@@ -209,10 +224,20 @@ impl Scope {
         self.frames.fin_head()
     }
 
-    // #[inline]
     pub fn child_nodes<'a>(&'a self) -> ScopeChildren {
-        // self.child_nodes
         unsafe { self.child_nodes.unextend_lfetime() }
-        // unsafe { std::mem::transmute(self.child_nodes) }
+    }
+
+    pub fn consume_garbage(&self) -> Vec<&VNode> {
+        let mut garbage = self.pending_garbage.borrow_mut();
+        garbage
+            .drain(..)
+            .map(|node| {
+                // safety: scopes cannot cycle without their garbage being collected. these nodes are safe
+                let node: &VNode<'static> = unsafe { &*node };
+                let node: &VNode = unsafe { std::mem::transmute(node) };
+                node
+            })
+            .collect::<Vec<_>>()
     }
 }

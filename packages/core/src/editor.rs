@@ -64,3 +64,24 @@ pub enum DomEdit<'bump> {
         name: &'static str,
     },
 }
+impl DomEdit<'_> {
+    pub fn is(&self, id: &'static str) -> bool {
+        match self {
+            DomEdit::PushRoot { .. } => id == "PushRoot",
+            DomEdit::PopRoot => id == "PopRoot",
+            DomEdit::AppendChildren { .. } => id == "AppendChildren",
+            DomEdit::ReplaceWith { .. } => id == "ReplaceWith",
+            DomEdit::Remove => id == "Remove",
+            DomEdit::RemoveAllChildren => id == "RemoveAllChildren",
+            DomEdit::CreateTextNode { .. } => id == "CreateTextNode",
+            DomEdit::CreateElement { .. } => id == "CreateElement",
+            DomEdit::CreateElementNs { .. } => id == "CreateElementNs",
+            DomEdit::CreatePlaceholder { .. } => id == "CreatePlaceholder",
+            DomEdit::NewEventListener { .. } => id == "NewEventListener",
+            DomEdit::RemoveEventListener { .. } => id == "RemoveEventListener",
+            DomEdit::SetText { .. } => id == "SetText",
+            DomEdit::SetAttribute { .. } => id == "SetAttribute",
+            DomEdit::RemoveAttribute { .. } => id == "RemoveAttribute",
+        }
+    }
+}

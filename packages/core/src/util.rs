@@ -5,7 +5,7 @@ use crate::innerlude::*;
 // create a cell with a "none" value
 #[inline]
 pub fn empty_cell() -> Cell<Option<ElementId>> {
-    Cell::new(None as Option<ElementId>)
+    Cell::new(None)
 }
 
 /// A helper type that lets scopes be ordered by their height

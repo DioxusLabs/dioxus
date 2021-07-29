@@ -9,7 +9,10 @@ use std::{
     rc::Rc,
 };
 
-use crate::innerlude::{ElementId, HeightMarker, ScopeId};
+use crate::{
+    innerlude::{ElementId, HeightMarker, ScopeId},
+    VNode,
+};
 
 #[derive(Debug)]
 pub struct EventTrigger {
@@ -46,14 +49,15 @@ impl EventTrigger {
 /// The ultimate goal of the scheduler is to manage latency of changes, prioritizing "flashier" changes over "subtler" changes.
 #[derive(Debug)]
 pub enum EventPriority {
-    /// "Immediate" work will interrupt whatever work is currently being done and force its way through. This type of work
-    /// is typically reserved for small changes to single elements.
+    /// Garbage collection is a type of work than can be scheduled around other work, but must be completed in a specific
+    /// order. The GC must be run for a component before any other future work for that component is run. Otherwise,
+    /// we will leak slots in our slab.
     ///
-    /// The primary user of the "Immediate" priority is the `Signal` API which performs surgical mutations to the DOM.
-    Immediate,
+    /// Garbage collection mixes with the safety aspects of the virtualdom so it's very important to get it done before
+    /// other work.
+    GarbageCollection,
 
     /// "High Priority" work will not interrupt other high priority work, but will interrupt long medium and low priority work.
-    ///
     ///
     /// This is typically reserved for things like user interaction.
     High,
@@ -105,6 +109,8 @@ pub enum VirtualEvent {
     ToggleEvent(on::ToggleEvent),
     MouseEvent(on::MouseEvent),
     PointerEvent(on::PointerEvent),
+
+    GarbageCollection,
 
     // image event has conflicting method types
     // ImageEvent(event_data::ImageEvent),
@@ -198,7 +204,6 @@ pub mod on {
                         Listener {
                             event: shortname,
                             mounted_node: Cell::new(None),
-                            scope: c.scope.our_arena_idx,
                             callback: RefCell::new(Some(callback)),
                         }
                     }

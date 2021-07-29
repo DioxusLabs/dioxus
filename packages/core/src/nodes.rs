@@ -7,7 +7,7 @@ use crate::{
     events::VirtualEvent,
     innerlude::{empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, FC},
 };
-use bumpalo::boxed::Box as BumpBox;
+use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
@@ -20,16 +20,24 @@ pub struct VNode<'src> {
     pub kind: VNodeKind<'src>,
 
     pub(crate) key: Option<&'src str>,
-
-    /// ElementId supports NonZero32 and Cell is zero cost, so the size of this field is unaffected
-    pub(crate) dom_id: Cell<Option<ElementId>>,
 }
-impl VNode<'_> {
-    pub fn key(&self) -> Option<&str> {
+
+impl<'src> VNode<'src> {
+    pub fn key(&self) -> Option<&'src str> {
         self.key
     }
-    pub fn element_id(&self) -> Option<ElementId> {
-        self.dom_id.get()
+    pub fn direct_id(&self) -> ElementId {
+        self.try_direct_id().unwrap()
+    }
+    pub fn try_direct_id(&self) -> Option<ElementId> {
+        match &self.kind {
+            VNodeKind::Text(el) => el.dom_id.get(),
+            VNodeKind::Element(el) => el.dom_id.get(),
+            VNodeKind::Anchor(el) => el.dom_id.get(),
+            VNodeKind::Fragment(_) => None,
+            VNodeKind::Component(_) => None,
+            VNodeKind::Suspended(_) => None,
+        }
     }
 }
 
@@ -47,11 +55,18 @@ pub enum VNodeKind<'src> {
 
     Component(&'src VComponent<'src>),
 
-    Suspended { node: Rc<Cell<Option<ElementId>>> },
+    Suspended(VSuspended),
+
+    Anchor(VAnchor),
+}
+
+pub struct VAnchor {
+    pub dom_id: Cell<Option<ElementId>>,
 }
 
 pub struct VText<'src> {
     pub text: &'src str,
+    pub dom_id: Cell<Option<ElementId>>,
     pub is_static: bool,
 }
 
@@ -77,6 +92,7 @@ pub struct VElement<'a> {
     // tag is always static
     pub tag_name: &'static str,
     pub namespace: Option<&'static str>,
+    pub dom_id: Cell<Option<ElementId>>,
 
     pub static_listeners: bool,
     pub listeners: &'a [Listener<'a>],
@@ -109,8 +125,6 @@ pub struct Attribute<'a> {
 pub struct Listener<'bump> {
     /// The type of event to listen for.
     pub(crate) event: &'static str,
-
-    pub scope: ScopeId,
 
     pub mounted_node: Cell<Option<ElementId>>,
 
@@ -150,27 +164,42 @@ pub struct VComponent<'src> {
     pub(crate) user_fc: *const (),
 }
 
+pub struct VSuspended {
+    pub node: Rc<Cell<Option<ElementId>>>,
+}
+
 /// This struct provides an ergonomic API to quickly build VNodes.
 ///
 /// NodeFactory is used to build VNodes in the component's memory space.
 /// This struct adds metadata to the final VNode about listeners, attributes, and children
 #[derive(Copy, Clone)]
 pub struct NodeFactory<'a> {
-    pub scope: &'a Scope,
+    pub(crate) bump: &'a Bump,
 }
 
 impl<'a> NodeFactory<'a> {
+    pub fn new(bump: &'a Bump) -> NodeFactory<'a> {
+        NodeFactory { bump }
+    }
+
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        &self.scope.frames.wip_frame().bump
+        &self.bump
+    }
+
+    pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> DomTree<'a>
+    where
+        F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+    {
+        Some(lazy_nodes.into_vnode(NodeFactory { bump: self.bump }))
     }
 
     pub fn unstable_place_holder() -> VNode<'static> {
         VNode {
-            dom_id: empty_cell(),
             key: None,
             kind: VNodeKind::Text(VText {
                 text: "",
+                dom_id: empty_cell(),
                 is_static: true,
             }),
         }
@@ -179,9 +208,9 @@ impl<'a> NodeFactory<'a> {
     /// Used in a place or two to make it easier to build vnodes from dummy text
     pub fn static_text(&self, text: &'static str) -> VNode<'a> {
         VNode {
-            dom_id: empty_cell(),
             key: None,
             kind: VNodeKind::Text(VText {
+                dom_id: empty_cell(),
                 text,
                 is_static: true,
             }),
@@ -208,9 +237,12 @@ impl<'a> NodeFactory<'a> {
     pub fn text(&self, args: Arguments) -> VNode<'a> {
         let (text, is_static) = self.raw_text(args);
         VNode {
-            dom_id: empty_cell(),
             key: None,
-            kind: VNodeKind::Text(VText { text, is_static }),
+            kind: VNodeKind::Text(VText {
+                text,
+                is_static,
+                dom_id: empty_cell(),
+            }),
         }
     }
 
@@ -260,19 +292,7 @@ impl<'a> NodeFactory<'a> {
         let children: &'a V = self.bump().alloc(children);
         let children = children.as_ref();
 
-        // We take the references directly from the bump arena
-        //
-        // TODO: this code shouldn't necessarily be here of all places
-        // It would make more sense to do this in diffing
-
-        let mut queue = self.scope.listeners.borrow_mut();
-        for listener in listeners.iter() {
-            let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
-            queue.push(long_listener as *const _)
-        }
-
         VNode {
-            dom_id: empty_cell(),
             key,
             kind: VNodeKind::Element(self.bump().alloc(VElement {
                 tag_name: tag,
@@ -280,6 +300,7 @@ impl<'a> NodeFactory<'a> {
                 listeners,
                 attributes,
                 children,
+                dom_id: empty_cell(),
 
                 // todo: wire up more constization
                 static_listeners: false,
@@ -291,11 +312,10 @@ impl<'a> NodeFactory<'a> {
 
     pub fn suspended() -> VNode<'static> {
         VNode {
-            dom_id: empty_cell(),
             key: None,
-            kind: VNodeKind::Suspended {
+            kind: VNodeKind::Suspended(VSuspended {
                 node: Rc::new(empty_cell()),
-            },
+            }),
         }
     }
 
@@ -390,7 +410,6 @@ impl<'a> NodeFactory<'a> {
 
         VNode {
             key,
-            dom_id: empty_cell(),
             kind: VNodeKind::Component(self.bump().alloc_with(|| VComponent {
                 user_fc,
                 comparator,
@@ -430,7 +449,6 @@ impl<'a> NodeFactory<'a> {
         let children = node_iter.into_vnode_list(self);
 
         VNode {
-            dom_id: empty_cell(),
             key: None,
             kind: VNodeKind::Fragment(VFragment {
                 children,
@@ -489,6 +507,15 @@ where
                     );
                 }
             }
+        }
+
+        if nodes.len() == 0 {
+            nodes.push(VNode {
+                kind: VNodeKind::Anchor(VAnchor {
+                    dom_id: empty_cell(),
+                }),
+                key: None,
+            });
         }
 
         nodes.into_bump_slice()
@@ -625,8 +652,10 @@ impl Debug for NodeFactory<'_> {
 impl Debug for VNode<'_> {
     fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match &self.kind {
-            VNodeKind::Element(el) => write!(s, "element, {}", el.tag_name),
-            VNodeKind::Text(t) => write!(s, "text, {}", t.text),
+            VNodeKind::Element(el) => write!(s, "VElement {{ name: {} }}", el.tag_name),
+            VNodeKind::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
+            VNodeKind::Anchor(a) => write!(s, "VAnchor"),
+
             VNodeKind::Fragment(_) => write!(s, "fragment"),
             VNodeKind::Suspended { .. } => write!(s, "suspended"),
             VNodeKind::Component(_) => write!(s, "component"),

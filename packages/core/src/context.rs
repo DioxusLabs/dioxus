@@ -138,8 +138,8 @@ impl<'src, P> Context<'src, P> {
         self,
         lazy_nodes: LazyNodes<'src, F>,
     ) -> DomTree<'src> {
-        let scope_ref = self.scope;
-        Some(lazy_nodes.into_vnode(NodeFactory { scope: scope_ref }))
+        let bump = &self.scope.frames.wip_frame().bump;
+        Some(lazy_nodes.into_vnode(NodeFactory { bump }))
     }
 
     /// `submit_task` will submit the future to be polled.
@@ -178,7 +178,7 @@ impl<'src, P> Context<'src, P> {
     ///
     pub fn consume_shared_state<T: 'static>(self) -> Option<Rc<T>> {
         let mut scope = Some(self.scope);
-        let mut par = None;
+        let mut parent = None;
 
         let ty = TypeId::of::<T>();
         while let Some(inner) = scope {
@@ -202,7 +202,7 @@ impl<'src, P> Context<'src, P> {
                     .clone()
                     .downcast::<T>()
                     .expect("Should not fail, already validated the type from the hashmap");
-                par = Some(rc);
+                parent = Some(rc);
                 break;
             } else {
                 match inner.parent_idx {
@@ -213,7 +213,7 @@ impl<'src, P> Context<'src, P> {
                 }
             }
         }
-        par
+        parent
     }
 
     /// Store a value between renders

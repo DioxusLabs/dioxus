@@ -190,11 +190,10 @@ where
                     None => {
                         //
                         Some(VNode {
-                            dom_id: empty_cell(),
                             key: None,
-                            kind: VNodeKind::Suspended {
+                            kind: VNodeKind::Suspended(VSuspended {
                                 node: domnode.clone(),
-                            },
+                            }),
                         })
                     }
                 }
@@ -250,7 +249,8 @@ impl<'src> SuspendedContext<'src> {
         lazy_nodes: LazyNodes<'src, F>,
     ) -> DomTree<'src> {
         let scope_ref = self.inner.scope;
+        let bump = &self.inner.scope.frames.wip_frame().bump;
 
-        Some(lazy_nodes.into_vnode(NodeFactory { scope: scope_ref }))
+        Some(lazy_nodes.into_vnode(NodeFactory { bump }))
     }
 }

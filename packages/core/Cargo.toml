@@ -41,6 +41,7 @@ slab = "0.4.3"
 
 
 [dev-dependencies]
+anyhow = "1.0.42"
 dioxus-html = { path = "../html" }
 
 
