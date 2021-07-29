@@ -15,7 +15,7 @@ pub struct BumpFrame {
     pub(crate) head_node: VNode<'static>,
 
     // used internally for debugging
-    name: &'static str,
+    _name: &'static str,
 }
 
 impl ActiveFrame {
@@ -23,12 +23,12 @@ impl ActiveFrame {
         let frame_a = BumpFrame {
             bump: Bump::new(),
             head_node: NodeFactory::unstable_place_holder(),
-            name: "wip",
+            _name: "wip",
         };
         let frame_b = BumpFrame {
             bump: Bump::new(),
             head_node: NodeFactory::unstable_place_holder(),
-            name: "fin",
+            _name: "fin",
         };
         Self {
             generation: 0.into(),
@@ -103,14 +103,14 @@ mod tests {
         for _ in 0..5 {
             let fin = frames.finished_frame();
             let wip = frames.wip_frame();
-            assert_eq!(wip.name, "wip");
-            assert_eq!(fin.name, "fin");
+            assert_eq!(wip._name, "wip");
+            assert_eq!(fin._name, "fin");
             frames.cycle_frame();
 
             let fin = frames.finished_frame();
             let wip = frames.wip_frame();
-            assert_eq!(wip.name, "fin");
-            assert_eq!(fin.name, "wip");
+            assert_eq!(wip._name, "fin");
+            assert_eq!(fin._name, "wip");
             frames.cycle_frame();
         }
         assert_eq!(frames.generation.get(), 10);

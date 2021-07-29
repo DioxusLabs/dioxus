@@ -55,7 +55,8 @@ use crate::{arena::SharedResources, innerlude::*};
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-use std::{any::Any, cmp::Ordering, process::Child};
+use std::{any::Any, cell::Cell, cmp::Ordering};
+use DomEdit::*;
 
 /// Instead of having handles directly over nodes, Dioxus uses simple u32 as node IDs.
 /// The expectation is that the underlying renderer will mainain their Nodes in vec where the ids are the index. This allows
@@ -74,7 +75,7 @@ pub struct DiffMachine<'real, 'bump> {
 
     pub vdom: &'bump SharedResources,
 
-    pub edits: DomEditor<'real, 'bump>,
+    pub edits: &'real mut Vec<DomEdit<'bump>>,
 
     pub scheduled_garbage: Vec<&'bump VNode<'bump>>,
 
@@ -94,7 +95,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     ) -> Self {
         Self {
             real_dom: dom,
-            edits: DomEditor::new(edits),
+            edits,
             cur_idxs: smallvec![cur_idx],
             vdom: shared,
             scheduled_garbage: vec![],
@@ -120,9 +121,9 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 let root = root.unwrap();
 
                 if old.text != new.text {
-                    self.edits.push_root(root);
-                    self.edits.set_text(new.text);
-                    self.edits.pop();
+                    self.push_root(root);
+                    self.set_text(new.text);
+                    self.pop();
                 }
 
                 new_node.dom_id.set(Some(root));
@@ -136,11 +137,11 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 //
                 // This case is rather rare (typically only in non-keyed lists)
                 if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                    self.edits.push_root(root);
+                    self.push_root(root);
                     let meta = self.create(new_node);
-                    self.edits.replace_with(meta.added_to_stack);
+                    self.replace_with(meta.added_to_stack);
                     self.scheduled_garbage.push(old_node);
-                    self.edits.pop();
+                    self.pop();
                     return;
                 }
 
@@ -148,10 +149,10 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                 // Don't push the root if we don't have to
                 let mut has_comitted = false;
-                let mut please_commit = |edits: &mut DomEditor| {
+                let mut please_commit = |edits: &mut Vec<DomEdit>| {
                     if !has_comitted {
                         has_comitted = true;
-                        edits.push_root(root);
+                        edits.push(PushRoot { id: root.as_u64() });
                     }
                 };
 
@@ -165,17 +166,17 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                         if old_attr.value != new_attr.value {
                             please_commit(&mut self.edits);
-                            self.edits.set_attribute(new_attr);
+                            self.set_attribute(new_attr);
                         }
                     }
                 } else {
                     // TODO: provide some sort of report on how "good" the diffing was
                     please_commit(&mut self.edits);
                     for attribute in old.attributes {
-                        self.edits.remove_attribute(attribute);
+                        self.remove_attribute(attribute);
                     }
                     for attribute in new.attributes {
-                        self.edits.set_attribute(attribute)
+                        self.set_attribute(attribute)
                     }
                 }
 
@@ -189,29 +190,29 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                         if old_l.event != new_l.event {
                             please_commit(&mut self.edits);
-                            self.edits.remove_event_listener(old_l.event);
-                            self.edits.new_event_listener(new_l);
+                            self.remove_event_listener(old_l.event);
+                            self.new_event_listener(new_l);
                         }
                         new_l.mounted_node.set(old_l.mounted_node.get());
                     }
                 } else {
                     please_commit(&mut self.edits);
                     for listener in old.listeners {
-                        self.edits.remove_event_listener(listener.event);
+                        self.remove_event_listener(listener.event);
                     }
                     for listener in new.listeners {
                         listener.mounted_node.set(Some(root));
-                        self.edits.new_event_listener(listener);
+                        self.new_event_listener(listener);
                     }
                 }
 
                 if has_comitted {
-                    self.edits.pop();
+                    self.pop();
                 }
 
                 // Each child pushes its own root, so it doesn't need our current root
-                todo!();
-                // self.diff_children(old.children, new.children);
+
+                self.diff_children(old.children, new.children, None, &mut None);
             }
 
             (VNodeKind::Component(old), VNodeKind::Component(new)) => {
@@ -249,7 +250,6 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                     self.seen_nodes.insert(scope_addr);
                 } else {
-                    // this seems to be a fairy common code path that we could
                     let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
                     let first = old_iter
                         .next()
@@ -257,16 +257,16 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                     // remove any leftovers
                     for to_remove in old_iter {
-                        self.edits.push_root(to_remove.element_id().unwrap());
-                        self.edits.remove();
+                        self.push_root(to_remove.element_id().unwrap());
+                        self.remove();
                     }
 
                     // seems like we could combine this into a single instruction....
-                    self.edits.push_root(first.element_id().unwrap());
+                    self.push_root(first.element_id().unwrap());
                     let meta = self.create(new_node);
-                    self.edits.replace_with(meta.added_to_stack);
+                    self.replace_with(meta.added_to_stack);
                     self.scheduled_garbage.push(old_node);
-                    self.edits.pop();
+                    self.pop();
 
                     // Wipe the old one and plant the new one
                     let old_scope = old.ass_scope.get().unwrap();
@@ -282,7 +282,16 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     return;
                 }
 
-                self.diff_children(old, new, old, new_anchor)
+                let mut new_anchor = None;
+                self.diff_children(
+                    old.children,
+                    new.children,
+                    old_node.dom_id.get(),
+                    &mut new_anchor,
+                );
+                if let Some(anchor) = new_anchor {
+                    new_node.dom_id.set(Some(anchor));
+                }
             }
 
             // The strategy here is to pick the first possible node from the previous set and use that as our replace with root
@@ -326,8 +335,8 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                         // remove any leftovers
                         for to_remove in old_iter {
-                            self.edits.push_root(to_remove.element_id().unwrap());
-                            self.edits.remove();
+                            self.push_root(to_remove.element_id().unwrap());
+                            self.remove();
                         }
 
                         back_node.element_id().unwrap()
@@ -335,9 +344,9 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 };
 
                 // replace the placeholder or first node with the nodes generated from the "new"
-                self.edits.push_root(back_node_id);
+                self.push_root(back_node_id);
                 let meta = self.create(new_node);
-                self.edits.replace_with(meta.added_to_stack);
+                self.replace_with(meta.added_to_stack);
 
                 // todo use the is_static metadata to update this subtree
             }
@@ -365,7 +374,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         match &node.kind {
             VNodeKind::Text(text) => {
                 let real_id = self.vdom.reserve_node();
-                self.edits.create_text_node(text.text, real_id);
+                self.create_text_node(text.text, real_id);
                 node.dom_id.set(Some(real_id));
 
                 CreateMeta::new(text.is_static, 1)
@@ -391,17 +400,16 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                 let real_id = self.vdom.reserve_node();
                 if let Some(namespace) = namespace {
-                    self.edits
-                        .create_element(tag_name, Some(namespace), real_id)
+                    self.create_element(tag_name, Some(namespace), real_id)
                 } else {
-                    self.edits.create_element(tag_name, None, real_id)
+                    self.create_element(tag_name, None, real_id)
                 };
                 node.dom_id.set(Some(real_id));
 
                 listeners.iter().for_each(|listener| {
                     log::info!("setting listener id to {:#?}", real_id);
                     listener.mounted_node.set(Some(real_id));
-                    self.edits.new_event_listener(listener);
+                    self.new_event_listener(listener);
 
                     // if the node has an event listener, then it must be visited ?
                     is_static = false;
@@ -409,7 +417,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
                 for attr in *attributes {
                     is_static = is_static && attr.is_static;
-                    self.edits.set_attribute(attr);
+                    self.set_attribute(attr);
                 }
 
                 // Fast path: if there is a single text child, it is faster to
@@ -424,7 +432,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 // TODO move over
                 // if children.len() == 1 {
                 //     if let VNodeKind::Text(text) = &children[0].kind {
-                //         self.edits.set_text(text.text);
+                //         self.set_text(text.text);
                 //         return CreateMeta::new(is_static, 1);
                 //     }
                 // }
@@ -434,7 +442,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                     is_static = is_static && child_meta.is_static;
 
                     // append whatever children were generated by this call
-                    self.edits.append_children(child_meta.added_to_stack);
+                    self.append_children(child_meta.added_to_stack);
                 }
 
                 // if is_static {
@@ -520,7 +528,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
             VNodeKind::Suspended { node: real_node } => {
                 let id = self.vdom.reserve_node();
-                self.edits.create_placeholder(id);
+                self.create_placeholder(id);
                 node.dom_id.set(Some(id));
                 real_node.set(Some(id));
                 CreateMeta::new(false, 1)
@@ -594,7 +602,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         &mut self,
         old: &'bump [VNode<'bump>],
         new: &'bump [VNode<'bump>],
-        old_anchor: &mut Option<ElementId>,
+        old_anchor: Option<ElementId>,
         new_anchor: &mut Option<ElementId>,
     ) {
         const IS_EMPTY: bool = true;
@@ -602,33 +610,36 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
         match (old_anchor, new.is_empty()) {
             // Both are empty, dealing only with potential anchors
-            (Some(_), IS_EMPTY) => {
-                *new_anchor = *old_anchor;
+            (Some(anchor), IS_EMPTY) => {
+                // new_anchor.set(Some(anchor));
                 if old.len() > 0 {
                     // clean up these virtual nodes (components, fragments, etc)
                 }
             }
 
             // Completely adding new nodes, removing any placeholder if it exists
-            (Some(anchor), IS_NOT_EMPTY) => match old_anchor {
+            (Some(anchor), IS_NOT_EMPTY) => {
+                //
+                // match old_anchor {
                 // If there's anchor to work from, then we replace it with the new children
-                Some(anchor) => {
-                    self.edits.push_root(*anchor);
-                    let meta = self.create_children(new);
-                    if meta.added_to_stack > 0 {
-                        self.edits.replace_with(meta.added_to_stack)
-                    } else {
-                        // no items added to the stack... hmmmm....
-                        *new_anchor = *old_anchor;
-                    }
+                // Some(anchor) => {
+                self.push_root(anchor);
+                let meta = self.create_children(new);
+                if meta.added_to_stack > 0 {
+                    self.replace_with(meta.added_to_stack)
+                } else {
+                    // no items added to the stack... hmmmm....
+                    *new_anchor = old_anchor;
                 }
+                // }
 
                 // If there's no anchor to work with, we just straight up append them
-                None => {
-                    let meta = self.create_children(new);
-                    self.edits.append_children(meta.added_to_stack);
-                }
-            },
+                // None => {
+                let meta = self.create_children(new);
+                self.append_children(meta.added_to_stack);
+                // }
+                // }
+            }
 
             // Completely removing old nodes and putting an anchor in its place
             // no anchor (old has nodes) and the new is empty
@@ -637,24 +648,24 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 // load the first real
                 if let Some(to_replace) = find_first_real_node(old, self.vdom) {
                     //
-                    self.edits.push_root(to_replace.dom_id.get().unwrap());
+                    self.push_root(to_replace.dom_id.get().unwrap());
 
                     // Create the anchor
                     let anchor_id = self.vdom.reserve_node();
-                    self.edits.create_placeholder(anchor_id);
-                    *new_anchor = Some(anchor_id);
+                    self.create_placeholder(anchor_id);
+                    // *new_anchor = Some(anchor_id);
 
                     // Replace that node
-                    self.edits.replace_with(1);
+                    self.replace_with(1);
                 } else {
                     // no real nodes -
-                    *new_anchor = *old_anchor;
+                    // new_anchor.set(old_anchor);
                 }
 
                 // remove the rest
                 for child in &old[1..] {
-                    self.edits.push_root(child.element_id().unwrap());
-                    self.edits.remove();
+                    self.push_root(child.element_id().unwrap());
+                    self.remove();
                 }
             }
 
@@ -784,7 +795,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         old: &'bump [VNode<'bump>],
         new: &'bump [VNode<'bump>],
     ) -> KeyedPrefixResult {
-        // self.edits.go_down();
+        // self.go_down();
 
         let mut shared_prefix_count = 0;
 
@@ -794,7 +805,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 break;
             }
 
-            // self.edits.go_to_sibling(i);
+            // self.go_to_sibling(i);
 
             self.diff_node(old, new);
 
@@ -804,8 +815,8 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if shared_prefix_count == old.len() {
-            // self.edits.go_up();
-            // self.edits.commit_traversal();
+            // self.go_up();
+            // self.commit_traversal();
             self.create_and_append_children(&new[shared_prefix_count..]);
             return KeyedPrefixResult::Finished;
         }
@@ -813,13 +824,13 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // And if that was all of the new children, then remove all of the remaining
         // old children and we're finished.
         if shared_prefix_count == new.len() {
-            // self.edits.go_to_sibling(shared_prefix_count);
-            // self.edits.commit_traversal();
+            // self.go_to_sibling(shared_prefix_count);
+            // self.commit_traversal();
             self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
             return KeyedPrefixResult::Finished;
         }
         //
-        // self.edits.go_up();
+        // self.go_up();
         KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
     }
 
@@ -831,7 +842,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     //
     // When this function returns, the change list stack is in the same state.
     fn remove_all_children(&mut self, old: &'bump [VNode<'bump>]) {
-        // debug_assert!(self.edits.traversal_is_committed());
+        // debug_assert!(self.traversal_is_committed());
         log::debug!("REMOVING CHILDREN");
         for _child in old {
             // registry.remove_subtree(child);
@@ -839,7 +850,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // Fast way to remove all children: set the node's textContent to an empty
         // string.
         todo!()
-        // self.edits.set_inner_text("");
+        // self.set_inner_text("");
     }
 
     // Create the given children and append them to the parent node.
@@ -852,7 +863,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     pub fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
         for child in new {
             let meta = self.create(child);
-            self.edits.append_children(meta.added_to_stack);
+            self.append_children(meta.added_to_stack);
         }
     }
 
@@ -919,11 +930,11 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // // afresh.
         // if shared_suffix_count == 0 && shared_keys.is_empty() {
         //     if shared_prefix_count == 0 {
-        //         // self.edits.commit_traversal();
+        //         // self.commit_traversal();
         //         self.remove_all_children(old);
         //     } else {
-        //         // self.edits.go_down_to_child(shared_prefix_count);
-        //         // self.edits.commit_traversal();
+        //         // self.go_down_to_child(shared_prefix_count);
+        //         // self.commit_traversal();
         //         self.remove_self_and_next_siblings(&old[shared_prefix_count..]);
         //     }
 
@@ -945,8 +956,8 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         //         .unwrap_or(old.len());
 
         //     if end - start > 0 {
-        //         // self.edits.commit_traversal();
-        //         let mut t = self.edits.save_children_to_temporaries(
+        //         // self.commit_traversal();
+        //         let mut t = self.save_children_to_temporaries(
         //             shared_prefix_count + start,
         //             shared_prefix_count + end,
         //         );
@@ -971,9 +982,9 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         //     if !shared_keys.contains(&old_child.key()) {
         //         // registry.remove_subtree(old_child);
         //         // todo
-        //         // self.edits.commit_traversal();
-        //         self.edits.remove(old_child.dom_id.get());
-        //         self.edits.remove_child(i + shared_prefix_count);
+        //         // self.commit_traversal();
+        //         self.remove(old_child.dom_id.get());
+        //         self.remove_child(i + shared_prefix_count);
         //         removed_count += 1;
         //     }
         // }
@@ -1032,29 +1043,29 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         //         let old_index = new_index_to_old_index[last_index];
         //         let temp = old_index_to_temp[old_index];
         //         // [... parent]
-        //         self.edits.go_down_to_temp_child(temp);
+        //         self.go_down_to_temp_child(temp);
         //         // [... parent last]
         //         self.diff_node(&old[old_index], last);
 
         //         if new_index_is_in_lis.contains(&last_index) {
         //             // Don't move it, since it is already where it needs to be.
         //         } else {
-        //             // self.edits.commit_traversal();
+        //             // self.commit_traversal();
         //             // [... parent last]
-        //             self.edits.append_child();
+        //             self.append_child();
         //             // [... parent]
-        //             self.edits.go_down_to_temp_child(temp);
+        //             self.go_down_to_temp_child(temp);
         //             // [... parent last]
         //         }
         //     } else {
-        //         // self.edits.commit_traversal();
+        //         // self.commit_traversal();
         //         // [... parent]
         //         self.create(last);
 
         //         // [... parent last]
-        //         self.edits.append_child();
+        //         self.append_child();
         //         // [... parent]
-        //         self.edits.go_down_to_reverse_child(0);
+        //         self.go_down_to_reverse_child(0);
         //         // [... parent last]
         //     }
         // }
@@ -1063,11 +1074,11 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         //     let old_index = new_index_to_old_index[new_index];
         //     if old_index == u32::MAX as usize {
         //         debug_assert!(!shared_keys.contains(&new_child.key()));
-        //         // self.edits.commit_traversal();
+        //         // self.commit_traversal();
         //         // [... parent successor]
         //         self.create(new_child);
         //         // [... parent successor new_child]
-        //         self.edits.insert_before();
+        //         self.insert_before();
         //     // [... parent new_child]
         //     } else {
         //         debug_assert!(shared_keys.contains(&new_child.key()));
@@ -1076,14 +1087,14 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
 
         //         if new_index_is_in_lis.contains(&new_index) {
         //             // [... parent successor]
-        //             self.edits.go_to_temp_sibling(temp);
+        //             self.go_to_temp_sibling(temp);
         //         // [... parent new_child]
         //         } else {
-        //             // self.edits.commit_traversal();
+        //             // self.commit_traversal();
         //             // [... parent successor]
-        //             self.edits.push_temporary(temp);
+        //             self.push_temporary(temp);
         //             // [... parent successor new_child]
-        //             self.edits.insert_before();
+        //             self.insert_before();
         //             // [... parent new_child]
         //         }
 
@@ -1136,17 +1147,17 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             Ordering::Greater => {
                 for item in &old[new.len()..] {
                     for i in RealChildIterator::new(item, self.vdom) {
-                        self.edits.push_root(i.element_id().unwrap());
-                        self.edits.remove();
+                        self.push_root(i.element_id().unwrap());
+                        self.remove();
                     }
                 }
             }
             // old.len < new.len -> adding some nodes
             Ordering::Less => {
                 // [... parent last_child]
-                // self.edits.go_up();
+                // self.go_up();
                 // [... parent]
-                // self.edits.commit_traversal();
+                // self.commit_traversal();
                 self.create_and_append_children(&new[old.len()..]);
             }
             // old.len == new.len -> no nodes added/removed, but πerhaps changed
@@ -1168,7 +1179,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     //
     //     [... parent]
     fn remove_self_and_next_siblings(&self, old: &[VNode<'bump>]) {
-        // debug_assert!(self.edits.traversal_is_committed());
+        // debug_assert!(self.traversal_is_committed());
         for child in old {
             if let VNodeKind::Component(_vcomp) = child.kind {
                 // dom
@@ -1182,7 +1193,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 // })
                 // let id = get_id();
                 // *component.stable_addr.as_ref().borrow_mut() = Some(id);
-                // self.edits.save_known_root(id);
+                // self.save_known_root(id);
                 // let scope = Rc::downgrade(&component.ass_scope);
                 // self.lifecycle_events.push_back(LifeCycleEvent::Mount {
                 //     caller: Rc::downgrade(&component.caller),
@@ -1194,7 +1205,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             // registry.remove_subtree(child);
         }
         todo!()
-        // self.edits.remove_self_and_next_siblings();
+        // self.remove_self_and_next_siblings();
     }
 
     pub fn get_scope_mut(&mut self, id: &ScopeId) -> Option<&'bump mut Scope> {
@@ -1208,6 +1219,108 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         // ensure we haven't seen this scope before
         // if we have, then we're trying to alias it, which is not allowed
         unsafe { self.vdom.get_scope(*id) }
+    }
+
+    // Navigation
+    pub(crate) fn push_root(&mut self, root: ElementId) {
+        let id = root.as_u64();
+        self.edits.push(PushRoot { id });
+    }
+
+    pub(crate) fn pop(&mut self) {
+        self.edits.push(PopRoot {});
+    }
+
+    // Add Nodes to the dom
+    // add m nodes from the stack
+    pub(crate) fn append_children(&mut self, many: u32) {
+        self.edits.push(AppendChildren { many });
+    }
+
+    // replace the n-m node on the stack with the m nodes
+    // ends with the last element of the chain on the top of the stack
+    pub(crate) fn replace_with(&mut self, many: u32) {
+        self.edits.push(ReplaceWith { many });
+    }
+
+    // Remove Nodesfrom the dom
+    pub(crate) fn remove(&mut self) {
+        self.edits.push(Remove);
+    }
+
+    // Create
+    pub(crate) fn create_text_node(&mut self, text: &'bump str, id: ElementId) {
+        let id = id.as_u64();
+        self.edits.push(CreateTextNode { text, id });
+    }
+
+    pub(crate) fn create_element(
+        &mut self,
+        tag: &'static str,
+        ns: Option<&'static str>,
+        id: ElementId,
+    ) {
+        let id = id.as_u64();
+        match ns {
+            Some(ns) => self.edits.push(CreateElementNs { id, ns, tag }),
+            None => self.edits.push(CreateElement { id, tag }),
+        }
+    }
+
+    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
+    pub(crate) fn create_placeholder(&mut self, id: ElementId) {
+        let id = id.as_u64();
+        self.edits.push(CreatePlaceholder { id });
+    }
+
+    // events
+    pub(crate) fn new_event_listener(&mut self, listener: &Listener) {
+        let Listener {
+            event,
+            scope,
+            mounted_node,
+            ..
+        } = listener;
+
+        let element_id = mounted_node.get().unwrap().as_u64();
+
+        self.edits.push(NewEventListener {
+            scope: scope.clone(),
+            event_name: event,
+            mounted_node_id: element_id,
+        });
+    }
+
+    pub(crate) fn remove_event_listener(&mut self, event: &'static str) {
+        self.edits.push(RemoveEventListener { event });
+    }
+
+    // modify
+    pub(crate) fn set_text(&mut self, text: &'bump str) {
+        self.edits.push(SetText { text });
+    }
+
+    pub(crate) fn set_attribute(&mut self, attribute: &'bump Attribute) {
+        let Attribute {
+            name,
+            value,
+            is_static,
+            is_volatile,
+            namespace,
+        } = attribute;
+        // field: &'static str,
+        // value: &'bump str,
+        // ns: Option<&'static str>,
+        self.edits.push(SetAttribute {
+            field: name,
+            value,
+            ns: *namespace,
+        });
+    }
+
+    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute) {
+        let name = attribute.name;
+        self.edits.push(RemoveAttribute { name });
     }
 }
 
@@ -1237,11 +1350,11 @@ enum KeyedPrefixResult {
 }
 
 fn find_first_real_node<'a>(
-    nodes: &'a [VNode<'a>],
+    nodes: impl IntoIterator<Item = &'a VNode<'a>>,
     scopes: &'a SharedResources,
 ) -> Option<&'a VNode<'a>> {
     for node in nodes {
-        let iter = RealChildIterator::new(node, scopes);
+        let mut iter = RealChildIterator::new(node, scopes);
         if let Some(node) = iter.next() {
             return Some(node);
         }

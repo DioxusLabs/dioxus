@@ -194,7 +194,7 @@ impl VirtualDom {
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
             let meta = diff_machine.create(cur_component.frames.fin_head());
-            diff_machine.edits.append_children(meta.added_to_stack);
+            diff_machine.append_children(meta.added_to_stack);
         } else {
             // todo: should this be a hard error?
             log::warn!(
@@ -295,13 +295,13 @@ impl VirtualDom {
 
                         // push the old node's root onto the stack
                         let real_id = domnode.get().ok_or(Error::NotMounted)?;
-                        diff_machine.edits.push_root(real_id);
+                        diff_machine.push_root(real_id);
 
                         // push these new nodes onto the diff machines stack
                         let meta = diff_machine.create(&*nodes);
 
                         // replace the placeholder with the new nodes we just pushed on the stack
-                        diff_machine.edits.replace_with(meta.added_to_stack);
+                        diff_machine.replace_with(meta.added_to_stack);
                     }
                 }
             }
