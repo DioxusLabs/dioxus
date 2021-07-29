@@ -1,24 +1,24 @@
-use crate::innerlude::*;
+//! Public APIs for managing component state, tasks, and lifecycles.
 
-use futures_util::FutureExt;
-use std::{
-    any::{Any, TypeId},
-    cell::{Cell, RefCell},
-    future::Future,
-    ops::Deref,
-    rc::Rc,
-};
+use crate::innerlude::*;
+use std::{any::TypeId, ops::Deref, rc::Rc};
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
-/// This lets components schedule updates, integrate hooks, and expose their context via the context api.
 ///
-/// Properties passed down from the parent component are also directly accessible via the exposed "props" field.
+/// This lets components access props, schedule updates, integrate hooks, and expose shared state.
+///
+/// Note: all of these methods are *imperative* - they do not act as hooks! They are meant to be used by hooks
+/// to provide complex behavior. For instance, calling "add_shared_state" on every render is considered a leak. This method
+/// exists for the `use_provide_state` hook to provide a shared state object.
+///
+/// For the most part, the only method you should be using regularly is `render`.
+///
+/// ## Example
 ///
 /// ```ignore
 /// #[derive(Properties)]
 /// struct Props {
 ///     name: String
-///
 /// }
 ///
 /// fn example(cx: Context<Props>) -> VNode {
@@ -27,16 +27,6 @@ use std::{
 ///     }
 /// }
 /// ```
-///
-/// ## Available Methods:
-/// - render
-/// - use_hook
-/// - use_task
-/// - use_suspense
-/// - submit_task
-/// - children
-/// - use_effect
-///
 pub struct Context<'src, T> {
     pub props: &'src T,
     pub scope: &'src Scope,
@@ -123,7 +113,8 @@ impl<'src, P> Context<'src, P> {
         todo!()
     }
 
-    /// Get's this context's ScopeId
+    /// Get's this component's unique identifier.
+    ///
     pub fn get_scope_id(&self) -> ScopeId {
         self.scope.our_arena_idx.clone()
     }
@@ -148,11 +139,7 @@ impl<'src, P> Context<'src, P> {
         lazy_nodes: LazyNodes<'src, F>,
     ) -> DomTree<'src> {
         let scope_ref = self.scope;
-        // let listener_id = &scope_ref.listener_idx;
-        Some(lazy_nodes.into_vnode(NodeFactory {
-            scope: scope_ref,
-            // listener_id,
-        }))
+        Some(lazy_nodes.into_vnode(NodeFactory { scope: scope_ref }))
     }
 
     /// `submit_task` will submit the future to be polled.
@@ -177,11 +164,14 @@ impl<'src, P> Context<'src, P> {
     }
 
     /// Add a state globally accessible to child components via tree walking
-    pub fn add_shared_state<T: 'static>(self, val: T) -> Option<Rc<dyn Any>> {
+    pub fn add_shared_state<T: 'static>(self, val: T) {
         self.scope
             .shared_contexts
             .borrow_mut()
             .insert(TypeId::of::<T>(), Rc::new(val))
+            .map(|_| {
+                log::warn!("A shared state was replaced with itself. This is does not result in a panic, but is probably not what you are trying to do");
+            });
     }
 
     /// Walk the tree to find a shared state with the TypeId of the generic type
@@ -212,7 +202,6 @@ impl<'src, P> Context<'src, P> {
                     .clone()
                     .downcast::<T>()
                     .expect("Should not fail, already validated the type from the hashmap");
-
                 par = Some(rc);
                 break;
             } else {

@@ -3,6 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 
+use cfg::DesktopConfig;
 use dioxus_core::*;
 pub use wry;
 
@@ -15,6 +16,7 @@ use wry::{
     webview::{RpcRequest, RpcResponse},
 };
 
+mod cfg;
 mod dom;
 mod escape;
 mod events;
@@ -24,14 +26,14 @@ static HTML_CONTENT: &'static str = include_str!("./index.html");
 
 pub fn launch(
     root: FC<()>,
-    builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
+    builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) -> anyhow::Result<()> {
     launch_with_props(root, (), builder)
 }
 pub fn launch_with_props<P: Properties + 'static>(
     root: FC<P>,
     props: P,
-    builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
+    builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) -> anyhow::Result<()> {
     WebviewRenderer::run(root, props, builder)
 }
@@ -46,11 +48,17 @@ enum RpcEvent<'a> {
     Initialize { edits: Vec<DomEdit<'a>> },
 }
 
+#[derive(Serialize)]
+struct Response<'a> {
+    pre_rendered: Option<String>,
+    edits: Vec<DomEdit<'a>>,
+}
+
 impl<T: Properties + 'static> WebviewRenderer<T> {
     pub fn run(
         root: FC<T>,
         props: T,
-        user_builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
+        user_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
     ) -> anyhow::Result<()> {
         Self::run_with_edits(root, props, user_builder, None)
     }
@@ -58,13 +66,22 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
     pub fn run_with_edits(
         root: FC<T>,
         props: T,
-        user_builder: impl FnOnce(WindowBuilder) -> WindowBuilder,
+        user_builder: impl for<'a, 'b> FnOnce(&'a mut DesktopConfig<'b>) -> &'a mut DesktopConfig<'b>,
         redits: Option<Vec<DomEdit<'static>>>,
     ) -> anyhow::Result<()> {
         log::info!("hello edits");
         let event_loop = EventLoop::new();
 
-        let window = user_builder(WindowBuilder::new()).build(&event_loop)?;
+        let mut cfg = DesktopConfig::new();
+        user_builder(&mut cfg);
+
+        let DesktopConfig {
+            window,
+            manual_edits,
+            pre_rendered,
+        } = cfg;
+
+        let window = window.build(&event_loop)?;
 
         let vir = VirtualDom::new_with_props(root, props);
 
@@ -73,8 +90,6 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
         // let registry = Arc::new(RwLock::new(Some(WebviewRegistry::new())));
 
         let webview = WebViewBuilder::new(window)?
-            // .with_visible(false)
-            // .with_transparent(true)
             .with_url(&format!("data:text/html,{}", HTML_CONTENT))?
             .with_rpc_handler(move |_window: &Window, mut req: RpcRequest| {
                 match req.method.as_str() {
@@ -87,17 +102,32 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
 
                             // Create the thin wrapper around the registry to collect the edits into
                             let mut real = dom::WebviewDom::new();
+                            let pre = pre_rendered.clone();
 
-                            // Serialize the edit stream
-                            let edits = {
-                                let mut edits = Vec::new();
-                                lock.rebuild(&mut real, &mut edits).unwrap();
-                                serde_json::to_value(edits).unwrap()
+                            let response = match pre {
+                                Some(content) => {
+                                    lock.rebuild_in_place().unwrap();
+
+                                    Response {
+                                        edits: Vec::new(),
+                                        pre_rendered: Some(content),
+                                    }
+                                }
+                                None => {
+                                    //
+                                    let edits = {
+                                        let mut edits = Vec::new();
+                                        lock.rebuild(&mut real, &mut edits).unwrap();
+                                        edits
+                                    };
+                                    Response {
+                                        edits,
+                                        pre_rendered: None,
+                                    }
+                                }
                             };
 
-                            // Give back the registry into its slot
-                            // *reg_lock = Some(real.consume());
-                            edits
+                            serde_json::to_value(&response).unwrap()
                         };
 
                         // Return the edits into the webview runtime
@@ -128,13 +158,18 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                             lock.progress_with_event(&mut real, &mut edits)
                                 .await
                                 .expect("failed to progress");
-                            let edits = serde_json::to_value(edits).unwrap();
+
+                            let response = Response {
+                                edits,
+                                pre_rendered: None,
+                            };
+                            let response = serde_json::to_value(&response).unwrap();
 
                             // Give back the registry into its slot
                             // *reg_lock = Some(real.consume());
 
                             // Return the edits into the webview runtime
-                            Some(RpcResponse::new_result(req.id.take(), Some(edits)))
+                            Some(RpcResponse::new_result(req.id.take(), Some(response)))
                         });
 
                         response

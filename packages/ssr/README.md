@@ -16,3 +16,9 @@ vdom.rebuild_in_place();
 let text = dioxus_ssr::render_root(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
 ```
+
+
+
+## Pre-rendering
+
+

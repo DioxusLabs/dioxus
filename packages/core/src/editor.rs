@@ -5,7 +5,10 @@
 //!
 //!
 
-use crate::{innerlude::ScopeId, ElementId};
+use crate::{
+    innerlude::{Attribute, Listener, ScopeId},
+    ElementId,
+};
 
 /// The `DomEditor` provides an imperative interface for the Diffing algorithm to plan out its changes.
 ///
@@ -86,18 +89,20 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
     }
 
     // events
-    pub(crate) fn new_event_listener(
-        &mut self,
-        event: &'static str,
-        scope: ScopeId,
-        element_id: usize,
-        realnode: ElementId,
-    ) {
-        self.edits.push(NewEventListener {
+    pub(crate) fn new_event_listener(&mut self, listener: &Listener) {
+        let Listener {
+            event,
             scope,
+            mounted_node,
+            ..
+        } = listener;
+
+        let element_id = mounted_node.get().unwrap().as_u64();
+
+        self.edits.push(NewEventListener {
+            scope: scope.clone(),
             event_name: event,
-            element_id,
-            mounted_node_id: realnode.as_u64(),
+            mounted_node_id: element_id,
         });
     }
 
@@ -113,17 +118,27 @@ impl<'real, 'bump> DomEditor<'real, 'bump> {
     }
 
     #[inline]
-    pub(crate) fn set_attribute(
-        &mut self,
-        field: &'static str,
-        value: &'bump str,
-        ns: Option<&'static str>,
-    ) {
-        self.edits.push(SetAttribute { field, value, ns });
+    pub(crate) fn set_attribute(&mut self, attribute: &'bump Attribute) {
+        let Attribute {
+            name,
+            value,
+            is_static,
+            is_volatile,
+            namespace,
+        } = attribute;
+        // field: &'static str,
+        // value: &'bump str,
+        // ns: Option<&'static str>,
+        self.edits.push(SetAttribute {
+            field: name,
+            value,
+            ns: *namespace,
+        });
     }
 
     #[inline]
-    pub(crate) fn remove_attribute(&mut self, name: &'static str) {
+    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute) {
+        let name = attribute.name;
         self.edits.push(RemoveAttribute { name });
     }
 }
@@ -169,7 +184,6 @@ pub enum DomEdit<'bump> {
         event_name: &'static str,
         scope: ScopeId,
         mounted_node_id: u64,
-        element_id: usize,
     },
     RemoveEventListener {
         event: &'static str,

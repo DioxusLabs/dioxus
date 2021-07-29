@@ -117,6 +117,16 @@ pub struct Listener<'bump> {
     pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(VirtualEvent) + 'bump>>>,
 }
 
+impl Listener<'_> {
+    // serialize the listener event stuff to a string
+    pub fn serialize(&self) {
+        //
+    }
+    pub fn deserialize() {
+        //
+    }
+}
+
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {

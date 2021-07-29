@@ -8,12 +8,13 @@
 //! into the native VDom instance.
 //!
 //! Currently, NodeRefs won't work properly, but all other event functionality will.
+#![allow(non_upper_case_globals, non_snake_case)]
 
 use dioxus::{events::on::MouseEvent, prelude::*};
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     env_logger::init();
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App, |c| c)
 }
 
 static App: FC<()> = |cx| {

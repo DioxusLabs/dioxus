@@ -40,6 +40,10 @@ smallvec = "1.6.1"
 slab = "0.4.3"
 
 
+[dev-dependencies]
+dioxus-html = { path = "../html" }
+
+
 [features]
 default = ["serialize"]
 serialize = ["serde"]

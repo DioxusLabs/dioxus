@@ -22,7 +22,7 @@ async fn main() -> Result<(), std::io::Error> {
         let dom = VirtualDom::launch_with_props_in_place(Example, ExampleProps { initial_name });
 
         Ok(Response::builder(200)
-            .body(format!("{}", dioxus_ssr::render_vdom(&dom)))
+            .body(format!("{}", dioxus_ssr::render_vdom(&dom, |c| c)))
             .content_type(tide::http::mime::HTML)
             .build())
     });

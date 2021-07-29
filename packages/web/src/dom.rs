@@ -8,12 +8,19 @@ use fxhash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     window, Document, Element, Event, HtmlElement, HtmlInputElement, HtmlOptionElement, Node,
+    NodeList,
 };
 
+use crate::{nodeslab::NodeSlab, WebConfig};
+
 pub struct WebsysDom {
-    pub stack: Stack,
-    nodes: Vec<Node>,
+    stack: Stack,
+
+    /// A map from ElementID (index) to Node
+    nodes: NodeSlab,
+
     document: Document,
+
     root: Element,
 
     event_receiver: async_channel::Receiver<EventTrigger>,
@@ -33,11 +40,8 @@ pub struct WebsysDom {
     last_node_was_text: bool,
 }
 impl WebsysDom {
-    pub fn new(root: Element) -> Self {
-        let document = window()
-            .expect("must have access to the window")
-            .document()
-            .expect("must have access to the Document");
+    pub fn new(root: Element, cfg: WebConfig) -> Self {
+        let document = load_document();
 
         let (sender, receiver) = async_channel::unbounded::<EventTrigger>();
 
@@ -48,14 +52,36 @@ impl WebsysDom {
             });
         });
 
-        let mut nodes = Vec::with_capacity(1000);
+        let mut nodes = NodeSlab::new(2000);
+        let mut listeners = FxHashMap::default();
 
-        // let root_id = nodes.insert(root.clone().dyn_into::<Node>().unwrap());
+        // re-hydrate the page - only supports one virtualdom per page
+        if cfg.hydrate {
+            // Load all the elements into the arena
+            let node_list: NodeList = document.query_selector_all("dio_el").unwrap();
+            let len = node_list.length() as usize;
+
+            for x in 0..len {
+                let node: Node = node_list.get(x as u32).unwrap();
+                let el: &Element = node.dyn_ref::<Element>().unwrap();
+                let id: String = el.get_attribute("dio_el").unwrap();
+                let id = id.parse::<usize>().unwrap();
+
+                // this autoresizes the vector if needed
+                nodes[id] = Some(node);
+            }
+
+            // Load all the event listeners into our listener register
+        }
+
+        let mut stack = Stack::with_capacity(10);
+        let root_node = root.clone().dyn_into::<Node>().unwrap();
+        stack.push(root_node);
 
         Self {
-            stack: Stack::with_capacity(10),
+            stack,
             nodes,
-            listeners: FxHashMap::default(),
+            listeners,
             document,
             event_receiver: receiver,
             trigger: sender_callback,
@@ -97,18 +123,13 @@ impl WebsysDom {
         }
     }
     fn push(&mut self, root: u64) {
-        // let key = DefaultKey::from(KeyData::from_ffi(root));
         let key = root as usize;
-        let domnode = self.nodes.get_mut(key);
+        let domnode = &self.nodes[key];
 
         let real_node: Node = match domnode {
             Some(n) => n.clone(),
             None => todo!(),
         };
-
-        // let domnode = domnode.unwrap().as_mut().unwrap();
-        // .expect(&format!("Failed to pop know root: {:#?}", key))
-        // .unwrap();
 
         self.stack.push(real_node);
     }
@@ -205,7 +226,7 @@ impl WebsysDom {
 
         let id = id as usize;
         self.stack.push(textnode.clone());
-        *self.nodes.get_mut(id).unwrap() = textnode;
+        self.nodes[id] = Some(textnode);
     }
 
     fn create_element(&mut self, tag: &str, ns: Option<&'static str>, id: u64) {
@@ -227,7 +248,7 @@ impl WebsysDom {
         let id = id as usize;
 
         self.stack.push(el.clone());
-        *self.nodes.get_mut(id).unwrap() = el;
+        self.nodes[id] = Some(el);
         // let nid = self.node_counter.?next();
         // let nid = self.nodes.insert(el).data().as_ffi();
         // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
@@ -263,6 +284,9 @@ impl WebsysDom {
             &format!("{}.{}", scope_id, real_id),
         )
         .unwrap();
+
+        el.set_attribute(&format!("dioxus-event"), &format!("{}", event))
+            .unwrap();
 
         // Register the callback to decode
 
@@ -512,26 +536,6 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
                 }
             }
             VirtualEvent::MouseEvent(MouseEvent(Rc::new(CustomMouseEvent(evt))))
-            // MouseEvent(Box::new(RawMouseEvent {
-            //                 alt_key: evt.alt_key(),
-            //                 button: evt.button() as i32,
-            //                 buttons: evt.buttons() as i32,
-            //                 client_x: evt.client_x(),
-            //                 client_y: evt.client_y(),
-            //                 ctrl_key: evt.ctrl_key(),
-            //                 meta_key: evt.meta_key(),
-            //                 page_x: evt.page_x(),
-            //                 page_y: evt.page_y(),
-            //                 screen_x: evt.screen_x(),
-            //                 screen_y: evt.screen_y(),
-            //                 shift_key: evt.shift_key(),
-            //                 get_modifier_state: GetModifierKey(Box::new(|f| {
-            //                     // evt.get_modifier_state(f)
-            //                     todo!("This is not yet implemented properly, sorry :(");
-            //                 })),
-            //             }))
-            // todo!()
-            // VirtualEvent::MouseEvent()
         }
 
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
@@ -644,4 +648,15 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
         Some(ElementId(real_id as usize)),
         dioxus_core::events::EventPriority::High,
     ))
+}
+
+pub fn prepare_websys_dom() -> Element {
+    load_document().get_element_by_id("dioxusroot").unwrap()
+}
+
+pub fn load_document() -> Document {
+    web_sys::window()
+        .expect("should have access to the Window")
+        .document()
+        .expect("should have access to the Document")
 }

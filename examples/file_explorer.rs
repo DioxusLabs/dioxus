@@ -12,8 +12,10 @@ use std::fs::{self, DirEntry};
 fn main() {
     env_logger::init();
     dioxus::desktop::launch(App, |c| {
-        c.with_resizable(false)
-            .with_inner_size(LogicalSize::new(800.0, 400.0))
+        c.with_window(|w| {
+            w.with_resizable(false)
+                .with_inner_size(LogicalSize::new(800.0, 400.0))
+        })
     })
     .unwrap();
 }

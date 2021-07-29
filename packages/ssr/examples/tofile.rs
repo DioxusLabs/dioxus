@@ -15,8 +15,11 @@ fn main() {
     let mut dom = VirtualDom::new(App);
     dom.rebuild_in_place().expect("failed to run virtualdom");
 
-    file.write_fmt(format_args!("{}", TextRenderer::from_vdom(&dom)))
-        .unwrap();
+    file.write_fmt(format_args!(
+        "{}",
+        TextRenderer::from_vdom(&dom, Default::default())
+    ))
+    .unwrap();
 }
 
 pub static App: FC<()> = |cx| {

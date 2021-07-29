@@ -1,4 +1,5 @@
 use std::cell::{RefCell, RefMut};
+use std::fmt::Display;
 use std::{cell::UnsafeCell, rc::Rc};
 
 use crate::heuristics::*;
@@ -17,6 +18,11 @@ pub struct ScopeId(pub usize);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ElementId(pub usize);
+impl Display for ElementId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl ElementId {
     pub fn as_u64(self) -> u64 {

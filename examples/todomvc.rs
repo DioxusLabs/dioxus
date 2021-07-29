@@ -1,14 +1,10 @@
+#![allow(non_upper_case_globals, non_snake_case)]
 use dioxus::prelude::*;
 use im_rc::HashMap;
 use std::rc::Rc;
 
-fn main() {
-    #[cfg(feature = "desktop")]
-    // #[cfg(not(target_arch = "wasm32"))]
-    dioxus::desktop::launch(App, |c| c);
-
-    #[cfg(feature = "desktop")]
-    dioxus::web::launch(App, |c| c);
+fn main() -> anyhow::Result<()> {
+    dioxus::desktop::launch(App, |c| c)
 }
 
 #[derive(PartialEq)]

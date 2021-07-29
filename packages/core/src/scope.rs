@@ -87,15 +87,12 @@ impl Scope {
         }
     }
 
-    pub(crate) fn update_caller<'creator_node>(&mut self, caller: Rc<WrappedCaller>) {
-        self.caller = caller;
-    }
-
-    pub(crate) fn update_children<'creator_node>(
+    pub(crate) fn update_scope_dependencies<'creator_node>(
         &mut self,
+        caller: Rc<WrappedCaller>,
         child_nodes: ScopeChildren,
-        // child_nodes: &'creator_node [VNode<'creator_node>],
     ) {
+        self.caller = caller;
         // let child_nodes = unsafe { std::mem::transmute(child_nodes) };
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
         self.child_nodes = child_nodes;

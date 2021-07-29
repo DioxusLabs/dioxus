@@ -7,7 +7,7 @@ pub static Example: FC<()> = |cx| {
         // This is an easy/low hanging fruit to improve upon
         let mut dom = VirtualDom::new(SomeApp);
         dom.rebuild_in_place().unwrap();
-        ssr::render_vdom(&dom)
+        ssr::render_vdom(&dom, |c| c)
     });
 
     cx.render(rsx! {
