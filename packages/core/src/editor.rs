@@ -30,6 +30,9 @@ pub enum DomEdit<'bump> {
         // the last m elements
         m: u32,
     },
+    InsertAfter {
+        n: u32,
+    },
     Remove,
     RemoveAllChildren,
     CreateTextNode {
@@ -71,6 +74,7 @@ pub enum DomEdit<'bump> {
 impl DomEdit<'_> {
     pub fn is(&self, id: &'static str) -> bool {
         match self {
+            DomEdit::InsertAfter { .. } => id == "InsertAfter",
             DomEdit::PushRoot { .. } => id == "PushRoot",
             DomEdit::PopRoot => id == "PopRoot",
             DomEdit::AppendChildren { .. } => id == "AppendChildren",

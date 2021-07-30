@@ -13,7 +13,7 @@ use syn::{
 // =======================================
 pub struct Element<const AS: HTML_OR_RSX> {
     name: Ident,
-    key: Option<AttrType>,
+    key: Option<LitStr>,
     attributes: Vec<ElementAttr<AS>>,
     listeners: Vec<ElementAttr<AS>>,
     children: Vec<BodyNode<AS>>,
@@ -195,6 +195,10 @@ impl<const AS: HTML_OR_RSX> ToTokens for Element<AS> {
         let attr = &self.attributes;
         let childs = &self.children;
         let listeners = &self.listeners;
+        let key = match &self.key {
+            Some(ty) => quote! { Some(format_args_f!(#ty)) },
+            None => quote! { None },
+        };
 
         tokens.append_all(quote! {
             __cx.element(
@@ -202,10 +206,7 @@ impl<const AS: HTML_OR_RSX> ToTokens for Element<AS> {
                 [ #(#listeners),* ],
                 [ #(#attr),* ],
                 [ #(#childs),* ],
-                // __cx.bump().alloc([ #(#listeners),* ]),
-                // __cx.bump().alloc([ #(#attr),* ]),
-                // __cx.bump().alloc([ #(#childs),* ]),
-                None,
+                #key,
             )
         });
     }
@@ -235,7 +236,7 @@ fn parse_rsx_element_field(
     stream: ParseStream,
     attrs: &mut Vec<ElementAttr<AS_RSX>>,
     listeners: &mut Vec<ElementAttr<AS_RSX>>,
-    key: &mut Option<AttrType>,
+    key: &mut Option<LitStr>,
     element_name: Ident,
 ) -> Result<()> {
     let name = Ident::parse_any(stream)?;
@@ -301,7 +302,7 @@ fn parse_rsx_element_field(
             return Ok(());
         }
         "key" => {
-            *key = Some(AttrType::BumpText(stream.parse::<LitStr>()?));
+            *key = Some(stream.parse::<LitStr>()?);
             return Ok(());
         }
         "classes" => {

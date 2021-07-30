@@ -252,7 +252,7 @@ impl<'a> NodeFactory<'a> {
         listeners: L,
         attributes: A,
         children: V,
-        key: Option<&'a str>,
+        key: Option<Arguments>,
     ) -> VNode<'a>
     where
         L: 'a + AsRef<[Listener<'a>]>,
@@ -276,7 +276,7 @@ impl<'a> NodeFactory<'a> {
         listeners: L,
         attributes: A,
         children: V,
-        key: Option<&'a str>,
+        key: Option<Arguments>,
     ) -> VNode<'a>
     where
         L: 'a + AsRef<[Listener<'a>]>,
@@ -291,6 +291,8 @@ impl<'a> NodeFactory<'a> {
 
         let children: &'a V = self.bump().alloc(children);
         let children = children.as_ref();
+
+        let key = key.map(|f| self.raw_text(f).0);
 
         VNode {
             key,
@@ -352,21 +354,26 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn component<P>(
+    pub fn component<P, V>(
         &self,
         component: FC<P>,
         props: P,
-        key: Option<&'a str>,
-        children: &'a [VNode<'a>],
+        key: Option<Arguments>,
+        // key: Option<&'a str>,
+        children: V,
     ) -> VNode<'a>
     where
         P: Properties + 'a,
+        V: 'a + AsRef<[VNode<'a>]>,
     {
         // TODO
         // It's somewhat wrong to go about props like this
 
         // We don't want the fat part of the fat pointer
         // This function does static dispatch so we don't need any VTable stuff
+        let children: &'a V = self.bump().alloc(children);
+        let children = children.as_ref();
+
         let props = self.bump().alloc(props);
 
         let raw_props = props as *mut P as *mut ();
@@ -407,6 +414,8 @@ impl<'a> NodeFactory<'a> {
         }));
 
         let is_static = children.len() == 0 && P::IS_STATIC && key.is_none();
+
+        let key = key.map(|f| self.raw_text(f).0);
 
         VNode {
             key,

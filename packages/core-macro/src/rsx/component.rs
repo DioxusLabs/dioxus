@@ -261,12 +261,10 @@ impl<const AS: HTML_OR_RSX> ToTokens for Component<AS> {
 
         let key_token = match has_key {
             Some(field) => {
-                let inners = field.content.to_token_stream();
-                quote! {
-                    Some(#inners)
-                }
+                let inners = &field.content;
+                quote! { Some(format_args_f!(#inners)) }
             }
-            None => quote! {None},
+            None => quote! { None },
         };
 
         let childs = &self.children;
@@ -279,7 +277,7 @@ impl<const AS: HTML_OR_RSX> ToTokens for Component<AS> {
                 #name,
                 #builder,
                 #key_token,
-                __cx.bump().alloc(#children)
+                #children
             )
         })
     }
