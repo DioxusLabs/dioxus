@@ -83,6 +83,15 @@ impl<'a> TextRenderer<'a> {
                 }
                 write!(f, "{}", text.text)?
             }
+            VNodeKind::Anchor(anchor) => {
+                //
+                if self.cfg.indent {
+                    for _ in 0..il {
+                        write!(f, "    ")?;
+                    }
+                }
+                write!(f, "<!-- -->")?;
+            }
             VNodeKind::Element(el) => {
                 if self.cfg.indent {
                     for _ in 0..il {
@@ -120,7 +129,7 @@ impl<'a> TextRenderer<'a> {
                 //
                 // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
                 // them interpreter's stack
-                match (self.cfg.pre_render, node.dom_id()) {
+                match (self.cfg.pre_render, node.try_direct_id()) {
                     (true, Some(id)) => {
                         write!(f, " dio_el=\"{}\"", id)?;
                         //

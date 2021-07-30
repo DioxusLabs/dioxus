@@ -75,60 +75,54 @@ pub async fn run_with_props<T: Properties + 'static>(
     root_props: T,
     cfg: WebConfig,
 ) -> Result<()> {
-    let dom = VirtualDom::new_with_props(root, root_props);
+    let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    let root_el = load_document().get_element_by_id("dioxus_root").unwrap();
+    // let tasks = dom.shared.tasks.clone();
+
+    let root_el = load_document().get_element_by_id("dioxusroot").unwrap();
     let mut websys_dom = dom::WebsysDom::new(root_el, cfg);
 
-    // let mut edits = Vec::new();
-    // internal_dom.rebuild(&mut websys_dom, &mut edits)?;
-    // websys_dom.process_edits(&mut edits);
+    let mut edits = Vec::new();
+    dom.rebuild(&mut websys_dom, &mut edits)?;
+    websys_dom.process_edits(&mut edits);
 
     log::info!("Going into event loop");
+
+    // #[allow(unreachable_code)]
     loop {
-        todo!();
-        // let trigger = {
-        //     let real_queue = websys_dom.wait_for_event();
-        //     if internal_dom.tasks.is_empty() {
-        //         log::info!("tasks is empty, waiting for dom event to trigger soemthing");
-        //         real_queue.await
-        //     } else {
-        //         log::info!("tasks is not empty, waiting for either tasks or event system");
-        //         let task_queue = (&mut internal_dom.tasks).next();
+        let trigger = {
+            let real_queue = websys_dom.wait_for_event();
+            if dom.any_pending_events() {
+                log::info!("tasks is not empty, waiting for either tasks or event system");
+                let mut task = dom.wait_for_event();
 
-        //         pin_mut!(real_queue);
-        //         pin_mut!(task_queue);
+                pin_mut!(real_queue);
+                pin_mut!(task);
 
-        //         match futures_util::future::select(real_queue, task_queue).await {
-        //             futures_util::future::Either::Left((trigger, _)) => trigger,
-        //             futures_util::future::Either::Right((trigger, _)) => trigger,
-        //         }
-        //     }
-        // };
+                match futures_util::future::select(real_queue, task).await {
+                    futures_util::future::Either::Left((trigger, _)) => trigger,
+                    futures_util::future::Either::Right((trigger, _)) => trigger,
+                }
+            } else {
+                log::info!("tasks is empty, waiting for dom event to trigger soemthing");
+                real_queue.await
+            }
+        };
 
-        // if let Some(real_trigger) = trigger {
-        //     log::info!("event received");
+        if let Some(real_trigger) = trigger {
+            log::info!("event received");
 
-        //     internal_dom.queue_event(real_trigger);
+            dom.queue_event(real_trigger);
 
-        //     let mut edits = Vec::new();
-        //     internal_dom
-        //         .progress_with_event(&mut websys_dom, &mut edits)
-        //         .await?;
-        //     websys_dom.process_edits(&mut edits);
-        // }
+            let mut edits = Vec::new();
+            dom.progress_with_event(&mut websys_dom, &mut edits).await?;
+            websys_dom.process_edits(&mut edits);
+        }
     }
 
     // should actually never return from this, should be an error, rustc just cant see it
     Ok(())
 }
-
-fn iter_node_list() {}
-
-// struct NodeListIter {
-//     node_list: NodeList,
-// }
-// impl Iterator for NodeListIter {}
 
 struct HydrationNode {
     id: usize,

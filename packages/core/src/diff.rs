@@ -526,7 +526,8 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         let mut is_static = true;
         let mut added_to_stack = 0;
 
-        for child in children {
+        // add them backwards
+        for child in children.iter().rev() {
             let child_meta = self.create_vnode(child);
             is_static = is_static && child_meta.is_static;
             added_to_stack += child_meta.added_to_stack;

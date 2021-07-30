@@ -48,6 +48,7 @@ impl WebsysDom {
         let sender_callback = Arc::new(move |ev| {
             let c = sender.clone();
             wasm_bindgen_futures::spawn_local(async move {
+                log::debug!("sending event through channel");
                 c.send(ev).await.unwrap();
             });
         });
@@ -102,7 +103,7 @@ impl WebsysDom {
                 DomEdit::PushRoot { id: root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
                 DomEdit::AppendChildren { many } => self.append_children(many),
-                DomEdit::ReplaceWith { many } => self.replace_with(many),
+                DomEdit::ReplaceWith { n, m } => self.replace_with(n, m),
                 DomEdit::Remove => self.remove(),
                 DomEdit::RemoveAllChildren => self.remove_all_children(),
                 DomEdit::CreateTextNode { text, id } => self.create_text_node(text, id),
@@ -113,12 +114,15 @@ impl WebsysDom {
                     event_name: event,
                     scope,
                     mounted_node_id: node,
-                    element_id: idx,
-                } => self.new_event_listener(event, scope, idx, node),
+                } => self.new_event_listener(event, scope, node),
+
                 DomEdit::RemoveEventListener { event } => todo!(),
                 DomEdit::SetText { text } => self.set_text(text),
                 DomEdit::SetAttribute { field, value, ns } => self.set_attribute(field, value, ns),
                 DomEdit::RemoveAttribute { name } => self.remove_attribute(name),
+
+                DomEdit::InsertAfter { n } => self.insert_after(n),
+                DomEdit::InsertBefore { n } => self.insert_before(n),
             }
         }
     }
@@ -169,37 +173,51 @@ impl WebsysDom {
         }
     }
 
-    fn replace_with(&mut self, many: u32) {
+    fn replace_with(&mut self, n: u32, m: u32) {
         log::debug!("Called [`replace_with`]");
-        let new_node = self.stack.pop();
-        let old_node = self.stack.pop();
 
-        // TODO: use different-sized replace withs
-        if many == 1 {
-            if old_node.has_type::<Element>() {
-                old_node
-                    .dyn_ref::<Element>()
-                    .unwrap()
-                    .replace_with_with_node_1(&new_node)
-                    .unwrap();
-            } else if old_node.has_type::<web_sys::CharacterData>() {
-                old_node
-                    .dyn_ref::<web_sys::CharacterData>()
-                    .unwrap()
-                    .replace_with_with_node_1(&new_node)
-                    .unwrap();
-            } else if old_node.has_type::<web_sys::DocumentType>() {
-                old_node
-                    .dyn_ref::<web_sys::DocumentType>()
-                    .unwrap()
-                    .replace_with_with_node_1(&new_node)
-                    .unwrap();
-            } else {
-                panic!("Cannot replace node: {:?}", old_node);
-            }
+        let mut new_nodes = vec![];
+        for _ in 0..m {
+            new_nodes.push(self.stack.pop());
         }
 
-        self.stack.push(new_node);
+        let mut old_nodes = vec![];
+        for _ in 0..n {
+            old_nodes.push(self.stack.pop());
+        }
+
+        let old = old_nodes[0].clone();
+        let arr: js_sys::Array = new_nodes.iter().collect();
+        let el = old.dyn_into::<Element>().unwrap();
+        el.replace_with_with_node(&arr).unwrap();
+        // let arr = js_sys::Array::from();
+
+        // TODO: use different-sized replace withs
+        // if m == 1 {
+        //     if old_node.has_type::<Element>() {
+        //         old_node
+        //             .dyn_ref::<Element>()
+        //             .unwrap()
+        //             .replace_with_with_node_1(&new_node)
+        //             .unwrap();
+        //     } else if old_node.has_type::<web_sys::CharacterData>() {
+        //         old_node
+        //             .dyn_ref::<web_sys::CharacterData>()
+        //             .unwrap()
+        //             .replace_with_with_node_1(&new_node)
+        //             .unwrap();
+        //     } else if old_node.has_type::<web_sys::DocumentType>() {
+        //         old_node
+        //             .dyn_ref::<web_sys::DocumentType>()
+        //             .unwrap()
+        //             .replace_with_with_node_1(&new_node)
+        //             .unwrap();
+        //     } else {
+        //         panic!("Cannot replace node: {:?}", old_node);
+        //     }
+        // }
+
+        // self.stack.push(new_node);
     }
 
     fn remove(&mut self) {
@@ -213,7 +231,8 @@ impl WebsysDom {
     }
 
     fn create_placeholder(&mut self, id: u64) {
-        self.create_element("pre", None, id)
+        self.create_element("pre", None, id);
+        self.set_attribute("hidden", "", None);
     }
     fn create_text_node(&mut self, text: &str, id: u64) {
         // let nid = self.node_counter.next();
@@ -255,14 +274,8 @@ impl WebsysDom {
         // ElementId::new(nid)
     }
 
-    fn new_event_listener(
-        &mut self,
-        event: &'static str,
-        scope: ScopeId,
-        _element_id: usize,
-        real_id: u64,
-    ) {
-        let (_on, event) = event.split_at(2);
+    fn new_event_listener(&mut self, event: &'static str, scope: ScopeId, real_id: u64) {
+        // let (_on, event) = event.split_at(2);
         let event = wasm_bindgen::intern(event);
 
         // attach the correct attributes to the element
@@ -367,8 +380,37 @@ impl WebsysDom {
         }
     }
 
-    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-        todo!()
+    fn insert_after(&mut self, n: u32) {
+        let mut new_nodes = vec![];
+        for _ in 0..n {
+            new_nodes.push(self.stack.pop());
+        }
+
+        let after = self.stack.top().clone();
+        let arr: js_sys::Array = new_nodes.iter().collect();
+
+        let el = after.dyn_into::<Element>().unwrap();
+        el.after_with_node(&arr).unwrap();
+        // let mut old_nodes = vec![];
+        // for _ in 0..n {
+        //     old_nodes.push(self.stack.pop());
+        // }
+
+        // let el = self.stack.top();
+    }
+
+    fn insert_before(&mut self, n: u32) {
+        let n = n as usize;
+        let root = self
+            .stack
+            .list
+            .get(self.stack.list.len() - n)
+            .unwrap()
+            .clone();
+        for _ in 0..n {
+            let el = self.stack.pop();
+            root.insert_before(&el, None).unwrap();
+        }
     }
 }
 

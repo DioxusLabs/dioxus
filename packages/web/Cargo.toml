@@ -78,7 +78,7 @@ uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
 dioxus-hooks = { path = "../hooks" }
 gloo-timers = { version = "0.2.1", features = ["futures"] }
 serde = { version = "1.0.126", features = ["derive"] }
-surf = { version = "2.2.0", default-features = false, features = [
-    "wasm-client",
-] }
+# surf = { git = "https://github.com/http-rs/surf", default-features = false, features = [
+#     "wasm-client",
+# ] }
 # wasm-timer = "0.2.5"

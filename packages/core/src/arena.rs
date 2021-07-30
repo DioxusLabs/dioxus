@@ -45,7 +45,7 @@ pub struct SharedResources {
 
     pub(crate) heuristics: Shared<HeuristicsEngine>,
 
-    pub(crate) tasks: Shared<FuturesUnordered<FiberTask>>,
+    pub tasks: Shared<FuturesUnordered<FiberTask>>,
 
     /// We use a SlotSet to keep track of the keys that are currently being used.
     /// However, we don't store any specific data since the "mirror"

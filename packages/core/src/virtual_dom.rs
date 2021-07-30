@@ -19,6 +19,8 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
+use futures_util::StreamExt;
+
 use crate::hooks::{SuspendedContext, SuspenseHook};
 use crate::{arena::SharedResources, innerlude::*};
 
@@ -398,6 +400,20 @@ impl VirtualDom {
         }
 
         Ok(())
+    }
+
+    pub async fn wait_for_event(&mut self) -> Option<EventTrigger> {
+        let r = self.shared.tasks.clone();
+        let mut r = r.borrow_mut();
+        let gh = r.next().await;
+
+        gh
+    }
+
+    pub fn any_pending_events(&self) -> bool {
+        let r = self.shared.tasks.clone();
+        let r = r.borrow();
+        !r.is_empty()
     }
 
     pub fn base_scope(&self) -> &Scope {

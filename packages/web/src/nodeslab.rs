@@ -8,17 +8,12 @@ pub struct NodeSlab {
 
 impl NodeSlab {
     pub fn new(capacity: usize) -> NodeSlab {
-        NodeSlab {
-            nodes: Vec::with_capacity(capacity),
-        }
-    }
-
-    fn insert_and_extend(&mut self, node: Node, id: usize) {
-        if id > self.nodes.len() * 3 {
-            panic!("Trying to insert an element way too far out of bounds");
+        let mut nodes = Vec::with_capacity(capacity);
+        for x in 0..5 {
+            nodes.push(None);
         }
 
-        if id < self.nodes.len() {}
+        NodeSlab { nodes }
     }
 }
 impl Index<usize> for NodeSlab {
@@ -30,11 +25,12 @@ impl Index<usize> for NodeSlab {
 
 impl IndexMut<usize> for NodeSlab {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        if index >= self.nodes.len() * 3 {
+        if index >= self.nodes.capacity() * 3 {
             panic!("Trying to mutate an element way too far out of bounds");
         }
-        if index > self.nodes.len() {
-            self.nodes.resize_with(index, || None);
+
+        if index + 1 > self.nodes.len() {
+            self.nodes.resize_with(index + 1, || None);
         }
         &mut self.nodes[index]
     }
