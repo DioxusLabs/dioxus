@@ -33,6 +33,9 @@ pub enum DomEdit<'bump> {
     InsertAfter {
         n: u32,
     },
+    InsertBefore {
+        n: u32,
+    },
     Remove,
     RemoveAllChildren,
     CreateTextNode {
@@ -75,6 +78,7 @@ impl DomEdit<'_> {
     pub fn is(&self, id: &'static str) -> bool {
         match self {
             DomEdit::InsertAfter { .. } => id == "InsertAfter",
+            DomEdit::InsertBefore { .. } => id == "InsertBefore",
             DomEdit::PushRoot { .. } => id == "PushRoot",
             DomEdit::PopRoot => id == "PopRoot",
             DomEdit::AppendChildren { .. } => id == "AppendChildren",

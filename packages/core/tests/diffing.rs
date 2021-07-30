@@ -299,14 +299,46 @@ fn fragment_keys() {
 #[test]
 fn keyed_diffing_out_of_order() {
     let dom = TestDom::new();
-    let left = rsx!(
-        {(0..5).map(|f| {rsx! { div { key: "{f}"  }}})}
-        p {"e"}
-    );
-    let right = rsx!(
-        {(0..5).rev().map(|f| {rsx! { div { key: "{f}"  }}})}
-        p {"e"}
-    );
+
+    // 0, 1, 2, 3, 4, 5, 6, 7, 8,
+    let left = rsx!({
+        (0..3).chain(3..6).chain(6..9).map(|f| {
+            rsx! { div { key: "{f}"  }}
+        })
+    });
+
+    // 0, 1, 2, 6, 5, 4, 3, 7, 8, 9
+    let right = rsx!({
+        (0..3).chain((3..7).rev()).chain(7..10).map(|f| {
+            rsx! { div { key: "{f}"  }}
+        })
+    });
+
+    // LIS: 3, 7, 8,
+    let edits = dom.lazy_diff(left, right);
+    dbg!(&edits);
+}
+
+#[test]
+fn controlled_keyed_diffing_out_of_order() {
+    let dom = TestDom::new();
+
+    let left = [4, 5, 6, 7];
+    let left = rsx!({
+        left.iter().map(|f| {
+            rsx! { div { key: "{f}" "{f}" }}
+        })
+    });
+
+    // 0, 1, 2, 6, 5, 4, 3, 7, 8, 9
+    let right = [0, 5, 9, 6, 4];
+    let right = rsx!({
+        right.iter().map(|f| {
+            rsx! { div { key: "{f}" "{f}" }}
+        })
+    });
+
+    // LIS: 3, 7, 8,
     let edits = dom.lazy_diff(left, right);
     dbg!(&edits);
 }

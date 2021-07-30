@@ -145,9 +145,9 @@ impl Scope {
         unsafe { self.frames.reset_wip_frame() };
 
         // Cast the caller ptr from static to one with our own reference
-        let c3: &WrappedCaller = self.caller.as_ref();
+        let render: &WrappedCaller = self.caller.as_ref();
 
-        match c3(self) {
+        match render(self) {
             None => {
                 // the user's component failed. We avoid cycling to the next frame
                 log::error!("Running your component failed! It will no longer receive events.");

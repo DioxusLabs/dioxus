@@ -171,10 +171,11 @@ impl VirtualDom {
     /// This method uses the `DebugDom` under the hood - essentially making the VirtualDOM's diffing patches a "no-op".
     ///
     /// SSR takes advantage of this by using Dioxus itself as the source of truth, and rendering from the tree directly.
-    pub fn rebuild_in_place(&mut self) -> Result<()> {
+    pub fn rebuild_in_place(&mut self) -> Result<Vec<DomEdit>> {
         let mut realdom = DebugDom::new();
         let mut edits = Vec::new();
-        self.rebuild(&mut realdom, &mut edits)
+        self.rebuild(&mut realdom, &mut edits)?;
+        Ok(edits)
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
