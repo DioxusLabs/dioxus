@@ -334,7 +334,7 @@ impl VirtualDom {
                         log::warn!("Suspense event came through, but there was no mounted node to update >:(");
                     }
                     Some(nodes) => {
-                        todo!("using the wrong frame");
+                        // todo!("using the wrong frame");
                         let nodes = scope.frames.finished_frame().bump.alloc(nodes);
 
                         // push the old node's root onto the stack

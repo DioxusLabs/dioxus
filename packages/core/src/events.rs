@@ -91,7 +91,6 @@ impl EventTrigger {
     }
 }
 
-#[derive(Debug)]
 pub enum VirtualEvent {
     // Real events
     ClipboardEvent(on::ClipboardEvent),
@@ -135,6 +134,34 @@ pub enum VirtualEvent {
     // GarbageCollection {}
 }
 
+impl std::fmt::Debug for VirtualEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            VirtualEvent::ClipboardEvent(_) => "ClipboardEvent",
+            VirtualEvent::CompositionEvent(_) => "CompositionEvent",
+            VirtualEvent::KeyboardEvent(_) => "KeyboardEvent",
+            VirtualEvent::FocusEvent(_) => "FocusEvent",
+            VirtualEvent::FormEvent(_) => "FormEvent",
+            VirtualEvent::SelectionEvent(_) => "SelectionEvent",
+            VirtualEvent::TouchEvent(_) => "TouchEvent",
+            VirtualEvent::UIEvent(_) => "UIEvent",
+            VirtualEvent::WheelEvent(_) => "WheelEvent",
+            VirtualEvent::MediaEvent(_) => "MediaEvent",
+            VirtualEvent::AnimationEvent(_) => "AnimationEvent",
+            VirtualEvent::TransitionEvent(_) => "TransitionEvent",
+            VirtualEvent::ToggleEvent(_) => "ToggleEvent",
+            VirtualEvent::MouseEvent(_) => "MouseEvent",
+            VirtualEvent::PointerEvent(_) => "PointerEvent",
+            VirtualEvent::GarbageCollection => "GarbageCollection",
+            VirtualEvent::SetStateEvent { .. } => "SetStateEvent",
+            VirtualEvent::AsyncEvent { .. } => "AsyncEvent",
+            VirtualEvent::SuspenseEvent { .. } => "SuspenseEvent",
+        };
+
+        f.debug_struct("VirtualEvent").field("type", &name).finish()
+    }
+}
+
 pub mod on {
     //! This module defines the synthetic events that all Dioxus apps enable. No matter the platform, every dioxus renderer
     //! will implement the same events and same behavior (bubbling, cancelation, etc).
@@ -169,7 +196,6 @@ pub mod on {
         )* ) => {
             $(
                 $(#[$attr])*
-                #[derive(Debug)]
                 pub struct $wrapper(pub Rc<dyn $eventdata>);
 
                 // todo: derefing to the event is fine (and easy) but breaks some IDE stuff like (go to source)
@@ -523,15 +549,15 @@ pub mod on {
         fn time_stamp(&self) -> usize;
     }
 
-    pub trait ClipboardEventInner: Debug + GenericEventInner {
+    pub trait ClipboardEventInner {
         // DOMDataTransfer clipboardData
     }
 
-    pub trait CompositionEventInner: Debug {
+    pub trait CompositionEventInner {
         fn data(&self) -> String;
     }
 
-    pub trait KeyboardEventInner: Debug {
+    pub trait KeyboardEventInner {
         fn char_code(&self) -> u32;
 
         /// Get the key code as an enum Variant.
@@ -588,15 +614,15 @@ pub mod on {
         fn get_modifier_state(&self, key_code: usize) -> bool;
     }
 
-    pub trait FocusEventInner: Debug {
+    pub trait FocusEventInner {
         /* DOMEventInnerTarget relatedTarget */
     }
 
-    pub trait FormEventInner: Debug {
+    pub trait FormEventInner {
         fn value(&self) -> String;
     }
 
-    pub trait MouseEventInner: Debug {
+    pub trait MouseEventInner {
         fn alt_key(&self) -> bool;
         fn button(&self) -> i16;
         fn buttons(&self) -> u16;
@@ -613,7 +639,7 @@ pub mod on {
         fn get_modifier_state(&self, key_code: &str) -> bool;
     }
 
-    pub trait PointerEventInner: Debug {
+    pub trait PointerEventInner {
         // Mouse only
         fn alt_key(&self) -> bool;
         fn button(&self) -> usize;
@@ -640,9 +666,9 @@ pub mod on {
         fn is_primary(&self) -> bool;
     }
 
-    pub trait SelectionEventInner: Debug {}
+    pub trait SelectionEventInner {}
 
-    pub trait TouchEventInner: Debug {
+    pub trait TouchEventInner {
         fn alt_key(&self) -> bool;
         fn ctrl_key(&self) -> bool;
         fn meta_key(&self) -> bool;
@@ -653,37 +679,37 @@ pub mod on {
         // touches: DOMTouchList,
     }
 
-    pub trait UIEventInner: Debug {
+    pub trait UIEventInner {
         // DOMAbstractView view
         fn detail(&self) -> i32;
     }
 
-    pub trait WheelEventInner: Debug {
+    pub trait WheelEventInner {
         fn delta_mode(&self) -> i32;
         fn delta_x(&self) -> i32;
         fn delta_y(&self) -> i32;
         fn delta_z(&self) -> i32;
     }
 
-    pub trait MediaEventInner: Debug {}
+    pub trait MediaEventInner {}
 
-    pub trait ImageEventInner: Debug {
+    pub trait ImageEventInner {
         //     load error
     }
 
-    pub trait AnimationEventInner: Debug {
+    pub trait AnimationEventInner {
         fn animation_name(&self) -> String;
         fn pseudo_element(&self) -> String;
         fn elapsed_time(&self) -> f32;
     }
 
-    pub trait TransitionEventInner: Debug {
+    pub trait TransitionEventInner {
         fn property_name(&self) -> String;
         fn pseudo_element(&self) -> String;
         fn elapsed_time(&self) -> f32;
     }
 
-    pub trait ToggleEventInner: Debug {}
+    pub trait ToggleEventInner {}
 
     pub use util::KeyCode;
     mod util {

@@ -186,6 +186,10 @@ impl WebsysDom {
             old_nodes.push(self.stack.pop());
         }
 
+        for node in &old_nodes[1..] {
+            node.dyn_ref::<Element>().unwrap().remove();
+        }
+
         let old = old_nodes[0].clone();
         let arr: js_sys::Array = new_nodes.iter().collect();
         let el = old.dyn_into::<Element>().unwrap();
@@ -466,30 +470,140 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
     use dioxus_core::events::on::*;
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => {
-            // let evt: web_sys::ClipboardEvent = event.clone().dyn_into().unwrap();
-
-            todo!()
+            struct WebsysClipboardEvent();
+            impl ClipboardEventInner for WebsysClipboardEvent {}
+            VirtualEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent())))
         }
 
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: web_sys::CompositionEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            struct WebsysCompositionEvent(web_sys::CompositionEvent);
+            impl CompositionEventInner for WebsysCompositionEvent {
+                fn data(&self) -> String {
+                    todo!()
+                }
+            }
+            VirtualEvent::CompositionEvent(CompositionEvent(Rc::new(WebsysCompositionEvent(evt))))
         }
 
         "keydown" | "keypress" | "keyup" => {
+            struct Event(web_sys::KeyboardEvent);
+            impl KeyboardEventInner for Event {
+                fn char_code(&self) -> u32 {
+                    todo!()
+                }
+                fn key_code(&self) -> KeyCode {
+                    todo!()
+                }
+                fn ctrl_key(&self) -> bool {
+                    todo!()
+                }
+
+                fn key(&self) -> String {
+                    todo!()
+                }
+
+                fn locale(&self) -> String {
+                    todo!()
+                }
+
+                fn location(&self) -> usize {
+                    todo!()
+                }
+
+                fn meta_key(&self) -> bool {
+                    todo!()
+                }
+
+                fn repeat(&self) -> bool {
+                    todo!()
+                }
+
+                fn shift_key(&self) -> bool {
+                    todo!()
+                }
+
+                fn which(&self) -> usize {
+                    todo!()
+                }
+
+                fn get_modifier_state(&self, key_code: usize) -> bool {
+                    todo!()
+                }
+            }
             let evt: web_sys::KeyboardEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::KeyboardEvent(KeyboardEvent(Rc::new(Event(evt))))
         }
 
         "focus" | "blur" => {
+            struct Event(web_sys::FocusEvent);
+            impl FocusEventInner for Event {}
             let evt: web_sys::FocusEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::FocusEvent(FocusEvent(Rc::new(Event(evt))))
         }
 
         "change" => {
-            let evt: web_sys::Event = event.clone().dyn_into().expect("wrong error typ");
+            // struct Event(web_sys::Event);
+            // impl GenericEventInner for Event {
+            //     fn bubbles(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn cancel_bubble(&self) {
+            //         todo!()
+            //     }
+
+            //     fn cancelable(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn composed(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn composed_path(&self) -> String {
+            //         todo!()
+            //     }
+
+            //     fn current_target(&self) {
+            //         todo!()
+            //     }
+
+            //     fn default_prevented(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn event_phase(&self) -> usize {
+            //         todo!()
+            //     }
+
+            //     fn is_trusted(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn prevent_default(&self) {
+            //         todo!()
+            //     }
+
+            //     fn stop_immediate_propagation(&self) {
+            //         todo!()
+            //     }
+
+            //     fn stop_propagation(&self) {
+            //         todo!()
+            //     }
+
+            //     fn target(&self) {
+            //         todo!()
+            //     }
+
+            //     fn time_stamp(&self) -> usize {
+            //         todo!()
+            //     }
+            // }
+            // let evt: web_sys::Event = event.clone().dyn_into().expect("wrong error typ");
+            // VirtualEvent::Event(GenericEvent(Rc::new(Event(evt))))
             todo!()
-            // VirtualEvent::FormEvent(FormEvent {value:})
         }
 
         "input" | "invalid" | "reset" | "submit" => {
@@ -513,15 +627,6 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
                 })
                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-            // let p2 = evt.data_transfer();
-
-            // let value: Option<String> = (&evt).data();
-            // let value = val;
-            // let value = value.unwrap_or_default();
-            // let value = (&evt).data().expect("No data to unwrap");
-
-            // todo - this needs to be a "controlled" event
-            // these events won't carry the right data with them
             todo!()
             // VirtualEvent::FormEvent(FormEvent { value })
         }
@@ -606,6 +711,15 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
             let evt: web_sys::WheelEvent = event.clone().dyn_into().unwrap();
             todo!()
         }
+        "animationstart" | "animationend" | "animationiteration" => {
+            let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "transitionend" => {
+            let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
 
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
@@ -615,16 +729,6 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
 
             // let evt: web_sys::MediaEvent = event.clone().dyn_into().unwrap();
             // let evt: web_sys::MediaEvent = event.clone().dyn_into().unwrap();
-            todo!()
-        }
-
-        "animationstart" | "animationend" | "animationiteration" => {
-            let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
-            todo!()
-        }
-
-        "transitionend" => {
-            let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
             todo!()
         }
 

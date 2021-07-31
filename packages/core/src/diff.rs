@@ -338,9 +338,15 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             }
 
             // TODO
-            (VNodeKind::Suspended(_), new) => todo!(),
+            (VNodeKind::Suspended(old), new) => {
+                //
+                self.replace_and_create_many_with_many([old_node], [new_node]);
+            }
             // a node that was once real is now suspended
-            (old, VNodeKind::Suspended(_)) => todo!(),
+            (old, VNodeKind::Suspended(_)) => {
+                //
+                self.replace_and_create_many_with_many([old_node], [new_node]);
+            }
         }
     }
 
@@ -512,12 +518,10 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
             VNodeKind::Fragment(frag) => self.create_children(frag.children),
 
             VNodeKind::Suspended(VSuspended { node: real_node }) => {
-                todo!("wip on adding suspense back in");
-                // let id = self.vdom.reserve_node();
-                // self.edit_create_placeholder(id);
-                // node.dom_id.set(Some(id));
-                // real_node.set(Some(id));
-                // CreateMeta::new(false, 1)
+                let id = self.vdom.reserve_node();
+                self.edit_create_placeholder(id);
+                real_node.set(Some(id));
+                CreateMeta::new(false, 1)
             }
         }
     }
