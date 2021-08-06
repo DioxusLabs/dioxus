@@ -118,7 +118,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                                         // Serialize the edit stream
                                         let edits = {
                                             let mut edits = Vec::new();
-                                            lock.rebuild(&mut real, &mut edits).unwrap();
+                                            lock.rebuild(&mut edits).unwrap();
                                             serde_json::to_value(edits).unwrap()
                                         };
 
@@ -140,7 +140,7 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
                                     // Serialize the edit stream
                                     let edits = {
                                         let mut edits = Vec::new();
-                                        lock.rebuild(&mut real, &mut edits).unwrap();
+                                        lock.rebuild(&mut edits).unwrap();
                                         serde_json::to_value(edits).unwrap()
                                     };
 

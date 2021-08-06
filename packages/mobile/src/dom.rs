@@ -30,7 +30,7 @@ impl WebviewDom<'_> {
         self.registry
     }
 }
-impl<'bump> RealDom<'bump> for WebviewDom<'bump> {
+impl<'bump> RealDom for WebviewDom<'bump> {
     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
         todo!()
         // self.edits.push(PushRoot { root });

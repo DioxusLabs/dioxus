@@ -2,6 +2,8 @@
 //! --------------
 //! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using Websys.
 
+use std::rc::Rc;
+
 pub use crate::cfg::WebConfig;
 use crate::dom::load_document;
 use dioxus::prelude::{Context, Properties, VNode};
@@ -77,54 +79,36 @@ pub async fn run_with_props<T: Properties + 'static>(
 ) -> Result<()> {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    // let tasks = dom.shared.tasks.clone();
+    let root_el = load_document().get_element_by_id(&cfg.rootname).unwrap();
 
-    let root_el = load_document().get_element_by_id("dioxusroot").unwrap();
-    let mut websys_dom = dom::WebsysDom::new(root_el, cfg);
+    let tasks = dom.get_event_sender();
 
-    let mut edits = Vec::new();
-    dom.rebuild(&mut websys_dom, &mut edits)?;
-    websys_dom.process_edits(&mut edits);
+    let mut real = RealDomWebsys {};
 
-    log::info!("Going into event loop");
-
-    // #[allow(unreachable_code)]
-    loop {
-        let trigger = {
-            let real_queue = websys_dom.wait_for_event();
-            if dom.any_pending_events() {
-                log::info!("tasks is not empty, waiting for either tasks or event system");
-                let mut task = dom.wait_for_event();
-
-                pin_mut!(real_queue);
-                pin_mut!(task);
-
-                match futures_util::future::select(real_queue, task).await {
-                    futures_util::future::Either::Left((trigger, _)) => trigger,
-                    futures_util::future::Either::Right((trigger, _)) => trigger,
-                }
-            } else {
-                log::info!("tasks is empty, waiting for dom event to trigger soemthing");
-                real_queue.await
-            }
-        };
-
-        if let Some(real_trigger) = trigger {
-            log::info!("event received");
-
-            dom.queue_event(real_trigger);
-
-            let mut edits = Vec::new();
-            dom.progress_with_event(&mut websys_dom, &mut edits).await?;
-            websys_dom.process_edits(&mut edits);
-        }
+    // initialize the virtualdom first
+    if cfg.hydrate {
+        dom.rebuild_in_place()?;
     }
 
-    // should actually never return from this, should be an error, rustc just cant see it
+    let mut websys_dom = dom::WebsysDom::new(
+        root_el,
+        cfg,
+        Rc::new(move |event| tasks.unbounded_send(event).unwrap()),
+    );
+
+    dom.run(&mut websys_dom).await?;
+
     Ok(())
 }
 
 struct HydrationNode {
     id: usize,
     node: Node,
+}
+
+struct RealDomWebsys {}
+impl dioxus::RealDom for RealDomWebsys {
+    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
+        todo!()
+    }
 }

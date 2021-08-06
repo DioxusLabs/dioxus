@@ -7,8 +7,8 @@ use dioxus_core::{
 use fxhash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
-    window, Document, Element, Event, HtmlElement, HtmlInputElement, HtmlOptionElement, Node,
-    NodeList,
+    window, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
+    HtmlOptionElement, Node, NodeList,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};
@@ -23,9 +23,7 @@ pub struct WebsysDom {
 
     root: Element,
 
-    event_receiver: async_channel::Receiver<EventTrigger>,
-
-    trigger: Arc<dyn Fn(EventTrigger)>,
+    sender_callback: Rc<dyn Fn(EventTrigger)>,
 
     // map of listener types to number of those listeners
     // This is roughly a delegater
@@ -40,18 +38,8 @@ pub struct WebsysDom {
     last_node_was_text: bool,
 }
 impl WebsysDom {
-    pub fn new(root: Element, cfg: WebConfig) -> Self {
+    pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(EventTrigger)>) -> Self {
         let document = load_document();
-
-        let (sender, receiver) = async_channel::unbounded::<EventTrigger>();
-
-        let sender_callback = Arc::new(move |ev| {
-            let c = sender.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                log::debug!("sending event through channel");
-                c.send(ev).await.unwrap();
-            });
-        });
 
         let mut nodes = NodeSlab::new(2000);
         let mut listeners = FxHashMap::default();
@@ -67,12 +55,11 @@ impl WebsysDom {
                 let el: &Element = node.dyn_ref::<Element>().unwrap();
                 let id: String = el.get_attribute("dio_el").unwrap();
                 let id = id.parse::<usize>().unwrap();
-
-                // this autoresizes the vector if needed
                 nodes[id] = Some(node);
             }
 
             // Load all the event listeners into our listener register
+            // TODO
         }
 
         let mut stack = Stack::with_capacity(10);
@@ -84,16 +71,10 @@ impl WebsysDom {
             nodes,
             listeners,
             document,
-            event_receiver: receiver,
-            trigger: sender_callback,
+            sender_callback,
             root,
             last_node_was_text: false,
         }
-    }
-
-    pub async fn wait_for_event(&mut self) -> Option<EventTrigger> {
-        let v = self.event_receiver.recv().await.unwrap();
-        Some(v)
     }
 
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
@@ -310,7 +291,7 @@ impl WebsysDom {
         if let Some(entry) = self.listeners.get_mut(event) {
             entry.0 += 1;
         } else {
-            let trigger = self.trigger.clone();
+            let trigger = self.sender_callback.clone();
 
             let handler = Closure::wrap(Box::new(move |event: &web_sys::Event| {
                 // "Result" cannot be received from JS
@@ -339,25 +320,21 @@ impl WebsysDom {
     }
 
     fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
-        if name == "class" {
+        if let Some(el) = self.stack.top().dyn_ref::<Element>() {
             match ns {
-                Some("http://www.w3.org/2000/svg") => {
-                    //
-                    if let Some(el) = self.stack.top().dyn_ref::<web_sys::SvgElement>() {
-                        let r: web_sys::SvgAnimatedString = el.class_name();
-                        r.set_base_val(value);
-                        // el.set_class_name(value);
-                    }
+                // inline style support
+                Some("style") => {
+                    let el = el.dyn_ref::<HtmlElement>().unwrap();
+                    let style_dc: CssStyleDeclaration = el.style();
+                    style_dc.set_property(name, value).unwrap();
                 }
-                _ => {
-                    if let Some(el) = self.stack.top().dyn_ref::<Element>() {
-                        el.set_class_name(value);
-                    }
-                }
+                _ => el.set_attribute(name, value).unwrap(),
             }
-        } else {
-            if let Some(el) = self.stack.top().dyn_ref::<Element>() {
-                el.set_attribute(name, value).unwrap();
+            match name {
+                "value" => {}
+                "checked" => {}
+                "selected" => {}
+                _ => {}
             }
         }
     }
@@ -418,7 +395,7 @@ impl WebsysDom {
     }
 }
 
-impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
+impl<'a> dioxus_core::diff::RealDom for WebsysDom {
     // fn request_available_node(&mut self) -> ElementId {
     //     let key = self.nodes.insert(None);
     //     log::debug!("making new key: {:#?}", key);

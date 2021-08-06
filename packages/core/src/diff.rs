@@ -65,10 +65,11 @@
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
 use crate::{arena::SharedResources, innerlude::*};
+use futures_util::Future;
 use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-use std::{any::Any, cell::Cell, cmp::Ordering};
+use std::{any::Any, cell::Cell, cmp::Ordering, pin::Pin};
 use DomEdit::*;
 
 /// Instead of having handles directly over nodes, Dioxus uses simple u32 as node IDs.
@@ -79,16 +80,32 @@ use DomEdit::*;
 /// nodes as the diffing algorithm descenes through the tree. This means that whatever is on top of the stack will receive
 /// any modifications that follow. This technique enables the diffing algorithm to avoid directly handling or storing any
 /// target-specific Node type as well as easily serializing the edits to be sent over a network or IPC connection.
-pub trait RealDom<'a> {
+pub trait RealDom {
     fn raw_node_as_any(&self) -> &mut dyn Any;
+
+    /// Essentially "are we out of time to do more work?"
+    /// Right now, defaults to "no" giving us unlimited time to process work.
+    /// This will lead to blocking behavior in the UI, so implementors will want to override this.
+    fn must_commit(&self) -> bool {
+        false
+    }
+
+    fn commit_edits<'a>(&mut self, edits: &mut Vec<DomEdit<'a>>) {}
+
+    // pause the virtualdom until the main loop is ready to process more work
+    fn wait_until_ready<'s>(&'s mut self) -> Pin<Box<dyn Future<Output = ()> + 's>> {
+        //
+        Box::pin(async {
+            //
+        })
+    }
 }
 
-pub struct DiffMachine<'real, 'bump> {
-    pub real_dom: &'real dyn RealDom<'bump>,
-
+pub struct DiffMachine<'r, 'bump> {
+    // pub real_dom: &'real dyn RealDom,
     pub vdom: &'bump SharedResources,
 
-    pub edits: &'real mut Vec<DomEdit<'bump>>,
+    pub edits: &'r mut Vec<DomEdit<'bump>>,
 
     pub scope_stack: SmallVec<[ScopeId; 5]>,
 
@@ -99,15 +116,13 @@ pub struct DiffMachine<'real, 'bump> {
     pub seen_scopes: FxHashSet<ScopeId>,
 }
 
-impl<'real, 'bump> DiffMachine<'real, 'bump> {
+impl<'r, 'bump> DiffMachine<'r, 'bump> {
     pub(crate) fn new(
-        edits: &'real mut Vec<DomEdit<'bump>>,
-        dom: &'real dyn RealDom<'bump>,
+        edits: &'r mut Vec<DomEdit<'bump>>,
         cur_scope: ScopeId,
         shared: &'bump SharedResources,
     ) -> Self {
         Self {
-            real_dom: dom,
             edits,
             scope_stack: smallvec![cur_scope],
             vdom: shared,
@@ -121,18 +136,24 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
     ///
     /// This will PANIC if any component elements are passed in.
     pub fn new_headless(
-        edits: &'real mut Vec<DomEdit<'bump>>,
-        dom: &'real dyn RealDom<'bump>,
+        edits: &'r mut Vec<DomEdit<'bump>>,
         shared: &'bump SharedResources,
     ) -> Self {
         Self {
-            real_dom: dom,
             edits,
             scope_stack: smallvec![ScopeId(0)],
             vdom: shared,
             diffed: FxHashSet::default(),
             seen_scopes: FxHashSet::default(),
         }
+    }
+
+    //
+    pub fn diff_scope(&mut self, id: ScopeId) -> Result<()> {
+        let component = self.get_scope_mut(&id).ok_or_else(|| Error::NotMounted)?;
+        let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+        self.diff_node(old, new);
+        Ok(())
     }
 
     // Diff the `old` node with the `new` node. Emits instructions to modify a
@@ -396,11 +417,7 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
                 } = el;
 
                 let real_id = self.vdom.reserve_node();
-                if let Some(namespace) = namespace {
-                    self.edit_create_element(tag_name, Some(namespace), real_id)
-                } else {
-                    self.edit_create_element(tag_name, None, real_id)
-                };
+                self.edit_create_element(tag_name, *namespace, real_id);
                 dom_id.set(Some(real_id));
 
                 let cur_scope = self.current_scope().unwrap();
@@ -1451,6 +1468,29 @@ impl<'real, 'bump> DiffMachine<'real, 'bump> {
         });
     }
 
+    pub(crate) fn edit_set_attribute_ns(
+        &mut self,
+        attribute: &'bump Attribute,
+        namespace: &'bump str,
+    ) {
+        let Attribute {
+            name,
+            value,
+            is_static,
+            is_volatile,
+            // namespace,
+            ..
+        } = attribute;
+        // field: &'static str,
+        // value: &'bump str,
+        // ns: Option<&'static str>,
+        self.edits.push(SetAttribute {
+            field: name,
+            value,
+            ns: Some(namespace),
+        });
+    }
+
     pub(crate) fn edit_remove_attribute(&mut self, attribute: &Attribute) {
         let name = attribute.name;
         self.edits.push(RemoveAttribute { name });
@@ -1627,131 +1667,3 @@ fn compare_strs(a: &str, b: &str) -> bool {
         true
     }
 }
-
-// // Now we will iterate from the end of the new children back to the
-// // beginning, diffing old children we are reusing and if they aren't in the
-// // LIS moving them to their new destination, or creating new children. Note
-// // that iterating in reverse order lets us use `Node.prototype.insertBefore`
-// // to move/insert children.
-// //
-// // But first, we ensure that we have a child on the change list stack that
-// // we can `insertBefore`. We handle this once before looping over `new`
-// // children, so that we don't have to keep checking on every loop iteration.
-// if shared_suffix_count > 0 {
-//     // There is a shared suffix after these middle children. We will be
-//     // inserting before that shared suffix, so add the first child of that
-//     // shared suffix to the change list stack.
-//     //
-//     // [... parent]
-
-//     // TODO
-
-//     // self.edits
-//     //     .go_down_to_child(old_shared_suffix_start - removed_count);
-//     // [... parent first_child_of_shared_suffix]
-// } else {
-//     // There is no shared suffix coming after these middle children.
-//     // Therefore we have to process the last child in `new` and move it to
-//     // the end of the parent's children if it isn't already there.
-//     let last_index = new.len() - 1;
-//     // uhhhh why an unwrap?
-//     let last = new.last().unwrap();
-//     // let last = new.last().unwrap_throw();
-//     new = &new[..new.len() - 1];
-//     if shared_keys.contains(&last.key()) {
-//         let old_index = new_index_to_old_index[last_index];
-//         let temp = old_index_to_temp[old_index];
-//         // [... parent]
-//         // self.go_down_to_temp_child(temp);
-//         // [... parent last]
-//         self.diff_node(&old[old_index], last);
-
-//         if new_index_is_in_lis.contains(&last_index) {
-//             // Don't move it, since it is already where it needs to be.
-//         } else {
-//             // self.commit_traversal();
-//             // [... parent last]
-//             // self.append_child();
-//             // [... parent]
-//             // self.go_down_to_temp_child(temp);
-//             // [... parent last]
-//         }
-//     } else {
-//         // self.commit_traversal();
-//         // [... parent]
-//         let meta = self.create_vnode(last);
-
-//         // [... parent last]
-//         // self.append_child();
-//         // [... parent]
-//         // self.go_down_to_reverse_child(0);
-//         // [... parent last]
-//     }
-// }
-
-// for (new_index, new_child) in new.iter().enumerate().rev() {
-//     let old_index = new_index_to_old_index[new_index];
-//     if old_index == u32::MAX as usize {
-//         debug_assert!(!shared_keys.contains(&new_child.key()));
-//         // self.commit_traversal();
-//         // [... parent successor]
-//         let meta = self.create_vnode(new_child);
-//         // [... parent successor new_child]
-//         self.edit_insert_after(meta.added_to_stack);
-//         // self.insert_before();
-//         // [... parent new_child]
-//     } else {
-//         debug_assert!(shared_keys.contains(&new_child.key()));
-//         let temp = old_index_to_temp[old_index];
-//         debug_assert_ne!(temp, u32::MAX);
-
-//         if new_index_is_in_lis.contains(&new_index) {
-//             // [... parent successor]
-//             // self.go_to_temp_sibling(temp);
-//             // [... parent new_child]
-//         } else {
-//             // self.commit_traversal();
-//             // [... parent successor]
-//             // self.push_temporary(temp);
-//             // [... parent successor new_child]
-//             // self.insert_before();
-//             // [... parent new_child]
-//         }
-
-//         self.diff_node(&old[old_index], new_child);
-//     }
-// }
-
-// Save each of the old children whose keys are reused in the new
-// children
-// let reused_children = vec![];
-// let mut old_index_to_temp = vec![u32::MAX; old.len()];
-// let mut start = 0;
-// loop {
-//     let end = (start..old.len())
-//         .find(|&i| {
-//             let key = old[i].key();
-//             !shared_keys.contains(&key)
-//         })
-//         .unwrap_or(old.len());
-
-//     if end - start > 0 {
-//         // self.commit_traversal();
-//         // let mut t = 5;
-//         let mut t = self.save_children_to_temporaries(
-//             shared_prefix_count + start,
-//             shared_prefix_count + end,
-//         );
-//         for i in start..end {
-//             old_index_to_temp[i] = t;
-//             t += 1;
-//         }
-//     }
-
-//     debug_assert!(end <= old.len());
-//     if end == old.len() {
-//         break;
-//     } else {
-//         start = end + 1;
-//     }
-// }

@@ -359,7 +359,6 @@ impl<'a> NodeFactory<'a> {
         component: FC<P>,
         props: P,
         key: Option<Arguments>,
-        // key: Option<&'a str>,
         children: V,
     ) -> VNode<'a>
     where

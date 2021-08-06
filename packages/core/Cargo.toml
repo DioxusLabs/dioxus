@@ -39,9 +39,12 @@ smallvec = "1.6.1"
 
 slab = "0.4.3"
 
+futures-channel = "0.3.16"
+
 
 [dev-dependencies]
 anyhow = "1.0.42"
+async-std = { version = "1.9.0", features = ["attributes"] }
 dioxus-html = { path = "../html" }
 
 

@@ -18,8 +18,9 @@
 //!
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
-
+#![allow(unreachable_code)]
 use futures_util::StreamExt;
+use fxhash::FxHashMap;
 
 use crate::hooks::{SuspendedContext, SuspenseHook};
 use crate::{arena::SharedResources, innerlude::*};
@@ -28,6 +29,7 @@ use std::any::Any;
 
 use std::any::TypeId;
 use std::cell::{Ref, RefCell, RefMut};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 use std::pin::Pin;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
@@ -51,7 +53,7 @@ pub struct VirtualDom {
     /// Should always be the first (gen=0, id=0)
     pub base_scope: ScopeId,
 
-    pub triggers: RefCell<Vec<EventTrigger>>,
+    pending_events: BTreeMap<EventKey, EventTrigger>,
 
     // for managing the props that were used to create the dom
     #[doc(hidden)]
@@ -61,9 +63,6 @@ pub struct VirtualDom {
     _root_props: std::pin::Pin<Box<dyn std::any::Any>>,
 }
 
-// ======================================
-// Public Methods for the VirtualDom
-// ======================================
 impl VirtualDom {
     /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
     ///
@@ -145,14 +144,14 @@ impl VirtualDom {
             base_scope,
             _root_props: root_props,
             shared: components,
-            triggers: Default::default(),
+            pending_events: BTreeMap::new(),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
 
     pub fn launch_in_place(root: FC<()>) -> Self {
         let mut s = Self::new(root);
-        s.rebuild_in_place();
+        s.rebuild_in_place().unwrap();
         s
     }
 
@@ -160,8 +159,16 @@ impl VirtualDom {
     ///
     pub fn launch_with_props_in_place<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let mut s = Self::new_with_props(root, root_props);
-        s.rebuild_in_place();
+        s.rebuild_in_place().unwrap();
         s
+    }
+
+    pub fn base_scope(&self) -> &Scope {
+        unsafe { self.shared.get_scope(self.base_scope).unwrap() }
+    }
+
+    pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
+        unsafe { self.shared.get_scope(id) }
     }
 
     /// Rebuilds the VirtualDOM from scratch, but uses a "dummy" RealDom.
@@ -174,21 +181,22 @@ impl VirtualDom {
     ///
     /// SSR takes advantage of this by using Dioxus itself as the source of truth, and rendering from the tree directly.
     pub fn rebuild_in_place(&mut self) -> Result<Vec<DomEdit>> {
-        let mut realdom = DebugDom::new();
-        let mut edits = Vec::new();
-        self.rebuild(&mut realdom, &mut edits)?;
-        Ok(edits)
+        todo!();
+        // let mut realdom = DebugDom::new();
+        // let mut edits = Vec::new();
+        // self.rebuild(&mut realdom, &mut edits)?;
+        // Ok(edits)
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
     ///
     /// The diff machine expects the RealDom's stack to be the root of the application
-    pub fn rebuild<'s>(
-        &'s mut self,
-        realdom: &'_ mut dyn RealDom<'s>,
-        edits: &'_ mut Vec<DomEdit<'s>>,
-    ) -> Result<()> {
-        let mut diff_machine = DiffMachine::new(edits, realdom, self.base_scope, &self.shared);
+    ///
+    /// Events like garabge collection, application of refs, etc are not handled by this method and can only be progressed
+    /// through "run"
+    ///
+    pub fn rebuild<'s>(&'s mut self, edits: &'_ mut Vec<DomEdit<'s>>) -> Result<()> {
+        let mut diff_machine = DiffMachine::new(edits, self.base_scope, &self.shared);
 
         let cur_component = diff_machine
             .get_scope_mut(&self.base_scope)
@@ -209,219 +217,220 @@ impl VirtualDom {
         Ok(())
     }
 
-    ///
-    ///
-    ///
-    ///
-    ///
-    pub fn queue_event(&self, trigger: EventTrigger) {
-        let mut triggers = self.triggers.borrow_mut();
-        triggers.push(trigger);
+    async fn select_next_event(&mut self) -> Option<EventTrigger> {
+        let mut receiver = self.shared.task_receiver.borrow_mut();
+
+        // drain the in-flight events so that we can sort them out with the current events
+        while let Ok(Some(trigger)) = receiver.try_next() {
+            log::info!("scooping event from receiver");
+            self.pending_events.insert(trigger.make_key(), trigger);
+        }
+
+        if self.pending_events.is_empty() {
+            // Continuously poll the future pool and the event receiver for work
+            let mut tasks = self.shared.async_tasks.borrow_mut();
+            let tasks_tasks = tasks.next();
+
+            let mut receiver = self.shared.task_receiver.borrow_mut();
+            let reciv_task = receiver.next();
+
+            futures_util::pin_mut!(tasks_tasks);
+            futures_util::pin_mut!(reciv_task);
+
+            let trigger = match futures_util::future::select(tasks_tasks, reciv_task).await {
+                futures_util::future::Either::Left((trigger, _)) => trigger,
+                futures_util::future::Either::Right((trigger, _)) => trigger,
+            }
+            .unwrap();
+            self.pending_events.insert(trigger.make_key(), trigger);
+        }
+
+        todo!()
+
+        // let trigger = self.select_next_event().unwrap();
+        // trigger
     }
 
-    /// This method is the most sophisticated way of updating the virtual dom after an external event has been triggered.
-    ///  
-    /// Given a synthetic event, the component that triggered the event, and the index of the callback, this runs the virtual
-    /// dom to completion, tagging components that need updates, compressing events together, and finally emitting a single
-    /// change list.
-    ///
-    /// If implementing an external renderer, this is the perfect method to combine with an async event loop that waits on
-    /// listeners, something like this:
-    ///
-    /// ```ignore
-    /// while let Ok(event) = receiver.recv().await {
-    ///     let edits = self.internal_dom.progress_with_event(event)?;
-    ///     for edit in &edits {
-    ///         patch_machine.handle_edit(edit);
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// Note: this method is not async and does not provide suspense-like functionality. It is up to the renderer to provide the
-    /// executor and handlers for suspense as show in the example.
-    ///
-    /// ```ignore
-    /// let (sender, receiver) = channel::new();
-    /// sender.send(EventTrigger::start());
-    ///
-    /// let mut dom = VirtualDom::new();
-    /// dom.suspense_handler(|event| sender.send(event));
-    ///
-    /// while let Ok(diffs) = dom.progress_with_event(receiver.recv().await) {
-    ///     render(diffs);
-    /// }
-    ///
-    /// ```
+    // the cooperartive, fiber-based scheduler
+    // is "awaited" and will always return some edits for the real dom to apply
     //
-    // Developer notes:
-    // ----
-    // This method has some pretty complex safety guarantees to uphold.
-    // We interact with bump arenas, raw pointers, and use UnsafeCell to get a partial borrow of the arena.
-    // The final EditList has edits that pull directly from the Bump Arenas which add significant complexity
-    // in crafting a 100% safe solution with traditional lifetimes. Consider this method to be internally unsafe
-    // but the guarantees provide a safe, fast, and efficient abstraction for the VirtualDOM updating framework.
+    // Right now, we'll happily partially render component trees
     //
-    // A good project would be to remove all unsafe from this crate and move the unsafety into safer abstractions.
-    pub async fn progress_with_event<'a, 's>(
-        &'s mut self,
-        realdom: &'a mut dyn RealDom<'s>,
-        edits: &'a mut Vec<DomEdit<'s>>,
-    ) -> Result<()> {
-        let trigger = self.triggers.borrow_mut().pop().expect("failed");
+    // Normally, you would descend through the tree depth-first, but we actually descend breadth-first.
+    pub async fn run(&mut self, realdom: &mut dyn RealDom) -> Result<()> {
+        let cur_component = self.base_scope;
+        let mut edits = Vec::new();
+        let resources = self.shared.clone();
 
-        let mut diff_machine = DiffMachine::new(edits, realdom, trigger.originator, &self.shared);
+        let mut diff_machine = DiffMachine::new(&mut edits, cur_component, &resources);
 
-        match &trigger.event {
-            // When a scope gets destroyed during a diff, it gets its own garbage collection event
-            // However, an old scope might be attached
-            VirtualEvent::GarbageCollection => {
-                let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
+        loop {
+            let trigger = self.select_next_event().await.unwrap();
 
-                let mut garbage_list = scope.consume_garbage();
+            match &trigger.event {
+                // Collecting garabge is not currently interruptible.
+                //
+                // In the future, it could be though
+                VirtualEvent::GarbageCollection => {
+                    let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
 
-                while let Some(node) = garbage_list.pop() {
-                    match &node.kind {
-                        VNodeKind::Text(_) => {
-                            //
-                            self.shared.collect_garbage(node.direct_id())
-                        }
-                        VNodeKind::Anchor(anchor) => {
-                            //
-                        }
+                    let mut garbage_list = scope.consume_garbage();
 
-                        VNodeKind::Element(el) => {
-                            self.shared.collect_garbage(node.direct_id());
-                            for child in el.children {
-                                garbage_list.push(child);
+                    let mut scopes_to_kill = Vec::new();
+                    while let Some(node) = garbage_list.pop() {
+                        match &node.kind {
+                            VNodeKind::Text(_) => {
+                                self.shared.collect_garbage(node.direct_id());
+                            }
+                            VNodeKind::Anchor(_) => {
+                                self.shared.collect_garbage(node.direct_id());
+                            }
+                            VNodeKind::Suspended(_) => {
+                                self.shared.collect_garbage(node.direct_id());
+                            }
+
+                            VNodeKind::Element(el) => {
+                                self.shared.collect_garbage(node.direct_id());
+                                for child in el.children {
+                                    garbage_list.push(child);
+                                }
+                            }
+
+                            VNodeKind::Fragment(frag) => {
+                                for child in frag.children {
+                                    garbage_list.push(child);
+                                }
+                            }
+
+                            VNodeKind::Component(comp) => {
+                                // TODO: run the hook destructors and then even delete the scope
+                                // TODO: allow interruption here
+                                if !realdom.must_commit() {
+                                    let scope_id = comp.ass_scope.get().unwrap();
+                                    let scope = self.get_scope(scope_id).unwrap();
+                                    let root = scope.root();
+                                    garbage_list.push(root);
+                                    scopes_to_kill.push(scope_id);
+                                }
                             }
                         }
+                    }
 
-                        VNodeKind::Fragment(frag) => {
-                            for child in frag.children {
-                                garbage_list.push(child);
-                            }
-                        }
-                        VNodeKind::Component(comp) => {
-                            // run the destructors
-                            todo!();
-                        }
-                        VNodeKind::Suspended(node) => {
-                            // make sure the task goes away
-                            todo!();
-                        }
+                    for scope in scopes_to_kill {
+                        // oy kill em
+                        log::debug!("should be removing scope {:#?}", scope);
                     }
                 }
-            }
 
-            // Nothing yet
-            VirtualEvent::AsyncEvent { .. } => {}
-
-            // Suspense Events! A component's suspended node is updated
-            VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
-                // Safety: this handler is the only thing that can mutate shared items at this moment in tim
-                let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
-
-                // safety: we are sure that there are no other references to the inner content of suspense hooks
-                let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
-
-                let cx = Context { scope, props: &() };
-                let scx = SuspendedContext { inner: cx };
-
-                // generate the new node!
-                let nodes: Option<VNode<'s>> = (&hook.callback)(scx);
-                match nodes {
-                    None => {
-                        log::warn!("Suspense event came through, but there was no mounted node to update >:(");
-                    }
-                    Some(nodes) => {
-                        // todo!("using the wrong frame");
-                        let nodes = scope.frames.finished_frame().bump.alloc(nodes);
-
-                        // push the old node's root onto the stack
-                        let real_id = domnode.get().ok_or(Error::NotMounted)?;
-                        diff_machine.edit_push_root(real_id);
-
-                        // push these new nodes onto the diff machines stack
-                        let meta = diff_machine.create_vnode(&*nodes);
-
-                        // replace the placeholder with the new nodes we just pushed on the stack
-                        diff_machine.edit_replace_with(1, meta.added_to_stack);
-                    }
+                VirtualEvent::AsyncEvent { .. } => {
+                    // we want to progress these events
+                    // However, there's nothing we can do for these events, they must generate their own events.
                 }
-            }
 
-            // This is the "meat" of our cooperative scheduler
-            // As updates flow in, we re-evalute the event queue and decide if we should be switching the type of work
-            //
-            // We use the reconciler to request new IDs and then commit/uncommit the IDs when the scheduler is finished
-            _ => {
-                diff_machine
-                    .get_scope_mut(&trigger.originator)
-                    .map(|f| f.call_listener(trigger));
+                // Suspense Events! A component's suspended node is updated
+                VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
+                    // Safety: this handler is the only thing that can mutate shared items at this moment in tim
+                    let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
 
-                // Now, there are events in the queue
-                let mut updates = self.shared.borrow_queue();
+                    // safety: we are sure that there are no other references to the inner content of suspense hooks
+                    let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
 
-                // Order the nodes by their height, we want the nodes with the smallest depth on top
-                // This prevents us from running the same component multiple times
-                updates.sort_unstable();
+                    let cx = Context { scope, props: &() };
+                    let scx = SuspendedContext { inner: cx };
 
-                log::debug!("There are: {:#?} updates to be processed", updates.len());
-
-                // Iterate through the triggered nodes (sorted by height) and begin to diff them
-                for update in updates.drain(..) {
-                    log::debug!("Running updates for: {:#?}", update);
-
-                    // Make sure this isn't a node we've already seen, we don't want to double-render anything
-                    // If we double-renderer something, this would cause memory safety issues
-                    if diff_machine.seen_scopes.contains(&update.idx) {
-                        log::debug!("Skipping update for: {:#?}", update);
-                        continue;
-                    }
-
-                    // Start a new mutable borrow to components
-                    // We are guaranteeed that this scope is unique because we are tracking which nodes have modified in the diff machine
-                    let cur_component = diff_machine
-                        .get_scope_mut(&update.idx)
-                        .expect("Failed to find scope or borrow would be aliasing");
-
-                    // Now, all the "seen nodes" are nodes that got notified by running this listener
-                    diff_machine.seen_scopes.insert(update.idx.clone());
-
-                    if cur_component.run_scope().is_ok() {
-                        let (old, new) = (
-                            cur_component.frames.wip_head(),
-                            cur_component.frames.fin_head(),
+                    // generate the new node!
+                    let nodes: Option<VNode> = (&hook.callback)(scx);
+                    match nodes {
+                        None => {
+                            log::warn!(
+                            "Suspense event came through, but there were no generated nodes >:(."
                         );
-                        diff_machine.diff_node(old, new);
+                        }
+                        Some(nodes) => {
+                            // allocate inside the finished frame - not the WIP frame
+                            let nodes = scope.frames.finished_frame().bump.alloc(nodes);
+
+                            // push the old node's root onto the stack
+                            let real_id = domnode.get().ok_or(Error::NotMounted)?;
+                            diff_machine.edit_push_root(real_id);
+
+                            // push these new nodes onto the diff machines stack
+                            let meta = diff_machine.create_vnode(&*nodes);
+
+                            // replace the placeholder with the new nodes we just pushed on the stack
+                            diff_machine.edit_replace_with(1, meta.added_to_stack);
+                        }
                     }
                 }
+
+                // Run the component
+                VirtualEvent::ScheduledUpdate { height: u32 } => {
+                    let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
+
+                    match scope.run_scope() {
+                        Ok(_) => {
+                            let event = VirtualEvent::DiffComponent;
+                            let trigger = EventTrigger {
+                                event,
+                                originator: trigger.originator,
+                                priority: EventPriority::High,
+                                real_node_id: None,
+                            };
+                            self.shared.task_sender.unbounded_send(trigger);
+                        }
+                        Err(_) => {
+                            log::error!("failed to run this component!");
+                        }
+                    }
+                }
+
+                VirtualEvent::DiffComponent => {
+                    diff_machine.diff_scope(trigger.originator)?;
+                }
+
+                // Process any user-facing events just by calling their listeners
+                // This performs no actual work - but the listeners themselves will cause insert new work
+                VirtualEvent::ClipboardEvent(_)
+                | VirtualEvent::CompositionEvent(_)
+                | VirtualEvent::KeyboardEvent(_)
+                | VirtualEvent::FocusEvent(_)
+                | VirtualEvent::FormEvent(_)
+                | VirtualEvent::SelectionEvent(_)
+                | VirtualEvent::TouchEvent(_)
+                | VirtualEvent::UIEvent(_)
+                | VirtualEvent::WheelEvent(_)
+                | VirtualEvent::MediaEvent(_)
+                | VirtualEvent::AnimationEvent(_)
+                | VirtualEvent::TransitionEvent(_)
+                | VirtualEvent::ToggleEvent(_)
+                | VirtualEvent::MouseEvent(_)
+                | VirtualEvent::PointerEvent(_) => {
+                    let scope_id = &trigger.originator;
+                    let scope = unsafe { self.shared.get_scope_mut(*scope_id) };
+                    match scope {
+                        Some(scope) => scope.call_listener(trigger)?,
+                        None => {
+                            log::warn!("No scope found for event: {:#?}", scope_id);
+                        }
+                    }
+                }
+            }
+
+            if realdom.must_commit() || self.pending_events.is_empty() {
+                realdom.commit_edits(&mut diff_machine.edits);
+                realdom.wait_until_ready().await;
             }
         }
 
         Ok(())
     }
 
-    pub async fn wait_for_event(&mut self) -> Option<EventTrigger> {
-        let r = self.shared.tasks.clone();
-        let mut r = r.borrow_mut();
-        let gh = r.next().await;
-
-        gh
-    }
-
-    pub fn any_pending_events(&self) -> bool {
-        let r = self.shared.tasks.clone();
-        let r = r.borrow();
-        !r.is_empty()
-    }
-
-    pub fn base_scope(&self) -> &Scope {
-        unsafe { self.shared.get_scope(self.base_scope).unwrap() }
-    }
-
-    pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
-        unsafe { self.shared.get_scope(id) }
+    pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<EventTrigger> {
+        todo!()
+        // std::rc::Rc::new(move |_| {
+        //     //
+        // })
+        // todo()
     }
 }
 
@@ -429,3 +438,9 @@ impl VirtualDom {
 // These impls are actually wrong. The DOM needs to have a mutex implemented.
 unsafe impl Sync for VirtualDom {}
 unsafe impl Send for VirtualDom {}
+
+fn select_next_event(
+    pending_events: &mut BTreeMap<EventKey, EventTrigger>,
+) -> Option<EventTrigger> {
+    None
+}

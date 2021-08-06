@@ -115,6 +115,8 @@ impl Scope {
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
         if !self.pending_garbage.borrow().is_empty() {
+            // We have some garbage to clean up
+            log::error!("Cleaning up garabge");
             panic!("cannot run scope while garbage is pending! Please clean up your mess first");
         }
 
@@ -122,18 +124,17 @@ impl Scope {
 
         // make sure we call the drop implementation on all the listeners
         // this is important to not leak memory
-        for listener in self
-            .listeners
+        self.listeners
             .borrow_mut()
             .drain(..)
             .map(|li| unsafe { &*li })
-        {
-            let mut cb = listener.callback.borrow_mut();
-            match cb.take() {
-                Some(val) => std::mem::drop(val),
-                None => log::info!("no callback to drop. component must be broken"),
-            };
-        }
+            .for_each(|listener| {
+                listener.callback.borrow_mut().take();
+            });
+
+        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+        // run the hooks (which hold an &mut Referrence)
+        // right now, we don't drop
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held

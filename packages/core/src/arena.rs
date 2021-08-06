@@ -33,19 +33,22 @@ impl ElementId {
 }
 
 type Shared<T> = Rc<RefCell<T>>;
+type TaskReceiver = futures_channel::mpsc::UnboundedReceiver<EventTrigger>;
+type TaskSender = futures_channel::mpsc::UnboundedSender<EventTrigger>;
 
 /// These are resources shared among all the components and the virtualdom itself
 #[derive(Clone)]
 pub struct SharedResources {
     pub components: Rc<UnsafeCell<Slab<Scope>>>,
 
-    pub event_queue: Shared<Vec<HeightMarker>>,
-
-    pub events: Shared<Vec<EventTrigger>>,
-
     pub(crate) heuristics: Shared<HeuristicsEngine>,
 
-    pub tasks: Shared<FuturesUnordered<FiberTask>>,
+    ///
+    pub task_sender: TaskSender,
+
+    pub task_receiver: Shared<TaskReceiver>,
+
+    pub async_tasks: Shared<FuturesUnordered<FiberTask>>,
 
     /// We use a SlotSet to keep track of the keys that are currently being used.
     /// However, we don't store any specific data since the "mirror"
@@ -63,30 +66,39 @@ impl SharedResources {
         // elements are super cheap - the value takes no space
         let raw_elements = Slab::with_capacity(2000);
 
-        let event_queue = Rc::new(RefCell::new(Vec::new()));
-        let tasks = Vec::new();
+        // let pending_events = Rc::new(RefCell::new(Vec::new()));
+
+        let (sender, receiver) = futures_channel::mpsc::unbounded();
+
         let heuristics = HeuristicsEngine::new();
 
+        // we allocate this task setter once to save us from having to allocate later
         let task_setter = {
-            let queue = event_queue.clone();
+            let queue = sender.clone();
             let components = components.clone();
             Rc::new(move |idx: ScopeId| {
                 let comps = unsafe { &*components.get() };
 
                 if let Some(scope) = comps.get(idx.0) {
-                    queue.borrow_mut().push(HeightMarker {
-                        height: scope.height,
-                        idx,
-                    })
+                    queue
+                        .unbounded_send(EventTrigger::new(
+                            VirtualEvent::ScheduledUpdate {
+                                height: scope.height,
+                            },
+                            idx,
+                            None,
+                            EventPriority::High,
+                        ))
+                        .expect("The event queu receiver should *never* be dropped");
                 }
-            })
+            }) as Rc<dyn Fn(ScopeId)>
         };
 
         Self {
-            event_queue,
             components,
-            tasks: Rc::new(RefCell::new(FuturesUnordered::new())),
-            events: Rc::new(RefCell::new(tasks)),
+            async_tasks: Rc::new(RefCell::new(FuturesUnordered::new())),
+            task_receiver: Rc::new(RefCell::new(receiver)),
+            task_sender: sender,
             heuristics: Rc::new(RefCell::new(heuristics)),
             raw_elements: Rc::new(RefCell::new(raw_elements)),
             task_setter,
@@ -136,12 +148,7 @@ impl SharedResources {
 
     /// return the id, freeing the space of the original node
     pub fn collect_garbage(&self, id: ElementId) {
-        let mut r: RefMut<Slab<()>> = self.raw_elements.borrow_mut();
-        r.remove(id.0);
-    }
-
-    pub fn borrow_queue(&self) -> RefMut<Vec<HeightMarker>> {
-        self.event_queue.borrow_mut()
+        self.raw_elements.borrow_mut().remove(id.0);
     }
 
     pub fn insert_scope_with_key(&self, f: impl FnOnce(ScopeId) -> Scope) -> ScopeId {
@@ -157,7 +164,7 @@ impl SharedResources {
     }
 
     pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
-        self.tasks.borrow_mut().push(task);
+        self.async_tasks.borrow_mut().push(task);
         TaskHandle {}
     }
 }

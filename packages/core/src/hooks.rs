@@ -111,7 +111,7 @@ where
 
     // whenever the task is complete, save it into th
     cx.use_hook(
-        move |hook_idx| {
+        move |_| {
             let task_fut = task_initializer();
 
             let task_dump = Rc::new(RefCell::new(None));
@@ -127,7 +127,7 @@ where
                 *slot.as_ref().borrow_mut() = Some(output);
                 updater(update_id);
                 EventTrigger {
-                    event: VirtualEvent::AsyncEvent { hook_idx },
+                    event: VirtualEvent::AsyncEvent {},
                     originator,
                     priority: EventPriority::Low,
                     real_node_id: None,

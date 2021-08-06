@@ -33,6 +33,7 @@ features = [
     "Attr",
     "Document",
     "Element",
+    "CssStyleDeclaration",
     "HtmlElement",
     "HtmlInputElement",
     "HtmlSelectElement",

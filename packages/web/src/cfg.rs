@@ -1,9 +1,13 @@
 pub struct WebConfig {
     pub(crate) hydrate: bool,
+    pub(crate) rootname: String,
 }
 impl Default for WebConfig {
     fn default() -> Self {
-        Self { hydrate: false }
+        Self {
+            hydrate: false,
+            rootname: "dioxusroot".to_string(),
+        }
     }
 }
 impl WebConfig {
@@ -16,6 +20,11 @@ impl WebConfig {
     ///
     pub fn hydrate(mut self, f: bool) -> Self {
         self.hydrate = f;
+        self
+    }
+
+    pub fn rootname(mut self, name: impl Into<String>) -> Self {
+        self.rootname = name.into();
         self
     }
 }

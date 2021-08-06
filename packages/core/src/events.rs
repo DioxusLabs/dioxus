@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    innerlude::{ElementId, HeightMarker, ScopeId},
+    innerlude::{ElementId, ScopeId},
     VNode,
 };
 
@@ -28,15 +28,32 @@ pub struct EventTrigger {
     /// The priority of the event
     pub priority: EventPriority,
 }
-
 impl EventTrigger {
-    pub fn new_from_task(originator: ScopeId, hook_idx: usize) -> Self {
-        Self {
-            originator,
-            event: VirtualEvent::AsyncEvent { hook_idx },
-            priority: EventPriority::Low,
-            real_node_id: None,
+    pub fn make_key(&self) -> EventKey {
+        EventKey {
+            originator: self.originator,
+            priority: self.priority,
         }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+pub struct EventKey {
+    /// The originator of the event trigger
+    pub originator: ScopeId,
+    /// The priority of the event
+    pub priority: EventPriority,
+    // TODO: add the time that the event was queued
+}
+
+impl PartialOrd for EventKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        todo!()
+    }
+}
+impl Ord for EventKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        todo!()
     }
 }
 
@@ -47,7 +64,7 @@ impl EventTrigger {
 /// implement this form of scheduling internally, however Dioxus will perform its own scheduling as well.
 ///
 /// The ultimate goal of the scheduler is to manage latency of changes, prioritizing "flashier" changes over "subtler" changes.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub enum EventPriority {
     /// Garbage collection is a type of work than can be scheduled around other work, but must be completed in a specific
     /// order. The GC must be run for a component before any other future work for that component is run. Otherwise,
@@ -92,6 +109,45 @@ impl EventTrigger {
 }
 
 pub enum VirtualEvent {
+    /// Generated during diffing to signal that a component's nodes to be given back
+    ///
+    /// Typically has a high priority
+    ///
+    /// If an event is scheduled for a component that has "garbage", that garabge will be cleaned up before the event can
+    /// be processed.
+    GarbageCollection,
+
+    ///
+    DiffComponent,
+
+    /// A type of "immediate" event scheduled by components
+    ScheduledUpdate {
+        height: u32,
+    },
+
+    // Whenever a task is ready (complete) Dioxus produces this "AsyncEvent"
+    //
+    // Async events don't necessarily propagate into a scope being ran. It's up to the event itself
+    // to force an update for itself.
+    //
+    // Most async events should have a low priority.
+    //
+    // This type exists for the task/concurrency system to signal that a task is ready.
+    // However, this does not necessarily signal that a scope must be re-ran, so the hook implementation must cause its
+    // own re-run.
+    AsyncEvent {},
+
+    // Suspense events are a type of async event
+    //
+    // they have the lowest priority
+    SuspenseEvent {
+        hook_idx: usize,
+        domnode: Rc<Cell<Option<ElementId>>>,
+    },
+
+    // image event has conflicting method types
+    // ImageEvent(event_data::ImageEvent),
+
     // Real events
     ClipboardEvent(on::ClipboardEvent),
     CompositionEvent(on::CompositionEvent),
@@ -108,30 +164,6 @@ pub enum VirtualEvent {
     ToggleEvent(on::ToggleEvent),
     MouseEvent(on::MouseEvent),
     PointerEvent(on::PointerEvent),
-
-    GarbageCollection,
-
-    // image event has conflicting method types
-    // ImageEvent(event_data::ImageEvent),
-    SetStateEvent {
-        height: HeightMarker,
-    },
-
-    // Whenever a task is ready (complete) Dioxus produces this "AsyncEvent"
-    //
-    // Async events don't necessarily propagate into a scope being ran. It's up to the event itself
-    // to force an update for itself.
-    AsyncEvent {
-        hook_idx: usize,
-    },
-
-    // These are more intrusive than the rest
-    SuspenseEvent {
-        hook_idx: usize,
-        domnode: Rc<Cell<Option<ElementId>>>,
-    },
-    // TOOD: make garbage collection its own dedicated event
-    // GarbageCollection {}
 }
 
 impl std::fmt::Debug for VirtualEvent {
@@ -153,9 +185,10 @@ impl std::fmt::Debug for VirtualEvent {
             VirtualEvent::MouseEvent(_) => "MouseEvent",
             VirtualEvent::PointerEvent(_) => "PointerEvent",
             VirtualEvent::GarbageCollection => "GarbageCollection",
-            VirtualEvent::SetStateEvent { .. } => "SetStateEvent",
+            VirtualEvent::ScheduledUpdate { .. } => "SetStateEvent",
             VirtualEvent::AsyncEvent { .. } => "AsyncEvent",
             VirtualEvent::SuspenseEvent { .. } => "SuspenseEvent",
+            VirtualEvent::DiffComponent { .. } => "DiffComponent",
         };
 
         f.debug_struct("VirtualEvent").field("type", &name).finish()
