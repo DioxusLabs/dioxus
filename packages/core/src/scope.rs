@@ -37,6 +37,7 @@ pub struct Scope {
 
     // Listeners
     pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
+    pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
 
     // State
     pub(crate) hooks: HookList,
@@ -94,6 +95,7 @@ impl Scope {
             hooks: Default::default(),
             shared_contexts: Default::default(),
             listeners: Default::default(),
+            borrowed_props: Default::default(),
             descendents: Default::default(),
             pending_garbage: Default::default(),
         }
@@ -114,27 +116,8 @@ impl Scope {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
-        if !self.pending_garbage.borrow().is_empty() {
-            // We have some garbage to clean up
-            log::error!("Cleaning up garabge");
-            panic!("cannot run scope while garbage is pending! Please clean up your mess first");
-        }
 
-        log::debug!("reset okay");
-
-        // make sure we call the drop implementation on all the listeners
-        // this is important to not leak memory
-        self.listeners
-            .borrow_mut()
-            .drain(..)
-            .map(|li| unsafe { &*li })
-            .for_each(|listener| {
-                listener.callback.borrow_mut().take();
-            });
-
-        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
-        // run the hooks (which hold an &mut Referrence)
-        // right now, we don't drop
+        self.ensure_drop_safety();
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
@@ -162,6 +145,51 @@ impl Scope {
                 Ok(())
             }
         }
+    }
+
+    /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
+    /// causuing UB in our tree.
+    ///
+    /// This works by cleaning up our references from the bottom of the tree to the top. The directed graph of components
+    /// essentially forms a dependency tree that we can traverse from the bottom to the top. As we traverse, we remove
+    /// any possible references to the data in the hook list.
+    ///
+    /// Refrences to hook data can only be stored in listeners and component props. During diffing, we make sure to log
+    /// all listeners and borrowed props so we can clear them here.
+    fn ensure_drop_safety(&mut self) {
+        // make sure all garabge is collected before trying to proceed with anything else
+        debug_assert!(
+            self.pending_garbage.borrow().is_empty(),
+            "clean up your garabge please"
+        );
+
+        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+        // run the hooks (which hold an &mut Referrence)
+        // right now, we don't drop
+        let vdom = &self.vdom;
+        self.borrowed_props
+            .get_mut()
+            .drain(..)
+            .map(|li| unsafe { &*li })
+            .for_each(|comp| {
+                // First drop the component's undropped references
+                let scope_id = comp.ass_scope.get().unwrap();
+                let scope = unsafe { vdom.get_scope_mut(scope_id) }.unwrap();
+                scope.ensure_drop_safety();
+
+                // Now, drop our own reference
+                let mut dropper = comp.drop_props.borrow_mut().take().unwrap();
+                dropper();
+            });
+
+        // Now that all the references are gone, we can safely drop our own references in our listeners.
+        self.listeners
+            .get_mut()
+            .drain(..)
+            .map(|li| unsafe { &*li })
+            .for_each(|listener| {
+                listener.callback.borrow_mut().take();
+            });
     }
 
     // A safe wrapper around calling listeners

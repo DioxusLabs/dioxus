@@ -96,7 +96,7 @@ pub async fn run_with_props<T: Properties + 'static>(
         Rc::new(move |event| tasks.unbounded_send(event).unwrap()),
     );
 
-    dom.run(&mut websys_dom).await?;
+    dom.run_with_deadline(&mut websys_dom).await?;
 
     Ok(())
 }

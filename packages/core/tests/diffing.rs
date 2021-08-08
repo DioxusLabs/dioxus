@@ -11,7 +11,6 @@ use dioxus::{
     arena::SharedResources,
     diff::{CreateMeta, DiffMachine},
     prelude::*,
-    util::DebugDom,
     DomEdit,
 };
 use dioxus_core as dioxus;

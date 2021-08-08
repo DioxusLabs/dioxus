@@ -28,21 +28,15 @@ pub struct EventTrigger {
     /// The priority of the event
     pub priority: EventPriority,
 }
-impl EventTrigger {
-    pub fn make_key(&self) -> EventKey {
-        EventKey {
-            originator: self.originator,
-            priority: self.priority,
-        }
-    }
-}
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct EventKey {
     /// The originator of the event trigger
     pub originator: ScopeId,
     /// The priority of the event
     pub priority: EventPriority,
+    /// The height of the scope (used for ordering)
+    pub height: u32,
     // TODO: add the time that the event was queued
 }
 
@@ -117,9 +111,6 @@ pub enum VirtualEvent {
     /// be processed.
     GarbageCollection,
 
-    ///
-    DiffComponent,
-
     /// A type of "immediate" event scheduled by components
     ScheduledUpdate {
         height: u32,
@@ -135,9 +126,11 @@ pub enum VirtualEvent {
     // This type exists for the task/concurrency system to signal that a task is ready.
     // However, this does not necessarily signal that a scope must be re-ran, so the hook implementation must cause its
     // own re-run.
-    AsyncEvent {},
+    AsyncEvent {
+        should_rerender: bool,
+    },
 
-    // Suspense events are a type of async event
+    // Suspense events are a type of async event generated when suspended nodes are ready to be processed.
     //
     // they have the lowest priority
     SuspenseEvent {
@@ -188,7 +181,6 @@ impl std::fmt::Debug for VirtualEvent {
             VirtualEvent::ScheduledUpdate { .. } => "SetStateEvent",
             VirtualEvent::AsyncEvent { .. } => "AsyncEvent",
             VirtualEvent::SuspenseEvent { .. } => "SuspenseEvent",
-            VirtualEvent::DiffComponent { .. } => "DiffComponent",
         };
 
         f.debug_struct("VirtualEvent").field("type", &name).finish()

@@ -4,6 +4,7 @@ pub mod dioxus {
     pub mod prelude {
         pub trait Properties {
             type Builder;
+            const IS_STATIC: bool;
             fn builder() -> Self::Builder;
             unsafe fn memoize(&self, other: &Self) -> bool;
         }

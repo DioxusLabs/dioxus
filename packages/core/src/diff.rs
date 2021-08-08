@@ -69,43 +69,13 @@ use futures_util::Future;
 use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-use std::{any::Any, cell::Cell, cmp::Ordering, pin::Pin};
+use std::{any::Any, cell::Cell, cmp::Ordering, marker::PhantomData, pin::Pin};
 use DomEdit::*;
 
-/// Instead of having handles directly over nodes, Dioxus uses simple u32 as node IDs.
-/// The expectation is that the underlying renderer will mainain their Nodes in vec where the ids are the index. This allows
-/// for a form of passive garbage collection where nodes aren't immedately cleaned up.
-///
-/// The "RealDom" abstracts over the... real dom. The RealDom trait assumes that the renderer maintains a stack of real
-/// nodes as the diffing algorithm descenes through the tree. This means that whatever is on top of the stack will receive
-/// any modifications that follow. This technique enables the diffing algorithm to avoid directly handling or storing any
-/// target-specific Node type as well as easily serializing the edits to be sent over a network or IPC connection.
-pub trait RealDom {
-    fn raw_node_as_any(&self) -> &mut dyn Any;
-
-    /// Essentially "are we out of time to do more work?"
-    /// Right now, defaults to "no" giving us unlimited time to process work.
-    /// This will lead to blocking behavior in the UI, so implementors will want to override this.
-    fn must_commit(&self) -> bool {
-        false
-    }
-
-    fn commit_edits<'a>(&mut self, edits: &mut Vec<DomEdit<'a>>) {}
-
-    // pause the virtualdom until the main loop is ready to process more work
-    fn wait_until_ready<'s>(&'s mut self) -> Pin<Box<dyn Future<Output = ()> + 's>> {
-        //
-        Box::pin(async {
-            //
-        })
-    }
-}
-
 pub struct DiffMachine<'r, 'bump> {
-    // pub real_dom: &'real dyn RealDom,
     pub vdom: &'bump SharedResources,
 
-    pub edits: &'r mut Vec<DomEdit<'bump>>,
+    pub edits: Mutations<'bump>,
 
     pub scope_stack: SmallVec<[ScopeId; 5]>,
 
@@ -114,11 +84,13 @@ pub struct DiffMachine<'r, 'bump> {
     // will be used later for garbage collection
     // we check every seen node and then schedule its eventual deletion
     pub seen_scopes: FxHashSet<ScopeId>,
+
+    _r: PhantomData<&'r ()>,
 }
 
 impl<'r, 'bump> DiffMachine<'r, 'bump> {
     pub(crate) fn new(
-        edits: &'r mut Vec<DomEdit<'bump>>,
+        edits: Mutations<'bump>,
         cur_scope: ScopeId,
         shared: &'bump SharedResources,
     ) -> Self {
@@ -128,6 +100,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
             vdom: shared,
             diffed: FxHashSet::default(),
             seen_scopes: FxHashSet::default(),
+            _r: PhantomData,
         }
     }
 
@@ -136,15 +109,16 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     ///
     /// This will PANIC if any component elements are passed in.
     pub fn new_headless(
-        edits: &'r mut Vec<DomEdit<'bump>>,
+        // edits: &'r mut Vec<DomEdit<'bump>>,
         shared: &'bump SharedResources,
     ) -> Self {
         Self {
-            edits,
+            edits: Mutations { edits: Vec::new() },
             scope_stack: smallvec![ScopeId(0)],
             vdom: shared,
             diffed: FxHashSet::default(),
             seen_scopes: FxHashSet::default(),
+            _r: PhantomData,
         }
     }
 
@@ -211,13 +185,13 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                 if old.attributes.len() == new.attributes.len() {
                     for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                         if old_attr.value != new_attr.value {
-                            please_commit(&mut self.edits);
+                            please_commit(&mut self.edits.edits);
                             self.edit_set_attribute(new_attr);
                         }
                     }
                 } else {
                     // TODO: provide some sort of report on how "good" the diffing was
-                    please_commit(&mut self.edits);
+                    please_commit(&mut self.edits.edits);
                     for attribute in old.attributes {
                         self.edit_remove_attribute(attribute);
                     }
@@ -238,7 +212,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                 if old.listeners.len() == new.listeners.len() {
                     for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                         if old_l.event != new_l.event {
-                            please_commit(&mut self.edits);
+                            please_commit(&mut self.edits.edits);
                             self.edit_remove_event_listener(old_l.event);
                             self.edit_new_event_listener(new_l, cur_scope);
                         }
@@ -246,7 +220,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                         self.fix_listener(new_l);
                     }
                 } else {
-                    please_commit(&mut self.edits);
+                    please_commit(&mut self.edits.edits);
                     for listener in old.listeners {
                         self.edit_remove_event_listener(listener.event);
                     }
@@ -421,6 +395,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                 dom_id.set(Some(real_id));
 
                 let cur_scope = self.current_scope().unwrap();
+
                 listeners.iter().for_each(|listener| {
                     self.fix_listener(listener);
                     listener.mounted_node.set(Some(real_id));
@@ -464,7 +439,6 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
             }
 
             VNodeKind::Component(vcomponent) => {
-                log::debug!("Mounting a new component");
                 let caller = vcomponent.caller.clone();
 
                 let parent_idx = self.scope_stack.last().unwrap().clone();
@@ -486,9 +460,17 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                 // Actually initialize the caller's slot with the right address
                 vcomponent.ass_scope.set(Some(new_idx));
 
+                if !vcomponent.can_memoize {
+                    let cur_scope = self.get_scope_mut(&parent_idx).unwrap();
+                    let extended = *vcomponent as *const VComponent;
+                    let extended: *const VComponent<'static> =
+                        unsafe { std::mem::transmute(extended) };
+                    cur_scope.borrowed_props.borrow_mut().push(extended);
+                }
+
                 // TODO:
-                //  Noderefs
-                //  Effects
+                //  add noderefs to current noderef list Noderefs
+                //  add effects to current effect list Effects
 
                 let new_component = self.get_scope_mut(&new_idx).unwrap();
 
@@ -501,9 +483,6 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                         // failed to run. this is the first time the component ran, and it failed
                         // we manually set its head node to an empty fragment
                         panic!("failing components not yet implemented");
-
-                        // new_component.frames.head
-                        // self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
                     }
                 }
 
@@ -1367,42 +1346,42 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     // Navigation
     pub(crate) fn edit_push_root(&mut self, root: ElementId) {
         let id = root.as_u64();
-        self.edits.push(PushRoot { id });
+        self.edits.edits.push(PushRoot { id });
     }
 
     pub(crate) fn edit_pop(&mut self) {
-        self.edits.push(PopRoot {});
+        self.edits.edits.push(PopRoot {});
     }
 
     // Add Nodes to the dom
     // add m nodes from the stack
     pub(crate) fn edit_append_children(&mut self, many: u32) {
-        self.edits.push(AppendChildren { many });
+        self.edits.edits.push(AppendChildren { many });
     }
 
     // replace the n-m node on the stack with the m nodes
     // ends with the last element of the chain on the top of the stack
     pub(crate) fn edit_replace_with(&mut self, n: u32, m: u32) {
-        self.edits.push(ReplaceWith { n, m });
+        self.edits.edits.push(ReplaceWith { n, m });
     }
 
     pub(crate) fn edit_insert_after(&mut self, n: u32) {
-        self.edits.push(InsertAfter { n });
+        self.edits.edits.push(InsertAfter { n });
     }
 
     pub(crate) fn edit_insert_before(&mut self, n: u32) {
-        self.edits.push(InsertBefore { n });
+        self.edits.edits.push(InsertBefore { n });
     }
 
     // Remove Nodesfrom the dom
     pub(crate) fn edit_remove(&mut self) {
-        self.edits.push(Remove);
+        self.edits.edits.push(Remove);
     }
 
     // Create
     pub(crate) fn edit_create_text_node(&mut self, text: &'bump str, id: ElementId) {
         let id = id.as_u64();
-        self.edits.push(CreateTextNode { text, id });
+        self.edits.edits.push(CreateTextNode { text, id });
     }
 
     pub(crate) fn edit_create_element(
@@ -1413,15 +1392,15 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     ) {
         let id = id.as_u64();
         match ns {
-            Some(ns) => self.edits.push(CreateElementNs { id, ns, tag }),
-            None => self.edits.push(CreateElement { id, tag }),
+            Some(ns) => self.edits.edits.push(CreateElementNs { id, ns, tag }),
+            None => self.edits.edits.push(CreateElement { id, tag }),
         }
     }
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     pub(crate) fn edit_create_placeholder(&mut self, id: ElementId) {
         let id = id.as_u64();
-        self.edits.push(CreatePlaceholder { id });
+        self.edits.edits.push(CreatePlaceholder { id });
     }
 
     // events
@@ -1434,7 +1413,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
 
         let element_id = mounted_node.get().unwrap().as_u64();
 
-        self.edits.push(NewEventListener {
+        self.edits.edits.push(NewEventListener {
             scope,
             event_name: event,
             mounted_node_id: element_id,
@@ -1442,12 +1421,12 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     }
 
     pub(crate) fn edit_remove_event_listener(&mut self, event: &'static str) {
-        self.edits.push(RemoveEventListener { event });
+        self.edits.edits.push(RemoveEventListener { event });
     }
 
     // modify
     pub(crate) fn edit_set_text(&mut self, text: &'bump str) {
-        self.edits.push(SetText { text });
+        self.edits.edits.push(SetText { text });
     }
 
     pub(crate) fn edit_set_attribute(&mut self, attribute: &'bump Attribute) {
@@ -1461,7 +1440,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
         // field: &'static str,
         // value: &'bump str,
         // ns: Option<&'static str>,
-        self.edits.push(SetAttribute {
+        self.edits.edits.push(SetAttribute {
             field: name,
             value,
             ns: *namespace,
@@ -1484,7 +1463,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
         // field: &'static str,
         // value: &'bump str,
         // ns: Option<&'static str>,
-        self.edits.push(SetAttribute {
+        self.edits.edits.push(SetAttribute {
             field: name,
             value,
             ns: Some(namespace),
@@ -1493,7 +1472,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
 
     pub(crate) fn edit_remove_attribute(&mut self, attribute: &Attribute) {
         let name = attribute.name;
-        self.edits.push(RemoveAttribute { name });
+        self.edits.edits.push(RemoveAttribute { name });
     }
 }
 

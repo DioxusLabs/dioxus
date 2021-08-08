@@ -66,8 +66,6 @@ impl SharedResources {
         // elements are super cheap - the value takes no space
         let raw_elements = Slab::with_capacity(2000);
 
-        // let pending_events = Rc::new(RefCell::new(Vec::new()));
-
         let (sender, receiver) = futures_channel::mpsc::unbounded();
 
         let heuristics = HeuristicsEngine::new();
@@ -106,8 +104,8 @@ impl SharedResources {
     }
 
     /// this is unsafe because the caller needs to track which other scopes it's already using
-    pub unsafe fn get_scope(&self, idx: ScopeId) -> Option<&Scope> {
-        let inner = &*self.components.get();
+    pub fn get_scope(&self, idx: ScopeId) -> Option<&Scope> {
+        let inner = unsafe { &*self.components.get() };
         inner.get(idx.0)
     }
 
@@ -166,6 +164,19 @@ impl SharedResources {
     pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
         self.async_tasks.borrow_mut().push(task);
         TaskHandle {}
+    }
+
+    pub fn make_trigger_key(&self, trigger: &EventTrigger) -> EventKey {
+        let height = self
+            .get_scope(trigger.originator)
+            .map(|f| f.height)
+            .unwrap();
+
+        EventKey {
+            height,
+            originator: trigger.originator,
+            priority: trigger.priority,
+        }
     }
 }
 

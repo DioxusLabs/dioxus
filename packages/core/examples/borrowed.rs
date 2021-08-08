@@ -67,6 +67,7 @@ impl PartialEq for ChildProps {
 }
 impl Properties for ChildProps {
     type Builder = ();
+    const IS_STATIC: bool = true;
     fn builder() -> Self::Builder {
         ()
     }

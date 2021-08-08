@@ -26,16 +26,3 @@ pub fn empty_cell() -> Cell<Option<ElementId>> {
 //         Some(self.cmp(other))
 //     }
 // }
-
-pub struct DebugDom {}
-impl DebugDom {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl RealDom for DebugDom {
-    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-        todo!()
-    }
-}

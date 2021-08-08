@@ -127,7 +127,9 @@ where
                 *slot.as_ref().borrow_mut() = Some(output);
                 updater(update_id);
                 EventTrigger {
-                    event: VirtualEvent::AsyncEvent {},
+                    event: VirtualEvent::AsyncEvent {
+                        should_rerender: false,
+                    },
                     originator,
                     priority: EventPriority::Low,
                     real_node_id: None,

@@ -41,7 +41,7 @@ use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 /// ```
 pub trait Properties: Sized {
     type Builder;
-    const IS_STATIC: bool = false;
+    const IS_STATIC: bool;
     fn builder() -> Self::Builder;
 
     /// Memoization can only happen if the props are 'static

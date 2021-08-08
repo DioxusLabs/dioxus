@@ -152,15 +152,16 @@ pub struct VComponent<'src> {
 
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
-    pub(crate) drop_props: Option<&'src dyn FnOnce()>,
+    pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
 
     pub is_static: bool,
+
+    pub can_memoize: bool,
 
     // a pointer into the bump arena (given by the 'src lifetime)
     pub(crate) raw_props: *const (),
 
     // a pointer to the raw fn typ
-    // pub(crate) user_fc: BumpB\,
     pub(crate) user_fc: *const (),
 }
 
@@ -365,20 +366,19 @@ impl<'a> NodeFactory<'a> {
         P: Properties + 'a,
         V: 'a + AsRef<[VNode<'a>]>,
     {
-        // TODO
-        // It's somewhat wrong to go about props like this
+        let bump = self.bump();
 
         // We don't want the fat part of the fat pointer
         // This function does static dispatch so we don't need any VTable stuff
-        let children: &'a V = self.bump().alloc(children);
+        let children: &'a V = bump.alloc(children);
         let children = children.as_ref();
 
-        let props = self.bump().alloc(props);
+        let props = bump.alloc(props);
 
         let raw_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
 
-        let comparator: Option<&dyn Fn(&VComponent) -> bool> = Some(self.bump().alloc_with(|| {
+        let comparator: Option<&dyn Fn(&VComponent) -> bool> = Some(bump.alloc_with(|| {
             move |other: &VComponent| {
                 if user_fc == other.user_fc {
                     // Safety
@@ -404,13 +404,19 @@ impl<'a> NodeFactory<'a> {
         }));
 
         // create a closure to drop the props
-        let drop_props: Option<&dyn FnOnce()> = Some(self.bump().alloc_with(|| {
+        let mut has_dropped = false;
+        let drop_props: &mut dyn FnMut() = bump.alloc_with(|| {
             move || unsafe {
-                let real_other = raw_props as *mut _ as *mut P;
-                let b = BumpBox::from_raw(real_other);
-                std::mem::drop(b);
+                if !has_dropped {
+                    let real_other = raw_props as *mut _ as *mut P;
+                    let b = BumpBox::from_raw(real_other);
+                    std::mem::drop(b);
+
+                    has_dropped = true;
+                }
             }
-        }));
+        });
+        let drop_props = unsafe { BumpBox::from_raw(drop_props) };
 
         let is_static = children.len() == 0 && P::IS_STATIC && key.is_none();
 
@@ -418,14 +424,15 @@ impl<'a> NodeFactory<'a> {
 
         VNode {
             key,
-            kind: VNodeKind::Component(self.bump().alloc_with(|| VComponent {
+            kind: VNodeKind::Component(bump.alloc_with(|| VComponent {
                 user_fc,
                 comparator,
                 raw_props,
                 children,
                 caller: NodeFactory::create_component_caller(component, raw_props),
                 is_static,
-                drop_props,
+                drop_props: RefCell::new(Some(drop_props)),
+                can_memoize: P::IS_STATIC,
                 ass_scope: Cell::new(None),
             })),
         }

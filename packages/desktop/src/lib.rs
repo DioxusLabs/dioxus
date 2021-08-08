@@ -88,26 +88,26 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
 
         let channel = vir.get_event_sender();
         struct WebviewBridge {}
-        impl RealDom for WebviewBridge {
-            fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-                todo!()
-            }
+        // impl RealDom for WebviewBridge {
+        //     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
+        //         todo!()
+        //     }
 
-            fn must_commit(&self) -> bool {
-                false
-            }
+        //     fn must_commit(&self) -> bool {
+        //         false
+        //     }
 
-            fn commit_edits<'a>(&mut self, edits: &mut Vec<DomEdit<'a>>) {}
+        //     fn commit_edits<'a>(&mut self, edits: &mut Vec<DomEdit<'a>>) {}
 
-            fn wait_until_ready<'s>(
-                &'s mut self,
-            ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 's>> {
-                //
-                Box::pin(async {
-                    //
-                })
-            }
-        }
+        //     fn wait_until_ready<'s>(
+        //         &'s mut self,
+        //     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 's>> {
+        //         //
+        //         Box::pin(async {
+        //             //
+        //         })
+        //     }
+        // }
 
         let mut real_dom = WebviewBridge {};
         // async_std::task::spawn_local(vir.run(&mut real_dom));

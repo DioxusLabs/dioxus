@@ -29,7 +29,7 @@ use std::any::Any;
 
 use std::any::TypeId;
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet};
 use std::pin::Pin;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
@@ -52,6 +52,8 @@ pub struct VirtualDom {
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
     pub base_scope: ScopeId,
+
+    active_fibers: Vec<Fiber<'static>>,
 
     pending_events: BTreeMap<EventKey, EventTrigger>,
 
@@ -144,6 +146,7 @@ impl VirtualDom {
             base_scope,
             _root_props: root_props,
             shared: components,
+            active_fibers: Vec::new(),
             pending_events: BTreeMap::new(),
             _root_prop_type: TypeId::of::<P>(),
         }
@@ -195,8 +198,10 @@ impl VirtualDom {
     /// Events like garabge collection, application of refs, etc are not handled by this method and can only be progressed
     /// through "run"
     ///
-    pub fn rebuild<'s>(&'s mut self, edits: &'_ mut Vec<DomEdit<'s>>) -> Result<()> {
-        let mut diff_machine = DiffMachine::new(edits, self.base_scope, &self.shared);
+    pub fn rebuild<'s>(&'s mut self) -> Result<Vec<DomEdit<'s>>> {
+        let mut edits = Vec::new();
+        let mutations = Mutations { edits: Vec::new() };
+        let mut diff_machine = DiffMachine::new(mutations, self.base_scope, &self.shared);
 
         let cur_component = diff_machine
             .get_scope_mut(&self.base_scope)
@@ -214,7 +219,7 @@ impl VirtualDom {
             );
         }
 
-        Ok(())
+        Ok(edits)
     }
 
     async fn select_next_event(&mut self) -> Option<EventTrigger> {
@@ -222,8 +227,9 @@ impl VirtualDom {
 
         // drain the in-flight events so that we can sort them out with the current events
         while let Ok(Some(trigger)) = receiver.try_next() {
-            log::info!("scooping event from receiver");
-            self.pending_events.insert(trigger.make_key(), trigger);
+            log::info!("retrieving event from receiver");
+            let key = self.shared.make_trigger_key(&trigger);
+            self.pending_events.insert(key, trigger);
         }
 
         if self.pending_events.is_empty() {
@@ -242,83 +248,172 @@ impl VirtualDom {
                 futures_util::future::Either::Right((trigger, _)) => trigger,
             }
             .unwrap();
-            self.pending_events.insert(trigger.make_key(), trigger);
+            let key = self.shared.make_trigger_key(&trigger);
+            self.pending_events.insert(key, trigger);
         }
 
-        todo!()
+        // pop the most important event off
+        let key = self.pending_events.keys().next().unwrap().clone();
+        let trigger = self.pending_events.remove(&key).unwrap();
 
-        // let trigger = self.select_next_event().unwrap();
-        // trigger
+        Some(trigger)
     }
 
-    // the cooperartive, fiber-based scheduler
-    // is "awaited" and will always return some edits for the real dom to apply
-    //
-    // Right now, we'll happily partially render component trees
-    //
-    // Normally, you would descend through the tree depth-first, but we actually descend breadth-first.
-    pub async fn run(&mut self, realdom: &mut dyn RealDom) -> Result<()> {
-        let cur_component = self.base_scope;
-        let mut edits = Vec::new();
-        let resources = self.shared.clone();
+    /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
+    ///
+    /// This method will not wait for any suspended tasks, completely skipping over
+    pub fn run_immediate<'s>(&'s mut self) -> Result<Mutations<'s>> {
+        //
 
-        let mut diff_machine = DiffMachine::new(&mut edits, cur_component, &resources);
+        todo!()
+    }
+
+    /// Runs the virtualdom with no time limit.
+    ///
+    /// If there are pending tasks, they will be progressed before returning. This is useful when rendering an application
+    /// that has suspended nodes or suspended tasks. Be warned - any async tasks running forever will prevent this method
+    /// from completing. Consider using `run` and specifing a deadline.
+    pub async fn run_unbounded<'s>(&'s mut self) -> Result<Mutations<'s>> {
+        self.run_with_deadline(|| false).await
+    }
+
+    /// Run the virtualdom with a time limit.
+    ///
+    /// This method will progress async tasks until the deadline is reached. If tasks are completed before the deadline,
+    /// and no tasks are pending, this method will return immediately. If tasks are still pending, then this method will
+    /// exhaust the deadline working on them.
+    ///
+    /// This method is useful when needing to schedule the virtualdom around other tasks on the main thread to prevent
+    /// "jank". It will try to finish whatever work it has by the deadline to free up time for other work.
+    ///
+    /// Due to platform differences in how time is handled, this method accepts a closure that must return true when the
+    /// deadline is exceeded. However, the deadline won't be met precisely, so you might want to build some wiggle room
+    /// into the deadline closure manually.
+    ///
+    /// The deadline is checked before starting to diff components. This strikes a balance between the overhead of checking
+    /// the deadline and just completing the work. However, if an individual component takes more than 16ms to render, then
+    /// the screen will "jank" up. In debug, this will trigger an alert.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// let mut dom = VirtualDom::new(|cx| cx.render(rsx!( div {"hello"} )));
+    /// loop {
+    ///     let started = std::time::Instant::now();
+    ///     let deadline = move || std::time::Instant::now() - started > std::time::Duration::from_millis(16);
+    ///     
+    ///     let mutations = dom.run_with_deadline(deadline).await;
+    ///     apply_mutations(mutations);
+    /// }
+    /// ```
+    pub async fn run_with_deadline<'s>(
+        &'s mut self,
+        mut deadline_exceeded: impl FnMut() -> bool,
+    ) -> Result<Mutations<'s>> {
+        let cur_component = self.base_scope;
+
+        let mut mutations = Mutations { edits: Vec::new() };
+
+        let mut diff_machine = DiffMachine::new(mutations, cur_component, &self.shared);
+
+        let must_be_re_rendered = HashSet::<ScopeId>::new();
+
+        let mut receiver = self.shared.task_receiver.borrow_mut();
+
+        //
 
         loop {
-            let trigger = self.select_next_event().await.unwrap();
+            if deadline_exceeded() {
+                break;
+            }
+
+            /*
+            Strategy:
+            1. Check if there are any events in the receiver.
+            2. If there are, process them and create a new fiber.
+            3. If there are no events, then choose a fiber to work on.
+            4. If there are no fibers, then wait for the next event from the receiver.
+            5. While processing a fiber, periodically check if we're out of time
+            6. If we are almost out of time, then commit our edits to the realdom
+            7. Whenever a fiber is finished, immediately commit it. (IE so deadlines can be infinite if unsupported)
+
+
+
+
+            The user of this method will loop over "run", waiting for edits and then committing them IE
+
+
+            task::spawn_local(async {
+                let vdom = VirtualDom::new(App);
+                loop {
+                    let deadline = wait_for_idle().await;
+                    let mutations = vdom.run_with_deadline(deadline);
+                    realdom.apply_edits(mutations.edits);
+                    realdom.apply_refs(mutations.refs);
+                }
+            });
+
+
+            let vdom = VirtualDom::new(App);
+            let realdom = WebsysDom::new(App);
+            loop {
+                let deadline = wait_for_idle().await;
+                let mutations = vdom.run_with_deadline(deadline);
+
+                realdom.apply_edits(mutations.edits);
+                realdom.apply_refs(mutations.refs);
+            }
+
+
+
+            ```
+            task::spawn_local(async move {
+                let vdom = VirtualDom::new(App);
+                loop {
+                    let mutations = vdom.run_with_deadline(16);
+                    realdom.apply_edits(mutations.edits)?;
+                    realdom.apply_refs(mutations.refs)?;
+                }
+            });
+
+            event_loop.run(move |event, _, flow| {
+
+            });
+            ```
+            */
+            let mut receiver = self.shared.task_receiver.borrow_mut();
+
+            // match receiver.try_next() {}
+
+            let trigger = receiver.next().await.unwrap();
 
             match &trigger.event {
-                // Collecting garabge is not currently interruptible.
+                // If any user event is received, then we run the listener and let it dump "needs updates" into the queue
                 //
-                // In the future, it could be though
-                VirtualEvent::GarbageCollection => {
-                    let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
-
-                    let mut garbage_list = scope.consume_garbage();
-
-                    let mut scopes_to_kill = Vec::new();
-                    while let Some(node) = garbage_list.pop() {
-                        match &node.kind {
-                            VNodeKind::Text(_) => {
-                                self.shared.collect_garbage(node.direct_id());
-                            }
-                            VNodeKind::Anchor(_) => {
-                                self.shared.collect_garbage(node.direct_id());
-                            }
-                            VNodeKind::Suspended(_) => {
-                                self.shared.collect_garbage(node.direct_id());
-                            }
-
-                            VNodeKind::Element(el) => {
-                                self.shared.collect_garbage(node.direct_id());
-                                for child in el.children {
-                                    garbage_list.push(child);
-                                }
-                            }
-
-                            VNodeKind::Fragment(frag) => {
-                                for child in frag.children {
-                                    garbage_list.push(child);
-                                }
-                            }
-
-                            VNodeKind::Component(comp) => {
-                                // TODO: run the hook destructors and then even delete the scope
-                                // TODO: allow interruption here
-                                if !realdom.must_commit() {
-                                    let scope_id = comp.ass_scope.get().unwrap();
-                                    let scope = self.get_scope(scope_id).unwrap();
-                                    let root = scope.root();
-                                    garbage_list.push(root);
-                                    scopes_to_kill.push(scope_id);
-                                }
-                            }
+                VirtualEvent::ClipboardEvent(_)
+                | VirtualEvent::CompositionEvent(_)
+                | VirtualEvent::KeyboardEvent(_)
+                | VirtualEvent::FocusEvent(_)
+                | VirtualEvent::FormEvent(_)
+                | VirtualEvent::SelectionEvent(_)
+                | VirtualEvent::TouchEvent(_)
+                | VirtualEvent::UIEvent(_)
+                | VirtualEvent::WheelEvent(_)
+                | VirtualEvent::MediaEvent(_)
+                | VirtualEvent::AnimationEvent(_)
+                | VirtualEvent::TransitionEvent(_)
+                | VirtualEvent::ToggleEvent(_)
+                | VirtualEvent::MouseEvent(_)
+                | VirtualEvent::PointerEvent(_) => {
+                    let scope_id = &trigger.originator;
+                    let scope = unsafe { self.shared.get_scope_mut(*scope_id) };
+                    match scope {
+                        Some(scope) => {
+                            scope.call_listener(trigger)?;
                         }
-                    }
-
-                    for scope in scopes_to_kill {
-                        // oy kill em
-                        log::debug!("should be removing scope {:#?}", scope);
+                        None => {
+                            log::warn!("No scope found for event: {:#?}", scope_id);
+                        }
                     }
                 }
 
@@ -363,74 +458,93 @@ impl VirtualDom {
                     }
                 }
 
+                // Collecting garabge is not currently interruptible.
+                //
+                // In the future, it could be though
+                VirtualEvent::GarbageCollection => {
+                    let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
+
+                    let mut garbage_list = scope.consume_garbage();
+
+                    let mut scopes_to_kill = Vec::new();
+                    while let Some(node) = garbage_list.pop() {
+                        match &node.kind {
+                            VNodeKind::Text(_) => {
+                                self.shared.collect_garbage(node.direct_id());
+                            }
+                            VNodeKind::Anchor(_) => {
+                                self.shared.collect_garbage(node.direct_id());
+                            }
+                            VNodeKind::Suspended(_) => {
+                                self.shared.collect_garbage(node.direct_id());
+                            }
+
+                            VNodeKind::Element(el) => {
+                                self.shared.collect_garbage(node.direct_id());
+                                for child in el.children {
+                                    garbage_list.push(child);
+                                }
+                            }
+
+                            VNodeKind::Fragment(frag) => {
+                                for child in frag.children {
+                                    garbage_list.push(child);
+                                }
+                            }
+
+                            VNodeKind::Component(comp) => {
+                                // TODO: run the hook destructors and then even delete the scope
+
+                                let scope_id = comp.ass_scope.get().unwrap();
+                                let scope = self.get_scope(scope_id).unwrap();
+                                let root = scope.root();
+                                garbage_list.push(root);
+                                scopes_to_kill.push(scope_id);
+                            }
+                        }
+                    }
+
+                    for scope in scopes_to_kill {
+                        // oy kill em
+                        log::debug!("should be removing scope {:#?}", scope);
+                    }
+                }
+
                 // Run the component
                 VirtualEvent::ScheduledUpdate { height: u32 } => {
                     let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
 
                     match scope.run_scope() {
                         Ok(_) => {
-                            let event = VirtualEvent::DiffComponent;
-                            let trigger = EventTrigger {
-                                event,
-                                originator: trigger.originator,
-                                priority: EventPriority::High,
-                                real_node_id: None,
-                            };
-                            self.shared.task_sender.unbounded_send(trigger);
+                            todo!();
+                            // let event = VirtualEvent::DiffComponent;
+                            // let trigger = EventTrigger {
+                            //     event,
+                            //     originator: trigger.originator,
+                            //     priority: EventPriority::High,
+                            //     real_node_id: None,
+                            // };
+                            // self.shared.task_sender.unbounded_send(trigger);
                         }
                         Err(_) => {
                             log::error!("failed to run this component!");
                         }
                     }
                 }
-
-                VirtualEvent::DiffComponent => {
-                    diff_machine.diff_scope(trigger.originator)?;
-                }
-
-                // Process any user-facing events just by calling their listeners
-                // This performs no actual work - but the listeners themselves will cause insert new work
-                VirtualEvent::ClipboardEvent(_)
-                | VirtualEvent::CompositionEvent(_)
-                | VirtualEvent::KeyboardEvent(_)
-                | VirtualEvent::FocusEvent(_)
-                | VirtualEvent::FormEvent(_)
-                | VirtualEvent::SelectionEvent(_)
-                | VirtualEvent::TouchEvent(_)
-                | VirtualEvent::UIEvent(_)
-                | VirtualEvent::WheelEvent(_)
-                | VirtualEvent::MediaEvent(_)
-                | VirtualEvent::AnimationEvent(_)
-                | VirtualEvent::TransitionEvent(_)
-                | VirtualEvent::ToggleEvent(_)
-                | VirtualEvent::MouseEvent(_)
-                | VirtualEvent::PointerEvent(_) => {
-                    let scope_id = &trigger.originator;
-                    let scope = unsafe { self.shared.get_scope_mut(*scope_id) };
-                    match scope {
-                        Some(scope) => scope.call_listener(trigger)?,
-                        None => {
-                            log::warn!("No scope found for event: {:#?}", scope_id);
-                        }
-                    }
-                }
             }
 
-            if realdom.must_commit() || self.pending_events.is_empty() {
-                realdom.commit_edits(&mut diff_machine.edits);
-                realdom.wait_until_ready().await;
-            }
+            // //
+            // if realdom.must_commit() {
+            //     // commit these edits and then wait for the next idle period
+            //     realdom.commit_edits(&mut diff_machine.edits).await;
+            // }
         }
 
-        Ok(())
+        Ok(diff_machine.edits)
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<EventTrigger> {
-        todo!()
-        // std::rc::Rc::new(move |_| {
-        //     //
-        // })
-        // todo()
+        self.shared.task_sender.clone()
     }
 }
 
@@ -439,8 +553,38 @@ impl VirtualDom {
 unsafe impl Sync for VirtualDom {}
 unsafe impl Send for VirtualDom {}
 
-fn select_next_event(
-    pending_events: &mut BTreeMap<EventKey, EventTrigger>,
-) -> Option<EventTrigger> {
-    None
+struct Fiber<'a> {
+    trigger: EventTrigger,
+
+    // scopes that haven't been updated yet
+    pending_scopes: Vec<ScopeId>,
+
+    pending_nodes: Vec<*const VNode<'a>>,
+
+    // WIP edits
+    edits: Vec<DomEdit<'a>>,
+
+    started: bool,
+
+    completed: bool,
+}
+
+impl Fiber<'_> {
+    fn new(trigger: EventTrigger) -> Self {
+        Self {
+            trigger,
+            pending_scopes: Vec::new(),
+            pending_nodes: Vec::new(),
+            edits: Vec::new(),
+            started: false,
+            completed: false,
+        }
+    }
+}
+
+/// The "Mutations" object holds the changes that need to be made to the DOM.
+pub struct Mutations<'s> {
+    // todo: apply node refs
+    // todo: apply effects
+    pub edits: Vec<DomEdit<'s>>,
 }
