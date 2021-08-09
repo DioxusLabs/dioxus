@@ -110,8 +110,8 @@ impl SharedResources {
     }
 
     /// this is unsafe because the caller needs to track which other scopes it's already using
-    pub unsafe fn get_scope_mut(&self, idx: ScopeId) -> Option<&mut Scope> {
-        let inner = &mut *self.components.get();
+    pub fn get_scope_mut(&self, idx: ScopeId) -> Option<&mut Scope> {
+        let inner = unsafe { &mut *self.components.get() };
         inner.get_mut(idx.0)
     }
 

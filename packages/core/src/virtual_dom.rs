@@ -55,8 +55,6 @@ pub struct VirtualDom {
 
     active_fibers: Vec<Fiber<'static>>,
 
-    pending_events: BTreeMap<EventKey, EventTrigger>,
-
     // for managing the props that were used to create the dom
     #[doc(hidden)]
     _root_prop_type: std::any::TypeId,
@@ -147,7 +145,6 @@ impl VirtualDom {
             _root_props: root_props,
             shared: components,
             active_fibers: Vec::new(),
-            pending_events: BTreeMap::new(),
             _root_prop_type: TypeId::of::<P>(),
         }
     }
@@ -222,42 +219,42 @@ impl VirtualDom {
         Ok(edits)
     }
 
-    async fn select_next_event(&mut self) -> Option<EventTrigger> {
-        let mut receiver = self.shared.task_receiver.borrow_mut();
+    // async fn select_next_event(&mut self) -> Option<EventTrigger> {
+    //     let mut receiver = self.shared.task_receiver.borrow_mut();
 
-        // drain the in-flight events so that we can sort them out with the current events
-        while let Ok(Some(trigger)) = receiver.try_next() {
-            log::info!("retrieving event from receiver");
-            let key = self.shared.make_trigger_key(&trigger);
-            self.pending_events.insert(key, trigger);
-        }
+    //     // drain the in-flight events so that we can sort them out with the current events
+    //     while let Ok(Some(trigger)) = receiver.try_next() {
+    //         log::info!("retrieving event from receiver");
+    //         let key = self.shared.make_trigger_key(&trigger);
+    //         self.pending_events.insert(key, trigger);
+    //     }
 
-        if self.pending_events.is_empty() {
-            // Continuously poll the future pool and the event receiver for work
-            let mut tasks = self.shared.async_tasks.borrow_mut();
-            let tasks_tasks = tasks.next();
+    //     if self.pending_events.is_empty() {
+    //         // Continuously poll the future pool and the event receiver for work
+    //         let mut tasks = self.shared.async_tasks.borrow_mut();
+    //         let tasks_tasks = tasks.next();
 
-            let mut receiver = self.shared.task_receiver.borrow_mut();
-            let reciv_task = receiver.next();
+    //         let mut receiver = self.shared.task_receiver.borrow_mut();
+    //         let reciv_task = receiver.next();
 
-            futures_util::pin_mut!(tasks_tasks);
-            futures_util::pin_mut!(reciv_task);
+    //         futures_util::pin_mut!(tasks_tasks);
+    //         futures_util::pin_mut!(reciv_task);
 
-            let trigger = match futures_util::future::select(tasks_tasks, reciv_task).await {
-                futures_util::future::Either::Left((trigger, _)) => trigger,
-                futures_util::future::Either::Right((trigger, _)) => trigger,
-            }
-            .unwrap();
-            let key = self.shared.make_trigger_key(&trigger);
-            self.pending_events.insert(key, trigger);
-        }
+    //         let trigger = match futures_util::future::select(tasks_tasks, reciv_task).await {
+    //             futures_util::future::Either::Left((trigger, _)) => trigger,
+    //             futures_util::future::Either::Right((trigger, _)) => trigger,
+    //         }
+    //         .unwrap();
+    //         let key = self.shared.make_trigger_key(&trigger);
+    //         self.pending_events.insert(key, trigger);
+    //     }
 
-        // pop the most important event off
-        let key = self.pending_events.keys().next().unwrap().clone();
-        let trigger = self.pending_events.remove(&key).unwrap();
+    //     // pop the most important event off
+    //     let key = self.pending_events.keys().next().unwrap().clone();
+    //     let trigger = self.pending_events.remove(&key).unwrap();
 
-        Some(trigger)
-    }
+    //     Some(trigger)
+    // }
 
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
     ///
@@ -312,84 +309,28 @@ impl VirtualDom {
     ) -> Result<Mutations<'s>> {
         let cur_component = self.base_scope;
 
-        let mut mutations = Mutations { edits: Vec::new() };
+        let mut diff_machine =
+            DiffMachine::new(Mutations { edits: Vec::new() }, cur_component, &self.shared);
 
-        let mut diff_machine = DiffMachine::new(mutations, cur_component, &self.shared);
+        /*
+        Strategy:
+        1. Check if there are any events in the receiver.
+        2. If there are, process them and create a new fiber.
+        3. If there are no events, then choose a fiber to work on.
+        4. If there are no fibers, then wait for the next event from the receiver.
+        5. While processing a fiber, periodically check if we're out of time
+        6. If we are almost out of time, then commit our edits to the realdom
+        7. Whenever a fiber is finished, immediately commit it. (IE so deadlines can be infinite if unsupported)
+        */
 
-        let must_be_re_rendered = HashSet::<ScopeId>::new();
-
+        // 1. Consume any pending events and create new fibers
         let mut receiver = self.shared.task_receiver.borrow_mut();
-
-        //
-
-        loop {
-            if deadline_exceeded() {
-                break;
-            }
-
-            /*
-            Strategy:
-            1. Check if there are any events in the receiver.
-            2. If there are, process them and create a new fiber.
-            3. If there are no events, then choose a fiber to work on.
-            4. If there are no fibers, then wait for the next event from the receiver.
-            5. While processing a fiber, periodically check if we're out of time
-            6. If we are almost out of time, then commit our edits to the realdom
-            7. Whenever a fiber is finished, immediately commit it. (IE so deadlines can be infinite if unsupported)
-
-
-
-
-            The user of this method will loop over "run", waiting for edits and then committing them IE
-
-
-            task::spawn_local(async {
-                let vdom = VirtualDom::new(App);
-                loop {
-                    let deadline = wait_for_idle().await;
-                    let mutations = vdom.run_with_deadline(deadline);
-                    realdom.apply_edits(mutations.edits);
-                    realdom.apply_refs(mutations.refs);
-                }
-            });
-
-
-            let vdom = VirtualDom::new(App);
-            let realdom = WebsysDom::new(App);
-            loop {
-                let deadline = wait_for_idle().await;
-                let mutations = vdom.run_with_deadline(deadline);
-
-                realdom.apply_edits(mutations.edits);
-                realdom.apply_refs(mutations.refs);
-            }
-
-
-
-            ```
-            task::spawn_local(async move {
-                let vdom = VirtualDom::new(App);
-                loop {
-                    let mutations = vdom.run_with_deadline(16);
-                    realdom.apply_edits(mutations.edits)?;
-                    realdom.apply_refs(mutations.refs)?;
-                }
-            });
-
-            event_loop.run(move |event, _, flow| {
-
-            });
-            ```
-            */
-            let mut receiver = self.shared.task_receiver.borrow_mut();
-
-            // match receiver.try_next() {}
-
-            let trigger = receiver.next().await.unwrap();
+        while let Ok(Some(trigger)) = receiver.try_next() {
+            // todo: cache the fibers
+            let mut fiber = Fiber::new();
 
             match &trigger.event {
-                // If any user event is received, then we run the listener and let it dump "needs updates" into the queue
-                //
+                // If any input event is received, then we need to create a new fiber
                 VirtualEvent::ClipboardEvent(_)
                 | VirtualEvent::CompositionEvent(_)
                 | VirtualEvent::KeyboardEvent(_)
@@ -405,22 +346,20 @@ impl VirtualDom {
                 | VirtualEvent::ToggleEvent(_)
                 | VirtualEvent::MouseEvent(_)
                 | VirtualEvent::PointerEvent(_) => {
-                    let scope_id = &trigger.originator;
-                    let scope = unsafe { self.shared.get_scope_mut(*scope_id) };
-                    match scope {
-                        Some(scope) => {
-                            scope.call_listener(trigger)?;
-                        }
-                        None => {
-                            log::warn!("No scope found for event: {:#?}", scope_id);
-                        }
+                    if let Some(scope) = self.shared.get_scope_mut(trigger.originator) {
+                        scope.call_listener(trigger)?;
                     }
                 }
 
                 VirtualEvent::AsyncEvent { .. } => {
-                    // we want to progress these events
-                    // However, there's nothing we can do for these events, they must generate their own events.
+                    while let Ok(Some(event)) = receiver.try_next() {
+                        fiber.pending_scopes.push(event.originator);
+                    }
                 }
+
+                // These shouldn't normally be received, but if they are, it's done because some task set state manually
+                // Instead of batching the results,
+                VirtualEvent::ScheduledUpdate { height: u32 } => {}
 
                 // Suspense Events! A component's suspended node is updated
                 VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
@@ -438,8 +377,8 @@ impl VirtualDom {
                     match nodes {
                         None => {
                             log::warn!(
-                            "Suspense event came through, but there were no generated nodes >:(."
-                        );
+                                "Suspense event came through, but there were no generated nodes >:(."
+                            );
                         }
                         Some(nodes) => {
                             // allocate inside the finished frame - not the WIP frame
@@ -509,35 +448,13 @@ impl VirtualDom {
                         log::debug!("should be removing scope {:#?}", scope);
                     }
                 }
-
-                // Run the component
-                VirtualEvent::ScheduledUpdate { height: u32 } => {
-                    let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
-
-                    match scope.run_scope() {
-                        Ok(_) => {
-                            todo!();
-                            // let event = VirtualEvent::DiffComponent;
-                            // let trigger = EventTrigger {
-                            //     event,
-                            //     originator: trigger.originator,
-                            //     priority: EventPriority::High,
-                            //     real_node_id: None,
-                            // };
-                            // self.shared.task_sender.unbounded_send(trigger);
-                        }
-                        Err(_) => {
-                            log::error!("failed to run this component!");
-                        }
-                    }
-                }
             }
+        }
 
-            // //
-            // if realdom.must_commit() {
-            //     // commit these edits and then wait for the next idle period
-            //     realdom.commit_edits(&mut diff_machine.edits).await;
-            // }
+        while !deadline_exceeded() {
+            let mut receiver = self.shared.task_receiver.borrow_mut();
+
+            // no messages to receive, just work on the fiber
         }
 
         Ok(diff_machine.edits)
@@ -545,6 +462,10 @@ impl VirtualDom {
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<EventTrigger> {
         self.shared.task_sender.clone()
+    }
+
+    fn get_scope_mut(&mut self, id: ScopeId) -> Option<&mut Scope> {
+        unsafe { self.shared.get_scope_mut(id) }
     }
 }
 
@@ -554,8 +475,6 @@ unsafe impl Sync for VirtualDom {}
 unsafe impl Send for VirtualDom {}
 
 struct Fiber<'a> {
-    trigger: EventTrigger,
-
     // scopes that haven't been updated yet
     pending_scopes: Vec<ScopeId>,
 
@@ -570,9 +489,8 @@ struct Fiber<'a> {
 }
 
 impl Fiber<'_> {
-    fn new(trigger: EventTrigger) -> Self {
+    fn new() -> Self {
         Self {
-            trigger,
             pending_scopes: Vec::new(),
             pending_nodes: Vec::new(),
             edits: Vec::new(),

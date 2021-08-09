@@ -112,6 +112,8 @@ pub enum VirtualEvent {
     GarbageCollection,
 
     /// A type of "immediate" event scheduled by components
+    ///
+    /// Usually called through "set_state"
     ScheduledUpdate {
         height: u32,
     },
@@ -157,6 +159,32 @@ pub enum VirtualEvent {
     ToggleEvent(on::ToggleEvent),
     MouseEvent(on::MouseEvent),
     PointerEvent(on::PointerEvent),
+}
+impl VirtualEvent {
+    pub fn is_input_event(&self) -> bool {
+        match self {
+            VirtualEvent::ClipboardEvent(_)
+            | VirtualEvent::CompositionEvent(_)
+            | VirtualEvent::KeyboardEvent(_)
+            | VirtualEvent::FocusEvent(_)
+            | VirtualEvent::FormEvent(_)
+            | VirtualEvent::SelectionEvent(_)
+            | VirtualEvent::TouchEvent(_)
+            | VirtualEvent::UIEvent(_)
+            | VirtualEvent::WheelEvent(_)
+            | VirtualEvent::MediaEvent(_)
+            | VirtualEvent::AnimationEvent(_)
+            | VirtualEvent::TransitionEvent(_)
+            | VirtualEvent::ToggleEvent(_)
+            | VirtualEvent::MouseEvent(_)
+            | VirtualEvent::PointerEvent(_) => true,
+
+            VirtualEvent::GarbageCollection
+            | VirtualEvent::ScheduledUpdate { .. }
+            | VirtualEvent::AsyncEvent { .. }
+            | VirtualEvent::SuspenseEvent { .. } => false,
+        }
+    }
 }
 
 impl std::fmt::Debug for VirtualEvent {

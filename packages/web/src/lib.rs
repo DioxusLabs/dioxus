@@ -2,6 +2,30 @@
 //! --------------
 //! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using Websys.
 
+/*
+From Google's guide on rAF and rIC:
+--------
+
+If the callback is fired at the end of the frame, it will be scheduled to go after the current frame has been committed,
+which means that style changes will have been applied, and, importantly, layout calculated. If we make DOM changes inside
+ of the idle callback, those layout calculations will be invalidated. If there are any kind of layout reads in the next
+ frame, e.g. getBoundingClientRect, clientWidth, etc, the browser will have to perform a Forced Synchronous Layout,
+ which is a potential performance bottleneck.
+
+Another reason not trigger DOM changes in the idle callback is that the time impact of changing the DOM is unpredictable,
+and as such we could easily go past the deadline the browser provided.
+
+The best practice is to only make DOM changes inside of a requestAnimationFrame callback, since it is scheduled by the
+browser with that type of work in mind. That means that our code will need to use a document fragment, which can then
+be appended in the next requestAnimationFrame callback. If you are using a VDOM library, you would use requestIdleCallback
+to make changes, but you would apply the DOM patches in the next requestAnimationFrame callback, not the idle callback.
+
+Essentially:
+------------
+- Do the VDOM work during the idlecallback
+- Do DOM work in the next requestAnimationFrame callback
+*/
+
 use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;

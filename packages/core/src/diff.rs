@@ -108,10 +108,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     /// this is mostly useful for testing
     ///
     /// This will PANIC if any component elements are passed in.
-    pub fn new_headless(
-        // edits: &'r mut Vec<DomEdit<'bump>>,
-        shared: &'bump SharedResources,
-    ) -> Self {
+    pub fn new_headless(shared: &'bump SharedResources) -> Self {
         Self {
             edits: Mutations { edits: Vec::new() },
             scope_stack: smallvec![ScopeId(0)],
