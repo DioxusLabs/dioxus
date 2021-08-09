@@ -19,7 +19,7 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 #![allow(unreachable_code)]
-use futures_util::StreamExt;
+use futures_util::{Future, StreamExt};
 use fxhash::FxHashMap;
 
 use crate::hooks::{SuspendedContext, SuspenseHook};
@@ -271,7 +271,7 @@ impl VirtualDom {
     /// that has suspended nodes or suspended tasks. Be warned - any async tasks running forever will prevent this method
     /// from completing. Consider using `run` and specifing a deadline.
     pub async fn run_unbounded<'s>(&'s mut self) -> Result<Mutations<'s>> {
-        self.run_with_deadline(|| false).await
+        self.run_with_deadline(async {}).await
     }
 
     /// Run the virtualdom with a time limit.
@@ -283,181 +283,232 @@ impl VirtualDom {
     /// This method is useful when needing to schedule the virtualdom around other tasks on the main thread to prevent
     /// "jank". It will try to finish whatever work it has by the deadline to free up time for other work.
     ///
-    /// Due to platform differences in how time is handled, this method accepts a closure that must return true when the
-    /// deadline is exceeded. However, the deadline won't be met precisely, so you might want to build some wiggle room
-    /// into the deadline closure manually.
+    /// Due to platform differences in how time is handled, this method accepts a future that resolves when the deadline
+    /// is exceeded. However, the deadline won't be met precisely, so you might want to build some wiggle room into the
+    /// deadline closure manually.
     ///
     /// The deadline is checked before starting to diff components. This strikes a balance between the overhead of checking
     /// the deadline and just completing the work. However, if an individual component takes more than 16ms to render, then
     /// the screen will "jank" up. In debug, this will trigger an alert.
     ///
+    /// If there are no in-flight fibers when this method is called, it will await any possible tasks, aborting early if
+    /// the provided deadline future resolves.
+    ///
+    /// For use in the web, it is expected that this method will be called to be executed during "idle times" and the
+    /// mutations to be applied during the "paint times" IE "animation frames". With this strategy, it is possible to craft
+    /// entirely jank-free applications that perform a ton of work.
+    ///
     /// # Example
     ///
     /// ```no_run
-    /// let mut dom = VirtualDom::new(|cx| cx.render(rsx!( div {"hello"} )));
+    /// static App: FC<()> = |cx| rsx!(in cx, div {"hello"} );
+    /// let mut dom = VirtualDom::new(App);
     /// loop {
-    ///     let started = std::time::Instant::now();
-    ///     let deadline = move || std::time::Instant::now() - started > std::time::Duration::from_millis(16);
-    ///     
+    ///     let deadline = TimeoutFuture::from_ms(16);
     ///     let mutations = dom.run_with_deadline(deadline).await;
     ///     apply_mutations(mutations);
     /// }
     /// ```
     pub async fn run_with_deadline<'s>(
         &'s mut self,
-        mut deadline_exceeded: impl FnMut() -> bool,
+        mut deadline: impl Future<Output = ()>,
     ) -> Result<Mutations<'s>> {
-        let cur_component = self.base_scope;
+        // Configure our deadline
+        use futures_util::FutureExt;
+        let mut deadline_future = deadline.boxed_local();
 
-        let mut diff_machine =
-            DiffMachine::new(Mutations { edits: Vec::new() }, cur_component, &self.shared);
+        let is_ready = || -> bool { (&mut deadline_future).now_or_never().is_some() };
+
+        let mut diff_machine = DiffMachine::new(
+            Mutations { edits: Vec::new() },
+            self.base_scope,
+            &self.shared,
+        );
 
         /*
         Strategy:
         1. Check if there are any events in the receiver.
         2. If there are, process them and create a new fiber.
         3. If there are no events, then choose a fiber to work on.
-        4. If there are no fibers, then wait for the next event from the receiver.
+        4. If there are no fibers, then wait for the next event from the receiver. Abort if the deadline is reached.
         5. While processing a fiber, periodically check if we're out of time
-        6. If we are almost out of time, then commit our edits to the realdom
+        6. If our deadling is reached, then commit our edits to the realdom
         7. Whenever a fiber is finished, immediately commit it. (IE so deadlines can be infinite if unsupported)
+
+        We slice fibers based on time. Each batch of events between frames is its own fiber. This is the simplest way
+        to conceptualize what *is* or *isn't* a fiber. IE if a bunch of events occur during a time slice, they all
+        get batched together as a single operation of "dirty" scopes.
+
+        This approach is designed around the "diff during rIC and commit during rAF"
+
+        We need to make sure to not call multiple events while the diff machine is borrowing the same scope. Because props
+        and listeners hold references to hook data, it is wrong to run a scope that is already being diffed.
         */
 
         // 1. Consume any pending events and create new fibers
         let mut receiver = self.shared.task_receiver.borrow_mut();
-        while let Ok(Some(trigger)) = receiver.try_next() {
-            // todo: cache the fibers
-            let mut fiber = Fiber::new();
 
-            match &trigger.event {
-                // If any input event is received, then we need to create a new fiber
-                VirtualEvent::ClipboardEvent(_)
-                | VirtualEvent::CompositionEvent(_)
-                | VirtualEvent::KeyboardEvent(_)
-                | VirtualEvent::FocusEvent(_)
-                | VirtualEvent::FormEvent(_)
-                | VirtualEvent::SelectionEvent(_)
-                | VirtualEvent::TouchEvent(_)
-                | VirtualEvent::UIEvent(_)
-                | VirtualEvent::WheelEvent(_)
-                | VirtualEvent::MediaEvent(_)
-                | VirtualEvent::AnimationEvent(_)
-                | VirtualEvent::TransitionEvent(_)
-                | VirtualEvent::ToggleEvent(_)
-                | VirtualEvent::MouseEvent(_)
-                | VirtualEvent::PointerEvent(_) => {
-                    if let Some(scope) = self.shared.get_scope_mut(trigger.originator) {
-                        scope.call_listener(trigger)?;
+        // On the primary event queue, there is no batching.
+        let mut trigger = {
+            match receiver.try_next() {
+                Ok(Some(trigger)) => trigger,
+                _ => {
+                    // Continuously poll the future pool and the event receiver for work
+                    let mut tasks = self.shared.async_tasks.borrow_mut();
+                    let tasks_tasks = tasks.next();
+
+                    let mut receiver = self.shared.task_receiver.borrow_mut();
+                    let reciv_task = receiver.next();
+
+                    futures_util::pin_mut!(tasks_tasks);
+                    futures_util::pin_mut!(reciv_task);
+
+                    // Poll the event receiver and the future pool for work
+                    // Abort early if our deadline has ran out
+                    use futures_util::select;
+                    let mut deadline = (&mut deadline_future).fuse();
+
+                    let trig = select! {
+                        trigger = tasks_tasks => trigger,
+                        trigger = reciv_task => trigger,
+                        _ = deadline => { return Ok(diff_machine.mutations); }
+                    };
+
+                    trig.unwrap()
+                }
+            }
+        };
+
+        // since the last time we were ran with a deadline, we've accumulated many updates
+        // IE a button was clicked twice, or a scroll trigger was fired twice.
+        // We consider the button a event to be a function of the current state, which means we can batch many updates
+        // together.
+
+        match &trigger.event {
+            // If any input event is received, then we need to create a new fiber
+            VirtualEvent::ClipboardEvent(_)
+            | VirtualEvent::CompositionEvent(_)
+            | VirtualEvent::KeyboardEvent(_)
+            | VirtualEvent::FocusEvent(_)
+            | VirtualEvent::FormEvent(_)
+            | VirtualEvent::SelectionEvent(_)
+            | VirtualEvent::TouchEvent(_)
+            | VirtualEvent::UIEvent(_)
+            | VirtualEvent::WheelEvent(_)
+            | VirtualEvent::MediaEvent(_)
+            | VirtualEvent::AnimationEvent(_)
+            | VirtualEvent::TransitionEvent(_)
+            | VirtualEvent::ToggleEvent(_)
+            | VirtualEvent::MouseEvent(_)
+            | VirtualEvent::PointerEvent(_) => {
+                if let Some(scope) = self.shared.get_scope_mut(trigger.originator) {
+                    scope.call_listener(trigger)?;
+                }
+            }
+
+            VirtualEvent::AsyncEvent { .. } => while let Ok(Some(event)) = receiver.try_next() {},
+
+            // These shouldn't normally be received, but if they are, it's done because some task set state manually
+            // Instead of processing it serially,
+            // We will batch all the scheduled updates together in one go.
+            VirtualEvent::ScheduledUpdate { height: u32 } => {}
+
+            // Suspense Events! A component's suspended node is updated
+            VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
+                // Safety: this handler is the only thing that can mutate shared items at this moment in tim
+                let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
+
+                // safety: we are sure that there are no other references to the inner content of suspense hooks
+                let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
+
+                let cx = Context { scope, props: &() };
+                let scx = SuspendedContext { inner: cx };
+
+                // generate the new node!
+                let nodes: Option<VNode> = (&hook.callback)(scx);
+                match nodes {
+                    None => {
+                        log::warn!(
+                            "Suspense event came through, but there were no generated nodes >:(."
+                        );
+                    }
+                    Some(nodes) => {
+                        // allocate inside the finished frame - not the WIP frame
+                        let nodes = scope.frames.finished_frame().bump.alloc(nodes);
+
+                        // push the old node's root onto the stack
+                        let real_id = domnode.get().ok_or(Error::NotMounted)?;
+                        diff_machine.edit_push_root(real_id);
+
+                        // push these new nodes onto the diff machines stack
+                        let meta = diff_machine.create_vnode(&*nodes);
+
+                        // replace the placeholder with the new nodes we just pushed on the stack
+                        diff_machine.edit_replace_with(1, meta.added_to_stack);
+                    }
+                }
+            }
+
+            // Collecting garabge is not currently interruptible.
+            //
+            // In the future, it could be though
+            VirtualEvent::GarbageCollection => {
+                let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
+
+                let mut garbage_list = scope.consume_garbage();
+
+                let mut scopes_to_kill = Vec::new();
+                while let Some(node) = garbage_list.pop() {
+                    match &node.kind {
+                        VNodeKind::Text(_) => {
+                            self.shared.collect_garbage(node.direct_id());
+                        }
+                        VNodeKind::Anchor(_) => {
+                            self.shared.collect_garbage(node.direct_id());
+                        }
+                        VNodeKind::Suspended(_) => {
+                            self.shared.collect_garbage(node.direct_id());
+                        }
+
+                        VNodeKind::Element(el) => {
+                            self.shared.collect_garbage(node.direct_id());
+                            for child in el.children {
+                                garbage_list.push(child);
+                            }
+                        }
+
+                        VNodeKind::Fragment(frag) => {
+                            for child in frag.children {
+                                garbage_list.push(child);
+                            }
+                        }
+
+                        VNodeKind::Component(comp) => {
+                            // TODO: run the hook destructors and then even delete the scope
+
+                            let scope_id = comp.ass_scope.get().unwrap();
+                            let scope = self.get_scope(scope_id).unwrap();
+                            let root = scope.root();
+                            garbage_list.push(root);
+                            scopes_to_kill.push(scope_id);
+                        }
                     }
                 }
 
-                VirtualEvent::AsyncEvent { .. } => {
-                    while let Ok(Some(event)) = receiver.try_next() {
-                        fiber.pending_scopes.push(event.originator);
-                    }
-                }
-
-                // These shouldn't normally be received, but if they are, it's done because some task set state manually
-                // Instead of batching the results,
-                VirtualEvent::ScheduledUpdate { height: u32 } => {}
-
-                // Suspense Events! A component's suspended node is updated
-                VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
-                    // Safety: this handler is the only thing that can mutate shared items at this moment in tim
-                    let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
-
-                    // safety: we are sure that there are no other references to the inner content of suspense hooks
-                    let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
-
-                    let cx = Context { scope, props: &() };
-                    let scx = SuspendedContext { inner: cx };
-
-                    // generate the new node!
-                    let nodes: Option<VNode> = (&hook.callback)(scx);
-                    match nodes {
-                        None => {
-                            log::warn!(
-                                "Suspense event came through, but there were no generated nodes >:(."
-                            );
-                        }
-                        Some(nodes) => {
-                            // allocate inside the finished frame - not the WIP frame
-                            let nodes = scope.frames.finished_frame().bump.alloc(nodes);
-
-                            // push the old node's root onto the stack
-                            let real_id = domnode.get().ok_or(Error::NotMounted)?;
-                            diff_machine.edit_push_root(real_id);
-
-                            // push these new nodes onto the diff machines stack
-                            let meta = diff_machine.create_vnode(&*nodes);
-
-                            // replace the placeholder with the new nodes we just pushed on the stack
-                            diff_machine.edit_replace_with(1, meta.added_to_stack);
-                        }
-                    }
-                }
-
-                // Collecting garabge is not currently interruptible.
-                //
-                // In the future, it could be though
-                VirtualEvent::GarbageCollection => {
-                    let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
-
-                    let mut garbage_list = scope.consume_garbage();
-
-                    let mut scopes_to_kill = Vec::new();
-                    while let Some(node) = garbage_list.pop() {
-                        match &node.kind {
-                            VNodeKind::Text(_) => {
-                                self.shared.collect_garbage(node.direct_id());
-                            }
-                            VNodeKind::Anchor(_) => {
-                                self.shared.collect_garbage(node.direct_id());
-                            }
-                            VNodeKind::Suspended(_) => {
-                                self.shared.collect_garbage(node.direct_id());
-                            }
-
-                            VNodeKind::Element(el) => {
-                                self.shared.collect_garbage(node.direct_id());
-                                for child in el.children {
-                                    garbage_list.push(child);
-                                }
-                            }
-
-                            VNodeKind::Fragment(frag) => {
-                                for child in frag.children {
-                                    garbage_list.push(child);
-                                }
-                            }
-
-                            VNodeKind::Component(comp) => {
-                                // TODO: run the hook destructors and then even delete the scope
-
-                                let scope_id = comp.ass_scope.get().unwrap();
-                                let scope = self.get_scope(scope_id).unwrap();
-                                let root = scope.root();
-                                garbage_list.push(root);
-                                scopes_to_kill.push(scope_id);
-                            }
-                        }
-                    }
-
-                    for scope in scopes_to_kill {
-                        // oy kill em
-                        log::debug!("should be removing scope {:#?}", scope);
-                    }
+                for scope in scopes_to_kill {
+                    // oy kill em
+                    log::debug!("should be removing scope {:#?}", scope);
                 }
             }
         }
 
-        while !deadline_exceeded() {
-            let mut receiver = self.shared.task_receiver.borrow_mut();
+        // while !deadline() {
+        //     let mut receiver = self.shared.task_receiver.borrow_mut();
 
-            // no messages to receive, just work on the fiber
-        }
+        //     // no messages to receive, just work on the fiber
+        // }
 
-        Ok(diff_machine.edits)
+        Ok(diff_machine.mutations)
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<EventTrigger> {

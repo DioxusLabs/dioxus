@@ -75,7 +75,7 @@ use DomEdit::*;
 pub struct DiffMachine<'r, 'bump> {
     pub vdom: &'bump SharedResources,
 
-    pub edits: Mutations<'bump>,
+    pub mutations: Mutations<'bump>,
 
     pub scope_stack: SmallVec<[ScopeId; 5]>,
 
@@ -95,7 +95,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
         shared: &'bump SharedResources,
     ) -> Self {
         Self {
-            edits,
+            mutations: edits,
             scope_stack: smallvec![cur_scope],
             vdom: shared,
             diffed: FxHashSet::default(),
@@ -110,7 +110,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     /// This will PANIC if any component elements are passed in.
     pub fn new_headless(shared: &'bump SharedResources) -> Self {
         Self {
-            edits: Mutations { edits: Vec::new() },
+            mutations: Mutations { edits: Vec::new() },
             scope_stack: smallvec![ScopeId(0)],
             vdom: shared,
             diffed: FxHashSet::default(),
@@ -182,13 +182,13 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                 if old.attributes.len() == new.attributes.len() {
                     for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                         if old_attr.value != new_attr.value {
-                            please_commit(&mut self.edits.edits);
+                            please_commit(&mut self.mutations.edits);
                             self.edit_set_attribute(new_attr);
                         }
                     }
                 } else {
                     // TODO: provide some sort of report on how "good" the diffing was
-                    please_commit(&mut self.edits.edits);
+                    please_commit(&mut self.mutations.edits);
                     for attribute in old.attributes {
                         self.edit_remove_attribute(attribute);
                     }
@@ -209,7 +209,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                 if old.listeners.len() == new.listeners.len() {
                     for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                         if old_l.event != new_l.event {
-                            please_commit(&mut self.edits.edits);
+                            please_commit(&mut self.mutations.edits);
                             self.edit_remove_event_listener(old_l.event);
                             self.edit_new_event_listener(new_l, cur_scope);
                         }
@@ -217,7 +217,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                         self.fix_listener(new_l);
                     }
                 } else {
-                    please_commit(&mut self.edits.edits);
+                    please_commit(&mut self.mutations.edits);
                     for listener in old.listeners {
                         self.edit_remove_event_listener(listener.event);
                     }
@@ -1343,42 +1343,42 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     // Navigation
     pub(crate) fn edit_push_root(&mut self, root: ElementId) {
         let id = root.as_u64();
-        self.edits.edits.push(PushRoot { id });
+        self.mutations.edits.push(PushRoot { id });
     }
 
     pub(crate) fn edit_pop(&mut self) {
-        self.edits.edits.push(PopRoot {});
+        self.mutations.edits.push(PopRoot {});
     }
 
     // Add Nodes to the dom
     // add m nodes from the stack
     pub(crate) fn edit_append_children(&mut self, many: u32) {
-        self.edits.edits.push(AppendChildren { many });
+        self.mutations.edits.push(AppendChildren { many });
     }
 
     // replace the n-m node on the stack with the m nodes
     // ends with the last element of the chain on the top of the stack
     pub(crate) fn edit_replace_with(&mut self, n: u32, m: u32) {
-        self.edits.edits.push(ReplaceWith { n, m });
+        self.mutations.edits.push(ReplaceWith { n, m });
     }
 
     pub(crate) fn edit_insert_after(&mut self, n: u32) {
-        self.edits.edits.push(InsertAfter { n });
+        self.mutations.edits.push(InsertAfter { n });
     }
 
     pub(crate) fn edit_insert_before(&mut self, n: u32) {
-        self.edits.edits.push(InsertBefore { n });
+        self.mutations.edits.push(InsertBefore { n });
     }
 
     // Remove Nodesfrom the dom
     pub(crate) fn edit_remove(&mut self) {
-        self.edits.edits.push(Remove);
+        self.mutations.edits.push(Remove);
     }
 
     // Create
     pub(crate) fn edit_create_text_node(&mut self, text: &'bump str, id: ElementId) {
         let id = id.as_u64();
-        self.edits.edits.push(CreateTextNode { text, id });
+        self.mutations.edits.push(CreateTextNode { text, id });
     }
 
     pub(crate) fn edit_create_element(
@@ -1389,15 +1389,15 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     ) {
         let id = id.as_u64();
         match ns {
-            Some(ns) => self.edits.edits.push(CreateElementNs { id, ns, tag }),
-            None => self.edits.edits.push(CreateElement { id, tag }),
+            Some(ns) => self.mutations.edits.push(CreateElementNs { id, ns, tag }),
+            None => self.mutations.edits.push(CreateElement { id, tag }),
         }
     }
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     pub(crate) fn edit_create_placeholder(&mut self, id: ElementId) {
         let id = id.as_u64();
-        self.edits.edits.push(CreatePlaceholder { id });
+        self.mutations.edits.push(CreatePlaceholder { id });
     }
 
     // events
@@ -1410,7 +1410,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
 
         let element_id = mounted_node.get().unwrap().as_u64();
 
-        self.edits.edits.push(NewEventListener {
+        self.mutations.edits.push(NewEventListener {
             scope,
             event_name: event,
             mounted_node_id: element_id,
@@ -1418,12 +1418,12 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     }
 
     pub(crate) fn edit_remove_event_listener(&mut self, event: &'static str) {
-        self.edits.edits.push(RemoveEventListener { event });
+        self.mutations.edits.push(RemoveEventListener { event });
     }
 
     // modify
     pub(crate) fn edit_set_text(&mut self, text: &'bump str) {
-        self.edits.edits.push(SetText { text });
+        self.mutations.edits.push(SetText { text });
     }
 
     pub(crate) fn edit_set_attribute(&mut self, attribute: &'bump Attribute) {
@@ -1437,7 +1437,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
         // field: &'static str,
         // value: &'bump str,
         // ns: Option<&'static str>,
-        self.edits.edits.push(SetAttribute {
+        self.mutations.edits.push(SetAttribute {
             field: name,
             value,
             ns: *namespace,
@@ -1460,7 +1460,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
         // field: &'static str,
         // value: &'bump str,
         // ns: Option<&'static str>,
-        self.edits.edits.push(SetAttribute {
+        self.mutations.edits.push(SetAttribute {
             field: name,
             value,
             ns: Some(namespace),
@@ -1469,7 +1469,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
 
     pub(crate) fn edit_remove_attribute(&mut self, attribute: &Attribute) {
         let name = attribute.name;
-        self.edits.edits.push(RemoveAttribute { name });
+        self.mutations.edits.push(RemoveAttribute { name });
     }
 }
 
