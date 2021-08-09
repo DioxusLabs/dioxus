@@ -31,15 +31,23 @@ log = "0.4"
 # # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
-# Backs scopes and unique keys
-slotmap = "1.0.3"
-
 appendlist = "1.4.0"
 
 futures-util = "0.3.15"
+
 smallvec = "1.6.1"
+
+slab = "0.4.3"
+
+futures-channel = "0.3.16"
+
+
+[dev-dependencies]
+anyhow = "1.0.42"
+async-std = { version = "1.9.0", features = ["attributes"] }
+dioxus-html = { path = "../html" }
 
 
 [features]
 default = ["serialize"]
-serialize = ["slotmap/serde", "serde"]
+serialize = ["serde"]

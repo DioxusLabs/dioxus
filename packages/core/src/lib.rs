@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+#![doc = include_str!("../README.md")]
 //! Dioxus Core
 //! ----------
 //!
@@ -10,14 +11,15 @@
 //!
 
 pub use crate::innerlude::{
-    format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, EventTrigger, LazyNodes,
-    NodeFactory, Properties, RealDom, RealDomNode, ScopeId, VNode, VNodeKind, VirtualDom,
-    VirtualEvent, FC,
+    format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority,
+    EventTrigger, LazyNodes, NodeFactory, Properties, ScopeId, SuspendedContext, VNode, VNodeKind,
+    VirtualDom, VirtualEvent, FC,
 };
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::context::Context;
+    pub use crate::hooks::*;
     pub use crate::innerlude::{DioxusElement, DomTree, LazyNodes, NodeFactory, FC};
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
@@ -36,9 +38,9 @@ pub(crate) mod innerlude {
     pub use crate::events::*;
     pub use crate::heuristics::*;
     pub use crate::hooklist::*;
+    pub use crate::hooks::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
-    pub use crate::tasks::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -63,9 +65,9 @@ pub mod error;
 pub mod events;
 pub mod heuristics;
 pub mod hooklist;
+pub mod hooks;
 pub mod nodes;
 pub mod scope;
 pub mod signals;
-pub mod tasks;
 pub mod util;
 pub mod virtual_dom;

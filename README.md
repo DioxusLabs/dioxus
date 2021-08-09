@@ -84,6 +84,7 @@ If you know React, then you already know Dioxus.
 - Starting a new app takes zero templates or special tools - get a new app running in just seconds.
 - Desktop apps running natively (no Electron!) in less than 10 lines of code.
 - The most ergonomic and powerful state management of any Rust UI toolkit.
+- Multithreaded asynchronous coroutine scheduler for powerful async code.
 - And more! Read the full release post here.
 
 ## Get Started with...
@@ -165,7 +166,7 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Custom elements           | ✅      | ✅     | Define new element primitives                               |
 | Suspense                  | ✅      | ✅     | schedule future render from future/promise                  |
 | Integrated error handling | ✅      | ✅     | Gracefully handle errors with ? syntax                      |
-| Re-hydration              | 🛠      | ✅     | Pre-render to HTML to speed up first contentful paint       |
+| Re-hydration              | ✅      | ✅     | Pre-render to HTML to speed up first contentful paint       |
 | Cooperative Scheduling    | 🛠      | ✅     | Prioritize important events over non-important events       |
 | Runs natively             | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)              |
 | 1st class global state    | ✅      | ❓     | redux/recoil/mobx on top of context                         |

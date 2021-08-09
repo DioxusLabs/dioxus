@@ -4,7 +4,8 @@ use dioxus_core::prelude::*;
 
 fn App(cx: Context<()>) -> DomTree {
     //
-    let vak = cx.use_suspense(
+    let vak = use_suspense(
+        cx,
         || async {},
         |c, res| {
             //

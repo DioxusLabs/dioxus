@@ -37,18 +37,31 @@ mobile = ["dioxus-mobile"]
 
 
 [dev-dependencies]
-futures = "0.3.15"
+futures-util = "0.3.16"
 log = "0.4.14"
 num-format = "0.4.0"
 separator = "0.4.1"
 serde = { version = "1.0.126", features = ["derive"] }
-surf = "2.2.0"
+im-rc = "15.0.0"
+fxhash = "0.2.1"
+anyhow = "1.0.42"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+argh = "0.1.5"
 env_logger = "*"
 async-std = { version = "1.9.0", features = ["attributes"] }
-im-rc = "15.0.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
-fxhash = "0.2.1"
+surf = {version = "2.2.0", git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm"}
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 gloo-timers = "0.2.1"
+surf = {version = "2.2.0", default-features = false, features = ["wasm-client"], git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm"}
+
+
+[dependencies.getrandom]
+version = "0.2"
+features = ["js"]
+
 
 [workspace]
 members = [

@@ -1,68 +1,12 @@
 use proc_macro::TokenStream;
 use quote::ToTokens;
+use rsx::{AS_HTML, AS_RSX};
 use syn::parse_macro_input;
 
-pub(crate) mod fc;
 pub(crate) mod htm;
-pub(crate) mod html;
 pub(crate) mod ifmt;
 pub(crate) mod props;
 pub(crate) mod rsx;
-pub(crate) mod rsxtemplate;
-pub(crate) mod util;
-
-/// The html! macro makes it easy for developers to write jsx-style markup in their components.
-/// We aim to keep functional parity with html templates.
-#[proc_macro]
-pub fn html(s: TokenStream) -> TokenStream {
-    match syn::parse::<htm::HtmlRender>(s) {
-        Err(e) => e.to_compile_error().into(),
-        Ok(s) => s.to_token_stream().into(),
-    }
-}
-
-/// The html! macro makes it easy for developers to write jsx-style markup in their components.
-/// We aim to keep functional parity with html templates.
-#[proc_macro]
-pub fn rsx_template(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsxtemplate::RsxTemplate>(s) {
-        Err(e) => e.to_compile_error().into(),
-        Ok(s) => s.to_token_stream().into(),
-    }
-}
-
-/// The html! macro makes it easy for developers to write jsx-style markup in their components.
-/// We aim to keep functional parity with html templates.
-#[proc_macro]
-pub fn html_template(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsxtemplate::RsxTemplate>(s) {
-        Err(e) => e.to_compile_error().into(),
-        Ok(s) => s.to_token_stream().into(),
-    }
-}
-
-// #[proc_macro_attribute]
-// pub fn fc(attr: TokenStream, item: TokenStream) -> TokenStream {
-
-/// Label a function or static closure as a functional component.
-/// This macro reduces the need to create a separate properties struct.
-///
-/// Using this macro is fun and simple
-///
-/// ```ignore
-///
-/// #[fc]
-/// fn Example(cx: Context, name: &str) -> DomTree {
-///     cx.render(rsx! { h1 {"hello {name}"} })
-/// }
-/// ```
-#[proc_macro_attribute]
-pub fn fc(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    match syn::parse::<fc::FunctionComponent>(item) {
-        Err(e) => e.to_compile_error().into(),
-        Ok(s) => s.to_token_stream().into(),
-    }
-}
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {
@@ -238,7 +182,17 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 /// ```
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsx::RsxBody>(s) {
+    match syn::parse::<rsx::RsxBody<AS_RSX>>(s) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.to_token_stream().into(),
+    }
+}
+
+/// The html! macro makes it easy for developers to write jsx-style markup in their components.
+/// We aim to keep functional parity with html templates.
+#[proc_macro]
+pub fn html(s: TokenStream) -> TokenStream {
+    match syn::parse::<rsx::RsxBody<AS_HTML>>(s) {
         Err(e) => e.to_compile_error().into(),
         Ok(s) => s.to_token_stream().into(),
     }

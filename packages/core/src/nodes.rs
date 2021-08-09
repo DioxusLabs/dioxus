@@ -5,23 +5,39 @@
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 use crate::{
     events::VirtualEvent,
-    innerlude::{Context, DomTree, Properties, RealDomNode, Scope, ScopeId, FC},
+    innerlude::{empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, FC},
 };
+use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
+    mem::ManuallyDrop,
     rc::Rc,
 };
 
 pub struct VNode<'src> {
     pub kind: VNodeKind<'src>,
-    pub(crate) dom_id: Cell<RealDomNode>,
+
     pub(crate) key: Option<&'src str>,
 }
-impl VNode<'_> {
-    fn key(&self) -> Option<&str> {
+
+impl<'src> VNode<'src> {
+    pub fn key(&self) -> Option<&'src str> {
         self.key
+    }
+    pub fn direct_id(&self) -> ElementId {
+        self.try_direct_id().unwrap()
+    }
+    pub fn try_direct_id(&self) -> Option<ElementId> {
+        match &self.kind {
+            VNodeKind::Text(el) => el.dom_id.get(),
+            VNodeKind::Element(el) => el.dom_id.get(),
+            VNodeKind::Anchor(el) => el.dom_id.get(),
+            VNodeKind::Fragment(_) => None,
+            VNodeKind::Component(_) => None,
+            VNodeKind::Suspended(_) => None,
+        }
     }
 }
 
@@ -39,18 +55,24 @@ pub enum VNodeKind<'src> {
 
     Component(&'src VComponent<'src>),
 
-    Suspended { node: Rc<Cell<RealDomNode>> },
+    Suspended(VSuspended),
+
+    Anchor(VAnchor),
+}
+
+pub struct VAnchor {
+    pub dom_id: Cell<Option<ElementId>>,
 }
 
 pub struct VText<'src> {
     pub text: &'src str,
+    pub dom_id: Cell<Option<ElementId>>,
     pub is_static: bool,
 }
 
 pub struct VFragment<'src> {
     pub children: &'src [VNode<'src>],
     pub is_static: bool,
-    pub is_error: bool,
 }
 
 pub trait DioxusElement {
@@ -70,6 +92,7 @@ pub struct VElement<'a> {
     // tag is always static
     pub tag_name: &'static str,
     pub namespace: Option<&'static str>,
+    pub dom_id: Cell<Option<ElementId>>,
 
     pub static_listeners: bool,
     pub listeners: &'a [Listener<'a>],
@@ -103,11 +126,19 @@ pub struct Listener<'bump> {
     /// The type of event to listen for.
     pub(crate) event: &'static str,
 
-    pub scope: ScopeId,
+    pub mounted_node: Cell<Option<ElementId>>,
 
-    pub mounted_node: &'bump mut Cell<RealDomNode>,
+    pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(VirtualEvent) + 'bump>>>,
+}
 
-    pub(crate) callback: &'bump dyn FnMut(VirtualEvent),
+impl Listener<'_> {
+    // serialize the listener event stuff to a string
+    pub fn serialize(&self) {
+        //
+    }
+    pub fn deserialize() {
+        //
+    }
 }
 
 /// Virtual Components for custom user-defined components
@@ -121,7 +152,11 @@ pub struct VComponent<'src> {
 
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
+    pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
+
     pub is_static: bool,
+
+    pub can_memoize: bool,
 
     // a pointer into the bump arena (given by the 'src lifetime)
     pub(crate) raw_props: *const (),
@@ -130,28 +165,53 @@ pub struct VComponent<'src> {
     pub(crate) user_fc: *const (),
 }
 
+pub struct VSuspended {
+    pub node: Rc<Cell<Option<ElementId>>>,
+}
+
 /// This struct provides an ergonomic API to quickly build VNodes.
 ///
 /// NodeFactory is used to build VNodes in the component's memory space.
 /// This struct adds metadata to the final VNode about listeners, attributes, and children
 #[derive(Copy, Clone)]
 pub struct NodeFactory<'a> {
-    pub scope_ref: &'a Scope,
-    pub listener_id: &'a Cell<usize>,
+    pub(crate) bump: &'a Bump,
 }
 
 impl<'a> NodeFactory<'a> {
+    pub fn new(bump: &'a Bump) -> NodeFactory<'a> {
+        NodeFactory { bump }
+    }
+
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        &self.scope_ref.cur_frame().bump
+        &self.bump
+    }
+
+    pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> DomTree<'a>
+    where
+        F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+    {
+        Some(lazy_nodes.into_vnode(NodeFactory { bump: self.bump }))
+    }
+
+    pub fn unstable_place_holder() -> VNode<'static> {
+        VNode {
+            key: None,
+            kind: VNodeKind::Text(VText {
+                text: "",
+                dom_id: empty_cell(),
+                is_static: true,
+            }),
+        }
     }
 
     /// Used in a place or two to make it easier to build vnodes from dummy text
-    pub fn static_text(text: &'static str) -> VNode {
+    pub fn static_text(&self, text: &'static str) -> VNode<'a> {
         VNode {
-            dom_id: RealDomNode::empty_cell(),
             key: None,
             kind: VNodeKind::Text(VText {
+                dom_id: empty_cell(),
                 text,
                 is_static: true,
             }),
@@ -178,20 +238,28 @@ impl<'a> NodeFactory<'a> {
     pub fn text(&self, args: Arguments) -> VNode<'a> {
         let (text, is_static) = self.raw_text(args);
         VNode {
-            dom_id: RealDomNode::empty_cell(),
             key: None,
-            kind: VNodeKind::Text(VText { text, is_static }),
+            kind: VNodeKind::Text(VText {
+                text,
+                is_static,
+                dom_id: empty_cell(),
+            }),
         }
     }
 
-    pub fn element(
+    pub fn element<L, A, V>(
         &self,
         el: impl DioxusElement,
-        listeners: &'a mut [Listener<'a>],
-        attributes: &'a [Attribute<'a>],
-        children: &'a [VNode<'a>],
-        key: Option<&'a str>,
-    ) -> VNode<'a> {
+        listeners: L,
+        attributes: A,
+        children: V,
+        key: Option<Arguments>,
+    ) -> VNode<'a>
+    where
+        L: 'a + AsRef<[Listener<'a>]>,
+        A: 'a + AsRef<[Attribute<'a>]>,
+        V: 'a + AsRef<[VNode<'a>]>,
+    {
         self.raw_element(
             el.tag_name(),
             el.namespace(),
@@ -202,28 +270,32 @@ impl<'a> NodeFactory<'a> {
         )
     }
 
-    pub fn raw_element(
+    pub fn raw_element<L, A, V>(
         &self,
         tag: &'static str,
         namespace: Option<&'static str>,
-        listeners: &'a mut [Listener],
-        attributes: &'a [Attribute],
-        children: &'a [VNode<'a>],
-        key: Option<&'a str>,
-    ) -> VNode<'a> {
-        // We take the references directly from the bump arena
-        // TODO: this code shouldn't necessarily be here of all places
-        // It would make more sense to do this in diffing
+        listeners: L,
+        attributes: A,
+        children: V,
+        key: Option<Arguments>,
+    ) -> VNode<'a>
+    where
+        L: 'a + AsRef<[Listener<'a>]>,
+        A: 'a + AsRef<[Attribute<'a>]>,
+        V: 'a + AsRef<[VNode<'a>]>,
+    {
+        let listeners: &'a L = self.bump().alloc(listeners);
+        let listeners = listeners.as_ref();
 
-        let mut queue = self.scope_ref.listeners.borrow_mut();
-        for listener in listeners.iter_mut() {
-            let mounted = listener.mounted_node as *mut _;
-            let callback = listener.callback as *const _ as *mut _;
-            queue.push((mounted, callback))
-        }
+        let attributes: &'a A = self.bump().alloc(attributes);
+        let attributes = attributes.as_ref();
+
+        let children: &'a V = self.bump().alloc(children);
+        let children = children.as_ref();
+
+        let key = key.map(|f| self.raw_text(f).0);
 
         VNode {
-            dom_id: RealDomNode::empty_cell(),
             key,
             kind: VNodeKind::Element(self.bump().alloc(VElement {
                 tag_name: tag,
@@ -231,6 +303,7 @@ impl<'a> NodeFactory<'a> {
                 listeners,
                 attributes,
                 children,
+                dom_id: empty_cell(),
 
                 // todo: wire up more constization
                 static_listeners: false,
@@ -242,11 +315,10 @@ impl<'a> NodeFactory<'a> {
 
     pub fn suspended() -> VNode<'static> {
         VNode {
-            dom_id: RealDomNode::empty_cell(),
             key: None,
-            kind: VNodeKind::Suspended {
-                node: Rc::new(RealDomNode::empty_cell()),
-            },
+            kind: VNodeKind::Suspended(VSuspended {
+                node: Rc::new(empty_cell()),
+            }),
         }
     }
 
@@ -283,31 +355,44 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn component<P>(
+    pub fn component<P, V>(
         &self,
         component: FC<P>,
         props: P,
-        key: Option<&'a str>,
-        children: &'a [VNode<'a>],
+        key: Option<Arguments>,
+        children: V,
     ) -> VNode<'a>
     where
         P: Properties + 'a,
+        V: 'a + AsRef<[VNode<'a>]>,
     {
-        // TODO
-        // It's somewhat wrong to go about props like this
+        let bump = self.bump();
 
         // We don't want the fat part of the fat pointer
         // This function does static dispatch so we don't need any VTable stuff
-        let props = self.bump().alloc(props);
-        let raw_props = props as *const P as *const ();
+        let children: &'a V = bump.alloc(children);
+        let children = children.as_ref();
 
+        let props = bump.alloc(props);
+
+        let raw_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
 
-        let comparator: Option<&dyn Fn(&VComponent) -> bool> = Some(self.bump().alloc_with(|| {
+        let comparator: Option<&dyn Fn(&VComponent) -> bool> = Some(bump.alloc_with(|| {
             move |other: &VComponent| {
                 if user_fc == other.user_fc {
-                    let real_other = unsafe { &*(other.raw_props as *const _ as *const P) };
-                    let props_memoized = unsafe { props.memoize(&real_other) };
+                    // Safety
+                    // - We guarantee that FC<P> is the same by function pointer
+                    // - Because FC<P> is the same, then P must be the same (even with generics)
+                    // - Non-static P are autoderived to memoize as false
+                    // - This comparator is only called on a corresponding set of bumpframes
+                    let props_memoized = unsafe {
+                        let real_other: &P = &*(other.raw_props as *const _ as *const P);
+                        props.memoize(&real_other)
+                    };
+
+                    // It's only okay to memoize if there are no children and the props can be memoized
+                    // Implementing memoize is unsafe and done automatically with the props trait
                     match (props_memoized, children.len() == 0) {
                         (true, true) => true,
                         _ => false,
@@ -318,18 +403,36 @@ impl<'a> NodeFactory<'a> {
             }
         }));
 
+        // create a closure to drop the props
+        let mut has_dropped = false;
+        let drop_props: &mut dyn FnMut() = bump.alloc_with(|| {
+            move || unsafe {
+                if !has_dropped {
+                    let real_other = raw_props as *mut _ as *mut P;
+                    let b = BumpBox::from_raw(real_other);
+                    std::mem::drop(b);
+
+                    has_dropped = true;
+                }
+            }
+        });
+        let drop_props = unsafe { BumpBox::from_raw(drop_props) };
+
         let is_static = children.len() == 0 && P::IS_STATIC && key.is_none();
+
+        let key = key.map(|f| self.raw_text(f).0);
 
         VNode {
             key,
-            dom_id: Cell::new(RealDomNode::empty()),
-            kind: VNodeKind::Component(self.bump().alloc_with(|| VComponent {
+            kind: VNodeKind::Component(bump.alloc_with(|| VComponent {
                 user_fc,
                 comparator,
                 raw_props,
                 children,
                 caller: NodeFactory::create_component_caller(component, raw_props),
                 is_static,
+                drop_props: RefCell::new(Some(drop_props)),
+                can_memoize: P::IS_STATIC,
                 ass_scope: Cell::new(None),
             })),
         }
@@ -357,38 +460,14 @@ impl<'a> NodeFactory<'a> {
         unsafe { std::mem::transmute::<_, Captured<'static>>(caller) }
     }
 
-    pub fn fragment_from_iter(
-        self,
-        node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
-    ) -> VNode<'a> {
-        let mut nodes = bumpalo::collections::Vec::new_in(self.bump());
+    pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a>) -> VNode<'a> {
+        let children = node_iter.into_vnode_list(self);
 
-        for node in node_iter.into_iter() {
-            nodes.push(node.into_vnode(self));
-        }
-
-        if cfg!(debug_assertions) {
-            if nodes.len() > 1 {
-                if nodes.last().unwrap().key().is_none() {
-                    log::error!(
-                        r#"
-Warning: Each child in an array or iterator should have a unique "key" prop. 
-Not providing a key will lead to poor performance with lists.
-See docs.rs/dioxus for more information. 
----
-To help you identify where this error is coming from, we've generated a backtrace.
-                        "#,
-                    );
-                }
-            }
-        }
         VNode {
-            dom_id: RealDomNode::empty_cell(),
             key: None,
             kind: VNodeKind::Fragment(VFragment {
-                children: nodes.into_bump_slice(),
+                children,
                 is_static: false,
-                is_error: false,
             }),
         }
     }
@@ -413,6 +492,72 @@ pub trait IntoVNode<'a> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 
+pub trait IntoVNodeList<'a> {
+    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>];
+}
+
+impl<'a, T, V> IntoVNodeList<'a> for T
+where
+    T: IntoIterator<Item = V>,
+    V: IntoVNode<'a>,
+{
+    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
+        let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
+
+        for node in self.into_iter() {
+            nodes.push(node.into_vnode(cx));
+        }
+
+        if cfg!(debug_assertions) {
+            if nodes.len() > 1 {
+                if nodes.last().unwrap().key().is_none() {
+                    log::error!(
+                        r#"
+        Warning: Each child in an array or iterator should have a unique "key" prop.
+        Not providing a key will lead to poor performance with lists.
+        See docs.rs/dioxus for more information.
+        ---
+        To help you identify where this error is coming from, we've generated a backtrace.
+                                "#,
+                    );
+                }
+            }
+        }
+
+        if nodes.len() == 0 {
+            nodes.push(VNode {
+                kind: VNodeKind::Anchor(VAnchor {
+                    dom_id: empty_cell(),
+                }),
+                key: None,
+            });
+        }
+
+        nodes.into_bump_slice()
+    }
+}
+
+pub struct ScopeChildren<'a>(pub &'a [VNode<'a>]);
+impl Copy for ScopeChildren<'_> {}
+impl<'a> Clone for ScopeChildren<'a> {
+    fn clone(&self) -> Self {
+        ScopeChildren(self.0)
+    }
+}
+impl ScopeChildren<'_> {
+    pub unsafe fn extend_lifetime(self) -> ScopeChildren<'static> {
+        std::mem::transmute(self)
+    }
+    pub unsafe fn unextend_lfetime<'a>(self) -> ScopeChildren<'a> {
+        std::mem::transmute(self)
+    }
+}
+impl<'a> IntoVNodeList<'a> for ScopeChildren<'a> {
+    fn into_vnode_list(self, _: NodeFactory<'a>) -> &'a [VNode<'a>] {
+        self.0
+    }
+}
+
 // For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoIterator for VNode<'a> {
     type Item = VNode<'a>;
@@ -426,37 +571,6 @@ impl<'a> IntoIterator for VNode<'a> {
 impl<'a> IntoVNode<'a> for VNode<'a> {
     fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
         self
-    }
-}
-
-// For the case where a rendered VNode is by reference passed into the rsx! macro through curly braces
-// This behavior is designed for the cx.children method where child nodes are passed by reference.
-//
-// Designed to support indexing
-impl<'a> IntoVNode<'a> for &VNode<'a> {
-    fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
-        let kind = match &self.kind {
-            VNodeKind::Element(element) => VNodeKind::Element(element),
-            VNodeKind::Text(old) => VNodeKind::Text(VText {
-                text: old.text,
-                is_static: old.is_static,
-            }),
-            VNodeKind::Fragment(fragment) => VNodeKind::Fragment(VFragment {
-                children: fragment.children,
-                is_static: fragment.is_static,
-                is_error: false,
-            }),
-            VNodeKind::Component(component) => VNodeKind::Component(component),
-
-            // todo: it doesn't make much sense to pass in suspended nodes
-            // I think this is right but I'm not too sure.
-            VNodeKind::Suspended { node } => VNodeKind::Suspended { node: node.clone() },
-        };
-        VNode {
-            kind,
-            dom_id: self.dom_id.clone(),
-            key: self.key.clone(),
-        }
     }
 }
 
@@ -535,7 +649,7 @@ impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
 
 impl IntoVNode<'_> for &'static str {
     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        NodeFactory::static_text(self)
+        cx.static_text(self)
     }
 }
 impl IntoVNode<'_> for Arguments<'_> {
@@ -553,8 +667,10 @@ impl Debug for NodeFactory<'_> {
 impl Debug for VNode<'_> {
     fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match &self.kind {
-            VNodeKind::Element(el) => write!(s, "element, {}", el.tag_name),
-            VNodeKind::Text(t) => write!(s, "text, {}", t.text),
+            VNodeKind::Element(el) => write!(s, "VElement {{ name: {} }}", el.tag_name),
+            VNodeKind::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
+            VNodeKind::Anchor(a) => write!(s, "VAnchor"),
+
             VNodeKind::Fragment(_) => write!(s, "fragment"),
             VNodeKind::Suspended { .. } => write!(s, "suspended"),
             VNodeKind::Component(_) => write!(s, "component"),

@@ -11,7 +11,7 @@ license = "MIT/Apache-2.0"
 [dependencies]
 # web-view = { git = "https://github.com/Boscop/web-view" }
 dioxus-core = { path = "../core", version = "0.1.2", features = ["serialize"] }
-anyhow = "1.0.38"
+anyhow = "1.0"
 argh = "0.1.4"
 serde = "1.0.120"
 serde_json = "1.0.61"
@@ -20,12 +20,13 @@ log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }
 html-escape = "0.2.9"
 wry = "0.11.0"
+async-std = { version = "1.9.0", features = ["attributes"] }
 
 
 [dev-dependencies]
+dioxus-html = { path = "../html" }
 tide = "0.15.0"
 tide-websockets = "0.3.0"
-async-std = { version = "1.9.0", features = ["attributes"] }
 
 # thiserror = "1.0.23"
 # log = "0.4.13"

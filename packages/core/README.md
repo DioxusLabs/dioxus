@@ -2,18 +2,18 @@
 
 This is the core crate for the Dioxus Virtual DOM. This README will focus on the technical design and layout of this Virtual DOM implementation. If you want to read more about using Dioxus, then check out the Dioxus crate, documentation, and website.
 
-We reserve the "dioxus" name and aggregate all the various renderers under it. If you want just a single dioxus renderer, then chose from "dioxus-web", "dioxus-desktop", etc.
+To build new apps with Dioxus or to extend the ecosystem with new hooks or components, use the `Dioxus` crate with the appropriate feature flags.
 
 ## Internals
 
 Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus borrows these concepts:
 
 - React: hooks, concurrency, suspense
-- Dodrio: bump allocation, double buffering, and source code for NodeBuilder
+- Dodrio: bump allocation, double buffering, and some diffing architecture
 - Percy: html! macro architecture, platform-agnostic edits
-- Yew: passion and inspiration ❤️
-- InfernoJS: approach to fragments and node diffing
+- InfernoJS: approach to keyed diffing
 - Preact: approach for normalization and ref
+- Yew: passion and inspiration ❤️
 
 Dioxus-core leverages some really cool techniques and hits a very high level of parity with mature frameworks. Some unique features include:
 
@@ -21,6 +21,8 @@ Dioxus-core leverages some really cool techniques and hits a very high level of 
 - suspended nodes (task/fiber endpoints) for asynchronous vnodes
 - custom memory allocator for vnodes and all text content
 - support for fragments w/ lazy normalization
+- slab allocator for scopes
+- mirrored-slab approach for remote vdoms
 
 There's certainly more to the story, but these optimizations make Dioxus memory use and allocation count extremely minimal. For an average application, it is likely that zero allocations will need to be performed once the app has been mounted. Only when new components are added to the dom will allocations occur - and only en mass. The space of old VNodes is dynamically recycled as new nodes are added. Additionally, Dioxus tracks the average memory footprint of previous components to estimate how much memory allocate for future components.
 

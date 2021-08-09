@@ -1,8 +1,6 @@
-fn main() {}
-
-use dioxus::*;
-use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
+
+fn main() {}
 
 pub static Example: FC<()> = |cx| {
     let list = (0..10).map(|f| LazyNodes::new(move |f| todo!()));

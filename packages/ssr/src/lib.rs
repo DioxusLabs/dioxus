@@ -1,3 +1,7 @@
+//!
+//!
+//!
+//!
 //! This crate demonstrates how to implement a custom renderer for Dioxus VNodes via the `TextRenderer` renderer.
 //! The `TextRenderer` consumes a Dioxus Virtual DOM, progresses its event queue, and renders the VNodes to a String.
 //!
@@ -12,8 +16,11 @@ use dioxus_core::*;
 
 pub fn render_vnode(vnode: &VNode, string: &mut String) {}
 
-pub fn render_vdom(dom: &VirtualDom) -> String {
-    format!("{:}", TextRenderer::from_vdom(dom))
+pub fn render_vdom(dom: &VirtualDom, cfg: impl FnOnce(SsrConfig) -> SsrConfig) -> String {
+    format!(
+        "{:}",
+        TextRenderer::from_vdom(dom, cfg(SsrConfig::default()))
+    )
 }
 
 pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
@@ -21,35 +28,12 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
         "{:}",
         TextRenderer {
             cfg: SsrConfig::default(),
-            root: vdom.components.get(scope).unwrap().root(),
+            root: vdom.get_scope(scope).unwrap().root(),
             vdom: Some(vdom)
         }
     ))
 }
 
-pub struct SsrConfig {
-    // currently not supported - control if we indent the HTML output
-    indent: bool,
-
-    // Control if elements are written onto a new line
-    newline: bool,
-
-    // Currently not implemented
-    // Don't proceed onto new components. Instead, put the name of the component.
-    // TODO: components don't have names :(
-    _skip_components: bool,
-}
-
-impl Default for SsrConfig {
-    fn default() -> Self {
-        Self {
-            indent: false,
-
-            newline: false,
-            _skip_components: false,
-        }
-    }
-}
 /// A configurable text renderer for the Dioxus VirtualDOM.
 ///
 ///
@@ -60,7 +44,7 @@ impl Default for SsrConfig {
 ///
 /// ## Example
 /// ```ignore
-/// const App: FC<()> = |cx| cx.render(rsx!(div { "hello world" }));
+/// static App: FC<()> = |cx| cx.render(rsx!(div { "hello world" }));
 /// let mut vdom = VirtualDom::new(App);
 /// vdom.rebuild_in_place();
 ///
@@ -81,11 +65,11 @@ impl Display for TextRenderer<'_> {
 }
 
 impl<'a> TextRenderer<'a> {
-    pub fn from_vdom(vdom: &'a VirtualDom) -> Self {
+    pub fn from_vdom(vdom: &'a VirtualDom, cfg: SsrConfig) -> Self {
         Self {
+            cfg,
             root: vdom.base_scope().root(),
             vdom: Some(vdom),
-            cfg: SsrConfig::default(),
         }
     }
 
@@ -98,6 +82,15 @@ impl<'a> TextRenderer<'a> {
                     }
                 }
                 write!(f, "{}", text.text)?
+            }
+            VNodeKind::Anchor(anchor) => {
+                //
+                if self.cfg.indent {
+                    for _ in 0..il {
+                        write!(f, "    ")?;
+                    }
+                }
+                write!(f, "<!-- -->")?;
             }
             VNodeKind::Element(el) => {
                 if self.cfg.indent {
@@ -132,6 +125,21 @@ impl<'a> TextRenderer<'a> {
                     }
                 }
 
+                // we write the element's id as a data attribute
+                //
+                // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
+                // them interpreter's stack
+                match (self.cfg.pre_render, node.try_direct_id()) {
+                    (true, Some(id)) => {
+                        write!(f, " dio_el=\"{}\"", id)?;
+                        //
+                        for listener in el.listeners {
+                            // write the listeners
+                        }
+                    }
+                    _ => {}
+                }
+
                 match self.cfg.newline {
                     true => write!(f, ">\n")?,
                     false => write!(f, ">")?,
@@ -162,9 +170,14 @@ impl<'a> TextRenderer<'a> {
             }
             VNodeKind::Component(vcomp) => {
                 let idx = vcomp.ass_scope.get().unwrap();
-                if let Some(vdom) = self.vdom {
-                    let new_node = vdom.components.get(idx).unwrap().root();
-                    self.html_render(new_node, f, il + 1)?;
+                match (self.vdom, self.cfg.skip_components) {
+                    (Some(vdom), false) => {
+                        let new_node = vdom.get_scope(idx).unwrap().root();
+                        self.html_render(new_node, f, il + 1)?;
+                    }
+                    _ => {
+                        // render the component by name
+                    }
                 }
             }
             VNodeKind::Suspended { .. } => {
@@ -175,6 +188,52 @@ impl<'a> TextRenderer<'a> {
     }
 }
 
+pub struct SsrConfig {
+    // currently not supported - control if we indent the HTML output
+    indent: bool,
+
+    // Control if elements are written onto a new line
+    newline: bool,
+
+    // Choose to write ElementIDs into elements so the page can be re-hydrated later on
+    pre_render: bool,
+
+    // Currently not implemented
+    // Don't proceed onto new components. Instead, put the name of the component.
+    // TODO: components don't have names :(
+    skip_components: bool,
+}
+
+impl Default for SsrConfig {
+    fn default() -> Self {
+        Self {
+            indent: false,
+            pre_render: false,
+            newline: false,
+            skip_components: false,
+        }
+    }
+}
+
+impl SsrConfig {
+    pub fn indent(mut self, a: bool) -> Self {
+        self.indent = a;
+        self
+    }
+    pub fn newline(mut self, a: bool) -> Self {
+        self.newline = a;
+        self
+    }
+    pub fn pre_render(mut self, a: bool) -> Self {
+        self.pre_render = a;
+        self
+    }
+    pub fn skip_components(mut self, a: bool) -> Self {
+        self.skip_components = a;
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -182,15 +241,14 @@ mod tests {
     use dioxus_core as dioxus;
     use dioxus_core::prelude::*;
     use dioxus_html as dioxus_elements;
-    use dioxus_html::GlobalAttributes;
 
-    const SIMPLE_APP: FC<()> = |cx| {
+    static SIMPLE_APP: FC<()> = |cx| {
         cx.render(rsx!(div {
             "hello world!"
         }))
     };
 
-    const SLIGHTLY_MORE_COMPLEX: FC<()> = |cx| {
+    static SLIGHTLY_MORE_COMPLEX: FC<()> = |cx| {
         cx.render(rsx! {
             div {
                 title: "About W3Schools"
@@ -209,14 +267,14 @@ mod tests {
         })
     };
 
-    const NESTED_APP: FC<()> = |cx| {
+    static NESTED_APP: FC<()> = |cx| {
         cx.render(rsx!(
             div {
                 SIMPLE_APP {}
             }
         ))
     };
-    const FRAGMENT_APP: FC<()> = |cx| {
+    static FRAGMENT_APP: FC<()> = |cx| {
         cx.render(rsx!(
             div { "f1" }
             div { "f2" }
@@ -229,21 +287,28 @@ mod tests {
     fn to_string_works() {
         let mut dom = VirtualDom::new(SIMPLE_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_vdom(&dom));
+        dbg!(render_vdom(&dom, |c| c));
+    }
+
+    #[test]
+    fn hydration() {
+        let mut dom = VirtualDom::new(NESTED_APP);
+        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dbg!(render_vdom(&dom, |c| c.pre_render(true)));
     }
 
     #[test]
     fn nested() {
         let mut dom = VirtualDom::new(NESTED_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_vdom(&dom));
+        dbg!(render_vdom(&dom, |c| c));
     }
 
     #[test]
     fn fragment_app() {
         let mut dom = VirtualDom::new(FRAGMENT_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_vdom(&dom));
+        dbg!(render_vdom(&dom, |c| c));
     }
 
     #[test]
@@ -256,26 +321,23 @@ mod tests {
         let mut dom = VirtualDom::new(SLIGHTLY_MORE_COMPLEX);
         dom.rebuild_in_place().expect("failed to run virtualdom");
 
-        file.write_fmt(format_args!("{}", TextRenderer::from_vdom(&dom)))
-            .unwrap();
+        file.write_fmt(format_args!(
+            "{}",
+            TextRenderer::from_vdom(&dom, SsrConfig::default())
+        ))
+        .unwrap();
     }
 
     #[test]
     fn styles() {
-        const STLYE_APP: FC<()> = |cx| {
-            //
+        static STLYE_APP: FC<()> = |cx| {
             cx.render(rsx! {
-                div {
-                    style: {
-                        color: "blue",
-                        font_size: "46px"
-                    }
-                }
+                div { style: { color: "blue", font_size: "46px" } }
             })
         };
 
         let mut dom = VirtualDom::new(STLYE_APP);
         dom.rebuild_in_place().expect("failed to run virtualdom");
-        dbg!(render_vdom(&dom));
+        dbg!(render_vdom(&dom, |c| c));
     }
 }

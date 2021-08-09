@@ -1,14 +1,23 @@
 use std::collections::HashMap;
 
+use fxhash::FxHashMap;
+
 use crate::FC;
 
-pub(crate) struct HeuristicsEngine {
-    heuristics: HashMap<FcSlot, Heuristic>,
+/// Provides heuristics to the "SharedResources" object for improving allocation performance.
+///
+/// This heueristic engine records the memory footprint of bump arenas and hook lists for each component. These records are
+/// then used later on to optimize the initial allocation for future components. This helps save large allocations later on
+/// that would slow down the diffing and initializion process.
+///
+///
+pub struct HeuristicsEngine {
+    heuristics: FxHashMap<FcSlot, Heuristic>,
 }
 
-pub(crate) type FcSlot = *const ();
+pub type FcSlot = *const ();
 
-pub(crate) struct Heuristic {
+pub struct Heuristic {
     hooks: u32,
     bump_size: u64,
 }
@@ -16,7 +25,7 @@ pub(crate) struct Heuristic {
 impl HeuristicsEngine {
     pub(crate) fn new() -> Self {
         Self {
-            heuristics: HashMap::new(),
+            heuristics: FxHashMap::default(),
         }
     }
 

@@ -4,9 +4,15 @@
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
-use crate::innerlude::{RealDomNode, ScopeId};
+use crate::{
+    innerlude::{ElementId, ScopeId},
+    VNode,
+};
 
 #[derive(Debug)]
 pub struct EventTrigger {
@@ -14,7 +20,7 @@ pub struct EventTrigger {
     pub originator: ScopeId,
 
     /// The optional real node associated with the trigger
-    pub real_node_id: Option<RealDomNode>,
+    pub real_node_id: Option<ElementId>,
 
     /// The type of event
     pub event: VirtualEvent,
@@ -23,14 +29,25 @@ pub struct EventTrigger {
     pub priority: EventPriority,
 }
 
-impl EventTrigger {
-    pub fn new_from_task(originator: ScopeId, hook_idx: usize) -> Self {
-        Self {
-            originator,
-            event: VirtualEvent::AsyncEvent { hook_idx },
-            priority: EventPriority::Low,
-            real_node_id: None,
-        }
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub struct EventKey {
+    /// The originator of the event trigger
+    pub originator: ScopeId,
+    /// The priority of the event
+    pub priority: EventPriority,
+    /// The height of the scope (used for ordering)
+    pub height: u32,
+    // TODO: add the time that the event was queued
+}
+
+impl PartialOrd for EventKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        todo!()
+    }
+}
+impl Ord for EventKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        todo!()
     }
 }
 
@@ -41,16 +58,17 @@ impl EventTrigger {
 /// implement this form of scheduling internally, however Dioxus will perform its own scheduling as well.
 ///
 /// The ultimate goal of the scheduler is to manage latency of changes, prioritizing "flashier" changes over "subtler" changes.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub enum EventPriority {
-    /// "Immediate" work will interrupt whatever work is currently being done and force its way through. This type of work
-    /// is typically reserved for small changes to single elements.
+    /// Garbage collection is a type of work than can be scheduled around other work, but must be completed in a specific
+    /// order. The GC must be run for a component before any other future work for that component is run. Otherwise,
+    /// we will leak slots in our slab.
     ///
-    /// The primary user of the "Immediate" priority is the `Signal` API which performs surgical mutations to the DOM.
-    Immediate,
+    /// Garbage collection mixes with the safety aspects of the virtualdom so it's very important to get it done before
+    /// other work.
+    GarbageCollection,
 
     /// "High Priority" work will not interrupt other high priority work, but will interrupt long medium and low priority work.
-    ///
     ///
     /// This is typically reserved for things like user interaction.
     High,
@@ -72,7 +90,7 @@ impl EventTrigger {
     pub fn new(
         event: VirtualEvent,
         scope: ScopeId,
-        mounted_dom_id: Option<RealDomNode>,
+        mounted_dom_id: Option<ElementId>,
         priority: EventPriority,
     ) -> Self {
         Self {
@@ -84,8 +102,47 @@ impl EventTrigger {
     }
 }
 
-#[derive(Debug)]
 pub enum VirtualEvent {
+    /// Generated during diffing to signal that a component's nodes to be given back
+    ///
+    /// Typically has a high priority
+    ///
+    /// If an event is scheduled for a component that has "garbage", that garabge will be cleaned up before the event can
+    /// be processed.
+    GarbageCollection,
+
+    /// A type of "immediate" event scheduled by components
+    ///
+    /// Usually called through "set_state"
+    ScheduledUpdate {
+        height: u32,
+    },
+
+    // Whenever a task is ready (complete) Dioxus produces this "AsyncEvent"
+    //
+    // Async events don't necessarily propagate into a scope being ran. It's up to the event itself
+    // to force an update for itself.
+    //
+    // Most async events should have a low priority.
+    //
+    // This type exists for the task/concurrency system to signal that a task is ready.
+    // However, this does not necessarily signal that a scope must be re-ran, so the hook implementation must cause its
+    // own re-run.
+    AsyncEvent {
+        should_rerender: bool,
+    },
+
+    // Suspense events are a type of async event generated when suspended nodes are ready to be processed.
+    //
+    // they have the lowest priority
+    SuspenseEvent {
+        hook_idx: usize,
+        domnode: Rc<Cell<Option<ElementId>>>,
+    },
+
+    // image event has conflicting method types
+    // ImageEvent(event_data::ImageEvent),
+
     // Real events
     ClipboardEvent(on::ClipboardEvent),
     CompositionEvent(on::CompositionEvent),
@@ -102,25 +159,60 @@ pub enum VirtualEvent {
     ToggleEvent(on::ToggleEvent),
     MouseEvent(on::MouseEvent),
     PointerEvent(on::PointerEvent),
+}
+impl VirtualEvent {
+    pub fn is_input_event(&self) -> bool {
+        match self {
+            VirtualEvent::ClipboardEvent(_)
+            | VirtualEvent::CompositionEvent(_)
+            | VirtualEvent::KeyboardEvent(_)
+            | VirtualEvent::FocusEvent(_)
+            | VirtualEvent::FormEvent(_)
+            | VirtualEvent::SelectionEvent(_)
+            | VirtualEvent::TouchEvent(_)
+            | VirtualEvent::UIEvent(_)
+            | VirtualEvent::WheelEvent(_)
+            | VirtualEvent::MediaEvent(_)
+            | VirtualEvent::AnimationEvent(_)
+            | VirtualEvent::TransitionEvent(_)
+            | VirtualEvent::ToggleEvent(_)
+            | VirtualEvent::MouseEvent(_)
+            | VirtualEvent::PointerEvent(_) => true,
 
-    // image event has conflicting method types
-    // ImageEvent(event_data::ImageEvent),
+            VirtualEvent::GarbageCollection
+            | VirtualEvent::ScheduledUpdate { .. }
+            | VirtualEvent::AsyncEvent { .. }
+            | VirtualEvent::SuspenseEvent { .. } => false,
+        }
+    }
+}
 
-    // Whenever a task is ready (complete) Dioxus produces this "AsyncEvent"
-    //
-    // Async events don't necessarily propagate into a scope being ran. It's up to the event itself
-    // to force an update for itself.
-    AsyncEvent {
-        hook_idx: usize,
-    },
+impl std::fmt::Debug for VirtualEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            VirtualEvent::ClipboardEvent(_) => "ClipboardEvent",
+            VirtualEvent::CompositionEvent(_) => "CompositionEvent",
+            VirtualEvent::KeyboardEvent(_) => "KeyboardEvent",
+            VirtualEvent::FocusEvent(_) => "FocusEvent",
+            VirtualEvent::FormEvent(_) => "FormEvent",
+            VirtualEvent::SelectionEvent(_) => "SelectionEvent",
+            VirtualEvent::TouchEvent(_) => "TouchEvent",
+            VirtualEvent::UIEvent(_) => "UIEvent",
+            VirtualEvent::WheelEvent(_) => "WheelEvent",
+            VirtualEvent::MediaEvent(_) => "MediaEvent",
+            VirtualEvent::AnimationEvent(_) => "AnimationEvent",
+            VirtualEvent::TransitionEvent(_) => "TransitionEvent",
+            VirtualEvent::ToggleEvent(_) => "ToggleEvent",
+            VirtualEvent::MouseEvent(_) => "MouseEvent",
+            VirtualEvent::PointerEvent(_) => "PointerEvent",
+            VirtualEvent::GarbageCollection => "GarbageCollection",
+            VirtualEvent::ScheduledUpdate { .. } => "SetStateEvent",
+            VirtualEvent::AsyncEvent { .. } => "AsyncEvent",
+            VirtualEvent::SuspenseEvent { .. } => "SuspenseEvent",
+        };
 
-    // These are more intrusive than the rest
-    SuspenseEvent {
-        hook_idx: usize,
-        domnode: Rc<Cell<RealDomNode>>,
-    },
-
-    OtherEvent,
+        f.debug_struct("VirtualEvent").field("type", &name).finish()
+    }
 }
 
 pub mod on {
@@ -134,11 +226,12 @@ pub mod on {
     //!
 
     #![allow(unused)]
-    use std::{fmt::Debug, ops::Deref, rc::Rc};
+    use bumpalo::boxed::Box as BumpBox;
+    use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
     use crate::{
         innerlude::NodeFactory,
-        innerlude::{Attribute, Listener, RealDomNode, VNode},
+        innerlude::{Attribute, ElementId, Listener, VNode},
     };
     use std::cell::Cell;
 
@@ -156,7 +249,6 @@ pub mod on {
         )* ) => {
             $(
                 $(#[$attr])*
-                #[derive(Debug)]
                 pub struct $wrapper(pub Rc<dyn $eventdata>);
 
                 // todo: derefing to the event is fine (and easy) but breaks some IDE stuff like (go to source)
@@ -178,14 +270,20 @@ pub mod on {
                         where F: FnMut($wrapper) + 'a
                     {
                         let bump = &c.bump();
+
+                        let cb: &mut dyn FnMut(VirtualEvent) = bump.alloc(move |evt: VirtualEvent| match evt {
+                            VirtualEvent::$wrapper(event) => callback(event),
+                            _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
+                        });
+
+                        let callback: BumpBox<dyn FnMut(VirtualEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
+
+                        let event_name = stringify!($name);
+                        let shortname: &'static str = &event_name[2..];
                         Listener {
-                            event: stringify!($name),
-                            mounted_node: bump.alloc(Cell::new(RealDomNode::empty())),
-                            scope: c.scope_ref.our_arena_idx,
-                            callback: bump.alloc(move |evt: VirtualEvent| match evt {
-                                VirtualEvent::$wrapper(event) => callback(event),
-                                _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
-                            }),
+                            event: shortname,
+                            mounted_node: Cell::new(None),
+                            callback: RefCell::new(Some(callback)),
                         }
                     }
                 )*
@@ -504,15 +602,15 @@ pub mod on {
         fn time_stamp(&self) -> usize;
     }
 
-    pub trait ClipboardEventInner: Debug + GenericEventInner {
+    pub trait ClipboardEventInner {
         // DOMDataTransfer clipboardData
     }
 
-    pub trait CompositionEventInner: Debug {
+    pub trait CompositionEventInner {
         fn data(&self) -> String;
     }
 
-    pub trait KeyboardEventInner: Debug {
+    pub trait KeyboardEventInner {
         fn char_code(&self) -> u32;
 
         /// Get the key code as an enum Variant.
@@ -569,15 +667,15 @@ pub mod on {
         fn get_modifier_state(&self, key_code: usize) -> bool;
     }
 
-    pub trait FocusEventInner: Debug {
+    pub trait FocusEventInner {
         /* DOMEventInnerTarget relatedTarget */
     }
 
-    pub trait FormEventInner: Debug {
+    pub trait FormEventInner {
         fn value(&self) -> String;
     }
 
-    pub trait MouseEventInner: Debug {
+    pub trait MouseEventInner {
         fn alt_key(&self) -> bool;
         fn button(&self) -> i16;
         fn buttons(&self) -> u16;
@@ -594,7 +692,7 @@ pub mod on {
         fn get_modifier_state(&self, key_code: &str) -> bool;
     }
 
-    pub trait PointerEventInner: Debug {
+    pub trait PointerEventInner {
         // Mouse only
         fn alt_key(&self) -> bool;
         fn button(&self) -> usize;
@@ -621,9 +719,9 @@ pub mod on {
         fn is_primary(&self) -> bool;
     }
 
-    pub trait SelectionEventInner: Debug {}
+    pub trait SelectionEventInner {}
 
-    pub trait TouchEventInner: Debug {
+    pub trait TouchEventInner {
         fn alt_key(&self) -> bool;
         fn ctrl_key(&self) -> bool;
         fn meta_key(&self) -> bool;
@@ -634,37 +732,37 @@ pub mod on {
         // touches: DOMTouchList,
     }
 
-    pub trait UIEventInner: Debug {
+    pub trait UIEventInner {
         // DOMAbstractView view
         fn detail(&self) -> i32;
     }
 
-    pub trait WheelEventInner: Debug {
+    pub trait WheelEventInner {
         fn delta_mode(&self) -> i32;
         fn delta_x(&self) -> i32;
         fn delta_y(&self) -> i32;
         fn delta_z(&self) -> i32;
     }
 
-    pub trait MediaEventInner: Debug {}
+    pub trait MediaEventInner {}
 
-    pub trait ImageEventInner: Debug {
+    pub trait ImageEventInner {
         //     load error
     }
 
-    pub trait AnimationEventInner: Debug {
+    pub trait AnimationEventInner {
         fn animation_name(&self) -> String;
         fn pseudo_element(&self) -> String;
         fn elapsed_time(&self) -> f32;
     }
 
-    pub trait TransitionEventInner: Debug {
+    pub trait TransitionEventInner {
         fn property_name(&self) -> String;
         fn pseudo_element(&self) -> String;
         fn elapsed_time(&self) -> f32;
     }
 
-    pub trait ToggleEventInner: Debug {}
+    pub trait ToggleEventInner {}
 
     pub use util::KeyCode;
     mod util {

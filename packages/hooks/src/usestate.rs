@@ -52,7 +52,7 @@ use std::{
 pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
     cx: Context<'a, P>,
     initial_state_fn: F,
-) -> UseState<T> {
+) -> UseState<'a, T> {
     cx.use_hook(
         move |_| UseStateInner {
             current_val: initial_state_fn(),
@@ -212,8 +212,8 @@ impl<'a, T: Copy + Div<T, Output = T>> DivAssign<T> for UseState<'a, T> {
         self.set(self.inner.current_val.div(rhs));
     }
 }
-impl<'a, T: PartialEq<T>> PartialEq<T> for UseState<'a, T> {
-    fn eq(&self, other: &T) -> bool {
+impl<'a, V, T: PartialEq<V>> PartialEq<V> for UseState<'a, T> {
+    fn eq(&self, other: &V) -> bool {
         self.get() == other
     }
 }

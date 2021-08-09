@@ -15,13 +15,21 @@
 //! the RefCell will panic and crash. You can use `try_get_mut` or `.modify` to avoid this problem, or just not hold two
 //! RefMuts at the same time.
 
+use dioxus::desktop::wry::application::dpi::LogicalSize;
 use dioxus::events::on::*;
 use dioxus::prelude::*;
 
 const STYLE: &str = include_str!("./assets/calculator.css");
 fn main() {
-    dioxus::desktop::launch(App, |cfg| cfg.with_title("Calculator Demo"))
-        .expect("failed to launch dioxus app");
+    env_logger::init();
+    dioxus::desktop::launch(App, |cfg| {
+        cfg.with_window(|w| {
+            w.with_title("Calculator Demo")
+                .with_resizable(false)
+                .with_inner_size(LogicalSize::new(320.0, 530.0))
+        })
+    })
+    .expect("failed to launch dioxus app");
 }
 
 static App: FC<()> = |cx| {

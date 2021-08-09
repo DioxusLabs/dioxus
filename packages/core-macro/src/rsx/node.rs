@@ -10,13 +10,13 @@ use syn::{
 // ==============================================
 // Parse any div {} as a VElement
 // ==============================================
-pub enum BodyNode {
-    Element(AmbiguousElement),
+pub enum BodyNode<const AS: HTML_OR_RSX> {
+    Element(AmbiguousElement<AS>),
     Text(TextNode),
     RawExpr(Expr),
 }
 
-impl Parse for BodyNode {
+impl Parse for BodyNode<AS_RSX> {
     fn parse(stream: ParseStream) -> Result<Self> {
         // Supposedly this approach is discouraged due to inability to return proper errors
         // TODO: Rework this to provide more informative errors
@@ -31,11 +31,33 @@ impl Parse for BodyNode {
             return Ok(BodyNode::Text(stream.parse::<TextNode>()?));
         }
 
-        Ok(BodyNode::Element(stream.parse::<AmbiguousElement>()?))
+        Ok(BodyNode::Element(
+            stream.parse::<AmbiguousElement<AS_RSX>>()?,
+        ))
+    }
+}
+impl Parse for BodyNode<AS_HTML> {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        // Supposedly this approach is discouraged due to inability to return proper errors
+        // TODO: Rework this to provide more informative errors
+
+        if stream.peek(token::Brace) {
+            let content;
+            syn::braced!(content in stream);
+            return Ok(BodyNode::RawExpr(content.parse::<Expr>()?));
+        }
+
+        if stream.peek(LitStr) {
+            return Ok(BodyNode::Text(stream.parse::<TextNode>()?));
+        }
+
+        Ok(BodyNode::Element(
+            stream.parse::<AmbiguousElement<AS_HTML>>()?,
+        ))
     }
 }
 
-impl ToTokens for BodyNode {
+impl<const AS: HTML_OR_RSX> ToTokens for BodyNode<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self {
             BodyNode::Element(el) => el.to_tokens(tokens),

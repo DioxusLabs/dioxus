@@ -11,35 +11,16 @@ use syn::{
 // =======================================
 // Parse the VNode::Element type
 // =======================================
-pub struct Element {
+pub struct Element<const AS: HTML_OR_RSX> {
     name: Ident,
-    key: Option<AttrType>,
-    attributes: Vec<ElementAttr>,
-    listeners: Vec<ElementAttr>,
-    children: Vec<BodyNode>,
+    key: Option<LitStr>,
+    attributes: Vec<ElementAttr<AS>>,
+    listeners: Vec<ElementAttr<AS>>,
+    children: Vec<BodyNode<AS>>,
     is_static: bool,
 }
 
-impl ToTokens for Element {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = &self.name;
-        let attr = &self.attributes;
-        let childs = &self.children;
-        let listeners = &self.listeners;
-
-        tokens.append_all(quote! {
-            __cx.element(
-                dioxus_elements::#name,
-                __cx.bump().alloc([ #(#listeners),* ]),
-                __cx.bump().alloc([ #(#attr),* ]),
-                __cx.bump().alloc([ #(#childs),* ]),
-                None,
-            )
-        });
-    }
-}
-
-impl Parse for Element {
+impl Parse for Element<AS_RSX> {
     fn parse(stream: ParseStream) -> Result<Self> {
         let name = Ident::parse(stream)?;
 
@@ -47,9 +28,9 @@ impl Parse for Element {
         let content: ParseBuffer;
         syn::braced!(content in stream);
 
-        let mut attributes: Vec<ElementAttr> = vec![];
-        let mut listeners: Vec<ElementAttr> = vec![];
-        let mut children: Vec<BodyNode> = vec![];
+        let mut attributes: Vec<ElementAttr<AS_RSX>> = vec![];
+        let mut listeners: Vec<ElementAttr<AS_RSX>> = vec![];
+        let mut children: Vec<BodyNode<AS_RSX>> = vec![];
         let mut key = None;
 
         'parsing: loop {
@@ -59,7 +40,7 @@ impl Parse for Element {
             }
 
             if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                parse_element_body(
+                parse_rsx_element_field(
                     &content,
                     &mut attributes,
                     &mut listeners,
@@ -67,7 +48,7 @@ impl Parse for Element {
                     name.clone(),
                 )?;
             } else {
-                children.push(content.parse::<BodyNode>()?);
+                children.push(content.parse::<BodyNode<AS_RSX>>()?);
             }
 
             // consume comma if it exists
@@ -88,10 +69,153 @@ impl Parse for Element {
     }
 }
 
+impl Parse for Element<AS_HTML> {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        let l_tok = stream.parse::<Token![<]>()?;
+        let el_name = Ident::parse(stream)?;
+
+        // parse the guts
+        // let content: ParseBuffer;
+        // syn::braced!(content in stream);
+
+        let mut attributes: Vec<ElementAttr<AS_HTML>> = vec![];
+        let mut listeners: Vec<ElementAttr<AS_HTML>> = vec![];
+        let mut children: Vec<BodyNode<AS_HTML>> = vec![];
+        let mut key = None;
+
+        // loop {
+        //     if stream.peek(Token![>]) {
+        //         break;
+        //     } else {
+        //     }
+        // }
+        while !stream.peek(Token![>]) {
+            // self-closing
+            if stream.peek(Token![/]) {
+                stream.parse::<Token![/]>()?;
+                stream.parse::<Token![>]>()?;
+
+                return Ok(Self {
+                    name: el_name,
+                    key: None,
+                    attributes,
+                    is_static: false,
+                    listeners,
+                    children,
+                });
+            }
+
+            let name = Ident::parse_any(stream)?;
+            let name_str = name.to_string();
+            stream.parse::<Token![=]>()?;
+            if name_str.starts_with("on") {
+                let inner;
+                syn::braced!(inner in stream);
+                let toks = inner.parse::<Expr>()?;
+                let ty = AttrType::EventTokens(toks);
+                listeners.push(ElementAttr {
+                    element_name: el_name.clone(),
+                    name,
+                    value: ty,
+                    namespace: None,
+                })
+            } else {
+                match name_str.as_str() {
+                    "style" => {}
+                    "key" => {}
+                    "classes" | "namespace" | "ref" | _ => {
+                        let ty = if stream.peek(LitStr) {
+                            let rawtext = stream.parse::<LitStr>().unwrap();
+                            AttrType::BumpText(rawtext)
+                        } else {
+                            // like JSX, we expect raw expressions
+                            let inner;
+                            syn::braced!(inner in stream);
+                            let toks = inner.parse::<Expr>()?;
+                            AttrType::FieldTokens(toks)
+                        };
+                        attributes.push(ElementAttr {
+                            element_name: el_name.clone(),
+                            name,
+                            value: ty,
+                            namespace: None,
+                        })
+                    }
+                }
+            };
+        }
+        stream.parse::<Token![>]>()?;
+
+        // closing element
+        stream.parse::<Token![<]>()?;
+        stream.parse::<Token![/]>()?;
+        let close = Ident::parse_any(stream)?;
+        if close.to_string() != el_name.to_string() {
+            return Err(Error::new_spanned(
+                close,
+                "closing element does not match opening",
+            ));
+        }
+        stream.parse::<Token![>]>()?;
+        // 'parsing: loop {
+        //     // if stream.peek(Token![>]) {}
+
+        //     // // [1] Break if empty
+        //     // if content.is_empty() {
+        //     //     break 'parsing;
+        //     // }
+
+        //     if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
+        //         parse_element_body(
+        //             &content,
+        //             &mut attributes,
+        //             &mut listeners,
+        //             &mut key,
+        //             name.clone(),
+        //         )?;
+        //     } else {
+        //         children.push(stream.parse::<BodyNode<AS_HTML>>()?);
+        //     }
+        // }
+
+        Ok(Self {
+            key,
+            name: el_name,
+            attributes,
+            children,
+            listeners,
+            is_static: false,
+        })
+    }
+}
+
+impl<const AS: HTML_OR_RSX> ToTokens for Element<AS> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let name = &self.name;
+        let attr = &self.attributes;
+        let childs = &self.children;
+        let listeners = &self.listeners;
+        let key = match &self.key {
+            Some(ty) => quote! { Some(format_args_f!(#ty)) },
+            None => quote! { None },
+        };
+
+        tokens.append_all(quote! {
+            __cx.element(
+                dioxus_elements::#name,
+                [ #(#listeners),* ],
+                [ #(#attr),* ],
+                [ #(#childs),* ],
+                #key,
+            )
+        });
+    }
+}
+
 /// =======================================
 /// Parse a VElement's Attributes
 /// =======================================
-struct ElementAttr {
+struct ElementAttr<const AS: HTML_OR_RSX> {
     element_name: Ident,
     name: Ident,
     value: AttrType,
@@ -108,14 +232,14 @@ enum AttrType {
 // We parse attributes and dump them into the attribute vec
 // This is because some tags might be namespaced (IE style)
 // These dedicated tags produce multiple name-spaced attributes
-fn parse_element_body(
+fn parse_rsx_element_field(
     stream: ParseStream,
-    attrs: &mut Vec<ElementAttr>,
-    listeners: &mut Vec<ElementAttr>,
-    key: &mut Option<AttrType>,
+    attrs: &mut Vec<ElementAttr<AS_RSX>>,
+    listeners: &mut Vec<ElementAttr<AS_RSX>>,
+    key: &mut Option<LitStr>,
     element_name: Ident,
 ) -> Result<()> {
-    let mut name = Ident::parse_any(stream)?;
+    let name = Ident::parse_any(stream)?;
     let name_str = name.to_string();
     stream.parse::<Token![:]>()?;
 
@@ -178,7 +302,7 @@ fn parse_element_body(
             return Ok(());
         }
         "key" => {
-            *key = Some(AttrType::BumpText(stream.parse::<LitStr>()?));
+            *key = Some(stream.parse::<LitStr>()?);
             return Ok(());
         }
         "classes" => {
@@ -218,7 +342,7 @@ fn parse_element_body(
     Ok(())
 }
 
-impl ToTokens for ElementAttr {
+impl<const AS: HTML_OR_RSX> ToTokens for ElementAttr<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let el_name = &self.element_name;
         let name_str = self.name.to_string();

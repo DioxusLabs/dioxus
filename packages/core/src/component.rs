@@ -5,11 +5,43 @@
 //! if the type suppports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
-use crate::innerlude::{Context, DomTree, LazyNodes, VNode, FC};
+use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 
+/// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
+/// on how to memoize the props and some additional optimizations that can be made. We strongly encourage using the
+/// derive macro to implement the `Properties` trait automatically as guarantee that your memoization strategy is safe.
+///
+/// If your props are 'static, then Dioxus will require that they also be PartialEq for the derived memoize strategy. However,
+/// if your props borrow data, then the memoization strategy will simply default to "false" and the PartialEq will be ignored.
+/// This tends to be useful when props borrow something that simply cannot be compared (IE a reference to a closure);
+///
+/// By default, the memoization strategy is very conservative, but can be tuned to be more aggressive manually. However,
+/// this is only safe if the props are 'static - otherwise you might borrow references after-free.
+///
+/// We strongly suggest that any changes to memoization be done at the "PartialEq" level for 'static props. Additionally,
+/// we advise the use of smart pointers in cases where memoization is important.
+///
+/// ## Example
+///
+/// For props that are 'static:
+/// ```rust ignore
+/// #[derive(Props, PartialEq)]
+/// struct MyProps {
+///     data: String
+/// }
+/// ```
+///
+/// For props that borrow:
+///
+/// ```rust ignore
+/// #[derive(Props)]
+/// struct MyProps<'a >{
+///     data: &'a str
+/// }
+/// ```
 pub trait Properties: Sized {
     type Builder;
-    const IS_STATIC: bool = false;
+    const IS_STATIC: bool;
     fn builder() -> Self::Builder;
 
     /// Memoization can only happen if the props are 'static
@@ -50,6 +82,16 @@ pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
 ///
 /// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
 /// Try to avoid nesting fragments if you can. Infinitely nested Fragments *will* cause diffing to crash.
+///
+/// This function defines a dedicated `Fragment` component that can be used to create inline fragments in the RSX macro.
+///
+/// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
+///
+/// ```rust
+/// rsx!{
+///     Fragment { key: "abc" }
+/// }
+/// ```
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment<'a>(cx: Context<'a, ()>) -> DomTree<'a> {
     cx.render(LazyNodes::new(move |f| f.fragment_from_iter(cx.children())))

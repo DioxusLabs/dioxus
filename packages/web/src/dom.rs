@@ -2,24 +2,28 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use dioxus_core::{
     events::{EventTrigger, VirtualEvent},
-    DomEdit, RealDomNode, ScopeId,
+    DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
-use slotmap::{DefaultKey, Key, KeyData};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
-    window, Document, Element, Event, HtmlElement, HtmlInputElement, HtmlOptionElement, Node,
+    window, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
+    HtmlOptionElement, Node, NodeList,
 };
 
+use crate::{nodeslab::NodeSlab, WebConfig};
+
 pub struct WebsysDom {
-    pub stack: Stack,
-    nodes: slotmap::SlotMap<DefaultKey, Option<Node>>,
+    stack: Stack,
+
+    /// A map from ElementID (index) to Node
+    nodes: NodeSlab,
+
     document: Document,
+
     root: Element,
 
-    event_receiver: async_channel::Receiver<EventTrigger>,
-
-    trigger: Arc<dyn Fn(EventTrigger)>,
+    sender_callback: Rc<dyn Fn(EventTrigger)>,
 
     // map of listener types to number of those listeners
     // This is roughly a delegater
@@ -34,40 +38,43 @@ pub struct WebsysDom {
     last_node_was_text: bool,
 }
 impl WebsysDom {
-    pub fn new(root: Element) -> Self {
-        let document = window()
-            .expect("must have access to the window")
-            .document()
-            .expect("must have access to the Document");
+    pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(EventTrigger)>) -> Self {
+        let document = load_document();
 
-        let (sender, receiver) = async_channel::unbounded::<EventTrigger>();
+        let mut nodes = NodeSlab::new(2000);
+        let mut listeners = FxHashMap::default();
 
-        let sender_callback = Arc::new(move |ev| {
-            let c = sender.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                c.send(ev).await.unwrap();
-            });
-        });
+        // re-hydrate the page - only supports one virtualdom per page
+        if cfg.hydrate {
+            // Load all the elements into the arena
+            let node_list: NodeList = document.query_selector_all("dio_el").unwrap();
+            let len = node_list.length() as usize;
 
-        let mut nodes = slotmap::SlotMap::with_capacity(1000);
+            for x in 0..len {
+                let node: Node = node_list.get(x as u32).unwrap();
+                let el: &Element = node.dyn_ref::<Element>().unwrap();
+                let id: String = el.get_attribute("dio_el").unwrap();
+                let id = id.parse::<usize>().unwrap();
+                nodes[id] = Some(node);
+            }
 
-        let root_id = nodes.insert(Some(root.clone().dyn_into::<Node>().unwrap()));
+            // Load all the event listeners into our listener register
+            // TODO
+        }
+
+        let mut stack = Stack::with_capacity(10);
+        let root_node = root.clone().dyn_into::<Node>().unwrap();
+        stack.push(root_node);
 
         Self {
-            stack: Stack::with_capacity(10),
+            stack,
             nodes,
-            listeners: FxHashMap::default(),
+            listeners,
             document,
-            event_receiver: receiver,
-            trigger: sender_callback,
+            sender_callback,
             root,
             last_node_was_text: false,
         }
-    }
-
-    pub async fn wait_for_event(&mut self) -> Option<EventTrigger> {
-        let v = self.event_receiver.recv().await.unwrap();
-        Some(v)
     }
 
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
@@ -77,7 +84,7 @@ impl WebsysDom {
                 DomEdit::PushRoot { id: root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
                 DomEdit::AppendChildren { many } => self.append_children(many),
-                DomEdit::ReplaceWith { many } => self.replace_with(many),
+                DomEdit::ReplaceWith { n, m } => self.replace_with(n, m),
                 DomEdit::Remove => self.remove(),
                 DomEdit::RemoveAllChildren => self.remove_all_children(),
                 DomEdit::CreateTextNode { text, id } => self.create_text_node(text, id),
@@ -88,24 +95,28 @@ impl WebsysDom {
                     event_name: event,
                     scope,
                     mounted_node_id: node,
-                    element_id: idx,
-                } => self.new_event_listener(event, scope, idx, node),
+                } => self.new_event_listener(event, scope, node),
+
                 DomEdit::RemoveEventListener { event } => todo!(),
                 DomEdit::SetText { text } => self.set_text(text),
                 DomEdit::SetAttribute { field, value, ns } => self.set_attribute(field, value, ns),
                 DomEdit::RemoveAttribute { name } => self.remove_attribute(name),
+
+                DomEdit::InsertAfter { n } => self.insert_after(n),
+                DomEdit::InsertBefore { n } => self.insert_before(n),
             }
         }
     }
     fn push(&mut self, root: u64) {
-        let key = DefaultKey::from(KeyData::from_ffi(root));
-        let domnode = self.nodes.get_mut(key);
+        let key = root as usize;
+        let domnode = &self.nodes[key];
 
-        let domnode = domnode.unwrap().as_mut().unwrap();
-        // .expect(&format!("Failed to pop know root: {:#?}", key))
-        // .unwrap();
+        let real_node: Node = match domnode {
+            Some(n) => n.clone(),
+            None => todo!(),
+        };
 
-        self.stack.push(domnode.clone());
+        self.stack.push(real_node);
     }
     // drop the node off the stack
     fn pop(&mut self) {
@@ -143,37 +154,55 @@ impl WebsysDom {
         }
     }
 
-    fn replace_with(&mut self, many: u32) {
+    fn replace_with(&mut self, n: u32, m: u32) {
         log::debug!("Called [`replace_with`]");
-        let new_node = self.stack.pop();
-        let old_node = self.stack.pop();
 
-        // TODO: use different-sized replace withs
-        if many == 1 {
-            if old_node.has_type::<Element>() {
-                old_node
-                    .dyn_ref::<Element>()
-                    .unwrap()
-                    .replace_with_with_node_1(&new_node)
-                    .unwrap();
-            } else if old_node.has_type::<web_sys::CharacterData>() {
-                old_node
-                    .dyn_ref::<web_sys::CharacterData>()
-                    .unwrap()
-                    .replace_with_with_node_1(&new_node)
-                    .unwrap();
-            } else if old_node.has_type::<web_sys::DocumentType>() {
-                old_node
-                    .dyn_ref::<web_sys::DocumentType>()
-                    .unwrap()
-                    .replace_with_with_node_1(&new_node)
-                    .unwrap();
-            } else {
-                panic!("Cannot replace node: {:?}", old_node);
-            }
+        let mut new_nodes = vec![];
+        for _ in 0..m {
+            new_nodes.push(self.stack.pop());
         }
 
-        self.stack.push(new_node);
+        let mut old_nodes = vec![];
+        for _ in 0..n {
+            old_nodes.push(self.stack.pop());
+        }
+
+        for node in &old_nodes[1..] {
+            node.dyn_ref::<Element>().unwrap().remove();
+        }
+
+        let old = old_nodes[0].clone();
+        let arr: js_sys::Array = new_nodes.iter().collect();
+        let el = old.dyn_into::<Element>().unwrap();
+        el.replace_with_with_node(&arr).unwrap();
+        // let arr = js_sys::Array::from();
+
+        // TODO: use different-sized replace withs
+        // if m == 1 {
+        //     if old_node.has_type::<Element>() {
+        //         old_node
+        //             .dyn_ref::<Element>()
+        //             .unwrap()
+        //             .replace_with_with_node_1(&new_node)
+        //             .unwrap();
+        //     } else if old_node.has_type::<web_sys::CharacterData>() {
+        //         old_node
+        //             .dyn_ref::<web_sys::CharacterData>()
+        //             .unwrap()
+        //             .replace_with_with_node_1(&new_node)
+        //             .unwrap();
+        //     } else if old_node.has_type::<web_sys::DocumentType>() {
+        //         old_node
+        //             .dyn_ref::<web_sys::DocumentType>()
+        //             .unwrap()
+        //             .replace_with_with_node_1(&new_node)
+        //             .unwrap();
+        //     } else {
+        //         panic!("Cannot replace node: {:?}", old_node);
+        //     }
+        // }
+
+        // self.stack.push(new_node);
     }
 
     fn remove(&mut self) {
@@ -187,7 +216,8 @@ impl WebsysDom {
     }
 
     fn create_placeholder(&mut self, id: u64) {
-        self.create_element("pre", None, id)
+        self.create_element("pre", None, id);
+        self.set_attribute("hidden", "", None);
     }
     fn create_text_node(&mut self, text: &str, id: u64) {
         // let nid = self.node_counter.next();
@@ -198,11 +228,9 @@ impl WebsysDom {
             .dyn_into::<Node>()
             .unwrap();
 
+        let id = id as usize;
         self.stack.push(textnode.clone());
-        *self
-            .nodes
-            .get_mut(DefaultKey::from(KeyData::from_ffi(id)))
-            .unwrap() = Some(textnode);
+        self.nodes[id] = Some(textnode);
     }
 
     fn create_element(&mut self, tag: &str, ns: Option<&'static str>, id: u64) {
@@ -221,24 +249,18 @@ impl WebsysDom {
                 .dyn_into::<Node>()
                 .unwrap(),
         };
-        let id = DefaultKey::from(KeyData::from_ffi(id));
+        let id = id as usize;
 
         self.stack.push(el.clone());
-        *self.nodes.get_mut(id).unwrap() = Some(el);
+        self.nodes[id] = Some(el);
         // let nid = self.node_counter.?next();
         // let nid = self.nodes.insert(el).data().as_ffi();
         // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
-        // RealDomNode::new(nid)
+        // ElementId::new(nid)
     }
 
-    fn new_event_listener(
-        &mut self,
-        event: &'static str,
-        scope: ScopeId,
-        _element_id: usize,
-        real_id: u64,
-    ) {
-        let (_on, event) = event.split_at(2);
+    fn new_event_listener(&mut self, event: &'static str, scope: ScopeId, real_id: u64) {
+        // let (_on, event) = event.split_at(2);
         let event = wasm_bindgen::intern(event);
 
         // attach the correct attributes to the element
@@ -252,19 +274,24 @@ impl WebsysDom {
             .dyn_ref::<Element>()
             .expect(&format!("not an element: {:?}", el));
 
-        let scope_id = scope.data().as_ffi();
+        // let scope_id = scope.data().as_ffi();
+        let scope_id = scope.0 as u64;
+
         el.set_attribute(
             &format!("dioxus-event-{}", event),
             &format!("{}.{}", scope_id, real_id),
         )
         .unwrap();
 
+        el.set_attribute(&format!("dioxus-event"), &format!("{}", event))
+            .unwrap();
+
         // Register the callback to decode
 
         if let Some(entry) = self.listeners.get_mut(event) {
             entry.0 += 1;
         } else {
-            let trigger = self.trigger.clone();
+            let trigger = self.sender_callback.clone();
 
             let handler = Closure::wrap(Box::new(move |event: &web_sys::Event| {
                 // "Result" cannot be received from JS
@@ -293,25 +320,21 @@ impl WebsysDom {
     }
 
     fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
-        if name == "class" {
+        if let Some(el) = self.stack.top().dyn_ref::<Element>() {
             match ns {
-                Some("http://www.w3.org/2000/svg") => {
-                    //
-                    if let Some(el) = self.stack.top().dyn_ref::<web_sys::SvgElement>() {
-                        let r: web_sys::SvgAnimatedString = el.class_name();
-                        r.set_base_val(value);
-                        // el.set_class_name(value);
-                    }
+                // inline style support
+                Some("style") => {
+                    let el = el.dyn_ref::<HtmlElement>().unwrap();
+                    let style_dc: CssStyleDeclaration = el.style();
+                    style_dc.set_property(name, value).unwrap();
                 }
-                _ => {
-                    if let Some(el) = self.stack.top().dyn_ref::<Element>() {
-                        el.set_class_name(value);
-                    }
-                }
+                _ => el.set_attribute(name, value).unwrap(),
             }
-        } else {
-            if let Some(el) = self.stack.top().dyn_ref::<Element>() {
-                el.set_attribute(name, value).unwrap();
+            match name {
+                "value" => {}
+                "checked" => {}
+                "selected" => {}
+                _ => {}
             }
         }
     }
@@ -338,17 +361,46 @@ impl WebsysDom {
         }
     }
 
-    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-        todo!()
+    fn insert_after(&mut self, n: u32) {
+        let mut new_nodes = vec![];
+        for _ in 0..n {
+            new_nodes.push(self.stack.pop());
+        }
+
+        let after = self.stack.top().clone();
+        let arr: js_sys::Array = new_nodes.iter().collect();
+
+        let el = after.dyn_into::<Element>().unwrap();
+        el.after_with_node(&arr).unwrap();
+        // let mut old_nodes = vec![];
+        // for _ in 0..n {
+        //     old_nodes.push(self.stack.pop());
+        // }
+
+        // let el = self.stack.top();
+    }
+
+    fn insert_before(&mut self, n: u32) {
+        let n = n as usize;
+        let root = self
+            .stack
+            .list
+            .get(self.stack.list.len() - n)
+            .unwrap()
+            .clone();
+        for _ in 0..n {
+            let el = self.stack.pop();
+            root.insert_before(&el, None).unwrap();
+        }
     }
 }
 
-impl<'a> dioxus_core::diff::RealDom<'a> for WebsysDom {
-    fn request_available_node(&mut self) -> RealDomNode {
-        let key = self.nodes.insert(None);
-        log::debug!("making new key: {:#?}", key);
-        RealDomNode(key.data().as_ffi())
-    }
+impl<'a> dioxus_core::diff::RealDom for WebsysDom {
+    // fn request_available_node(&mut self) -> ElementId {
+    //     let key = self.nodes.insert(None);
+    //     log::debug!("making new key: {:#?}", key);
+    //     ElementId(key.data().as_ffi())
+    // }
 
     fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
         todo!()
@@ -395,30 +447,140 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
     use dioxus_core::events::on::*;
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => {
-            // let evt: web_sys::ClipboardEvent = event.clone().dyn_into().unwrap();
-
-            todo!()
+            struct WebsysClipboardEvent();
+            impl ClipboardEventInner for WebsysClipboardEvent {}
+            VirtualEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent())))
         }
 
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: web_sys::CompositionEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            struct WebsysCompositionEvent(web_sys::CompositionEvent);
+            impl CompositionEventInner for WebsysCompositionEvent {
+                fn data(&self) -> String {
+                    todo!()
+                }
+            }
+            VirtualEvent::CompositionEvent(CompositionEvent(Rc::new(WebsysCompositionEvent(evt))))
         }
 
         "keydown" | "keypress" | "keyup" => {
+            struct Event(web_sys::KeyboardEvent);
+            impl KeyboardEventInner for Event {
+                fn char_code(&self) -> u32 {
+                    todo!()
+                }
+                fn key_code(&self) -> KeyCode {
+                    todo!()
+                }
+                fn ctrl_key(&self) -> bool {
+                    todo!()
+                }
+
+                fn key(&self) -> String {
+                    todo!()
+                }
+
+                fn locale(&self) -> String {
+                    todo!()
+                }
+
+                fn location(&self) -> usize {
+                    todo!()
+                }
+
+                fn meta_key(&self) -> bool {
+                    todo!()
+                }
+
+                fn repeat(&self) -> bool {
+                    todo!()
+                }
+
+                fn shift_key(&self) -> bool {
+                    todo!()
+                }
+
+                fn which(&self) -> usize {
+                    todo!()
+                }
+
+                fn get_modifier_state(&self, key_code: usize) -> bool {
+                    todo!()
+                }
+            }
             let evt: web_sys::KeyboardEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::KeyboardEvent(KeyboardEvent(Rc::new(Event(evt))))
         }
 
         "focus" | "blur" => {
+            struct Event(web_sys::FocusEvent);
+            impl FocusEventInner for Event {}
             let evt: web_sys::FocusEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::FocusEvent(FocusEvent(Rc::new(Event(evt))))
         }
 
         "change" => {
-            let evt: web_sys::Event = event.clone().dyn_into().expect("wrong error typ");
+            // struct Event(web_sys::Event);
+            // impl GenericEventInner for Event {
+            //     fn bubbles(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn cancel_bubble(&self) {
+            //         todo!()
+            //     }
+
+            //     fn cancelable(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn composed(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn composed_path(&self) -> String {
+            //         todo!()
+            //     }
+
+            //     fn current_target(&self) {
+            //         todo!()
+            //     }
+
+            //     fn default_prevented(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn event_phase(&self) -> usize {
+            //         todo!()
+            //     }
+
+            //     fn is_trusted(&self) -> bool {
+            //         todo!()
+            //     }
+
+            //     fn prevent_default(&self) {
+            //         todo!()
+            //     }
+
+            //     fn stop_immediate_propagation(&self) {
+            //         todo!()
+            //     }
+
+            //     fn stop_propagation(&self) {
+            //         todo!()
+            //     }
+
+            //     fn target(&self) {
+            //         todo!()
+            //     }
+
+            //     fn time_stamp(&self) -> usize {
+            //         todo!()
+            //     }
+            // }
+            // let evt: web_sys::Event = event.clone().dyn_into().expect("wrong error typ");
+            // VirtualEvent::Event(GenericEvent(Rc::new(Event(evt))))
             todo!()
-            // VirtualEvent::FormEvent(FormEvent {value:})
         }
 
         "input" | "invalid" | "reset" | "submit" => {
@@ -442,15 +604,6 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
                 })
                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-            // let p2 = evt.data_transfer();
-
-            // let value: Option<String> = (&evt).data();
-            // let value = val;
-            // let value = value.unwrap_or_default();
-            // let value = (&evt).data().expect("No data to unwrap");
-
-            // todo - this needs to be a "controlled" event
-            // these events won't carry the right data with them
             todo!()
             // VirtualEvent::FormEvent(FormEvent { value })
         }
@@ -507,26 +660,6 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
                 }
             }
             VirtualEvent::MouseEvent(MouseEvent(Rc::new(CustomMouseEvent(evt))))
-            // MouseEvent(Box::new(RawMouseEvent {
-            //                 alt_key: evt.alt_key(),
-            //                 button: evt.button() as i32,
-            //                 buttons: evt.buttons() as i32,
-            //                 client_x: evt.client_x(),
-            //                 client_y: evt.client_y(),
-            //                 ctrl_key: evt.ctrl_key(),
-            //                 meta_key: evt.meta_key(),
-            //                 page_x: evt.page_x(),
-            //                 page_y: evt.page_y(),
-            //                 screen_x: evt.screen_x(),
-            //                 screen_y: evt.screen_y(),
-            //                 shift_key: evt.shift_key(),
-            //                 get_modifier_state: GetModifierKey(Box::new(|f| {
-            //                     // evt.get_modifier_state(f)
-            //                     todo!("This is not yet implemented properly, sorry :(");
-            //                 })),
-            //             }))
-            // todo!()
-            // VirtualEvent::MouseEvent()
         }
 
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
@@ -555,6 +688,15 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
             let evt: web_sys::WheelEvent = event.clone().dyn_into().unwrap();
             todo!()
         }
+        "animationstart" | "animationend" | "animationiteration" => {
+            let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
+
+        "transitionend" => {
+            let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
+            todo!()
+        }
 
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
@@ -567,23 +709,15 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
             todo!()
         }
 
-        "animationstart" | "animationend" | "animationiteration" => {
-            let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
-            todo!()
-        }
-
-        "transitionend" => {
-            let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
-            todo!()
-        }
-
         "toggle" => {
             // not required to construct anything special beyond standard event stuff (target)
 
             // let evt: web_sys::ToggleEvent = event.clone().dyn_into().unwrap();
             todo!()
         }
-        _ => VirtualEvent::OtherEvent,
+        _ => {
+            todo!()
+        }
     }
 }
 
@@ -628,12 +762,24 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
     // Call the trigger
     log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
 
-    let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
+    let triggered_scope = gi_id;
+    // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
     Ok(EventTrigger::new(
         virtual_event_from_websys_event(event),
-        triggered_scope,
-        Some(RealDomNode::from_u64(real_id)),
+        ScopeId(triggered_scope as usize),
+        Some(ElementId(real_id as usize)),
         dioxus_core::events::EventPriority::High,
     ))
+}
+
+pub fn prepare_websys_dom() -> Element {
+    load_document().get_element_by_id("dioxusroot").unwrap()
+}
+
+pub fn load_document() -> Document {
+    web_sys::window()
+        .expect("should have access to the Window")
+        .document()
+        .expect("should have access to the Document")
 }

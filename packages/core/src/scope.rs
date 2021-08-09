@@ -1,6 +1,9 @@
 use crate::innerlude::*;
+use bumpalo::boxed::Box as BumpBox;
+use fxhash::FxHashSet;
 use std::{
     any::{Any, TypeId},
+    borrow::BorrowMut,
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
@@ -18,39 +21,31 @@ use std::{
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// usecase they might have.
 pub struct Scope {
-    // Book-keeping about the arena
+    // Book-keeping about our spot in the arena
     pub(crate) parent_idx: Option<ScopeId>,
-    pub(crate) descendents: RefCell<HashSet<ScopeId>>,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
+    pub(crate) descendents: RefCell<FxHashSet<ScopeId>>,
 
     // Nodes
     // an internal, highly efficient storage of vnodes
+    // lots of safety condsiderations
     pub(crate) frames: ActiveFrame,
-    pub(crate) child_nodes: &'static [VNode<'static>],
     pub(crate) caller: Rc<WrappedCaller>,
+    pub(crate) child_nodes: ScopeChildren<'static>,
+    pub(crate) pending_garbage: RefCell<Vec<*const VNode<'static>>>,
 
     // Listeners
-    pub(crate) listeners: RefCell<Vec<(*mut Cell<RealDomNode>, *mut dyn FnMut(VirtualEvent))>>,
-    pub(crate) listener_idx: Cell<usize>,
+    pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
+    pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
 
     // State
     pub(crate) hooks: HookList,
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
-    // Events
-    pub(crate) event_channel: Rc<dyn Fn() + 'static>,
-
-    // Tasks
-    pub(crate) task_submitter: TaskSubmitter,
-
-    // A reference to the list of components.
-    // This lets us traverse the component list whenever we need to access our parent or children.
-    pub(crate) arena_link: SharedArena,
+    // A reference to the resources shared by all the comonents
+    pub(crate) vdom: SharedResources,
 }
-
-// The type of the channel function
-type EventChannel = Rc<dyn Fn()>;
 
 // The type of closure that wraps calling components
 pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> DomTree<'b>;
@@ -68,42 +63,52 @@ impl Scope {
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub fn new<'creator_node>(
         caller: Rc<WrappedCaller>,
+
         arena_idx: ScopeId,
+
         parent: Option<ScopeId>,
+
         height: u32,
-        event_channel: EventChannel,
-        arena_link: SharedArena,
-        child_nodes: &'creator_node [VNode<'creator_node>],
-        task_submitter: TaskSubmitter,
+
+        child_nodes: ScopeChildren,
+
+        vdom: SharedResources,
     ) -> Self {
-        let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+        let child_nodes = unsafe { child_nodes.extend_lifetime() };
+
+        // insert ourself as a descendent of the parent
+        // when the parent is removed, this map will be traversed, and we will also be cleaned up.
+        if let Some(parent) = &parent {
+            let parent = unsafe { vdom.get_scope(*parent) }.unwrap();
+            parent.descendents.borrow_mut().insert(arena_idx);
+        }
+
         Self {
             child_nodes,
             caller,
             parent_idx: parent,
             our_arena_idx: arena_idx,
             height,
-            event_channel,
-            arena_link,
-            task_submitter,
-            listener_idx: Default::default(),
+            vdom,
             frames: ActiveFrame::new(),
+
             hooks: Default::default(),
             shared_contexts: Default::default(),
             listeners: Default::default(),
+            borrowed_props: Default::default(),
             descendents: Default::default(),
+            pending_garbage: Default::default(),
         }
     }
 
-    pub(crate) fn update_caller<'creator_node>(&mut self, caller: Rc<WrappedCaller>) {
-        self.caller = caller;
-    }
-
-    pub(crate) fn update_children<'creator_node>(
+    pub(crate) fn update_scope_dependencies<'creator_node>(
         &mut self,
-        child_nodes: &'creator_node [VNode<'creator_node>],
+        caller: Rc<WrappedCaller>,
+        child_nodes: ScopeChildren,
     ) {
-        let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+        self.caller = caller;
+        // let child_nodes = unsafe { std::mem::transmute(child_nodes) };
+        let child_nodes = unsafe { child_nodes.extend_lifetime() };
         self.child_nodes = child_nodes;
     }
 
@@ -112,19 +117,21 @@ impl Scope {
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
 
-        // This is a very dangerous operation
-        let next_frame = self.frames.old_frame_mut();
-        next_frame.bump.reset();
+        self.ensure_drop_safety();
 
-        self.listeners.borrow_mut().clear();
-
+        // Safety:
+        // - We dropped the listeners, so no more &mut T can be used while these are held
+        // - All children nodes that rely on &mut T are replaced with a new reference
         unsafe { self.hooks.reset() };
-        self.listener_idx.set(0);
+
+        // Safety:
+        // - We've dropped all references to the wip bump frame
+        unsafe { self.frames.reset_wip_frame() };
 
         // Cast the caller ptr from static to one with our own reference
-        let c3: &WrappedCaller = self.caller.as_ref();
+        let render: &WrappedCaller = self.caller.as_ref();
 
-        match c3(self) {
+        match render(self) {
             None => {
                 // the user's component failed. We avoid cycling to the next frame
                 log::error!("Running your component failed! It will no longer receive events.");
@@ -132,11 +139,57 @@ impl Scope {
             }
             Some(new_head) => {
                 // the user's component succeeded. We can safely cycle to the next frame
-                self.frames.old_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
+                self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
                 self.frames.cycle_frame();
+                log::debug!("Cycle okay");
                 Ok(())
             }
         }
+    }
+
+    /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
+    /// causuing UB in our tree.
+    ///
+    /// This works by cleaning up our references from the bottom of the tree to the top. The directed graph of components
+    /// essentially forms a dependency tree that we can traverse from the bottom to the top. As we traverse, we remove
+    /// any possible references to the data in the hook list.
+    ///
+    /// Refrences to hook data can only be stored in listeners and component props. During diffing, we make sure to log
+    /// all listeners and borrowed props so we can clear them here.
+    fn ensure_drop_safety(&mut self) {
+        // make sure all garabge is collected before trying to proceed with anything else
+        debug_assert!(
+            self.pending_garbage.borrow().is_empty(),
+            "clean up your garabge please"
+        );
+
+        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+        // run the hooks (which hold an &mut Referrence)
+        // right now, we don't drop
+        let vdom = &self.vdom;
+        self.borrowed_props
+            .get_mut()
+            .drain(..)
+            .map(|li| unsafe { &*li })
+            .for_each(|comp| {
+                // First drop the component's undropped references
+                let scope_id = comp.ass_scope.get().unwrap();
+                let scope = unsafe { vdom.get_scope_mut(scope_id) }.unwrap();
+                scope.ensure_drop_safety();
+
+                // Now, drop our own reference
+                let mut dropper = comp.drop_props.borrow_mut().take().unwrap();
+                dropper();
+            });
+
+        // Now that all the references are gone, we can safely drop our own references in our listeners.
+        self.listeners
+            .get_mut()
+            .drain(..)
+            .map(|li| unsafe { &*li })
+            .for_each(|listener| {
+                listener.callback.borrow_mut().take();
+            });
     }
 
     // A safe wrapper around calling listeners
@@ -162,63 +215,58 @@ impl Scope {
 
         let listners = self.listeners.borrow_mut();
 
-        let raw_listener = listners.iter().find(|(domptr, _)| {
-            let search = unsafe { &**domptr };
-            let search_id = search.get();
-            log::info!("searching listener {:#?}", search_id);
-            match real_node_id {
-                Some(e) => search_id == e,
-                None => false,
+        let raw_listener = listners.iter().find(|lis| {
+            let search = unsafe { &***lis };
+            let search_id = search.mounted_node.get();
+            log::info!(
+                "searching listener {:#?} for real {:?}",
+                search_id,
+                real_node_id
+            );
+
+            match (real_node_id, search_id) {
+                (Some(e), Some(search_id)) => search_id == e,
+                _ => false,
             }
         });
 
-        match raw_listener {
-            Some((_node, listener)) => unsafe {
-                // TODO: Don'tdo a linear scan! Do a hashmap lookup! It'll be faster!
-                let listener_fn = &mut **listener;
-                listener_fn(event);
-            },
-            None => todo!(),
+        if let Some(raw_listener) = raw_listener {
+            let listener = unsafe { &**raw_listener };
+
+            // log::info!(
+            //     "calling listener {:?}, {:?}",
+            //     listener.event,
+            //     // listener.scope
+            // );
+            let mut cb = listener.callback.borrow_mut();
+            if let Some(cb) = cb.as_mut() {
+                (cb)(event);
+            }
+        } else {
+            log::warn!("An event was triggered but there was no listener to handle it");
         }
 
         Ok(())
     }
 
-    pub(crate) fn submit_task(&self, task: FiberTask) {
-        log::debug!("Task submitted into scope");
-        (self.task_submitter)(task);
+    pub fn root(&self) -> &VNode {
+        self.frames.fin_head()
     }
 
-    #[inline]
-    pub(crate) fn next_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        self.frames.current_head_node()
+    pub fn child_nodes<'a>(&'a self) -> ScopeChildren {
+        unsafe { self.child_nodes.unextend_lfetime() }
     }
 
-    #[inline]
-    pub(crate) fn old_frame<'bump>(&'bump self) -> &'bump VNode<'bump> {
-        self.frames.prev_head_node()
-    }
-
-    #[inline]
-    pub(crate) fn cur_frame(&self) -> &BumpFrame {
-        self.frames.cur_frame()
-    }
-
-    /// Get the root VNode of this component
-    #[inline]
-    pub fn root<'a>(&'a self) -> &'a VNode<'a> {
-        &self.frames.cur_frame().head_node
-    }
-}
-
-pub fn errored_fragment() -> VNode<'static> {
-    VNode {
-        dom_id: RealDomNode::empty_cell(),
-        key: None,
-        kind: VNodeKind::Fragment(VFragment {
-            children: &[],
-            is_static: false,
-            is_error: true,
-        }),
+    pub fn consume_garbage(&self) -> Vec<&VNode> {
+        let mut garbage = self.pending_garbage.borrow_mut();
+        garbage
+            .drain(..)
+            .map(|node| {
+                // safety: scopes cannot cycle without their garbage being collected. these nodes are safe
+                let node: &VNode<'static> = unsafe { &*node };
+                let node: &VNode = unsafe { std::mem::transmute(node) };
+                node
+            })
+            .collect::<Vec<_>>()
     }
 }

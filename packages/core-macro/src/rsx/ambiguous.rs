@@ -15,17 +15,17 @@ use syn::{
     Error, Ident, LitStr, Result, Token,
 };
 
-pub enum AmbiguousElement {
-    Element(Element),
-    Component(Component),
+pub enum AmbiguousElement<const AS: HTML_OR_RSX> {
+    Element(Element<AS>),
+    Component(Component<AS>),
 }
 
-impl Parse for AmbiguousElement {
+impl Parse for AmbiguousElement<AS_RSX> {
     fn parse(input: ParseStream) -> Result<Self> {
         // Try to parse as an absolute path and immediately defer to the componetn
         if input.peek(Token![::]) {
             return input
-                .parse::<Component>()
+                .parse::<Component<AS_RSX>>()
                 .map(|c| AmbiguousElement::Component(c));
         }
 
@@ -34,7 +34,7 @@ impl Parse for AmbiguousElement {
         if let Ok(pat) = input.fork().parse::<syn::Path>() {
             if pat.segments.len() > 1 {
                 return input
-                    .parse::<Component>()
+                    .parse::<Component<AS_RSX>>()
                     .map(|c| AmbiguousElement::Component(c));
             }
         }
@@ -45,11 +45,11 @@ impl Parse for AmbiguousElement {
             let first_char = name_str.chars().next().unwrap();
             if first_char.is_ascii_uppercase() {
                 input
-                    .parse::<Component>()
+                    .parse::<Component<AS_RSX>>()
                     .map(|c| AmbiguousElement::Component(c))
             } else {
                 input
-                    .parse::<Element>()
+                    .parse::<Element<AS_RSX>>()
                     .map(|c| AmbiguousElement::Element(c))
             }
         } else {
@@ -61,7 +61,48 @@ impl Parse for AmbiguousElement {
     }
 }
 
-impl ToTokens for AmbiguousElement {
+impl Parse for AmbiguousElement<AS_HTML> {
+    fn parse(input: ParseStream) -> Result<Self> {
+        // Try to parse as an absolute path and immediately defer to the componetn
+        if input.peek(Token![::]) {
+            return input
+                .parse::<Component<AS_HTML>>()
+                .map(|c| AmbiguousElement::Component(c));
+        }
+
+        // If not an absolute path, then parse the ident and check if it's a valid tag
+
+        if let Ok(pat) = input.fork().parse::<syn::Path>() {
+            if pat.segments.len() > 1 {
+                return input
+                    .parse::<Component<AS_HTML>>()
+                    .map(|c| AmbiguousElement::Component(c));
+            }
+        }
+
+        if let Ok(name) = input.fork().parse::<Ident>() {
+            let name_str = name.to_string();
+
+            let first_char = name_str.chars().next().unwrap();
+            if first_char.is_ascii_uppercase() {
+                input
+                    .parse::<Component<AS_HTML>>()
+                    .map(|c| AmbiguousElement::Component(c))
+            } else {
+                input
+                    .parse::<Element<AS_HTML>>()
+                    .map(|c| AmbiguousElement::Element(c))
+            }
+        } else {
+            if input.peek(LitStr) {
+                panic!("it's actually a litstr");
+            }
+            Err(Error::new(input.span(), "Not a valid Html tag"))
+        }
+    }
+}
+
+impl<const AS: HTML_OR_RSX> ToTokens for AmbiguousElement<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             AmbiguousElement::Element(el) => el.to_tokens(tokens),

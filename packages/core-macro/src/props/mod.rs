@@ -502,7 +502,6 @@ mod field_info {
 
 mod struct_info {
     use proc_macro2::TokenStream;
-    use quote::__private::ext::RepToTokensExt;
     use quote::quote;
     use syn::parse::Error;
 
@@ -663,6 +662,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                 false => quote! { self == other },
             };
 
+            let is_static = match are_there_generics {
+                true => quote! { false  },
+                false => quote! { true },
+            };
+
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
                     #[doc = #builder_method_doc]
@@ -694,6 +698,7 @@ Finally, call `.build()` to create the instance of `{name}`.
 
                 impl #impl_generics dioxus::prelude::Properties for #name #ty_generics{
                     type Builder = #builder_name #generics_with_empty;
+                    const IS_STATIC: bool = #is_static;
                     fn builder() -> Self::Builder {
                         #name::builder()
                     }
@@ -1094,13 +1099,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                     }
                 }
             )
-        }
-
-        pub fn build_props_impl(&self) -> TokenStream {
-            // SomeProps: #name
-            // #builder_name
-            // #generics_with_empty
-            quote! {}
         }
     }
 

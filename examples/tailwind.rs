@@ -3,10 +3,12 @@ use dioxus::prelude::*;
 fn main() {
     use dioxus::desktop::wry::application::platform::macos::*;
     dioxus::desktop::launch(App, |c| {
-        c.with_fullsize_content_view(true)
-            .with_titlebar_buttons_hidden(false)
-            .with_titlebar_transparent(true)
-            .with_movable_by_window_background(true)
+        c.with_window(|w| {
+            w.with_fullsize_content_view(true)
+                .with_titlebar_buttons_hidden(false)
+                .with_titlebar_transparent(true)
+                .with_movable_by_window_background(true)
+        })
     });
 }
 
