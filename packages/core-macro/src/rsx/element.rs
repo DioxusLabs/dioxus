@@ -32,6 +32,7 @@ impl Parse for Element<AS_RSX> {
         let mut listeners: Vec<ElementAttr<AS_RSX>> = vec![];
         let mut children: Vec<BodyNode<AS_RSX>> = vec![];
         let mut key = None;
+        let mut el_ref = None;
 
         'parsing: loop {
             // [1] Break if empty
@@ -45,6 +46,7 @@ impl Parse for Element<AS_RSX> {
                     &mut attributes,
                     &mut listeners,
                     &mut key,
+                    &mut el_ref,
                     name.clone(),
                 )?;
             } else {
@@ -237,6 +239,7 @@ fn parse_rsx_element_field(
     attrs: &mut Vec<ElementAttr<AS_RSX>>,
     listeners: &mut Vec<ElementAttr<AS_RSX>>,
     key: &mut Option<LitStr>,
+    el_ref: &mut Option<Expr>,
     element_name: Ident,
 ) -> Result<()> {
     let name = Ident::parse_any(stream)?;
@@ -311,8 +314,9 @@ fn parse_rsx_element_field(
         "namespace" => {
             todo!("custom namespace not supported")
         }
-        "ref" => {
-            todo!("NodeRefs are currently not supported! This is currently a reserved keyword.")
+        "node_ref" => {
+            *el_ref = Some(stream.parse::<Expr>()?);
+            return Ok(());
         }
 
         // Fall through

@@ -40,7 +40,7 @@ impl TestDom {
 
     fn diff<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Vec<DomEdit<'a>> {
         let mut edits = Vec::new();
-        let mut machine = DiffMachine::new_headless(&mut edits, &self.resources);
+        let mut machine = DiffMachine::new_headless(&self.resources);
         machine.diff_node(old, new);
         edits
     }
@@ -52,7 +52,7 @@ impl TestDom {
         let old = self.bump.alloc(self.render(left));
         let mut edits = Vec::new();
 
-        let mut machine = DiffMachine::new_headless(&mut edits, &self.resources);
+        let mut machine = DiffMachine::new_headless(&self.resources);
         let meta = machine.create_vnode(old);
         (meta, edits)
     }
@@ -72,11 +72,11 @@ impl TestDom {
 
         let mut create_edits = Vec::new();
 
-        let mut machine = DiffMachine::new_headless(&mut create_edits, &self.resources);
+        let mut machine = DiffMachine::new_headless(&self.resources);
         machine.create_vnode(old);
 
         let mut edits = Vec::new();
-        let mut machine = DiffMachine::new_headless(&mut edits, &self.resources);
+        let mut machine = DiffMachine::new_headless(&self.resources);
         machine.diff_node(old, new);
         (create_edits, edits)
     }

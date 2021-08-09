@@ -107,8 +107,6 @@ pub async fn run_with_props<T: Properties + 'static>(
 
     let tasks = dom.get_event_sender();
 
-    let mut real = RealDomWebsys {};
-
     // initialize the virtualdom first
     if cfg.hydrate {
         dom.rebuild_in_place()?;
@@ -120,7 +118,12 @@ pub async fn run_with_props<T: Properties + 'static>(
         Rc::new(move |event| tasks.unbounded_send(event).unwrap()),
     );
 
-    dom.run_with_deadline(&mut websys_dom).await?;
+    loop {
+        let deadline = gloo_timers::future::TimeoutFuture::new(16);
+        let mut mutations = dom.run_with_deadline(deadline).await?;
+
+        websys_dom.process_edits(&mut mutations.edits);
+    }
 
     Ok(())
 }
@@ -128,11 +131,4 @@ pub async fn run_with_props<T: Properties + 'static>(
 struct HydrationNode {
     id: usize,
     node: Node,
-}
-
-struct RealDomWebsys {}
-impl dioxus::RealDom for RealDomWebsys {
-    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-        todo!()
-    }
 }

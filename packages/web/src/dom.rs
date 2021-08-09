@@ -395,18 +395,6 @@ impl WebsysDom {
     }
 }
 
-impl<'a> dioxus_core::diff::RealDom for WebsysDom {
-    // fn request_available_node(&mut self) -> ElementId {
-    //     let key = self.nodes.insert(None);
-    //     log::debug!("making new key: {:#?}", key);
-    //     ElementId(key.data().as_ffi())
-    // }
-
-    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-        todo!()
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct Stack {
     pub list: Vec<Node>,

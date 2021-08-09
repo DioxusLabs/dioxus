@@ -51,11 +51,14 @@ argh = "0.1.5"
 env_logger = "*"
 async-std = { version = "1.9.0", features = ["attributes"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
-surf = {version = "2.2.0", git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm"}
+surf = { version = "2.2.0", git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm" }
+gloo-timers = "0.2.1"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 gloo-timers = "0.2.1"
-surf = {version = "2.2.0", default-features = false, features = ["wasm-client"], git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm"}
+surf = { version = "2.2.0", default-features = false, features = [
+    "wasm-client",
+], git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm" }
 
 
 [dependencies.getrandom]

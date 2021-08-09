@@ -447,7 +447,10 @@ pub mod on {
             onmousemove
             /// onmouseout
             onmouseout
+
             /// onmouseover
+            ///
+            /// Triggered when the users's mouse hovers over an element.
             onmouseover
             /// onmouseup
             onmouseup

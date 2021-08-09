@@ -110,7 +110,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     /// This will PANIC if any component elements are passed in.
     pub fn new_headless(shared: &'bump SharedResources) -> Self {
         Self {
-            mutations: Mutations { edits: Vec::new() },
+            mutations: Mutations::new(),
             scope_stack: smallvec![ScopeId(0)],
             vdom: shared,
             diffed: FxHashSet::default(),

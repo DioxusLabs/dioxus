@@ -41,6 +41,9 @@ slab = "0.4.3"
 
 futures-channel = "0.3.16"
 
+# used for noderefs
+once_cell = "1.8.0"
+
 
 [dev-dependencies]
 anyhow = "1.0.42"

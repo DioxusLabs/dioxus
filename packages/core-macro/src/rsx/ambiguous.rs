@@ -39,7 +39,8 @@ impl Parse for AmbiguousElement<AS_RSX> {
             }
         }
 
-        if let Ok(name) = input.fork().parse::<Ident>() {
+        use syn::ext::IdentExt;
+        if let Ok(name) = input.fork().call(Ident::parse_any) {
             let name_str = name.to_string();
 
             let first_char = name_str.chars().next().unwrap();
@@ -53,9 +54,6 @@ impl Parse for AmbiguousElement<AS_RSX> {
                     .map(|c| AmbiguousElement::Element(c))
             }
         } else {
-            if input.peek(LitStr) {
-                panic!("it's actually a litstr");
-            }
             Err(Error::new(input.span(), "Not a valid Html tag"))
         }
     }
@@ -80,7 +78,8 @@ impl Parse for AmbiguousElement<AS_HTML> {
             }
         }
 
-        if let Ok(name) = input.fork().parse::<Ident>() {
+        use syn::ext::IdentExt;
+        if let Ok(name) = input.fork().call(Ident::parse_any) {
             let name_str = name.to_string();
 
             let first_char = name_str.chars().next().unwrap();
@@ -94,9 +93,6 @@ impl Parse for AmbiguousElement<AS_HTML> {
                     .map(|c| AmbiguousElement::Element(c))
             }
         } else {
-            if input.peek(LitStr) {
-                panic!("it's actually a litstr");
-            }
             Err(Error::new(input.span(), "Not a valid Html tag"))
         }
     }

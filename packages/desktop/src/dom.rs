@@ -1,6 +1,6 @@
 //! webview dom
 
-use dioxus_core::{DomEdit, RealDom};
+use dioxus_core::DomEdit;
 
 // pub struct WebviewRegistry {}
 
@@ -28,10 +28,4 @@ impl WebviewDom<'_> {
     // pub fn consume(self) -> WebviewRegistry {
     //     self.registry
     // }
-}
-impl RealDom for WebviewDom<'_> {
-    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-        todo!()
-        // self.edits.push(PushRoot { root });
-    }
 }

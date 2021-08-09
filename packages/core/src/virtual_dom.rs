@@ -47,11 +47,11 @@ pub struct VirtualDom {
     ///
     /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
     /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    pub shared: SharedResources,
+    shared: SharedResources,
 
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
-    pub base_scope: ScopeId,
+    base_scope: ScopeId,
 
     active_fibers: Vec<Fiber<'static>>,
 
@@ -197,8 +197,7 @@ impl VirtualDom {
     ///
     pub fn rebuild<'s>(&'s mut self) -> Result<Vec<DomEdit<'s>>> {
         let mut edits = Vec::new();
-        let mutations = Mutations { edits: Vec::new() };
-        let mut diff_machine = DiffMachine::new(mutations, self.base_scope, &self.shared);
+        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
         let cur_component = diff_machine
             .get_scope_mut(&self.base_scope)
@@ -274,7 +273,7 @@ impl VirtualDom {
         self.run_with_deadline(async {}).await
     }
 
-    /// Run the virtualdom with a time limit.
+    /// Run the virtualdom with a deadline.
     ///
     /// This method will progress async tasks until the deadline is reached. If tasks are completed before the deadline,
     /// and no tasks are pending, this method will return immediately. If tasks are still pending, then this method will
@@ -287,7 +286,7 @@ impl VirtualDom {
     /// is exceeded. However, the deadline won't be met precisely, so you might want to build some wiggle room into the
     /// deadline closure manually.
     ///
-    /// The deadline is checked before starting to diff components. This strikes a balance between the overhead of checking
+    /// The deadline is polled before starting to diff components. This strikes a balance between the overhead of checking
     /// the deadline and just completing the work. However, if an individual component takes more than 16ms to render, then
     /// the screen will "jank" up. In debug, this will trigger an alert.
     ///
@@ -309,6 +308,14 @@ impl VirtualDom {
     ///     apply_mutations(mutations);
     /// }
     /// ```
+    ///
+    /// ## Mutations
+    ///
+    /// This method returns "mutations" - IE the necessary changes to get the RealDOM to match the VirtualDOM. It also
+    /// includes a list of NodeRefs that need to be applied and effects that need to be triggered after the RealDOM has
+    /// applied the edits.
+    ///
+    /// Mutations are the only link between the RealDOM and the VirtualDOM.
     pub async fn run_with_deadline<'s>(
         &'s mut self,
         mut deadline: impl Future<Output = ()>,
@@ -319,11 +326,7 @@ impl VirtualDom {
 
         let is_ready = || -> bool { (&mut deadline_future).now_or_never().is_some() };
 
-        let mut diff_machine = DiffMachine::new(
-            Mutations { edits: Vec::new() },
-            self.base_scope,
-            &self.shared,
-        );
+        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
         /*
         Strategy:
@@ -348,6 +351,11 @@ impl VirtualDom {
         // 1. Consume any pending events and create new fibers
         let mut receiver = self.shared.task_receiver.borrow_mut();
 
+        let current_fiber = {
+            //
+            self.active_fibers.get_mut(0).unwrap()
+        };
+
         // On the primary event queue, there is no batching.
         let mut trigger = {
             match receiver.try_next() {
@@ -357,6 +365,8 @@ impl VirtualDom {
                     let mut tasks = self.shared.async_tasks.borrow_mut();
                     let tasks_tasks = tasks.next();
 
+                    // if the new event generates work more important than our current fiber, we should consider switching
+                    // only switch if it impacts different scopes.
                     let mut receiver = self.shared.task_receiver.borrow_mut();
                     let reciv_task = receiver.next();
 
@@ -365,10 +375,9 @@ impl VirtualDom {
 
                     // Poll the event receiver and the future pool for work
                     // Abort early if our deadline has ran out
-                    use futures_util::select;
                     let mut deadline = (&mut deadline_future).fuse();
 
-                    let trig = select! {
+                    let trig = futures_util::select! {
                         trigger = tasks_tasks => trigger,
                         trigger = reciv_task => trigger,
                         _ = deadline => { return Ok(diff_machine.mutations); }
@@ -401,6 +410,7 @@ impl VirtualDom {
             | VirtualEvent::ToggleEvent(_)
             | VirtualEvent::MouseEvent(_)
             | VirtualEvent::PointerEvent(_) => {
+                //
                 if let Some(scope) = self.shared.get_scope_mut(trigger.originator) {
                     scope.call_listener(trigger)?;
                 }
@@ -411,7 +421,7 @@ impl VirtualDom {
             // These shouldn't normally be received, but if they are, it's done because some task set state manually
             // Instead of processing it serially,
             // We will batch all the scheduled updates together in one go.
-            VirtualEvent::ScheduledUpdate { height: u32 } => {}
+            VirtualEvent::ScheduledUpdate { .. } => {}
 
             // Suspense Events! A component's suspended node is updated
             VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
@@ -556,4 +566,35 @@ pub struct Mutations<'s> {
     // todo: apply node refs
     // todo: apply effects
     pub edits: Vec<DomEdit<'s>>,
+
+    pub noderefs: Vec<NodeRefMutation<'s>>,
+}
+
+impl<'s> Mutations<'s> {
+    pub fn new() -> Self {
+        let edits = Vec::new();
+        let noderefs = Vec::new();
+        Self { edits, noderefs }
+    }
+}
+
+// refs are only assigned once
+pub struct NodeRefMutation<'a> {
+    element: &'a mut Option<once_cell::sync::OnceCell<Box<dyn Any>>>,
+    element_id: ElementId,
+}
+
+impl<'a> NodeRefMutation<'a> {
+    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+        self.element
+            .as_ref()
+            .and_then(|f| f.get())
+            .and_then(|f| f.downcast_ref::<T>())
+    }
+    pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.element
+            .as_mut()
+            .and_then(|f| f.get_mut())
+            .and_then(|f| f.downcast_mut::<T>())
+    }
 }
