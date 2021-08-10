@@ -60,6 +60,11 @@ pub struct Scheduler {
     fibers: Vec<Fiber<'static>>,
 }
 
+pub enum FiberResult<'a> {
+    Done(Mutations<'a>),
+    Interrupted,
+}
+
 impl Scheduler {
     pub fn new(shared: SharedResources) -> Self {
         Self {
@@ -90,13 +95,77 @@ impl Scheduler {
                 .borrow_mut()
                 .try_next()
                 .ok()
-                .and_then(|f| f)
+                .flatten()
         })
+    }
+
+    pub fn manually_poll_channels(&mut self) {
+        todo!()
+    }
+
+    pub fn consume_pending_events(&mut self) {}
+
+    // nothing to do, no events on channels, no work
+    pub fn is_idle(&self) -> bool {
+        !self.has_work() && self.has_pending_events()
+    }
+
+    pub fn has_pending_events(&self) -> bool {
+        todo!()
+    }
+
+    pub fn has_work(&self) -> bool {
+        todo!()
+    }
+
+    pub fn work_with_deadline(
+        &mut self,
+        deadline: &mut impl Future<Output = ()>,
+        is_deadline_reached: &mut impl FnMut() -> bool,
+    ) -> FiberResult {
+        todo!()
     }
 
     // waits for a trigger, canceling early if the deadline is reached
     // returns true if the deadline was reached
+    // does not return the trigger, but caches it in the scheduler
     pub async fn wait_for_any_trigger(&mut self, deadline: &mut impl Future<Output = ()>) -> bool {
+        // poll_all_channels()
+        // if no events and no work {
+        //     wait for events, cache them
+        // }
+
+        // for event in pending_evenst {
+        //     mark_dirty_scopes_with_priorities
+        // }
+
+        // // level shift the priority
+        // match current_priority {
+        //     high -> finish high queue
+        //     medium -> if work in high { set_current_level_high }
+        //     low -> if work in high { set_current_level_high } else if work in medium { set_current_level_medium }
+        // }
+
+        // let mut fiber = load_priority_fiber();
+
+        // fiber.load_work(high_priority_work);
+
+        // fiber.progress_with_deadline(deadline);
+
+        // if fiber.finished() {
+        //     if work_pending_for_priority(fiber.priority()) {
+        //         fiber.load_work(priority_work)
+        //     } else {
+        //         shift_level_down()
+        //     }
+        // }
+
+        // load current events
+        // if work queue is empty {
+        //     wait for events
+        //     load current events
+        // }
+
         todo!()
         // match raw_trigger {
         //     Ok(Some(trigger)) => trigger,
@@ -150,10 +219,6 @@ impl Scheduler {
         //         }
         //     })
         //     .or_insert_with(|| new_priority);
-    }
-
-    pub fn has_work(&self) -> bool {
-        true
     }
 
     // returns true if the deadline is reached
@@ -250,3 +315,150 @@ impl Fiber<'_> {
         }
     }
 }
+
+/*
+Strategy:
+1. Check if there are any UI events in the receiver.
+2. If there are, run the listener and then mark the dirty nodes
+3. If there are dirty nodes to be progressed, do so.
+4. Poll the task queue to see if we can create more dirty scopes.
+5. Resume any current in-flight work if there is some.
+6. While the deadline is not met, progress work, periodically checking the deadline.
+
+
+How to choose work:
+- When a scope is marked as dirty, it is given a priority.
+- If a dirty scope chains (borrowed) into children, mark those as dirty as well.
+- When the work loop starts, work on the highest priority scopes first.
+- Work by priority, choosing to pause in-flight work if higher-priority work is ready.
+
+
+
+4. If there are no fibers, then wait for the next event from the receiver. Abort if the deadline is reached.
+5. While processing a fiber, periodically check if we're out of time
+6. If our deadling is reached, then commit our edits to the realdom
+7. Whenever a fiber is finished, immediately commit it. (IE so deadlines can be infinite if unsupported)
+
+
+// 1. Check if there are any events in the receiver.
+// 2. If there are, process them and create a new fiber.
+// 3. If there are no events, then choose a fiber to work on.
+// 4. If there are no fibers, then wait for the next event from the receiver. Abort if the deadline is reached.
+// 5. While processing a fiber, periodically check if we're out of time
+// 6. If our deadling is reached, then commit our edits to the realdom
+// 7. Whenever a fiber is finished, immediately commit it. (IE so deadlines can be infinite if unsupported)
+
+We slice fibers based on time. Each batch of events between frames is its own fiber. This is the simplest way
+to conceptualize what *is* or *isn't* a fiber. IE if a bunch of events occur during a time slice, they all
+get batched together as a single operation of "dirty" scopes.
+
+This approach is designed around the "diff during rIC and commit during rAF"
+
+We need to make sure to not call multiple events while the diff machine is borrowing the same scope. Because props
+and listeners hold references to hook data, it is wrong to run a scope that is already being diffed.
+*/
+
+// // 1. Drain the existing immediates.
+// //
+// // These are generated by async tasks that we never got a chance to finish.
+// // All of these get scheduled with the lowest priority.
+// while let Ok(Some(dirty_scope)) = self.shared.immediate_receiver.borrow_mut().try_next()
+// {
+//     self.scheduler
+//         .add_dirty_scope(dirty_scope, EventPriority::Low);
+// }
+
+// // 2. Drain the event queues, calling whatever listeners need to be called
+// //
+// // First, check if there's any set_states in the queue that we can mark as low priority
+// // Next, check the UI event receiver so we can mark those scopes as medium/high priority
+// // Next, work on any fibers.
+// // Once the fiber work is finished
+// while let Some(trigger) = self.scheduler.next_event() {
+//     match &trigger.event {
+//         VirtualEvent::AsyncEvent { .. } => {}
+
+//         // This suspense system works, but it's not the most elegant solution.
+//         // TODO: Replace this system
+//         VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
+//             todo!();
+//             // // Safety: this handler is the only thing that can mutate shared items at this moment in tim
+//             // let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
+
+//             // // safety: we are sure that there are no other references to the inner content of suspense hooks
+//             // let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
+
+//             // let cx = Context { scope, props: &() };
+//             // let scx = SuspendedContext { inner: cx };
+
+//             // // generate the new node!
+//             // let nodes: Option<VNode> = (&hook.callback)(scx);
+
+//             // if let Some(nodes) = nodes {
+//             //     // allocate inside the finished frame - not the WIP frame
+//             //     let nodes = scope.frames.finished_frame().bump.alloc(nodes);
+
+//             //     // push the old node's root onto the stack
+//             //     let real_id = domnode.get().ok_or(Error::NotMounted)?;
+//             //     diff_machine.edit_push_root(real_id);
+
+//             //     // push these new nodes onto the diff machines stack
+//             //     let meta = diff_machine.create_vnode(&*nodes);
+
+//             //     // replace the placeholder with the new nodes we just pushed on the stack
+//             //     diff_machine.edit_replace_with(1, meta.added_to_stack);
+//             // } else {
+//             //     log::warn!(
+//             //         "Suspense event came through, but there were no generated nodes >:(."
+//             //     );
+//             // }
+//         }
+
+//         VirtualEvent::ClipboardEvent(_)
+//         | VirtualEvent::CompositionEvent(_)
+//         | VirtualEvent::KeyboardEvent(_)
+//         | VirtualEvent::FocusEvent(_)
+//         | VirtualEvent::FormEvent(_)
+//         | VirtualEvent::SelectionEvent(_)
+//         | VirtualEvent::TouchEvent(_)
+//         | VirtualEvent::UIEvent(_)
+//         | VirtualEvent::WheelEvent(_)
+//         | VirtualEvent::MediaEvent(_)
+//         | VirtualEvent::AnimationEvent(_)
+//         | VirtualEvent::TransitionEvent(_)
+//         | VirtualEvent::ToggleEvent(_)
+//         | VirtualEvent::MouseEvent(_)
+//         | VirtualEvent::PointerEvent(_) => {
+//             if let Some(scope) = self.shared.get_scope_mut(trigger.originator) {
+//                 if let Some(element) = trigger.real_node_id {
+//                     scope.call_listener(trigger.event, element)?;
+
+//                     // Drain the immediates into the dirty scopes, setting the appropiate priorities
+//                     while let Ok(Some(dirty_scope)) =
+//                         self.shared.immediate_receiver.borrow_mut().try_next()
+//                     {
+//                         self.scheduler
+//                             .add_dirty_scope(dirty_scope, trigger.priority)
+//                     }
+//                 }
+//             }
+//         }
+//     }
+// }
+
+// // todo: for these, make these methods return results where deadlinereached is an error type
+
+// // 3. Work through the fibers, and wait for any future work to be ready
+// let mut machine = DiffMachine::new_headless(&self.shared);
+// if self.scheduler.progress_work(&mut machine, &mut is_ready) {
+//     break;
+// }
+
+// // 4. Wait for any new triggers before looping again
+// if self
+//     .scheduler
+//     .wait_for_any_trigger(&mut deadline_future)
+//     .await
+// {
+//     break;
+// }
