@@ -18,18 +18,12 @@
 //!
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
-use futures_util::{Future, StreamExt};
-use fxhash::FxHashMap;
-
-use crate::hooks::{SuspendedContext, SuspenseHook};
 use crate::innerlude::*;
-
-use std::any::Any;
-
-use std::any::TypeId;
-use std::cell::{Ref, RefCell, RefMut};
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
-use std::pin::Pin;
+use futures_util::Future;
+use std::{
+    any::{Any, TypeId},
+    pin::Pin,
+};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -63,69 +57,50 @@ pub struct VirtualDom {
 }
 
 impl VirtualDom {
-    /// Create a new instance of the Dioxus Virtual Dom with no properties for the root component.
+    /// Create a new VirtualDOM with a component that does not have special props.
     ///
-    /// This means that the root component must either consumes its own context, or statics are used to generate the page.
-    /// The root component can access things like routing in its context.
+    /// # Description
     ///
-    /// As an end-user, you'll want to use the Renderer's "new" method instead of this method.
-    /// Directly creating the VirtualDOM is only useful when implementing a new renderer.
-    ///
-    ///
-    /// ```ignore
-    /// // Directly from a closure
-    ///
-    /// let dom = VirtualDom::new(|cx| cx.render(rsx!{ div {"hello world"} }));
-    ///
-    /// // or pass in...
-    ///
-    /// let root = |cx| {
-    ///     cx.render(rsx!{
-    ///         div {"hello world"}
-    ///     })
-    /// }
-    /// let dom = VirtualDom::new(root);
-    ///
-    /// // or directly from a fn
-    ///
-    /// fn Example(cx: Context<()>) -> DomTree  {
-    ///     cx.render(rsx!{ div{"hello world"} })
-    /// }
-    ///
-    /// let dom = VirtualDom::new(Example);
-    /// ```
-    pub fn new(root: FC<()>) -> Self {
-        Self::new_with_props(root, ())
-    }
-
-    /// Start a new VirtualDom instance with a dependent cx.
     /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
     ///
     /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
     /// to toss out the entire tree.
     ///
-    /// ```ignore
-    /// // Directly from a closure
     ///
-    /// let dom = VirtualDom::new(|cx| cx.render(rsx!{ div {"hello world"} }));
-    ///
-    /// // or pass in...
-    ///
-    /// let root = |cx| {
-    ///     cx.render(rsx!{
-    ///         div {"hello world"}
-    ///     })
-    /// }
-    /// let dom = VirtualDom::new(root);
-    ///
-    /// // or directly from a fn
-    ///
-    /// fn Example(cx: Context, props: &SomeProps) -> VNode  {
+    /// # Example
+    /// ```
+    /// fn Example(cx: Context<SomeProps>) -> VNode  {
     ///     cx.render(rsx!{ div{"hello world"} })
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
     /// ```
+    ///
+    /// Note: the VirtualDOM is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
+    pub fn new(root: FC<()>) -> Self {
+        Self::new_with_props(root, ())
+    }
+
+    /// Create a new VirtualDOM with the given properties for the root component.
+    ///
+    /// # Description
+    ///
+    /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
+    ///
+    /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
+    /// to toss out the entire tree.
+    ///
+    ///
+    /// # Example
+    /// ```
+    /// fn Example(cx: Context<SomeProps>) -> VNode  {
+    ///     cx.render(rsx!{ div{"hello world"} })
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Example);
+    /// ```
+    ///
+    /// Note: the VirtualDOM is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let components = SharedResources::new();
 
@@ -150,7 +125,7 @@ impl VirtualDom {
 
     pub fn launch_in_place(root: FC<()>) -> Self {
         let mut s = Self::new(root);
-        s.rebuild_in_place().unwrap();
+        s.rebuild().unwrap();
         s
     }
 
@@ -158,7 +133,7 @@ impl VirtualDom {
     ///
     pub fn launch_with_props_in_place<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let mut s = Self::new_with_props(root, root_props);
-        s.rebuild_in_place().unwrap();
+        s.rebuild().unwrap();
         s
     }
 
@@ -168,23 +143,6 @@ impl VirtualDom {
 
     pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
         unsafe { self.shared.get_scope(id) }
-    }
-
-    /// Rebuilds the VirtualDOM from scratch, but uses a "dummy" RealDom.
-    ///
-    /// Used in contexts where a real copy of the  structure doesn't matter, and the VirtualDOM is the source of truth.
-    ///
-    /// ## Why?
-    ///
-    /// This method uses the `DebugDom` under the hood - essentially making the VirtualDOM's diffing patches a "no-op".
-    ///
-    /// SSR takes advantage of this by using Dioxus itself as the source of truth, and rendering from the tree directly.
-    pub fn rebuild_in_place(&mut self) -> Result<Vec<DomEdit>> {
-        todo!();
-        // let mut realdom = DebugDom::new();
-        // let mut edits = Vec::new();
-        // self.rebuild(&mut realdom, &mut edits)?;
-        // Ok(edits)
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
@@ -219,11 +177,13 @@ impl VirtualDom {
 
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
     ///
-    /// This method will not wait for any suspended tasks, completely skipping over
+    /// This method will not wait for any suspended nodes to complete.
     pub fn run_immediate<'s>(&'s mut self) -> Result<Mutations<'s>> {
-        //
-
-        todo!()
+        use futures_util::FutureExt;
+        let mut is_ready = || false;
+        self.run_with_deadline_and_is_ready(futures_util::future::ready(()), &mut is_ready)
+            .now_or_never()
+            .expect("this future will always resolve immediately")
     }
 
     /// Runs the virtualdom with no time limit.
@@ -282,6 +242,28 @@ impl VirtualDom {
         &'s mut self,
         mut deadline: impl Future<Output = ()>,
     ) -> Result<Mutations<'s>> {
+        // let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
+
+        // Configure our deadline
+        use futures_util::FutureExt;
+        let mut deadline_future = deadline.shared();
+
+        let mut is_ready_deadline = deadline_future.clone();
+        let mut is_ready = || -> bool { (&mut is_ready_deadline).now_or_never().is_some() };
+
+        todo!()
+        // Ok(diff_machine.mutations)
+    }
+
+    /// Runs the virtualdom with a deadline and a custom "check" function.
+    ///
+    /// Designed this way so "run_immediate" can re-use all the same rendering logic as "run_with_deadline" but the work
+    /// queue is completely drained;
+    async fn run_with_deadline_and_is_ready<'s>(
+        &'s mut self,
+        mut deadline_future: impl Future<Output = ()>,
+        mut is_ready: &mut impl FnMut() -> bool,
+    ) -> Result<Mutations<'s>> {
         /*
         Strategy:
         1. Check if there are any UI events in the receiver.
@@ -323,15 +305,6 @@ impl VirtualDom {
         We need to make sure to not call multiple events while the diff machine is borrowing the same scope. Because props
         and listeners hold references to hook data, it is wrong to run a scope that is already being diffed.
         */
-
-        // let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
-
-        // Configure our deadline
-        use futures_util::FutureExt;
-        let mut deadline_future = deadline.shared();
-
-        let mut is_ready_deadline = deadline_future.clone();
-        let mut is_ready = || -> bool { (&mut is_ready_deadline).now_or_never().is_some() };
 
         loop {
             // 1. Drain the existing immediates.
@@ -427,9 +400,13 @@ impl VirtualDom {
                 }
             }
 
+            // todo: for these, make these methods return results where deadlinereached is an error type
+
             // 3. Work through the fibers, and wait for any future work to be ready
             let mut machine = DiffMachine::new_headless(&self.shared);
-            self.scheduler.progress_work(&mut machine, &mut is_ready);
+            if self.scheduler.progress_work(&mut machine, &mut is_ready) {
+                break;
+            }
 
             // 4. Wait for any new triggers before looping again
             if self
@@ -440,17 +417,11 @@ impl VirtualDom {
                 break;
             }
         }
-
         todo!()
-        // Ok(diff_machine.mutations)
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<EventTrigger> {
         self.shared.ui_event_sender.clone()
-    }
-
-    fn get_scope_mut(&mut self, id: ScopeId) -> Option<&mut Scope> {
-        unsafe { self.shared.get_scope_mut(id) }
     }
 }
 
