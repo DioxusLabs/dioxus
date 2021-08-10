@@ -166,7 +166,7 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Custom elements           | ✅      | ✅     | Define new element primitives                                        |
 | Suspense                  | ✅      | ✅     | schedule future render from future/promise                           |
 | Integrated error handling | ✅      | ✅     | Gracefully handle errors with ? syntax                               |
-| NodeRef                   | ✅      | ✅     | gain direct access to nodes [1]                                      |
+| NodeRef                   | ✅      | ✅     | gain direct access to nodes                                          |
 | Re-hydration              | ✅      | ✅     | Pre-render to HTML to speed up first contentful paint                |
 | Jank-Free Rendering       | ✅      | ✅     | Large diffs are segmented across frames for silky-smooth transitions |
 | Cooperative Scheduling    | ✅      | ✅     | Prioritize important events over non-important events                |
@@ -178,7 +178,6 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Fine-grained reactivity   | 🛠      | ❓     | Skip diffing for fine-grain updates                                  |
 | Effects                   | 🛠      | ✅     | Run effects after a component has been committed to render           |
 
-- [1] Currently blocked until we figure out a cross-platform way of exposing an imperative Node API.
 
 ### Phase 2: Advanced Toolkits
 

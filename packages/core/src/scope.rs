@@ -193,51 +193,24 @@ impl Scope {
     }
 
     // A safe wrapper around calling listeners
-    // calling listeners will invalidate the list of listeners
-    // The listener list will be completely drained because the next frame will write over previous listeners
-    pub(crate) fn call_listener(&mut self, trigger: EventTrigger) -> Result<()> {
-        let EventTrigger {
-            real_node_id,
-            event,
-            ..
-        } = trigger;
-
-        if let &VirtualEvent::AsyncEvent { .. } = &event {
-            log::info!("arrived a fiber event");
-            return Ok(());
-        }
-
-        log::debug!(
-            "There are  {:?} listeners associated with this scope {:#?}",
-            self.listeners.borrow().len(),
-            self.our_arena_idx
-        );
-
+    //
+    //
+    pub(crate) fn call_listener(&mut self, event: VirtualEvent, element: ElementId) -> Result<()> {
         let listners = self.listeners.borrow_mut();
 
         let raw_listener = listners.iter().find(|lis| {
             let search = unsafe { &***lis };
             let search_id = search.mounted_node.get();
-            log::info!(
-                "searching listener {:#?} for real {:?}",
-                search_id,
-                real_node_id
-            );
 
-            match (real_node_id, search_id) {
-                (Some(e), Some(search_id)) => search_id == e,
-                _ => false,
+            // this assumes the node might not be mounted - should we assume that though?
+            match search_id.map(|f| f == element) {
+                Some(same) => same,
+                None => false,
             }
         });
 
         if let Some(raw_listener) = raw_listener {
             let listener = unsafe { &**raw_listener };
-
-            // log::info!(
-            //     "calling listener {:?}, {:?}",
-            //     listener.event,
-            //     // listener.scope
-            // );
             let mut cb = listener.callback.borrow_mut();
             if let Some(cb) = cb.as_mut() {
                 (cb)(event);

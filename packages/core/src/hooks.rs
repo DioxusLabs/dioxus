@@ -260,24 +260,12 @@ impl<'src> SuspendedContext<'src> {
 #[derive(Clone, Copy)]
 pub struct NodeRef<'src, T: 'static>(&'src RefCell<T>);
 
-// impl NodeRef<'src, T> {
-// fn set_ref(&self, new: Box<dyn Any>)
-// }
-// impl<'a, T> std::ops::Deref for NodeRef<'a, T> {
-//     type Target = Option<&'a T>;
-
-//     fn deref(&self) -> &Self::Target {
-//         // &self.node
-//     }
-// }
-
 pub fn use_node_ref<T, P>(cx: Context<P>) -> NodeRef<T> {
     cx.use_hook(
         |f| {},
         |f| {
             //
             todo!()
-            // NodeRef {}
         },
         |f| {
             //

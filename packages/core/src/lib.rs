@@ -40,6 +40,7 @@ pub(crate) mod innerlude {
     pub use crate::hooklist::*;
     pub use crate::hooks::*;
     pub use crate::nodes::*;
+    pub use crate::scheduler::*;
     pub use crate::scope::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
@@ -67,6 +68,7 @@ pub mod heuristics;
 pub mod hooklist;
 pub mod hooks;
 pub mod nodes;
+pub mod scheduler;
 pub mod scope;
 pub mod signals;
 pub mod util;

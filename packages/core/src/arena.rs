@@ -4,6 +4,7 @@ use std::{cell::UnsafeCell, rc::Rc};
 
 use crate::heuristics::*;
 use crate::innerlude::*;
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::stream::FuturesUnordered;
 use fxhash::{FxHashMap, FxHashSet};
 use slab::Slab;
@@ -33,8 +34,11 @@ impl ElementId {
 }
 
 type Shared<T> = Rc<RefCell<T>>;
-type TaskReceiver = futures_channel::mpsc::UnboundedReceiver<EventTrigger>;
-type TaskSender = futures_channel::mpsc::UnboundedSender<EventTrigger>;
+type UiReceiver = UnboundedReceiver<EventTrigger>;
+type UiSender = UnboundedSender<EventTrigger>;
+
+type TaskReceiver = UnboundedReceiver<ScopeId>;
+type TaskSender = UnboundedSender<ScopeId>;
 
 /// These are resources shared among all the components and the virtualdom itself
 #[derive(Clone)]
@@ -43,16 +47,23 @@ pub struct SharedResources {
 
     pub(crate) heuristics: Shared<HeuristicsEngine>,
 
-    ///
-    pub task_sender: TaskSender,
+    // Used by "set_state" and co - is its own queue
+    pub immediate_sender: TaskSender,
+    pub immediate_receiver: Shared<TaskReceiver>,
 
-    pub task_receiver: Shared<TaskReceiver>,
+    /// Triggered by event listeners
+    pub ui_event_sender: UiSender,
+    pub ui_event_receiver: Shared<UiReceiver>,
 
+    // Garbage stored
+    pub pending_garbage: Shared<FxHashSet<ScopeId>>,
+
+    // In-flight futures
     pub async_tasks: Shared<FuturesUnordered<FiberTask>>,
 
     /// We use a SlotSet to keep track of the keys that are currently being used.
     /// However, we don't store any specific data since the "mirror"
-    pub raw_elements: Rc<RefCell<Slab<()>>>,
+    pub raw_elements: Shared<Slab<()>>,
 
     pub task_setter: Rc<dyn Fn(ScopeId)>,
 }
@@ -66,28 +77,30 @@ impl SharedResources {
         // elements are super cheap - the value takes no space
         let raw_elements = Slab::with_capacity(2000);
 
-        let (sender, receiver) = futures_channel::mpsc::unbounded();
+        let (ui_sender, ui_receiver) = futures_channel::mpsc::unbounded();
+        let (immediate_sender, immediate_receiver) = futures_channel::mpsc::unbounded();
 
         let heuristics = HeuristicsEngine::new();
 
         // we allocate this task setter once to save us from having to allocate later
         let task_setter = {
-            let queue = sender.clone();
+            let queue = immediate_sender.clone();
             let components = components.clone();
             Rc::new(move |idx: ScopeId| {
                 let comps = unsafe { &*components.get() };
 
                 if let Some(scope) = comps.get(idx.0) {
-                    queue
-                        .unbounded_send(EventTrigger::new(
-                            VirtualEvent::ScheduledUpdate {
-                                height: scope.height,
-                            },
-                            idx,
-                            None,
-                            EventPriority::High,
-                        ))
-                        .expect("The event queu receiver should *never* be dropped");
+                    todo!("implement immediates again")
+                    // queue
+                    //     .unbounded_send(EventTrigger::new(
+                    //         VirtualEvent::ScheduledUpdate {
+                    //             height: scope.height,
+                    //         },
+                    //         idx,
+                    //         None,
+                    //         EventPriority::High,
+                    //     ))
+                    //     .expect("The event queu receiver should *never* be dropped");
                 }
             }) as Rc<dyn Fn(ScopeId)>
         };
@@ -95,8 +108,15 @@ impl SharedResources {
         Self {
             components,
             async_tasks: Rc::new(RefCell::new(FuturesUnordered::new())),
-            task_receiver: Rc::new(RefCell::new(receiver)),
-            task_sender: sender,
+
+            ui_event_receiver: Rc::new(RefCell::new(ui_receiver)),
+            ui_event_sender: ui_sender,
+
+            immediate_receiver: Rc::new(RefCell::new(immediate_receiver)),
+            immediate_sender: immediate_sender,
+
+            pending_garbage: Rc::new(RefCell::new(FxHashSet::default())),
+
             heuristics: Rc::new(RefCell::new(heuristics)),
             raw_elements: Rc::new(RefCell::new(raw_elements)),
             task_setter,
