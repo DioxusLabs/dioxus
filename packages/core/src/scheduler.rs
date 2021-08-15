@@ -5,11 +5,18 @@ use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
 use std::pin::Pin;
 
+use futures_util::future::FusedFuture;
+use futures_util::pin_mut;
 use futures_util::Future;
+use futures_util::FutureExt;
+use futures_util::StreamExt;
+use indexmap::IndexSet;
 
 use crate::innerlude::*;
 
 /// The "Mutations" object holds the changes that need to be made to the DOM.
+///
+#[derive(Debug)]
 pub struct Mutations<'s> {
     pub edits: Vec<DomEdit<'s>>,
     pub noderefs: Vec<NodeRefMutation<'s>>,
@@ -21,12 +28,22 @@ impl<'s> Mutations<'s> {
         let noderefs = Vec::new();
         Self { edits, noderefs }
     }
+
+    pub fn extend(&mut self, other: &mut Mutations) {}
 }
 
 // refs are only assigned once
 pub struct NodeRefMutation<'a> {
     element: &'a mut Option<once_cell::sync::OnceCell<Box<dyn Any>>>,
     element_id: ElementId,
+}
+
+impl<'a> std::fmt::Debug for NodeRefMutation<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NodeRefMutation")
+            .field("element_id", &self.element_id)
+            .finish()
+    }
 }
 
 impl<'a> NodeRefMutation<'a> {
@@ -48,16 +65,18 @@ pub struct Scheduler {
     current_priority: EventPriority,
 
     pending_events: VecDeque<EventTrigger>,
-    pending_immediates: VecDeque<EventTrigger>,
+
+    pending_immediates: VecDeque<ScopeId>,
+
     pending_tasks: VecDeque<EventTrigger>,
 
     garbage_scopes: HashSet<ScopeId>,
 
     shared: SharedResources,
 
-    dirty_scopes: [HashSet<DirtyScope>; 3],
-
-    fibers: Vec<Fiber<'static>>,
+    high_priorty: PriorityFiber<'static>,
+    medium_priority: PriorityFiber<'static>,
+    low_priority: PriorityFiber<'static>,
 }
 
 pub enum FiberResult<'a> {
@@ -75,14 +94,13 @@ impl Scheduler {
             pending_immediates: VecDeque::new(),
             pending_tasks: VecDeque::new(),
 
-            fibers: Vec::new(),
-
             garbage_scopes: HashSet::new(),
 
             current_priority: EventPriority::Low,
 
-            // low, medium, high
-            dirty_scopes: [HashSet::new(), HashSet::new(), HashSet::new()],
+            high_priorty: PriorityFiber::new(),
+            medium_priority: PriorityFiber::new(),
+            low_priority: PriorityFiber::new(),
         }
     }
 
@@ -99,142 +117,206 @@ impl Scheduler {
         })
     }
 
-    pub fn manually_poll_channels(&mut self) {
-        todo!()
+    pub fn manually_poll_events(&mut self) {
+        // 1. Poll the UI event receiver
+        // 2. Poll the set_state receiver
+
+        // poll the immediates first, creating work out of them
+        let shared_receiver = self.shared.immediate_receiver.clone();
+        let mut receiver = shared_receiver.borrow_mut();
+        while let Ok(Some(trigger)) = receiver.try_next() {
+            self.add_dirty_scope(trigger, EventPriority::Low);
+        }
+
+        // next poll the UI events,
+        let mut receiver = self.shared.ui_event_receiver.borrow_mut();
+        while let Ok(Some(trigger)) = receiver.try_next() {
+            self.pending_events.push_back(trigger);
+        }
     }
 
-    pub fn consume_pending_events(&mut self) {}
+    // Converts UI events into dirty scopes with various priorities
+    pub fn consume_pending_events(&mut self) -> Result<()> {
+        while let Some(trigger) = self.pending_events.pop_back() {
+            match &trigger.event {
+                VirtualEvent::AsyncEvent { .. } => {}
+
+                // This suspense system works, but it's not the most elegant solution.
+                // TODO: Replace this system
+                VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
+                    todo!("suspense needs to be converted into its own channel");
+
+                    // // Safety: this handler is the only thing that can mutate shared items at this moment in tim
+                    // let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
+
+                    // // safety: we are sure that there are no other references to the inner content of suspense hooks
+                    // let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
+
+                    // let cx = Context { scope, props: &() };
+                    // let scx = SuspendedContext { inner: cx };
+
+                    // // generate the new node!
+                    // let nodes: Option<VNode> = (&hook.callback)(scx);
+
+                    // if let Some(nodes) = nodes {
+                    //     // allocate inside the finished frame - not the WIP frame
+                    //     let nodes = scope.frames.finished_frame().bump.alloc(nodes);
+
+                    //     // push the old node's root onto the stack
+                    //     let real_id = domnode.get().ok_or(Error::NotMounted)?;
+                    //     diff_machine.edit_push_root(real_id);
+
+                    //     // push these new nodes onto the diff machines stack
+                    //     let meta = diff_machine.create_vnode(&*nodes);
+
+                    //     // replace the placeholder with the new nodes we just pushed on the stack
+                    //     diff_machine.edit_replace_with(1, meta.added_to_stack);
+                    // } else {
+                    //     log::warn!(
+                    //         "Suspense event came through, but there were no generated nodes >:(."
+                    //     );
+                    // }
+                }
+
+                VirtualEvent::ClipboardEvent(_)
+                | VirtualEvent::CompositionEvent(_)
+                | VirtualEvent::KeyboardEvent(_)
+                | VirtualEvent::FocusEvent(_)
+                | VirtualEvent::FormEvent(_)
+                | VirtualEvent::SelectionEvent(_)
+                | VirtualEvent::TouchEvent(_)
+                | VirtualEvent::UIEvent(_)
+                | VirtualEvent::WheelEvent(_)
+                | VirtualEvent::MediaEvent(_)
+                | VirtualEvent::AnimationEvent(_)
+                | VirtualEvent::TransitionEvent(_)
+                | VirtualEvent::ToggleEvent(_)
+                | VirtualEvent::MouseEvent(_)
+                | VirtualEvent::PointerEvent(_) => {
+                    if let Some(scope) = self.shared.get_scope_mut(trigger.originator) {
+                        if let Some(element) = trigger.real_node_id {
+                            scope.call_listener(trigger.event, element)?;
+
+                            let receiver = self.shared.immediate_receiver.clone();
+                            let mut receiver = receiver.borrow_mut();
+
+                            // Drain the immediates into the dirty scopes, setting the appropiate priorities
+                            while let Ok(Some(dirty_scope)) = receiver.try_next() {
+                                self.add_dirty_scope(dirty_scope, trigger.priority)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 
     // nothing to do, no events on channels, no work
-    pub fn is_idle(&self) -> bool {
-        !self.has_work() && self.has_pending_events()
+    pub fn has_any_work(&self) -> bool {
+        self.has_work() || self.has_pending_events() || self.has_pending_garbage()
     }
 
     pub fn has_pending_events(&self) -> bool {
-        todo!()
+        self.pending_events.len() > 0
     }
 
     pub fn has_work(&self) -> bool {
-        todo!()
+        let has_work = self.high_priorty.has_work()
+            || self.medium_priority.has_work()
+            || self.low_priority.has_work();
+        !has_work
     }
 
+    pub fn has_pending_garbage(&self) -> bool {
+        !self.garbage_scopes.is_empty()
+    }
+
+    /// If a the fiber finishes its works (IE needs to be committed) the scheduler will drop the dirty scope
     pub fn work_with_deadline(
         &mut self,
-        deadline: &mut impl Future<Output = ()>,
+        mut deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
         is_deadline_reached: &mut impl FnMut() -> bool,
     ) -> FiberResult {
+        // check if we need to elevate priority
+        self.current_priority = match (
+            self.high_priorty.has_work(),
+            self.medium_priority.has_work(),
+            self.low_priority.has_work(),
+        ) {
+            (true, _, _) => EventPriority::High,
+            (false, true, _) => EventPriority::Medium,
+            (false, false, _) => EventPriority::Low,
+        };
+
+        let mut current_fiber = match self.current_priority {
+            EventPriority::High => &mut self.high_priorty,
+            EventPriority::Medium => &mut self.medium_priority,
+            EventPriority::Low => &mut self.low_priority,
+        };
+
         todo!()
     }
 
     // waits for a trigger, canceling early if the deadline is reached
     // returns true if the deadline was reached
     // does not return the trigger, but caches it in the scheduler
-    pub async fn wait_for_any_trigger(&mut self, deadline: &mut impl Future<Output = ()>) -> bool {
-        // poll_all_channels()
-        // if no events and no work {
-        //     wait for events, cache them
-        // }
+    pub async fn wait_for_any_trigger(
+        &mut self,
+        mut deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
+    ) -> bool {
+        use futures_util::select;
 
-        // for event in pending_evenst {
-        //     mark_dirty_scopes_with_priorities
-        // }
+        let _immediates = self.shared.immediate_receiver.clone();
+        let mut immediates = _immediates.borrow_mut();
 
-        // // level shift the priority
-        // match current_priority {
-        //     high -> finish high queue
-        //     medium -> if work in high { set_current_level_high }
-        //     low -> if work in high { set_current_level_high } else if work in medium { set_current_level_medium }
-        // }
+        let mut _ui_events = self.shared.ui_event_receiver.clone();
+        let mut ui_events = _ui_events.borrow_mut();
 
-        // let mut fiber = load_priority_fiber();
+        let mut _tasks = self.shared.async_tasks.clone();
+        let mut tasks = _tasks.borrow_mut();
 
-        // fiber.load_work(high_priority_work);
+        // set_state called
+        select! {
+            dirty_scope = immediates.next() => {
+                if let Some(scope) = dirty_scope {
+                    self.add_dirty_scope(scope, EventPriority::Low);
+                }
+            }
 
-        // fiber.progress_with_deadline(deadline);
+            ui_event = ui_events.next() => {
+                if let Some(event) = ui_event {
+                    self.pending_events.push_back(event);
+                }
+            }
 
-        // if fiber.finished() {
-        //     if work_pending_for_priority(fiber.priority()) {
-        //         fiber.load_work(priority_work)
-        //     } else {
-        //         shift_level_down()
-        //     }
-        // }
+            async_task = tasks.next() => {
+                if let Some(event) = async_task {
+                    self.pending_events.push_back(event);
+                }
+            }
 
-        // load current events
-        // if work queue is empty {
-        //     wait for events
-        //     load current events
-        // }
+            _ = deadline => {
+                return true;
+            }
 
-        todo!()
-        // match raw_trigger {
-        //     Ok(Some(trigger)) => trigger,
-        //     _ => {
-        //         // nothing to do - let's clean up any garbage we might have
-        //         self.scheduler.clean_up_garbage();
-
-        //         // Continuously poll the future pool and the event receiver for work
-        //         let mut tasks = self.shared.async_tasks.borrow_mut();
-        //         let tasks_tasks = tasks.next();
-
-        //         // if the new event generates work more important than our current fiber, we should consider switching
-        //         // only switch if it impacts different scopes.
-        //         let mut ui_receiver = self.shared.ui_event_receiver.borrow_mut();
-        //         let ui_reciv_task = ui_receiver.next();
-
-        //         // right now, this polling method will only catch batched set_states that don't get awaited.
-        //         // However, in the future, we might be interested in batching set_states across await points
-        //         let immediate_tasks = ();
-
-        //         futures_util::pin_mut!(tasks_tasks);
-        //         futures_util::pin_mut!(ui_reciv_task);
-
-        //         // Poll the event receiver and the future pool for work
-        //         // Abort early if our deadline has ran out
-        //         let mut deadline = (&mut deadline_future).fuse();
-
-        //         let trig = futures_util::select! {
-        //             trigger = tasks_tasks => trigger,
-        //             trigger = ui_reciv_task => trigger,
-
-        //             // abort if we're out of time
-        //             _ = deadline => { return Ok(Mutations::new()); }
-        //             // _ = deadline => { return Ok(diff_machine.mutations); }
-        //         };
-
-        //         trig.unwrap()
-        //     }
-        // };
-        //
+        }
+        false
     }
 
     pub fn add_dirty_scope(&mut self, scope: ScopeId, priority: EventPriority) {
-        //
-
-        // generated_immediates
-        //     .entry(dirty_scope)
-        //     .and_modify(|cur_priority| {
-        //         if *cur_priority > new_priority {
-        //             *cur_priority = new_priority;
-        //         }
-        //     })
-        //     .or_insert_with(|| new_priority);
-    }
-
-    // returns true if the deadline is reached
-    // returns false if the deadline is not reached
-    pub fn progress_work(
-        &mut self,
-        machine: &mut DiffMachine,
-        is_deadline_reached: &mut impl FnMut() -> bool,
-    ) -> bool {
-        todo!()
+        match priority {
+            EventPriority::High => self.high_priorty.dirty_scopes.insert(scope),
+            EventPriority::Medium => self.medium_priority.dirty_scopes.insert(scope),
+            EventPriority::Low => self.low_priority.dirty_scopes.insert(scope),
+        };
     }
 
     pub fn clean_up_garbage(&mut self) {
         let mut scopes_to_kill = Vec::new();
-
         let mut garbage_list = Vec::new();
+
         for scope in self.garbage_scopes.drain() {
             let scope = self.shared.get_scope_mut(scope).unwrap();
             for node in scope.consume_garbage() {
@@ -278,18 +360,22 @@ impl Scheduler {
                 }
             }
         }
+
+        for scope in scopes_to_kill.drain(..) {
+            //
+            // kill em
+        }
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash)]
 pub struct DirtyScope {
     height: u32,
-    priority: EventPriority,
     start_tick: u32,
 }
 
 // fibers in dioxus aren't exactly the same as React's. Our fibers are more like a "saved state" of the diffing algorithm.
-pub struct Fiber<'a> {
+pub struct PriorityFiber<'a> {
     // scopes that haven't been updated yet
     pending_scopes: Vec<ScopeId>,
 
@@ -302,9 +388,15 @@ pub struct Fiber<'a> {
 
     // a fiber is finished when no more scopes or nodes are pending
     completed: bool,
+
+    dirty_scopes: IndexSet<ScopeId>,
+
+    wip_edits: Vec<DomEdit<'a>>,
+
+    current_batch_scopes: HashSet<ScopeId>,
 }
 
-impl Fiber<'_> {
+impl PriorityFiber<'_> {
     fn new() -> Self {
         Self {
             pending_scopes: Vec::new(),
@@ -312,153 +404,15 @@ impl Fiber<'_> {
             edits: Vec::new(),
             started: false,
             completed: false,
+            dirty_scopes: IndexSet::new(),
+            wip_edits: Vec::new(),
+            current_batch_scopes: HashSet::new(),
         }
     }
+
+    fn has_work(&self) -> bool {
+        self.dirty_scopes.is_empty()
+            && self.wip_edits.is_empty()
+            && self.current_batch_scopes.is_empty()
+    }
 }
-
-/*
-Strategy:
-1. Check if there are any UI events in the receiver.
-2. If there are, run the listener and then mark the dirty nodes
-3. If there are dirty nodes to be progressed, do so.
-4. Poll the task queue to see if we can create more dirty scopes.
-5. Resume any current in-flight work if there is some.
-6. While the deadline is not met, progress work, periodically checking the deadline.
-
-
-How to choose work:
-- When a scope is marked as dirty, it is given a priority.
-- If a dirty scope chains (borrowed) into children, mark those as dirty as well.
-- When the work loop starts, work on the highest priority scopes first.
-- Work by priority, choosing to pause in-flight work if higher-priority work is ready.
-
-
-
-4. If there are no fibers, then wait for the next event from the receiver. Abort if the deadline is reached.
-5. While processing a fiber, periodically check if we're out of time
-6. If our deadling is reached, then commit our edits to the realdom
-7. Whenever a fiber is finished, immediately commit it. (IE so deadlines can be infinite if unsupported)
-
-
-// 1. Check if there are any events in the receiver.
-// 2. If there are, process them and create a new fiber.
-// 3. If there are no events, then choose a fiber to work on.
-// 4. If there are no fibers, then wait for the next event from the receiver. Abort if the deadline is reached.
-// 5. While processing a fiber, periodically check if we're out of time
-// 6. If our deadling is reached, then commit our edits to the realdom
-// 7. Whenever a fiber is finished, immediately commit it. (IE so deadlines can be infinite if unsupported)
-
-We slice fibers based on time. Each batch of events between frames is its own fiber. This is the simplest way
-to conceptualize what *is* or *isn't* a fiber. IE if a bunch of events occur during a time slice, they all
-get batched together as a single operation of "dirty" scopes.
-
-This approach is designed around the "diff during rIC and commit during rAF"
-
-We need to make sure to not call multiple events while the diff machine is borrowing the same scope. Because props
-and listeners hold references to hook data, it is wrong to run a scope that is already being diffed.
-*/
-
-// // 1. Drain the existing immediates.
-// //
-// // These are generated by async tasks that we never got a chance to finish.
-// // All of these get scheduled with the lowest priority.
-// while let Ok(Some(dirty_scope)) = self.shared.immediate_receiver.borrow_mut().try_next()
-// {
-//     self.scheduler
-//         .add_dirty_scope(dirty_scope, EventPriority::Low);
-// }
-
-// // 2. Drain the event queues, calling whatever listeners need to be called
-// //
-// // First, check if there's any set_states in the queue that we can mark as low priority
-// // Next, check the UI event receiver so we can mark those scopes as medium/high priority
-// // Next, work on any fibers.
-// // Once the fiber work is finished
-// while let Some(trigger) = self.scheduler.next_event() {
-//     match &trigger.event {
-//         VirtualEvent::AsyncEvent { .. } => {}
-
-//         // This suspense system works, but it's not the most elegant solution.
-//         // TODO: Replace this system
-//         VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
-//             todo!();
-//             // // Safety: this handler is the only thing that can mutate shared items at this moment in tim
-//             // let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
-
-//             // // safety: we are sure that there are no other references to the inner content of suspense hooks
-//             // let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
-
-//             // let cx = Context { scope, props: &() };
-//             // let scx = SuspendedContext { inner: cx };
-
-//             // // generate the new node!
-//             // let nodes: Option<VNode> = (&hook.callback)(scx);
-
-//             // if let Some(nodes) = nodes {
-//             //     // allocate inside the finished frame - not the WIP frame
-//             //     let nodes = scope.frames.finished_frame().bump.alloc(nodes);
-
-//             //     // push the old node's root onto the stack
-//             //     let real_id = domnode.get().ok_or(Error::NotMounted)?;
-//             //     diff_machine.edit_push_root(real_id);
-
-//             //     // push these new nodes onto the diff machines stack
-//             //     let meta = diff_machine.create_vnode(&*nodes);
-
-//             //     // replace the placeholder with the new nodes we just pushed on the stack
-//             //     diff_machine.edit_replace_with(1, meta.added_to_stack);
-//             // } else {
-//             //     log::warn!(
-//             //         "Suspense event came through, but there were no generated nodes >:(."
-//             //     );
-//             // }
-//         }
-
-//         VirtualEvent::ClipboardEvent(_)
-//         | VirtualEvent::CompositionEvent(_)
-//         | VirtualEvent::KeyboardEvent(_)
-//         | VirtualEvent::FocusEvent(_)
-//         | VirtualEvent::FormEvent(_)
-//         | VirtualEvent::SelectionEvent(_)
-//         | VirtualEvent::TouchEvent(_)
-//         | VirtualEvent::UIEvent(_)
-//         | VirtualEvent::WheelEvent(_)
-//         | VirtualEvent::MediaEvent(_)
-//         | VirtualEvent::AnimationEvent(_)
-//         | VirtualEvent::TransitionEvent(_)
-//         | VirtualEvent::ToggleEvent(_)
-//         | VirtualEvent::MouseEvent(_)
-//         | VirtualEvent::PointerEvent(_) => {
-//             if let Some(scope) = self.shared.get_scope_mut(trigger.originator) {
-//                 if let Some(element) = trigger.real_node_id {
-//                     scope.call_listener(trigger.event, element)?;
-
-//                     // Drain the immediates into the dirty scopes, setting the appropiate priorities
-//                     while let Ok(Some(dirty_scope)) =
-//                         self.shared.immediate_receiver.borrow_mut().try_next()
-//                     {
-//                         self.scheduler
-//                             .add_dirty_scope(dirty_scope, trigger.priority)
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// // todo: for these, make these methods return results where deadlinereached is an error type
-
-// // 3. Work through the fibers, and wait for any future work to be ready
-// let mut machine = DiffMachine::new_headless(&self.shared);
-// if self.scheduler.progress_work(&mut machine, &mut is_ready) {
-//     break;
-// }
-
-// // 4. Wait for any new triggers before looping again
-// if self
-//     .scheduler
-//     .wait_for_any_trigger(&mut deadline_future)
-//     .await
-// {
-//     break;
-// }

@@ -19,7 +19,7 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 use crate::innerlude::*;
-use futures_util::Future;
+use futures_util::{pin_mut, Future, FutureExt};
 use std::{
     any::{Any, TypeId},
     pin::Pin,
@@ -152,8 +152,7 @@ impl VirtualDom {
     /// Events like garabge collection, application of refs, etc are not handled by this method and can only be progressed
     /// through "run"
     ///
-    pub fn rebuild<'s>(&'s mut self) -> Result<Vec<DomEdit<'s>>> {
-        let mut edits = Vec::new();
+    pub fn rebuild<'s>(&'s mut self) -> Result<Mutations<'s>> {
         let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
         let cur_component = diff_machine
@@ -172,7 +171,7 @@ impl VirtualDom {
             );
         }
 
-        Ok(edits)
+        Ok(diff_machine.mutations)
     }
 
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
@@ -258,33 +257,53 @@ impl VirtualDom {
     /// queue is completely drained;
     async fn run_with_deadline_and_is_ready<'s>(
         &'s mut self,
-        mut deadline: impl Future<Output = ()>,
+        deadline: impl Future<Output = ()>,
         is_ready: &mut impl FnMut() -> bool,
     ) -> Result<Mutations<'s>> {
-        let mutations = Mutations::new();
+        let mut committed_mutations = Mutations::new();
+        let mut deadline = Box::pin(deadline.fuse());
 
+        // TODO:
+        // the scheduler uses a bunch of different receivers to mimic a "topic" queue system. The futures-channel implementation
+        // doesn't really have a concept of a "topic" queue, so there's a lot of noise in the hand-rolled scheduler. We should
+        // explore abstracting the scheduler into a topic-queue channel system - similar to Kafka or something similar.
         loop {
-            self.scheduler.manually_poll_channels();
+            // Internalize any pending work since the last time we ran
+            self.scheduler.manually_poll_events();
 
-            // essentially, is idle
-            if self.scheduler.is_idle() {
+            // Wait for any new events if we have nothing to do
+            if !self.scheduler.has_any_work() {
+                self.scheduler.clean_up_garbage();
                 let deadline_expired = self.scheduler.wait_for_any_trigger(&mut deadline).await;
 
                 if deadline_expired {
-                    return Ok(mutations);
+                    return Ok(committed_mutations);
                 }
             }
 
-            self.scheduler.consume_pending_events();
+            // Create work from the pending event queue
+            self.scheduler.consume_pending_events()?;
 
+            // Work through the current subtree, and commit the results when it finishes
+            // When the deadline expires, give back the work
             match self.scheduler.work_with_deadline(&mut deadline, is_ready) {
-                FiberResult::Done(mutations) => {
-                    // commit these mutations
+                FiberResult::Done(mut mutations) => {
+                    committed_mutations.extend(&mut mutations);
+
+                    /*
+                    quick return if there's no work left, so we can commit before the deadline expires
+                    When we loop over again, we'll re-wait for any new work.
+
+                    I'm not quite sure how this *should* work.
+
+                    It makes sense to try and progress the DOM faster
+                    */
+
+                    if !self.scheduler.has_any_work() {
+                        return Ok(committed_mutations);
+                    }
                 }
-                FiberResult::Interrupted => {
-                    //
-                    return Ok(mutations);
-                }
+                FiberResult::Interrupted => return Ok(committed_mutations),
             }
         }
     }
