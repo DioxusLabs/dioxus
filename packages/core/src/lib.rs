@@ -44,6 +44,7 @@ pub(crate) mod innerlude {
     pub use crate::scope::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
+    pub use crate::yield_now::*;
 
     pub type DomTree<'a> = Option<VNode<'a>>;
     pub type FC<P> = fn(Context<P>) -> DomTree;
@@ -73,3 +74,4 @@ pub mod scope;
 pub mod signals;
 pub mod util;
 pub mod virtual_dom;
+pub mod yield_now;

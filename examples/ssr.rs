@@ -5,7 +5,7 @@ use dioxus::ssr;
 
 fn main() {
     let mut vdom = VirtualDom::new(App);
-    vdom.rebuild_in_place().expect("Rebuilding failed");
+    // vdom.rebuild_in_place().expect("Rebuilding failed");
     println!("{}", ssr::render_vdom(&vdom, |c| c));
 }
 
@@ -17,3 +17,10 @@ static App: FC<()> = |cx| {
         }
     ))
 };
+
+struct MyProps<'a> {
+    text: &'a str,
+}
+fn App2<'a>(cx: Context<'a, MyProps>) -> DomTree<'a> {
+    None
+}

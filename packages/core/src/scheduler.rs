@@ -1,3 +1,26 @@
+//! Provides resumable task scheduling for Dioxus.
+//!
+//!
+//! ## Design
+//!
+//! The recent React fiber architecture rewrite enabled pauseable and resumable diffing through the development of
+//! something called a "Fiber." Fibers were created to provide a way of "saving a stack frame", making it possible to
+//! resume said stack frame at a later time, or to drop it altogether. This made it possible to
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+//!
+
 use std::any::Any;
 
 use std::any::TypeId;
@@ -11,6 +34,7 @@ use futures_util::Future;
 use futures_util::FutureExt;
 use futures_util::StreamExt;
 use indexmap::IndexSet;
+use smallvec::SmallVec;
 
 use crate::innerlude::*;
 
@@ -74,13 +98,15 @@ pub struct Scheduler {
 
     shared: SharedResources,
 
-    high_priorty: PriorityFiber<'static>,
-    medium_priority: PriorityFiber<'static>,
-    low_priority: PriorityFiber<'static>,
+    waypoints: VecDeque<Waypoint>,
+
+    high_priorty: PriortySystem,
+    medium_priority: PriortySystem,
+    low_priority: PriortySystem,
 }
 
 pub enum FiberResult<'a> {
-    Done(Mutations<'a>),
+    Done(&'a mut Mutations<'a>),
     Interrupted,
 }
 
@@ -97,10 +123,11 @@ impl Scheduler {
             garbage_scopes: HashSet::new(),
 
             current_priority: EventPriority::Low,
+            waypoints: VecDeque::new(),
 
-            high_priorty: PriorityFiber::new(),
-            medium_priority: PriorityFiber::new(),
-            low_priority: PriorityFiber::new(),
+            high_priorty: PriortySystem::new(),
+            medium_priority: PriortySystem::new(),
+            low_priority: PriortySystem::new(),
         }
     }
 
@@ -223,21 +250,26 @@ impl Scheduler {
     }
 
     pub fn has_work(&self) -> bool {
-        let has_work = self.high_priorty.has_work()
-            || self.medium_priority.has_work()
-            || self.low_priority.has_work();
-        !has_work
+        self.waypoints.len() > 0
     }
 
     pub fn has_pending_garbage(&self) -> bool {
         !self.garbage_scopes.is_empty()
     }
 
+    fn get_current_fiber<'a>(&'a mut self) -> &mut DiffMachine<'a> {
+        let fib = match self.current_priority {
+            EventPriority::High => &mut self.high_priorty,
+            EventPriority::Medium => &mut self.medium_priority,
+            EventPriority::Low => &mut self.low_priority,
+        };
+        unsafe { std::mem::transmute(fib) }
+    }
+
     /// If a the fiber finishes its works (IE needs to be committed) the scheduler will drop the dirty scope
     pub fn work_with_deadline(
         &mut self,
         mut deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
-        is_deadline_reached: &mut impl FnMut() -> bool,
     ) -> FiberResult {
         // check if we need to elevate priority
         self.current_priority = match (
@@ -250,13 +282,10 @@ impl Scheduler {
             (false, false, _) => EventPriority::Low,
         };
 
-        let mut current_fiber = match self.current_priority {
-            EventPriority::High => &mut self.high_priorty,
-            EventPriority::Medium => &mut self.medium_priority,
-            EventPriority::Low => &mut self.low_priority,
-        };
+        let mut is_ready = || -> bool { (&mut deadline).now_or_never().is_some() };
 
-        todo!()
+        // TODO: remove this unwrap - proprogate errors out
+        self.get_current_fiber().work(is_ready).unwrap()
     }
 
     // waits for a trigger, canceling early if the deadline is reached
@@ -374,45 +403,46 @@ pub struct DirtyScope {
     start_tick: u32,
 }
 
-// fibers in dioxus aren't exactly the same as React's. Our fibers are more like a "saved state" of the diffing algorithm.
-pub struct PriorityFiber<'a> {
-    // scopes that haven't been updated yet
-    pending_scopes: Vec<ScopeId>,
+/*
+A "waypoint" represents a frozen unit in time for the DiffingMachine to resume from. Whenever the deadline runs out
+while diffing, the diffing algorithm generates a Waypoint in order to easily resume from where it left off. Waypoints are
+fairly expensive to create, especially for big trees, so it's a good idea to pre-allocate them.
 
-    pending_nodes: Vec<*const VNode<'a>>,
+Waypoints are created pessimisticly, and are only generated when an "Error" state is bubbled out of the diffing machine.
+This saves us from wasting cycles book-keeping waypoints for 99% of edits where the deadline is not reached.
+*/
+pub struct Waypoint {
+    // the progenitor of this waypoint
+    root: ScopeId,
 
-    // WIP edits
-    edits: Vec<DomEdit<'a>>,
+    edits: Vec<DomEdit<'static>>,
 
-    started: bool,
+    // a saved position in the tree
+    // these indicies continue to map through the tree into children nodes.
+    // A sequence of usizes is all that is needed to represent the path to a node.
+    tree_position: SmallVec<[usize; 10]>,
 
-    // a fiber is finished when no more scopes or nodes are pending
-    completed: bool,
+    seen_scopes: HashSet<ScopeId>,
 
-    dirty_scopes: IndexSet<ScopeId>,
+    invalidate_scopes: HashSet<ScopeId>,
 
-    wip_edits: Vec<DomEdit<'a>>,
-
-    current_batch_scopes: HashSet<ScopeId>,
+    priority_level: EventPriority,
 }
 
-impl PriorityFiber<'_> {
-    fn new() -> Self {
+pub struct PriortySystem {
+    pub pending_scopes: Vec<ScopeId>,
+    pub dirty_scopes: IndexSet<ScopeId>,
+}
+
+impl PriortySystem {
+    pub fn new() -> Self {
         Self {
-            pending_scopes: Vec::new(),
-            pending_nodes: Vec::new(),
-            edits: Vec::new(),
-            started: false,
-            completed: false,
-            dirty_scopes: IndexSet::new(),
-            wip_edits: Vec::new(),
-            current_batch_scopes: HashSet::new(),
+            pending_scopes: Default::default(),
+            dirty_scopes: Default::default(),
         }
     }
 
     fn has_work(&self) -> bool {
-        self.dirty_scopes.is_empty()
-            && self.wip_edits.is_empty()
-            && self.current_batch_scopes.is_empty()
+        self.pending_scopes.len() > 0 || self.dirty_scopes.len() > 0
     }
 }

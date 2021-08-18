@@ -178,11 +178,12 @@ impl VirtualDom {
     ///
     /// This method will not wait for any suspended nodes to complete.
     pub fn run_immediate<'s>(&'s mut self) -> Result<Mutations<'s>> {
-        use futures_util::FutureExt;
-        let mut is_ready = || false;
-        self.run_with_deadline_and_is_ready(futures_util::future::ready(()), &mut is_ready)
-            .now_or_never()
-            .expect("this future will always resolve immediately")
+        todo!()
+        // use futures_util::FutureExt;
+        // let mut is_ready = || false;
+        // self.run_with_deadline(futures_util::future::ready(()), &mut is_ready)
+        //     .now_or_never()
+        //     .expect("this future will always resolve immediately")
     }
 
     /// Runs the virtualdom with no time limit.
@@ -241,25 +242,6 @@ impl VirtualDom {
         &'s mut self,
         deadline: impl Future<Output = ()>,
     ) -> Result<Mutations<'s>> {
-        use futures_util::FutureExt;
-
-        let deadline_future = deadline.shared();
-        let mut is_ready_deadline = deadline_future.clone();
-        let mut is_ready = || -> bool { (&mut is_ready_deadline).now_or_never().is_some() };
-
-        self.run_with_deadline_and_is_ready(deadline_future, &mut is_ready)
-            .await
-    }
-
-    /// Runs the virtualdom with a deadline and a custom "check" function.
-    ///
-    /// Designed this way so "run_immediate" can re-use all the same rendering logic as "run_with_deadline" but the work
-    /// queue is completely drained;
-    async fn run_with_deadline_and_is_ready<'s>(
-        &'s mut self,
-        deadline: impl Future<Output = ()>,
-        is_ready: &mut impl FnMut() -> bool,
-    ) -> Result<Mutations<'s>> {
         let mut committed_mutations = Mutations::new();
         let mut deadline = Box::pin(deadline.fuse());
 
@@ -286,7 +268,7 @@ impl VirtualDom {
 
             // Work through the current subtree, and commit the results when it finishes
             // When the deadline expires, give back the work
-            match self.scheduler.work_with_deadline(&mut deadline, is_ready) {
+            match self.scheduler.work_with_deadline(&mut deadline) {
                 FiberResult::Done(mut mutations) => {
                     committed_mutations.extend(&mut mutations);
 

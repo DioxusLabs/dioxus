@@ -108,9 +108,9 @@ pub async fn run_with_props<T: Properties + 'static>(
     let tasks = dom.get_event_sender();
 
     // initialize the virtualdom first
-    if cfg.hydrate {
-        dom.rebuild_in_place()?;
-    }
+    // if cfg.hydrate {
+    //     dom.rebuild_in_place()?;
+    // }
 
     let mut websys_dom = dom::WebsysDom::new(
         root_el,

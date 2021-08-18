@@ -1,9 +1,12 @@
-//! This module contains the stateful DiffMachine and all methods to diff VNodes, their properties, and their children.
-//! The DiffMachine calculates the diffs between the old and new frames, updates the new nodes, and modifies the real dom.
+//! This module contains the stateful PriorityFiber and all methods to diff VNodes, their properties, and their children.
+//!
+//! The [`PriorityFiber`] calculates the diffs between the old and new frames, updates the new nodes, and generates a set
+//! of mutations for the RealDom to apply.
 //!
 //! ## Notice:
 //! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
-//! Components, Fragments, Suspense, SubTree memoization, and additional batching operations.
+//! Components, Fragments, Suspense, SubTree memoization, incremental diffing, cancelation, NodeRefs, and additional
+//! batching operations.
 //!
 //! ## Implementation Details:
 //!
@@ -11,12 +14,13 @@
 //! --------------------
 //! All nodes are addressed by their IDs. The RealDom provides an imperative interface for making changes to these nodes.
 //! We don't necessarily require that DOM changes happen instnatly during the diffing process, so the implementor may choose
-//! to batch nodes if it is more performant for their application. The expectation is that renderers use a Slotmap for nodes
-//! whose keys can be converted to u64 on FFI boundaries.
+//! to batch nodes if it is more performant for their application. The element IDs are indicies into the internal element
+//! array. The expectation is that implemenetors will use the ID as an index into a Vec of real nodes, allowing for passive
+//! garbage collection as the VirtualDOM replaces old nodes.
 //!
-//! When new nodes are created through `render`, they won't know which real node they correspond to. During diffing, we
-//! always make sure to copy over the ID. If we don't do this properly, the ElementId will be populated incorrectly and
-//! brick the user's page.
+//! When new vnodes are created through `cx.render`, they won't know which real node they correspond to. During diffing,
+//! we always make sure to copy over the ID. If we don't do this properly, the ElementId will be populated incorrectly
+//! and brick the user's page.
 //!
 //! ### Fragment Support
 //!
@@ -25,6 +29,9 @@
 //! fragment to be replaced with when it is no longer empty. This is guaranteed by logic in the NodeFactory - it is
 //! impossible to craft a fragment with 0 elements - they must always have at least a single placeholder element. This is
 //! slightly inefficient, but represents a such an uncommon use case that it is not worth optimizing.
+//!
+//! Other implementations either don't support fragments or use a "child + sibling" pattern to represent them. Our code is
+//! vastly simpler and more performant when we can just create a placeholder element while the fragment has no children.
 //!
 //! ## Subtree Memoization
 //! -----------------------
@@ -35,13 +42,15 @@
 //! rsx!( div { class: "hello world", "this node is entirely static" } )
 //! ```
 //! Because the subtrees won't be diffed, their "real node" data will be stale (invalid), so its up to the reconciler to
-//! track nodes created in a scope and clean up all relevant data. Support for this is currently WIP
+//! track nodes created in a scope and clean up all relevant data. Support for this is currently WIP and depends on comp-time
+//! hashing of the subtree from the rsx! macro. We do a very limited form of static analysis via static string pointers as
+//! a way of short-circuiting the most expensive checks.
 //!
 //! ## Bloom Filter and Heuristics
 //! ------------------------------
 //! For all components, we employ some basic heuristics to speed up allocations and pre-size bump arenas. The heuristics are
-//! currently very rough, but will get better as time goes on. For FFI, we recommend using a bloom filter to cache strings.
-//!
+//! currently very rough, but will get better as time goes on. The information currently tracked includes the size of a
+//! bump arena after first render, the number of hooks, and the number of nodes in the tree.
 //!
 //! ## Garbage Collection
 //! ---------------------
@@ -53,11 +62,6 @@
 //! so the client only needs to maintain a simple list of nodes. By default, Dioxus will not manually clean up old nodes
 //! for the client. As new nodes are created, old nodes will be over-written.
 //!
-//! HEADS-UP:
-//!     For now, deferred garabge collection is disabled. The code-paths are almost wired up, but it's quite complex to
-//!     get working safely and efficiently. For now, garabge is collected immediately during diffing. This adds extra
-//!     overhead, but is faster to implement in the short term.
-//!
 //! Further Reading and Thoughts
 //! ----------------------------
 //! There are more ways of increasing diff performance here that are currently not implemented.
@@ -67,13 +71,16 @@
 use crate::{arena::SharedResources, innerlude::*};
 use futures_util::Future;
 use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
+use indexmap::IndexSet;
 use smallvec::{smallvec, SmallVec};
 
-use std::{any::Any, cell::Cell, cmp::Ordering, marker::PhantomData, pin::Pin};
+use std::{
+    any::Any, cell::Cell, cmp::Ordering, collections::HashSet, marker::PhantomData, pin::Pin,
+};
 use DomEdit::*;
 
-pub struct DiffMachine<'r, 'bump> {
-    pub vdom: &'bump SharedResources,
+pub struct DiffMachine<'bump> {
+    vdom: &'bump SharedResources,
 
     pub mutations: Mutations<'bump>,
 
@@ -81,14 +88,10 @@ pub struct DiffMachine<'r, 'bump> {
 
     pub diffed: FxHashSet<ScopeId>,
 
-    // will be used later for garbage collection
-    // we check every seen node and then schedule its eventual deletion
     pub seen_scopes: FxHashSet<ScopeId>,
-
-    _r: PhantomData<&'r ()>,
 }
 
-impl<'r, 'bump> DiffMachine<'r, 'bump> {
+impl<'bump> DiffMachine<'bump> {
     pub(crate) fn new(
         edits: Mutations<'bump>,
         cur_scope: ScopeId,
@@ -100,7 +103,6 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
             vdom: shared,
             diffed: FxHashSet::default(),
             seen_scopes: FxHashSet::default(),
-            _r: PhantomData,
         }
     }
 
@@ -115,12 +117,17 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
             vdom: shared,
             diffed: FxHashSet::default(),
             seen_scopes: FxHashSet::default(),
-            _r: PhantomData,
         }
     }
 
+    // make incremental progress on the current task
+    pub fn work(&mut self, is_ready: impl FnMut() -> bool) -> Result<FiberResult> {
+        todo!()
+        // Ok(FiberResult::D)
+    }
+
     //
-    pub fn diff_scope(&mut self, id: ScopeId) -> Result<()> {
+    pub async fn diff_scope(&mut self, id: ScopeId) -> Result<()> {
         let component = self.get_scope_mut(&id).ok_or_else(|| Error::NotMounted)?;
         let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
         self.diff_node(old, new);
@@ -133,7 +140,11 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     // the real stack should be what it is coming in and out of this function (ideally empty)
     //
     // each function call assumes the stack is fresh (empty).
-    pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
+    pub async fn diff_node(
+        &mut self,
+        old_node: &'bump VNode<'bump>,
+        new_node: &'bump VNode<'bump>,
+    ) {
         match (&old_node.kind, &new_node.kind) {
             // Handle the "sane" cases first.
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
@@ -264,7 +275,8 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                         false => {
                             // the props are different...
                             scope.run_scope().unwrap();
-                            self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
+                            self.diff_node(scope.frames.wip_head(), scope.frames.fin_head())
+                                .await;
                         }
                     }
 
@@ -296,7 +308,7 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                 // This is the case where options or direct vnodes might be used.
                 // In this case, it's faster to just skip ahead to their diff
                 if old.children.len() == 1 && new.children.len() == 1 {
-                    self.diff_node(&old.children[0], &new.children[0]);
+                    self.diff_node(&old.children[0], &new.children[0]).await;
                     return;
                 }
 
@@ -1059,7 +1071,11 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
+    async fn diff_non_keyed_children(
+        &mut self,
+        old: &'bump [VNode<'bump>],
+        new: &'bump [VNode<'bump>],
+    ) {
         // Handled these cases in `diff_children` before calling this function.
         //
         debug_assert!(!new.is_empty());
@@ -1099,15 +1115,15 @@ impl<'r, 'bump> DiffMachine<'r, 'bump> {
                 self.edit_pop();
 
                 // diff the rest
-                new.iter()
-                    .zip(old.iter())
-                    .for_each(|(new_child, old_child)| self.diff_node(old_child, new_child));
+                for (new_child, old_child) in new.iter().zip(old.iter()) {
+                    self.diff_node(old_child, new_child).await
+                }
             }
 
             // old.len == new.len -> no nodes added/removed, but perhaps changed
             Ordering::Equal => {
                 for (new_child, old_child) in new.iter().zip(old.iter()) {
-                    self.diff_node(old_child, new_child);
+                    self.diff_node(old_child, new_child).await;
                 }
             }
         }
