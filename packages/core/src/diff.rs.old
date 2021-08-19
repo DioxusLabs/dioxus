@@ -79,21 +79,12 @@ use std::{
 };
 use DomEdit::*;
 
-/// Our DiffMachine is an iterative tree differ.
-///
-/// It uses techniques of a register-based Turing Machines to allow pausing and restarting of the diff algorithm. This
-/// was origially implemented using recursive techniques, but Rust lacks the abilty to call async functions recursively,
-/// meaning we could not "pause" the diffing algorithm.
-///
-/// Instead, we use a traditional stack machine approach to diff and create new nodes.
 pub struct DiffMachine<'bump> {
     vdom: &'bump SharedResources,
 
     pub mutations: Mutations<'bump>,
 
-    pub nodes_created_stack: SmallVec<[usize; 10]>,
-
-    pub node_stack: SmallVec<[DiffInstruction<'bump>; 10]>,
+    pub node_stack: SmallVec<[SearchNode<'bump>; 10]>,
 
     pub scope_stack: SmallVec<[ScopeId; 5]>,
 
@@ -101,20 +92,14 @@ pub struct DiffMachine<'bump> {
 
     pub seen_scopes: FxHashSet<ScopeId>,
 }
-pub enum DiffInstruction<'a> {
-    DiffNode {
+enum SearchNode<'a> {
+    Node {
         old: &'a VNode<'a>,
         new: &'a VNode<'a>,
-        progress: usize,
     },
-
-    Append {},
-    Replace {
-        with: usize,
-    },
-
-    Create {
-        node: &'a VNode<'a>,
+    NodeList {
+        old: &'a [VNode<'a>],
+        node: &'a [VNode<'a>],
     },
 }
 
@@ -126,7 +111,6 @@ impl<'bump> DiffMachine<'bump> {
     ) -> Self {
         Self {
             node_stack: smallvec![],
-            nodes_created_stack: smallvec![],
             mutations: edits,
             scope_stack: smallvec![cur_scope],
             vdom: shared,
@@ -140,15 +124,14 @@ impl<'bump> DiffMachine<'bump> {
     ///
     /// This will PANIC if any component elements are passed in.
     pub fn new_headless(shared: &'bump SharedResources) -> Self {
-        todo!()
-        // Self {
-        //     node_stack: smallvec![],
-        //     mutations: Mutations::new(),
-        //     scope_stack: smallvec![ScopeId(0)],
-        //     vdom: shared,
-        //     diffed: FxHashSet::default(),
-        //     seen_scopes: FxHashSet::default(),
-        // }
+        Self {
+            node_stack: smallvec![],
+            mutations: Mutations::new(),
+            scope_stack: smallvec![ScopeId(0)],
+            vdom: shared,
+            diffed: FxHashSet::default(),
+            seen_scopes: FxHashSet::default(),
+        }
     }
 
     //
@@ -169,349 +152,25 @@ impl<'bump> DiffMachine<'bump> {
     ///
     ///
     pub async fn work(&mut self) -> Result<()> {
-        // todo: don't move the reused instructions around
-        while let Some(mut make) = self.node_stack.pop() {
-            match &mut make {
-                DiffInstruction::DiffNode { old, new, progress } => {
+        //
+        while let Some(search) = self.node_stack.last_mut() {
+            // Prevent our task from blocking permanently
+            yield_now().await;
+
+            match search {
+                SearchNode::Node { old, new } => {
                     //
+                    // self.diff_node(old, new);
                 }
 
-                DiffInstruction::Append {} => {
-                    let many = self.nodes_created_stack.pop().unwrap();
-                    self.edit_append_children(many as u32);
-                }
-
-                DiffInstruction::Replace { with } => {
-                    let many = self.nodes_created_stack.pop().unwrap();
-                    self.edit_replace_with(*with as u32, many as u32);
-                }
-
-                DiffInstruction::Create { node, .. } => {
-                    match &node.kind {
-                        VNodeKind::Text(text) => {
-                            let real_id = self.vdom.reserve_node();
-                            self.edit_create_text_node(text.text, real_id);
-                            text.dom_id.set(Some(real_id));
-                            *self.nodes_created_stack.last_mut().unwrap() += 1;
-                        }
-                        VNodeKind::Suspended(suspended) => {
-                            let real_id = self.vdom.reserve_node();
-                            self.edit_create_placeholder(real_id);
-                            suspended.node.set(Some(real_id));
-                            *self.nodes_created_stack.last_mut().unwrap() += 1;
-                        }
-                        VNodeKind::Anchor(anchor) => {
-                            let real_id = self.vdom.reserve_node();
-                            self.edit_create_placeholder(real_id);
-                            anchor.dom_id.set(Some(real_id));
-                            *self.nodes_created_stack.last_mut().unwrap() += 1;
-                        }
-
-                        VNodeKind::Element(el) => {
-                            let VElement {
-                                tag_name,
-                                listeners,
-                                attributes,
-                                children,
-                                namespace,
-                                static_attrs: _,
-                                static_children: _,
-                                static_listeners: _,
-                                dom_id,
-                            } = el;
-
-                            let real_id = self.vdom.reserve_node();
-                            self.edit_create_element(tag_name, *namespace, real_id);
-                            dom_id.set(Some(real_id));
-
-                            let cur_scope = self.current_scope().unwrap();
-
-                            listeners.iter().for_each(|listener| {
-                                self.fix_listener(listener);
-                                listener.mounted_node.set(Some(real_id));
-                                self.edit_new_event_listener(listener, cur_scope.clone());
-
-                                // if the node has an event listener, then it must be visited ?
-                            });
-
-                            for attr in *attributes {
-                                self.edit_set_attribute(attr);
-                            }
-
-                            // TODO: the append child edit
-
-                            *self.nodes_created_stack.last_mut().unwrap() += 1;
-
-                            // push every child onto the stack
-                            self.nodes_created_stack.push(0);
-                            for child in *children {
-                                self.node_stack
-                                    .push(DiffInstruction::Create { node: child })
-                            }
-                        }
-
-                        VNodeKind::Fragment(frag) => {
-                            for node in frag.children {
-                                self.node_stack.push(DiffInstruction::Create { node })
-                            }
-                        }
-
-                        VNodeKind::Component(_) => {
-                            //
-                        }
-                    }
+                SearchNode::NodeList { old, node } => {
+                    //
+                    todo!()
                 }
             }
         }
 
         Ok(())
-    }
-
-    /// Create the new node, pushing instructions on our instruction stack to create any further children
-    ///
-    ///
-    pub fn create_iterative(&mut self, node: &'bump VNode<'bump>) {
-        match &node.kind {
-            // singles
-            // update the parent
-            VNodeKind::Text(text) => {
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_text_node(text.text, real_id);
-                text.dom_id.set(Some(real_id));
-                *self.nodes_created_stack.last_mut().unwrap() += 1;
-            }
-            VNodeKind::Suspended(suspended) => {
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_placeholder(real_id);
-                suspended.node.set(Some(real_id));
-                *self.nodes_created_stack.last_mut().unwrap() += 1;
-            }
-            VNodeKind::Anchor(anchor) => {
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_placeholder(real_id);
-                anchor.dom_id.set(Some(real_id));
-                *self.nodes_created_stack.last_mut().unwrap() += 1;
-            }
-
-            VNodeKind::Element(el) => {
-                //
-            }
-            VNodeKind::Fragment(frag) => {
-                //
-            }
-            VNodeKind::Component(comp) => {
-                //
-            }
-        }
-    }
-
-    pub fn diff_iterative(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
-        match (&old_node.kind, &new_node.kind) {
-            // Handle the "sane" cases first.
-            // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
-            // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
-            (VNodeKind::Text(old), VNodeKind::Text(new)) => {
-                let root = old_node.direct_id();
-
-                if old.text != new.text {
-                    self.edit_push_root(root);
-                    self.edit_set_text(new.text);
-                    self.edit_pop();
-                }
-
-                new.dom_id.set(Some(root));
-            }
-
-            (VNodeKind::Element(old), VNodeKind::Element(new)) => {
-                let root = old_node.direct_id();
-
-                // If the element type is completely different, the element needs to be re-rendered completely
-                // This is an optimization React makes due to how users structure their code
-                //
-                // This case is rather rare (typically only in non-keyed lists)
-                if new.tag_name != old.tag_name || new.namespace != old.namespace {
-                    self.replace_node_with_node(root, old_node, new_node);
-                    return;
-                }
-
-                new.dom_id.set(Some(root));
-
-                // Don't push the root if we don't have to
-                let mut has_comitted = false;
-                let mut please_commit = |edits: &mut Vec<DomEdit>| {
-                    if !has_comitted {
-                        has_comitted = true;
-                        edits.push(PushRoot { id: root.as_u64() });
-                    }
-                };
-
-                // Diff Attributes
-                //
-                // It's extraordinarily rare to have the number/order of attributes change
-                // In these cases, we just completely erase the old set and make a new set
-                //
-                // TODO: take a more efficient path than this
-                if old.attributes.len() == new.attributes.len() {
-                    for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
-                        if old_attr.value != new_attr.value {
-                            please_commit(&mut self.mutations.edits);
-                            self.edit_set_attribute(new_attr);
-                        }
-                    }
-                } else {
-                    // TODO: provide some sort of report on how "good" the diffing was
-                    please_commit(&mut self.mutations.edits);
-                    for attribute in old.attributes {
-                        self.edit_remove_attribute(attribute);
-                    }
-                    for attribute in new.attributes {
-                        self.edit_set_attribute(attribute)
-                    }
-                }
-
-                // Diff listeners
-                //
-                // It's extraordinarily rare to have the number/order of listeners change
-                // In the cases where the listeners change, we completely wipe the data attributes and add new ones
-                //
-                // We also need to make sure that all listeners are properly attached to the parent scope (fix_listener)
-                //
-                // TODO: take a more efficient path than this
-                let cur_scope: ScopeId = self.scope_stack.last().unwrap().clone();
-                if old.listeners.len() == new.listeners.len() {
-                    for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
-                        if old_l.event != new_l.event {
-                            please_commit(&mut self.mutations.edits);
-                            self.edit_remove_event_listener(old_l.event);
-                            self.edit_new_event_listener(new_l, cur_scope);
-                        }
-                        new_l.mounted_node.set(old_l.mounted_node.get());
-                        self.fix_listener(new_l);
-                    }
-                } else {
-                    please_commit(&mut self.mutations.edits);
-                    for listener in old.listeners {
-                        self.edit_remove_event_listener(listener.event);
-                    }
-                    for listener in new.listeners {
-                        listener.mounted_node.set(Some(root));
-                        self.edit_new_event_listener(listener, cur_scope);
-
-                        // Make sure the listener gets attached to the scope list
-                        self.fix_listener(listener);
-                    }
-                }
-
-                if has_comitted {
-                    self.edit_pop();
-                }
-
-                self.diff_children(old.children, new.children);
-            }
-
-            (VNodeKind::Component(old), VNodeKind::Component(new)) => {
-                let scope_addr = old.ass_scope.get().unwrap();
-
-                // Make sure we're dealing with the same component (by function pointer)
-                if old.user_fc == new.user_fc {
-                    //
-                    self.scope_stack.push(scope_addr);
-
-                    // Make sure the new component vnode is referencing the right scope id
-                    new.ass_scope.set(Some(scope_addr));
-
-                    // make sure the component's caller function is up to date
-                    let scope = self.get_scope_mut(&scope_addr).unwrap();
-
-                    scope
-                        .update_scope_dependencies(new.caller.clone(), ScopeChildren(new.children));
-
-                    // React doesn't automatically memoize, but we do.
-                    let compare = old.comparator.unwrap();
-
-                    match compare(new) {
-                        true => {
-                            // the props are the same...
-                        }
-                        false => {
-                            // the props are different...
-                            scope.run_scope().unwrap();
-                            self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
-                        }
-                    }
-
-                    self.scope_stack.pop();
-
-                    self.seen_scopes.insert(scope_addr);
-                } else {
-                    let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
-                    let first = old_iter
-                        .next()
-                        .expect("Components should generate a placeholder root");
-
-                    // remove any leftovers
-                    for to_remove in old_iter {
-                        self.edit_push_root(to_remove.direct_id());
-                        self.edit_remove();
-                    }
-
-                    // seems like we could combine this into a single instruction....
-                    self.replace_node_with_node(first.direct_id(), old_node, new_node);
-
-                    // Wipe the old one and plant the new one
-                    let old_scope = old.ass_scope.get().unwrap();
-                    self.destroy_scopes(old_scope);
-                }
-            }
-
-            (VNodeKind::Fragment(old), VNodeKind::Fragment(new)) => {
-                // This is the case where options or direct vnodes might be used.
-                // In this case, it's faster to just skip ahead to their diff
-                if old.children.len() == 1 && new.children.len() == 1 {
-                    self.diff_node(&old.children[0], &new.children[0]);
-                    return;
-                }
-
-                self.diff_children(old.children, new.children);
-            }
-
-            (VNodeKind::Anchor(old), VNodeKind::Anchor(new)) => {
-                new.dom_id.set(old.dom_id.get());
-            }
-
-            // The strategy here is to pick the first possible node from the previous set and use that as our replace with root
-            //
-            // We also walk the "real node" list to make sure all latent roots are claened up
-            // This covers the case any time a fragment or component shows up with pretty much anything else
-            //
-            // This likely isn't the fastest way to go about replacing one node with a virtual node, but the "insane" cases
-            // are pretty rare.  IE replacing a list (component or fragment) with a single node.
-            (
-                VNodeKind::Component(_)
-                | VNodeKind::Fragment(_)
-                | VNodeKind::Text(_)
-                | VNodeKind::Element(_)
-                | VNodeKind::Anchor(_),
-                VNodeKind::Component(_)
-                | VNodeKind::Fragment(_)
-                | VNodeKind::Text(_)
-                | VNodeKind::Element(_)
-                | VNodeKind::Anchor(_),
-            ) => {
-                self.replace_and_create_many_with_many([old_node], [new_node]);
-            }
-
-            // TODO
-            (VNodeKind::Suspended(old), new) => {
-                //
-                self.replace_and_create_many_with_many([old_node], [new_node]);
-            }
-            // a node that was once real is now suspended
-            (old, VNodeKind::Suspended(_)) => {
-                //
-                self.replace_and_create_many_with_many([old_node], [new_node]);
-            }
-        }
     }
 
     // Diff the `old` node with the `new` node. Emits instructions to modify a
@@ -1491,14 +1150,14 @@ impl<'bump> DiffMachine<'bump> {
 
                 // diff the rest
                 for (new_child, old_child) in new.iter().zip(old.iter()) {
-                    self.diff_node(old_child, new_child)
+                    self.diff_node(old_child, new_child).await
                 }
             }
 
             // old.len == new.len -> no nodes added/removed, but perhaps changed
             Ordering::Equal => {
                 for (new_child, old_child) in new.iter().zip(old.iter()) {
-                    self.diff_node(old_child, new_child);
+                    self.diff_node(old_child, new_child).await;
                 }
             }
         }

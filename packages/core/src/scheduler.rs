@@ -285,7 +285,8 @@ impl Scheduler {
         let mut is_ready = || -> bool { (&mut deadline).now_or_never().is_some() };
 
         // TODO: remove this unwrap - proprogate errors out
-        self.get_current_fiber().work(is_ready).unwrap()
+        // self.get_current_fiber().work(is_ready).unwrap()
+        todo!()
     }
 
     // waits for a trigger, canceling early if the deadline is reached
