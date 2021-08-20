@@ -159,17 +159,19 @@ impl VirtualDom {
             .get_scope_mut(&self.base_scope)
             .expect("The base scope should never be moved");
 
-        // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope().is_ok() {
-            let meta = diff_machine.create_vnode(cur_component.frames.fin_head());
-            diff_machine.edit_append_children(meta.added_to_stack);
-        } else {
-            // todo: should this be a hard error?
-            log::warn!(
-                "Component failed to run succesfully during rebuild.
-                This does not result in a failed rebuild, but indicates a logic failure within your app."
-            );
-        }
+        todo!();
+
+        // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
+        // if cur_component.run_scope().is_ok() {
+        //     let meta = diff_machine.create_vnode(cur_component.frames.fin_head());
+        //     diff_machine.edit_append_children(meta.added_to_stack);
+        // } else {
+        //     // todo: should this be a hard error?
+        //     log::warn!(
+        //         "Component failed to run succesfully during rebuild.
+        //         This does not result in a failed rebuild, but indicates a logic failure within your app."
+        //     );
+        // }
 
         Ok(diff_machine.mutations)
     }

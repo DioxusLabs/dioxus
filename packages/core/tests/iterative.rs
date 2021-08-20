@@ -45,3 +45,13 @@ async fn test_iterative_diff() {
     let mut machine = DiffMachine::new_headless(&shared);
     let a = machine.work().await.unwrap();
 }
+
+#[async_std::test]
+async fn websys_loop() {
+    ///loop {
+    ///    let deadline = request_idle_callback().await;
+    ///    let edits = dom.work(deadline);
+    ///    request_animation_frame().await;
+    ///    apply(edits);
+    ///}
+}
