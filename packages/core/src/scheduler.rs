@@ -354,31 +354,31 @@ impl Scheduler {
             }
 
             while let Some(node) = garbage_list.pop() {
-                match &node.kind {
-                    VNodeKind::Text(_) => {
+                match &node {
+                    VNode::Text(_) => {
                         self.shared.collect_garbage(node.direct_id());
                     }
-                    VNodeKind::Anchor(_) => {
+                    VNode::Anchor(_) => {
                         self.shared.collect_garbage(node.direct_id());
                     }
-                    VNodeKind::Suspended(_) => {
+                    VNode::Suspended(_) => {
                         self.shared.collect_garbage(node.direct_id());
                     }
 
-                    VNodeKind::Element(el) => {
+                    VNode::Element(el) => {
                         self.shared.collect_garbage(node.direct_id());
                         for child in el.children {
                             garbage_list.push(child);
                         }
                     }
 
-                    VNodeKind::Fragment(frag) => {
+                    VNode::Fragment(frag) => {
                         for child in frag.children {
                             garbage_list.push(child);
                         }
                     }
 
-                    VNodeKind::Component(comp) => {
+                    VNode::Component(comp) => {
                         // TODO: run the hook destructors and then even delete the scope
 
                         let scope_id = comp.ass_scope.get().unwrap();

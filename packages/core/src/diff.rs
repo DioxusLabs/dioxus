@@ -85,7 +85,9 @@ use DomEdit::*;
 /// was origially implemented using recursive techniques, but Rust lacks the abilty to call async functions recursively,
 /// meaning we could not "pause" the diffing algorithm.
 ///
-/// Instead, we use a traditional stack machine approach to diff and create new nodes.
+/// Instead, we use a traditional stack machine approach to diff and create new nodes. The diff algorithm periodically
+/// calls "yield_now" which allows the machine to pause and return control to the caller. The caller can then wait for
+/// the next period of idle time, preventing our diff algorithm from blocking the maint thread.
 pub struct DiffMachine<'bump> {
     vdom: &'bump SharedResources,
 
@@ -187,27 +189,27 @@ impl<'bump> DiffMachine<'bump> {
                 }
 
                 DiffInstruction::Create { node, .. } => {
-                    match &node.kind {
-                        VNodeKind::Text(text) => {
+                    match &node {
+                        VNode::Text(text) => {
                             let real_id = self.vdom.reserve_node();
                             self.edit_create_text_node(text.text, real_id);
                             text.dom_id.set(Some(real_id));
                             *self.nodes_created_stack.last_mut().unwrap() += 1;
                         }
-                        VNodeKind::Suspended(suspended) => {
+                        VNode::Suspended(suspended) => {
                             let real_id = self.vdom.reserve_node();
                             self.edit_create_placeholder(real_id);
                             suspended.node.set(Some(real_id));
                             *self.nodes_created_stack.last_mut().unwrap() += 1;
                         }
-                        VNodeKind::Anchor(anchor) => {
+                        VNode::Anchor(anchor) => {
                             let real_id = self.vdom.reserve_node();
                             self.edit_create_placeholder(real_id);
                             anchor.dom_id.set(Some(real_id));
                             *self.nodes_created_stack.last_mut().unwrap() += 1;
                         }
 
-                        VNodeKind::Element(el) => {
+                        VNode::Element(el) => {
                             let VElement {
                                 tag_name,
                                 listeners,
@@ -218,6 +220,7 @@ impl<'bump> DiffMachine<'bump> {
                                 static_children: _,
                                 static_listeners: _,
                                 dom_id,
+                                key,
                             } = el;
 
                             let real_id = self.vdom.reserve_node();
@@ -250,13 +253,13 @@ impl<'bump> DiffMachine<'bump> {
                             }
                         }
 
-                        VNodeKind::Fragment(frag) => {
+                        VNode::Fragment(frag) => {
                             for node in frag.children {
                                 self.node_stack.push(DiffInstruction::Create { node })
                             }
                         }
 
-                        VNodeKind::Component(_) => {
+                        VNode::Component(_) => {
                             //
                         }
                     }
@@ -267,50 +270,52 @@ impl<'bump> DiffMachine<'bump> {
         Ok(())
     }
 
+    fn create_text_node(&mut self) {}
+
     /// Create the new node, pushing instructions on our instruction stack to create any further children
     ///
     ///
     pub fn create_iterative(&mut self, node: &'bump VNode<'bump>) {
-        match &node.kind {
+        match &node {
             // singles
             // update the parent
-            VNodeKind::Text(text) => {
+            VNode::Text(text) => {
                 let real_id = self.vdom.reserve_node();
                 self.edit_create_text_node(text.text, real_id);
                 text.dom_id.set(Some(real_id));
                 *self.nodes_created_stack.last_mut().unwrap() += 1;
             }
-            VNodeKind::Suspended(suspended) => {
+            VNode::Suspended(suspended) => {
                 let real_id = self.vdom.reserve_node();
                 self.edit_create_placeholder(real_id);
                 suspended.node.set(Some(real_id));
                 *self.nodes_created_stack.last_mut().unwrap() += 1;
             }
-            VNodeKind::Anchor(anchor) => {
+            VNode::Anchor(anchor) => {
                 let real_id = self.vdom.reserve_node();
                 self.edit_create_placeholder(real_id);
                 anchor.dom_id.set(Some(real_id));
                 *self.nodes_created_stack.last_mut().unwrap() += 1;
             }
 
-            VNodeKind::Element(el) => {
+            VNode::Element(el) => {
                 //
             }
-            VNodeKind::Fragment(frag) => {
+            VNode::Fragment(frag) => {
                 //
             }
-            VNodeKind::Component(comp) => {
+            VNode::Component(comp) => {
                 //
             }
         }
     }
 
     pub fn diff_iterative(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
-        match (&old_node.kind, &new_node.kind) {
+        match (&old_node, &new_node) {
             // Handle the "sane" cases first.
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
             // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
-            (VNodeKind::Text(old), VNodeKind::Text(new)) => {
+            (VNode::Text(old), VNode::Text(new)) => {
                 let root = old_node.direct_id();
 
                 if old.text != new.text {
@@ -322,7 +327,7 @@ impl<'bump> DiffMachine<'bump> {
                 new.dom_id.set(Some(root));
             }
 
-            (VNodeKind::Element(old), VNodeKind::Element(new)) => {
+            (VNode::Element(old), VNode::Element(new)) => {
                 let root = old_node.direct_id();
 
                 // If the element type is completely different, the element needs to be re-rendered completely
@@ -409,7 +414,7 @@ impl<'bump> DiffMachine<'bump> {
                 self.diff_children(old.children, new.children);
             }
 
-            (VNodeKind::Component(old), VNodeKind::Component(new)) => {
+            (VNode::Component(old), VNode::Component(new)) => {
                 let scope_addr = old.ass_scope.get().unwrap();
 
                 // Make sure we're dealing with the same component (by function pointer)
@@ -464,7 +469,7 @@ impl<'bump> DiffMachine<'bump> {
                 }
             }
 
-            (VNodeKind::Fragment(old), VNodeKind::Fragment(new)) => {
+            (VNode::Fragment(old), VNode::Fragment(new)) => {
                 // This is the case where options or direct vnodes might be used.
                 // In this case, it's faster to just skip ahead to their diff
                 if old.children.len() == 1 && new.children.len() == 1 {
@@ -475,7 +480,7 @@ impl<'bump> DiffMachine<'bump> {
                 self.diff_children(old.children, new.children);
             }
 
-            (VNodeKind::Anchor(old), VNodeKind::Anchor(new)) => {
+            (VNode::Anchor(old), VNode::Anchor(new)) => {
                 new.dom_id.set(old.dom_id.get());
             }
 
@@ -487,27 +492,27 @@ impl<'bump> DiffMachine<'bump> {
             // This likely isn't the fastest way to go about replacing one node with a virtual node, but the "insane" cases
             // are pretty rare.  IE replacing a list (component or fragment) with a single node.
             (
-                VNodeKind::Component(_)
-                | VNodeKind::Fragment(_)
-                | VNodeKind::Text(_)
-                | VNodeKind::Element(_)
-                | VNodeKind::Anchor(_),
-                VNodeKind::Component(_)
-                | VNodeKind::Fragment(_)
-                | VNodeKind::Text(_)
-                | VNodeKind::Element(_)
-                | VNodeKind::Anchor(_),
+                VNode::Component(_)
+                | VNode::Fragment(_)
+                | VNode::Text(_)
+                | VNode::Element(_)
+                | VNode::Anchor(_),
+                VNode::Component(_)
+                | VNode::Fragment(_)
+                | VNode::Text(_)
+                | VNode::Element(_)
+                | VNode::Anchor(_),
             ) => {
                 self.replace_and_create_many_with_many([old_node], [new_node]);
             }
 
             // TODO
-            (VNodeKind::Suspended(old), new) => {
+            (VNode::Suspended(old), new) => {
                 //
                 self.replace_and_create_many_with_many([old_node], [new_node]);
             }
             // a node that was once real is now suspended
-            (old, VNodeKind::Suspended(_)) => {
+            (old, VNode::Suspended(_)) => {
                 //
                 self.replace_and_create_many_with_many([old_node], [new_node]);
             }
@@ -521,11 +526,11 @@ impl<'bump> DiffMachine<'bump> {
     //
     // each function call assumes the stack is fresh (empty).
     pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
-        match (&old_node.kind, &new_node.kind) {
+        match (&old_node, &new_node) {
             // Handle the "sane" cases first.
             // The rsx and html macros strongly discourage dynamic lists not encapsulated by a "Fragment".
             // So the sane (and fast!) cases are where the virtual structure stays the same and is easily diffable.
-            (VNodeKind::Text(old), VNodeKind::Text(new)) => {
+            (VNode::Text(old), VNode::Text(new)) => {
                 let root = old_node.direct_id();
 
                 if old.text != new.text {
@@ -537,7 +542,7 @@ impl<'bump> DiffMachine<'bump> {
                 new.dom_id.set(Some(root));
             }
 
-            (VNodeKind::Element(old), VNodeKind::Element(new)) => {
+            (VNode::Element(old), VNode::Element(new)) => {
                 let root = old_node.direct_id();
 
                 // If the element type is completely different, the element needs to be re-rendered completely
@@ -624,7 +629,7 @@ impl<'bump> DiffMachine<'bump> {
                 self.diff_children(old.children, new.children);
             }
 
-            (VNodeKind::Component(old), VNodeKind::Component(new)) => {
+            (VNode::Component(old), VNode::Component(new)) => {
                 let scope_addr = old.ass_scope.get().unwrap();
 
                 // Make sure we're dealing with the same component (by function pointer)
@@ -679,7 +684,7 @@ impl<'bump> DiffMachine<'bump> {
                 }
             }
 
-            (VNodeKind::Fragment(old), VNodeKind::Fragment(new)) => {
+            (VNode::Fragment(old), VNode::Fragment(new)) => {
                 // This is the case where options or direct vnodes might be used.
                 // In this case, it's faster to just skip ahead to their diff
                 if old.children.len() == 1 && new.children.len() == 1 {
@@ -690,7 +695,7 @@ impl<'bump> DiffMachine<'bump> {
                 self.diff_children(old.children, new.children);
             }
 
-            (VNodeKind::Anchor(old), VNodeKind::Anchor(new)) => {
+            (VNode::Anchor(old), VNode::Anchor(new)) => {
                 new.dom_id.set(old.dom_id.get());
             }
 
@@ -702,27 +707,27 @@ impl<'bump> DiffMachine<'bump> {
             // This likely isn't the fastest way to go about replacing one node with a virtual node, but the "insane" cases
             // are pretty rare.  IE replacing a list (component or fragment) with a single node.
             (
-                VNodeKind::Component(_)
-                | VNodeKind::Fragment(_)
-                | VNodeKind::Text(_)
-                | VNodeKind::Element(_)
-                | VNodeKind::Anchor(_),
-                VNodeKind::Component(_)
-                | VNodeKind::Fragment(_)
-                | VNodeKind::Text(_)
-                | VNodeKind::Element(_)
-                | VNodeKind::Anchor(_),
+                VNode::Component(_)
+                | VNode::Fragment(_)
+                | VNode::Text(_)
+                | VNode::Element(_)
+                | VNode::Anchor(_),
+                VNode::Component(_)
+                | VNode::Fragment(_)
+                | VNode::Text(_)
+                | VNode::Element(_)
+                | VNode::Anchor(_),
             ) => {
                 self.replace_and_create_many_with_many([old_node], [new_node]);
             }
 
             // TODO
-            (VNodeKind::Suspended(old), new) => {
+            (VNode::Suspended(old), new) => {
                 //
                 self.replace_and_create_many_with_many([old_node], [new_node]);
             }
             // a node that was once real is now suspended
-            (old, VNodeKind::Suspended(_)) => {
+            (old, VNode::Suspended(_)) => {
                 //
                 self.replace_and_create_many_with_many([old_node], [new_node]);
             }
@@ -739,22 +744,22 @@ impl<'bump> DiffMachine<'bump> {
     //
     //     [... node]
     pub fn create_vnode(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
-        match &node.kind {
-            VNodeKind::Text(text) => {
+        match &node {
+            VNode::Text(text) => {
                 let real_id = self.vdom.reserve_node();
                 self.edit_create_text_node(text.text, real_id);
                 text.dom_id.set(Some(real_id));
                 CreateMeta::new(text.is_static, 1)
             }
 
-            VNodeKind::Anchor(anchor) => {
+            VNode::Anchor(anchor) => {
                 let real_id = self.vdom.reserve_node();
                 self.edit_create_placeholder(real_id);
                 anchor.dom_id.set(Some(real_id));
                 CreateMeta::new(false, 1)
             }
 
-            VNodeKind::Element(el) => {
+            VNode::Element(el) => {
                 // we have the potential to completely eliminate working on this node in the future(!)
                 //
                 // This can only be done if all of the elements properties (attrs, children, listeners, etc) are static
@@ -772,6 +777,7 @@ impl<'bump> DiffMachine<'bump> {
                     static_children: _,
                     static_listeners: _,
                     dom_id,
+                    key,
                 } = el;
 
                 let real_id = self.vdom.reserve_node();
@@ -805,7 +811,7 @@ impl<'bump> DiffMachine<'bump> {
                 //
                 // TODO move over
                 // if children.len() == 1 {
-                //     if let VNodeKind::Text(text) = &children[0].kind {
+                //     if let VNodeKind::Text(text) = &children[0] {
                 //         self.set_text(text.text);
                 //         return CreateMeta::new(is_static, 1);
                 //     }
@@ -822,7 +828,7 @@ impl<'bump> DiffMachine<'bump> {
                 CreateMeta::new(is_static, 1)
             }
 
-            VNodeKind::Component(vcomponent) => {
+            VNode::Component(vcomponent) => {
                 let caller = vcomponent.caller.clone();
 
                 let parent_idx = self.scope_stack.last().unwrap().clone();
@@ -895,9 +901,9 @@ impl<'bump> DiffMachine<'bump> {
             // Fragments are the only nodes that can contain dynamic content (IE through curlies or iterators).
             // We can never ignore their contents, so the prescence of a fragment indicates that we need always diff them.
             // Fragments will just put all their nodes onto the stack after creation
-            VNodeKind::Fragment(frag) => self.create_children(frag.children),
+            VNode::Fragment(frag) => self.create_children(frag.children),
 
-            VNodeKind::Suspended(VSuspended { node: real_node }) => {
+            VNode::Suspended(VSuspended { node: real_node }) => {
                 let id = self.vdom.reserve_node();
                 self.edit_create_placeholder(id);
                 real_node.set(Some(id));
@@ -993,14 +999,14 @@ impl<'bump> DiffMachine<'bump> {
                 let first_old = &old[0];
                 let first_new = &new[0];
 
-                match (&first_old.kind, &first_new.kind) {
+                match (&first_old, &first_new) {
                     // Anchors can only appear in empty fragments
-                    (VNodeKind::Anchor(old_anchor), VNodeKind::Anchor(new_anchor)) => {
+                    (VNode::Anchor(old_anchor), VNode::Anchor(new_anchor)) => {
                         old_anchor.dom_id.set(new_anchor.dom_id.get());
                     }
 
                     // Replace the anchor with whatever new nodes are coming down the pipe
-                    (VNodeKind::Anchor(anchor), _) => {
+                    (VNode::Anchor(anchor), _) => {
                         self.edit_push_root(anchor.dom_id.get().unwrap());
                         let mut added = 0;
                         for el in new {
@@ -1011,21 +1017,21 @@ impl<'bump> DiffMachine<'bump> {
                     }
 
                     // Replace whatever nodes are sitting there with the anchor
-                    (_, VNodeKind::Anchor(anchor)) => {
+                    (_, VNode::Anchor(anchor)) => {
                         self.replace_and_create_many_with_many(old, [first_new]);
                     }
 
                     // Use the complex diff algorithm to diff the nodes
                     _ => {
-                        let new_is_keyed = new[0].key.is_some();
-                        let old_is_keyed = old[0].key.is_some();
+                        let new_is_keyed = new[0].key().is_some();
+                        let old_is_keyed = old[0].key().is_some();
 
                         debug_assert!(
-                            new.iter().all(|n| n.key.is_some() == new_is_keyed),
+                            new.iter().all(|n| n.key().is_some() == new_is_keyed),
                             "all siblings must be keyed or all siblings must be non-keyed"
                         );
                         debug_assert!(
-                            old.iter().all(|o| o.key.is_some() == old_is_keyed),
+                            old.iter().all(|o| o.key().is_some() == old_is_keyed),
                             "all siblings must be keyed or all siblings must be non-keyed"
                         );
 
@@ -1062,7 +1068,7 @@ impl<'bump> DiffMachine<'bump> {
             let mut assert_unique_keys = |children: &'bump [VNode<'bump>]| {
                 keys.clear();
                 for child in children {
-                    let key = child.key;
+                    let key = child.key();
                     debug_assert!(
                         key.is_some(),
                         "if any sibling is keyed, all siblings must be keyed"
@@ -1102,7 +1108,7 @@ impl<'bump> DiffMachine<'bump> {
             .iter()
             .rev()
             .zip(new[shared_prefix_count..].iter().rev())
-            .take_while(|&(old, new)| old.key == new.key)
+            .take_while(|&(old, new)| old.key() == new.key())
             .count();
 
         let old_shared_suffix_start = old.len() - shared_suffix_count;
@@ -1543,17 +1549,16 @@ impl<'bump> DiffMachine<'bump> {
 
         loop {
             let node = search_node.take().unwrap();
-            match &node.kind {
+            match &node {
                 // the ones that have a direct id
-                VNodeKind::Text(_)
-                | VNodeKind::Element(_)
-                | VNodeKind::Anchor(_)
-                | VNodeKind::Suspended(_) => break node,
+                VNode::Text(_) | VNode::Element(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
+                    break node
+                }
 
-                VNodeKind::Fragment(frag) => {
+                VNode::Fragment(frag) => {
                     search_node = frag.children.last();
                 }
-                VNodeKind::Component(el) => {
+                VNode::Component(el) => {
                     let scope_id = el.ass_scope.get().unwrap();
                     let scope = self.get_scope(&scope_id).unwrap();
                     search_node = Some(scope.root());
@@ -1567,17 +1572,16 @@ impl<'bump> DiffMachine<'bump> {
 
         loop {
             let node = search_node.take().unwrap();
-            match &node.kind {
+            match &node {
                 // the ones that have a direct id
-                VNodeKind::Text(_)
-                | VNodeKind::Element(_)
-                | VNodeKind::Anchor(_)
-                | VNodeKind::Suspended(_) => break node,
+                VNode::Text(_) | VNode::Element(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
+                    break node
+                }
 
-                VNodeKind::Fragment(frag) => {
+                VNode::Fragment(frag) => {
                     search_node = Some(&frag.children[0]);
                 }
-                VNodeKind::Component(el) => {
+                VNode::Component(el) => {
                     let scope_id = el.ass_scope.get().unwrap();
                     let scope = self.get_scope(&scope_id).unwrap();
                     search_node = Some(scope.root());
@@ -1602,15 +1606,15 @@ impl<'bump> DiffMachine<'bump> {
         let mut nodes_to_search = old_nodes.into_iter().collect::<Vec<_>>();
         let mut scopes_obliterated = Vec::new();
         while let Some(node) = nodes_to_search.pop() {
-            match &node.kind {
+            match &node {
                 // the ones that have a direct id return immediately
-                VNodeKind::Text(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
-                VNodeKind::Element(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
-                VNodeKind::Anchor(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
-                VNodeKind::Suspended(el) => nodes_to_replace.push(el.node.get().unwrap()),
+                VNode::Text(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
+                VNode::Element(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
+                VNode::Anchor(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
+                VNode::Suspended(el) => nodes_to_replace.push(el.node.get().unwrap()),
 
                 // Fragments will either have a single anchor or a list of children
-                VNodeKind::Fragment(frag) => {
+                VNode::Fragment(frag) => {
                     for child in frag.children {
                         nodes_to_search.push(child);
                     }
@@ -1618,7 +1622,7 @@ impl<'bump> DiffMachine<'bump> {
 
                 // Components can be any of the nodes above
                 // However, we do need to track which components need to be removed
-                VNodeKind::Component(el) => {
+                VNode::Component(el) => {
                     let scope_id = el.ass_scope.get().unwrap();
                     let scope = self.get_scope(&scope_id).unwrap();
                     let root = scope.root();
@@ -1680,27 +1684,27 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     fn remove_vnode(&mut self, node: &'bump VNode<'bump>) {
-        match &node.kind {
-            VNodeKind::Text(el) => self.immediately_dispose_garabage(node.direct_id()),
-            VNodeKind::Element(el) => {
+        match &node {
+            VNode::Text(el) => self.immediately_dispose_garabage(node.direct_id()),
+            VNode::Element(el) => {
                 self.immediately_dispose_garabage(node.direct_id());
                 for child in el.children {
                     self.remove_vnode(&child);
                 }
             }
-            VNodeKind::Anchor(a) => {
+            VNode::Anchor(a) => {
                 //
             }
-            VNodeKind::Fragment(frag) => {
+            VNode::Fragment(frag) => {
                 for child in frag.children {
                     self.remove_vnode(&child);
                 }
             }
-            VNodeKind::Component(el) => {
+            VNode::Component(el) => {
                 //
                 // self.destroy_scopes(old_scope)
             }
-            VNodeKind::Suspended(_) => todo!(),
+            VNode::Suspended(_) => todo!(),
         }
     }
 
@@ -1941,10 +1945,10 @@ impl<'a> Iterator for RealChildIterator<'a> {
 
         while returned_node.is_none() {
             if let Some((count, node)) = self.stack.last_mut() {
-                match &node.kind {
+                match &node {
                     // We can only exit our looping when we get "real" nodes
                     // This includes fragments and components when they're empty (have a single root)
-                    VNodeKind::Element(_) | VNodeKind::Text(_) => {
+                    VNode::Element(_) | VNode::Text(_) => {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         should_pop = true;
@@ -1952,7 +1956,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
                     }
 
                     // If we get a fragment we push the next child
-                    VNodeKind::Fragment(frag) => {
+                    VNode::Fragment(frag) => {
                         let subcount = *count as usize;
 
                         if frag.children.len() == 0 {
@@ -1983,17 +1987,17 @@ impl<'a> Iterator for RealChildIterator<'a> {
                     // }
 
                     // Immediately abort suspended nodes - can't do anything with them yet
-                    VNodeKind::Suspended(node) => {
+                    VNode::Suspended(node) => {
                         // VNodeKind::Suspended => should_pop = true,
                         todo!()
                     }
 
-                    VNodeKind::Anchor(a) => {
+                    VNode::Anchor(a) => {
                         todo!()
                     }
 
                     // For components, we load their root and push them onto the stack
-                    VNodeKind::Component(sc) => {
+                    VNode::Component(sc) => {
                         let scope =
                             unsafe { self.scopes.get_scope(sc.ass_scope.get().unwrap()) }.unwrap();
                         // let scope = self.scopes.get(sc.ass_scope.get().unwrap()).unwrap();

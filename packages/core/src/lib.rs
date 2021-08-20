@@ -12,8 +12,8 @@
 
 pub use crate::innerlude::{
     format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority,
-    EventTrigger, LazyNodes, NodeFactory, Properties, ScopeId, SuspendedContext, VNode, VNodeKind,
-    VirtualDom, VirtualEvent, FC,
+    EventTrigger, LazyNodes, NodeFactory, Properties, ScopeId, SuspendedContext, VNode, VirtualDom,
+    VirtualEvent, FC,
 };
 
 pub mod prelude {

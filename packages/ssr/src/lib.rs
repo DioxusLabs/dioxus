@@ -75,7 +75,7 @@ impl<'a> TextRenderer<'a> {
 
     fn html_render(&self, node: &VNode, f: &mut std::fmt::Formatter, il: u16) -> std::fmt::Result {
         match &node.kind {
-            VNodeKind::Text(text) => {
+            VNode::Text(text) => {
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
@@ -83,7 +83,7 @@ impl<'a> TextRenderer<'a> {
                 }
                 write!(f, "{}", text.text)?
             }
-            VNodeKind::Anchor(anchor) => {
+            VNode::Anchor(anchor) => {
                 //
                 if self.cfg.indent {
                     for _ in 0..il {
@@ -92,7 +92,7 @@ impl<'a> TextRenderer<'a> {
                 }
                 write!(f, "<!-- -->")?;
             }
-            VNodeKind::Element(el) => {
+            VNode::Element(el) => {
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
@@ -163,12 +163,12 @@ impl<'a> TextRenderer<'a> {
                     write!(f, "\n")?;
                 }
             }
-            VNodeKind::Fragment(frag) => {
+            VNode::Fragment(frag) => {
                 for child in frag.children {
                     self.html_render(child, f, il + 1)?;
                 }
             }
-            VNodeKind::Component(vcomp) => {
+            VNode::Component(vcomp) => {
                 let idx = vcomp.ass_scope.get().unwrap();
                 match (self.vdom, self.cfg.skip_components) {
                     (Some(vdom), false) => {
@@ -180,7 +180,7 @@ impl<'a> TextRenderer<'a> {
                     }
                 }
             }
-            VNodeKind::Suspended { .. } => {
+            VNode::Suspended { .. } => {
                 // we can't do anything with suspended nodes
             }
         }

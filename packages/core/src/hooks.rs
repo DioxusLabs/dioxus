@@ -191,12 +191,9 @@ where
                     }
                     None => {
                         //
-                        Some(VNode {
-                            key: None,
-                            kind: VNodeKind::Suspended(VSuspended {
-                                node: domnode.clone(),
-                            }),
-                        })
+                        Some(VNode::Suspended(VSuspended {
+                            node: domnode.clone(),
+                        }))
                     }
                 }
             });
