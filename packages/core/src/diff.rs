@@ -103,6 +103,11 @@ pub struct DiffMachine<'bump> {
 
     pub seen_scopes: FxHashSet<ScopeId>,
 }
+
+/// The stack instructions we use to diff and create new nodes.
+///
+/// Right now, we insert an instruction for every child node we want to create and diff. This can be less efficient than
+/// a custom iterator type - but this is current easier to implement. In the future, let's try interact with the stack less.
 pub enum DiffInstruction<'a> {
     DiffNode {
         old: &'a VNode<'a>,
@@ -111,6 +116,7 @@ pub enum DiffInstruction<'a> {
     },
 
     Append {},
+
     Replace {
         with: usize,
     },
@@ -189,76 +195,14 @@ impl<'bump> DiffMachine<'bump> {
                 }
 
                 DiffInstruction::Create { node, .. } => {
+                    // defer to individual functions so the compiler produces better code
+                    // large functions tend to be difficult for the compiler to work with
                     match &node {
-                        VNode::Text(text) => {
-                            let real_id = self.vdom.reserve_node();
-                            self.edit_create_text_node(text.text, real_id);
-                            text.dom_id.set(Some(real_id));
-                            *self.nodes_created_stack.last_mut().unwrap() += 1;
-                        }
-                        VNode::Suspended(suspended) => {
-                            let real_id = self.vdom.reserve_node();
-                            self.edit_create_placeholder(real_id);
-                            suspended.node.set(Some(real_id));
-                            *self.nodes_created_stack.last_mut().unwrap() += 1;
-                        }
-                        VNode::Anchor(anchor) => {
-                            let real_id = self.vdom.reserve_node();
-                            self.edit_create_placeholder(real_id);
-                            anchor.dom_id.set(Some(real_id));
-                            *self.nodes_created_stack.last_mut().unwrap() += 1;
-                        }
-
-                        VNode::Element(el) => {
-                            let VElement {
-                                tag_name,
-                                listeners,
-                                attributes,
-                                children,
-                                namespace,
-                                static_attrs: _,
-                                static_children: _,
-                                static_listeners: _,
-                                dom_id,
-                                key,
-                            } = el;
-
-                            let real_id = self.vdom.reserve_node();
-                            self.edit_create_element(tag_name, *namespace, real_id);
-                            dom_id.set(Some(real_id));
-
-                            let cur_scope = self.current_scope().unwrap();
-
-                            listeners.iter().for_each(|listener| {
-                                self.fix_listener(listener);
-                                listener.mounted_node.set(Some(real_id));
-                                self.edit_new_event_listener(listener, cur_scope.clone());
-
-                                // if the node has an event listener, then it must be visited ?
-                            });
-
-                            for attr in *attributes {
-                                self.edit_set_attribute(attr);
-                            }
-
-                            // TODO: the append child edit
-
-                            *self.nodes_created_stack.last_mut().unwrap() += 1;
-
-                            // push every child onto the stack
-                            self.nodes_created_stack.push(0);
-                            for child in *children {
-                                self.node_stack
-                                    .push(DiffInstruction::Create { node: child })
-                            }
-                        }
-
-                        VNode::Fragment(frag) => {
-                            for node in frag.children {
-                                self.node_stack.push(DiffInstruction::Create { node })
-                            }
-                        }
-
+                        VNode::Text(vtext) => self.create_text_node(vtext),
+                        VNode::Suspended(suspended) => self.create_suspended_node(suspended),
+                        VNode::Anchor(anchor) => self.create_anchor_node(anchor),
+                        VNode::Element(element) => self.create_element_node(element),
+                        VNode::Fragment(frag) => self.create_fragment_node(frag),
                         VNode::Component(_) => {
                             //
                         }
@@ -270,44 +214,142 @@ impl<'bump> DiffMachine<'bump> {
         Ok(())
     }
 
-    fn create_text_node(&mut self) {}
+    fn create_text_node(&mut self, vtext: &'bump VText<'bump>) {
+        let real_id = self.vdom.reserve_node();
+        self.edit_create_text_node(vtext.text, real_id);
+        vtext.dom_id.set(Some(real_id));
+        *self.nodes_created_stack.last_mut().unwrap() += 1;
+    }
 
-    /// Create the new node, pushing instructions on our instruction stack to create any further children
-    ///
-    ///
-    pub fn create_iterative(&mut self, node: &'bump VNode<'bump>) {
-        match &node {
-            // singles
-            // update the parent
-            VNode::Text(text) => {
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_text_node(text.text, real_id);
-                text.dom_id.set(Some(real_id));
-                *self.nodes_created_stack.last_mut().unwrap() += 1;
-            }
-            VNode::Suspended(suspended) => {
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_placeholder(real_id);
-                suspended.node.set(Some(real_id));
-                *self.nodes_created_stack.last_mut().unwrap() += 1;
-            }
-            VNode::Anchor(anchor) => {
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_placeholder(real_id);
-                anchor.dom_id.set(Some(real_id));
-                *self.nodes_created_stack.last_mut().unwrap() += 1;
-            }
+    fn create_suspended_node(&mut self, suspended: &'bump VSuspended) {
+        let real_id = self.vdom.reserve_node();
+        self.edit_create_placeholder(real_id);
+        suspended.node.set(Some(real_id));
+        *self.nodes_created_stack.last_mut().unwrap() += 1;
+    }
 
-            VNode::Element(el) => {
-                //
+    fn create_anchor_node(&mut self, anchor: &'bump VAnchor) {
+        let real_id = self.vdom.reserve_node();
+        self.edit_create_placeholder(real_id);
+        anchor.dom_id.set(Some(real_id));
+        *self.nodes_created_stack.last_mut().unwrap() += 1;
+    }
+
+    fn create_element_node(&mut self, element: &'bump VElement<'bump>) {
+        let VElement {
+            tag_name,
+            listeners,
+            attributes,
+            children,
+            namespace,
+            static_attrs: _,
+            static_children: _,
+            static_listeners: _,
+            dom_id,
+            key,
+        } = element;
+
+        let real_id = self.vdom.reserve_node();
+        self.edit_create_element(tag_name, *namespace, real_id);
+        dom_id.set(Some(real_id));
+
+        let cur_scope = self.current_scope().unwrap();
+
+        listeners.iter().for_each(|listener| {
+            self.fix_listener(listener);
+            listener.mounted_node.set(Some(real_id));
+            self.edit_new_event_listener(listener, cur_scope.clone());
+
+            // if the node has an event listener, then it must be visited ?
+        });
+
+        for attr in *attributes {
+            self.edit_set_attribute(attr);
+        }
+
+        // TODO: the append child edit
+
+        *self.nodes_created_stack.last_mut().unwrap() += 1;
+
+        // push every child onto the stack
+        self.nodes_created_stack.push(0);
+        for child in *children {
+            self.node_stack
+                .push(DiffInstruction::Create { node: child })
+        }
+    }
+
+    fn create_fragment_node(&mut self, frag: &'bump VFragment<'bump>) {
+        for node in frag.children {
+            self.node_stack.push(DiffInstruction::Create { node })
+        }
+    }
+
+    fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
+        let caller = vcomponent.caller.clone();
+
+        let parent_idx = self.scope_stack.last().unwrap().clone();
+
+        // Insert a new scope into our component list
+        let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
+            let parent_scope = self.get_scope(&parent_idx).unwrap();
+            let height = parent_scope.height + 1;
+            Scope::new(
+                caller,
+                new_idx,
+                Some(parent_idx),
+                height,
+                ScopeChildren(vcomponent.children),
+                self.vdom.clone(),
+            )
+        });
+
+        // Actually initialize the caller's slot with the right address
+        vcomponent.ass_scope.set(Some(new_idx));
+
+        if !vcomponent.can_memoize {
+            let cur_scope = self.get_scope_mut(&parent_idx).unwrap();
+            let extended = vcomponent as *const VComponent;
+            let extended: *const VComponent<'static> = unsafe { std::mem::transmute(extended) };
+            cur_scope.borrowed_props.borrow_mut().push(extended);
+        }
+
+        // TODO:
+        //  add noderefs to current noderef list Noderefs
+        //  add effects to current effect list Effects
+
+        let new_component = self.get_scope_mut(&new_idx).unwrap();
+
+        // Run the scope for one iteration to initialize it
+        match new_component.run_scope() {
+            Ok(_) => {
+                // all good, new nodes exist
             }
-            VNode::Fragment(frag) => {
-                //
-            }
-            VNode::Component(comp) => {
-                //
+            Err(err) => {
+                // failed to run. this is the first time the component ran, and it failed
+                // we manually set its head node to an empty fragment
+                panic!("failing components not yet implemented");
             }
         }
+
+        // Take the node that was just generated from running the component
+        let nextnode = new_component.frames.fin_head();
+
+        // Push the new scope onto the stack
+        self.scope_stack.push(new_idx);
+
+        // Run the creation algorithm with this scope on the stack
+        let meta = self.create_vnode(nextnode);
+
+        // pop the scope off the stack
+        self.scope_stack.pop();
+
+        if meta.added_to_stack == 0 {
+            panic!("Components should *always* generate nodes - even if they fail");
+        }
+
+        // Finally, insert this scope as a seen node.
+        self.seen_scopes.insert(new_idx);
     }
 
     pub fn diff_iterative(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
@@ -730,184 +772,6 @@ impl<'bump> DiffMachine<'bump> {
             (old, VNode::Suspended(_)) => {
                 //
                 self.replace_and_create_many_with_many([old_node], [new_node]);
-            }
-        }
-    }
-
-    // Emit instructions to create the given virtual node.
-    //
-    // The change list stack may have any shape upon entering this function:
-    //
-    //     [...]
-    //
-    // When this function returns, the new node is on top of the change list stack:
-    //
-    //     [... node]
-    pub fn create_vnode(&mut self, node: &'bump VNode<'bump>) -> CreateMeta {
-        match &node {
-            VNode::Text(text) => {
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_text_node(text.text, real_id);
-                text.dom_id.set(Some(real_id));
-                CreateMeta::new(text.is_static, 1)
-            }
-
-            VNode::Anchor(anchor) => {
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_placeholder(real_id);
-                anchor.dom_id.set(Some(real_id));
-                CreateMeta::new(false, 1)
-            }
-
-            VNode::Element(el) => {
-                // we have the potential to completely eliminate working on this node in the future(!)
-                //
-                // This can only be done if all of the elements properties (attrs, children, listeners, etc) are static
-                // While creating these things, keep track if we can memoize this element.
-                // At the end, we'll set this flag on the element to skip it
-                let mut is_static: bool = true;
-
-                let VElement {
-                    tag_name,
-                    listeners,
-                    attributes,
-                    children,
-                    namespace,
-                    static_attrs: _,
-                    static_children: _,
-                    static_listeners: _,
-                    dom_id,
-                    key,
-                } = el;
-
-                let real_id = self.vdom.reserve_node();
-                self.edit_create_element(tag_name, *namespace, real_id);
-                dom_id.set(Some(real_id));
-
-                let cur_scope = self.current_scope().unwrap();
-
-                listeners.iter().for_each(|listener| {
-                    self.fix_listener(listener);
-                    listener.mounted_node.set(Some(real_id));
-                    self.edit_new_event_listener(listener, cur_scope.clone());
-
-                    // if the node has an event listener, then it must be visited ?
-                    is_static = false;
-                });
-
-                for attr in *attributes {
-                    is_static = is_static && attr.is_static;
-                    self.edit_set_attribute(attr);
-                }
-
-                // Fast path: if there is a single text child, it is faster to
-                // create-and-append the text node all at once via setting the
-                // parent's `textContent` in a single change list instruction than
-                // to emit three instructions to (1) create a text node, (2) set its
-                // text content, and finally (3) append the text node to this
-                // parent.
-                //
-                // Notice: this is a web-specific optimization and may be changed in the future
-                //
-                // TODO move over
-                // if children.len() == 1 {
-                //     if let VNodeKind::Text(text) = &children[0] {
-                //         self.set_text(text.text);
-                //         return CreateMeta::new(is_static, 1);
-                //     }
-                // }
-
-                for child in *children {
-                    let child_meta = self.create_vnode(child);
-                    is_static = is_static && child_meta.is_static;
-
-                    // append whatever children were generated by this call
-                    self.edit_append_children(child_meta.added_to_stack);
-                }
-
-                CreateMeta::new(is_static, 1)
-            }
-
-            VNode::Component(vcomponent) => {
-                let caller = vcomponent.caller.clone();
-
-                let parent_idx = self.scope_stack.last().unwrap().clone();
-
-                // Insert a new scope into our component list
-                let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
-                    let parent_scope = self.get_scope(&parent_idx).unwrap();
-                    let height = parent_scope.height + 1;
-                    Scope::new(
-                        caller,
-                        new_idx,
-                        Some(parent_idx),
-                        height,
-                        ScopeChildren(vcomponent.children),
-                        self.vdom.clone(),
-                    )
-                });
-
-                // Actually initialize the caller's slot with the right address
-                vcomponent.ass_scope.set(Some(new_idx));
-
-                if !vcomponent.can_memoize {
-                    let cur_scope = self.get_scope_mut(&parent_idx).unwrap();
-                    let extended = *vcomponent as *const VComponent;
-                    let extended: *const VComponent<'static> =
-                        unsafe { std::mem::transmute(extended) };
-                    cur_scope.borrowed_props.borrow_mut().push(extended);
-                }
-
-                // TODO:
-                //  add noderefs to current noderef list Noderefs
-                //  add effects to current effect list Effects
-
-                let new_component = self.get_scope_mut(&new_idx).unwrap();
-
-                // Run the scope for one iteration to initialize it
-                match new_component.run_scope() {
-                    Ok(_) => {
-                        // all good, new nodes exist
-                    }
-                    Err(err) => {
-                        // failed to run. this is the first time the component ran, and it failed
-                        // we manually set its head node to an empty fragment
-                        panic!("failing components not yet implemented");
-                    }
-                }
-
-                // Take the node that was just generated from running the component
-                let nextnode = new_component.frames.fin_head();
-
-                // Push the new scope onto the stack
-                self.scope_stack.push(new_idx);
-
-                // Run the creation algorithm with this scope on the stack
-                let meta = self.create_vnode(nextnode);
-
-                // pop the scope off the stack
-                self.scope_stack.pop();
-
-                if meta.added_to_stack == 0 {
-                    panic!("Components should *always* generate nodes - even if they fail");
-                }
-
-                // Finally, insert this scope as a seen node.
-                self.seen_scopes.insert(new_idx);
-
-                CreateMeta::new(vcomponent.is_static, meta.added_to_stack)
-            }
-
-            // Fragments are the only nodes that can contain dynamic content (IE through curlies or iterators).
-            // We can never ignore their contents, so the prescence of a fragment indicates that we need always diff them.
-            // Fragments will just put all their nodes onto the stack after creation
-            VNode::Fragment(frag) => self.create_children(frag.children),
-
-            VNode::Suspended(VSuspended { node: real_node }) => {
-                let id = self.vdom.reserve_node();
-                self.edit_create_placeholder(id);
-                real_node.set(Some(id));
-                CreateMeta::new(false, 1)
             }
         }
     }
