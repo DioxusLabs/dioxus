@@ -14,7 +14,7 @@
 //! ### IDs for elements
 //! --------------------
 //! All nodes are addressed by their IDs. The RealDom provides an imperative interface for making changes to these nodes.
-//! We don't necessarily require that DOM changes happen instnatly during the diffing process, so the implementor may choose
+//! We don't necessarily require that DOM changes happen instantly during the diffing process, so the implementor may choose
 //! to batch nodes if it is more performant for their application. The element IDs are indicies into the internal element
 //! array. The expectation is that implemenetors will use the ID as an index into a Vec of real nodes, allowing for passive
 //! garbage collection as the VirtualDOM replaces old nodes.
@@ -46,7 +46,7 @@
 //! Because the subtrees won't be diffed, their "real node" data will be stale (invalid), so its up to the reconciler to
 //! track nodes created in a scope and clean up all relevant data. Support for this is currently WIP and depends on comp-time
 //! hashing of the subtree from the rsx! macro. We do a very limited form of static analysis via static string pointers as
-//! a way of short-circuiting the most mem-cmp expensive checks.
+//! a way of short-circuiting the most expensive checks.
 //!
 //! ## Bloom Filter and Heuristics
 //! ------------------------------
@@ -119,14 +119,25 @@ pub enum DiffInstruction<'a> {
         new: &'a VNode<'a>,
     },
 
-    Append {},
-
-    Replace {
-        with: usize,
+    DiffChildren {
+        progress: usize,
+        children: &'a [VNode<'a>],
     },
 
     Create {
         node: &'a VNode<'a>,
+    },
+    CreateChildren {
+        progress: usize,
+        children: &'a [VNode<'a>],
+    },
+
+    // todo: merge this into the create instruction?
+    Append,
+    InsertAfter,
+    InsertBefore,
+    Replace {
+        with: usize,
     },
 }
 
@@ -165,10 +176,30 @@ impl<'bump> DiffMachine<'bump> {
         // todo: don't move the reused instructions around
         // defer to individual functions so the compiler produces better code
         // large functions tend to be difficult for the compiler to work with
-        while let Some(mut make) = self.node_stack.pop() {
-            match &mut make {
+        let mut should_pop = false;
+        while let Some(make) = self.node_stack.last_mut() {
+            should_pop = false;
+            match make {
                 DiffInstruction::DiffNode { old, new, .. } => {
+                    let (old, new) = (*old, *new);
                     self.diff_node(old, new);
+                }
+
+                DiffInstruction::DiffChildren { progress, children } => {
+                    //
+                }
+
+                DiffInstruction::Create { node, .. } => {
+                    let node = *node;
+                    self.create_node(node);
+                }
+                DiffInstruction::CreateChildren { progress, children } => {
+                    if let Some(child) = (children).get(*progress) {
+                        *progress += 1;
+                        self.create_node(child);
+                    } else {
+                        should_pop = true;
+                    }
                 }
 
                 DiffInstruction::Append {} => {
@@ -177,13 +208,17 @@ impl<'bump> DiffMachine<'bump> {
                 }
 
                 DiffInstruction::Replace { with } => {
+                    let with = *with;
                     let many = self.nodes_created_stack.pop().unwrap();
-                    self.edit_replace_with(*with as u32, many as u32);
+
+                    self.edit_replace_with(with as u32, many as u32);
                 }
 
-                DiffInstruction::Create { node, .. } => {
-                    self.create_node(node);
-                }
+                DiffInstruction::InsertAfter => todo!(),
+                DiffInstruction::InsertBefore => todo!(),
+            }
+            if should_pop {
+                self.node_stack.pop();
             }
         }
 
@@ -397,7 +432,8 @@ impl<'bump> DiffMachine<'bump> {
         //
         // This case is rather rare (typically only in non-keyed lists)
         if new.tag_name != old.tag_name || new.namespace != old.namespace {
-            self.replace_node_with_node(root, old_node, new_node);
+            todo!();
+            // self.replace_node_with_node(root, old_node, new_node);
             return;
         }
 
@@ -600,8 +636,11 @@ impl<'bump> DiffMachine<'bump> {
 
             // Completely adding new nodes, removing any placeholder if it exists
             (IS_EMPTY, IS_NOT_EMPTY) => {
-                let meta = self.create_children(new);
-                self.edit_append_children(meta.added_to_stack);
+                todo!();
+                // let meta = todo!();
+                // let meta = self.create_children(new);
+                // let meta = self.create_children(new);
+                // self.edit_append_children(meta.added_to_stack);
             }
 
             // Completely removing old nodes and putting an anchor in its place
@@ -628,8 +667,9 @@ impl<'bump> DiffMachine<'bump> {
                         self.edit_push_root(anchor.dom_id.get().unwrap());
                         let mut added = 0;
                         for el in new {
-                            let meta = self.create_vnode(el);
-                            added += meta.added_to_stack;
+                            todo!();
+                            // let meta = self.create_vnode(el);
+                            // added += meta.added_to_stack;
                         }
                         self.edit_replace_with(1, added);
                     }
@@ -780,8 +820,10 @@ impl<'bump> DiffMachine<'bump> {
             self.edit_push_root(last_node);
 
             // Create the new children and insert them after
-            let meta = self.create_children(&new[shared_prefix_count..]);
-            self.edit_insert_after(meta.added_to_stack);
+            //
+            todo!();
+            // let meta = self.create_children(&new[shared_prefix_count..]);
+            // self.edit_insert_after(meta.added_to_stack);
 
             return KeyedPrefixResult::Finished;
         }
@@ -805,8 +847,9 @@ impl<'bump> DiffMachine<'bump> {
     // When this function returns, the change list stack is in the same state.
     pub fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
         for child in new {
-            let meta = self.create_vnode(child);
-            self.edit_append_children(meta.added_to_stack);
+            todo!();
+            // let meta = self.create_vnode(child);
+            // self.edit_append_children(meta.added_to_stack);
         }
     }
 
@@ -990,8 +1033,9 @@ impl<'bump> DiffMachine<'bump> {
                         eprintln!("key is not contained {:?}", key);
                         // new node needs to be created
                         // insert it before the current milestone
-                        let meta = self.create_vnode(next_new);
-                        self.edit_insert_before(meta.added_to_stack);
+                        todo!();
+                        // let meta = self.create_vnode(next_new);
+                        // self.edit_insert_before(meta.added_to_stack);
                     }
                 }
             }
@@ -1034,8 +1078,9 @@ impl<'bump> DiffMachine<'bump> {
                 eprintln!("key is not contained {:?}", key);
                 // new node needs to be created
                 // insert it before the current milestone
-                let meta = self.create_vnode(last_node);
-                self.edit_insert_after(meta.added_to_stack);
+                todo!();
+                // let meta = self.create_vnode(last_node);
+                // self.edit_insert_after(meta.added_to_stack);
             }
         }
         self.edit_pop();
@@ -1108,8 +1153,9 @@ impl<'bump> DiffMachine<'bump> {
                 self.edit_push_root(last.direct_id());
 
                 // create the rest and insert them
-                let meta = self.create_children(&new[old.len()..]);
-                self.edit_insert_after(meta.added_to_stack);
+                todo!();
+                // let meta = self.create_children(&new[old.len()..]);
+                // self.edit_insert_after(meta.added_to_stack);
 
                 self.edit_pop();
 
@@ -1259,8 +1305,9 @@ impl<'bump> DiffMachine<'bump> {
 
         let mut nodes_created = 0;
         for node in new_nodes {
-            let meta = self.create_vnode(node);
-            nodes_created += meta.added_to_stack;
+            todo!();
+            // let meta = self.create_vnode(node);
+            // nodes_created += meta.added_to_stack;
         }
 
         // if 0 nodes are created, then it gets interperted as a deletion
@@ -1295,9 +1342,10 @@ impl<'bump> DiffMachine<'bump> {
         new_node: &'bump VNode<'bump>,
     ) {
         self.edit_push_root(anchor);
-        let meta = self.create_vnode(new_node);
-        self.edit_replace_with(1, meta.added_to_stack);
-        self.create_garbage(old_node);
+        todo!();
+        // let meta = self.create_vnode(new_node);
+        // self.edit_replace_with(1, meta.added_to_stack);
+        // self.create_garbage(old_node);
         self.edit_pop();
     }
 
