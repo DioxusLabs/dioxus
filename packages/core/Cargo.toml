@@ -50,6 +50,8 @@ indexmap = "1.7.0"
 anyhow = "1.0.42"
 async-std = { version = "1.9.0", features = ["attributes"] }
 dioxus-html = { path = "../html" }
+fern = { version = "0.6.0", features = ["colored"] }
+simple_logger = "1.13.0"
 
 
 [features]

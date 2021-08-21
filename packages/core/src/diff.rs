@@ -100,7 +100,7 @@ pub struct DiffMachine<'bump> {
 
     pub nodes_created_stack: SmallVec<[usize; 10]>,
 
-    pub node_stack: SmallVec<[DiffInstruction<'bump>; 10]>,
+    pub instructions: SmallVec<[DiffInstruction<'bump>; 10]>,
 
     pub scope_stack: SmallVec<[ScopeId; 5]>,
 
@@ -113,6 +113,7 @@ pub struct DiffMachine<'bump> {
 ///
 /// Right now, we insert an instruction for every child node we want to create and diff. This can be less efficient than
 /// a custom iterator type - but this is current easier to implement. In the future, let's try interact with the stack less.
+#[derive(Debug)]
 pub enum DiffInstruction<'a> {
     DiffNode {
         old: &'a VNode<'a>,
@@ -121,7 +122,8 @@ pub enum DiffInstruction<'a> {
 
     DiffChildren {
         progress: usize,
-        children: &'a [VNode<'a>],
+        old: &'a [VNode<'a>],
+        new: &'a [VNode<'a>],
     },
 
     Create {
@@ -148,7 +150,7 @@ impl<'bump> DiffMachine<'bump> {
         shared: &'bump SharedResources,
     ) -> Self {
         Self {
-            node_stack: smallvec![],
+            instructions: smallvec![],
             nodes_created_stack: smallvec![],
             mutations: edits,
             scope_stack: smallvec![cur_scope],
@@ -156,6 +158,12 @@ impl<'bump> DiffMachine<'bump> {
             diffed: FxHashSet::default(),
             seen_scopes: FxHashSet::default(),
         }
+    }
+
+    pub fn new_headless(shared: &'bump SharedResources) -> Self {
+        let edits = Mutations::new();
+        let cur_scope = ScopeId(0);
+        Self::new(edits, cur_scope, shared)
     }
 
     //
@@ -176,50 +184,60 @@ impl<'bump> DiffMachine<'bump> {
         // todo: don't move the reused instructions around
         // defer to individual functions so the compiler produces better code
         // large functions tend to be difficult for the compiler to work with
-        let mut should_pop = false;
-        while let Some(make) = self.node_stack.last_mut() {
-            should_pop = false;
-            match make {
+        while let Some(instruction) = self.instructions.last_mut() {
+            log::debug!("Handling diff instruction: {:?}", instruction);
+            match instruction {
                 DiffInstruction::DiffNode { old, new, .. } => {
                     let (old, new) = (*old, *new);
+                    self.instructions.pop();
                     self.diff_node(old, new);
                 }
 
-                DiffInstruction::DiffChildren { progress, children } => {
-                    //
+                // this is slightly more complicated, we need to find a way to pause our LIS code
+                DiffInstruction::DiffChildren { progress, old, new } => {
+                    todo!()
                 }
 
                 DiffInstruction::Create { node, .. } => {
                     let node = *node;
+                    self.instructions.pop();
                     self.create_node(node);
                 }
+
                 DiffInstruction::CreateChildren { progress, children } => {
-                    if let Some(child) = (children).get(*progress) {
+                    if let Some(child) = children.get(*progress) {
                         *progress += 1;
                         self.create_node(child);
                     } else {
-                        should_pop = true;
+                        self.instructions.pop();
                     }
                 }
 
-                DiffInstruction::Append {} => {
+                DiffInstruction::Append => {
                     let many = self.nodes_created_stack.pop().unwrap();
                     self.edit_append_children(many as u32);
+                    self.instructions.pop();
                 }
 
                 DiffInstruction::Replace { with } => {
                     let with = *with;
                     let many = self.nodes_created_stack.pop().unwrap();
-
                     self.edit_replace_with(with as u32, many as u32);
+                    self.instructions.pop();
                 }
 
-                DiffInstruction::InsertAfter => todo!(),
-                DiffInstruction::InsertBefore => todo!(),
-            }
-            if should_pop {
-                self.node_stack.pop();
-            }
+                DiffInstruction::InsertAfter => {
+                    let n = self.nodes_created_stack.pop().unwrap();
+                    self.edit_insert_after(n as u32);
+                    self.instructions.pop();
+                }
+
+                DiffInstruction::InsertBefore => {
+                    let n = self.nodes_created_stack.pop().unwrap();
+                    self.edit_insert_before(n as u32);
+                    self.instructions.pop();
+                }
+            };
         }
 
         Ok(())
@@ -268,15 +286,13 @@ impl<'bump> DiffMachine<'bump> {
             attributes,
             children,
             namespace,
-            static_attrs: _,
-            static_children: _,
-            static_listeners: _,
             dom_id,
-            key,
+            ..
         } = element;
 
         let real_id = self.vdom.reserve_node();
         self.edit_create_element(tag_name, *namespace, real_id);
+        *self.nodes_created_stack.last_mut().unwrap() += 1;
         dom_id.set(Some(real_id));
 
         let cur_scope = self.current_scope().unwrap();
@@ -285,30 +301,26 @@ impl<'bump> DiffMachine<'bump> {
             self.fix_listener(listener);
             listener.mounted_node.set(Some(real_id));
             self.edit_new_event_listener(listener, cur_scope.clone());
-
-            // if the node has an event listener, then it must be visited ?
         });
 
         for attr in *attributes {
             self.edit_set_attribute(attr);
         }
 
-        // TODO: the append child edit
+        self.instructions.push(DiffInstruction::Append);
 
-        *self.nodes_created_stack.last_mut().unwrap() += 1;
-
-        // push every child onto the stack
         self.nodes_created_stack.push(0);
-        for child in *children {
-            self.node_stack
-                .push(DiffInstruction::Create { node: child })
-        }
+        self.instructions.push(DiffInstruction::CreateChildren {
+            children,
+            progress: 0,
+        });
     }
 
     fn create_fragment_node(&mut self, frag: &'bump VFragment<'bump>) {
-        for node in frag.children {
-            self.node_stack.push(DiffInstruction::Create { node })
-        }
+        self.instructions.push(DiffInstruction::CreateChildren {
+            children: frag.children,
+            progress: 0,
+        });
     }
 
     fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
@@ -348,7 +360,7 @@ impl<'bump> DiffMachine<'bump> {
 
         // Run the scope for one iteration to initialize it
         match new_component.run_scope() {
-            Ok(_) => {
+            Ok(_g) => {
                 // all good, new nodes exist
             }
             Err(err) => {
@@ -361,11 +373,13 @@ impl<'bump> DiffMachine<'bump> {
         // Take the node that was just generated from running the component
         let nextnode = new_component.frames.fin_head();
 
-        // Push the new scope onto the stack
-        self.scope_stack.push(new_idx);
+        // // Push the new scope onto the stack
+        // self.scope_stack.push(new_idx);
 
-        todo!();
         // // Run the creation algorithm with this scope on the stack
+        self.instructions
+            .push(DiffInstruction::Create { node: nextnode });
+
         // let meta = self.create_vnode(nextnode);
 
         // // pop the scope off the stack
@@ -376,7 +390,7 @@ impl<'bump> DiffMachine<'bump> {
         // }
 
         // // Finally, insert this scope as a seen node.
-        // self.seen_scopes.insert(new_idx);
+        self.seen_scopes.insert(new_idx);
     }
 
     // =================================

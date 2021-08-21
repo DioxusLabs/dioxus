@@ -159,23 +159,53 @@ impl VirtualDom {
             .get_scope_mut(&self.base_scope)
             .expect("The base scope should never be moved");
 
-        todo!();
+        // todo!();
 
         // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        // if cur_component.run_scope().is_ok() {
-        //     let meta = diff_machine.create_vnode(cur_component.frames.fin_head());
-        //     diff_machine.edit_append_children(meta.added_to_stack);
-        // } else {
-        //     // todo: should this be a hard error?
-        //     log::warn!(
-        //         "Component failed to run succesfully during rebuild.
-        //         This does not result in a failed rebuild, but indicates a logic failure within your app."
-        //     );
-        // }
+        if cur_component.run_scope().is_ok() {
+            diff_machine.nodes_created_stack.push(0);
+            diff_machine.instructions.push(DiffInstruction::Create {
+                node: cur_component.frames.fin_head(),
+            });
+        } else {
+            // todo: should this be a hard error?
+            log::warn!(
+                "Component failed to run succesfully during rebuild.
+                This does not result in a failed rebuild, but indicates a logic failure within your app."
+            );
+        }
 
         Ok(diff_machine.mutations)
     }
 
+    pub async fn rebuild_async<'s>(&'s mut self) -> Result<Mutations<'s>> {
+        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
+
+        let cur_component = diff_machine
+            .get_scope_mut(&self.base_scope)
+            .expect("The base scope should never be moved");
+
+        // todo!();
+
+        // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
+        if cur_component.run_scope().is_ok() {
+            diff_machine.nodes_created_stack.push(0);
+            diff_machine.instructions.push(DiffInstruction::Create {
+                node: cur_component.frames.fin_head(),
+            });
+            diff_machine.work().await.unwrap();
+            let many = diff_machine.nodes_created_stack.pop().unwrap() as u32;
+            diff_machine.edit_append_children(many);
+        } else {
+            // todo: should this be a hard error?
+            log::warn!(
+                "Component failed to run succesfully during rebuild.
+                This does not result in a failed rebuild, but indicates a logic failure within your app."
+            );
+        }
+
+        Ok(diff_machine.mutations)
+    }
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
     ///
     /// This method will not wait for any suspended nodes to complete.

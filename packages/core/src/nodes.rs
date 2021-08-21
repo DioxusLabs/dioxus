@@ -38,12 +38,12 @@ pub enum VNode<'src> {
 impl<'src> VNode<'src> {
     pub fn key(&self) -> Option<&'src str> {
         match &self {
-            VNode::Text(_) => todo!(),
-            VNode::Element(_) => todo!(),
-            VNode::Fragment(_) => todo!(),
-            VNode::Component(_) => todo!(),
-            VNode::Suspended(_) => todo!(),
-            VNode::Anchor(_) => todo!(),
+            VNode::Element(el) => el.key,
+            VNode::Component(c) => c.key,
+            VNode::Fragment(f) => f.key,
+            VNode::Text(_t) => None,
+            VNode::Suspended(s) => None,
+            VNode::Anchor(f) => None,
         }
     }
     pub fn direct_id(&self) -> ElementId {

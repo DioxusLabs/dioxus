@@ -8,6 +8,7 @@ use dioxus::{
     scheduler::Mutations,
     DomEdit,
 };
+mod test_logging;
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 
@@ -29,29 +30,55 @@ fn test_original_diff() {
 }
 
 #[async_std::test]
-async fn test_iterative_diff() {
+async fn test_iterative_create() {
     static App: FC<()> = |cx| {
         cx.render(rsx! {
             div {
                 div {
                     "Hello, world!"
+                    div {
+                        div {
+                            Fragment {
+                                "hello"
+                                "world"
+                            }
+                        }
+                    }
                 }
             }
         })
     };
 
-    let shared = SharedResources::new();
+    test_logging::set_up_logging();
 
-    let mut machine = DiffMachine::new_headless(&shared);
-    let a = machine.work().await.unwrap();
+    let mut dom = VirtualDom::new(App);
+    let mutations = dom.rebuild_async().await.unwrap();
+    dbg!(mutations);
 }
 
 #[async_std::test]
-async fn websys_loop() {
-    ///loop {
-    ///    let deadline = request_idle_callback().await;
-    ///    let edits = dom.work(deadline);
-    ///    request_animation_frame().await;
-    ///    apply(edits);
-    ///}
+async fn test_iterative_create_list() {
+    static App: FC<()> = |cx| {
+        cx.render(rsx! {
+            {(0..10).map(|f| rsx!{ div {
+                "hello"
+            }})}
+        })
+    };
+
+    test_logging::set_up_logging();
+
+    let mut dom = VirtualDom::new(App);
+    let mutations = dom.rebuild_async().await.unwrap();
+    dbg!(mutations);
 }
+
+// #[async_std::test]
+// async fn websys_loop() {
+//     ///loop {
+//     ///    let deadline = request_idle_callback().await;
+//     ///    let edits = dom.work(deadline);
+//     ///    request_animation_frame().await;
+//     ///    apply(edits);
+//     ///}
+// }
