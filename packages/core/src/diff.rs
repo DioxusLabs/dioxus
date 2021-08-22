@@ -35,6 +35,19 @@
 //! Other implementations either don't support fragments or use a "child + sibling" pattern to represent them. Our code is
 //! vastly simpler and more performant when we can just create a placeholder element while the fragment has no children.
 //!
+//! ### Suspense
+//! ------------
+//! Dioxus implements suspense slightly differently than React. In React, each fiber is manually progressed until it runs
+//! into a promise-like value. React will then work on the next "ready" fiber, checking back on the previous fiber once
+//! it has finished its new work. In Dioxus, we use a similar approach, but try to completely render the tree before
+//! switching sub-fibers. Instead, each future is submitted into a futures-queue and the node is manually loaded later on.
+//!
+//! We're able to use this approach because we use placeholder nodes - futures that aren't ready still get submitted to
+//! DOM, but as a placeholder.
+//!
+//! Right now, the "suspense" queue is intertwined the hooks. In the future, we should allow any future to drive attributes
+//! and contents, without the need for the "use_suspense" hook. For now, this is the quickest way to get suspense working.
+//!
 //! ## Subtree Memoization
 //! -----------------------
 //! We also employ "subtree memoization" which saves us from having to check trees which take no dynamic content. We can
@@ -121,6 +134,12 @@ pub enum DiffInstruction<'a> {
     },
 
     DiffChildren {
+        old: &'a [VNode<'a>],
+        new: &'a [VNode<'a>],
+    },
+
+    // diff two lists of equally sized children
+    DiffEqual {
         progress: usize,
         old: &'a [VNode<'a>],
         new: &'a [VNode<'a>],
@@ -128,19 +147,29 @@ pub enum DiffInstruction<'a> {
 
     Create {
         node: &'a VNode<'a>,
+        and: MountType<'a>,
     },
+
     CreateChildren {
         progress: usize,
         children: &'a [VNode<'a>],
+        and: MountType<'a>,
     },
 
-    // todo: merge this into the create instruction?
-    Append,
-    InsertAfter,
-    InsertBefore,
-    Replace {
-        with: usize,
+    Mount {
+        and: MountType<'a>,
     },
+
+    PopScope,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MountType<'a> {
+    Absorb,
+    Append,
+    Replace { old: &'a VNode<'a> },
+    InsertAfter { other_node: &'a VNode<'a> },
+    InsertBefore { other_node: &'a VNode<'a> },
 }
 
 impl<'bump> DiffMachine<'bump> {
@@ -178,63 +207,109 @@ impl<'bump> DiffMachine<'bump> {
     ///
     /// This method implements a depth-first iterative tree traversal.
     ///
-    /// We do depth-first to maintain high cache locality (nodes were originally generated recursively) and because we
-    /// only need a stack (not a queue) of lists
+    /// We do depth-first to maintain high cache locality (nodes were originally generated recursively).
     pub async fn work(&mut self) -> Result<()> {
         // todo: don't move the reused instructions around
         // defer to individual functions so the compiler produces better code
         // large functions tend to be difficult for the compiler to work with
         while let Some(instruction) = self.instructions.last_mut() {
             log::debug!("Handling diff instruction: {:?}", instruction);
+
+            // todo: call this less frequently, there is a bit of overhead involved
+            yield_now().await;
+
             match instruction {
+                DiffInstruction::PopScope => {
+                    self.instructions.pop();
+                    self.scope_stack.pop();
+                }
+
                 DiffInstruction::DiffNode { old, new, .. } => {
                     let (old, new) = (*old, *new);
                     self.instructions.pop();
+
                     self.diff_node(old, new);
                 }
 
-                // this is slightly more complicated, we need to find a way to pause our LIS code
-                DiffInstruction::DiffChildren { progress, old, new } => {
-                    todo!()
-                }
+                DiffInstruction::DiffEqual { progress, old, new } => {
+                    debug_assert_eq!(old.len(), new.len());
 
-                DiffInstruction::Create { node, .. } => {
-                    let node = *node;
-                    self.instructions.pop();
-                    self.create_node(node);
-                }
-
-                DiffInstruction::CreateChildren { progress, children } => {
-                    if let Some(child) = children.get(*progress) {
+                    if let (Some(old_child), Some(new_child)) =
+                        (old.get(*progress), new.get(*progress))
+                    {
                         *progress += 1;
-                        self.create_node(child);
+                        self.diff_node(old_child, new_child);
                     } else {
                         self.instructions.pop();
                     }
                 }
 
-                DiffInstruction::Append => {
-                    let many = self.nodes_created_stack.pop().unwrap();
-                    self.edit_append_children(many as u32);
+                // this is slightly more complicated, we need to find a way to pause our LIS code
+                DiffInstruction::DiffChildren { old, new } => {
+                    let (old, new) = (*old, *new);
                     self.instructions.pop();
+
+                    self.diff_children(old, new);
                 }
 
-                DiffInstruction::Replace { with } => {
-                    let with = *with;
-                    let many = self.nodes_created_stack.pop().unwrap();
-                    self.edit_replace_with(with as u32, many as u32);
+                DiffInstruction::Create { node, and } => {
+                    let (node, and) = (*node, *and);
                     self.instructions.pop();
+
+                    self.nodes_created_stack.push(0);
+                    self.instructions.push(DiffInstruction::Mount { and });
+
+                    self.create_node(node);
                 }
 
-                DiffInstruction::InsertAfter => {
-                    let n = self.nodes_created_stack.pop().unwrap();
-                    self.edit_insert_after(n as u32);
-                    self.instructions.pop();
+                DiffInstruction::CreateChildren {
+                    progress,
+                    children,
+                    and,
+                } => {
+                    let and = *and;
+
+                    if *progress == 0 {
+                        self.nodes_created_stack.push(0);
+                    }
+
+                    if let Some(child) = children.get(*progress) {
+                        *progress += 1;
+
+                        if *progress == children.len() {
+                            self.instructions.pop();
+                            self.instructions.push(DiffInstruction::Mount { and });
+                        }
+
+                        self.create_node(child);
+                    } else if children.len() == 0 {
+                        self.instructions.pop();
+                    }
                 }
 
-                DiffInstruction::InsertBefore => {
-                    let n = self.nodes_created_stack.pop().unwrap();
-                    self.edit_insert_before(n as u32);
+                DiffInstruction::Mount { and } => {
+                    let nodes_created = self.nodes_created_stack.pop().unwrap();
+                    match and {
+                        // add the nodes from this virtual list to the parent
+                        // used by fragments and components
+                        MountType::Absorb => {
+                            *self.nodes_created_stack.last_mut().unwrap() += nodes_created;
+                        }
+                        MountType::Append => {
+                            self.edit_append_children(nodes_created as u32);
+                        }
+                        MountType::Replace { old } => {
+                            todo!()
+                            // self.edit_replace_with(with as u32, many as u32);
+                        }
+                        MountType::InsertAfter { other_node } => {
+                            self.edit_insert_after(nodes_created as u32);
+                        }
+                        MountType::InsertBefore { other_node } => {
+                            self.edit_insert_before(nodes_created as u32);
+                        }
+                    }
+
                     self.instructions.pop();
                 }
             };
@@ -292,7 +367,9 @@ impl<'bump> DiffMachine<'bump> {
 
         let real_id = self.vdom.reserve_node();
         self.edit_create_element(tag_name, *namespace, real_id);
+
         *self.nodes_created_stack.last_mut().unwrap() += 1;
+
         dom_id.set(Some(real_id));
 
         let cur_scope = self.current_scope().unwrap();
@@ -307,19 +384,20 @@ impl<'bump> DiffMachine<'bump> {
             self.edit_set_attribute(attr);
         }
 
-        self.instructions.push(DiffInstruction::Append);
-
-        self.nodes_created_stack.push(0);
-        self.instructions.push(DiffInstruction::CreateChildren {
-            children,
-            progress: 0,
-        });
+        if children.len() > 0 {
+            self.instructions.push(DiffInstruction::CreateChildren {
+                children,
+                progress: 0,
+                and: MountType::Append,
+            });
+        }
     }
 
     fn create_fragment_node(&mut self, frag: &'bump VFragment<'bump>) {
         self.instructions.push(DiffInstruction::CreateChildren {
             children: frag.children,
             progress: 0,
+            and: MountType::Absorb,
         });
     }
 
@@ -373,23 +451,18 @@ impl<'bump> DiffMachine<'bump> {
         // Take the node that was just generated from running the component
         let nextnode = new_component.frames.fin_head();
 
-        // // Push the new scope onto the stack
-        // self.scope_stack.push(new_idx);
+        // Push the new scope onto the stack
+        self.scope_stack.push(new_idx);
+        self.instructions.push(DiffInstruction::PopScope);
 
-        // // Run the creation algorithm with this scope on the stack
-        self.instructions
-            .push(DiffInstruction::Create { node: nextnode });
+        // Run the creation algorithm with this scope on the stack
+        // ?? I think we treat components as framgnets??
+        self.instructions.push(DiffInstruction::Create {
+            node: nextnode,
+            and: MountType::Absorb,
+        });
 
-        // let meta = self.create_vnode(nextnode);
-
-        // // pop the scope off the stack
-        // self.scope_stack.pop();
-
-        // if meta.added_to_stack == 0 {
-        //     panic!("Components should *always* generate nodes - even if they fail");
-        // }
-
-        // // Finally, insert this scope as a seen node.
+        // Finally, insert this scope as a seen node.
         self.seen_scopes.insert(new_idx);
     }
 
@@ -641,20 +714,24 @@ impl<'bump> DiffMachine<'bump> {
     // If old no anchors are provided, then it's assumed that we can freely append to the parent.
     //
     // Remember, non-empty lists does not mean that there are real elements, just that there are virtual elements.
+    //
+    // Frament nodes cannot generate empty children lists, so we can assume that when a list is empty, it belongs only
+    // to an element, and appending makes sense.
     fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         const IS_EMPTY: bool = true;
         const IS_NOT_EMPTY: bool = false;
 
+        // Remember, fragments can never be empty (they always have a single child)
         match (old.is_empty(), new.is_empty()) {
             (IS_EMPTY, IS_EMPTY) => {}
 
             // Completely adding new nodes, removing any placeholder if it exists
             (IS_EMPTY, IS_NOT_EMPTY) => {
-                todo!();
-                // let meta = todo!();
-                // let meta = self.create_children(new);
-                // let meta = self.create_children(new);
-                // self.edit_append_children(meta.added_to_stack);
+                self.instructions.push(DiffInstruction::CreateChildren {
+                    children: new,
+                    progress: 0,
+                    and: MountType::Append,
+                });
             }
 
             // Completely removing old nodes and putting an anchor in its place
@@ -678,14 +755,11 @@ impl<'bump> DiffMachine<'bump> {
 
                     // Replace the anchor with whatever new nodes are coming down the pipe
                     (VNode::Anchor(anchor), _) => {
-                        self.edit_push_root(anchor.dom_id.get().unwrap());
-                        let mut added = 0;
-                        for el in new {
-                            todo!();
-                            // let meta = self.create_vnode(el);
-                            // added += meta.added_to_stack;
-                        }
-                        self.edit_replace_with(1, added);
+                        self.instructions.push(DiffInstruction::CreateChildren {
+                            children: new,
+                            progress: 0,
+                            and: MountType::Replace { old: first_old },
+                        });
                     }
 
                     // Replace whatever nodes are sitting there with the anchor
@@ -888,52 +962,59 @@ impl<'bump> DiffMachine<'bump> {
         shared_suffix_count: usize,
         old_shared_suffix_start: usize,
     ) {
+        /*
+        1. Map the old keys into a numerical ordering based on indicies.
+        2. Create a map of old key to its index
+        3. Map each new key to the old key, carrying over the old index.
+            - IE if we have ABCD becomes BACD, our sequence would be 1,0,2,3
+            - if we have ABCD to ABDE, our sequence would be 0,1,3,MAX because E doesn't exist
+
+        now, we should have a list of integers that indicates where in the old list the new items map to.
+
+        4. Compute the LIS of this list
+            - this indicates the longest list of new children that won't need to be moved.
+
+        5. Identify which nodes need to be removed
+        6. Identify which nodes will need to be diffed
+
+        7. Going along each item in the new list, create it and insert it before the next closest item in the LIS.
+            - if the item already existed, just move it to the right place.
+
+        8. Finally, generate instructions to remove any old children.
+        9. Generate instructions to finally diff children that are the same between both
+        */
+
+        // 0. Debug sanity checks
         // Should have already diffed the shared-key prefixes and suffixes.
         debug_assert_ne!(new.first().map(|n| n.key()), old.first().map(|o| o.key()));
         debug_assert_ne!(new.last().map(|n| n.key()), old.last().map(|o| o.key()));
 
-        // // The algorithm below relies upon using `u32::MAX` as a sentinel
-        // // value, so if we have that many new nodes, it won't work. This
-        // // check is a bit academic (hence only enabled in debug), since
-        // // wasm32 doesn't have enough address space to hold that many nodes
-        // // in memory.
-        // debug_assert!(new.len() < u32::MAX as usize);
-
-        // Map from each `old` node's key to its index within `old`.
+        // 1. Map the old keys into a numerical ordering based on indicies.
+        // 2. Create a map of old key to its index
         // IE if the keys were A B C, then we would have (A, 1) (B, 2) (C, 3).
-        let mut old_key_to_old_index = old
+        let old_key_to_old_index = old
             .iter()
             .enumerate()
             .map(|(i, o)| (o.key().unwrap(), i))
             .collect::<FxHashMap<_, _>>();
 
-        // The set of shared keys between `new` and `old`.
         let mut shared_keys = FxHashSet::default();
-        // let mut to_remove = FxHashSet::default();
         let mut to_add = FxHashSet::default();
 
-        // Map from each index in `new` to the index of the node in `old` that
-        // has the same key.
-        let mut new_index_to_old_index = new
+        // 3. Map each new key to the old key, carrying over the old index.
+        let new_index_to_old_index = new
             .iter()
             .map(|n| {
                 let key = n.key().unwrap();
-                match old_key_to_old_index.get(&key) {
-                    Some(&index) => {
-                        shared_keys.insert(key);
-                        index
-                    }
-                    None => {
-                        //
-                        to_add.insert(key);
-                        u32::MAX as usize
-                    }
+                if let Some(&index) = old_key_to_old_index.get(&key) {
+                    shared_keys.insert(key);
+                    index
+                } else {
+                    to_add.insert(key);
+                    u32::MAX as usize
                 }
             })
             .collect::<Vec<_>>();
-
-        dbg!(&shared_keys);
-        dbg!(&to_add);
 
         // If none of the old keys are reused by the new children, then we
         // remove all the remaining old children and create the new children
@@ -943,23 +1024,7 @@ impl<'bump> DiffMachine<'bump> {
             return;
         }
 
-        // // Remove any old children whose keys were not reused in the new
-        // // children. Remove from the end first so that we don't mess up indices.
-        // for old_child in old.iter().rev() {
-        //     if !shared_keys.contains(&old_child.key()) {
-        //         self.remove_child(old_child);
-        //     }
-        // }
-
-        // let old_keyds = old.iter().map(|f| f.key()).collect::<Vec<_>>();
-        // let new_keyds = new.iter().map(|f| f.key()).collect::<Vec<_>>();
-        // dbg!(old_keyds);
-        // dbg!(new_keyds);
-
-        // // If there aren't any more new children, then we are done!
-        // if new.is_empty() {
-        //     return;
-        // }
+        // 4. Compute the LIS of this list
 
         // The longest increasing subsequence within `new_index_to_old_index`. This
         // is the longest sequence on DOM nodes in `old` that are relatively ordered
@@ -981,16 +1046,11 @@ impl<'bump> DiffMachine<'bump> {
             &mut starts,
         );
 
-        dbg!(&new_index_is_in_lis);
         // use the old nodes to navigate the new nodes
-
         let mut lis_in_order = new_index_is_in_lis.into_iter().collect::<Vec<_>>();
         lis_in_order.sort_unstable();
 
-        dbg!(&lis_in_order);
-
         // we walk front to back, creating the head node
-
         // diff the shared, in-place nodes first
         // this makes sure we can rely on their first/last nodes being correct later on
         for id in &lis_in_order {
@@ -1016,9 +1076,9 @@ impl<'bump> DiffMachine<'bump> {
             let new_anchor = &new[*lis_id];
             root = Some(new_anchor);
 
-            let anchor_el = self.find_first_element(new_anchor);
-            self.edit_push_root(anchor_el.direct_id());
-            // let mut pushed = false;
+            // let anchor_el = self.find_first_element(new_anchor);
+            // self.edit_push_root(anchor_el.direct_id());
+            // // let mut pushed = false;
 
             'inner: loop {
                 let (next_id, next_new) = new_iter.next().unwrap();
@@ -1044,12 +1104,12 @@ impl<'bump> DiffMachine<'bump> {
                             self.edit_insert_before(1);
                         }
                     } else {
-                        eprintln!("key is not contained {:?}", key);
-                        // new node needs to be created
-                        // insert it before the current milestone
-                        todo!();
-                        // let meta = self.create_vnode(next_new);
-                        // self.edit_insert_before(meta.added_to_stack);
+                        self.instructions.push(DiffInstruction::Create {
+                            node: next_new,
+                            and: MountType::InsertBefore {
+                                other_node: new_anchor,
+                            },
+                        });
                     }
                 }
             }
@@ -1129,11 +1189,7 @@ impl<'bump> DiffMachine<'bump> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    async fn diff_non_keyed_children(
-        &mut self,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
-    ) {
+    fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Handled these cases in `diff_children` before calling this function.
         //
         debug_assert!(!new.is_empty());

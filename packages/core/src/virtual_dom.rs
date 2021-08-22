@@ -163,9 +163,9 @@ impl VirtualDom {
 
         // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
-            diff_machine.nodes_created_stack.push(0);
             diff_machine.instructions.push(DiffInstruction::Create {
                 node: cur_component.frames.fin_head(),
+                and: MountType::Append,
             });
         } else {
             // todo: should this be a hard error?
@@ -178,6 +178,7 @@ impl VirtualDom {
         Ok(diff_machine.mutations)
     }
 
+    /// Rebuild the dom
     pub async fn rebuild_async<'s>(&'s mut self) -> Result<Mutations<'s>> {
         let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
@@ -189,13 +190,11 @@ impl VirtualDom {
 
         // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
-            diff_machine.nodes_created_stack.push(0);
             diff_machine.instructions.push(DiffInstruction::Create {
                 node: cur_component.frames.fin_head(),
+                and: MountType::Append,
             });
             diff_machine.work().await.unwrap();
-            let many = diff_machine.nodes_created_stack.pop().unwrap() as u32;
-            diff_machine.edit_append_children(many);
         } else {
             // todo: should this be a hard error?
             log::warn!(
