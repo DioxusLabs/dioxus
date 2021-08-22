@@ -1,10 +1,10 @@
 use std::{
     any::Any,
-    cell::{Cell, UnsafeCell},
+    cell::{Cell, RefCell, UnsafeCell},
 };
 
 pub struct HookList {
-    vals: appendlist::AppendList<InnerHook<Box<dyn Any>>>,
+    vals: RefCell<Vec<InnerHook<Box<dyn Any>>>>,
     idx: Cell<usize>,
 }
 
@@ -27,35 +27,17 @@ impl<T> InnerHook<T> {
         }
     }
 }
-
 impl HookList {
-    /// Unsafely get a mutable reference to any of the hooks
-    ///
-    /// This is unsafe because an &mut T might be aliased if the hook data is already borrowed/in use in the component
-    ///
-    /// This method should be reserved for internal methods that are guaranteed that this hook is not aliased anyhwere
-    /// inside the component body, or outside into children components.
-    ///
-    /// This method is currently used only by the suspense system whose hook implementation guarantees that all &T is dropped
-    /// before the suspense handler is ran.
-    pub(crate) unsafe fn get_mut<T: 'static>(&self, idx: usize) -> Option<&mut T> {
-        self.vals.get(idx).and_then(|inn| {
-            let raw_box = unsafe { &mut *inn.cell.get() };
-            raw_box.downcast_mut::<T>()
-        })
-    }
-
     pub(crate) fn next<T: 'static>(&self) -> Option<&mut T> {
-        self.vals.get(self.idx.get()).and_then(|inn| {
+        self.vals.borrow().get(self.idx.get()).and_then(|inn| {
             self.idx.set(self.idx.get() + 1);
             let raw_box = unsafe { &mut *inn.cell.get() };
             raw_box.downcast_mut::<T>()
         })
     }
 
-    #[inline]
     pub(crate) fn push<T: 'static>(&self, new: T) {
-        self.vals.push(InnerHook::new(Box::new(new)))
+        self.vals.borrow_mut().push(InnerHook::new(Box::new(new)))
     }
 
     /// This resets the internal iterator count
@@ -70,7 +52,7 @@ impl HookList {
 
     #[inline]
     pub(crate) fn len(&self) -> usize {
-        self.vals.len()
+        self.vals.borrow().len()
     }
 
     #[inline]

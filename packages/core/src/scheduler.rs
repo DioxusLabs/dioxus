@@ -33,57 +33,9 @@ use futures_util::pin_mut;
 use futures_util::Future;
 use futures_util::FutureExt;
 use futures_util::StreamExt;
-use indexmap::IndexSet;
 use smallvec::SmallVec;
 
 use crate::innerlude::*;
-
-/// The "Mutations" object holds the changes that need to be made to the DOM.
-///
-#[derive(Debug)]
-pub struct Mutations<'s> {
-    pub edits: Vec<DomEdit<'s>>,
-    pub noderefs: Vec<NodeRefMutation<'s>>,
-}
-
-impl<'s> Mutations<'s> {
-    pub fn new() -> Self {
-        let edits = Vec::new();
-        let noderefs = Vec::new();
-        Self { edits, noderefs }
-    }
-
-    pub fn extend(&mut self, other: &mut Mutations) {}
-}
-
-// refs are only assigned once
-pub struct NodeRefMutation<'a> {
-    element: &'a mut Option<once_cell::sync::OnceCell<Box<dyn Any>>>,
-    element_id: ElementId,
-}
-
-impl<'a> std::fmt::Debug for NodeRefMutation<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NodeRefMutation")
-            .field("element_id", &self.element_id)
-            .finish()
-    }
-}
-
-impl<'a> NodeRefMutation<'a> {
-    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
-        self.element
-            .as_ref()
-            .and_then(|f| f.get())
-            .and_then(|f| f.downcast_ref::<T>())
-    }
-    pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut T> {
-        self.element
-            .as_mut()
-            .and_then(|f| f.get_mut())
-            .and_then(|f| f.downcast_mut::<T>())
-    }
-}
 
 pub struct Scheduler {
     current_priority: EventPriority,
@@ -432,7 +384,7 @@ pub struct Waypoint {
 
 pub struct PriortySystem {
     pub pending_scopes: Vec<ScopeId>,
-    pub dirty_scopes: IndexSet<ScopeId>,
+    pub dirty_scopes: HashSet<ScopeId>,
 }
 
 impl PriortySystem {

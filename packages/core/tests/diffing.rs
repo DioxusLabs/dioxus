@@ -9,12 +9,13 @@ use bumpalo::Bump;
 use anyhow::{Context, Result};
 use dioxus::{
     arena::SharedResources,
-    diff::{CreateMeta, DiffMachine},
+    diff::{CreateMeta, DiffInstruction, DiffMachine},
     prelude::*,
     DomEdit,
 };
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
+use futures_util::FutureExt;
 
 struct TestDom {
     bump: Bump,
@@ -38,30 +39,41 @@ impl TestDom {
         lazy_nodes.into_vnode(NodeFactory::new(&self.bump))
     }
 
-    fn diff<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Vec<DomEdit<'a>> {
-        let mut edits = Vec::new();
+    fn diff<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
+        // let mut edits = Vec::new();
         let mut machine = DiffMachine::new_headless(&self.resources);
-        machine.diff_node(old, new);
-        edits
+
+        machine
+            .instructions
+            .push(dioxus::diff::DiffInstruction::DiffNode { new, old });
+
+        machine.mutations
     }
 
-    fn create<'a, F1>(&'a self, left: LazyNodes<'a, F1>) -> (CreateMeta, Vec<DomEdit<'a>>)
+    fn create<'a, F1>(&'a self, left: LazyNodes<'a, F1>) -> Mutations<'a>
     where
         F1: FnOnce(NodeFactory<'a>) -> VNode<'a>,
     {
         let old = self.bump.alloc(self.render(left));
-        let mut edits = Vec::new();
 
         let mut machine = DiffMachine::new_headless(&self.resources);
-        let meta = machine.create_vnode(old);
-        (meta, edits)
+
+        machine
+            .instructions
+            .push(dioxus::diff::DiffInstruction::Create {
+                node: old,
+                and: dioxus::diff::MountType::Append,
+            });
+        work_sync(&mut machine);
+
+        machine.mutations
     }
 
     fn lazy_diff<'a, F1, F2>(
         &'a self,
         left: LazyNodes<'a, F1>,
         right: LazyNodes<'a, F2>,
-    ) -> (Vec<DomEdit<'a>>, Vec<DomEdit<'a>>)
+    ) -> (Mutations<'a>, Mutations<'a>)
     where
         F1: FnOnce(NodeFactory<'a>) -> VNode<'a>,
         F2: FnOnce(NodeFactory<'a>) -> VNode<'a>,
@@ -70,15 +82,34 @@ impl TestDom {
 
         let new = self.bump.alloc(self.render(right));
 
-        let mut create_edits = Vec::new();
+        // let mut create_edits = Vec::new();
 
         let mut machine = DiffMachine::new_headless(&self.resources);
-        machine.create_vnode(old);
+        machine
+            .instructions
+            .push(dioxus::diff::DiffInstruction::Create {
+                and: dioxus::diff::MountType::Append,
+                node: old,
+            });
+        work_sync(&mut machine);
+        let create_edits = machine.mutations;
 
-        let mut edits = Vec::new();
         let mut machine = DiffMachine::new_headless(&self.resources);
-        machine.diff_node(old, new);
+        machine
+            .instructions
+            .push(DiffInstruction::DiffNode { old, new });
+        work_sync(&mut machine);
+        let edits = machine.mutations;
+
         (create_edits, edits)
+    }
+}
+
+fn work_sync(machine: &mut DiffMachine) {
+    let mut fut = machine.work().boxed_local();
+
+    while let None = (&mut fut).now_or_never() {
+        //
     }
 }
 
@@ -100,7 +131,7 @@ fn html_and_rsx_generate_the_same_output() {
 #[test]
 fn fragments_create_properly() {
     let dom = TestDom::new();
-    let (meta, edits) = dom.create(rsx! {
+    let Mutations { edits, noderefs } = dom.create(rsx! {
         div { "Hello a" }
         div { "Hello b" }
         div { "Hello c" }
@@ -109,7 +140,7 @@ fn fragments_create_properly() {
     assert!(&edits[3].is("CreateElement"));
     assert!(&edits[6].is("CreateElement"));
 
-    assert_eq!(meta.added_to_stack, 3);
+    assert_eq!(*edits.last().unwrap(), DomEdit::AppendChildren { many: 3 });
     dbg!(edits);
 }
 
@@ -152,7 +183,7 @@ fn empty_fragments_create_anchors_with_many_children() {
 
     let edits = dom.lazy_diff(left, right);
     dbg!(&edits);
-    let last_edit = edits.1.last().unwrap();
+    let last_edit = edits.1.edits.last().unwrap();
     assert!(last_edit.is("ReplaceWith"));
 }
 
@@ -190,7 +221,7 @@ fn two_equal_fragments_are_equal() {
 
     let edits = dom.lazy_diff(left, right);
     dbg!(&edits);
-    assert!(edits.1.is_empty());
+    assert!(edits.1.edits.is_empty());
 }
 
 /// Should result the creation of more nodes appended after the old last node

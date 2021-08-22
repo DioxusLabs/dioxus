@@ -43,6 +43,9 @@ pub struct Scope {
     pub(crate) hooks: HookList,
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
+    // meta
+    pub(crate) function_name: &'static str,
+
     // A reference to the resources shared by all the comonents
     pub(crate) vdom: SharedResources,
 }
@@ -73,6 +76,8 @@ impl Scope {
         child_nodes: ScopeChildren,
 
         vdom: SharedResources,
+
+        function_name: &'static str,
     ) -> Self {
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
 
@@ -84,6 +89,7 @@ impl Scope {
         }
 
         Self {
+            function_name,
             child_nodes,
             caller,
             parent_idx: parent,
@@ -141,7 +147,7 @@ impl Scope {
                 // the user's component succeeded. We can safely cycle to the next frame
                 self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
                 self.frames.cycle_frame();
-                log::debug!("Cycle okay");
+                log::debug!("Successfully rendered component");
                 Ok(())
             }
         }

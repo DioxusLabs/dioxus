@@ -8,6 +8,10 @@ pub fn empty_cell() -> Cell<Option<ElementId>> {
     Cell::new(None)
 }
 
+pub fn type_name_of<T>(_: T) -> &'static str {
+    std::any::type_name::<T>()
+}
+
 // /// A helper type that lets scopes be ordered by their height
 // #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 // pub struct HeightMarker {

@@ -12,15 +12,15 @@
 
 pub use crate::innerlude::{
     format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority,
-    EventTrigger, LazyNodes, NodeFactory, Properties, ScopeId, SuspendedContext, VNode, VirtualDom,
-    VirtualEvent, FC,
+    EventTrigger, LazyNodes, Mutations, NodeFactory, Properties, ScopeId, SuspendedContext, VNode,
+    VirtualDom, VirtualEvent, FC,
 };
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::context::Context;
     pub use crate::hooks::*;
-    pub use crate::innerlude::{DioxusElement, DomTree, LazyNodes, NodeFactory, FC};
+    pub use crate::innerlude::{DioxusElement, DomTree, LazyNodes, Mutations, NodeFactory, FC};
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
     pub use dioxus_core_macro::{format_args_f, html, rsx, Props};
@@ -39,6 +39,7 @@ pub(crate) mod innerlude {
     pub use crate::heuristics::*;
     pub use crate::hooklist::*;
     pub use crate::hooks::*;
+    pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::scheduler::*;
     pub use crate::scope::*;
@@ -68,6 +69,7 @@ pub mod events;
 pub mod heuristics;
 pub mod hooklist;
 pub mod hooks;
+pub mod mutations;
 pub mod nodes;
 pub mod scheduler;
 pub mod scope;

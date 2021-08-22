@@ -40,7 +40,7 @@ pub struct VirtualDom {
     ///
     /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
     /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    shared: SharedResources,
+    pub shared: SharedResources,
 
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
@@ -111,7 +111,8 @@ impl VirtualDom {
 
         let base_scope = components.insert_scope_with_key(move |myidx| {
             let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
-            Scope::new(caller, myidx, None, 0, ScopeChildren(&[]), link)
+            let name = type_name_of(root);
+            Scope::new(caller, myidx, None, 0, ScopeChildren(&[]), link, name)
         });
 
         Self {
@@ -150,43 +151,24 @@ impl VirtualDom {
     /// The diff machine expects the RealDom's stack to be the root of the application
     ///
     /// Events like garabge collection, application of refs, etc are not handled by this method and can only be progressed
-    /// through "run"
-    ///
+    /// through "run". We completely avoid the task scheduler infrastructure.
     pub fn rebuild<'s>(&'s mut self) -> Result<Mutations<'s>> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
+        let mut fut = self.rebuild_async().boxed_local();
 
-        let cur_component = diff_machine
-            .get_scope_mut(&self.base_scope)
-            .expect("The base scope should never be moved");
-
-        // todo!();
-
-        // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope().is_ok() {
-            diff_machine.instructions.push(DiffInstruction::Create {
-                node: cur_component.frames.fin_head(),
-                and: MountType::Append,
-            });
-        } else {
-            // todo: should this be a hard error?
-            log::warn!(
-                "Component failed to run succesfully during rebuild.
-                This does not result in a failed rebuild, but indicates a logic failure within your app."
-            );
+        loop {
+            if let Some(edits) = (&mut fut).now_or_never() {
+                break edits;
+            }
         }
-
-        Ok(diff_machine.mutations)
     }
 
-    /// Rebuild the dom
+    /// Rebuild the dom from the ground up
     pub async fn rebuild_async<'s>(&'s mut self) -> Result<Mutations<'s>> {
         let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
         let cur_component = diff_machine
             .get_scope_mut(&self.base_scope)
             .expect("The base scope should never be moved");
-
-        // todo!();
 
         // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
@@ -205,6 +187,27 @@ impl VirtualDom {
 
         Ok(diff_machine.mutations)
     }
+
+    // diff the dom with itself
+    pub async fn diff_async<'s>(&'s mut self) -> Result<Mutations<'s>> {
+        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
+
+        let cur_component = diff_machine
+            .get_scope_mut(&self.base_scope)
+            .expect("The base scope should never be moved");
+
+        cur_component.run_scope().unwrap();
+
+        diff_machine.instructions.push(DiffInstruction::DiffNode {
+            old: cur_component.frames.wip_head(),
+            new: cur_component.frames.fin_head(),
+        });
+
+        diff_machine.work().await.unwrap();
+
+        Ok(diff_machine.mutations)
+    }
+
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
     ///
     /// This method will not wait for any suspended nodes to complete.

@@ -164,6 +164,8 @@ pub struct VComponent<'src> {
 
     pub can_memoize: bool,
 
+    pub name: &'static str,
+
     // a pointer into the bump arena (given by the 'src lifetime)
     pub(crate) raw_props: *const (),
 
@@ -361,6 +363,8 @@ impl<'a> NodeFactory<'a> {
     {
         let bump = self.bump();
 
+        let name = crate::util::type_name_of(component);
+
         // We don't want the fat part of the fat pointer
         // This function does static dispatch so we don't need any VTable stuff
         let children: &'a V = bump.alloc(children);
@@ -426,6 +430,7 @@ impl<'a> NodeFactory<'a> {
             can_memoize: P::IS_STATIC,
             ass_scope: Cell::new(None),
             key,
+            name,
         }))
     }
 
@@ -453,6 +458,25 @@ impl<'a> NodeFactory<'a> {
 
     pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a>) -> VNode<'a> {
         let children = node_iter.into_vnode_list(self);
+
+        // TODO
+        // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
+        //
+        // if cfg!(debug_assertions) {
+        //     if children.len() > 1 {
+        //         if children.last().unwrap().key().is_none() {
+        //             log::error!(
+        //                 r#"
+        // Warning: Each child in an array or iterator should have a unique "key" prop.
+        // Not providing a key will lead to poor performance with lists.
+        // See docs.rs/dioxus for more information.
+        // ---
+        // To help you identify where this error is coming from, we've generated a backtrace.
+        //                         "#,
+        //             );
+        //         }
+        //     }
+        // }
 
         VNode::Fragment(VFragment {
             children,
@@ -495,22 +519,6 @@ where
 
         for node in self.into_iter() {
             nodes.push(node.into_vnode(cx));
-        }
-
-        if cfg!(debug_assertions) {
-            if nodes.len() > 1 {
-                if nodes.last().unwrap().key().is_none() {
-                    log::error!(
-                        r#"
-        Warning: Each child in an array or iterator should have a unique "key" prop.
-        Not providing a key will lead to poor performance with lists.
-        See docs.rs/dioxus for more information.
-        ---
-        To help you identify where this error is coming from, we've generated a backtrace.
-                                "#,
-                    );
-                }
-            }
         }
 
         if nodes.len() == 0 {
@@ -657,9 +665,13 @@ impl Debug for VNode<'_> {
             VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
             VNode::Anchor(a) => write!(s, "VAnchor"),
 
-            VNode::Fragment(_) => write!(s, "fragment"),
-            VNode::Suspended { .. } => write!(s, "suspended"),
-            VNode::Component(_) => write!(s, "component"),
+            VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
+            VNode::Suspended { .. } => write!(s, "VSuspended"),
+            VNode::Component(comp) => write!(
+                s,
+                "VComponent {{ fc: {:?}, children: {:?} }}",
+                comp.name, comp.children
+            ),
         }
     }
 }

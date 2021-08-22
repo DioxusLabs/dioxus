@@ -9,7 +9,7 @@ use crate::innerlude::ScopeId;
 
 /// A `DomEdit` represents a serialzied form of the VirtualDom's trait-based API. This allows streaming edits across the
 /// network or through FFI boundaries.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[cfg_attr(
     feature = "serialize",
     derive(serde::Serialize, serde::Deserialize),

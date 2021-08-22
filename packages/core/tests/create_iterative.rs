@@ -104,9 +104,7 @@ async fn test_iterative_create_components() {
     static Child: FC<()> = |cx| {
         cx.render(rsx! {
             h1 {}
-            div {
-                {cx.children()}
-            }
+            div { {cx.children()} }
             p {}
         })
     };
