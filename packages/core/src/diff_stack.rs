@@ -18,14 +18,6 @@ pub enum DiffInstruction<'a> {
         node: &'a VNode<'a>,
     },
 
-    Remove {
-        child: &'a VNode<'a>,
-    },
-
-    RemoveChildren {
-        children: &'a [VNode<'a>],
-    },
-
     Mount {
         and: MountType<'a>,
     },
@@ -40,7 +32,7 @@ pub enum MountType<'a> {
     Absorb,
     Append,
     Replace { old: &'a VNode<'a> },
-    ReplaceByElementId { old: ElementId },
+    ReplaceByElementId { el: ElementId },
     InsertAfter { other_node: &'a VNode<'a> },
     InsertBefore { other_node: &'a VNode<'a> },
 }

@@ -185,14 +185,6 @@ impl<'bump> DiffMachine<'bump> {
                     self.create_node(node);
                 }
 
-                DiffInstruction::Remove { child } => {
-                    self.remove_nodes(Some(child));
-                }
-
-                DiffInstruction::RemoveChildren { children } => {
-                    self.remove_nodes(children);
-                }
-
                 DiffInstruction::Mount { and } => {
                     self.mount(and);
                 }
@@ -219,7 +211,7 @@ impl<'bump> DiffMachine<'bump> {
                 let root = todo!();
                 self.mutations.replace_with(root, nodes_created as u32);
             }
-            MountType::ReplaceByElementId { old } => {
+            MountType::ReplaceByElementId { el: old } => {
                 self.mutations.replace_with(old, nodes_created as u32);
             }
 
@@ -584,70 +576,76 @@ impl<'bump> DiffMachine<'bump> {
     // Frament nodes cannot generate empty children lists, so we can assume that when a list is empty, it belongs only
     // to an element, and appending makes sense.
     fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
-        const IS_EMPTY: bool = true;
-        const IS_NOT_EMPTY: bool = false;
-
         // Remember, fragments can never be empty (they always have a single child)
-        match (old.is_empty(), new.is_empty()) {
-            (IS_EMPTY, IS_EMPTY) => {}
-
-            // Completely adding new nodes, removing any placeholder if it exists
-            (IS_EMPTY, IS_NOT_EMPTY) => {
+        match (old, new) {
+            ([], []) => {}
+            ([], _) => {
                 self.stack.create_children(new, MountType::Append);
             }
-
-            // Completely removing old nodes and putting an anchor in its place
-            // no anchor (old has nodes) and the new is empty
-            // remove all the old nodes
-            (IS_NOT_EMPTY, IS_EMPTY) => {
+            (_, []) => {
                 for node in old {
                     self.remove_nodes(Some(node));
                 }
             }
+            ([VNode::Anchor(old_anchor)], [VNode::Anchor(new_anchor)]) => {
+                old_anchor.dom_id.set(new_anchor.dom_id.get());
+            }
+            ([VNode::Anchor(anchor)], _) => {
+                let el = anchor.dom_id.get().unwrap();
+                self.stack
+                    .create_children(new, MountType::ReplaceByElementId { el });
+            }
+            (_, [VNode::Anchor(_)]) => {
+                self.replace_and_create_many_with_one(old, &new[0]);
+            }
+            _ => {
+                let new_is_keyed = new[0].key().is_some();
+                let old_is_keyed = old[0].key().is_some();
 
-            (IS_NOT_EMPTY, IS_NOT_EMPTY) => {
-                let first_old = &old[0];
-                let first_new = &new[0];
+                debug_assert!(
+                    new.iter().all(|n| n.key().is_some() == new_is_keyed),
+                    "all siblings must be keyed or all siblings must be non-keyed"
+                );
+                debug_assert!(
+                    old.iter().all(|o| o.key().is_some() == old_is_keyed),
+                    "all siblings must be keyed or all siblings must be non-keyed"
+                );
 
-                match (&first_old, &first_new) {
-                    // Anchors can only appear in empty fragments
-                    (VNode::Anchor(old_anchor), VNode::Anchor(new_anchor)) => {
-                        old_anchor.dom_id.set(new_anchor.dom_id.get());
-                    }
-
-                    // Replace the anchor with whatever new nodes are coming down the pipe
-                    (VNode::Anchor(anchor), _) => {
-                        self.stack
-                            .create_children(new, MountType::Replace { old: first_old });
-                    }
-
-                    // Replace whatever nodes are sitting there with the anchor
-                    (_, VNode::Anchor(anchor)) => {
-                        self.replace_and_create_many_with_one(old, first_new);
-                    }
-
-                    // Use the complex diff algorithm to diff the nodes
-                    _ => {
-                        let new_is_keyed = new[0].key().is_some();
-                        let old_is_keyed = old[0].key().is_some();
-
-                        debug_assert!(
-                            new.iter().all(|n| n.key().is_some() == new_is_keyed),
-                            "all siblings must be keyed or all siblings must be non-keyed"
-                        );
-                        debug_assert!(
-                            old.iter().all(|o| o.key().is_some() == old_is_keyed),
-                            "all siblings must be keyed or all siblings must be non-keyed"
-                        );
-
-                        if new_is_keyed && old_is_keyed {
-                            self.diff_keyed_children(old, new);
-                        } else {
-                            self.diff_non_keyed_children(old, new);
-                        }
-                    }
+                if new_is_keyed && old_is_keyed {
+                    self.diff_keyed_children(old, new);
+                } else {
+                    self.diff_non_keyed_children(old, new);
                 }
             }
+        }
+    }
+
+    // Diff children that are not keyed.
+    //
+    // The parent must be on the top of the change list stack when entering this
+    // function:
+    //
+    //     [... parent]
+    //
+    // the change list stack is in the same state when this function returns.
+    fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
+        // Handled these cases in `diff_children` before calling this function.
+        debug_assert!(!new.is_empty());
+        debug_assert!(!old.is_empty());
+
+        for (new, old) in new.iter().zip(old.iter()).rev() {
+            self.stack.push(DiffInstruction::DiffNode { new, old });
+        }
+
+        if old.len() > new.len() {
+            self.remove_nodes(&old[new.len()..]);
+        } else {
+            self.stack.create_children(
+                &new[old.len()..],
+                MountType::InsertAfter {
+                    other_node: old.last().unwrap(),
+                },
+            );
         }
     }
 
@@ -1024,70 +1022,6 @@ impl<'bump> DiffMachine<'bump> {
 
         for (old_child, new_child) in old.iter().zip(new.iter()) {
             self.diff_node(old_child, new_child);
-        }
-    }
-
-    // Diff children that are not keyed.
-    //
-    // The parent must be on the top of the change list stack when entering this
-    // function:
-    //
-    //     [... parent]
-    //
-    // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
-        // Handled these cases in `diff_children` before calling this function.
-        //
-        debug_assert!(!new.is_empty());
-        debug_assert!(!old.is_empty());
-
-        match old.len().cmp(&new.len()) {
-            // old.len > new.len -> removing some nodes
-            Ordering::Greater => {
-                // Generate instructions to diff the existing elements
-                for (new_child, old_child) in new.iter().zip(old.iter()).rev() {
-                    self.stack.push(DiffInstruction::DiffNode {
-                        new: new_child,
-                        old: old_child,
-                    });
-                }
-
-                self.stack.push(DiffInstruction::RemoveChildren {
-                    children: &old[new.len()..],
-                });
-            }
-
-            // old.len < new.len -> adding some nodes
-            // this is wrong in the case where we're diffing fragments
-            //
-            // we need to save the last old element and then replace it with all the new ones
-            Ordering::Less => {
-                // Generate instructions to diff the existing elements
-                for (new_child, old_child) in new.iter().zip(old.iter()).rev() {
-                    self.stack.push(DiffInstruction::DiffNode {
-                        new: new_child,
-                        old: old_child,
-                    });
-                }
-
-                // Generate instructions to add in the new elements
-                self.stack.create_children(
-                    &new[old.len()..],
-                    MountType::InsertAfter {
-                        other_node: old.last().unwrap(),
-                    },
-                );
-            }
-
-            // old.len == new.len -> no nodes added/removed, but perhaps changed
-            Ordering::Equal => {
-                for (new_child, old_child) in new.iter().zip(old.iter()).rev() {
-                    self.stack.push(DiffInstruction::DiffNode {
-                        new: new_child,
-                        old: old_child,
-                    });
-                }
-            }
         }
     }
 
