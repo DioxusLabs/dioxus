@@ -188,6 +188,10 @@ impl<'bump> DiffMachine<'bump> {
                 DiffInstruction::Mount { and } => {
                     self.mount(and);
                 }
+
+                DiffInstruction::PrepareMoveNode { node } => {
+                    //
+                }
             };
         }
 
@@ -223,6 +227,12 @@ impl<'bump> DiffMachine<'bump> {
             MountType::InsertBefore { other_node } => {
                 let root = self.find_first_element(other_node).direct_id();
                 self.mutations.insert_before(root, nodes_created as u32);
+            }
+
+            MountType::InsertAfterFlush { other_node } => {
+                self.stack.push_nodes_created(0);
+                let root = self.find_last_element(other_node).direct_id();
+                self.mutations.insert_after(root, nodes_created as u32);
             }
         }
     }
@@ -693,94 +703,72 @@ impl<'bump> DiffMachine<'bump> {
         //
         // `shared_prefix_count` is the count of how many nodes at the start of
         // `new` and `old` share the same keys.
-        //
-        // TODO: just inline this
-        let shared_prefix_count = match self.diff_keyed_prefix(old, new) {
-            KeyedPrefixResult::Finished => return,
-            KeyedPrefixResult::MoreWorkToDo(count) => count,
+        let (left_offset, right_offset) = match self.diff_keyed_ends(old, new) {
+            Some(count) => count,
+            None => return,
         };
-
-        // Next, we find out how many of the nodes at the end of the children have
-        // the same key. We do _not_ diff them yet, since we want to emit the change
-        // list instructions such that they can be applied in a single pass over the
-        // DOM. Instead, we just save this information for later.
-        //
-        // `shared_suffix_count` is the count of how many nodes at the end of `new`
-        // and `old` share the same keys.
-        let shared_suffix_count = old[shared_prefix_count..]
-            .iter()
-            .rev()
-            .zip(new[shared_prefix_count..].iter().rev())
-            .take_while(|&(old, new)| old.key() == new.key())
-            .count();
-
-        let old_shared_suffix_start = old.len() - shared_suffix_count;
-        let new_shared_suffix_start = new.len() - shared_suffix_count;
 
         // Ok, we now hopefully have a smaller range of children in the middle
         // within which to re-order nodes with the same keys, remove old nodes with
         // now-unused keys, and create new nodes with fresh keys.
         self.diff_keyed_middle(
-            &old[shared_prefix_count..old_shared_suffix_start],
-            &new[shared_prefix_count..new_shared_suffix_start],
-            shared_prefix_count,
-            shared_suffix_count,
-            old_shared_suffix_start,
+            &old[left_offset..(old.len() - right_offset)],
+            &new[left_offset..(new.len() - right_offset)],
         );
-
-        // Finally, diff the nodes at the end of `old` and `new` that share keys.
-        let old_suffix = &old[old_shared_suffix_start..];
-        let new_suffix = &new[new_shared_suffix_start..];
-        debug_assert_eq!(old_suffix.len(), new_suffix.len());
-        if !old_suffix.is_empty() {
-            self.diff_keyed_suffix(old_suffix, new_suffix, new_shared_suffix_start)
-        }
     }
 
-    // Diff the prefix of children in `new` and `old` that share the same keys in
-    // the same order.
-    //
-    // The stack is empty upon entry.
-    fn diff_keyed_prefix(
+    /// Diff both ends of the children that share keys.
+    ///
+    /// Returns a left offset and right offset of that indicates a smaller section to pass onto the middle diffing.
+    ///
+    /// If there is no offset, then this function returns None and the diffing is complete.
+    fn diff_keyed_ends(
         &mut self,
         old: &'bump [VNode<'bump>],
         new: &'bump [VNode<'bump>],
-    ) -> KeyedPrefixResult {
-        let mut shared_prefix_count = 0;
+    ) -> Option<(usize, usize)> {
+        let mut left_offset = 0;
 
         for (old, new) in old.iter().zip(new.iter()) {
             // abort early if we finally run into nodes with different keys
             if old.key() != new.key() {
                 break;
             }
-            self.diff_node(old, new);
-            shared_prefix_count += 1;
+            self.stack.push(DiffInstruction::DiffNode { old, new });
+            left_offset += 1;
         }
 
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
-        if shared_prefix_count == old.len() {
-            // Load the last element
-            let last_node = self.find_last_element(new.last().unwrap()).direct_id();
-            self.mutations.push_root(last_node);
-
-            // Create the new children and insert them after
-            //
-            todo!();
-            // let meta = self.create_children(&new[shared_prefix_count..]);
-            // self.mutations.insert_after(meta.added_to_stack);
-
-            return KeyedPrefixResult::Finished;
+        if left_offset == old.len() {
+            self.stack.create_children(
+                &new[left_offset..],
+                MountType::InsertAfter {
+                    other_node: old.last().unwrap(),
+                },
+            );
+            return None;
         }
 
         // And if that was all of the new children, then remove all of the remaining
         // old children and we're finished.
-        if shared_prefix_count == new.len() {
-            self.remove_nodes(&old[shared_prefix_count..]);
-            return KeyedPrefixResult::Finished;
+        if left_offset == new.len() {
+            self.remove_nodes(&old[left_offset..]);
+            return None;
         }
 
-        KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
+        // if the shared prefix is less than either length, then we need to walk backwards
+        let mut right_offset = 0;
+        for (old, new) in old.iter().rev().zip(new.iter().rev()) {
+            // abort early if we finally run into nodes with different keys
+            if old.key() != new.key() {
+                break;
+            }
+            self.diff_node(old, new);
+            right_offset += 1;
+        }
+
+        Some((left_offset, right_offset))
     }
 
     // The most-general, expensive code path for keyed children diffing.
@@ -796,14 +784,7 @@ impl<'bump> DiffMachine<'bump> {
     // This function will load the appropriate nodes onto the stack and do diffing in place.
     //
     // Upon exit from this function, it will be restored to that same state.
-    fn diff_keyed_middle(
-        &mut self,
-        old: &'bump [VNode<'bump>],
-        mut new: &'bump [VNode<'bump>],
-        shared_prefix_count: usize,
-        shared_suffix_count: usize,
-        old_shared_suffix_start: usize,
-    ) {
+    fn diff_keyed_middle(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         /*
         1. Map the old keys into a numerical ordering based on indicies.
         2. Create a map of old key to its index
@@ -841,39 +822,30 @@ impl<'bump> DiffMachine<'bump> {
             .collect::<FxHashMap<_, _>>();
 
         let mut shared_keys = FxHashSet::default();
-        let mut to_add = FxHashSet::default();
 
         // 3. Map each new key to the old key, carrying over the old index.
         let new_index_to_old_index = new
             .iter()
-            .map(|n| {
-                let key = n.key().unwrap();
+            .map(|node| {
+                let key = node.key().unwrap();
                 if let Some(&index) = old_key_to_old_index.get(&key) {
                     shared_keys.insert(key);
                     index
                 } else {
-                    to_add.insert(key);
                     u32::MAX as usize
                 }
             })
             .collect::<Vec<_>>();
 
-        // If none of the old keys are reused by the new children, then we
-        // remove all the remaining old children and create the new children
-        // afresh.
-        if shared_suffix_count == 0 && shared_keys.is_empty() {
+        // If none of the old keys are reused by the new children, then we remove all the remaining old children and
+        // create the new children afresh.
+        if shared_keys.is_empty() {
             self.replace_and_create_many_with_many(old, new);
             return;
         }
 
         // 4. Compute the LIS of this list
-
-        // The longest increasing subsequence within `new_index_to_old_index`. This
-        // is the longest sequence on DOM nodes in `old` that are relatively ordered
-        // correctly within `new`. We will leave these nodes in place in the DOM,
-        // and only move nodes that are not part of the LIS. This results in the
-        // maximum number of DOM nodes left in place, AKA the minimum number of DOM
-        // nodes moved.
+        // TODO: investigate if we can go without the hashset here, I can't quite tell from the LIS crate
         let mut new_index_is_in_lis = FxHashSet::default();
         new_index_is_in_lis.reserve(new_index_to_old_index.len());
 
@@ -888,141 +860,50 @@ impl<'bump> DiffMachine<'bump> {
             &mut starts,
         );
 
-        // use the old nodes to navigate the new nodes
-        let mut lis_in_order = new_index_is_in_lis.into_iter().collect::<Vec<_>>();
-        lis_in_order.sort_unstable();
+        // REMEMBER: we're generating instructions. we cannot rely on anything stack related to be consistent.
 
-        // we walk front to back, creating the head node
-        // diff the shared, in-place nodes first
-        // this makes sure we can rely on their first/last nodes being correct later on
-        for id in &lis_in_order {
-            let new_node = &new[*id];
-            let key = new_node.key().unwrap();
-            let old_index = old_key_to_old_index.get(&key).unwrap();
-            let old_node = &old[*old_index];
-            self.diff_node(old_node, new_node);
-        }
+        // walk the new list, creating nodes or diffing them. if we hit an LIS, then we call "insert before"
+        let mut last_lis = 0;
 
-        // return the old node from the key
-        let load_old_node_from_lsi = |key| -> &VNode {
-            let old_index = old_key_to_old_index.get(key).unwrap();
-            let old_node = &old[*old_index];
-            old_node
-        };
+        self.stack.push_nodes_created(0);
+        for (idx, new_node) in new.into_iter().enumerate().rev() {
+            let old_index = new_index_to_old_index[idx];
 
-        let mut root = None;
-        let mut new_iter = new.iter().enumerate();
-        for lis_id in &lis_in_order {
-            eprintln!("tracking {:?}", lis_id);
-            // this is the next milestone node we are working up to
-            let new_anchor = &new[*lis_id];
-            root = Some(new_anchor);
-
-            // let anchor_el = self.find_first_element(new_anchor);
-            // self.mutations.push_root(anchor_el.direct_id());
-            // // let mut pushed = false;
-
-            'inner: loop {
-                let (next_id, next_new) = new_iter.next().unwrap();
-                if next_id == *lis_id {
-                    // we've reached the milestone, break this loop so we can step to the next milestone
-                    // remember: we already diffed this node
-                    eprintln!("breaking {:?}", next_id);
-                    break 'inner;
-                } else {
-                    let key = next_new.key().unwrap();
-                    eprintln!("found key {:?}", key);
-                    if shared_keys.contains(&key) {
-                        eprintln!("key is contained {:?}", key);
-                        shared_keys.remove(key);
-                        // diff the two nodes
-                        let old_node = load_old_node_from_lsi(key);
-                        self.diff_node(old_node, next_new);
-
-                        // now move all the nodes into the right spot
-                        for child in RealChildIterator::new(next_new, self.vdom) {
-                            let el = child.direct_id();
-                            self.mutations.push_root(el);
-                            todo!();
-                            // self.mutations.insert_before(1);
-                        }
-                    } else {
-                        self.stack.create_node(
-                            next_new,
-                            MountType::InsertBefore {
-                                other_node: new_anchor,
-                            },
-                        );
-                    }
-                }
-            }
-
-            self.mutations.pop();
-        }
-
-        let final_lis_node = root.unwrap();
-        let final_el_node = self.find_last_element(final_lis_node);
-        let final_el = final_el_node.direct_id();
-        self.mutations.push_root(final_el);
-
-        let mut last_iter = new.iter().rev().enumerate();
-        let last_key = final_lis_node.key().unwrap();
-        loop {
-            let (last_id, last_node) = last_iter.next().unwrap();
-            let key = last_node.key().unwrap();
-
-            eprintln!("checking final nodes {:?}", key);
-
-            if last_key == key {
-                eprintln!("breaking final nodes");
-                break;
-            }
-
-            if shared_keys.contains(&key) {
-                eprintln!("key is contained {:?}", key);
-                shared_keys.remove(key);
-                // diff the two nodes
-                let old_node = load_old_node_from_lsi(key);
-                self.diff_node(old_node, last_node);
-
-                // now move all the nodes into the right spot
-                for child in RealChildIterator::new(last_node, self.vdom) {
-                    let el = child.direct_id();
-                    self.mutations.push_root(el);
-                    // self.mutations.insert_after(1);
-                    todo!();
-                }
+            if old_index == u32::MAX as usize {
+                self.stack.create_node(new_node, MountType::Absorb);
             } else {
-                eprintln!("key is not contained {:?}", key);
-                // new node needs to be created
-                // insert it before the current milestone
-                todo!();
-                // let meta = self.create_vnode(last_node);
-                // self.mutations.insert_after(meta.added_to_stack);
+                // diff / move
+                if let Some(new_index) = new_index_is_in_lis.get(&idx) {
+                    // take all the nodes on the stack and insert them before this one
+                    self.stack.push(DiffInstruction::Mount {
+                        and: MountType::InsertAfterFlush {
+                            other_node: new_node,
+                        },
+                    });
+                    self.stack.push(DiffInstruction::DiffNode {
+                        new: new_node,
+                        old: &old[old_index],
+                    });
+                    last_lis = *new_index;
+                } else {
+                    // this is not an LIS node, we need to diff it and move it
+                    self.stack
+                        .push(DiffInstruction::PrepareMoveNode { node: new_node });
+                    self.stack.push(DiffInstruction::DiffNode {
+                        new: new_node,
+                        old: &old[old_index],
+                    });
+                }
             }
         }
-        self.mutations.pop();
-    }
 
-    // Diff the suffix of keyed children that share the same keys in the same order.
-    //
-    // The parent must be on the change list stack when we enter this function:
-    //
-    //     [... parent]
-    //
-    // When this function exits, the change list stack remains the same.
-    fn diff_keyed_suffix(
-        &mut self,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
-        new_shared_suffix_start: usize,
-    ) {
-        debug_assert_eq!(old.len(), new.len());
-        debug_assert!(!old.is_empty());
-
-        for (old_child, new_child) in old.iter().zip(new.iter()) {
-            self.diff_node(old_child, new_child);
-        }
+        // There will be nodes left on top of the stack. They need to be inserted before the final
+        let last_node = &old[last_lis];
+        self.stack.push(DiffInstruction::Mount {
+            and: MountType::InsertBefore {
+                other_node: last_node,
+            },
+        });
     }
 
     // =====================
@@ -1073,14 +954,6 @@ impl<'bump> DiffMachine<'bump> {
                 }
             }
         }
-    }
-
-    fn replace_many_with_many(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
-        //
-    }
-
-    fn replace_one_with_many(&mut self, old: &'bump VNode<'bump>, new: &'bump [VNode<'bump>]) {
-        self.stack.create_children(new, MountType::Replace { old });
     }
 
     fn replace_and_create_many_with_one(
@@ -1230,15 +1103,6 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    fn replace_node_with_node(
-        &mut self,
-        old_node: &'bump VNode<'bump>,
-        new_node: &'bump VNode<'bump>,
-    ) {
-        self.stack
-            .create_node(new_node, MountType::Replace { old: old_node });
-    }
-
     fn fix_listener<'a>(&mut self, listener: &'a Listener<'a>) {
         let scope_id = self.stack.current_scope();
         if let Some(scope_id) = scope_id {
@@ -1248,13 +1112,4 @@ impl<'bump> DiffMachine<'bump> {
             queue.push(long_listener as *const _)
         }
     }
-}
-
-enum KeyedPrefixResult {
-    // Fast path: we finished diffing all the children just by looking at the
-    // prefix of shared keys!
-    Finished,
-    // There is more diffing work to do. Here is a count of how many children at
-    // the beginning of `new` and `old` we already processed.
-    MoreWorkToDo(usize),
 }

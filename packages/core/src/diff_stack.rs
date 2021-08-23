@@ -18,6 +18,11 @@ pub enum DiffInstruction<'a> {
         node: &'a VNode<'a>,
     },
 
+    /// pushes the node elements onto the stack for use in mount
+    PrepareMoveNode {
+        node: &'a VNode<'a>,
+    },
+
     Mount {
         and: MountType<'a>,
     },
@@ -34,6 +39,7 @@ pub enum MountType<'a> {
     Replace { old: &'a VNode<'a> },
     ReplaceByElementId { el: ElementId },
     InsertAfter { other_node: &'a VNode<'a> },
+    InsertAfterFlush { other_node: &'a VNode<'a> },
     InsertBefore { other_node: &'a VNode<'a> },
 }
 
@@ -72,6 +78,10 @@ impl<'bump> DiffStack<'bump> {
             self.instructions
                 .push(DiffInstruction::Create { node: child });
         }
+    }
+
+    pub fn push_nodes_created(&mut self, count: usize) {
+        self.nodes_created_stack.push(count);
     }
 
     pub fn create_node(&mut self, node: &'bump VNode<'bump>, and: MountType<'bump>) {
