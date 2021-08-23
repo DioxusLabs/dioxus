@@ -166,13 +166,14 @@ impl VirtualDom {
     pub async fn rebuild_async<'s>(&'s mut self) -> Result<Mutations<'s>> {
         let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
-        let cur_component = diff_machine
-            .get_scope_mut(&self.base_scope)
+        let cur_component = self
+            .shared
+            .get_scope_mut(self.base_scope)
             .expect("The base scope should never be moved");
 
         // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
-            diff_machine.instructions.push(DiffInstruction::Create {
+            diff_machine.stack.push(DiffInstruction::Create {
                 node: cur_component.frames.fin_head(),
                 and: MountType::Append,
             });
@@ -192,13 +193,14 @@ impl VirtualDom {
     pub async fn diff_async<'s>(&'s mut self) -> Result<Mutations<'s>> {
         let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
-        let cur_component = diff_machine
-            .get_scope_mut(&self.base_scope)
+        let cur_component = self
+            .shared
+            .get_scope_mut(self.base_scope)
             .expect("The base scope should never be moved");
 
         cur_component.run_scope().unwrap();
 
-        diff_machine.instructions.push(DiffInstruction::DiffNode {
+        diff_machine.stack.push(DiffInstruction::DiffNode {
             old: cur_component.frames.wip_head(),
             new: cur_component.frames.fin_head(),
         });

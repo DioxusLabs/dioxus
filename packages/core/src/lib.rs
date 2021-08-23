@@ -30,9 +30,11 @@ pub mod prelude {
 pub(crate) mod innerlude {
     pub use crate::arena::*;
     pub use crate::bumpframe::*;
+    pub use crate::childiter::*;
     pub use crate::component::*;
     pub use crate::context::*;
     pub use crate::diff::*;
+    pub use crate::diff_stack::*;
     pub use crate::editor::*;
     pub use crate::error::*;
     pub use crate::events::*;
@@ -60,9 +62,11 @@ pub mod exports {
 
 pub mod arena;
 pub mod bumpframe;
+pub mod childiter;
 pub mod component;
 pub mod context;
 pub mod diff;
+pub mod diff_stack;
 pub mod editor;
 pub mod error;
 pub mod events;

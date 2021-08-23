@@ -98,13 +98,8 @@ pub struct VElement<'a> {
     pub namespace: Option<&'static str>,
     pub dom_id: Cell<Option<ElementId>>,
 
-    pub static_listeners: bool,
     pub listeners: &'a [Listener<'a>],
-
-    pub static_attrs: bool,
     pub attributes: &'a [Attribute<'a>],
-
-    pub static_children: bool,
     pub children: &'a [VNode<'a>],
 }
 
@@ -303,11 +298,6 @@ impl<'a> NodeFactory<'a> {
             attributes,
             children,
             dom_id: empty_cell(),
-
-            // todo: wire up more constization
-            static_listeners: false,
-            static_attrs: false,
-            static_children: false,
         }))
     }
 

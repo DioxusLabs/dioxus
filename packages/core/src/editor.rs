@@ -24,10 +24,6 @@ pub enum DomEdit<'bump> {
         many: u32,
     },
     ReplaceWith {
-        // the first n elements
-        n: u32,
-
-        // the last m elements
         m: u32,
     },
     InsertAfter {
@@ -36,7 +32,10 @@ pub enum DomEdit<'bump> {
     InsertBefore {
         n: u32,
     },
-    Remove,
+    // remove roots directly
+    Remove {
+        root: u64,
+    },
     RemoveAllChildren,
     CreateTextNode {
         text: &'bump str,
@@ -83,7 +82,7 @@ impl DomEdit<'_> {
             DomEdit::PopRoot => id == "PopRoot",
             DomEdit::AppendChildren { .. } => id == "AppendChildren",
             DomEdit::ReplaceWith { .. } => id == "ReplaceWith",
-            DomEdit::Remove => id == "Remove",
+            DomEdit::Remove { .. } => id == "Remove",
             DomEdit::RemoveAllChildren => id == "RemoveAllChildren",
             DomEdit::CreateTextNode { .. } => id == "CreateTextNode",
             DomEdit::CreateElement { .. } => id == "CreateElement",

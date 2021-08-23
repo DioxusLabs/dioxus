@@ -1,17 +1,18 @@
-use std::any::Any;
+//! Instructions returned by the VirtualDOM on how to modify the Real DOM.
+//!
 
 use crate::innerlude::*;
+use std::any::Any;
 
-/// The "Mutations" object holds the changes that need to be made to the DOM.
-///
 #[derive(Debug)]
-pub struct Mutations<'s> {
-    pub edits: Vec<DomEdit<'s>>,
-    pub noderefs: Vec<NodeRefMutation<'s>>,
+pub struct Mutations<'a> {
+    pub edits: Vec<DomEdit<'a>>,
+    pub noderefs: Vec<NodeRefMutation<'a>>,
 }
+
 use DomEdit::*;
 
-impl<'bump> Mutations<'bump> {
+impl<'a> Mutations<'a> {
     pub fn new() -> Self {
         let edits = Vec::new();
         let noderefs = Vec::new();
@@ -25,29 +26,34 @@ impl<'bump> Mutations<'bump> {
         let id = root.as_u64();
         self.edits.push(PushRoot { id });
     }
+
     pub(crate) fn pop(&mut self) {
         self.edits.push(PopRoot {});
     }
-    // replace the n-m node on the stack with the m nodes
-    // ends with the last element of the chain on the top of the stack
-    pub(crate) fn replace_with(&mut self, n: u32, m: u32) {
-        self.edits.push(ReplaceWith { n, m });
+
+    pub(crate) fn replace_with(&mut self, m: u32) {
+        self.edits.push(ReplaceWith { m });
     }
+
     pub(crate) fn insert_after(&mut self, n: u32) {
         self.edits.push(InsertAfter { n });
     }
+
     pub(crate) fn insert_before(&mut self, n: u32) {
         self.edits.push(InsertBefore { n });
     }
+
     // Remove Nodesfrom the dom
-    pub(crate) fn remove(&mut self) {
-        self.edits.push(Remove);
+    pub(crate) fn remove(&mut self, id: u64) {
+        self.edits.push(Remove { root: id });
     }
+
     // Create
-    pub(crate) fn create_text_node(&mut self, text: &'bump str, id: ElementId) {
+    pub(crate) fn create_text_node(&mut self, text: &'a str, id: ElementId) {
         let id = id.as_u64();
         self.edits.push(CreateTextNode { text, id });
     }
+
     pub(crate) fn create_element(
         &mut self,
         tag: &'static str,
@@ -65,6 +71,7 @@ impl<'bump> Mutations<'bump> {
         let id = id.as_u64();
         self.edits.push(CreatePlaceholder { id });
     }
+
     // events
     pub(crate) fn new_event_listener(&mut self, listener: &Listener, scope: ScopeId) {
         let Listener {
@@ -84,11 +91,13 @@ impl<'bump> Mutations<'bump> {
     pub(crate) fn remove_event_listener(&mut self, event: &'static str) {
         self.edits.push(RemoveEventListener { event });
     }
+
     // modify
-    pub(crate) fn set_text(&mut self, text: &'bump str) {
+    pub(crate) fn set_text(&mut self, text: &'a str) {
         self.edits.push(SetText { text });
     }
-    pub(crate) fn set_attribute(&mut self, attribute: &'bump Attribute) {
+
+    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute) {
         let Attribute {
             name,
             value,
@@ -103,7 +112,7 @@ impl<'bump> Mutations<'bump> {
             ns: *namespace,
         });
     }
-    pub(crate) fn set_attribute_ns(&mut self, attribute: &'bump Attribute, namespace: &'bump str) {
+    pub(crate) fn set_attribute_ns(&mut self, attribute: &'a Attribute, namespace: &'a str) {
         let Attribute {
             name,
             value,
@@ -118,6 +127,7 @@ impl<'bump> Mutations<'bump> {
             ns: Some(namespace),
         });
     }
+
     pub(crate) fn remove_attribute(&mut self, attribute: &Attribute) {
         let name = attribute.name;
         self.edits.push(RemoveAttribute { name });

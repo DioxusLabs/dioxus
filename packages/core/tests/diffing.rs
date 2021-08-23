@@ -9,7 +9,7 @@ use bumpalo::Bump;
 use anyhow::{Context, Result};
 use dioxus::{
     arena::SharedResources,
-    diff::{CreateMeta, DiffInstruction, DiffMachine},
+    diff::{DiffInstruction, DiffMachine},
     prelude::*,
     DomEdit,
 };
@@ -44,7 +44,7 @@ impl TestDom {
         let mut machine = DiffMachine::new_headless(&self.resources);
 
         machine
-            .instructions
+            .stack
             .push(dioxus::diff::DiffInstruction::DiffNode { new, old });
 
         machine.mutations
@@ -58,12 +58,10 @@ impl TestDom {
 
         let mut machine = DiffMachine::new_headless(&self.resources);
 
-        machine
-            .instructions
-            .push(dioxus::diff::DiffInstruction::Create {
-                node: old,
-                and: dioxus::diff::MountType::Append,
-            });
+        machine.stack.push(dioxus::diff::DiffInstruction::Create {
+            node: old,
+            and: dioxus::diff::MountType::Append,
+        });
         work_sync(&mut machine);
 
         machine.mutations
@@ -85,19 +83,15 @@ impl TestDom {
         // let mut create_edits = Vec::new();
 
         let mut machine = DiffMachine::new_headless(&self.resources);
-        machine
-            .instructions
-            .push(dioxus::diff::DiffInstruction::Create {
-                and: dioxus::diff::MountType::Append,
-                node: old,
-            });
+        machine.stack.push(dioxus::diff::DiffInstruction::Create {
+            and: dioxus::diff::MountType::Append,
+            node: old,
+        });
         work_sync(&mut machine);
         let create_edits = machine.mutations;
 
         let mut machine = DiffMachine::new_headless(&self.resources);
-        machine
-            .instructions
-            .push(DiffInstruction::DiffNode { old, new });
+        machine.stack.push(DiffInstruction::DiffNode { old, new });
         work_sync(&mut machine);
         let edits = machine.mutations;
 
