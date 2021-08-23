@@ -17,7 +17,9 @@ pub fn set_up_logging() {
     // just clone `colors_line` and overwrite our changes
     let colors_level = colors_line.clone().info(Color::Green);
     // here we set up our fern Dispatch
-    fern::Dispatch::new()
+
+    // when running tests in batch, the logger is re-used, so ignore the logger error
+    let _ = fern::Dispatch::new()
         .format(move |out, message, record| {
             out.finish(format_args!(
                 "{color_line}[{level}{color_line}] {message}\x1B[0m",
@@ -42,6 +44,5 @@ pub fn set_up_logging() {
         // .level_for("pretty_colored", log::LevelFilter::Trace)
         // output to stdout
         .chain(std::io::stdout())
-        .apply()
-        .unwrap();
+        .apply();
 }

@@ -20,22 +20,29 @@ pub enum DomEdit<'bump> {
         id: u64,
     },
     PopRoot,
+
     AppendChildren {
         many: u32,
     },
+
+    // "Root" refers to the item direclty
+    // it's a waste of an instruction to push the root directly
     ReplaceWith {
+        root: u64,
         m: u32,
     },
     InsertAfter {
+        root: u64,
         n: u32,
     },
     InsertBefore {
+        root: u64,
         n: u32,
     },
-    // remove roots directly
     Remove {
         root: u64,
     },
+
     RemoveAllChildren,
     CreateTextNode {
         text: &'bump str,

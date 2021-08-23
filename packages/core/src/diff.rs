@@ -167,8 +167,10 @@ impl<'bump> DiffMachine<'bump> {
                 DiffInstruction::PopScope => {
                     self.stack.pop_scope();
                 }
+
                 DiffInstruction::PopElement => {
-                    self.mutations.pop();
+                    todo!();
+                    // self.mutations.pop();
                 }
 
                 DiffInstruction::DiffNode { old, new, .. } => {
@@ -179,20 +181,16 @@ impl<'bump> DiffMachine<'bump> {
                     self.diff_children(old, new);
                 }
 
-                DiffInstruction::Create { node, and } => {
+                DiffInstruction::Create { node } => {
                     self.create_node(node);
                 }
 
                 DiffInstruction::Remove { child } => {
-                    for child in RealChildIterator::new(child, self.vdom) {
-                        self.mutations.remove(child.direct_id().as_u64());
-                    }
+                    self.remove_nodes(Some(child));
                 }
 
                 DiffInstruction::RemoveChildren { children } => {
-                    for child in RealChildIterator::new_from_slice(children, self.vdom) {
-                        self.mutations.remove(child.direct_id().as_u64());
-                    }
+                    self.remove_nodes(children);
                 }
 
                 DiffInstruction::Mount { and } => {
@@ -204,13 +202,13 @@ impl<'bump> DiffMachine<'bump> {
         Ok(())
     }
 
-    fn mount(&mut self, and: MountType) {
-        let nodes_created = self.stack.nodes_created_stack.pop().unwrap();
+    fn mount(&mut self, and: MountType<'bump>) {
+        let nodes_created = self.stack.pop_nodes_created();
         match and {
             // add the nodes from this virtual list to the parent
             // used by fragments and components
             MountType::Absorb => {
-                *self.stack.nodes_created_stack.last_mut().unwrap() += nodes_created;
+                self.stack.add_child_count(nodes_created);
             }
             MountType::Append => {
                 self.mutations.edits.push(AppendChildren {
@@ -218,15 +216,21 @@ impl<'bump> DiffMachine<'bump> {
                 });
             }
             MountType::Replace { old } => {
-                todo!()
-                // self.mutations.replace_with(with as u32, many as u32);
+                let root = todo!();
+                self.mutations.replace_with(root, nodes_created as u32);
             }
+            MountType::ReplaceByElementId { old } => {
+                self.mutations.replace_with(old, nodes_created as u32);
+            }
+
             MountType::InsertAfter { other_node } => {
-                self.mutations.insert_after(nodes_created as u32);
+                let root = self.find_last_element(other_node).direct_id();
+                self.mutations.insert_after(root, nodes_created as u32);
             }
 
             MountType::InsertBefore { other_node } => {
-                self.mutations.insert_before(nodes_created as u32);
+                let root = self.find_first_element(other_node).direct_id();
+                self.mutations.insert_before(root, nodes_created as u32);
             }
         }
     }
@@ -373,17 +377,19 @@ impl<'bump> DiffMachine<'bump> {
         match (old_node, new_node) {
             // Check the most common cases first
             (Text(old), Text(new)) => self.diff_text_nodes(old, new),
-            (Element(old), Element(new)) => self.diff_element_nodes(old, new),
             (Component(old), Component(new)) => self.diff_component_nodes(old, new),
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
             (Suspended(old), Suspended(new)) => new.node.set(old.node.get()),
+            (Element(old), Element(new)) => self.diff_element_nodes(old, new),
 
             // Anything else is just a basic replace and create
             (
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_) | Suspended(_),
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_) | Suspended(_),
-            ) => self.replace_and_create_one_with_one(old_node, new_node),
+            ) => self
+                .stack
+                .create_node(new_node, MountType::Replace { old: old_node }),
         }
     }
 
@@ -407,8 +413,8 @@ impl<'bump> DiffMachine<'bump> {
         //
         // This case is rather rare (typically only in non-keyed lists)
         if new.tag_name != old.tag_name || new.namespace != old.namespace {
-            todo!();
-            // self.replace_node_with_node(root, old_node, new_node);
+            todo!("element changed");
+            // self.replace_node_with_node(old, new);
             return;
         }
 
@@ -779,21 +785,6 @@ impl<'bump> DiffMachine<'bump> {
         KeyedPrefixResult::MoreWorkToDo(shared_prefix_count)
     }
 
-    // Create the given children and append them to the parent node.
-    //
-    // The parent node must currently be on top of the change list stack:
-    //
-    //     [... parent]
-    //
-    // When this function returns, the change list stack is in the same state.
-    fn create_and_append_children(&mut self, new: &'bump [VNode<'bump>]) {
-        for child in new {
-            todo!();
-            // let meta = self.create_vnode(child);
-            // self.mutations.append_children(meta.added_to_stack);
-        }
-    }
-
     // The most-general, expensive code path for keyed children diffing.
     //
     // We find the longest subsequence within `old` of children that are relatively
@@ -957,12 +948,12 @@ impl<'bump> DiffMachine<'bump> {
                             self.mutations.insert_before(1);
                         }
                     } else {
-                        self.stack.push(DiffInstruction::Create {
-                            node: next_new,
-                            and: MountType::InsertBefore {
-                                other_node: Some(new_anchor),
+                        self.stack.create_node(
+                            next_new,
+                            MountType::InsertBefore {
+                                other_node: new_anchor,
                             },
-                        });
+                        );
                     }
                 }
             }
@@ -1081,7 +1072,7 @@ impl<'bump> DiffMachine<'bump> {
                 self.stack.create_children(
                     &new[old.len()..],
                     MountType::InsertAfter {
-                        other_node: old.last(),
+                        other_node: old.last().unwrap(),
                     },
                 );
             }
@@ -1097,6 +1088,10 @@ impl<'bump> DiffMachine<'bump> {
             }
         }
     }
+
+    // =====================
+    //  Utilities
+    // =====================
 
     fn find_last_element(&mut self, vnode: &'bump VNode<'bump>) -> &'bump VNode<'bump> {
         let mut search_node = Some(vnode);
@@ -1142,18 +1137,6 @@ impl<'bump> DiffMachine<'bump> {
                 }
             }
         }
-    }
-
-    // fn remove_child(&mut self, node: &'bump VNode<'bump>) {
-    //     self.replace_and_create_many_with_many(Some(node), None);
-    // }
-
-    fn replace_and_create_one_with_one(
-        &mut self,
-        old: &'bump VNode<'bump>,
-        new: &'bump VNode<'bump>,
-    ) {
-        self.stack.create_node(new, MountType::Replace { old });
     }
 
     fn replace_many_with_many(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
@@ -1316,10 +1299,8 @@ impl<'bump> DiffMachine<'bump> {
         old_node: &'bump VNode<'bump>,
         new_node: &'bump VNode<'bump>,
     ) {
-        self.stack.instructions.push(DiffInstruction::Create {
-            and: MountType::Replace { old: old_node },
-            node: new_node,
-        });
+        self.stack
+            .create_node(new_node, MountType::Replace { old: old_node });
     }
 
     fn fix_listener<'a>(&mut self, listener: &'a Listener<'a>) {

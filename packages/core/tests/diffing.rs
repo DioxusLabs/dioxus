@@ -8,10 +8,7 @@ use bumpalo::Bump;
 
 use anyhow::{Context, Result};
 use dioxus::{
-    arena::SharedResources,
-    diff::{DiffInstruction, DiffMachine},
-    prelude::*,
-    DomEdit,
+    arena::SharedResources, diff::DiffMachine, prelude::*, DiffInstruction, DomEdit, MountType,
 };
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
@@ -43,9 +40,7 @@ impl TestDom {
         // let mut edits = Vec::new();
         let mut machine = DiffMachine::new_headless(&self.resources);
 
-        machine
-            .stack
-            .push(dioxus::diff::DiffInstruction::DiffNode { new, old });
+        machine.stack.push(DiffInstruction::DiffNode { new, old });
 
         machine.mutations
     }
@@ -58,10 +53,8 @@ impl TestDom {
 
         let mut machine = DiffMachine::new_headless(&self.resources);
 
-        machine.stack.push(dioxus::diff::DiffInstruction::Create {
-            node: old,
-            and: dioxus::diff::MountType::Append,
-        });
+        machine.stack.create_node(old, MountType::Append);
+
         work_sync(&mut machine);
 
         machine.mutations
@@ -83,10 +76,9 @@ impl TestDom {
         // let mut create_edits = Vec::new();
 
         let mut machine = DiffMachine::new_headless(&self.resources);
-        machine.stack.push(dioxus::diff::DiffInstruction::Create {
-            and: dioxus::diff::MountType::Append,
-            node: old,
-        });
+
+        machine.stack.create_node(old, MountType::Append);
+
         work_sync(&mut machine);
         let create_edits = machine.mutations;
 

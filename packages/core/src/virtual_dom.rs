@@ -173,10 +173,9 @@ impl VirtualDom {
 
         // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope().is_ok() {
-            diff_machine.stack.push(DiffInstruction::Create {
-                node: cur_component.frames.fin_head(),
-                and: MountType::Append,
-            });
+            diff_machine
+                .stack
+                .create_node(cur_component.frames.fin_head(), MountType::Append);
             diff_machine.work().await.unwrap();
         } else {
             // todo: should this be a hard error?

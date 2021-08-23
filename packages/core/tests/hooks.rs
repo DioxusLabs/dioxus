@@ -1,10 +1,5 @@
 use anyhow::{Context, Result};
-use dioxus::{
-    arena::SharedResources,
-    diff::{CreateMeta, DiffMachine},
-    prelude::*,
-    DomEdit,
-};
+use dioxus::{arena::SharedResources, diff::DiffMachine, prelude::*, DomEdit};
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 

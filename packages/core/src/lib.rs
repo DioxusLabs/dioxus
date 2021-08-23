@@ -11,9 +11,9 @@
 //!
 
 pub use crate::innerlude::{
-    format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority,
-    EventTrigger, LazyNodes, Mutations, NodeFactory, Properties, ScopeId, SuspendedContext, VNode,
-    VirtualDom, VirtualEvent, FC,
+    format_args_f, html, rsx, Context, DiffInstruction, DioxusElement, DomEdit, DomTree, ElementId,
+    EventPriority, EventTrigger, LazyNodes, MountType, Mutations, NodeFactory, Properties, ScopeId,
+    SuspendedContext, VNode, VirtualDom, VirtualEvent, FC,
 };
 
 pub mod prelude {
@@ -35,7 +35,7 @@ pub(crate) mod innerlude {
     pub use crate::context::*;
     pub use crate::diff::*;
     pub use crate::diff_stack::*;
-    pub use crate::editor::*;
+    pub use crate::dom_edits::*;
     pub use crate::error::*;
     pub use crate::events::*;
     pub use crate::heuristics::*;
@@ -67,7 +67,7 @@ pub mod component;
 pub mod context;
 pub mod diff;
 pub mod diff_stack;
-pub mod editor;
+pub mod dom_edits;
 pub mod error;
 pub mod events;
 pub mod heuristics;

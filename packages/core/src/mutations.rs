@@ -31,16 +31,19 @@ impl<'a> Mutations<'a> {
         self.edits.push(PopRoot {});
     }
 
-    pub(crate) fn replace_with(&mut self, m: u32) {
-        self.edits.push(ReplaceWith { m });
+    pub(crate) fn replace_with(&mut self, root: ElementId, m: u32) {
+        let root = root.as_u64();
+        self.edits.push(ReplaceWith { m, root });
     }
 
-    pub(crate) fn insert_after(&mut self, n: u32) {
-        self.edits.push(InsertAfter { n });
+    pub(crate) fn insert_after(&mut self, root: ElementId, n: u32) {
+        let root = root.as_u64();
+        self.edits.push(InsertAfter { n, root });
     }
 
-    pub(crate) fn insert_before(&mut self, n: u32) {
-        self.edits.push(InsertBefore { n });
+    pub(crate) fn insert_before(&mut self, root: ElementId, n: u32) {
+        let root = root.as_u64();
+        self.edits.push(InsertBefore { n, root });
     }
 
     // Remove Nodesfrom the dom
