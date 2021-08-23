@@ -945,7 +945,8 @@ impl<'bump> DiffMachine<'bump> {
                         for child in RealChildIterator::new(next_new, self.vdom) {
                             let el = child.direct_id();
                             self.mutations.push_root(el);
-                            self.mutations.insert_before(1);
+                            todo!();
+                            // self.mutations.insert_before(1);
                         }
                     } else {
                         self.stack.create_node(
@@ -990,7 +991,8 @@ impl<'bump> DiffMachine<'bump> {
                 for child in RealChildIterator::new(last_node, self.vdom) {
                     let el = child.direct_id();
                     self.mutations.push_root(el);
-                    self.mutations.insert_after(1);
+                    // self.mutations.insert_after(1);
+                    todo!();
                 }
             } else {
                 eprintln!("key is not contained {:?}", key);

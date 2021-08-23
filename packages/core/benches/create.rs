@@ -13,10 +13,4 @@ fn criterion_benchmark(c: &mut Criterion) {
 }
 
 criterion_group!(benches, criterion_benchmark);
-
-fn main() {
-    benches();
-    Criterion::default().configure_from_args().final_summary();
-    // $crate::__warn_about_html_reports_feature();
-    // $crate::__warn_about_cargo_bench_support_feature();
-}
+criterion_main!(benches);
