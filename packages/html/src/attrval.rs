@@ -1,3 +1,6 @@
+//! This module is not included anywhere.
+//!
+//! It is a prototype for a system that supports non-string attribute values.
 
 trait AsAttributeValue: Sized {
     fn into_attribute_value<'a>(self, cx: NodeFactory<'a>) -> AttributeValue<'a>;

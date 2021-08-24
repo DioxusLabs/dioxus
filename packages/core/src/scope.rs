@@ -113,7 +113,6 @@ impl Scope {
         child_nodes: ScopeChildren,
     ) {
         self.caller = caller;
-        // let child_nodes = unsafe { std::mem::transmute(child_nodes) };
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
         self.child_nodes = child_nodes;
     }
@@ -237,8 +236,8 @@ impl Scope {
     }
 
     pub fn consume_garbage(&self) -> Vec<&VNode> {
-        let mut garbage = self.pending_garbage.borrow_mut();
-        garbage
+        self.pending_garbage
+            .borrow_mut()
             .drain(..)
             .map(|node| {
                 // safety: scopes cannot cycle without their garbage being collected. these nodes are safe

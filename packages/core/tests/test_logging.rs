@@ -1,6 +1,10 @@
-pub fn set_up_logging() {
+pub fn set_up_logging(enabled: bool) {
     use fern::colors::{Color, ColoredLevelConfig};
     use log::debug;
+
+    if !enabled {
+        return;
+    }
 
     // configure colors for the whole line
     let colors_line = ColoredLevelConfig::new()

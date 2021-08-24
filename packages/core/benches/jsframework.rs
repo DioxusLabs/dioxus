@@ -1,3 +1,4 @@
+#![allow(non_snake_case, non_upper_case_globals)]
 //! This benchmark tests just the overhead of Dioxus itself.
 //!
 //! For the JS Framework Benchmark, both the framework and the browser is benchmarked together. Dioxus prepares changes
@@ -8,12 +9,10 @@
 //! - Dioxus takes 3ms to create 1_000 rows
 //! - Dioxus takes 30ms to create 10_000 rows
 //!
-//! As pure "overhead", these are really really good numbers, mostly slowed down by hitting the global allocator.
+//! As pure "overhead", these are amazing good numbers, mostly slowed down by hitting the global allocator.
 //! These numbers don't represent Dioxus with the heuristic engine installed, so I assume it'll be even faster.
 
-use std::fmt::Display;
-
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_html as dioxus_elements;
@@ -58,11 +57,12 @@ struct RowProps {
     label: Label,
 }
 fn Row<'a>(cx: Context<'a, RowProps>) -> DomTree {
+    let [adj, col, noun] = cx.label.0;
     cx.render(rsx! {
         tr {
             td { class:"col-md-1", "{cx.row_id}" }
             td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
-                a { class: "lbl", "{cx.label}" }
+                a { class: "lbl", "{adj}" "{col}" "{noun}" }
             }
             td { class: "col-md-1"
                 a { class: "remove", onclick: move |_| {/* remove */}
@@ -84,11 +84,6 @@ impl Label {
             COLOURS.choose(rng).unwrap(),
             NOUNS.choose(rng).unwrap(),
         ])
-    }
-}
-impl Display for Label {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} {}", self.0[0], self.0[1], self.0[2])
     }
 }
 

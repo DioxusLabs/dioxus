@@ -7,6 +7,8 @@ use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 use DomEdit::*;
 
+const LOGGING_ENABLED: bool = false;
+
 #[test]
 fn test_original_diff() {
     static App: FC<()> = |cx| {
@@ -57,7 +59,7 @@ async fn create() {
         })
     };
 
-    test_logging::set_up_logging();
+    test_logging::set_up_logging(LOGGING_ENABLED);
     let mut dom = VirtualDom::new(App);
     let mutations = dom.rebuild_async().await.unwrap();
     assert_eq!(
@@ -98,7 +100,7 @@ async fn create_list() {
         })
     };
 
-    test_logging::set_up_logging();
+    test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
     let mutations = dom.rebuild_async().await.unwrap();
@@ -141,7 +143,7 @@ async fn create_simple() {
         })
     };
 
-    test_logging::set_up_logging();
+    test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
     let mutations = dom.rebuild_async().await.unwrap();
@@ -177,7 +179,7 @@ async fn create_components() {
         })
     };
 
-    test_logging::set_up_logging();
+    test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
     let mutations = dom.rebuild_async().await.unwrap();
@@ -223,7 +225,7 @@ async fn anchors() {
         })
     };
 
-    test_logging::set_up_logging();
+    test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
     let mutations = dom.rebuild_async().await.unwrap();
@@ -249,7 +251,7 @@ async fn suspended() {
         cx.render(rsx! { {val} })
     };
 
-    test_logging::set_up_logging();
+    test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
     let mutations = dom.rebuild_async().await.unwrap();

@@ -1,12 +1,7 @@
 //! Diffing Tests
-//! -------------
-//!
-//! These should always compile and run, but the result is not validat root: (), m: () ed for each test.
-//! TODO: Validate the results beyond visual inspection.
 
 use bumpalo::Bump;
 
-use anyhow::{Context, Result};
 use dioxus::{
     arena::SharedResources, diff::DiffMachine, prelude::*, DiffInstruction, DomEdit, MountType,
 };
@@ -18,7 +13,7 @@ use DomEdit::*;
 
 // logging is wired up to the test harness
 // feel free to enable while debugging
-const IS_LOGGING_ENABLED: bool = true;
+const IS_LOGGING_ENABLED: bool = false;
 
 struct TestDom {
     bump: Bump,
@@ -26,9 +21,7 @@ struct TestDom {
 }
 impl TestDom {
     fn new() -> TestDom {
-        if IS_LOGGING_ENABLED {
-            test_logging::set_up_logging();
-        }
+        test_logging::set_up_logging(IS_LOGGING_ENABLED);
         let bump = Bump::new();
         let resources = SharedResources::new();
         TestDom { bump, resources }
@@ -81,8 +74,6 @@ impl TestDom {
         let old = self.bump.alloc(self.render(left));
 
         let new = self.bump.alloc(self.render(right));
-
-        // let mut create_edits = Vec::new();
 
         let mut machine = DiffMachine::new_headless(&self.resources);
 
@@ -343,16 +334,31 @@ fn two_fragments_with_differrent_elements_are_differet() {
     let dom = TestDom::new();
 
     let left = rsx!(
-        { (0..2).map(|f| rsx! { div {  }} ) }
+        { (0..2).map(|_| rsx! { div {  }} ) }
         p {}
     );
     let right = rsx!(
-        { (0..5).map(|f| rsx! (h1 {  }) ) }
+        { (0..5).map(|_| rsx! (h1 {  }) ) }
         p {}
     );
 
-    let edits = dom.lazy_diff(left, right);
-    log::debug!("{:#?}", &edits);
+    let (create, changes) = dom.lazy_diff(left, right);
+    log::debug!("{:#?}", &changes);
+    assert_eq!(
+        changes.edits,
+        [
+            // create the new h1s
+            CreateElement { tag: "h1", id: 3 },
+            CreateElement { tag: "h1", id: 4 },
+            CreateElement { tag: "h1", id: 5 },
+            InsertAfter { root: 1, n: 3 },
+            // replace the divs with new h1s
+            CreateElement { tag: "h1", id: 6 },
+            ReplaceWith { root: 0, m: 1 },
+            CreateElement { tag: "h1", id: 7 },
+            ReplaceWith { root: 1, m: 1 },
+        ]
+    );
 }
 
 /// Should result in multiple nodes destroyed - with changes to the first nodes
@@ -452,14 +458,6 @@ fn keyed_diffing_order() {
     );
 }
 
-#[test]
-fn fragment_keys() {
-    let r = 1;
-    let p = rsx! {
-        Fragment { key: "asd {r}" }
-    };
-}
-
 /// Should result in moves, but not removals or additions
 #[test]
 fn keyed_diffing_out_of_order() {
@@ -477,8 +475,12 @@ fn keyed_diffing_out_of_order() {
         })
     });
 
-    let edits = dom.lazy_diff(left, right);
-    log::debug!("{:?}", &edits.1);
+    let (_, changes) = dom.lazy_diff(left, right);
+    log::debug!("{:?}", &changes);
+    assert_eq!(
+        changes.edits,
+        [PushRoot { id: 6 }, InsertBefore { root: 4, n: 1 }]
+    );
 }
 
 /// Should result in moves only
@@ -655,21 +657,24 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 
     let right = rsx!({
         [/**/ 7, 4, 5, 6, 11, 12 /**/].iter().map(|f| {
-            // [/**/ 8, 7, 4, 5, 6, 9, 10 /**/].iter().map(|f| {
             rsx! { div { key: "{f}"  }}
         })
     });
 
     let (_, change) = dom.lazy_diff(left, right);
     log::debug!("{:?}", change);
-    // assert_eq!(
-    //     change.edits,
-    //     [
-    //         CreateElement { id: 5, tag: "div" },
-    //         CreateElement { id: 6, tag: "div" },
-    //         InsertAfter { n: 2, root: 4 }
-    //     ]
-    // );
+    assert_eq!(
+        change.edits,
+        [
+            // create 11, 12
+            CreateElement { tag: "div", id: 4 },
+            CreateElement { tag: "div", id: 5 },
+            InsertAfter { root: 2, n: 2 },
+            // move 7 to the front
+            PushRoot { id: 3 },
+            InsertBefore { root: 0, n: 1 }
+        ]
+    );
 }
 
 #[test]
@@ -688,16 +693,25 @@ fn keyed_diffing_additions_and_moves_in_middle() {
         })
     });
 
+    // LIS: 4, 5, 6
     let (_, change) = dom.lazy_diff(left, right);
-    log::debug!("{:?}", change);
-    // assert_eq!(
-    //     change.edits,
-    //     [
-    //         CreateElement { id: 5, tag: "div" },
-    //         CreateElement { id: 6, tag: "div" },
-    //         InsertAfter { n: 2, root: 4 }
-    //     ]
-    // );
+    log::debug!("{:#?}", change);
+    assert_eq!(
+        change.edits,
+        [
+            // create 13, 17
+            CreateElement { tag: "div", id: 4 },
+            CreateElement { tag: "div", id: 5 },
+            InsertBefore { root: 1, n: 2 },
+            // create 11, 12
+            CreateElement { tag: "div", id: 6 },
+            CreateElement { tag: "div", id: 7 },
+            InsertBefore { root: 2, n: 2 },
+            // move 7
+            PushRoot { id: 3 },
+            InsertBefore { root: 0, n: 1 }
+        ]
+    );
 }
 
 #[test]

@@ -89,7 +89,6 @@
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
 use crate::{arena::SharedResources, innerlude::*};
-use futures_util::{Future, FutureExt};
 use fxhash::{FxHashMap, FxHashSet};
 use DomEdit::*;
 
@@ -281,19 +280,20 @@ impl<'bump> DiffMachine<'bump> {
         } = element;
 
         let real_id = self.vdom.reserve_node();
+        dom_id.set(Some(real_id));
+
         self.mutations.create_element(tag_name, *namespace, real_id);
 
         self.stack.add_child_count(1);
 
-        dom_id.set(Some(real_id));
-
-        let cur_scope = self.stack.current_scope().unwrap();
+        let cur_scope_id = self.stack.current_scope().unwrap();
+        let scope = self.vdom.get_scope(cur_scope_id).unwrap();
 
         listeners.iter().for_each(|listener| {
-            self.fix_listener(listener);
+            self.attach_listener_to_scope(listener, scope);
             listener.mounted_node.set(Some(real_id));
             self.mutations
-                .new_event_listener(listener, cur_scope.clone());
+                .new_event_listener(listener, cur_scope_id.clone());
         });
 
         for attr in *attributes {
@@ -466,16 +466,19 @@ impl<'bump> DiffMachine<'bump> {
         // We also need to make sure that all listeners are properly attached to the parent scope (fix_listener)
         //
         // TODO: take a more efficient path than this
-        let cur_scope = self.stack.current_scope().unwrap();
+
+        let cur_scope_id = self.stack.current_scope().unwrap();
+        let scope = self.vdom.get_scope(cur_scope_id).unwrap();
+
         if old.listeners.len() == new.listeners.len() {
             for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                 if old_l.event != new_l.event {
                     please_commit(&mut self.mutations.edits);
                     self.mutations.remove_event_listener(old_l.event);
-                    self.mutations.new_event_listener(new_l, cur_scope);
+                    self.mutations.new_event_listener(new_l, cur_scope_id);
                 }
                 new_l.mounted_node.set(old_l.mounted_node.get());
-                self.fix_listener(new_l);
+                self.attach_listener_to_scope(new_l, scope);
             }
         } else {
             please_commit(&mut self.mutations.edits);
@@ -484,10 +487,8 @@ impl<'bump> DiffMachine<'bump> {
             }
             for listener in new.listeners {
                 listener.mounted_node.set(Some(root));
-                self.mutations.new_event_listener(listener, cur_scope);
-
-                // Make sure the listener gets attached to the scope list
-                self.fix_listener(listener);
+                self.mutations.new_event_listener(listener, cur_scope_id);
+                self.attach_listener_to_scope(listener, scope);
             }
         }
 
@@ -1082,13 +1083,10 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    fn fix_listener<'a>(&mut self, listener: &'a Listener<'a>) {
-        let scope_id = self.stack.current_scope();
-        if let Some(scope_id) = scope_id {
-            let scope = self.vdom.get_scope(scope_id).unwrap();
-            let mut queue = scope.listeners.borrow_mut();
-            let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
-            queue.push(long_listener as *const _)
-        }
+    /// Adds a listener closure to a scope during diff.
+    fn attach_listener_to_scope<'a>(&mut self, listener: &'a Listener<'a>, scope: &Scope) {
+        let mut queue = scope.listeners.borrow_mut();
+        let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
+        queue.push(long_listener as *const _)
     }
 }

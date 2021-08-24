@@ -6,6 +6,8 @@ mod test_logging;
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 
+const LOGGING_ENABLED: bool = false;
+
 #[async_std::test]
 async fn test_iterative_create_components() {
     static App: FC<()> = |cx| {
@@ -34,7 +36,7 @@ async fn test_iterative_create_components() {
         })
     }
 
-    test_logging::set_up_logging();
+    test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
 

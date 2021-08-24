@@ -25,7 +25,7 @@ fn main() {
 }
 
 static App: FC<()> = |cx| {
-    let mut count = use_state(cx, || 0);
+    let mut count = use_state(cx, || 3);
 
     cx.render(rsx! {
         div {

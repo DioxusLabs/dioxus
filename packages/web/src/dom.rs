@@ -84,8 +84,8 @@ impl WebsysDom {
                 DomEdit::PushRoot { id: root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
                 DomEdit::AppendChildren { many } => self.append_children(many),
-                DomEdit::ReplaceWith { n, m } => self.replace_with(n, m),
-                DomEdit::Remove => self.remove(),
+                DomEdit::ReplaceWith { m, root } => self.replace_with(m, root),
+                DomEdit::Remove { root } => self.remove(root),
                 DomEdit::RemoveAllChildren => self.remove_all_children(),
                 DomEdit::CreateTextNode { text, id } => self.create_text_node(text, id),
                 DomEdit::CreateElement { tag, id } => self.create_element(tag, None, id),
@@ -102,8 +102,8 @@ impl WebsysDom {
                 DomEdit::SetAttribute { field, value, ns } => self.set_attribute(field, value, ns),
                 DomEdit::RemoveAttribute { name } => self.remove_attribute(name),
 
-                DomEdit::InsertAfter { n } => self.insert_after(n),
-                DomEdit::InsertBefore { n } => self.insert_before(n),
+                DomEdit::InsertAfter { n, root } => self.insert_after(n, root),
+                DomEdit::InsertBefore { n, root } => self.insert_before(n, root),
             }
         }
     }
@@ -154,7 +154,7 @@ impl WebsysDom {
         }
     }
 
-    fn replace_with(&mut self, n: u32, m: u32) {
+    fn replace_with(&mut self, m: u32, root: u64) {
         log::debug!("Called [`replace_with`]");
 
         let mut new_nodes = vec![];
@@ -162,19 +162,11 @@ impl WebsysDom {
             new_nodes.push(self.stack.pop());
         }
 
-        let mut old_nodes = vec![];
-        for _ in 0..n {
-            old_nodes.push(self.stack.pop());
-        }
-
-        for node in &old_nodes[1..] {
-            node.dyn_ref::<Element>().unwrap().remove();
-        }
-
-        let old = old_nodes[0].clone();
+        let old = self.nodes[root as usize].as_ref().unwrap();
         let arr: js_sys::Array = new_nodes.iter().collect();
-        let el = old.dyn_into::<Element>().unwrap();
+        let el = old.dyn_ref::<Element>().unwrap();
         el.replace_with_with_node(&arr).unwrap();
+
         // let arr = js_sys::Array::from();
 
         // TODO: use different-sized replace withs
@@ -205,9 +197,17 @@ impl WebsysDom {
         // self.stack.push(new_node);
     }
 
-    fn remove(&mut self) {
+    fn remove(&mut self, root: u64) {
         log::debug!("Called [`remove`]");
-        todo!()
+
+        let node = self.nodes[root as usize].as_ref().unwrap();
+        if let Some(element) = node.dyn_ref::<Element>() {
+            element.remove();
+        } else {
+            if let Some(parent) = node.parent_node() {
+                parent.remove_child(&node).unwrap();
+            }
+        }
     }
 
     fn remove_all_children(&mut self) {
@@ -361,7 +361,7 @@ impl WebsysDom {
         }
     }
 
-    fn insert_after(&mut self, n: u32) {
+    fn insert_after(&mut self, n: u32, root: u64) {
         let mut new_nodes = vec![];
         for _ in 0..n {
             new_nodes.push(self.stack.pop());
@@ -380,7 +380,7 @@ impl WebsysDom {
         // let el = self.stack.top();
     }
 
-    fn insert_before(&mut self, n: u32) {
+    fn insert_before(&mut self, n: u32, root: u64) {
         let n = n as usize;
         let root = self
             .stack
