@@ -16,13 +16,19 @@ use futures_util::FutureExt;
 mod test_logging;
 use DomEdit::*;
 
+// logging is wired up to the test harness
+// feel free to enable while debugging
+const IS_LOGGING_ENABLED: bool = true;
+
 struct TestDom {
     bump: Bump,
     resources: SharedResources,
 }
 impl TestDom {
     fn new() -> TestDom {
-        test_logging::set_up_logging();
+        if IS_LOGGING_ENABLED {
+            test_logging::set_up_logging();
+        }
         let bump = Bump::new();
         let resources = SharedResources::new();
         TestDom { bump, resources }
@@ -346,7 +352,7 @@ fn two_fragments_with_differrent_elements_are_differet() {
     );
 
     let edits = dom.lazy_diff(left, right);
-    dbg!(&edits);
+    log::debug!("{:#?}", &edits);
 }
 
 /// Should result in multiple nodes destroyed - with changes to the first nodes
@@ -472,7 +478,7 @@ fn keyed_diffing_out_of_order() {
     });
 
     let edits = dom.lazy_diff(left, right);
-    dbg!(&edits.1);
+    log::debug!("{:?}", &edits.1);
 }
 
 /// Should result in moves only
@@ -655,7 +661,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
     });
 
     let (_, change) = dom.lazy_diff(left, right);
-    dbg!(change);
+    log::debug!("{:?}", change);
     // assert_eq!(
     //     change.edits,
     //     [
@@ -683,7 +689,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     });
 
     let (_, change) = dom.lazy_diff(left, right);
-    dbg!(change);
+    log::debug!("{:?}", change);
     // assert_eq!(
     //     change.edits,
     //     [
@@ -698,22 +704,64 @@ fn keyed_diffing_additions_and_moves_in_middle() {
 fn controlled_keyed_diffing_out_of_order() {
     let dom = TestDom::new();
 
-    let left = [4, 5, 6, 7];
     let left = rsx!({
-        left.iter().map(|f| {
-            rsx! { div { key: "{f}" "{f}" }}
+        [4, 5, 6, 7].iter().map(|f| {
+            rsx! { div { key: "{f}" }}
         })
     });
 
-    // 0, 1, 2, 6, 5, 4, 3, 7, 8, 9
-    let right = [0, 5, 9, 6, 4];
     let right = rsx!({
-        right.iter().map(|f| {
-            rsx! { div { key: "{f}" "{f}" }}
+        [0, 5, 9, 6, 4].iter().map(|f| {
+            rsx! { div { key: "{f}" }}
         })
     });
 
-    // LIS: 3, 7, 8,
-    let edits = dom.lazy_diff(left, right);
-    dbg!(&edits);
+    // LIS: 5, 6
+    let (_, changes) = dom.lazy_diff(left, right);
+    log::debug!("{:#?}", &changes);
+    assert_eq!(
+        changes.edits,
+        [
+            // move 4 to after 6
+            PushRoot { id: 0 },
+            InsertAfter { n: 1, root: 2 },
+            // remove 7
+
+            // create 9 and insert before 6
+            CreateElement { id: 4, tag: "div" },
+            InsertBefore { n: 1, root: 2 },
+            // create 0 and insert before 5
+            CreateElement { id: 5, tag: "div" },
+            InsertBefore { n: 1, root: 1 },
+        ]
+    );
+}
+
+#[test]
+fn controlled_keyed_diffing_out_of_order_max_test() {
+    let dom = TestDom::new();
+
+    let left = rsx!({
+        [0, 1, 2, 3, 4].iter().map(|f| {
+            rsx! { div { key: "{f}"  }}
+        })
+    });
+
+    let right = rsx!({
+        [3, 0, 1, 10, 2].iter().map(|f| {
+            rsx! { div { key: "{f}"  }}
+        })
+    });
+
+    let (_, changes) = dom.lazy_diff(left, right);
+    log::debug!("{:#?}", &changes);
+    assert_eq!(
+        changes.edits,
+        [
+            CreateElement { id: 5, tag: "div" },
+            InsertBefore { n: 1, root: 2 },
+            PushRoot { id: 3 },
+            InsertBefore { n: 1, root: 0 },
+        ]
+    );
 }

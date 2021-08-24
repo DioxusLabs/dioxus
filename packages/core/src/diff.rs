@@ -6,8 +6,8 @@
 //! ## Notice:
 //!
 //! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
-//! Components, Fragments, Suspense, SubTree memoization, incremental diffing, cancelation, NodeRefs, and additional
-//! batching operations.
+//! Components, Fragments, Suspense, SubTree memoization, incremental diffing, cancelation, NodeRefs, pausing, priority
+//! scheduling, and additional batching operations.
 //!
 //! ## Implementation Details:
 //!
@@ -41,12 +41,13 @@
 //! into a promise-like value. React will then work on the next "ready" fiber, checking back on the previous fiber once
 //! it has finished its new work. In Dioxus, we use a similar approach, but try to completely render the tree before
 //! switching sub-fibers. Instead, each future is submitted into a futures-queue and the node is manually loaded later on.
+//! Due to the frequent calls to "yield_now" we can get the pure "fetch-as-you-render" behavior of React fiber.
 //!
 //! We're able to use this approach because we use placeholder nodes - futures that aren't ready still get submitted to
 //! DOM, but as a placeholder.
 //!
 //! Right now, the "suspense" queue is intertwined the hooks. In the future, we should allow any future to drive attributes
-//! and contents, without the need for the "use_suspense" hook. For now, this is the quickest way to get suspense working.
+//! and contents, without the need for the "use_suspense" hook. In the interim, this is the quickest way to get suspense working.
 //!
 //! ## Subtree Memoization
 //! -----------------------
@@ -80,17 +81,16 @@
 //! ## Further Reading and Thoughts
 //! ----------------------------
 //! There are more ways of increasing diff performance here that are currently not implemented.
+//! - Strong memoization of subtrees.
+//! - Guided diffing.
+//! - Certain web-dom-specific optimizations.
+//!
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
 use crate::{arena::SharedResources, innerlude::*};
 use futures_util::{Future, FutureExt};
-use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
-use smallvec::{smallvec, SmallVec};
-
-use std::{
-    any::Any, cell::Cell, cmp::Ordering, collections::HashSet, marker::PhantomData, pin::Pin,
-};
+use fxhash::{FxHashMap, FxHashSet};
 use DomEdit::*;
 
 /// Our DiffMachine is an iterative tree differ.
@@ -158,19 +158,12 @@ impl<'bump> DiffMachine<'bump> {
         // defer to individual functions so the compiler produces better code
         // large functions tend to be difficult for the compiler to work with
         while let Some(instruction) = self.stack.pop() {
-            log::debug!("Handling diff instruction: {:?}", instruction);
-
             // todo: call this less frequently, there is a bit of overhead involved
             yield_now().await;
 
             match instruction {
                 DiffInstruction::PopScope => {
                     self.stack.pop_scope();
-                }
-
-                DiffInstruction::PopElement => {
-                    todo!();
-                    // self.mutations.pop();
                 }
 
                 DiffInstruction::DiffNode { old, new, .. } => {
@@ -229,7 +222,7 @@ impl<'bump> DiffMachine<'bump> {
             }
 
             MountType::InsertAfter { other_node } => {
-                let root = self.find_last_element(other_node).direct_id();
+                let root = self.find_last_element(other_node).unwrap();
                 self.mutations.insert_after(root, nodes_created as u32);
             }
 
@@ -862,8 +855,6 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         // 4. Compute the LIS of this list
-        // TODO: investigate if we can go without the hashset here, I can't quite tell from the LIS crate
-        // let mut new_index_is_in_lis = Vec::default();
         let mut lis_sequence = Vec::default();
         lis_sequence.reserve(new_index_to_old_index.len());
 
@@ -878,7 +869,7 @@ impl<'bump> DiffMachine<'bump> {
             &mut starts,
         );
 
-        // the lis comes out backwards, I think. can't quite tell
+        // the lis comes out backwards, I think. can't quite tell.
         lis_sequence.sort_unstable();
 
         // if a new node gets u32 max and is at the end, then it might be part of our LIS (because u32 max is a valid LIS)
@@ -886,13 +877,8 @@ impl<'bump> DiffMachine<'bump> {
             lis_sequence.pop();
         }
 
-        log::debug!("LIS Indicies: {:?}", lis_sequence);
-
         let apply = |new_idx, new_node: &'bump VNode<'bump>, stack: &mut DiffStack<'bump>| {
-            log::debug!("applying {:?}", new_node);
-
             let old_index = new_index_to_old_index[new_idx];
-            dbg!(new_idx, old_index);
             if old_index == u32::MAX as usize {
                 stack.create_node(new_node, MountType::Absorb);
             } else {
@@ -907,7 +893,6 @@ impl<'bump> DiffMachine<'bump> {
 
         // add mount instruction for the last items not covered by the lis
         let first_lis = *lis_sequence.first().unwrap();
-        dbg!(first_lis);
         if first_lis > 0 {
             self.stack.push_nodes_created(0);
             self.stack.push(DiffInstruction::Mount {
@@ -940,28 +925,23 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         // add mount instruction for the first items not covered by the lis
-        let last_lis = *lis_sequence.last().unwrap();
-        log::debug!("last lis is {}, new len is {}", last_lis, new.len());
-        if last_lis < (new.len() - 1) {
-            let after = &new[last_lis];
-            dbg!(after);
+        let last = *lis_sequence.last().unwrap();
+        if last < (new.len() - 1) {
             self.stack.push_nodes_created(0);
             self.stack.push(DiffInstruction::Mount {
-                and: MountType::InsertAfter { other_node: after },
+                and: MountType::InsertAfter {
+                    other_node: &new[last],
+                },
             });
-
-            for (idx, new_node) in new[(last_lis + 1)..].iter().enumerate().rev() {
-                apply(idx + last_lis + 1, new_node, &mut self.stack);
+            for (idx, new_node) in new[(last + 1)..].iter().enumerate().rev() {
+                apply(idx + last + 1, new_node, &mut self.stack);
             }
         }
 
         for idx in lis_sequence.iter().rev() {
-            let old_index = new_index_to_old_index[*idx];
-            let new_node = &new[*idx];
-            log::debug!("diffing {:?}", new_node);
             self.stack.push(DiffInstruction::DiffNode {
-                new: new_node,
-                old: &old[old_index],
+                new: &new[*idx],
+                old: &old[new_index_to_old_index[*idx]],
             });
         }
     }
@@ -970,16 +950,15 @@ impl<'bump> DiffMachine<'bump> {
     //  Utilities
     // =====================
 
-    fn find_last_element(&mut self, vnode: &'bump VNode<'bump>) -> &'bump VNode<'bump> {
+    fn find_last_element(&mut self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
 
         loop {
-            let node = search_node.take().unwrap();
-            match &node {
-                // the ones that have a direct id
-                VNode::Text(_) | VNode::Element(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
-                    break node
-                }
+            match &search_node.take().unwrap() {
+                VNode::Text(t) => break t.dom_id.get(),
+                VNode::Element(t) => break t.dom_id.get(),
+                VNode::Suspended(t) => break t.node.get(),
+                VNode::Anchor(t) => break t.dom_id.get(),
 
                 VNode::Fragment(frag) => {
                     search_node = frag.children.last();
@@ -997,8 +976,7 @@ impl<'bump> DiffMachine<'bump> {
         let mut search_node = Some(vnode);
 
         loop {
-            let node = search_node.take().unwrap();
-            match &node {
+            match &search_node.take().unwrap() {
                 // the ones that have a direct id
                 VNode::Fragment(frag) => {
                     search_node = Some(&frag.children[0]);
@@ -1015,28 +993,6 @@ impl<'bump> DiffMachine<'bump> {
             }
         }
     }
-    // fn find_first_element(&mut self, vnode: &'bump VNode<'bump>) -> &'bump VNode<'bump> {
-    //     let mut search_node = Some(vnode);
-
-    //     loop {
-    //         let node = search_node.take().unwrap();
-    //         match &node {
-    //             // the ones that have a direct id
-    //             VNode::Text(_) | VNode::Element(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
-    //                 break node
-    //             }
-
-    //             VNode::Fragment(frag) => {
-    //                 search_node = Some(&frag.children[0]);
-    //             }
-    //             VNode::Component(el) => {
-    //                 let scope_id = el.ass_scope.get().unwrap();
-    //                 let scope = self.vdom.get_scope(scope_id).unwrap();
-    //                 search_node = Some(scope.root());
-    //             }
-    //         }
-    //     }
-    // }
 
     fn replace_and_create_many_with_one(
         &mut self,
@@ -1082,6 +1038,7 @@ impl<'bump> DiffMachine<'bump> {
                 VNode::Fragment(f) => {
                     self.remove_nodes(f.children);
                 }
+
                 VNode::Component(c) => {
                     let scope_id = c.ass_scope.get().unwrap();
                     let scope = self.vdom.get_scope(scope_id).unwrap();
@@ -1090,66 +1047,6 @@ impl<'bump> DiffMachine<'bump> {
                 }
             }
         }
-
-        // let mut nodes_to_replace = Vec::new();
-        // let mut nodes_to_search = vec![old_node];
-        // let mut scopes_obliterated = Vec::new();
-        // while let Some(node) = nodes_to_search.pop() {
-        //     match &node {
-        //         // the ones that have a direct id return immediately
-        //         VNode::Text(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
-        //         VNode::Element(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
-        //         VNode::Anchor(el) => nodes_to_replace.push(el.dom_id.get().unwrap()),
-        //         VNode::Suspended(el) => nodes_to_replace.push(el.node.get().unwrap()),
-
-        //         // Fragments will either have a single anchor or a list of children
-        //         VNode::Fragment(frag) => {
-        //             for child in frag.children {
-        //                 nodes_to_search.push(child);
-        //             }
-        //         }
-
-        //         // Components can be any of the nodes above
-        //         // However, we do need to track which components need to be removed
-        //         VNode::Component(el) => {
-        //             let scope_id = el.ass_scope.get().unwrap();
-        //             let scope = self.vdom.get_scope(scope_id).unwrap();
-        //             let root = scope.root();
-        //             nodes_to_search.push(root);
-        //             scopes_obliterated.push(scope_id);
-        //         }
-        //     }
-        //     // TODO: enable internal garabge collection
-        //     // self.create_garbage(node);
-        // }
-
-        // let n = nodes_to_replace.len();
-        // for node in nodes_to_replace {
-        //     self.mutations.push_root(node);
-        // }
-
-        // let mut nodes_created = 0;
-        // for node in new_nodes {
-        //     todo!();
-        // let meta = self.create_vnode(node);
-        // nodes_created += meta.added_to_stack;
-        // }
-
-        // if 0 nodes are created, then it gets interperted as a deletion
-        // self.mutations.replace_with(n as u32, nodes_created);
-
-        // self.instructions.push(DiffInstruction::CreateChildren {
-        //     and: MountType::Replace { old: None },
-        //     children:
-        // });
-
-        // obliterate!
-        // for scope in scopes_obliterated {
-
-        // todo: mark as garbage
-
-        // self.destroy_scopes(scope);
-        // }
     }
 
     /// Remove all the old nodes and replace them with newly created new nodes.

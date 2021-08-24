@@ -27,8 +27,6 @@ pub enum DiffInstruction<'a> {
         and: MountType<'a>,
     },
 
-    PopElement,
-
     PopScope,
 }
 
