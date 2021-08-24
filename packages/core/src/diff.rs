@@ -190,7 +190,11 @@ impl<'bump> DiffMachine<'bump> {
                 }
 
                 DiffInstruction::PrepareMoveNode { node } => {
-                    //
+                    log::debug!("Preparing to move node: {:?}", node);
+                    for el in RealChildIterator::new(node, self.vdom) {
+                        self.mutations.push_root(el.direct_id());
+                        self.stack.add_child_count(1);
+                    }
                 }
             };
         }
@@ -211,10 +215,15 @@ impl<'bump> DiffMachine<'bump> {
                     many: nodes_created as u32,
                 });
             }
+
             MountType::Replace { old } => {
-                let root = todo!();
-                self.mutations.replace_with(root, nodes_created as u32);
+                let mut iter = RealChildIterator::new(old, self.vdom);
+                let first = iter.next().unwrap();
+                self.mutations
+                    .replace_with(first.direct_id(), nodes_created as u32);
+                self.remove_nodes(iter);
             }
+
             MountType::ReplaceByElementId { el: old } => {
                 self.mutations.replace_with(old, nodes_created as u32);
             }
@@ -225,14 +234,8 @@ impl<'bump> DiffMachine<'bump> {
             }
 
             MountType::InsertBefore { other_node } => {
-                let root = self.find_first_element(other_node).direct_id();
+                let root = self.find_first_element_id(other_node).unwrap();
                 self.mutations.insert_before(root, nodes_created as u32);
-            }
-
-            MountType::InsertAfterFlush { other_node } => {
-                self.stack.push_nodes_created(0);
-                let root = self.find_last_element(other_node).direct_id();
-                self.mutations.insert_after(root, nodes_created as u32);
             }
         }
     }
@@ -415,8 +418,15 @@ impl<'bump> DiffMachine<'bump> {
         //
         // This case is rather rare (typically only in non-keyed lists)
         if new.tag_name != old.tag_name || new.namespace != old.namespace {
-            todo!("element changed");
-            // self.replace_node_with_node(old, new);
+            // maybe make this an instruction?
+            // issue is that we need the "vnode" but this method only has the velement
+            self.stack.push_nodes_created(0);
+            self.stack.push(DiffInstruction::Mount {
+                and: MountType::ReplaceByElementId {
+                    el: old.dom_id.get().unwrap(),
+                },
+            });
+            self.create_element_node(new);
             return;
         }
 
@@ -640,6 +650,7 @@ impl<'bump> DiffMachine<'bump> {
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Handled these cases in `diff_children` before calling this function.
+        log::debug!("diffing non-keyed case");
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
@@ -649,7 +660,8 @@ impl<'bump> DiffMachine<'bump> {
 
         if old.len() > new.len() {
             self.remove_nodes(&old[new.len()..]);
-        } else {
+        } else if new.len() > old.len() {
+            log::debug!("Calling create children on array differences");
             self.stack.create_children(
                 &new[old.len()..],
                 MountType::InsertAfter {
@@ -707,6 +719,11 @@ impl<'bump> DiffMachine<'bump> {
             Some(count) => count,
             None => return,
         };
+        log::debug!(
+            "Left offset, right offset, {}, {}",
+            left_offset,
+            right_offset,
+        );
 
         // Ok, we now hopefully have a smaller range of children in the middle
         // within which to re-order nodes with the same keys, remove old nodes with
@@ -846,64 +863,107 @@ impl<'bump> DiffMachine<'bump> {
 
         // 4. Compute the LIS of this list
         // TODO: investigate if we can go without the hashset here, I can't quite tell from the LIS crate
-        let mut new_index_is_in_lis = FxHashSet::default();
-        new_index_is_in_lis.reserve(new_index_to_old_index.len());
+        // let mut new_index_is_in_lis = Vec::default();
+        let mut lis_sequence = Vec::default();
+        lis_sequence.reserve(new_index_to_old_index.len());
 
         let mut predecessors = vec![0; new_index_to_old_index.len()];
         let mut starts = vec![0; new_index_to_old_index.len()];
 
         longest_increasing_subsequence::lis_with(
             &new_index_to_old_index,
-            &mut new_index_is_in_lis,
+            &mut lis_sequence,
             |a, b| a < b,
             &mut predecessors,
             &mut starts,
         );
 
-        // REMEMBER: we're generating instructions. we cannot rely on anything stack related to be consistent.
+        // the lis comes out backwards, I think. can't quite tell
+        lis_sequence.sort_unstable();
 
-        // walk the new list, creating nodes or diffing them. if we hit an LIS, then we call "insert before"
-        let mut last_lis = 0;
+        // if a new node gets u32 max and is at the end, then it might be part of our LIS (because u32 max is a valid LIS)
+        if lis_sequence.last().map(|f| new_index_to_old_index[*f]) == Some(u32::MAX as usize) {
+            lis_sequence.pop();
+        }
 
-        self.stack.push_nodes_created(0);
-        for (idx, new_node) in new.into_iter().enumerate().rev() {
-            let old_index = new_index_to_old_index[idx];
+        log::debug!("LIS Indicies: {:?}", lis_sequence);
 
+        let apply = |new_idx, new_node: &'bump VNode<'bump>, stack: &mut DiffStack<'bump>| {
+            log::debug!("applying {:?}", new_node);
+
+            let old_index = new_index_to_old_index[new_idx];
+            dbg!(new_idx, old_index);
             if old_index == u32::MAX as usize {
-                self.stack.create_node(new_node, MountType::Absorb);
+                stack.create_node(new_node, MountType::Absorb);
             } else {
-                // diff / move
-                if let Some(new_index) = new_index_is_in_lis.get(&idx) {
-                    // take all the nodes on the stack and insert them before this one
-                    self.stack.push(DiffInstruction::Mount {
-                        and: MountType::InsertAfterFlush {
-                            other_node: new_node,
-                        },
-                    });
-                    self.stack.push(DiffInstruction::DiffNode {
-                        new: new_node,
-                        old: &old[old_index],
-                    });
-                    last_lis = *new_index;
-                } else {
-                    // this is not an LIS node, we need to diff it and move it
-                    self.stack
-                        .push(DiffInstruction::PrepareMoveNode { node: new_node });
-                    self.stack.push(DiffInstruction::DiffNode {
-                        new: new_node,
-                        old: &old[old_index],
-                    });
-                }
+                // this funciton should never take LIS indicies
+                stack.push(DiffInstruction::PrepareMoveNode { node: new_node });
+                stack.push(DiffInstruction::DiffNode {
+                    new: new_node,
+                    old: &old[old_index],
+                });
+            }
+        };
+
+        // add mount instruction for the last items not covered by the lis
+        let first_lis = *lis_sequence.first().unwrap();
+        dbg!(first_lis);
+        if first_lis > 0 {
+            self.stack.push_nodes_created(0);
+            self.stack.push(DiffInstruction::Mount {
+                and: MountType::InsertBefore {
+                    other_node: &new[first_lis],
+                },
+            });
+
+            for (idx, new_node) in new[..first_lis].iter().enumerate().rev() {
+                apply(idx, new_node, &mut self.stack);
             }
         }
 
-        // There will be nodes left on top of the stack. They need to be inserted before the final
-        let last_node = &old[last_lis];
-        self.stack.push(DiffInstruction::Mount {
-            and: MountType::InsertBefore {
-                other_node: last_node,
-            },
-        });
+        // for each spacing, generate a mount instruction
+        let mut lis_iter = lis_sequence.iter().rev();
+        let mut last = *lis_iter.next().unwrap();
+        while let Some(&next) = lis_iter.next() {
+            if last - next > 1 {
+                self.stack.push_nodes_created(0);
+                self.stack.push(DiffInstruction::Mount {
+                    and: MountType::InsertBefore {
+                        other_node: &new[last],
+                    },
+                });
+                for (idx, new_node) in new[(next + 1)..last].iter().enumerate().rev() {
+                    apply(idx + next + 1, new_node, &mut self.stack);
+                }
+            }
+            last = next;
+        }
+
+        // add mount instruction for the first items not covered by the lis
+        let last_lis = *lis_sequence.last().unwrap();
+        log::debug!("last lis is {}, new len is {}", last_lis, new.len());
+        if last_lis < (new.len() - 1) {
+            let after = &new[last_lis];
+            dbg!(after);
+            self.stack.push_nodes_created(0);
+            self.stack.push(DiffInstruction::Mount {
+                and: MountType::InsertAfter { other_node: after },
+            });
+
+            for (idx, new_node) in new[(last_lis + 1)..].iter().enumerate().rev() {
+                apply(idx + last_lis + 1, new_node, &mut self.stack);
+            }
+        }
+
+        for idx in lis_sequence.iter().rev() {
+            let old_index = new_index_to_old_index[*idx];
+            let new_node = &new[*idx];
+            log::debug!("diffing {:?}", new_node);
+            self.stack.push(DiffInstruction::DiffNode {
+                new: new_node,
+                old: &old[old_index],
+            });
+        }
     }
 
     // =====================
@@ -933,17 +993,13 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    fn find_first_element(&mut self, vnode: &'bump VNode<'bump>) -> &'bump VNode<'bump> {
+    fn find_first_element_id(&mut self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
 
         loop {
             let node = search_node.take().unwrap();
             match &node {
                 // the ones that have a direct id
-                VNode::Text(_) | VNode::Element(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
-                    break node
-                }
-
                 VNode::Fragment(frag) => {
                     search_node = Some(&frag.children[0]);
                 }
@@ -952,9 +1008,35 @@ impl<'bump> DiffMachine<'bump> {
                     let scope = self.vdom.get_scope(scope_id).unwrap();
                     search_node = Some(scope.root());
                 }
+                VNode::Text(t) => break t.dom_id.get(),
+                VNode::Element(t) => break t.dom_id.get(),
+                VNode::Suspended(t) => break t.node.get(),
+                VNode::Anchor(t) => break t.dom_id.get(),
             }
         }
     }
+    // fn find_first_element(&mut self, vnode: &'bump VNode<'bump>) -> &'bump VNode<'bump> {
+    //     let mut search_node = Some(vnode);
+
+    //     loop {
+    //         let node = search_node.take().unwrap();
+    //         match &node {
+    //             // the ones that have a direct id
+    //             VNode::Text(_) | VNode::Element(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
+    //                 break node
+    //             }
+
+    //             VNode::Fragment(frag) => {
+    //                 search_node = Some(&frag.children[0]);
+    //             }
+    //             VNode::Component(el) => {
+    //                 let scope_id = el.ass_scope.get().unwrap();
+    //                 let scope = self.vdom.get_scope(scope_id).unwrap();
+    //                 search_node = Some(scope.root());
+    //             }
+    //         }
+    //     }
+    // }
 
     fn replace_and_create_many_with_one(
         &mut self,

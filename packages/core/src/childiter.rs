@@ -48,7 +48,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
                 match &node {
                     // We can only exit our looping when we get "real" nodes
                     // This includes fragments and components when they're empty (have a single root)
-                    VNode::Element(_) | VNode::Text(_) => {
+                    VNode::Element(_) | VNode::Text(_) | VNode::Suspended(_) | VNode::Anchor(_) => {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         should_pop = true;
@@ -69,31 +69,6 @@ impl<'a> Iterator for RealChildIterator<'a> {
                         } else {
                             should_push = Some(&frag.children[subcount]);
                         }
-                    }
-                    // // If we get a fragment we push the next child
-                    // VNodeKind::Fragment(frag) => {
-                    //     let subcount = *count as usize;
-
-                    //     if frag.children.len() == 0 {
-                    //         should_pop = true;
-                    //         returned_node = Some(&*node);
-                    //     }
-
-                    //     if subcount >= frag.children.len() {
-                    //         should_pop = true;
-                    //     } else {
-                    //         should_push = Some(&frag.children[subcount]);
-                    //     }
-                    // }
-
-                    // Immediately abort suspended nodes - can't do anything with them yet
-                    VNode::Suspended(node) => {
-                        // VNodeKind::Suspended => should_pop = true,
-                        todo!()
-                    }
-
-                    VNode::Anchor(a) => {
-                        todo!()
                     }
 
                     // For components, we load their root and push them onto the stack

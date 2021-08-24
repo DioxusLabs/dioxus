@@ -39,7 +39,6 @@ pub enum MountType<'a> {
     Replace { old: &'a VNode<'a> },
     ReplaceByElementId { el: ElementId },
     InsertAfter { other_node: &'a VNode<'a> },
-    InsertAfterFlush { other_node: &'a VNode<'a> },
     InsertBefore { other_node: &'a VNode<'a> },
 }
 

@@ -651,7 +651,13 @@ impl Debug for NodeFactory<'_> {
 impl Debug for VNode<'_> {
     fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match &self {
-            VNode::Element(el) => write!(s, "VElement {{ name: {} }}", el.tag_name),
+            VNode::Element(el) => {
+                //
+                s.debug_struct("VElement")
+                    .field("name", &el.tag_name)
+                    .field("key", &el.key)
+                    .finish()
+            }
             VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
             VNode::Anchor(a) => write!(s, "VAnchor"),
 
