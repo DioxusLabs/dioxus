@@ -40,9 +40,9 @@ async fn test_iterative_create_components() {
 
     let mut dom = VirtualDom::new(App);
 
-    let mutations = dom.rebuild_async().await.unwrap();
+    let mutations = dom.rebuild_async().await;
     dbg!(mutations);
 
-    let mutations = dom.diff_async().await.unwrap();
+    let mutations = dom.diff_async().await;
     dbg!(mutations);
 }

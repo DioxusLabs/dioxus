@@ -22,7 +22,7 @@ fn worksync() {
     let mutations = loop {
         let g = (&mut fut).now_or_never();
         if g.is_some() {
-            break g.unwrap().unwrap();
+            break g.unwrap();
         }
     };
 

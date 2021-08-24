@@ -286,28 +286,28 @@ mod tests {
     #[test]
     fn to_string_works() {
         let mut dom = VirtualDom::new(SIMPLE_APP);
-        dom.rebuild().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
     }
 
     #[test]
     fn hydration() {
         let mut dom = VirtualDom::new(NESTED_APP);
-        dom.rebuild().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c.pre_render(true)));
     }
 
     #[test]
     fn nested() {
         let mut dom = VirtualDom::new(NESTED_APP);
-        dom.rebuild().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
     }
 
     #[test]
     fn fragment_app() {
         let mut dom = VirtualDom::new(FRAGMENT_APP);
-        dom.rebuild().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
     }
 
@@ -319,7 +319,7 @@ mod tests {
         let mut file = File::create("index.html").unwrap();
 
         let mut dom = VirtualDom::new(SLIGHTLY_MORE_COMPLEX);
-        dom.rebuild().expect("failed to run virtualdom");
+        dom.rebuild();
 
         file.write_fmt(format_args!(
             "{}",
@@ -337,7 +337,7 @@ mod tests {
         };
 
         let mut dom = VirtualDom::new(STLYE_APP);
-        dom.rebuild().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
     }
 }

@@ -602,7 +602,30 @@ pub mod on {
     }
 
     pub trait KeyboardEventInner {
+        fn alt_key(&self) -> bool;
+
         fn char_code(&self) -> u32;
+
+        /// Identify which "key" was entered.
+        ///
+        /// This is the best method to use for all languages. They key gets mapped to a String sequence which you can match on.
+        /// The key isn't an enum because there are just so many context-dependent keys.
+        ///
+        /// A full list on which keys to use is available at:
+        /// <https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values>
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// match event.key().as_str() {
+        ///     "Esc" | "Escape" => {}
+        ///     "ArrowDown" => {}
+        ///     "ArrowLeft" => {}
+        ///      _ => {}
+        /// }
+        /// ```
+        ///
+        fn key(&self) -> String;
 
         /// Get the key code as an enum Variant.
         ///
@@ -627,35 +650,14 @@ pub mod on {
         /// Check if the ctrl key was pressed down
         fn ctrl_key(&self) -> bool;
 
-        /// Identify which "key" was entered.
-        ///
-        /// This is the best method to use for all languages. They key gets mapped to a String sequence which you can match on.
-        /// The key isn't an enum because there are just so many context-dependent keys.
-        ///
-        /// A full list on which keys to use is available at:
-        /// <https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values>
-        ///
-        /// # Example
-        ///
-        /// ```rust
-        /// match event.key().as_str() {
-        ///     "Esc" | "Escape" => {}
-        ///     "ArrowDown" => {}
-        ///     "ArrowLeft" => {}
-        ///      _ => {}
-        /// }
-        /// ```
-        ///
-        fn key(&self) -> String;
+        fn get_modifier_state(&self, key_code: &str) -> bool;
 
-        // fn key(&self) -> String;
         fn locale(&self) -> String;
         fn location(&self) -> usize;
         fn meta_key(&self) -> bool;
         fn repeat(&self) -> bool;
         fn shift_key(&self) -> bool;
         fn which(&self) -> usize;
-        fn get_modifier_state(&self, key_code: usize) -> bool;
     }
 
     pub trait FocusEventInner {

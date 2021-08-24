@@ -137,7 +137,7 @@ pub async fn run_with_props<T: Properties + 'static>(
 
     let mut websys_dom = dom::WebsysDom::new(root_el, cfg, sender_callback);
 
-    let mut mutations = dom.rebuild().unwrap();
+    let mut mutations = dom.rebuild();
     log::info!("Mutations: {:#?}", mutations);
 
     // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding

@@ -124,26 +124,12 @@ impl VirtualDom {
         }
     }
 
-    pub fn launch_in_place(root: FC<()>) -> Self {
-        let mut s = Self::new(root);
-        s.rebuild().unwrap();
-        s
-    }
-
-    /// Creates a new virtualdom and immediately rebuilds it in place, not caring about the RealDom to write into.
-    ///
-    pub fn launch_with_props_in_place<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let mut s = Self::new_with_props(root, root_props);
-        s.rebuild().unwrap();
-        s
-    }
-
     pub fn base_scope(&self) -> &Scope {
-        unsafe { self.shared.get_scope(self.base_scope).unwrap() }
+        self.shared.get_scope(self.base_scope).unwrap()
     }
 
     pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
-        unsafe { self.shared.get_scope(id) }
+        self.shared.get_scope(id)
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
@@ -152,7 +138,7 @@ impl VirtualDom {
     ///
     /// Events like garabge collection, application of refs, etc are not handled by this method and can only be progressed
     /// through "run". We completely avoid the task scheduler infrastructure.
-    pub fn rebuild<'s>(&'s mut self) -> Result<Mutations<'s>> {
+    pub fn rebuild<'s>(&'s mut self) -> Mutations<'s> {
         let mut fut = self.rebuild_async().boxed_local();
 
         loop {
@@ -163,7 +149,11 @@ impl VirtualDom {
     }
 
     /// Rebuild the dom from the ground up
-    pub async fn rebuild_async<'s>(&'s mut self) -> Result<Mutations<'s>> {
+    ///
+    /// This method is asynchronous to prevent the application from blocking while the dom is being rebuilt. Computing
+    /// the diff and creating nodes can be expensive, so we provide this method to avoid blocking the main thread. This
+    /// method can be useful when needing to perform some crucial periodic tasks.
+    pub async fn rebuild_async<'s>(&'s mut self) -> Mutations<'s> {
         let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
         let cur_component = self
@@ -176,7 +166,7 @@ impl VirtualDom {
             diff_machine
                 .stack
                 .create_node(cur_component.frames.fin_head(), MountType::Append);
-            diff_machine.work().await.unwrap();
+            diff_machine.work().await;
         } else {
             // todo: should this be a hard error?
             log::warn!(
@@ -185,11 +175,20 @@ impl VirtualDom {
             );
         }
 
-        Ok(diff_machine.mutations)
+        diff_machine.mutations
     }
 
-    // diff the dom with itself
-    pub async fn diff_async<'s>(&'s mut self) -> Result<Mutations<'s>> {
+    pub fn diff_sync<'s>(&'s mut self) -> Mutations<'s> {
+        let mut fut = self.diff_async().boxed_local();
+
+        loop {
+            if let Some(edits) = (&mut fut).now_or_never() {
+                break edits;
+            }
+        }
+    }
+
+    pub async fn diff_async<'s>(&'s mut self) -> Mutations<'s> {
         let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
 
         let cur_component = self
@@ -204,15 +203,15 @@ impl VirtualDom {
             new: cur_component.frames.fin_head(),
         });
 
-        diff_machine.work().await.unwrap();
+        diff_machine.work().await;
 
-        Ok(diff_machine.mutations)
+        diff_machine.mutations
     }
 
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
     ///
     /// This method will not wait for any suspended nodes to complete.
-    pub fn run_immediate<'s>(&'s mut self) -> Result<Mutations<'s>> {
+    pub fn run_immediate<'s>(&'s mut self) -> Mutations<'s> {
         todo!()
         // use futures_util::FutureExt;
         // let mut is_ready = || false;

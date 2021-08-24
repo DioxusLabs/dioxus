@@ -22,7 +22,7 @@ fn test_original_diff() {
     };
 
     let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild().unwrap();
+    let mutations = dom.rebuild();
     assert_eq!(
         mutations.edits,
         [
@@ -61,7 +61,7 @@ async fn create() {
 
     test_logging::set_up_logging(LOGGING_ENABLED);
     let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await.unwrap();
+    let mutations = dom.rebuild_async().await;
     assert_eq!(
         mutations.edits,
         [
@@ -103,7 +103,7 @@ async fn create_list() {
     test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await.unwrap();
+    let mutations = dom.rebuild_async().await;
 
     // copilot wrote this test :P
     assert_eq!(
@@ -146,7 +146,7 @@ async fn create_simple() {
     test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await.unwrap();
+    let mutations = dom.rebuild_async().await;
 
     // copilot wrote this test :P
     assert_eq!(
@@ -182,7 +182,7 @@ async fn create_components() {
     test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await.unwrap();
+    let mutations = dom.rebuild_async().await;
 
     assert_eq!(
         mutations.edits,
@@ -228,7 +228,7 @@ async fn anchors() {
     test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await.unwrap();
+    let mutations = dom.rebuild_async().await;
     assert_eq!(
         mutations.edits,
         [
@@ -254,7 +254,7 @@ async fn suspended() {
     test_logging::set_up_logging(LOGGING_ENABLED);
 
     let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await.unwrap();
+    let mutations = dom.rebuild_async().await;
 
     assert_eq!(
         mutations.edits,

@@ -5,7 +5,7 @@ use dioxus_html as dioxus_elements;
 
 fn main() {
     let mut dom = VirtualDom::new(App);
-    dom.rebuild().unwrap();
+    dom.rebuild();
     println!(
         "{}",
         dioxus_ssr::render_vdom(&dom, |c| c.newline(true).indent(true))

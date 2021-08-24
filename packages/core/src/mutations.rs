@@ -139,8 +139,8 @@ impl<'a> Mutations<'a> {
 
 // refs are only assigned once
 pub struct NodeRefMutation<'a> {
-    element: &'a mut Option<once_cell::sync::OnceCell<Box<dyn Any>>>,
-    element_id: ElementId,
+    pub element: &'a mut Option<once_cell::sync::OnceCell<Box<dyn Any>>>,
+    pub element_id: ElementId,
 }
 
 impl<'a> std::fmt::Debug for NodeRefMutation<'a> {

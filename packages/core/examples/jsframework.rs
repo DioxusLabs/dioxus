@@ -6,7 +6,7 @@ use std::fmt::Display;
 
 fn main() {
     let mut dom = VirtualDom::new(App);
-    let g = dom.rebuild().unwrap();
+    let g = dom.rebuild();
     assert!(g.edits.len() > 1);
 }
 

@@ -153,7 +153,7 @@ impl<'bump> DiffMachine<'bump> {
     /// This method implements a depth-first iterative tree traversal.
     ///
     /// We do depth-first to maintain high cache locality (nodes were originally generated recursively).
-    pub async fn work(&mut self) -> Result<()> {
+    pub async fn work(&mut self) {
         // defer to individual functions so the compiler produces better code
         // large functions tend to be difficult for the compiler to work with
         while let Some(instruction) = self.stack.pop() {
@@ -190,8 +190,6 @@ impl<'bump> DiffMachine<'bump> {
                 }
             };
         }
-
-        Ok(())
     }
 
     fn mount(&mut self, and: MountType<'bump>) {

@@ -14,7 +14,7 @@ async fn event_queue_works() {
     };
 
     let mut dom = VirtualDom::new(App);
-    let edits = dom.rebuild().unwrap();
+    let edits = dom.rebuild();
 
     async_std::task::spawn_local(async move {
         match dom.run_unbounded().await {

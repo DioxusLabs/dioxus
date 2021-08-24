@@ -19,7 +19,9 @@ async fn main() -> Result<(), std::io::Error> {
             .map(|f| f.parse().unwrap_or("...?".to_string()))
             .unwrap_or("...?".to_string());
 
-        let dom = VirtualDom::launch_with_props_in_place(Example, ExampleProps { initial_name });
+        let mut dom = VirtualDom::new_with_props(Example, ExampleProps { initial_name });
+
+        dom.rebuild();
 
         Ok(Response::builder(200)
             .body(format!("{}", dioxus_ssr::render_vdom(&dom, |c| c)))

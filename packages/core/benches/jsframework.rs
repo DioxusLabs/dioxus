@@ -45,7 +45,7 @@ fn create_rows(c: &mut Criterion) {
     c.bench_function("create rows", |b| {
         b.iter(|| {
             let mut dom = VirtualDom::new(App);
-            let g = dom.rebuild().unwrap();
+            let g = dom.rebuild();
             assert!(g.edits.len() > 1);
         })
     });
