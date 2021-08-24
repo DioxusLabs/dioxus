@@ -225,8 +225,8 @@ impl VirtualDom {
     /// If there are pending tasks, they will be progressed before returning. This is useful when rendering an application
     /// that has suspended nodes or suspended tasks. Be warned - any async tasks running forever will prevent this method
     /// from completing. Consider using `run` and specifing a deadline.
-    pub async fn run_unbounded<'s>(&'s mut self) -> Result<Mutations<'s>> {
-        self.run_with_deadline(async {}).await
+    pub async fn run_unbounded<'s>(&'s mut self) -> Mutations<'s> {
+        self.run_with_deadline(async {}).await.unwrap()
     }
 
     /// Run the virtualdom with a deadline.
@@ -275,7 +275,7 @@ impl VirtualDom {
     pub async fn run_with_deadline<'s>(
         &'s mut self,
         deadline: impl Future<Output = ()>,
-    ) -> Result<Mutations<'s>> {
+    ) -> Option<Mutations<'s>> {
         let mut committed_mutations = Mutations::new();
         let mut deadline = Box::pin(deadline.fuse());
 
@@ -293,12 +293,12 @@ impl VirtualDom {
                 let deadline_expired = self.scheduler.wait_for_any_trigger(&mut deadline).await;
 
                 if deadline_expired {
-                    return Ok(committed_mutations);
+                    return Some(committed_mutations);
                 }
             }
 
             // Create work from the pending event queue
-            self.scheduler.consume_pending_events()?;
+            self.scheduler.consume_pending_events();
 
             // Work through the current subtree, and commit the results when it finishes
             // When the deadline expires, give back the work
@@ -316,10 +316,10 @@ impl VirtualDom {
                     */
 
                     if !self.scheduler.has_any_work() {
-                        return Ok(committed_mutations);
+                        return Some(committed_mutations);
                     }
                 }
-                FiberResult::Interrupted => return Ok(committed_mutations),
+                FiberResult::Interrupted => return None,
             }
         }
     }
@@ -327,6 +327,12 @@ impl VirtualDom {
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<EventTrigger> {
         self.shared.ui_event_sender.clone()
     }
+
+    pub fn has_work(&self) -> bool {
+        true
+    }
+
+    pub async fn wait_for_any_work(&self) {}
 }
 
 // TODO!

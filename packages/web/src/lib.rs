@@ -56,20 +56,16 @@ use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
 use crate::dom::load_document;
-use dioxus::prelude::{Context, Properties, VNode};
+use dioxus::prelude::Properties;
 use dioxus::virtual_dom::VirtualDom;
 pub use dioxus_core as dioxus;
-use dioxus_core::error::Result;
-use dioxus_core::{events::EventTrigger, prelude::FC};
-use futures_util::{pin_mut, Stream, StreamExt};
-use fxhash::FxHashMap;
-use js_sys::Iterator;
-use web_sys::{window, Document, Element, Event, Node, NodeList};
+use dioxus_core::prelude::FC;
 
 mod cache;
 mod cfg;
 mod dom;
 mod nodeslab;
+mod ric_raf;
 
 /// Launches the VirtualDOM from the specified component function.
 ///
@@ -100,15 +96,8 @@ where
 {
     let config = config(WebConfig::default());
     let fut = run_with_props(root, root_props, config);
-
-    wasm_bindgen_futures::spawn_local(async {
-        match fut.await {
-            Ok(_) => log::error!("Your app completed running... somehow?"),
-            Err(e) => log::error!("Your app crashed! {}", e),
-        }
-    });
+    wasm_bindgen_futures::spawn_local(fut);
 }
-
 /// This method is the primary entrypoint for Websys Dioxus apps. Will panic if an error occurs while rendering.
 /// See DioxusErrors for more information on how these errors could occour.
 ///
@@ -122,11 +111,7 @@ where
 ///
 /// Run the app to completion, panicing if any error occurs while rendering.
 /// Pairs well with the wasm_bindgen async handler
-pub async fn run_with_props<T: Properties + 'static>(
-    root: FC<T>,
-    root_props: T,
-    cfg: WebConfig,
-) -> Result<()> {
+pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
     let hydrating = cfg.hydrate;
@@ -138,7 +123,6 @@ pub async fn run_with_props<T: Properties + 'static>(
     let mut websys_dom = dom::WebsysDom::new(root_el, cfg, sender_callback);
 
     let mut mutations = dom.rebuild();
-    log::info!("Mutations: {:#?}", mutations);
 
     // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding
     // ElementIds should already line up because the web_sys dom has already loaded elements with the DioxusID into memory
@@ -146,12 +130,18 @@ pub async fn run_with_props<T: Properties + 'static>(
         websys_dom.process_edits(&mut mutations.edits);
     }
 
+    let work_loop = ric_raf::RafLoop::new();
     loop {
-        let deadline = gloo_timers::future::TimeoutFuture::new(16);
-        let mut mutations = dom.run_with_deadline(deadline).await?;
+        // if virtualdom has nothing, wait for it to have something before requesting idle time
+        if !dom.has_work() {
+            dom.wait_for_any_work().await;
+        }
 
-        websys_dom.process_edits(&mut mutations.edits);
+        let deadline = work_loop.wait_for_idle_time().await;
+
+        if let Some(mut mutations) = dom.run_with_deadline(deadline).await {
+            work_loop.wait_for_raf().await;
+            websys_dom.process_edits(&mut mutations.edits);
+        }
     }
-
-    Ok(())
 }
