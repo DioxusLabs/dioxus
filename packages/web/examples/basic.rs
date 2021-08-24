@@ -28,25 +28,6 @@ static APP: FC<()> = |cx| {
     cx.render(rsx! {
         div {
             button { onclick: move |_| count += 1, "add"  }
-            div {
-                div {
-                    div {
-                        div {
-                            div {
-                                Fragment {
-                                    a {"wo"}
-                                    p {"wo"}
-                                    li {"wo"}
-                                    em {"wo"}
-                                }
-                            }
-                        }
-                        Child {}
-                    }
-                    Child {}
-                }
-                Child {}
-            }
             ul {
                 {(0..*count).map(|f| rsx!{
                     li { "a - {f}" }
@@ -54,6 +35,7 @@ static APP: FC<()> = |cx| {
                     li { "c - {f}" }
                 })}
             }
+            Child {}
         }
     })
 };

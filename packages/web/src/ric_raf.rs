@@ -29,6 +29,11 @@ impl RafLoop {
         let ric_closure: Closure<dyn Fn(JsValue)> =
             Closure::wrap(Box::new(move |v: JsValue| ric_sender.try_send(()).unwrap()));
 
+        // execute the polyfill for safari
+        Function::new_no_args(include_str!("./ricpolyfill.js"))
+            .call0(&JsValue::NULL)
+            .unwrap();
+
         Self {
             window: web_sys::window().unwrap(),
             raf_receiver,
