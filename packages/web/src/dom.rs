@@ -124,8 +124,6 @@ impl WebsysDom {
     }
 
     fn append_children(&mut self, many: u32) {
-        log::debug!("Called [`append_child`]");
-
         let root: Node = self
             .stack
             .list
@@ -133,9 +131,11 @@ impl WebsysDom {
             .unwrap()
             .clone();
 
-        for _ in 0..many {
-            let child = self.stack.pop();
-
+        for child in self
+            .stack
+            .list
+            .drain((self.stack.list.len() - many as usize)..)
+        {
             if child.dyn_ref::<web_sys::Text>().is_some() {
                 if self.last_node_was_text {
                     let comment_node = self
@@ -143,20 +143,17 @@ impl WebsysDom {
                         .create_comment("dioxus")
                         .dyn_into::<Node>()
                         .unwrap();
-                    self.stack.top().append_child(&comment_node).unwrap();
+                    root.append_child(&comment_node).unwrap();
                 }
                 self.last_node_was_text = true;
             } else {
                 self.last_node_was_text = false;
             }
-
             root.append_child(&child).unwrap();
         }
     }
 
     fn replace_with(&mut self, m: u32, root: u64) {
-        log::debug!("Called [`replace_with`]");
-
         let mut new_nodes = vec![];
         for _ in 0..m {
             new_nodes.push(self.stack.pop());
@@ -198,8 +195,6 @@ impl WebsysDom {
     }
 
     fn remove(&mut self, root: u64) {
-        log::debug!("Called [`remove`]");
-
         let node = self.nodes[root as usize].as_ref().unwrap();
         if let Some(element) = node.dyn_ref::<Element>() {
             element.remove();
@@ -211,7 +206,6 @@ impl WebsysDom {
     }
 
     fn remove_all_children(&mut self) {
-        log::debug!("Called [`remove_all_children`]");
         todo!()
     }
 
@@ -255,7 +249,6 @@ impl WebsysDom {
         self.nodes[id] = Some(el);
         // let nid = self.node_counter.?next();
         // let nid = self.nodes.insert(el).data().as_ffi();
-        // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
         // ElementId::new(nid)
     }
 
