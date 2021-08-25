@@ -35,7 +35,7 @@ pub struct EventChannel {
 pub enum SchedulerMsg {
     Immediate(ScopeId),
     UiEvent(EventTrigger),
-    SubmitTask(u64),
+    SubmitTask(FiberTask, u64),
     ToggleTask(u64),
     PauseTask(u64),
     ResumeTask(u64),
@@ -108,27 +108,39 @@ pub struct Scheduler {
 
 impl Scheduler {
     pub fn new() -> Self {
-        // preallocate 2000 elements and 20 scopes to avoid dynamic allocation
+        /*
+        Preallocate 2000 elements and 100 scopes to avoid dynamic allocation.
+        Perhaps this should be configurable?
+        */
         let components = Rc::new(UnsafeCell::new(Slab::with_capacity(100)));
-
-        // elements are super cheap - the value takes no space
         let raw_elements = Slab::with_capacity(2000);
 
         let heuristics = HeuristicsEngine::new();
 
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
         let task_counter = Rc::new(Cell::new(0));
+
         let channel = EventChannel {
-            task_counter,
+            task_counter: task_counter.clone(),
             sender: sender.clone(),
             schedule_any_immediate: {
+                let sender = sender.clone();
                 Rc::new(move |id| sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap())
             },
-            submit_task: Rc::new(|_| {
-                //
-                todo!()
-                // TaskHandle {}
-            }),
+            submit_task: {
+                let sender = sender.clone();
+                Rc::new(move |fiber_task| {
+                    let task_id = task_counter.get();
+                    task_counter.set(task_id + 1);
+                    sender
+                        .unbounded_send(SchedulerMsg::SubmitTask(fiber_task, task_id))
+                        .unwrap();
+                    TaskHandle {
+                        our_id: task_id,
+                        sender: sender.clone(),
+                    }
+                })
+            },
             get_shared_context: {
                 let components = components.clone();
                 Rc::new(move |id, ty| {
@@ -498,7 +510,7 @@ impl Scheduler {
 }
 
 pub struct TaskHandle {
-    pub channel: EventChannel,
+    pub sender: UnboundedSender<SchedulerMsg>,
     pub our_id: u64,
 }
 
