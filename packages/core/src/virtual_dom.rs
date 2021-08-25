@@ -298,11 +298,11 @@ impl VirtualDom {
             }
 
             // Create work from the pending event queue
-            self.scheduler.consume_pending_events();
+            self.scheduler.consume_pending_events().unwrap();
 
             // Work through the current subtree, and commit the results when it finishes
             // When the deadline expires, give back the work
-            match self.scheduler.work_with_deadline(&mut deadline) {
+            match self.scheduler.work_with_deadline(&mut deadline).await {
                 FiberResult::Done(mut mutations) => {
                     committed_mutations.extend(&mut mutations);
 
@@ -332,7 +332,10 @@ impl VirtualDom {
         true
     }
 
-    pub async fn wait_for_any_work(&self) {}
+    pub async fn wait_for_any_work(&mut self) {
+        let mut timeout = Box::pin(futures_util::future::pending().fuse());
+        self.scheduler.wait_for_any_trigger(&mut timeout).await;
+    }
 }
 
 // TODO!

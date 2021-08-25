@@ -90,17 +90,17 @@ impl SharedResources {
                 let comps = unsafe { &*components.get() };
 
                 if let Some(scope) = comps.get(idx.0) {
-                    todo!("implement immediates again")
+                    // todo!("implement immediates again")
+                    //
+
                     // queue
-                    //     .unbounded_send(EventTrigger::new(
-                    //         VirtualEvent::ScheduledUpdate {
-                    //             height: scope.height,
-                    //         },
-                    //         idx,
-                    //         None,
-                    //         EventPriority::High,
-                    //     ))
-                    //     .expect("The event queu receiver should *never* be dropped");
+                    // .unbounded_send(EventTrigger::new(
+                    //     V
+                    //     idx,
+                    //     None,
+                    //     EventPriority::High,
+                    // ))
+                    // .expect("The event queu receiver should *never* be dropped");
                 }
             }) as Rc<dyn Fn(ScopeId)>
         };

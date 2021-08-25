@@ -138,14 +138,12 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     //
-    pub async fn diff_scope(&mut self, id: ScopeId) -> Result<()> {
-        let component = self
-            .vdom
-            .get_scope_mut(id)
-            .ok_or_else(|| Error::NotMounted)?;
-        let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-        self.diff_node(old, new);
-        Ok(())
+    pub async fn diff_scope(&mut self, id: ScopeId) {
+        if let Some(component) = self.vdom.get_scope_mut(id) {
+            let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+            self.stack.push(DiffInstruction::DiffNode { new, old });
+            self.work().await;
+        }
     }
 
     /// Progress the diffing for this "fiber"

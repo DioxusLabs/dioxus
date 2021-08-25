@@ -56,6 +56,7 @@ use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
 use crate::dom::load_document;
+use cache::intern_cache;
 use dioxus::prelude::Properties;
 use dioxus::virtual_dom::VirtualDom;
 pub use dioxus_core as dioxus;
@@ -64,6 +65,7 @@ use dioxus_core::prelude::FC;
 mod cache;
 mod cfg;
 mod dom;
+mod events;
 mod nodeslab;
 mod ric_raf;
 
@@ -113,6 +115,8 @@ where
 /// Pairs well with the wasm_bindgen async handler
 pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
+
+    intern_cache();
 
     let hydrating = cfg.hydrate;
 

@@ -19,7 +19,7 @@ dioxus-mobile = { path = "./packages/mobile", optional = true }
 
 [features]
 # core
-default = ["core", "ssr"]
+default = ["core", "ssr", "web"]
 core = ["macro", "hooks", "html"]
 macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
@@ -56,12 +56,17 @@ gloo-timers = "0.2.1"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 gloo-timers = "0.2.1"
-surf = { version = "2.2.0", default-features = false, features = [
-    "wasm-client",
-], git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm" }
+wasm-logger = "0.2.0"
+console_error_panic_hook = "0.1.6"
+rand = { version = "0.8.4", features = ["small_rng"] }
+wasm-bindgen = { version = "0.2.71", features = ["enable-interning"] }
+
+# surf = { version = "2.2.0", default-features = false, features = [
+#     "wasm-client",
+# ], git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm" }
 
 
-[dependencies.getrandom]
+[dev-dependencies.getrandom]
 version = "0.2"
 features = ["js"]
 

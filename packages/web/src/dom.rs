@@ -1,7 +1,7 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 use dioxus_core::{
-    events::{EventTrigger, VirtualEvent},
+    events::{on::GenericEventInner, EventTrigger, VirtualEvent},
     mutations::NodeRefMutation,
     DomEdit, ElementId, ScopeId,
 };
@@ -9,7 +9,7 @@ use fxhash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     window, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, Node, NodeList,
+    HtmlOptionElement, Node, NodeList, UiEvent,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};
@@ -436,284 +436,82 @@ impl Stack {
     }
 }
 
-fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
+fn virtual_event_from_websys_event(event: web_sys::Event) -> VirtualEvent {
+    use crate::events::*;
     use dioxus_core::events::on::*;
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => {
-            struct WebsysClipboardEvent();
-            impl ClipboardEventInner for WebsysClipboardEvent {}
-            VirtualEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent())))
+            VirtualEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent(event))))
         }
-
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: web_sys::CompositionEvent = event.clone().dyn_into().unwrap();
-            struct WebsysCompositionEvent(web_sys::CompositionEvent);
-            impl CompositionEventInner for WebsysCompositionEvent {
-                fn data(&self) -> String {
-                    todo!()
-                }
-            }
             VirtualEvent::CompositionEvent(CompositionEvent(Rc::new(WebsysCompositionEvent(evt))))
         }
-
         "keydown" | "keypress" | "keyup" => {
-            struct Event(web_sys::KeyboardEvent);
-            impl KeyboardEventInner for Event {
-                fn alt_key(&self) -> bool {
-                    self.0.alt_key()
-                }
-                fn char_code(&self) -> u32 {
-                    self.0.char_code()
-                }
-                fn key(&self) -> String {
-                    self.0.key()
-                }
-
-                fn key_code(&self) -> KeyCode {
-                    KeyCode::from_raw_code(self.0.key_code() as u8)
-                }
-
-                fn ctrl_key(&self) -> bool {
-                    self.0.ctrl_key()
-                }
-
-                fn get_modifier_state(&self, key_code: &str) -> bool {
-                    self.0.get_modifier_state(key_code)
-                }
-
-                fn locale(&self) -> String {
-                    todo!("Locale is currently not supported. :(")
-                }
-
-                fn location(&self) -> usize {
-                    self.0.location() as usize
-                }
-
-                fn meta_key(&self) -> bool {
-                    self.0.meta_key()
-                }
-
-                fn repeat(&self) -> bool {
-                    self.0.repeat()
-                }
-
-                fn shift_key(&self) -> bool {
-                    self.0.shift_key()
-                }
-
-                fn which(&self) -> usize {
-                    self.0.which() as usize
-                }
-            }
-            let evt: web_sys::KeyboardEvent = event.clone().dyn_into().unwrap();
-            VirtualEvent::KeyboardEvent(KeyboardEvent(Rc::new(Event(evt))))
+            let evt: web_sys::KeyboardEvent = event.dyn_into().unwrap();
+            VirtualEvent::KeyboardEvent(KeyboardEvent(Rc::new(WebsysKeyboardEvent(evt))))
         }
-
         "focus" | "blur" => {
-            struct Event(web_sys::FocusEvent);
-            impl FocusEventInner for Event {}
-            let evt: web_sys::FocusEvent = event.clone().dyn_into().unwrap();
-            VirtualEvent::FocusEvent(FocusEvent(Rc::new(Event(evt))))
+            let evt: web_sys::FocusEvent = event.dyn_into().unwrap();
+            VirtualEvent::FocusEvent(FocusEvent(Rc::new(WebsysFocusEvent(evt))))
         }
-
         "change" => {
-            // struct Event(web_sys::Event);
-            // impl GenericEventInner for Event {
-            //     fn bubbles(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn cancel_bubble(&self) {
-            //         todo!()
-            //     }
-
-            //     fn cancelable(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn composed(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn composed_path(&self) -> String {
-            //         todo!()
-            //     }
-
-            //     fn current_target(&self) {
-            //         todo!()
-            //     }
-
-            //     fn default_prevented(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn event_phase(&self) -> usize {
-            //         todo!()
-            //     }
-
-            //     fn is_trusted(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn prevent_default(&self) {
-            //         todo!()
-            //     }
-
-            //     fn stop_immediate_propagation(&self) {
-            //         todo!()
-            //     }
-
-            //     fn stop_propagation(&self) {
-            //         todo!()
-            //     }
-
-            //     fn target(&self) {
-            //         todo!()
-            //     }
-
-            //     fn time_stamp(&self) -> usize {
-            //         todo!()
-            //     }
-            // }
-            // let evt: web_sys::Event = event.clone().dyn_into().expect("wrong error typ");
-            // VirtualEvent::Event(GenericEvent(Rc::new(Event(evt))))
-            todo!()
+            let evt = event.dyn_into().unwrap();
+            VirtualEvent::UIEvent(UIEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
-
         "input" | "invalid" | "reset" | "submit" => {
-            // is a special react events
-            let evt: web_sys::InputEvent = event.clone().dyn_into().expect("wrong event type");
-            let this: web_sys::EventTarget = evt.target().unwrap();
-
-            let value = (&this)
-                .dyn_ref()
-                .map(|input: &web_sys::HtmlInputElement| input.value())
-                .or_else(|| {
-                    (&this)
-                        .dyn_ref()
-                        .map(|input: &web_sys::HtmlTextAreaElement| input.value())
-                })
-                .or_else(|| {
-                    (&this)
-                        .dyn_ref::<web_sys::HtmlElement>()
-                        .unwrap()
-                        .text_content()
-                })
-                .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
-
-            todo!()
-            // VirtualEvent::FormEvent(FormEvent { value })
+            let evt: web_sys::InputEvent = event.clone().dyn_into().unwrap();
+            VirtualEvent::FormEvent(FormEvent(Rc::new(WebsysFormEvent(evt))))
         }
-
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             let evt: web_sys::MouseEvent = event.clone().dyn_into().unwrap();
-
-            #[derive(Debug)]
-            pub struct CustomMouseEvent(web_sys::MouseEvent);
-            impl dioxus_core::events::on::MouseEventInner for CustomMouseEvent {
-                fn alt_key(&self) -> bool {
-                    self.0.alt_key()
-                }
-                fn button(&self) -> i16 {
-                    self.0.button()
-                }
-                fn buttons(&self) -> u16 {
-                    self.0.buttons()
-                }
-                fn client_x(&self) -> i32 {
-                    self.0.client_x()
-                }
-                fn client_y(&self) -> i32 {
-                    self.0.client_y()
-                }
-                fn ctrl_key(&self) -> bool {
-                    self.0.ctrl_key()
-                }
-                fn meta_key(&self) -> bool {
-                    self.0.meta_key()
-                }
-                fn page_x(&self) -> i32 {
-                    self.0.page_x()
-                }
-                fn page_y(&self) -> i32 {
-                    self.0.page_y()
-                }
-                fn screen_x(&self) -> i32 {
-                    self.0.screen_x()
-                }
-                fn screen_y(&self) -> i32 {
-                    self.0.screen_y()
-                }
-                fn shift_key(&self) -> bool {
-                    self.0.shift_key()
-                }
-
-                // yikes
-                // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
-                fn get_modifier_state(&self, key_code: &str) -> bool {
-                    self.0.get_modifier_state(key_code)
-                }
-            }
-            VirtualEvent::MouseEvent(MouseEvent(Rc::new(CustomMouseEvent(evt))))
+            VirtualEvent::MouseEvent(MouseEvent(Rc::new(WebsysMouseEvent(evt))))
         }
-
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             let evt: web_sys::PointerEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::PointerEvent(PointerEvent(Rc::new(WebsysPointerEvent(evt))))
         }
-
         "select" => {
-            // let evt: web_sys::SelectionEvent = event.clone().dyn_into().unwrap();
-            // not required to construct anything special beyond standard event stuff
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            VirtualEvent::SelectionEvent(SelectionEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
-
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
             let evt: web_sys::TouchEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::TouchEvent(TouchEvent(Rc::new(WebsysTouchEvent(evt))))
         }
-
         "scroll" => {
-            // let evt: web_sys::UIEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            VirtualEvent::UIEvent(UIEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
-
         "wheel" => {
             let evt: web_sys::WheelEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::WheelEvent(WheelEvent(Rc::new(WebsysWheelEvent(evt))))
         }
         "animationstart" | "animationend" | "animationiteration" => {
             let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::AnimationEvent(AnimationEvent(Rc::new(WebsysAnimationEvent(evt))))
         }
-
         "transitionend" => {
             let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            VirtualEvent::TransitionEvent(TransitionEvent(Rc::new(WebsysTransitionEvent(evt))))
         }
-
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
-            // not required to construct anything special beyond standard event stuff
-
-            // let evt: web_sys::MediaEvent = event.clone().dyn_into().unwrap();
-            // let evt: web_sys::MediaEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            VirtualEvent::MediaEvent(MediaEvent(Rc::new(WebsysMediaEvent(evt))))
         }
-
         "toggle" => {
-            // not required to construct anything special beyond standard event stuff (target)
-
-            // let evt: web_sys::ToggleEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            VirtualEvent::ToggleEvent(ToggleEvent(Rc::new(WebsysToggleEvent(evt))))
         }
         _ => {
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            VirtualEvent::UIEvent(UIEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
     }
 }
@@ -763,7 +561,7 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
     // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
     Ok(EventTrigger::new(
-        virtual_event_from_websys_event(event),
+        virtual_event_from_websys_event(event.clone()),
         ScopeId(triggered_scope as usize),
         Some(ElementId(real_id as usize)),
         dioxus_core::events::EventPriority::High,

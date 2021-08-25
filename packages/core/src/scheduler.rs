@@ -50,15 +50,13 @@ pub struct Scheduler {
 
     shared: SharedResources,
 
-    waypoints: VecDeque<Waypoint>,
-
     high_priorty: PriortySystem,
     medium_priority: PriortySystem,
     low_priority: PriortySystem,
 }
 
 pub enum FiberResult<'a> {
-    Done(&'a mut Mutations<'a>),
+    Done(Mutations<'a>),
     Interrupted,
 }
 
@@ -75,7 +73,6 @@ impl Scheduler {
             garbage_scopes: HashSet::new(),
 
             current_priority: EventPriority::Low,
-            waypoints: VecDeque::new(),
 
             high_priorty: PriortySystem::new(),
             medium_priority: PriortySystem::new(),
@@ -202,7 +199,9 @@ impl Scheduler {
     }
 
     pub fn has_work(&self) -> bool {
-        self.waypoints.len() > 0
+        self.high_priorty.has_work()
+            || self.medium_priority.has_work()
+            || self.low_priority.has_work()
     }
 
     pub fn has_pending_garbage(&self) -> bool {
@@ -219,10 +218,10 @@ impl Scheduler {
     }
 
     /// If a the fiber finishes its works (IE needs to be committed) the scheduler will drop the dirty scope
-    pub fn work_with_deadline(
-        &mut self,
-        mut deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
-    ) -> FiberResult {
+    pub async fn work_with_deadline<'a>(
+        &'a mut self,
+        deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
+    ) -> FiberResult<'a> {
         // check if we need to elevate priority
         self.current_priority = match (
             self.high_priorty.has_work(),
@@ -234,11 +233,46 @@ impl Scheduler {
             (false, false, _) => EventPriority::Low,
         };
 
-        let mut is_ready = || -> bool { (&mut deadline).now_or_never().is_some() };
+        let mut machine = DiffMachine::new_headless(&self.shared);
 
-        // TODO: remove this unwrap - proprogate errors out
-        // self.get_current_fiber().work(is_ready).unwrap()
-        todo!()
+        let dirty_root = {
+            let dirty_roots = match self.current_priority {
+                EventPriority::High => &self.high_priorty.dirty_scopes,
+                EventPriority::Medium => &self.medium_priority.dirty_scopes,
+                EventPriority::Low => &self.low_priority.dirty_scopes,
+            };
+            let mut height = 0;
+            let mut dirty_root = {
+                let root = dirty_roots.iter().next();
+                if root.is_none() {
+                    return FiberResult::Done(machine.mutations);
+                }
+                root.unwrap()
+            };
+
+            for root in dirty_roots {
+                if let Some(scope) = self.shared.get_scope(*root) {
+                    if scope.height < height {
+                        height = scope.height;
+                        dirty_root = root;
+                    }
+                }
+            }
+            dirty_root
+        };
+
+        match {
+            let fut = machine.diff_scope(*dirty_root).fuse();
+            pin_mut!(fut);
+
+            match futures_util::future::select(deadline, fut).await {
+                futures_util::future::Either::Left((deadline, work_fut)) => true,
+                futures_util::future::Either::Right((_, deadline_fut)) => false,
+            }
+        } {
+            true => FiberResult::Done(machine.mutations),
+            false => FiberResult::Interrupted,
+        }
     }
 
     // waits for a trigger, canceling early if the deadline is reached
@@ -354,32 +388,6 @@ impl Scheduler {
 pub struct DirtyScope {
     height: u32,
     start_tick: u32,
-}
-
-/*
-A "waypoint" represents a frozen unit in time for the DiffingMachine to resume from. Whenever the deadline runs out
-while diffing, the diffing algorithm generates a Waypoint in order to easily resume from where it left off. Waypoints are
-fairly expensive to create, especially for big trees, so it's a good idea to pre-allocate them.
-
-Waypoints are created pessimisticly, and are only generated when an "Error" state is bubbled out of the diffing machine.
-This saves us from wasting cycles book-keeping waypoints for 99% of edits where the deadline is not reached.
-*/
-pub struct Waypoint {
-    // the progenitor of this waypoint
-    root: ScopeId,
-
-    edits: Vec<DomEdit<'static>>,
-
-    // a saved position in the tree
-    // these indicies continue to map through the tree into children nodes.
-    // A sequence of usizes is all that is needed to represent the path to a node.
-    tree_position: SmallVec<[usize; 10]>,
-
-    seen_scopes: HashSet<ScopeId>,
-
-    invalidate_scopes: HashSet<ScopeId>,
-
-    priority_level: EventPriority,
 }
 
 pub struct PriortySystem {

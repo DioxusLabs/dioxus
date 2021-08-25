@@ -153,6 +153,7 @@ pub enum VirtualEvent {
     MouseEvent(on::MouseEvent),
     PointerEvent(on::PointerEvent),
 }
+
 impl VirtualEvent {
     pub fn is_input_event(&self) -> bool {
         match self {
@@ -215,7 +216,7 @@ pub mod on {
 
     #![allow(unused)]
     use bumpalo::boxed::Box as BumpBox;
-    use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
+    use std::{any::Any, cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
     use crate::{
         innerlude::NodeFactory,
@@ -563,6 +564,8 @@ pub mod on {
     }
 
     pub trait GenericEventInner {
+        /// Return a reference to the raw event. User will need to downcast the event to the right platform-specific type.
+        fn raw_event(&self) -> &dyn Any;
         /// Returns whether or not a specific event is a bubbling event
         fn bubbles(&self) -> bool;
         /// Sets or returns whether the event should propagate up the hierarchy or not
@@ -571,14 +574,18 @@ pub mod on {
         fn cancelable(&self) -> bool;
         /// Returns whether the event is composed or not
         fn composed(&self) -> bool;
-        /// Returns the event's path
-        fn composed_path(&self) -> String;
+
+        // Currently not supported because those no way we could possibly support it
+        // just cast the event to the right platform-specific type and return it
+        // /// Returns the event's path
+        // fn composed_path(&self) -> String;
+
         /// Returns the element whose event listeners triggered the event
         fn current_target(&self);
         /// Returns whether or not the preventDefault method was called for the event
         fn default_prevented(&self) -> bool;
         /// Returns which phase of the event flow is currently being evaluated
-        fn event_phase(&self) -> usize;
+        fn event_phase(&self) -> u16;
         /// Returns whether or not an event is trusted
         fn is_trusted(&self) -> bool;
         /// Cancels the event if it is cancelable, meaning that the default action that belongs to the event will
@@ -590,7 +597,7 @@ pub mod on {
         /// Returns the element that triggered the event
         fn target(&self);
         /// Returns the time (in milliseconds relative to the epoch) at which the event was created
-        fn time_stamp(&self) -> usize;
+        fn time_stamp(&self) -> f64;
     }
 
     pub trait ClipboardEventInner {
@@ -688,8 +695,8 @@ pub mod on {
     pub trait PointerEventInner {
         // Mouse only
         fn alt_key(&self) -> bool;
-        fn button(&self) -> usize;
-        fn buttons(&self) -> usize;
+        fn button(&self) -> i16;
+        fn buttons(&self) -> u16;
         fn client_x(&self) -> i32;
         fn client_y(&self) -> i32;
         fn ctrl_key(&self) -> bool;
@@ -699,12 +706,12 @@ pub mod on {
         fn screen_x(&self) -> i32;
         fn screen_y(&self) -> i32;
         fn shift_key(&self) -> bool;
-        fn get_modifier_state(&self, key_code: usize) -> bool;
-        fn pointer_id(&self) -> usize;
-        fn width(&self) -> usize;
-        fn height(&self) -> usize;
-        fn pressure(&self) -> usize;
-        fn tangential_pressure(&self) -> usize;
+        fn get_modifier_state(&self, key_code: &str) -> bool;
+        fn pointer_id(&self) -> i32;
+        fn width(&self) -> i32;
+        fn height(&self) -> i32;
+        fn pressure(&self) -> f32;
+        fn tangential_pressure(&self) -> f32;
         fn tilt_x(&self) -> i32;
         fn tilt_y(&self) -> i32;
         fn twist(&self) -> i32;
@@ -719,7 +726,7 @@ pub mod on {
         fn ctrl_key(&self) -> bool;
         fn meta_key(&self) -> bool;
         fn shift_key(&self) -> bool;
-        fn get_modifier_state(&self, key_code: usize) -> bool;
+        fn get_modifier_state(&self, key_code: &str) -> bool;
         // changedTouches: DOMTouchList,
         // targetTouches: DOMTouchList,
         // touches: DOMTouchList,
@@ -731,10 +738,10 @@ pub mod on {
     }
 
     pub trait WheelEventInner {
-        fn delta_mode(&self) -> i32;
-        fn delta_x(&self) -> i32;
-        fn delta_y(&self) -> i32;
-        fn delta_z(&self) -> i32;
+        fn delta_mode(&self) -> u32;
+        fn delta_x(&self) -> f64;
+        fn delta_y(&self) -> f64;
+        fn delta_z(&self) -> f64;
     }
 
     pub trait MediaEventInner {}
