@@ -208,14 +208,16 @@ where
                 cx.render(LazyNodes::new(|f| {
                     let bump = f.bump();
                     let g: &dyn FnOnce(SuspendedContext<'src>) -> DomTree<'src> =
-                        bump.alloc(|sus| {
-                            let out = value
-                                .borrow()
+                        bump.alloc(move |sus| {
+                            let val = value.borrow();
+
+                            let out = val
                                 .as_ref()
                                 .unwrap()
                                 .as_ref()
                                 .downcast_ref::<Out>()
                                 .unwrap();
+
                             user_callback(sus, out)
                         });
 

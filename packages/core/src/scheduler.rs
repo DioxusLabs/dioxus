@@ -95,7 +95,7 @@ pub struct Scheduler {
     // scheduler stuff
     pub current_priority: EventPriority,
 
-    pub pending_events: VecDeque<EventTrigger>,
+    pub ui_events: VecDeque<EventTrigger>,
 
     pub pending_immediates: VecDeque<ScopeId>,
 
@@ -131,7 +131,7 @@ impl Scheduler {
             }),
             get_shared_context: {
                 let components = components.clone();
-                Rc::new(|id, ty| {
+                Rc::new(move |id, ty| {
                     let components = unsafe { &*components.get() };
                     let mut search: Option<&Scope> = components.get(id.0);
                     while let Some(inner) = search.take() {
@@ -159,7 +159,7 @@ impl Scheduler {
             raw_elements,
 
             // a storage for our receiver to dump into
-            pending_events: VecDeque::new(),
+            ui_events: VecDeque::new(),
 
             pending_immediates: VecDeque::new(),
 
@@ -216,12 +216,14 @@ impl Scheduler {
     }
 
     pub fn reserve_node(&self) -> ElementId {
-        ElementId(self.raw_elements.insert(()))
+        todo!("reserving wip until it's fast enough again")
+        // ElementId(self.raw_elements.insert(()))
     }
 
     /// return the id, freeing the space of the original node
     pub fn collect_garbage(&self, id: ElementId) {
-        self.raw_elements.remove(id.0);
+        todo!("garabge collection currently WIP")
+        // self.raw_elements.remove(id.0);
     }
 
     pub fn insert_scope_with_key(&self, f: impl FnOnce(ScopeId) -> Scope) -> ScopeId {
@@ -233,163 +235,101 @@ impl Scheduler {
     }
 
     pub fn clean_up_garbage(&mut self) {
-        let mut scopes_to_kill = Vec::new();
-        let mut garbage_list = Vec::new();
+        // let mut scopes_to_kill = Vec::new();
+        // let mut garbage_list = Vec::new();
 
-        for scope in self.garbage_scopes.drain() {
-            let scope = self.get_scope_mut(scope).unwrap();
-            for node in scope.consume_garbage() {
-                garbage_list.push(node);
-            }
+        todo!("garbage collection is currently immediate")
+        // for scope in self.garbage_scopes.drain() {
+        //     let scope = self.get_scope_mut(scope).unwrap();
+        //     for node in scope.consume_garbage() {
+        //         garbage_list.push(node);
+        //     }
 
-            while let Some(node) = garbage_list.pop() {
-                match &node {
-                    VNode::Text(_) => {
-                        self.collect_garbage(node.direct_id());
-                    }
-                    VNode::Anchor(_) => {
-                        self.collect_garbage(node.direct_id());
-                    }
-                    VNode::Suspended(_) => {
-                        self.collect_garbage(node.direct_id());
-                    }
+        //     while let Some(node) = garbage_list.pop() {
+        //         match &node {
+        //             VNode::Text(_) => {
+        //                 self.collect_garbage(node.direct_id());
+        //             }
+        //             VNode::Anchor(_) => {
+        //                 self.collect_garbage(node.direct_id());
+        //             }
+        //             VNode::Suspended(_) => {
+        //                 self.collect_garbage(node.direct_id());
+        //             }
 
-                    VNode::Element(el) => {
-                        self.collect_garbage(node.direct_id());
-                        for child in el.children {
-                            garbage_list.push(child);
-                        }
-                    }
+        //             VNode::Element(el) => {
+        //                 self.collect_garbage(node.direct_id());
+        //                 for child in el.children {
+        //                     garbage_list.push(child);
+        //                 }
+        //             }
 
-                    VNode::Fragment(frag) => {
-                        for child in frag.children {
-                            garbage_list.push(child);
-                        }
-                    }
+        //             VNode::Fragment(frag) => {
+        //                 for child in frag.children {
+        //                     garbage_list.push(child);
+        //                 }
+        //             }
 
-                    VNode::Component(comp) => {
-                        // TODO: run the hook destructors and then even delete the scope
+        //             VNode::Component(comp) => {
+        //                 // TODO: run the hook destructors and then even delete the scope
 
-                        let scope_id = comp.ass_scope.get().unwrap();
-                        let scope = self.get_scope(scope_id).unwrap();
-                        let root = scope.root();
-                        garbage_list.push(root);
-                        scopes_to_kill.push(scope_id);
-                    }
-                }
-            }
-        }
+        //                 let scope_id = comp.ass_scope.get().unwrap();
+        //                 let scope = self.get_scope(scope_id).unwrap();
+        //                 let root = scope.root();
+        //                 garbage_list.push(root);
+        //                 scopes_to_kill.push(scope_id);
+        //             }
+        //         }
+        //     }
+        // }
 
-        for scope in scopes_to_kill.drain(..) {
-            //
-            // kill em
-        }
-    }
-
-    // channels don't have these methods, so we just implement our own wrapper
-    pub fn next_event(&mut self) -> Option<EventTrigger> {
-        // pop the last event off the internal queue
-        self.pending_events.pop_back().or_else(|| {
-            self.ui_event_receiver
-                .borrow_mut()
-                .try_next()
-                .ok()
-                .flatten()
-        })
+        // for scope in scopes_to_kill.drain(..) {
+        //     //
+        //     // kill em
+        // }
     }
 
     pub fn manually_poll_events(&mut self) {
-        // 1. Poll the UI event receiver
-        // 2. Poll the set_state receiver
-
-        // poll the immediates first, creating work out of them
-        let shared_receiver = self.immediate_receiver.clone();
-        let mut receiver = shared_receiver.borrow_mut();
-        while let Ok(Some(trigger)) = receiver.try_next() {
-            self.add_dirty_scope(trigger, EventPriority::Low);
-        }
-
-        // next poll the UI events,
-        let mut receiver = self.ui_event_receiver.borrow_mut();
-        while let Ok(Some(trigger)) = receiver.try_next() {
-            self.pending_events.push_back(trigger);
+        while let Ok(Some(msg)) = self.receiver.try_next() {
+            self.handle_channel_msg(msg);
         }
     }
 
     // Converts UI events into dirty scopes with various priorities
     pub fn consume_pending_events(&mut self) -> Result<()> {
-        while let Some(trigger) = self.pending_events.pop_back() {
-            match &trigger.event {
-                SyntheticEvent::AsyncEvent { .. } => {}
+        // while let Some(trigger) = self.ui_events.pop_back() {
+        //     match &trigger.event {
+        //         SyntheticEvent::ClipboardEvent(_)
+        //         | SyntheticEvent::CompositionEvent(_)
+        //         | SyntheticEvent::KeyboardEvent(_)
+        //         | SyntheticEvent::FocusEvent(_)
+        //         | SyntheticEvent::FormEvent(_)
+        //         | SyntheticEvent::SelectionEvent(_)
+        //         | SyntheticEvent::TouchEvent(_)
+        //         | SyntheticEvent::UIEvent(_)
+        //         | SyntheticEvent::WheelEvent(_)
+        //         | SyntheticEvent::MediaEvent(_)
+        //         | SyntheticEvent::AnimationEvent(_)
+        //         | SyntheticEvent::TransitionEvent(_)
+        //         | SyntheticEvent::ToggleEvent(_)
+        //         | SyntheticEvent::MouseEvent(_)
+        //         | SyntheticEvent::PointerEvent(_) => {
+        //             if let Some(scope) = self.get_scope_mut(trigger.scope) {
+        //                 if let Some(element) = trigger.mounted_dom_id {
+        //                     scope.call_listener(trigger.event, element)?;
 
-                // This suspense system works, but it's not the most elegant solution.
-                // TODO: Replace this system
-                SyntheticEvent::SuspenseEvent { hook_idx, domnode } => {
-                    todo!("suspense needs to be converted into its own channel");
+        //                     // let receiver = self.immediate_receiver.clone();
+        //                     // let mut receiver = receiver.borrow_mut();
 
-                    // // Safety: this handler is the only thing that can mutate shared items at this moment in tim
-                    // let scope = diff_machine.get_scope_mut(&trigger.originator).unwrap();
-
-                    // // safety: we are sure that there are no other references to the inner content of suspense hooks
-                    // let hook = unsafe { scope.hooks.get_mut::<SuspenseHook>(*hook_idx) }.unwrap();
-
-                    // let cx = Context { scope, props: &() };
-                    // let scx = SuspendedContext { inner: cx };
-
-                    // // generate the new node!
-                    // let nodes: Option<VNode> = (&hook.callback)(scx);
-
-                    // if let Some(nodes) = nodes {
-                    //     // allocate inside the finished frame - not the WIP frame
-                    //     let nodes = scope.frames.finished_frame().bump.alloc(nodes);
-
-                    //     // push the old node's root onto the stack
-                    //     let real_id = domnode.get().ok_or(Error::NotMounted)?;
-                    //     diff_machine.edit_push_root(real_id);
-
-                    //     // push these new nodes onto the diff machines stack
-                    //     let meta = diff_machine.create_vnode(&*nodes);
-
-                    //     // replace the placeholder with the new nodes we just pushed on the stack
-                    //     diff_machine.edit_replace_with(1, meta.added_to_stack);
-                    // } else {
-                    //     log::warn!(
-                    //         "Suspense event came through, but there were no generated nodes >:(."
-                    //     );
-                    // }
-                }
-
-                SyntheticEvent::ClipboardEvent(_)
-                | SyntheticEvent::CompositionEvent(_)
-                | SyntheticEvent::KeyboardEvent(_)
-                | SyntheticEvent::FocusEvent(_)
-                | SyntheticEvent::FormEvent(_)
-                | SyntheticEvent::SelectionEvent(_)
-                | SyntheticEvent::TouchEvent(_)
-                | SyntheticEvent::UIEvent(_)
-                | SyntheticEvent::WheelEvent(_)
-                | SyntheticEvent::MediaEvent(_)
-                | SyntheticEvent::AnimationEvent(_)
-                | SyntheticEvent::TransitionEvent(_)
-                | SyntheticEvent::ToggleEvent(_)
-                | SyntheticEvent::MouseEvent(_)
-                | SyntheticEvent::PointerEvent(_) => {
-                    if let Some(scope) = self.get_scope_mut(trigger.scope) {
-                        if let Some(element) = trigger.mounted_dom_id {
-                            scope.call_listener(trigger.event, element)?;
-
-                            let receiver = self.immediate_receiver.clone();
-                            let mut receiver = receiver.borrow_mut();
-
-                            // Drain the immediates into the dirty scopes, setting the appropiate priorities
-                            while let Ok(Some(dirty_scope)) = receiver.try_next() {
-                                self.add_dirty_scope(dirty_scope, trigger.priority)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        //                     // // Drain the immediates into the dirty scopes, setting the appropiate priorities
+        //                     // while let Ok(Some(dirty_scope)) = receiver.try_next() {
+        //                     //     self.add_dirty_scope(dirty_scope, trigger.priority)
+        //                     // }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         Ok(())
     }
@@ -400,13 +340,14 @@ impl Scheduler {
     }
 
     pub fn has_pending_events(&self) -> bool {
-        self.pending_events.len() > 0
+        self.ui_events.len() > 0
     }
 
     pub fn has_work(&self) -> bool {
-        self.high_priorty.has_work()
-            || self.medium_priority.has_work()
-            || self.low_priority.has_work()
+        todo!()
+        // self.high_priorty.has_work()
+        //     || self.medium_priority.has_work()
+        //     || self.low_priority.has_work()
     }
 
     pub fn has_pending_garbage(&self) -> bool {
@@ -414,66 +355,104 @@ impl Scheduler {
     }
 
     fn get_current_fiber<'a>(&'a mut self) -> &mut DiffMachine<'a> {
-        let fib = match self.current_priority {
-            EventPriority::High => &mut self.high_priorty,
-            EventPriority::Medium => &mut self.medium_priority,
-            EventPriority::Low => &mut self.low_priority,
-        };
-        unsafe { std::mem::transmute(fib) }
+        todo!()
+        // let fib = match self.current_priority {
+        //     EventPriority::High => &mut self.high_priorty,
+        //     EventPriority::Medium => &mut self.medium_priority,
+        //     EventPriority::Low => &mut self.low_priority,
+        // };
+        // unsafe { std::mem::transmute(fib) }
     }
 
     /// If a the fiber finishes its works (IE needs to be committed) the scheduler will drop the dirty scope
+    ///
+    ///
+    ///
     pub async fn work_with_deadline<'a>(
         &'a mut self,
-        mutations: &mut Mutations<'a>,
         deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
-    ) -> bool {
-        // check if we need to elevate priority
-        self.current_priority = match (
-            self.high_priorty.has_work(),
-            self.medium_priority.has_work(),
-            self.low_priority.has_work(),
-        ) {
-            (true, _, _) => EventPriority::High,
-            (false, true, _) => EventPriority::Medium,
-            (false, false, _) => EventPriority::Low,
-        };
+    ) -> Vec<Mutations<'a>> {
+        let mut committed_mutations = Vec::new();
 
-        // let mut machine = DiffMachine::new(mutations, ScopeId(0), &self);
+        // TODO:
+        // the scheduler uses a bunch of different receivers to mimic a "topic" queue system. The futures-channel implementation
+        // doesn't really have a concept of a "topic" queue, so there's a lot of noise in the hand-rolled scheduler. We should
+        // explore abstracting the scheduler into a topic-queue channel system - similar to Kafka or something similar.
+        loop {
+            // Internalize any pending work since the last time we ran
+            self.manually_poll_events();
 
-        let dirty_root = {
-            let dirty_roots = match self.current_priority {
-                EventPriority::High => &self.high_priorty.dirty_scopes,
-                EventPriority::Medium => &self.medium_priority.dirty_scopes,
-                EventPriority::Low => &self.low_priority.dirty_scopes,
-            };
-            let mut height = 0;
-            let mut dirty_root = {
-                let root = dirty_roots.iter().next();
-                if root.is_none() {
-                    return true;
-                }
-                root.unwrap()
-            };
+            // Wait for any new events if we have nothing to do
+            if !self.has_any_work() {
+                self.clean_up_garbage();
+                let deadline_expired = self.wait_for_any_trigger(deadline).await;
 
-            for root in dirty_roots {
-                if let Some(scope) = self.get_scope(*root) {
-                    if scope.height < height {
-                        height = scope.height;
-                        dirty_root = root;
-                    }
+                if deadline_expired {
+                    return committed_mutations;
                 }
             }
-            dirty_root
-        };
 
-        let fut = machine.diff_scope(*dirty_root).fuse();
-        pin_mut!(fut);
+            // Create work from the pending event queue
+            self.consume_pending_events().unwrap();
 
-        match futures_util::future::select(deadline, fut).await {
-            futures_util::future::Either::Left((deadline, work_fut)) => true,
-            futures_util::future::Either::Right((_, deadline_fut)) => false,
+            // Work through the current subtree, and commit the results when it finishes
+            // When the deadline expires, give back the work
+            let mut new_mutations = Mutations::new();
+            // match self.work_with_deadline(&mut deadline).await {
+            //     Some(mutations) => {
+            //         // safety: the scheduler will never let us mutate
+            //         let extended: Mutations<'static> = unsafe { std::mem::transmute(mutations) };
+            //         committed_mutations.push(extended)
+            //     }
+            //     None => return committed_mutations,
+            // }
         }
+        // // check if we need to elevate priority
+        // self.current_priority = match (
+        //     self.high_priorty.has_work(),
+        //     self.medium_priority.has_work(),
+        //     self.low_priority.has_work(),
+        // ) {
+        //     (true, _, _) => EventPriority::High,
+        //     (false, true, _) => EventPriority::Medium,
+        //     (false, false, _) => EventPriority::Low,
+        // };
+
+        // // let mut machine = DiffMachine::new(mutations, ScopeId(0), &self);
+
+        // let dirty_root = {
+        //     let dirty_roots = match self.current_priority {
+        //         EventPriority::High => &self.high_priorty.dirty_scopes,
+        //         EventPriority::Medium => &self.medium_priority.dirty_scopes,
+        //         EventPriority::Low => &self.low_priority.dirty_scopes,
+        //     };
+        //     let mut height = 0;
+        //     let mut dirty_root = {
+        //         let root = dirty_roots.iter().next();
+        //         if root.is_none() {
+        //             return true;
+        //         }
+        //         root.unwrap()
+        //     };
+
+        //     for root in dirty_roots {
+        //         if let Some(scope) = self.get_scope(*root) {
+        //             if scope.height < height {
+        //                 height = scope.height;
+        //                 dirty_root = root;
+        //             }
+        //         }
+        //     }
+        //     dirty_root
+        // };
+
+        // let fut = machine.diff_scope(*dirty_root).fuse();
+        // pin_mut!(fut);
+
+        // match futures_util::future::select(deadline, fut).await {
+        //     futures_util::future::Either::Left((deadline, work_fut)) => true,
+        //     futures_util::future::Either::Right((_, deadline_fut)) => false,
+        // }
     }
 
     // waits for a trigger, canceling early if the deadline is reached
@@ -509,11 +488,12 @@ impl Scheduler {
     }
 
     pub fn add_dirty_scope(&mut self, scope: ScopeId, priority: EventPriority) {
-        match priority {
-            EventPriority::High => self.high_priorty.dirty_scopes.insert(scope),
-            EventPriority::Medium => self.medium_priority.dirty_scopes.insert(scope),
-            EventPriority::Low => self.low_priority.dirty_scopes.insert(scope),
-        };
+        todo!()
+        // match priority {
+        //     EventPriority::High => self.high_priorty.dirty_scopes.insert(scope),
+        //     EventPriority::Medium => self.medium_priority.dirty_scopes.insert(scope),
+        //     EventPriority::Low => self.low_priority.dirty_scopes.insert(scope),
+        // };
     }
 }
 

@@ -271,58 +271,9 @@ impl VirtualDom {
     pub async fn run_with_deadline<'s>(
         &'s mut self,
         deadline: impl Future<Output = ()>,
-    ) -> Option<Vec<Mutations<'s>>> {
-        let mut committed_mutations = Vec::new();
+    ) -> Vec<Mutations<'s>> {
         let mut deadline = Box::pin(deadline.fuse());
-
-        // TODO:
-        // the scheduler uses a bunch of different receivers to mimic a "topic" queue system. The futures-channel implementation
-        // doesn't really have a concept of a "topic" queue, so there's a lot of noise in the hand-rolled scheduler. We should
-        // explore abstracting the scheduler into a topic-queue channel system - similar to Kafka or something similar.
-        loop {
-            // Internalize any pending work since the last time we ran
-            self.scheduler.manually_poll_events();
-
-            // Wait for any new events if we have nothing to do
-            if !self.scheduler.has_any_work() {
-                self.scheduler.clean_up_garbage();
-                let deadline_expired = self.scheduler.wait_for_any_trigger(&mut deadline).await;
-
-                if deadline_expired {
-                    return Some(committed_mutations);
-                }
-            }
-
-            // Create work from the pending event queue
-            self.scheduler.consume_pending_events().unwrap();
-
-            // Work through the current subtree, and commit the results when it finishes
-            // When the deadline expires, give back the work
-            let mut new_mutations = Mutations::new();
-            match self.scheduler.work_with_deadline(&mut deadline).await {
-                FiberResult::Done => {
-                    // return Some(mutations);
-                    // for edit in mutations.edits {
-                    //     committed_mutations.edits.push(edit);
-                    // }
-                    // committed_mutations.extend(&mut mutations);
-
-                    /*
-                    quick return if there's no work left, so we can commit before the deadline expires
-                    When we loop over again, we'll re-wait for any new work.
-
-                    I'm not quite sure how this *should* work.
-
-                    It makes sense to try and progress the DOM faster
-                    */
-
-                    // if !self.scheduler.has_any_work() {
-                    //     return Some(committed_mutations);
-                    // }
-                }
-                FiberResult::Interrupted => return None,
-            }
-        }
+        self.scheduler.work_with_deadline(&mut deadline).await
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {

@@ -107,7 +107,7 @@ use DomEdit::*;
 pub struct DiffMachine<'bump> {
     vdom: &'bump Scheduler,
 
-    pub mutations: &'bump mut Mutations<'bump>,
+    pub mutations: Mutations<'bump>,
 
     pub stack: DiffStack<'bump>,
     pub diffed: FxHashSet<ScopeId>,
@@ -116,7 +116,7 @@ pub struct DiffMachine<'bump> {
 
 impl<'bump> DiffMachine<'bump> {
     pub(crate) fn new(
-        edits: &'bump mut Mutations<'bump>,
+        edits: Mutations<'bump>,
         cur_scope: ScopeId,
         shared: &'bump Scheduler,
     ) -> Self {
