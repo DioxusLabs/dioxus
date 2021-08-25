@@ -68,9 +68,13 @@ impl Ord for EventKey {
 /// - UserBlocking = 3
 /// - HighPriority = 4
 /// - ImmediatePriority = 5
+///
+/// We still have a concept of discrete vs continuous though - discrete events won't be batched, but continuous events will.
+/// This means that multiple "scroll" events will be processed in a single frame, but multiple "click" events will be
+/// flushed before proceeding. Multiple discrete events is highly unlikely, though.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub enum EventPriority {
-    /// "High Priority" work will not interrupt other high priority work, but will interrupt long medium and low priority work.
+    /// "High Priority" work will not interrupt other high priority work, but will interrupt medium and low priority work.
     ///
     /// This is typically reserved for things like user interaction.
     ///

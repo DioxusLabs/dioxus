@@ -45,9 +45,8 @@ pub struct Scope {
 
     // meta
     pub(crate) function_name: &'static str,
-
-    // A reference to the resources shared by all the comonents
-    pub(crate) vdom: SharedResources,
+    // // A reference to the resources shared by all the comonents
+    // pub(crate) vdom: SharedResources,
 }
 
 // The type of closure that wraps calling components
@@ -75,18 +74,17 @@ impl Scope {
 
         child_nodes: ScopeChildren,
 
-        vdom: SharedResources,
-
+        // vdom: SharedResources,
         function_name: &'static str,
     ) -> Self {
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
 
-        // insert ourself as a descendent of the parent
-        // when the parent is removed, this map will be traversed, and we will also be cleaned up.
-        if let Some(parent) = &parent {
-            let parent = unsafe { vdom.get_scope(*parent) }.unwrap();
-            parent.descendents.borrow_mut().insert(arena_idx);
-        }
+        // // insert ourself as a descendent of the parent
+        // // when the parent is removed, this map will be traversed, and we will also be cleaned up.
+        // if let Some(parent) = &parent {
+        //     let parent = unsafe { vdom.get_scope(*parent) }.unwrap();
+        //     parent.descendents.borrow_mut().insert(arena_idx);
+        // }
 
         Self {
             function_name,
@@ -95,7 +93,7 @@ impl Scope {
             parent_idx: parent,
             our_arena_idx: arena_idx,
             height,
-            vdom,
+            // vdom,
             frames: ActiveFrame::new(),
 
             hooks: Default::default(),
@@ -168,33 +166,35 @@ impl Scope {
             "clean up your garabge please"
         );
 
-        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
-        // run the hooks (which hold an &mut Referrence)
-        // right now, we don't drop
-        let vdom = &self.vdom;
-        self.borrowed_props
-            .get_mut()
-            .drain(..)
-            .map(|li| unsafe { &*li })
-            .for_each(|comp| {
-                // First drop the component's undropped references
-                let scope_id = comp.ass_scope.get().unwrap();
-                let scope = unsafe { vdom.get_scope_mut(scope_id) }.unwrap();
-                scope.ensure_drop_safety();
+        todo!("arch changes");
 
-                // Now, drop our own reference
-                let mut dropper = comp.drop_props.borrow_mut().take().unwrap();
-                dropper();
-            });
+        // // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+        // // run the hooks (which hold an &mut Referrence)
+        // // right now, we don't drop
+        // // let vdom = &self.vdom;
+        // self.borrowed_props
+        //     .get_mut()
+        //     .drain(..)
+        //     .map(|li| unsafe { &*li })
+        //     .for_each(|comp| {
+        //         // First drop the component's undropped references
+        //         let scope_id = comp.ass_scope.get().unwrap();
+        //         let scope = unsafe { vdom.get_scope_mut(scope_id) }.unwrap();
+        //         scope.ensure_drop_safety();
 
-        // Now that all the references are gone, we can safely drop our own references in our listeners.
-        self.listeners
-            .get_mut()
-            .drain(..)
-            .map(|li| unsafe { &*li })
-            .for_each(|listener| {
-                listener.callback.borrow_mut().take();
-            });
+        //         // Now, drop our own reference
+        //         let mut dropper = comp.drop_props.borrow_mut().take().unwrap();
+        //         dropper();
+        //     });
+
+        // // Now that all the references are gone, we can safely drop our own references in our listeners.
+        // self.listeners
+        //     .get_mut()
+        //     .drain(..)
+        //     .map(|li| unsafe { &*li })
+        //     .for_each(|listener| {
+        //         listener.callback.borrow_mut().take();
+        //     });
     }
 
     // A safe wrapper around calling listeners

@@ -40,13 +40,11 @@ pub struct VirtualDom {
     ///
     /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
     /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    pub shared: SharedResources,
+    pub scheduler: Scheduler,
 
     /// The index of the root component
     /// Should always be the first (gen=0, id=0)
     base_scope: ScopeId,
-
-    scheduler: Scheduler,
 
     // for managing the props that were used to create the dom
     #[doc(hidden)]
@@ -102,7 +100,7 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDOM is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let components = SharedResources::new();
+        let components = Scheduler::new();
 
         let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
         let props_ptr = root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
@@ -119,17 +117,17 @@ impl VirtualDom {
             base_scope,
             _root_props: root_props,
             scheduler: Scheduler::new(components.clone()),
-            shared: components,
+            scheduler: components,
             _root_prop_type: TypeId::of::<P>(),
         }
     }
 
     pub fn base_scope(&self) -> &Scope {
-        self.shared.get_scope(self.base_scope).unwrap()
+        self.scheduler.get_scope(self.base_scope).unwrap()
     }
 
     pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
-        self.shared.get_scope(id)
+        self.scheduler.get_scope(id)
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
@@ -154,10 +152,10 @@ impl VirtualDom {
     /// the diff and creating nodes can be expensive, so we provide this method to avoid blocking the main thread. This
     /// method can be useful when needing to perform some crucial periodic tasks.
     pub async fn rebuild_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
+        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.scheduler);
 
         let cur_component = self
-            .shared
+            .scheduler
             .get_scope_mut(self.base_scope)
             .expect("The base scope should never be moved");
 
@@ -189,10 +187,10 @@ impl VirtualDom {
     }
 
     pub async fn diff_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.shared);
+        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.scheduler);
 
         let cur_component = self
-            .shared
+            .scheduler
             .get_scope_mut(self.base_scope)
             .expect("The base scope should never be moved");
 
@@ -275,8 +273,8 @@ impl VirtualDom {
     pub async fn run_with_deadline<'s>(
         &'s mut self,
         deadline: impl Future<Output = ()>,
-    ) -> Option<Mutations<'s>> {
-        let mut committed_mutations = Mutations::new();
+    ) -> Option<Vec<Mutations<'s>>> {
+        let mut committed_mutations = Vec::new();
         let mut deadline = Box::pin(deadline.fuse());
 
         // TODO:
@@ -302,9 +300,14 @@ impl VirtualDom {
 
             // Work through the current subtree, and commit the results when it finishes
             // When the deadline expires, give back the work
+            let mut new_mutations = Mutations::new();
             match self.scheduler.work_with_deadline(&mut deadline).await {
-                FiberResult::Done(mut mutations) => {
-                    committed_mutations.extend(&mut mutations);
+                FiberResult::Done => {
+                    // return Some(mutations);
+                    // for edit in mutations.edits {
+                    //     committed_mutations.edits.push(edit);
+                    // }
+                    // committed_mutations.extend(&mut mutations);
 
                     /*
                     quick return if there's no work left, so we can commit before the deadline expires
@@ -315,9 +318,9 @@ impl VirtualDom {
                     It makes sense to try and progress the DOM faster
                     */
 
-                    if !self.scheduler.has_any_work() {
-                        return Some(committed_mutations);
-                    }
+                    // if !self.scheduler.has_any_work() {
+                    //     return Some(committed_mutations);
+                    // }
                 }
                 FiberResult::Interrupted => return None,
             }
@@ -325,7 +328,7 @@ impl VirtualDom {
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<EventTrigger> {
-        self.shared.ui_event_sender.clone()
+        self.scheduler.ui_event_sender.clone()
     }
 
     pub fn has_work(&self) -> bool {

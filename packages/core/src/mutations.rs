@@ -19,7 +19,9 @@ impl<'a> Mutations<'a> {
         Self { edits, noderefs }
     }
 
-    pub fn extend(&mut self, other: &mut Mutations) {}
+    pub fn extend(&mut self, other: &mut Mutations) {
+        // self.edits.extend(other.edits);
+    }
 
     // Navigation
     pub(crate) fn push_root(&mut self, root: ElementId) {

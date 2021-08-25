@@ -88,7 +88,7 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
-use crate::{arena::SharedResources, innerlude::*};
+use crate::{arena::Scheduler, innerlude::*};
 use fxhash::{FxHashMap, FxHashSet};
 use DomEdit::*;
 
@@ -105,9 +105,9 @@ use DomEdit::*;
 /// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
 /// stack machines all the way down!
 pub struct DiffMachine<'bump> {
-    vdom: &'bump SharedResources,
+    vdom: &'bump Scheduler,
 
-    pub mutations: Mutations<'bump>,
+    pub mutations: &'bump mut Mutations<'bump>,
 
     pub stack: DiffStack<'bump>,
 
@@ -118,9 +118,9 @@ pub struct DiffMachine<'bump> {
 
 impl<'bump> DiffMachine<'bump> {
     pub(crate) fn new(
-        edits: Mutations<'bump>,
+        edits: &'bump mut Mutations<'bump>,
         cur_scope: ScopeId,
-        shared: &'bump SharedResources,
+        shared: &'bump Scheduler,
     ) -> Self {
         Self {
             stack: DiffStack::new(cur_scope),
@@ -131,11 +131,11 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    pub fn new_headless(shared: &'bump SharedResources) -> Self {
-        let edits = Mutations::new();
-        let cur_scope = ScopeId(0);
-        Self::new(edits, cur_scope, shared)
-    }
+    // pub fn new_headless(shared: &'bump SharedResources) -> Self {
+    //     let edits = Mutations::new();
+    //     let cur_scope = ScopeId(0);
+    //     Self::new(edits, cur_scope, shared)
+    // }
 
     //
     pub async fn diff_scope(&mut self, id: ScopeId) {
@@ -320,7 +320,7 @@ impl<'bump> DiffMachine<'bump> {
                 Some(parent_idx),
                 height,
                 ScopeChildren(vcomponent.children),
-                self.vdom.clone(),
+                // self.vdom.clone(),
                 vcomponent.name,
             )
         });

@@ -3,7 +3,7 @@
 use bumpalo::Bump;
 
 use dioxus::{
-    arena::SharedResources, diff::DiffMachine, prelude::*, DiffInstruction, DomEdit, MountType,
+    arena::Scheduler, diff::DiffMachine, prelude::*, DiffInstruction, DomEdit, MountType,
 };
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
@@ -17,13 +17,13 @@ const IS_LOGGING_ENABLED: bool = false;
 
 struct TestDom {
     bump: Bump,
-    resources: SharedResources,
+    resources: Scheduler,
 }
 impl TestDom {
     fn new() -> TestDom {
         test_logging::set_up_logging(IS_LOGGING_ENABLED);
         let bump = Bump::new();
-        let resources = SharedResources::new();
+        let resources = Scheduler::new();
         TestDom { bump, resources }
     }
     fn new_factory<'a>(&'a self) -> NodeFactory<'a> {
