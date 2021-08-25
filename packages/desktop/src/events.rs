@@ -6,7 +6,7 @@ use std::rc::Rc;
 use dioxus_core::{
     events::{
         on::{MouseEvent, MouseEventInner},
-        VirtualEvent,
+        SyntheticEvent,
     },
     ElementId, EventPriority, EventTrigger, ScopeId,
 };
@@ -21,7 +21,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> EventTrigger {
     let mut data: Vec<ImEvent> = serde_json::from_value(val).unwrap();
     let data = data.drain(..).next().unwrap();
 
-    let event = VirtualEvent::MouseEvent(MouseEvent(Rc::new(WebviewMouseEvent)));
+    let event = SyntheticEvent::MouseEvent(MouseEvent(Rc::new(WebviewMouseEvent)));
     let scope = ScopeId(data.scope as usize);
     let mounted_dom_id = Some(ElementId(data.mounted_dom_id as usize));
     let priority = EventPriority::High;

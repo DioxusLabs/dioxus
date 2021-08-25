@@ -4,8 +4,9 @@
 //!
 //! These VNodes should be *very* cheap and *very* fast to construct - building a full tree should be insanely quick.
 use crate::{
-    events::VirtualEvent,
+    events::SyntheticEvent,
     innerlude::{empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, FC},
+    SuspendedContext,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -30,7 +31,7 @@ pub enum VNode<'src> {
 
     Component(&'src VComponent<'src>),
 
-    Suspended(VSuspended),
+    Suspended(&'src VSuspended<'src>),
 
     Anchor(VAnchor),
 }
@@ -127,7 +128,7 @@ pub struct Listener<'bump> {
 
     pub mounted_node: Cell<Option<ElementId>>,
 
-    pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(VirtualEvent) + 'bump>>>,
+    pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(SyntheticEvent) + 'bump>>>,
 }
 
 impl Listener<'_> {
@@ -168,8 +169,10 @@ pub struct VComponent<'src> {
     pub(crate) user_fc: *const (),
 }
 
-pub struct VSuspended {
-    pub node: Rc<Cell<Option<ElementId>>>,
+pub struct VSuspended<'a> {
+    pub dom_id: Cell<Option<ElementId>>,
+    pub task_id: u64,
+    pub callback: RefCell<Option<&'a dyn FnOnce(SuspendedContext<'a>) -> DomTree<'a>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -299,12 +302,6 @@ impl<'a> NodeFactory<'a> {
             children,
             dom_id: empty_cell(),
         }))
-    }
-
-    pub fn suspended() -> VNode<'static> {
-        VNode::Suspended(VSuspended {
-            node: Rc::new(empty_cell()),
-        })
     }
 
     pub fn attr(

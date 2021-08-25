@@ -3,16 +3,7 @@
 //!
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
-
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
-
-use crate::{
-    innerlude::{ElementId, ScopeId},
-    VNode,
-};
+use crate::innerlude::{ElementId, ScopeId};
 
 #[derive(Debug)]
 pub struct EventTrigger {
@@ -23,12 +14,15 @@ pub struct EventTrigger {
     pub mounted_dom_id: Option<ElementId>,
 
     /// The type of event
-    pub event: VirtualEvent,
+    pub event: SyntheticEvent,
 
+    /// Is consistency important for this event?
+    /// UI events are the only events where consistency is important.
+    /// All else may be batched.
     pub discrete: bool,
 }
 
-pub enum VirtualEvent {
+pub enum SyntheticEvent {
     KeyboardEvent(on::KeyboardEvent),
     TouchEvent(on::TouchEvent),
     MouseEvent(on::MouseEvent),
@@ -47,24 +41,24 @@ pub enum VirtualEvent {
     // ImageEvent(event_data::ImageEvent),
 }
 
-impl std::fmt::Debug for VirtualEvent {
+impl std::fmt::Debug for SyntheticEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
-            VirtualEvent::ClipboardEvent(_) => "ClipboardEvent",
-            VirtualEvent::CompositionEvent(_) => "CompositionEvent",
-            VirtualEvent::KeyboardEvent(_) => "KeyboardEvent",
-            VirtualEvent::FocusEvent(_) => "FocusEvent",
-            VirtualEvent::FormEvent(_) => "FormEvent",
-            VirtualEvent::SelectionEvent(_) => "SelectionEvent",
-            VirtualEvent::TouchEvent(_) => "TouchEvent",
-            VirtualEvent::UIEvent(_) => "UIEvent",
-            VirtualEvent::WheelEvent(_) => "WheelEvent",
-            VirtualEvent::MediaEvent(_) => "MediaEvent",
-            VirtualEvent::AnimationEvent(_) => "AnimationEvent",
-            VirtualEvent::TransitionEvent(_) => "TransitionEvent",
-            VirtualEvent::ToggleEvent(_) => "ToggleEvent",
-            VirtualEvent::MouseEvent(_) => "MouseEvent",
-            VirtualEvent::PointerEvent(_) => "PointerEvent",
+            SyntheticEvent::ClipboardEvent(_) => "ClipboardEvent",
+            SyntheticEvent::CompositionEvent(_) => "CompositionEvent",
+            SyntheticEvent::KeyboardEvent(_) => "KeyboardEvent",
+            SyntheticEvent::FocusEvent(_) => "FocusEvent",
+            SyntheticEvent::FormEvent(_) => "FormEvent",
+            SyntheticEvent::SelectionEvent(_) => "SelectionEvent",
+            SyntheticEvent::TouchEvent(_) => "TouchEvent",
+            SyntheticEvent::UIEvent(_) => "UIEvent",
+            SyntheticEvent::WheelEvent(_) => "WheelEvent",
+            SyntheticEvent::MediaEvent(_) => "MediaEvent",
+            SyntheticEvent::AnimationEvent(_) => "AnimationEvent",
+            SyntheticEvent::TransitionEvent(_) => "TransitionEvent",
+            SyntheticEvent::ToggleEvent(_) => "ToggleEvent",
+            SyntheticEvent::MouseEvent(_) => "MouseEvent",
+            SyntheticEvent::PointerEvent(_) => "PointerEvent",
         };
 
         f.debug_struct("VirtualEvent").field("type", &name).finish()
@@ -90,7 +84,7 @@ pub mod on {
     };
     use std::cell::Cell;
 
-    use super::VirtualEvent;
+    use super::SyntheticEvent;
 
     macro_rules! event_directory {
         ( $(
@@ -126,12 +120,12 @@ pub mod on {
                     {
                         let bump = &c.bump();
 
-                        let cb: &mut dyn FnMut(VirtualEvent) = bump.alloc(move |evt: VirtualEvent| match evt {
-                            VirtualEvent::$wrapper(event) => callback(event),
-                            _ => unreachable!("Downcasted VirtualEvent to wrong event type - this is an internal bug!")
+                        let cb: &mut dyn FnMut(SyntheticEvent) = bump.alloc(move |evt: SyntheticEvent| match evt {
+                            SyntheticEvent::$wrapper(event) => callback(event),
+                            _ => unreachable!("Downcasted SyntheticEvent to wrong event type - this is an internal bug!")
                         });
 
-                        let callback: BumpBox<dyn FnMut(VirtualEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
+                        let callback: BumpBox<dyn FnMut(SyntheticEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
 
                         let event_name = stringify!($name);
                         let shortname: &'static str = &event_name[2..];

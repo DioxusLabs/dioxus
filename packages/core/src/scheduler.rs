@@ -34,7 +34,7 @@ pub struct EventChannel {
 
 pub enum SchedulerMsg {
     Immediate(ScopeId),
-    UiEvent(),
+    UiEvent(EventTrigger),
     SubmitTask(u64),
     ToggleTask(u64),
     PauseTask(u64),
@@ -232,16 +232,6 @@ impl Scheduler {
         id
     }
 
-    pub fn make_trigger_key(&self, trigger: &EventTrigger) -> EventKey {
-        let height = self.get_scope(trigger.scope).map(|f| f.height).unwrap();
-
-        EventKey {
-            height,
-            originator: trigger.scope,
-            priority: trigger.priority,
-        }
-    }
-
     pub fn clean_up_garbage(&mut self) {
         let mut scopes_to_kill = Vec::new();
         let mut garbage_list = Vec::new();
@@ -330,11 +320,11 @@ impl Scheduler {
     pub fn consume_pending_events(&mut self) -> Result<()> {
         while let Some(trigger) = self.pending_events.pop_back() {
             match &trigger.event {
-                VirtualEvent::AsyncEvent { .. } => {}
+                SyntheticEvent::AsyncEvent { .. } => {}
 
                 // This suspense system works, but it's not the most elegant solution.
                 // TODO: Replace this system
-                VirtualEvent::SuspenseEvent { hook_idx, domnode } => {
+                SyntheticEvent::SuspenseEvent { hook_idx, domnode } => {
                     todo!("suspense needs to be converted into its own channel");
 
                     // // Safety: this handler is the only thing that can mutate shared items at this moment in tim
@@ -369,21 +359,21 @@ impl Scheduler {
                     // }
                 }
 
-                VirtualEvent::ClipboardEvent(_)
-                | VirtualEvent::CompositionEvent(_)
-                | VirtualEvent::KeyboardEvent(_)
-                | VirtualEvent::FocusEvent(_)
-                | VirtualEvent::FormEvent(_)
-                | VirtualEvent::SelectionEvent(_)
-                | VirtualEvent::TouchEvent(_)
-                | VirtualEvent::UIEvent(_)
-                | VirtualEvent::WheelEvent(_)
-                | VirtualEvent::MediaEvent(_)
-                | VirtualEvent::AnimationEvent(_)
-                | VirtualEvent::TransitionEvent(_)
-                | VirtualEvent::ToggleEvent(_)
-                | VirtualEvent::MouseEvent(_)
-                | VirtualEvent::PointerEvent(_) => {
+                SyntheticEvent::ClipboardEvent(_)
+                | SyntheticEvent::CompositionEvent(_)
+                | SyntheticEvent::KeyboardEvent(_)
+                | SyntheticEvent::FocusEvent(_)
+                | SyntheticEvent::FormEvent(_)
+                | SyntheticEvent::SelectionEvent(_)
+                | SyntheticEvent::TouchEvent(_)
+                | SyntheticEvent::UIEvent(_)
+                | SyntheticEvent::WheelEvent(_)
+                | SyntheticEvent::MediaEvent(_)
+                | SyntheticEvent::AnimationEvent(_)
+                | SyntheticEvent::TransitionEvent(_)
+                | SyntheticEvent::ToggleEvent(_)
+                | SyntheticEvent::MouseEvent(_)
+                | SyntheticEvent::PointerEvent(_) => {
                     if let Some(scope) = self.get_scope_mut(trigger.scope) {
                         if let Some(element) = trigger.mounted_dom_id {
                             scope.call_listener(trigger.event, element)?;
@@ -528,8 +518,8 @@ impl Scheduler {
 }
 
 pub struct TaskHandle {
-    channel: EventChannel,
-    our_id: u64,
+    pub channel: EventChannel,
+    pub our_id: u64,
 }
 
 impl TaskHandle {

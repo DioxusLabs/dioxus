@@ -126,14 +126,7 @@ where
             let handle = cx.submit_task(Box::pin(task_fut.then(move |output| async move {
                 *slot.as_ref().borrow_mut() = Some(output);
                 updater(update_id);
-                EventTrigger {
-                    event: VirtualEvent::AsyncEvent {
-                        should_rerender: false,
-                    },
-                    scope: originator,
-                    priority: EventPriority::Low,
-                    mounted_dom_id: None,
-                }
+                originator
             })));
 
             TaskHook {
@@ -172,71 +165,75 @@ where
     Out: 'static,
     Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> DomTree<'a> + 'static,
 {
+    /*
+    General strategy:
+    - Create a slot for the future to dump its output into
+    - Create a new future feeding off the user's future that feeds the output into that slot
+    - Submit that future as a task
+    - Take the task handle id and attach that to our suspended node
+    - when the hook runs, check if the value exists
+    - if it does, then we can render the node directly
+    - if it doesn't, then we render a suspended node along with with the callback and task id
+    */
     cx.use_hook(
         move |hook_idx| {
             let value = Rc::new(RefCell::new(None));
-
-            let dom_node_id = Rc::new(empty_cell());
-            let domnode = dom_node_id.clone();
-
             let slot = value.clone();
-
-            let callback: SuspendedCallback = Box::new(move |ctx: SuspendedContext| {
-                let v: std::cell::Ref<Option<Box<dyn Any>>> = slot.as_ref().borrow();
-                match v.as_ref() {
-                    Some(a) => {
-                        let v: &dyn Any = a.as_ref();
-                        let real_val = v.downcast_ref::<Out>().unwrap();
-                        user_callback(ctx, real_val)
-                    }
-                    None => {
-                        //
-                        Some(VNode::Suspended(VSuspended {
-                            node: domnode.clone(),
-                        }))
-                    }
-                }
-            });
 
             let originator = cx.scope.our_arena_idx.clone();
-            let task_fut = task_initializer();
-            let domnode = dom_node_id.clone();
 
-            let slot = value.clone();
-            cx.submit_task(Box::pin(task_fut.then(move |output| async move {
-                // When the new value arrives, set the hooks internal slot
-                // Dioxus will call the user's callback to generate new nodes outside of the diffing system
-                *slot.borrow_mut() = Some(Box::new(output) as Box<dyn Any>);
-                EventTrigger {
-                    event: VirtualEvent::SuspenseEvent { hook_idx, domnode },
-                    scope: originator,
-                    priority: EventPriority::Low,
-                    mounted_dom_id: None,
-                }
-            })));
+            let handle = cx.submit_task(Box::pin(task_initializer().then(
+                move |output| async move {
+                    *slot.borrow_mut() = Some(Box::new(output) as Box<dyn Any>);
+                    originator
+                },
+            )));
 
-            SuspenseHook {
-                value,
-                callback,
-                dom_node_id,
-            }
+            SuspenseHook { handle, value }
         },
-        move |hook| {
-            let cx = Context {
-                scope: &cx.scope,
-                props: &(),
-            };
-            let csx = SuspendedContext { inner: cx };
-            (&hook.callback)(csx)
+        move |hook| match hook.value.borrow().as_ref() {
+            Some(value) => {
+                let out = value.downcast_ref::<Out>().unwrap();
+                let sus = SuspendedContext {
+                    inner: Context {
+                        props: &(),
+                        scope: cx.scope,
+                    },
+                };
+                user_callback(sus, out)
+            }
+            None => {
+                let value = hook.value.clone();
+
+                cx.render(LazyNodes::new(|f| {
+                    let bump = f.bump();
+                    let g: &dyn FnOnce(SuspendedContext<'src>) -> DomTree<'src> =
+                        bump.alloc(|sus| {
+                            let out = value
+                                .borrow()
+                                .as_ref()
+                                .unwrap()
+                                .as_ref()
+                                .downcast_ref::<Out>()
+                                .unwrap();
+                            user_callback(sus, out)
+                        });
+
+                    VNode::Suspended(bump.alloc(VSuspended {
+                        dom_id: empty_cell(),
+                        task_id: hook.handle.our_id,
+                        callback: RefCell::new(Some(g)),
+                    }))
+                }))
+            }
         },
         |_| {},
     )
 }
 
 pub(crate) struct SuspenseHook {
+    pub handle: TaskHandle,
     pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
-    pub callback: SuspendedCallback,
-    pub dom_node_id: Rc<Cell<Option<ElementId>>>,
 }
 type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> DomTree<'a>>;
 pub struct SuspendedContext<'a> {

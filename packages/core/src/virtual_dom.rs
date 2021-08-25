@@ -100,24 +100,31 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDOM is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let components = Scheduler::new();
+        let scheduler = Scheduler::new();
 
-        let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
-        let props_ptr = root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
+        let _root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+        let _root_prop_type = TypeId::of::<P>();
 
-        let update_sender = components.immediate_sender.clone();
+        let props_ptr = _root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
 
-        let base_scope = components.insert_scope_with_key(move |myidx| {
+        let base_scope = scheduler.insert_scope_with_key(|myidx| {
             let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
             let name = type_name_of(root);
-            Scope::new(caller, myidx, None, 0, ScopeChildren(&[]), update_sender)
+            Scope::new(
+                caller,
+                myidx,
+                None,
+                0,
+                ScopeChildren(&[]),
+                scheduler.channel.clone(),
+            )
         });
 
         Self {
             base_scope,
-            _root_props: root_props,
-            scheduler: components,
-            _root_prop_type: TypeId::of::<P>(),
+            _root_props,
+            scheduler,
+            _root_prop_type,
         }
     }
 
@@ -216,15 +223,6 @@ impl VirtualDom {
         // self.run_with_deadline(futures_util::future::ready(()), &mut is_ready)
         //     .now_or_never()
         //     .expect("this future will always resolve immediately")
-    }
-
-    /// Runs the virtualdom with no time limit.
-    ///
-    /// If there are pending tasks, they will be progressed before returning. This is useful when rendering an application
-    /// that has suspended nodes or suspended tasks. Be warned - any async tasks running forever will prevent this method
-    /// from completing. Consider using `run` and specifing a deadline.
-    pub async fn run_unbounded<'s>(&'s mut self) -> Mutations<'s> {
-        self.run_with_deadline(async {}).await.unwrap()
     }
 
     /// Run the virtualdom with a deadline.
@@ -327,8 +325,8 @@ impl VirtualDom {
         }
     }
 
-    pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<EventTrigger> {
-        self.scheduler.ui_event_sender.clone()
+    pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
+        self.scheduler.channel.sender.clone()
     }
 
     pub fn has_work(&self) -> bool {

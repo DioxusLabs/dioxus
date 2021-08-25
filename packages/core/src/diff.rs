@@ -251,7 +251,7 @@ impl<'bump> DiffMachine<'bump> {
     fn create_suspended_node(&mut self, suspended: &'bump VSuspended) {
         let real_id = self.vdom.reserve_node();
         self.mutations.create_placeholder(real_id);
-        suspended.node.set(Some(real_id));
+        suspended.dom_id.set(Some(real_id));
         self.stack.add_child_count(1);
     }
 
@@ -372,7 +372,7 @@ impl<'bump> DiffMachine<'bump> {
             (Component(old), Component(new)) => self.diff_component_nodes(old, new),
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
-            (Suspended(old), Suspended(new)) => new.node.set(old.node.get()),
+            (Suspended(old), Suspended(new)) => new.dom_id.set(old.dom_id.get()),
             (Element(old), Element(new)) => self.diff_element_nodes(old, new),
 
             // Anything else is just a basic replace and create
@@ -952,7 +952,7 @@ impl<'bump> DiffMachine<'bump> {
             match &search_node.take().unwrap() {
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
-                VNode::Suspended(t) => break t.node.get(),
+                VNode::Suspended(t) => break t.dom_id.get(),
                 VNode::Anchor(t) => break t.dom_id.get(),
 
                 VNode::Fragment(frag) => {
@@ -983,7 +983,7 @@ impl<'bump> DiffMachine<'bump> {
                 }
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
-                VNode::Suspended(t) => break t.node.get(),
+                VNode::Suspended(t) => break t.dom_id.get(),
                 VNode::Anchor(t) => break t.dom_id.get(),
             }
         }
@@ -1016,7 +1016,7 @@ impl<'bump> DiffMachine<'bump> {
                     });
                 }
                 VNode::Suspended(s) => {
-                    s.node.get().map(|id| {
+                    s.dom_id.get().map(|id| {
                         self.mutations.remove(id.as_u64());
                         self.vdom.collect_garbage(id);
                     });

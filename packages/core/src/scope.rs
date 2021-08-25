@@ -40,6 +40,8 @@ pub struct Scope {
     pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
 
+    pub(crate) suspended_nodes: RefCell<HashMap<u64, *const VNode<'static>>>,
+
     // State
     pub(crate) hooks: HookList,
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
@@ -52,8 +54,9 @@ pub struct Scope {
 // The type of closure that wraps calling components
 pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> DomTree<'b>;
 
-// The type of task that gets sent to the task scheduler
-pub type FiberTask = Pin<Box<dyn Future<Output = EventTrigger>>>;
+/// The type of task that gets sent to the task scheduler
+/// Submitting a fiber task returns a handle to that task, which can be used to wake up suspended nodes
+pub type FiberTask = Pin<Box<dyn Future<Output = ScopeId>>>;
 
 impl Scope {
     // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
@@ -91,6 +94,7 @@ impl Scope {
             height,
             frames: ActiveFrame::new(),
             hooks: Default::default(),
+            suspended_nodes: Default::default(),
             shared_contexts: Default::default(),
             listeners: Default::default(),
             borrowed_props: Default::default(),
@@ -194,7 +198,11 @@ impl Scope {
     // A safe wrapper around calling listeners
     //
     //
-    pub(crate) fn call_listener(&mut self, event: VirtualEvent, element: ElementId) -> Result<()> {
+    pub(crate) fn call_listener(
+        &mut self,
+        event: SyntheticEvent,
+        element: ElementId,
+    ) -> Result<()> {
         let listners = self.listeners.borrow_mut();
 
         let raw_listener = listners.iter().find(|lis| {
