@@ -1,7 +1,7 @@
 //! tests to prove that the iterative implementation works
 
 use anyhow::{Context, Result};
-use dioxus::{arena::Scheduler, diff::DiffMachine, prelude::*, DomEdit, Mutations};
+use dioxus::{diff::DiffMachine, prelude::*, scheduler::Scheduler, DomEdit, Mutations};
 mod test_logging;
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;

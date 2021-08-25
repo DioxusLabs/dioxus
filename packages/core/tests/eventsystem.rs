@@ -1,7 +1,7 @@
 use bumpalo::Bump;
 
 use anyhow::{Context, Result};
-use dioxus::{arena::Scheduler, diff::DiffMachine, prelude::*, DomEdit};
+use dioxus::{diff::DiffMachine, prelude::*, scheduler::Scheduler, DomEdit};
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 

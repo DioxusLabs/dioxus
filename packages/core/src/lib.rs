@@ -28,7 +28,6 @@ pub mod prelude {
 
 // types used internally that are important
 pub(crate) mod innerlude {
-    pub use crate::arena::*;
     pub use crate::bumpframe::*;
     pub use crate::childiter::*;
     pub use crate::component::*;
@@ -43,6 +42,7 @@ pub(crate) mod innerlude {
     pub use crate::hooks::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
+    pub use crate::scheduler::*;
     // pub use crate::scheduler::*;
     pub use crate::scope::*;
     pub use crate::util::*;
@@ -56,11 +56,12 @@ pub(crate) mod innerlude {
 }
 
 pub mod exports {
-    // export important things here
+    //! Important dependencies that are used by the rest of the library
+
+    // the foundation of this library
     pub use bumpalo;
 }
 
-pub mod arena;
 pub mod bumpframe;
 pub mod childiter;
 pub mod component;
@@ -75,7 +76,7 @@ pub mod hooklist;
 pub mod hooks;
 pub mod mutations;
 pub mod nodes;
-// pub mod scheduler;
+pub mod scheduler;
 pub mod scope;
 pub mod signals;
 pub mod util;

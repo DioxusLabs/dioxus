@@ -3,7 +3,7 @@
 use bumpalo::Bump;
 
 use dioxus::{
-    arena::Scheduler, diff::DiffMachine, prelude::*, DiffInstruction, DomEdit, MountType,
+    diff::DiffMachine, prelude::*, scheduler::Scheduler, DiffInstruction, DomEdit, MountType,
 };
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;

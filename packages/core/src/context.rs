@@ -96,13 +96,11 @@ impl<'src, P> Context<'src, P> {
     /// ## Notice: you should prefer using prepare_update and get_scope_id
     ///
     pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
-        let cb = self.scope.vdom.schedule_update();
-        let id = self.get_scope_id();
-        Rc::new(move || cb(id))
+        self.scope.memoized_updater.clone()
     }
 
     pub fn prepare_update(&self) -> Rc<dyn Fn(ScopeId)> {
-        self.scope.vdom.schedule_update()
+        self.scope.shared.schedule_any_immediate.clone()
     }
 
     pub fn schedule_effect(&self) -> Rc<dyn Fn() + 'static> {
@@ -160,7 +158,7 @@ impl<'src, P> Context<'src, P> {
     ///
     ///
     pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
-        self.scope.vdom.submit_task(task)
+        (self.scope.shared.submit_task)(task)
     }
 
     /// Add a state globally accessible to child components via tree walking
@@ -174,46 +172,11 @@ impl<'src, P> Context<'src, P> {
             });
     }
 
-    /// Walk the tree to find a shared state with the TypeId of the generic type
-    ///
     pub fn consume_shared_state<T: 'static>(self) -> Option<Rc<T>> {
-        let mut scope = Some(self.scope);
-        let mut parent = None;
-
+        let getter = &self.scope.shared.get_shared_context;
         let ty = TypeId::of::<T>();
-        while let Some(inner) = scope {
-            log::debug!(
-                "Searching {:#?} for valid shared_context",
-                inner.our_arena_idx
-            );
-            let shared_ctx = {
-                let shared_contexts = inner.shared_contexts.borrow();
-
-                log::debug!(
-                    "This component has {} shared contexts",
-                    shared_contexts.len()
-                );
-                shared_contexts.get(&ty).map(|f| f.clone())
-            };
-
-            if let Some(shared_cx) = shared_ctx {
-                log::debug!("found matching cx");
-                let rc = shared_cx
-                    .clone()
-                    .downcast::<T>()
-                    .expect("Should not fail, already validated the type from the hashmap");
-                parent = Some(rc);
-                break;
-            } else {
-                match inner.parent_idx {
-                    Some(parent_id) => {
-                        scope = unsafe { inner.vdom.get_scope(parent_id) };
-                    }
-                    None => break,
-                }
-            }
-        }
-        parent
+        let idx = self.scope.our_arena_idx;
+        getter(idx, ty).map(|f| f.downcast().unwrap())
     }
 
     /// Store a value between renders

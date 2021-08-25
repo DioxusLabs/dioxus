@@ -1,4 +1,4 @@
-use std::cell::{RefCell, RefMut};
+use std::cell::{Cell, RefCell, RefMut};
 use std::fmt::Display;
 use std::{cell::UnsafeCell, rc::Rc};
 
@@ -23,37 +23,74 @@ use futures_util::Future;
 use futures_util::FutureExt;
 use futures_util::StreamExt;
 
-type UiReceiver = UnboundedReceiver<EventTrigger>;
-type UiSender = UnboundedSender<EventTrigger>;
+#[derive(Clone)]
+pub struct EventChannel {
+    pub task_counter: Rc<Cell<u64>>,
+    pub sender: UnboundedSender<SchedulerMsg>,
+    pub schedule_any_immediate: Rc<dyn Fn(ScopeId)>,
+    pub submit_task: Rc<dyn Fn(FiberTask) -> TaskHandle>,
+    pub get_shared_context: Rc<dyn Fn(ScopeId, TypeId) -> Option<Rc<dyn Any>>>,
+}
 
-type TaskReceiver = UnboundedReceiver<ScopeId>;
-type TaskSender = UnboundedSender<ScopeId>;
+pub enum SchedulerMsg {
+    Immediate(ScopeId),
+    UiEvent(),
+    SubmitTask(u64),
+    ToggleTask(u64),
+    PauseTask(u64),
+    ResumeTask(u64),
+    DropTask(u64),
+}
 
-/// These are resources shared among all the components and the virtualdom itself
+/// The scheduler holds basically everything around "working"
+///
+/// Each scope has the ability to lightly interact with the scheduler (IE, schedule an update) but ultimately the scheduler calls the components.
+///
+/// In Dioxus, the scheduler provides 3 priority levels - each with their own "DiffMachine". The DiffMachine state can be saved if the deadline runs
+/// out.
+///
+/// Saved DiffMachine state can be self-referential, so we need to be careful about how we save it. All self-referential data is a link between
+/// pending DiffInstructions, Mutations, and their underlying Scope. It's okay for us to be self-referential with this data, provided we don't priority
+/// task shift to a higher priority task that needs mutable access to the same scopes.
+///
+/// We can prevent this safety issue from occurring if we track which scopes are invalidated when starting a new task.
+///
+///
 pub struct Scheduler {
-    pub components: UnsafeCell<Slab<Scope>>,
+    /*
+    This *has* to be an UnsafeCell.
 
-    pub(crate) heuristics: HeuristicsEngine,
+    Each BumpFrame and Scope is located in this Slab - and we'll need mutable access to a scope while holding on to
+    its bumpframe conents immutably.
 
-    // Used by "set_state" and co - is its own queue
-    pub immediate_sender: TaskSender,
-    pub immediate_receiver: TaskReceiver,
+    However, all of the interaction with this Slab is done in this module and the Diff module, so it should be fairly
+    simple to audit.
 
-    /// Triggered by event listeners
-    pub ui_event_sender: UiSender,
-    pub ui_event_receiver: UiReceiver,
+    Wrapped in Rc so the "get_shared_context" closure can walk the tree (immutably!)
+    */
+    pub components: Rc<UnsafeCell<Slab<Scope>>>,
+
+    /*
+    Yes, a slab of "nil". We use this for properly ordering ElementIDs - all we care about is the allocation strategy
+    that slab uses. The slab essentially just provides keys for ElementIDs that we can re-use in a Vec on the client.
+
+    This just happened to be the simplest and most efficient way to implement a deterministic keyed map with slot reuse.
+
+    In the future, we could actually store a pointer to the VNode instead of nil to provide O(1) lookup for VNodes...
+    */
+    pub raw_elements: Slab<()>,
+
+    pub heuristics: HeuristicsEngine,
+
+    pub channel: EventChannel,
+
+    pub receiver: UnboundedReceiver<SchedulerMsg>,
 
     // Garbage stored
     pub pending_garbage: FxHashSet<ScopeId>,
 
     // In-flight futures
     pub async_tasks: FuturesUnordered<FiberTask>,
-
-    /// We use a SlotSet to keep track of the keys that are currently being used.
-    /// However, we don't store any specific data since the "mirror"
-    pub raw_elements: Slab<()>,
-
-    pub task_setter: Rc<dyn Fn(ScopeId)>,
 
     // scheduler stuff
     pub current_priority: EventPriority,
@@ -66,75 +103,78 @@ pub struct Scheduler {
 
     pub garbage_scopes: HashSet<ScopeId>,
 
-    pub high_priorty: PriortySystem,
-    pub medium_priority: PriortySystem,
-    pub low_priority: PriortySystem,
+    pub fibers: [PriortySystem; 3],
 }
 
 impl Scheduler {
     pub fn new() -> Self {
         // preallocate 2000 elements and 20 scopes to avoid dynamic allocation
-        let components: UnsafeCell<Slab<Scope>> = UnsafeCell::new(Slab::with_capacity(100));
+        let components = Rc::new(UnsafeCell::new(Slab::with_capacity(100)));
 
         // elements are super cheap - the value takes no space
         let raw_elements = Slab::with_capacity(2000);
 
-        let (ui_sender, ui_receiver) = futures_channel::mpsc::unbounded();
-        let (immediate_sender, immediate_receiver) = futures_channel::mpsc::unbounded();
-
         let heuristics = HeuristicsEngine::new();
 
-        // we allocate this task setter once to save us from having to allocate later
-        let task_setter = {
-            let queue = immediate_sender.clone();
-            let components = components.clone();
-            Rc::new(move |idx: ScopeId| {
-                let comps = unsafe { &*components.get() };
-
-                if let Some(scope) = comps.get(idx.0) {
-                    // todo!("implement immediates again")
-                    //
-
-                    // queue
-                    // .unbounded_send(EventTrigger::new(
-                    //     V
-                    //     idx,
-                    //     None,
-                    //     EventPriority::High,
-                    // ))
-                    // .expect("The event queu receiver should *never* be dropped");
-                }
-            }) as Rc<dyn Fn(ScopeId)>
+        let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
+        let task_counter = Rc::new(Cell::new(0));
+        let channel = EventChannel {
+            task_counter,
+            sender: sender.clone(),
+            schedule_any_immediate: {
+                Rc::new(move |id| sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap())
+            },
+            submit_task: Rc::new(|_| {
+                //
+                todo!()
+                // TaskHandle {}
+            }),
+            get_shared_context: {
+                let components = components.clone();
+                Rc::new(|id, ty| {
+                    let components = unsafe { &*components.get() };
+                    let mut search: Option<&Scope> = components.get(id.0);
+                    while let Some(inner) = search.take() {
+                        if let Some(shared) = inner.shared_contexts.borrow().get(&ty) {
+                            return Some(shared.clone());
+                        } else {
+                            search = inner.parent_idx.map(|id| components.get(id.0)).flatten();
+                        }
+                    }
+                    None
+                })
+            },
         };
 
         Self {
+            channel,
+            receiver,
+
             components,
             async_tasks: FuturesUnordered::new(),
 
-            ui_event_receiver: ui_receiver,
-            ui_event_sender: ui_sender,
-
-            immediate_receiver: immediate_receiver,
-            immediate_sender: immediate_sender,
-
             pending_garbage: FxHashSet::default(),
 
-            heuristics: heuristics,
-            raw_elements: raw_elements,
-            task_setter,
+            heuristics,
+            raw_elements,
 
             // a storage for our receiver to dump into
             pending_events: VecDeque::new(),
+
             pending_immediates: VecDeque::new(),
+
             pending_tasks: VecDeque::new(),
 
             garbage_scopes: HashSet::new(),
 
             current_priority: EventPriority::Low,
 
-            high_priorty: PriortySystem::new(),
-            medium_priority: PriortySystem::new(),
-            low_priority: PriortySystem::new(),
+            // a dedicated fiber for each priority
+            fibers: [
+                PriortySystem::new(),
+                PriortySystem::new(),
+                PriortySystem::new(),
+            ],
         }
     }
 
@@ -176,12 +216,12 @@ impl Scheduler {
     }
 
     pub fn reserve_node(&self) -> ElementId {
-        ElementId(self.raw_elements.borrow_mut().insert(()))
+        ElementId(self.raw_elements.insert(()))
     }
 
     /// return the id, freeing the space of the original node
     pub fn collect_garbage(&self, id: ElementId) {
-        self.raw_elements.borrow_mut().remove(id.0);
+        self.raw_elements.remove(id.0);
     }
 
     pub fn insert_scope_with_key(&self, f: impl FnOnce(ScopeId) -> Scope) -> ScopeId {
@@ -192,24 +232,12 @@ impl Scheduler {
         id
     }
 
-    pub fn schedule_update(&self) -> Rc<dyn Fn(ScopeId)> {
-        self.task_setter.clone()
-    }
-
-    pub fn submit_task(&self, task: FiberTask) -> TaskHandle {
-        self.async_tasks.borrow_mut().push(task);
-        TaskHandle {}
-    }
-
     pub fn make_trigger_key(&self, trigger: &EventTrigger) -> EventKey {
-        let height = self
-            .get_scope(trigger.originator)
-            .map(|f| f.height)
-            .unwrap();
+        let height = self.get_scope(trigger.scope).map(|f| f.height).unwrap();
 
         EventKey {
             height,
-            originator: trigger.originator,
+            originator: trigger.scope,
             priority: trigger.priority,
         }
     }
@@ -356,8 +384,8 @@ impl Scheduler {
                 | VirtualEvent::ToggleEvent(_)
                 | VirtualEvent::MouseEvent(_)
                 | VirtualEvent::PointerEvent(_) => {
-                    if let Some(scope) = self.get_scope_mut(trigger.originator) {
-                        if let Some(element) = trigger.real_node_id {
+                    if let Some(scope) = self.get_scope_mut(trigger.scope) {
+                        if let Some(element) = trigger.mounted_dom_id {
                             scope.call_listener(trigger.event, element)?;
 
                             let receiver = self.immediate_receiver.clone();
@@ -406,10 +434,10 @@ impl Scheduler {
 
     /// If a the fiber finishes its works (IE needs to be committed) the scheduler will drop the dirty scope
     pub async fn work_with_deadline<'a>(
-        &mut self,
-        mutations: &mut Mutations<'_>,
+        &'a mut self,
+        mutations: &mut Mutations<'a>,
         deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
-    ) -> FiberResult {
+    ) -> bool {
         // check if we need to elevate priority
         self.current_priority = match (
             self.high_priorty.has_work(),
@@ -421,7 +449,7 @@ impl Scheduler {
             (false, false, _) => EventPriority::Low,
         };
 
-        let mut machine = DiffMachine::new(mutations, ScopeId(0), &self);
+        // let mut machine = DiffMachine::new(mutations, ScopeId(0), &self);
 
         let dirty_root = {
             let dirty_roots = match self.current_priority {
@@ -433,7 +461,7 @@ impl Scheduler {
             let mut dirty_root = {
                 let root = dirty_roots.iter().next();
                 if root.is_none() {
-                    return FiberResult::Done;
+                    return true;
                 }
                 root.unwrap()
             };
@@ -449,17 +477,12 @@ impl Scheduler {
             dirty_root
         };
 
-        match {
-            let fut = machine.diff_scope(*dirty_root).fuse();
-            pin_mut!(fut);
+        let fut = machine.diff_scope(*dirty_root).fuse();
+        pin_mut!(fut);
 
-            match futures_util::future::select(deadline, fut).await {
-                futures_util::future::Either::Left((deadline, work_fut)) => true,
-                futures_util::future::Either::Right((_, deadline_fut)) => false,
-            }
-        } {
-            true => FiberResult::Done,
-            false => FiberResult::Interrupted,
+        match futures_util::future::select(deadline, fut).await {
+            futures_util::future::Either::Left((deadline, work_fut)) => true,
+            futures_util::future::Either::Right((_, deadline_fut)) => false,
         }
     }
 
@@ -468,45 +491,31 @@ impl Scheduler {
     // does not return the trigger, but caches it in the scheduler
     pub async fn wait_for_any_trigger(
         &mut self,
-        mut deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
+        deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
     ) -> bool {
-        use futures_util::select;
+        use futures_util::future::{select, Either};
 
-        let _immediates = self.immediate_receiver.clone();
-        let mut immediates = _immediates.borrow_mut();
-
-        let mut _ui_events = self.ui_event_receiver.clone();
-        let mut ui_events = _ui_events.borrow_mut();
-
-        let mut _tasks = self.async_tasks.clone();
-        let mut tasks = _tasks.borrow_mut();
-
-        // set_state called
-        select! {
-            dirty_scope = immediates.next() => {
-                if let Some(scope) = dirty_scope {
-                    self.add_dirty_scope(scope, EventPriority::Low);
+        let event_fut = async {
+            match select(self.receiver.next(), self.async_tasks.next()).await {
+                Either::Left((msg, _other)) => {
+                    self.handle_channel_msg(msg.unwrap());
+                }
+                Either::Right((task, _other)) => {
+                    // do nothing, async task will likely generate a set of scheduler messages
                 }
             }
+        };
 
-            ui_event = ui_events.next() => {
-                if let Some(event) = ui_event {
-                    self.pending_events.push_back(event);
-                }
-            }
+        pin_mut!(event_fut);
 
-            async_task = tasks.next() => {
-                if let Some(event) = async_task {
-                    self.pending_events.push_back(event);
-                }
-            }
-
-            _ = deadline => {
-                return true;
-            }
-
+        match select(event_fut, deadline).await {
+            Either::Left((msg, _other)) => false,
+            Either::Right((deadline, _)) => true,
         }
-        false
+    }
+
+    pub fn handle_channel_msg(&mut self, msg: SchedulerMsg) {
+        //
     }
 
     pub fn add_dirty_scope(&mut self, scope: ScopeId, priority: EventPriority) {
@@ -518,12 +527,24 @@ impl Scheduler {
     }
 }
 
-pub struct TaskHandle {}
+pub struct TaskHandle {
+    channel: EventChannel,
+    our_id: u64,
+}
 
 impl TaskHandle {
+    /// Toggles this coroutine off/on.
+    ///
+    /// This method is not synchronous - your task will not stop immediately.
     pub fn toggle(&self) {}
+
+    /// This method is not synchronous - your task will not stop immediately.
     pub fn start(&self) {}
+
+    /// This method is not synchronous - your task will not stop immediately.
     pub fn stop(&self) {}
+
+    /// This method is not synchronous - your task will not stop immediately.
     pub fn restart(&self) {}
 }
 
@@ -566,4 +587,73 @@ impl ElementId {
     pub fn as_u64(self) -> u64 {
         self.0 as u64
     }
+}
+
+// // Whenever a task is ready (complete) Dioxus produces this "AsyncEvent"
+// //
+// // Async events don't necessarily propagate into a scope being ran. It's up to the event itself
+// // to force an update for itself.
+// //
+// // Most async events should have a low priority.
+// //
+// // This type exists for the task/concurrency system to signal that a task is ready.
+// // However, this does not necessarily signal that a scope must be re-ran, so the hook implementation must cause its
+// // own re-run.
+// AsyncEvent {
+//     should_rerender: bool,
+// },
+
+// // Suspense events are a type of async event generated when suspended nodes are ready to be processed.
+// //
+// // they have the lowest priority
+// SuspenseEvent {
+//     hook_idx: usize,
+//     domnode: Rc<Cell<Option<ElementId>>>,
+// },
+
+/// Priority of Event Triggers.
+///
+/// Internally, Dioxus will abort work that's taking too long if new, more important, work arrives. Unlike React, Dioxus
+/// won't be afraid to pause work or flush changes to the RealDOM. This is called "cooperative scheduling". Some Renderers
+/// implement this form of scheduling internally, however Dioxus will perform its own scheduling as well.
+///
+/// The ultimate goal of the scheduler is to manage latency of changes, prioritizing "flashier" changes over "subtler" changes.
+///
+/// React has a 5-tier priority system. However, they break things into "Continuous" and "Discrete" priority. For now,
+/// we keep it simple, and just use a 3-tier priority system.
+///
+/// - NoPriority = 0
+/// - LowPriority = 1
+/// - NormalPriority = 2
+/// - UserBlocking = 3
+/// - HighPriority = 4
+/// - ImmediatePriority = 5
+///
+/// We still have a concept of discrete vs continuous though - discrete events won't be batched, but continuous events will.
+/// This means that multiple "scroll" events will be processed in a single frame, but multiple "click" events will be
+/// flushed before proceeding. Multiple discrete events is highly unlikely, though.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
+pub enum EventPriority {
+    /// "High Priority" work will not interrupt other high priority work, but will interrupt medium and low priority work.
+    ///
+    /// This is typically reserved for things like user interaction.
+    ///
+    /// React calls these "discrete" events, but with an extra category of "user-blocking".
+    High = 2,
+
+    /// "Medium priority" work is generated by page events not triggered by the user. These types of events are less important
+    /// than "High Priority" events and will take presedence over low priority events.
+    ///
+    /// This is typically reserved for VirtualEvents that are not related to keyboard or mouse input.
+    ///
+    /// React calls these "continuous" events (e.g. mouse move, mouse wheel, touch move, etc).
+    Medium = 1,
+
+    /// "Low Priority" work will always be pre-empted unless the work is significantly delayed, in which case it will be
+    /// advanced to the front of the work queue until completed.
+    ///
+    /// The primary user of Low Priority work is the asynchronous work system (suspense).
+    ///
+    /// This is considered "idle" work or "background" work.
+    Low = 0,
 }

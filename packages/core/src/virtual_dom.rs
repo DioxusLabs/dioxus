@@ -105,18 +105,17 @@ impl VirtualDom {
         let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
         let props_ptr = root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
 
-        let link = components.clone();
+        let update_sender = components.immediate_sender.clone();
 
         let base_scope = components.insert_scope_with_key(move |myidx| {
             let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
             let name = type_name_of(root);
-            Scope::new(caller, myidx, None, 0, ScopeChildren(&[]), link, name)
+            Scope::new(caller, myidx, None, 0, ScopeChildren(&[]), update_sender)
         });
 
         Self {
             base_scope,
             _root_props: root_props,
-            scheduler: Scheduler::new(components.clone()),
             scheduler: components,
             _root_prop_type: TypeId::of::<P>(),
         }
@@ -152,28 +151,29 @@ impl VirtualDom {
     /// the diff and creating nodes can be expensive, so we provide this method to avoid blocking the main thread. This
     /// method can be useful when needing to perform some crucial periodic tasks.
     pub async fn rebuild_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.scheduler);
+        todo!()
+        // let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.scheduler);
 
-        let cur_component = self
-            .scheduler
-            .get_scope_mut(self.base_scope)
-            .expect("The base scope should never be moved");
+        // let cur_component = self
+        //     .scheduler
+        //     .get_scope_mut(self.base_scope)
+        //     .expect("The base scope should never be moved");
 
-        // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope().is_ok() {
-            diff_machine
-                .stack
-                .create_node(cur_component.frames.fin_head(), MountType::Append);
-            diff_machine.work().await;
-        } else {
-            // todo: should this be a hard error?
-            log::warn!(
-                "Component failed to run succesfully during rebuild.
-                This does not result in a failed rebuild, but indicates a logic failure within your app."
-            );
-        }
+        // // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
+        // if cur_component.run_scope().is_ok() {
+        //     diff_machine
+        //         .stack
+        //         .create_node(cur_component.frames.fin_head(), MountType::Append);
+        //     diff_machine.work().await;
+        // } else {
+        //     // todo: should this be a hard error?
+        //     log::warn!(
+        //         "Component failed to run succesfully during rebuild.
+        //         This does not result in a failed rebuild, but indicates a logic failure within your app."
+        //     );
+        // }
 
-        diff_machine.mutations
+        // diff_machine.mutations
     }
 
     pub fn diff_sync<'s>(&'s mut self) -> Mutations<'s> {

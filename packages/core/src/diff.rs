@@ -88,7 +88,7 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
-use crate::{arena::Scheduler, innerlude::*};
+use crate::{innerlude::*, scheduler::Scheduler};
 use fxhash::{FxHashMap, FxHashSet};
 use DomEdit::*;
 
@@ -110,9 +110,7 @@ pub struct DiffMachine<'bump> {
     pub mutations: &'bump mut Mutations<'bump>,
 
     pub stack: DiffStack<'bump>,
-
     pub diffed: FxHashSet<ScopeId>,
-
     pub seen_scopes: FxHashSet<ScopeId>,
 }
 
@@ -310,6 +308,7 @@ impl<'bump> DiffMachine<'bump> {
 
         let parent_idx = self.stack.current_scope().unwrap();
 
+        let shared = self.vdom.channel.clone();
         // Insert a new scope into our component list
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
             let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
@@ -320,8 +319,7 @@ impl<'bump> DiffMachine<'bump> {
                 Some(parent_idx),
                 height,
                 ScopeChildren(vcomponent.children),
-                // self.vdom.clone(),
-                vcomponent.name,
+                shared,
             )
         });
 

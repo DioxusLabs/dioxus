@@ -1,5 +1,6 @@
 use crate::innerlude::*;
 use bumpalo::boxed::Box as BumpBox;
+use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashSet;
 use std::{
     any::{Any, TypeId},
@@ -43,10 +44,9 @@ pub struct Scope {
     pub(crate) hooks: HookList,
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
-    // meta
-    pub(crate) function_name: &'static str,
-    // // A reference to the resources shared by all the comonents
-    // pub(crate) vdom: SharedResources,
+    pub(crate) memoized_updater: Rc<dyn Fn() + 'static>,
+
+    pub(crate) shared: EventChannel,
 }
 
 // The type of closure that wraps calling components
@@ -74,28 +74,22 @@ impl Scope {
 
         child_nodes: ScopeChildren,
 
-        // vdom: SharedResources,
-        function_name: &'static str,
+        shared: EventChannel,
     ) -> Self {
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
 
-        // // insert ourself as a descendent of the parent
-        // // when the parent is removed, this map will be traversed, and we will also be cleaned up.
-        // if let Some(parent) = &parent {
-        //     let parent = unsafe { vdom.get_scope(*parent) }.unwrap();
-        //     parent.descendents.borrow_mut().insert(arena_idx);
-        // }
+        let up = shared.schedule_any_immediate.clone();
+        let memoized_updater = Rc::new(move || up(arena_idx));
 
         Self {
-            function_name,
+            memoized_updater,
+            shared,
             child_nodes,
             caller,
             parent_idx: parent,
             our_arena_idx: arena_idx,
             height,
-            // vdom,
             frames: ActiveFrame::new(),
-
             hooks: Default::default(),
             shared_contexts: Default::default(),
             listeners: Default::default(),

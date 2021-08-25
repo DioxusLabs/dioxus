@@ -3,7 +3,7 @@
 //! This means you can actually call it synchronously if you want.
 
 use anyhow::{Context, Result};
-use dioxus::{arena::Scheduler, diff::DiffMachine, prelude::*, scope::Scope};
+use dioxus::{diff::DiffMachine, prelude::*, scheduler::Scheduler, scope::Scope};
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 use futures_util::FutureExt;

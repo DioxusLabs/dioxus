@@ -130,9 +130,9 @@ where
                     event: VirtualEvent::AsyncEvent {
                         should_rerender: false,
                     },
-                    originator,
+                    scope: originator,
                     priority: EventPriority::Low,
-                    real_node_id: None,
+                    mounted_dom_id: None,
                 }
             })));
 
@@ -209,9 +209,9 @@ where
                 *slot.borrow_mut() = Some(Box::new(output) as Box<dyn Any>);
                 EventTrigger {
                     event: VirtualEvent::SuspenseEvent { hook_idx, domnode },
-                    originator,
+                    scope: originator,
                     priority: EventPriority::Low,
-                    real_node_id: None,
+                    mounted_dom_id: None,
                 }
             })));
 
