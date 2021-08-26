@@ -90,6 +90,7 @@
 
 use crate::{innerlude::*, scheduler::Scheduler};
 use fxhash::{FxHashMap, FxHashSet};
+use slab::Slab;
 use DomEdit::*;
 
 /// Our DiffMachine is an iterative tree differ.
@@ -105,25 +106,84 @@ use DomEdit::*;
 /// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
 /// stack machines all the way down!
 pub struct DiffMachine<'bump> {
-    pub vdom: &'bump Scheduler,
-
+    vdom: SharedVdom<'bump>,
     pub mutations: Mutations<'bump>,
-
     pub stack: DiffStack<'bump>,
-
     pub diffed: FxHashSet<ScopeId>,
-
     pub seen_scopes: FxHashSet<ScopeId>,
 }
 
+pub struct SharedVdom<'bump> {
+    pub components: &'bump mut Slab<Scope>,
+    pub elements: &'bump mut Slab<()>,
+    pub channel: EventChannel,
+}
+
+impl<'bump> SharedVdom<'bump> {
+    fn get_scope_mut(&mut self, scope: ScopeId) -> Option<&'bump mut Scope> {
+        todo!()
+    }
+
+    fn get_scope(&mut self, scope: ScopeId) -> Option<&'bump Scope> {
+        todo!()
+    }
+
+    fn reserve_node(&mut self) -> ElementId {
+        todo!()
+    }
+    fn collect_garbage(&mut self, element: ElementId) {}
+
+    pub fn insert_scope_with_key(&mut self, f: impl FnOnce(ScopeId) -> Scope) -> ScopeId {
+        let entry = self.components.vacant_entry();
+        let id = ScopeId(entry.key());
+        entry.insert(f(id));
+        id
+    }
+}
+
+/// a "saved" form of a diff machine
+/// in regular diff machine, the &'bump reference is a stack borrow, but the
+/// bump lifetimes are heap borrows.
+pub struct SavedDiffWork<'bump> {
+    pub mutations: Mutations<'bump>,
+    pub stack: DiffStack<'bump>,
+    pub diffed: FxHashSet<ScopeId>,
+    pub seen_scopes: FxHashSet<ScopeId>,
+}
+
+impl<'a> SavedDiffWork<'a> {
+    pub unsafe fn extend(self: SavedDiffWork<'a>) -> SavedDiffWork<'static> {
+        std::mem::transmute(self)
+    }
+    pub unsafe fn promote<'b>(self, vdom: SharedVdom<'b>) -> DiffMachine<'b> {
+        let extended: SavedDiffWork<'b> = std::mem::transmute(self);
+        DiffMachine {
+            vdom,
+            mutations: extended.mutations,
+            stack: extended.stack,
+            diffed: extended.diffed,
+            seen_scopes: extended.seen_scopes,
+        }
+    }
+}
+
 impl<'bump> DiffMachine<'bump> {
-    pub(crate) fn new(edits: Mutations<'bump>, shared: &'bump Scheduler) -> Self {
+    pub(crate) fn new(edits: Mutations<'bump>, shared: SharedVdom<'bump>) -> Self {
         Self {
             stack: DiffStack::new(),
             mutations: edits,
             vdom: shared,
             diffed: FxHashSet::default(),
             seen_scopes: FxHashSet::default(),
+        }
+    }
+
+    pub fn save(self) -> SavedDiffWork<'bump> {
+        SavedDiffWork {
+            mutations: self.mutations,
+            stack: self.stack,
+            diffed: self.diffed,
+            seen_scopes: self.seen_scopes,
         }
     }
 
@@ -136,7 +196,6 @@ impl<'bump> DiffMachine<'bump> {
     //
     pub async fn diff_scope(&mut self, id: ScopeId) {
         if let Some(component) = self.vdom.get_scope_mut(id) {
-            self.stack.scope_stack.push(id);
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             self.stack.push(DiffInstruction::DiffNode { new, old });
             self.work().await;
@@ -152,9 +211,6 @@ impl<'bump> DiffMachine<'bump> {
         // defer to individual functions so the compiler produces better code
         // large functions tend to be difficult for the compiler to work with
         while let Some(instruction) = self.stack.pop() {
-            // todo: call this less frequently, there is a bit of overhead involved
-            yield_now().await;
-
             match instruction {
                 DiffInstruction::PopScope => {
                     self.stack.pop_scope();
@@ -178,12 +234,16 @@ impl<'bump> DiffMachine<'bump> {
 
                 DiffInstruction::PrepareMoveNode { node } => {
                     log::debug!("Preparing to move node: {:?}", node);
-                    for el in RealChildIterator::new(node, self.vdom) {
-                        self.mutations.push_root(el.direct_id());
-                        self.stack.add_child_count(1);
-                    }
+                    todo!();
+                    // for el in RealChildIterator::new(node, self.vdom) {
+                    //     self.mutations.push_root(el.direct_id());
+                    //     self.stack.add_child_count(1);
+                    // }
                 }
             };
+
+            // todo: call this less frequently, there is a bit of overhead involved
+            yield_now().await;
         }
     }
 
@@ -202,11 +262,12 @@ impl<'bump> DiffMachine<'bump> {
             }
 
             MountType::Replace { old } => {
-                let mut iter = RealChildIterator::new(old, self.vdom);
-                let first = iter.next().unwrap();
-                self.mutations
-                    .replace_with(first.direct_id(), nodes_created as u32);
-                self.remove_nodes(iter);
+                todo!()
+                // let mut iter = RealChildIterator::new(old, self.vdom);
+                // let first = iter.next().unwrap();
+                // self.mutations
+                //     .replace_with(first.direct_id(), nodes_created as u32);
+                // self.remove_nodes(iter);
             }
 
             MountType::ReplaceByElementId { el: old } => {
@@ -309,8 +370,8 @@ impl<'bump> DiffMachine<'bump> {
 
         let shared = self.vdom.channel.clone();
         // Insert a new scope into our component list
+        let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
-            let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
             let height = parent_scope.height + 1;
             Scope::new(
                 caller,

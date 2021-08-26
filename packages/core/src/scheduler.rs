@@ -70,6 +70,7 @@ For the rest, we defer to the rIC period and work down each queue from high to l
 */
 use std::cell::{Cell, RefCell, RefMut};
 use std::fmt::Display;
+use std::intrinsics::transmute;
 use std::{cell::UnsafeCell, rc::Rc};
 
 use crate::heuristics::*;
@@ -174,7 +175,7 @@ pub struct Scheduler {
 
     pub garbage_scopes: HashSet<ScopeId>,
 
-    pub fibers: [PriortySystem; 3],
+    pub lanes: [PriortySystem; 4],
 }
 
 impl Scheduler {
@@ -253,7 +254,8 @@ impl Scheduler {
             current_priority: EventPriority::Low,
 
             // a dedicated fiber for each priority
-            fibers: [
+            lanes: [
+                PriortySystem::new(),
                 PriortySystem::new(),
                 PriortySystem::new(),
                 PriortySystem::new(),
@@ -456,7 +458,7 @@ impl Scheduler {
     ///
     pub async fn work_with_deadline<'a>(
         &'a mut self,
-        deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
+        mut deadline: Pin<Box<impl FusedFuture<Output = ()>>>,
     ) -> Vec<Mutations<'a>> {
         /*
         Strategy:
@@ -478,12 +480,8 @@ impl Scheduler {
             - should we batch?
             - react says no - they are continuous
             - but if we received both - then we don't need to diff, do we? run as many as we can and then finally diff?
-
-
-
-
         */
-        let mut committed_mutations = Vec::new();
+        let mut committed_mutations = Vec::<Mutations<'static>>::new();
 
         // TODO:
         // the scheduler uses a bunch of different receivers to mimic a "topic" queue system. The futures-channel implementation
@@ -496,7 +494,7 @@ impl Scheduler {
             // Wait for any new events if we have nothing to do
             if !self.has_any_work() {
                 self.clean_up_garbage();
-                let deadline_expired = self.wait_for_any_trigger(deadline).await;
+                let deadline_expired = self.wait_for_any_trigger(&mut deadline).await;
 
                 if deadline_expired {
                     return committed_mutations;
@@ -508,7 +506,76 @@ impl Scheduler {
 
             // Work through the current subtree, and commit the results when it finishes
             // When the deadline expires, give back the work
-            let mut new_mutations = Mutations::new();
+            self.current_priority = match (
+                self.lanes[0].has_work(),
+                self.lanes[1].has_work(),
+                self.lanes[2].has_work(),
+                self.lanes[3].has_work(),
+            ) {
+                (true, _, _, _) => EventPriority::Immediate,
+                (false, true, _, _) => EventPriority::High,
+                (false, false, true, _) => EventPriority::Medium,
+                (false, false, false, _) => EventPriority::Low,
+            };
+
+            let current_lane = match self.current_priority {
+                EventPriority::Immediate => &mut self.lanes[0],
+                EventPriority::High => &mut self.lanes[1],
+                EventPriority::Medium => &mut self.lanes[2],
+                EventPriority::Low => &mut self.lanes[3],
+            };
+
+            if self.current_priority == EventPriority::Immediate {
+                // IDGAF - get this out the door right now. loop poll if we need to
+            }
+
+            use futures_util::future::{select, Either};
+
+            // if let Some(state) = current_lane.saved_state.take() {
+            //     let mut machine = unsafe { state.promote(&self) };
+            //     machine.work().await;
+            // } else {
+            if let Some(scope) = current_lane.dirty_scopes.pop() {
+                let (mut saved_work, work_complete): (SavedDiffWork<'static>, bool) = {
+                    let shared = SharedVdom {
+                        channel: self.channel.clone(),
+                        components: unsafe { &mut *self.components.get() },
+                        elements: &mut self.raw_elements,
+                    };
+                    let mut machine = DiffMachine::new(Mutations::new(), shared);
+
+                    let work_complete = {
+                        let fut = machine.diff_scope(scope);
+                        pin_mut!(fut);
+                        match select(fut, &mut deadline).await {
+                            Either::Left((work, _other)) => {
+                                //
+                                true
+                            }
+                            Either::Right((deadline, _other)) => {
+                                //
+                                false
+                            }
+                        }
+                    };
+
+                    let saved = machine.save();
+                    let extended: SavedDiffWork<'static> = unsafe { transmute(saved) };
+                    (extended, work_complete)
+                };
+
+                // release the stack borrow of ourself
+
+                if work_complete {
+                    for scope in saved_work.seen_scopes.drain() {
+                        current_lane.dirty_scopes.remove(&scope);
+                    }
+                } else {
+                }
+                // }
+            };
+
+            // let mut new_mutations = Mutations::new();
             // match self.work_with_deadline(&mut deadline).await {
             //     Some(mutations) => {
             //         // safety: the scheduler will never let us mutate
@@ -519,15 +586,6 @@ impl Scheduler {
             // }
         }
         // // check if we need to elevate priority
-        // self.current_priority = match (
-        //     self.high_priorty.has_work(),
-        //     self.medium_priority.has_work(),
-        //     self.low_priority.has_work(),
-        // ) {
-        //     (true, _, _) => EventPriority::High,
-        //     (false, true, _) => EventPriority::Medium,
-        //     (false, false, _) => EventPriority::Low,
-        // };
 
         // // let mut machine = DiffMachine::new(mutations, ScopeId(0), &self);
 
@@ -595,7 +653,17 @@ impl Scheduler {
     }
 
     pub fn handle_channel_msg(&mut self, msg: SchedulerMsg) {
-        //
+        match msg {
+            SchedulerMsg::Immediate(_) => todo!(),
+            SchedulerMsg::UiEvent(_) => todo!(),
+
+            //
+            SchedulerMsg::SubmitTask(_, _) => todo!(),
+            SchedulerMsg::ToggleTask(_) => todo!(),
+            SchedulerMsg::PauseTask(_) => todo!(),
+            SchedulerMsg::ResumeTask(_) => todo!(),
+            SchedulerMsg::DropTask(_) => todo!(),
+        }
     }
 
     pub fn add_dirty_scope(&mut self, scope: ScopeId, priority: EventPriority) {
@@ -610,13 +678,13 @@ impl Scheduler {
 
 pub struct PriortySystem {
     pub dirty_scopes: IndexSet<ScopeId>,
-    pub machine: DiffMachine<'static>,
+    pub saved_state: Option<SavedDiffWork<'static>>,
 }
 
 impl PriortySystem {
     pub fn new() -> Self {
         Self {
-            machine: DiffMachine::new(edits, shared),
+            saved_state: None,
             dirty_scopes: Default::default(),
         }
     }

@@ -194,7 +194,7 @@ impl VirtualDom {
     }
 
     pub async fn diff_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), &self.scheduler);
+        let mut diff_machine = DiffMachine::new(Mutations::new(), todo!());
 
         let cur_component = self
             .scheduler
@@ -268,7 +268,7 @@ impl VirtualDom {
         deadline: impl Future<Output = ()>,
     ) -> Vec<Mutations<'s>> {
         let mut deadline = Box::pin(deadline.fuse());
-        self.scheduler.work_with_deadline(&mut deadline).await
+        self.scheduler.work_with_deadline(deadline).await
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
