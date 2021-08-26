@@ -531,49 +531,60 @@ impl Scheduler {
 
             use futures_util::future::{select, Either};
 
+            // We have to split away some parts of ourself - current lane is borrowed mutably
+
+            let shared = SharedVdom {
+                channel: self.channel.clone(),
+                components: unsafe { &mut *self.components.get() },
+                elements: &mut self.raw_elements,
+            };
+
+            let mut state = current_lane.saved_state.take().unwrap();
+            let mut machine = unsafe { state.promote(shared) };
+
+            if machine.stack.is_empty() {
+                // if let Some(scope) = current_lane.dirty_scopes.pop() {
+                //     let component = self.components.get_mut().get_mut(scope.0).unwrap();
+                //     let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                //     machine.stack.push(DiffInstruction::DiffNode { new, old });
+                // } else {
+                // }
+            } else {
+            }
+
             // if let Some(state) = current_lane.saved_state.take() {
             //     let mut machine = unsafe { state.promote(&self) };
             //     machine.work().await;
             // } else {
-            if let Some(scope) = current_lane.dirty_scopes.pop() {
-                let (mut saved_work, work_complete): (SavedDiffWork<'static>, bool) = {
-                    let shared = SharedVdom {
-                        channel: self.channel.clone(),
-                        components: unsafe { &mut *self.components.get() },
-                        elements: &mut self.raw_elements,
-                    };
-                    let mut machine = DiffMachine::new(Mutations::new(), shared);
+            // if let Some(scope) = current_lane.dirty_scopes.pop() {
+            //
 
-                    let work_complete = {
-                        let fut = machine.diff_scope(scope);
-                        pin_mut!(fut);
-                        match select(fut, &mut deadline).await {
-                            Either::Left((work, _other)) => {
-                                //
-                                true
-                            }
-                            Either::Right((deadline, _other)) => {
-                                //
-                                false
-                            }
-                        }
-                    };
+            // let work_complete = {
+            //     let fut = machine.diff_scope(scope);
+            //     pin_mut!(fut);
+            //     match select(fut, &mut deadline).await {
+            //         Either::Left((work, _other)) => {
+            //             //
+            //             true
+            //         }
+            //         Either::Right((deadline, _other)) => {
+            //             //
+            //             false
+            //         }
+            //     }
+            // };
 
-                    let saved = machine.save();
-                    let extended: SavedDiffWork<'static> = unsafe { transmute(saved) };
-                    (extended, work_complete)
-                };
+            // let mut saved = unsafe { machine.save().extend() };
 
-                // release the stack borrow of ourself
-
-                if work_complete {
-                    for scope in saved_work.seen_scopes.drain() {
-                        current_lane.dirty_scopes.remove(&scope);
-                    }
-                } else {
-                }
-                // }
-            };
+            // // release the stack borrow of ourself
+            // if work_complete {
+            //     for scope in saved.seen_scopes.drain() {
+            //         current_lane.dirty_scopes.remove(&scope);
+            //     }
+            // } else {
+            // }
+            // }
+            // };
 
             // let mut new_mutations = Mutations::new();
             // match self.work_with_deadline(&mut deadline).await {
@@ -679,6 +690,7 @@ impl Scheduler {
 pub struct PriortySystem {
     pub dirty_scopes: IndexSet<ScopeId>,
     pub saved_state: Option<SavedDiffWork<'static>>,
+    pub in_progress: bool,
 }
 
 impl PriortySystem {
@@ -686,6 +698,7 @@ impl PriortySystem {
         Self {
             saved_state: None,
             dirty_scopes: Default::default(),
+            in_progress: false,
         }
     }
 
