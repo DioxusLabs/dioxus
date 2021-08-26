@@ -194,7 +194,7 @@ impl VirtualDom {
     }
 
     pub async fn diff_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.scheduler);
+        let mut diff_machine = DiffMachine::new(Mutations::new(), &self.scheduler);
 
         let cur_component = self
             .scheduler
@@ -203,12 +203,7 @@ impl VirtualDom {
 
         cur_component.run_scope().unwrap();
 
-        diff_machine.stack.push(DiffInstruction::DiffNode {
-            old: cur_component.frames.wip_head(),
-            new: cur_component.frames.fin_head(),
-        });
-
-        diff_machine.work().await;
+        diff_machine.diff_scope(self.base_scope).await;
 
         diff_machine.mutations
     }

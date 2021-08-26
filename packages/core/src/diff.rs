@@ -105,23 +105,21 @@ use DomEdit::*;
 /// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
 /// stack machines all the way down!
 pub struct DiffMachine<'bump> {
-    vdom: &'bump Scheduler,
+    pub vdom: &'bump Scheduler,
 
     pub mutations: Mutations<'bump>,
 
     pub stack: DiffStack<'bump>,
+
     pub diffed: FxHashSet<ScopeId>,
+
     pub seen_scopes: FxHashSet<ScopeId>,
 }
 
 impl<'bump> DiffMachine<'bump> {
-    pub(crate) fn new(
-        edits: Mutations<'bump>,
-        cur_scope: ScopeId,
-        shared: &'bump Scheduler,
-    ) -> Self {
+    pub(crate) fn new(edits: Mutations<'bump>, shared: &'bump Scheduler) -> Self {
         Self {
-            stack: DiffStack::new(cur_scope),
+            stack: DiffStack::new(),
             mutations: edits,
             vdom: shared,
             diffed: FxHashSet::default(),
@@ -138,6 +136,7 @@ impl<'bump> DiffMachine<'bump> {
     //
     pub async fn diff_scope(&mut self, id: ScopeId) {
         if let Some(component) = self.vdom.get_scope_mut(id) {
+            self.stack.scope_stack.push(id);
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             self.stack.push(DiffInstruction::DiffNode { new, old });
             self.work().await;

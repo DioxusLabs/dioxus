@@ -47,11 +47,11 @@ pub struct DiffStack<'bump> {
 }
 
 impl<'bump> DiffStack<'bump> {
-    pub fn new(cur_scope: ScopeId) -> Self {
+    pub fn new() -> Self {
         Self {
             instructions: Vec::with_capacity(1000),
             nodes_created_stack: smallvec![],
-            scope_stack: smallvec![cur_scope],
+            scope_stack: smallvec![],
         }
     }
 
