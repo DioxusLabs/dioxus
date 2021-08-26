@@ -106,48 +106,20 @@ use DomEdit::*;
 /// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
 /// stack machines all the way down!
 pub struct DiffMachine<'bump> {
-    vdom: SharedVdom<'bump>,
+    pub channel: EventChannel,
+    pub vdom: &'bump ResourcePool,
     pub mutations: Mutations<'bump>,
     pub stack: DiffStack<'bump>,
-    pub diffed: FxHashSet<ScopeId>,
     pub seen_scopes: FxHashSet<ScopeId>,
-}
-
-pub struct SharedVdom<'bump> {
-    pub components: &'bump mut Slab<Scope>,
-    pub elements: &'bump mut Slab<()>,
-    pub channel: EventChannel,
-}
-
-impl<'bump> SharedVdom<'bump> {
-    fn get_scope_mut(&mut self, scope: ScopeId) -> Option<&'bump mut Scope> {
-        todo!()
-    }
-
-    fn get_scope(&mut self, scope: ScopeId) -> Option<&'bump Scope> {
-        todo!()
-    }
-
-    fn reserve_node(&mut self) -> ElementId {
-        todo!()
-    }
-    fn collect_garbage(&mut self, element: ElementId) {}
-
-    pub fn insert_scope_with_key(&mut self, f: impl FnOnce(ScopeId) -> Scope) -> ScopeId {
-        let entry = self.components.vacant_entry();
-        let id = ScopeId(entry.key());
-        entry.insert(f(id));
-        id
-    }
 }
 
 /// a "saved" form of a diff machine
 /// in regular diff machine, the &'bump reference is a stack borrow, but the
 /// bump lifetimes are heap borrows.
 pub struct SavedDiffWork<'bump> {
+    pub channel: EventChannel,
     pub mutations: Mutations<'bump>,
     pub stack: DiffStack<'bump>,
-    pub diffed: FxHashSet<ScopeId>,
     pub seen_scopes: FxHashSet<ScopeId>,
 }
 
@@ -155,34 +127,38 @@ impl<'a> SavedDiffWork<'a> {
     pub unsafe fn extend(self: SavedDiffWork<'a>) -> SavedDiffWork<'static> {
         std::mem::transmute(self)
     }
-    pub unsafe fn promote<'b>(self, vdom: SharedVdom<'b>) -> DiffMachine<'b> {
+    pub unsafe fn promote<'b>(self, vdom: &'b mut ResourcePool) -> DiffMachine<'b> {
         let extended: SavedDiffWork<'b> = std::mem::transmute(self);
         DiffMachine {
             vdom,
+            channel: extended.channel,
             mutations: extended.mutations,
             stack: extended.stack,
-            diffed: extended.diffed,
             seen_scopes: extended.seen_scopes,
         }
     }
 }
 
 impl<'bump> DiffMachine<'bump> {
-    pub(crate) fn new(edits: Mutations<'bump>, shared: SharedVdom<'bump>) -> Self {
+    pub(crate) fn new(
+        edits: Mutations<'bump>,
+        shared: &'bump mut ResourcePool,
+        channel: EventChannel,
+    ) -> Self {
         Self {
+            channel,
             stack: DiffStack::new(),
             mutations: edits,
             vdom: shared,
-            diffed: FxHashSet::default(),
             seen_scopes: FxHashSet::default(),
         }
     }
 
     pub fn save(self) -> SavedDiffWork<'bump> {
         SavedDiffWork {
+            channel: self.channel,
             mutations: self.mutations,
             stack: self.stack,
-            diffed: self.diffed,
             seen_scopes: self.seen_scopes,
         }
     }
@@ -194,11 +170,10 @@ impl<'bump> DiffMachine<'bump> {
     // }
 
     //
-    pub async fn diff_scope(&mut self, id: ScopeId) {
+    pub async fn diff_scope(&'bump mut self, id: ScopeId) {
         if let Some(component) = self.vdom.get_scope_mut(id) {
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             self.stack.push(DiffInstruction::DiffNode { new, old });
-            self.work().await;
         }
     }
 
@@ -368,7 +343,7 @@ impl<'bump> DiffMachine<'bump> {
 
         let parent_idx = self.stack.current_scope().unwrap();
 
-        let shared = self.vdom.channel.clone();
+        let shared = self.channel.clone();
         // Insert a new scope into our component list
         let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {

@@ -107,7 +107,7 @@ impl VirtualDom {
 
         let props_ptr = _root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
 
-        let base_scope = scheduler.insert_scope_with_key(|myidx| {
+        let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
             let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
             let name = type_name_of(root);
             Scope::new(
@@ -129,11 +129,11 @@ impl VirtualDom {
     }
 
     pub fn base_scope(&self) -> &Scope {
-        self.scheduler.get_scope(self.base_scope).unwrap()
+        self.scheduler.pool.get_scope(self.base_scope).unwrap()
     }
 
     pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
-        self.scheduler.get_scope(id)
+        self.scheduler.pool.get_scope(id)
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
@@ -194,10 +194,11 @@ impl VirtualDom {
     }
 
     pub async fn diff_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), todo!());
+        let mut diff_machine = DiffMachine::new(Mutations::new(), todo!(), todo!());
 
         let cur_component = self
             .scheduler
+            .pool
             .get_scope_mut(self.base_scope)
             .expect("The base scope should never be moved");
 

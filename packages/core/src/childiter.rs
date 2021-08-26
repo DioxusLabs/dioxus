@@ -5,7 +5,7 @@ use crate::innerlude::*;
 /// This iterator is useful when it's important to load the next real root onto the top of the stack for operations like
 /// "InsertBefore".
 pub struct RealChildIterator<'a> {
-    scopes: &'a Scheduler,
+    scopes: &'a ResourcePool,
 
     // Heuristcally we should never bleed into 4 completely nested fragments/components
     // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
@@ -14,14 +14,14 @@ pub struct RealChildIterator<'a> {
 }
 
 impl<'a> RealChildIterator<'a> {
-    pub fn new(starter: &'a VNode<'a>, scopes: &'a Scheduler) -> Self {
+    pub fn new(starter: &'a VNode<'a>, scopes: &'a ResourcePool) -> Self {
         Self {
             scopes,
             stack: smallvec::smallvec![(0, starter)],
         }
     }
 
-    pub fn new_from_slice(nodes: &'a [VNode<'a>], scopes: &'a Scheduler) -> Self {
+    pub fn new_from_slice(nodes: &'a [VNode<'a>], scopes: &'a ResourcePool) -> Self {
         let mut stack = smallvec::smallvec![];
         for node in nodes {
             stack.push((0, node));

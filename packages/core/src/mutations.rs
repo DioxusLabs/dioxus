@@ -13,14 +13,10 @@ pub struct Mutations<'a> {
 use DomEdit::*;
 
 impl<'a> Mutations<'a> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let edits = Vec::new();
         let noderefs = Vec::new();
         Self { edits, noderefs }
-    }
-
-    pub fn extend(&mut self, other: &mut Mutations) {
-        // self.edits.extend(other.edits);
     }
 
     // Navigation
