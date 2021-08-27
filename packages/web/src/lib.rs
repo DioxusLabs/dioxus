@@ -97,8 +97,7 @@ where
     F: FnOnce(WebConfig) -> WebConfig,
 {
     let config = config(WebConfig::default());
-    let fut = run_with_props(root, root_props, config);
-    wasm_bindgen_futures::spawn_local(fut);
+    wasm_bindgen_futures::spawn_local(run_with_props(root, root_props, config));
 }
 /// This method is the primary entrypoint for Websys Dioxus apps. Will panic if an error occurs while rendering.
 /// See DioxusErrors for more information on how these errors could occour.
@@ -143,9 +142,8 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
 
         let deadline = work_loop.wait_for_idle_time().await;
 
-        if let Some(mut mutations) = dom.run_with_deadline(deadline).await {
-            work_loop.wait_for_raf().await;
-            websys_dom.process_edits(&mut mutations.edits);
-        }
+        let mut mutations = dom.run_with_deadline(deadline).await;
+        work_loop.wait_for_raf().await;
+        websys_dom.process_edits(&mut mutations[0].edits);
     }
 }

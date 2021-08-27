@@ -17,6 +17,6 @@ async fn event_queue_works() {
     let edits = dom.rebuild();
 
     async_std::task::spawn_local(async move {
-        let mutations = dom.run_unbounded().await;
+        // let mutations = dom.run_unbounded().await;
     });
 }

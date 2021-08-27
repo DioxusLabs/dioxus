@@ -15,11 +15,6 @@ pub struct EventTrigger {
 
     /// The type of event
     pub event: SyntheticEvent,
-
-    /// Is consistency important for this event?
-    /// UI events are the only events where consistency is important.
-    /// All else may be batched.
-    pub discrete: bool,
 }
 
 pub enum SyntheticEvent {

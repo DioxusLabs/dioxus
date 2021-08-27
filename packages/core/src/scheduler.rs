@@ -133,8 +133,6 @@ pub struct Scheduler {
 
     pub heuristics: HeuristicsEngine,
 
-    pub channel: EventChannel,
-
     pub receiver: UnboundedReceiver<SchedulerMsg>,
 
     // Garbage stored
@@ -165,11 +163,6 @@ impl Scheduler {
         */
         let components = Rc::new(UnsafeCell::new(Slab::with_capacity(100)));
         let raw_elements = Rc::new(UnsafeCell::new(Slab::with_capacity(2000)));
-
-        let pool = ResourcePool {
-            components: components.clone(),
-            raw_elements,
-        };
 
         let heuristics = HeuristicsEngine::new();
 
@@ -214,9 +207,14 @@ impl Scheduler {
             },
         };
 
+        let pool = ResourcePool {
+            components: components.clone(),
+            raw_elements,
+            channel,
+        };
+
         Self {
             pool,
-            channel,
             receiver,
 
             async_tasks: FuturesUnordered::new(),
@@ -253,7 +251,7 @@ impl Scheduler {
     }
 
     // Converts UI events into dirty scopes with various priorities
-    pub fn consume_pending_events(&mut self) -> Result<()> {
+    pub fn consume_pending_events(&mut self) {
         // while let Some(trigger) = self.ui_events.pop_back() {
         //     match &trigger.event {
         //         SyntheticEvent::ClipboardEvent(_)
@@ -287,8 +285,6 @@ impl Scheduler {
         //         }
         //     }
         // }
-
-        Ok(())
     }
 
     // nothing to do, no events on channels, no work
@@ -363,8 +359,6 @@ impl Scheduler {
     /// Uses some fairly complex logic to schedule what work should be produced.
     ///
     /// Returns a list of successful mutations.
-    ///
-    ///
     pub async fn work_with_deadline<'a>(
         &'a mut self,
         mut deadline: Pin<Box<impl FusedFuture<Output = ()>>>,
@@ -392,10 +386,6 @@ impl Scheduler {
         */
         let mut committed_mutations = Vec::<Mutations<'static>>::new();
 
-        // TODO:
-        // the scheduler uses a bunch of different receivers to mimic a "topic" queue system. The futures-channel implementation
-        // doesn't really have a concept of a "topic" queue, so there's a lot of noise in the hand-rolled scheduler. We should
-        // explore abstracting the scheduler into a topic-queue channel system - similar to Kafka or something similar.
         loop {
             // Internalize any pending work since the last time we ran
             self.manually_poll_events();
@@ -411,7 +401,7 @@ impl Scheduler {
             }
 
             // Create work from the pending event queue
-            self.consume_pending_events().unwrap();
+            self.consume_pending_events();
 
             // Work through the current subtree, and commit the results when it finishes
             // When the deadline expires, give back the work
@@ -443,8 +433,8 @@ impl Scheduler {
                 pin_mut!(fut);
                 use futures_util::future::{select, Either};
                 match select(fut, &mut deadline).await {
-                    Either::Left((work, _other)) => true,
-                    Either::Right((deadline, _other)) => false,
+                    Either::Left((_, _other)) => true,
+                    Either::Right((_, _other)) => false,
                 }
             };
 
@@ -461,6 +451,7 @@ impl Scheduler {
 
                 committed_mutations.push(new_mutations);
             }
+
             self.save_work(saved);
 
             if !completed {
@@ -670,6 +661,8 @@ pub struct ResourcePool {
     In the future, we could actually store a pointer to the VNode instead of nil to provide O(1) lookup for VNodes...
     */
     pub raw_elements: Rc<UnsafeCell<Slab<()>>>,
+
+    pub channel: EventChannel,
 }
 
 impl ResourcePool {
@@ -711,8 +704,8 @@ impl ResourcePool {
     }
 
     pub fn reserve_node(&self) -> ElementId {
-        todo!("reserving wip until it's fast enough again")
-        // ElementId(self.raw_elements.insert(()))
+        let els = unsafe { &mut *self.raw_elements.get() };
+        ElementId(els.insert(()))
     }
 
     /// return the id, freeing the space of the original node

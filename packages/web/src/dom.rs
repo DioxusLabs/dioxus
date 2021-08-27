@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 use dioxus_core::{
     events::{on::GenericEventInner, EventTrigger, SyntheticEvent},
     mutations::NodeRefMutation,
+    scheduler::SchedulerMsg,
     DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
@@ -24,7 +25,7 @@ pub struct WebsysDom {
 
     root: Element,
 
-    sender_callback: Rc<dyn Fn(EventTrigger)>,
+    sender_callback: Rc<dyn Fn(SchedulerMsg)>,
 
     // map of listener types to number of those listeners
     // This is roughly a delegater
@@ -39,7 +40,7 @@ pub struct WebsysDom {
     last_node_was_text: bool,
 }
 impl WebsysDom {
-    pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(EventTrigger)>) -> Self {
+    pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         let document = load_document();
 
         let mut nodes = NodeSlab::new(2000);
@@ -277,7 +278,7 @@ impl WebsysDom {
                 // "Result" cannot be received from JS
                 // Instead, we just build and immediately execute a closure that returns result
                 match decode_trigger(event) {
-                    Ok(synthetic_event) => trigger.as_ref()(synthetic_event),
+                    Ok(synthetic_event) => trigger.as_ref()(SchedulerMsg::UiEvent(synthetic_event)),
                     Err(e) => log::error!("Error decoding Dioxus event attribute. {:#?}", e),
                 };
             }) as Box<dyn FnMut(&Event)>);
@@ -560,12 +561,11 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
     let triggered_scope = gi_id;
     // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
-    Ok(EventTrigger::new(
-        virtual_event_from_websys_event(event.clone()),
-        ScopeId(triggered_scope as usize),
-        Some(ElementId(real_id as usize)),
-        dioxus_core::events::EventPriority::High,
-    ))
+    Ok(EventTrigger {
+        event: virtual_event_from_websys_event(event.clone()),
+        mounted_dom_id: Some(ElementId(real_id as usize)),
+        scope: ScopeId(triggered_scope as usize),
+    })
 }
 
 pub fn prepare_websys_dom() -> Element {

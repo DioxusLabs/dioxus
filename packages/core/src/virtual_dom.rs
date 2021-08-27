@@ -116,7 +116,7 @@ impl VirtualDom {
                 None,
                 0,
                 ScopeChildren(&[]),
-                scheduler.channel.clone(),
+                scheduler.pool.channel.clone(),
             )
         });
 
@@ -158,29 +158,31 @@ impl VirtualDom {
     /// the diff and creating nodes can be expensive, so we provide this method to avoid blocking the main thread. This
     /// method can be useful when needing to perform some crucial periodic tasks.
     pub async fn rebuild_async<'s>(&'s mut self) -> Mutations<'s> {
-        todo!()
-        // let mut diff_machine = DiffMachine::new(Mutations::new(), self.base_scope, &self.scheduler);
+        let mut shared = self.scheduler.pool.clone();
+        let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
 
-        // let cur_component = self
-        //     .scheduler
-        //     .get_scope_mut(self.base_scope)
-        //     .expect("The base scope should never be moved");
+        let cur_component = self
+            .scheduler
+            .pool
+            .get_scope_mut(self.base_scope)
+            .expect("The base scope should never be moved");
 
-        // // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        // if cur_component.run_scope().is_ok() {
-        //     diff_machine
-        //         .stack
-        //         .create_node(cur_component.frames.fin_head(), MountType::Append);
-        //     diff_machine.work().await;
-        // } else {
-        //     // todo: should this be a hard error?
-        //     log::warn!(
-        //         "Component failed to run succesfully during rebuild.
-        //         This does not result in a failed rebuild, but indicates a logic failure within your app."
-        //     );
-        // }
+        // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
+        if cur_component.run_scope().is_ok() {
+            diff_machine
+                .stack
+                .create_node(cur_component.frames.fin_head(), MountType::Append);
+            diff_machine.stack.scope_stack.push(self.base_scope);
+            diff_machine.work().await;
+        } else {
+            // todo: should this be a hard error?
+            log::warn!(
+                "Component failed to run succesfully during rebuild.
+                This does not result in a failed rebuild, but indicates a logic failure within your app."
+            );
+        }
 
-        // diff_machine.mutations
+        unsafe { std::mem::transmute(diff_machine.mutations) }
     }
 
     pub fn diff_sync<'s>(&'s mut self) -> Mutations<'s> {
@@ -194,7 +196,7 @@ impl VirtualDom {
     }
 
     pub async fn diff_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), todo!(), todo!());
+        let mut diff_machine = DiffMachine::new(Mutations::new(), todo!());
 
         let cur_component = self
             .scheduler
@@ -273,7 +275,7 @@ impl VirtualDom {
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        self.scheduler.channel.sender.clone()
+        self.scheduler.pool.channel.sender.clone()
     }
 
     pub fn has_work(&self) -> bool {

@@ -24,8 +24,11 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> EventTrigger {
     let event = SyntheticEvent::MouseEvent(MouseEvent(Rc::new(WebviewMouseEvent)));
     let scope = ScopeId(data.scope as usize);
     let mounted_dom_id = Some(ElementId(data.mounted_dom_id as usize));
-    let priority = EventPriority::High;
-    EventTrigger::new(event, scope, mounted_dom_id, priority)
+    EventTrigger {
+        event,
+        scope,
+        mounted_dom_id,
+    }
 }
 
 #[derive(Debug)]

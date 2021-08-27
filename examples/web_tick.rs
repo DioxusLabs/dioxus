@@ -13,32 +13,13 @@
 use dioxus::prelude::*;
 
 fn main() {
-    // Setup logging
-    // wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    // console_error_panic_hook::set_once();
-    for adj in ADJECTIVES {
-        wasm_bindgen::intern(adj);
-    }
-    for col in COLOURS {
-        wasm_bindgen::intern(col);
-    }
-    for no in NOUNS {
-        wasm_bindgen::intern(no);
-    }
-    wasm_bindgen::intern("col-md-1");
-    wasm_bindgen::intern("col-md-6");
-    wasm_bindgen::intern("glyphicon glyphicon-remove remove");
-    wasm_bindgen::intern("remove");
-    wasm_bindgen::intern("dioxus");
-    wasm_bindgen::intern("lbl");
-    wasm_bindgen::intern("true");
+    #[cfg(target_arch = "wasm32")]
+    intern_strings();
 
     dioxus::web::launch(App, |c| c);
 }
 
 static App: FC<()> = |cx| {
-    // let mut count = use_state(cx, || 0);
-
     let mut rng = SmallRng::from_entropy();
     let rows = (0..1_000).map(|f| {
         let label = Label::new(&mut rng);
@@ -49,6 +30,7 @@ static App: FC<()> = |cx| {
             }
         }
     });
+
     cx.render(rsx! {
         table {
             tbody {
@@ -56,15 +38,6 @@ static App: FC<()> = |cx| {
             }
         }
     })
-    // cx.render(rsx! {
-    //     div {
-    //         // h1 { "Hifive counter: {count}" }
-    //         // {cx.children()}
-    //         // button { onclick: move |_| count += 1, "Up high!" }
-    //         // button { onclick: move |_| count -= 1, "Down low!" }
-    //         {(0..1000).map(|i| rsx!{ div { "Count: {count}" } })}
-    //     }
-    // })
 };
 
 #[derive(PartialEq, Props)]
@@ -141,3 +114,23 @@ static NOUNS: &[&str] = &[
     "table", "chair", "house", "bbq", "desk", "car", "pony", "cookie", "sandwich", "burger",
     "pizza", "mouse", "keyboard",
 ];
+
+#[cfg(target_arch = "wasm32")]
+fn intern_strings() {
+    for adj in ADJECTIVES {
+        wasm_bindgen::intern(adj);
+    }
+    for col in COLOURS {
+        wasm_bindgen::intern(col);
+    }
+    for no in NOUNS {
+        wasm_bindgen::intern(no);
+    }
+    wasm_bindgen::intern("col-md-1");
+    wasm_bindgen::intern("col-md-6");
+    wasm_bindgen::intern("glyphicon glyphicon-remove remove");
+    wasm_bindgen::intern("remove");
+    wasm_bindgen::intern("dioxus");
+    wasm_bindgen::intern("lbl");
+    wasm_bindgen::intern("true");
+}
