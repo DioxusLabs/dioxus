@@ -68,32 +68,23 @@ do anything too arduous from onInput.
 
 For the rest, we defer to the rIC period and work down each queue from high to low.
 */
-use std::cell::{Cell, RefCell, RefMut};
-use std::fmt::Display;
-use std::intrinsics::transmute;
-use std::{cell::UnsafeCell, rc::Rc};
-
 use crate::heuristics::*;
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::stream::FuturesUnordered;
+use futures_util::{future::FusedFuture, pin_mut, Future, FutureExt, StreamExt};
 use fxhash::{FxHashMap, FxHashSet};
 use indexmap::IndexSet;
 use slab::Slab;
 use smallvec::SmallVec;
-
-use std::any::Any;
-
-use std::any::TypeId;
-use std::cell::Ref;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
-use std::pin::Pin;
-
-use futures_util::future::FusedFuture;
-use futures_util::pin_mut;
-use futures_util::Future;
-use futures_util::FutureExt;
-use futures_util::StreamExt;
+use std::{
+    any::{Any, TypeId},
+    cell::{Cell, RefCell, RefMut, UnsafeCell},
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque},
+    fmt::Display,
+    pin::Pin,
+    rc::Rc,
+};
 
 #[derive(Clone)]
 pub struct EventChannel {
