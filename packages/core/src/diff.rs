@@ -105,7 +105,7 @@ use DomEdit::*;
 ///
 /// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
 /// stack machines all the way down!
-pub struct DiffMachine<'bump> {
+pub(crate) struct DiffMachine<'bump> {
     pub vdom: &'bump ResourcePool,
     pub mutations: Mutations<'bump>,
     pub stack: DiffStack<'bump>,
@@ -115,7 +115,7 @@ pub struct DiffMachine<'bump> {
 /// a "saved" form of a diff machine
 /// in regular diff machine, the &'bump reference is a stack borrow, but the
 /// bump lifetimes are heap borrows.
-pub struct SavedDiffWork<'bump> {
+pub(crate) struct SavedDiffWork<'bump> {
     pub mutations: Mutations<'bump>,
     pub stack: DiffStack<'bump>,
     pub seen_scopes: FxHashSet<ScopeId>,
@@ -174,40 +174,34 @@ impl<'bump> DiffMachine<'bump> {
     ///
     /// We do depth-first to maintain high cache locality (nodes were originally generated recursively).
     pub async fn work(&mut self) {
-        // defer to individual functions so the compiler produces better code
-        // large functions tend to be difficult for the compiler to work with
         while let Some(instruction) = self.stack.pop() {
+            // defer to individual functions so the compiler produces better code
+            // large functions tend to be difficult for the compiler to work with
             match instruction {
                 DiffInstruction::PopScope => {
                     self.stack.pop_scope();
                 }
 
-                DiffInstruction::DiffNode { old, new, .. } => {
-                    self.diff_node(old, new);
-                }
+                DiffInstruction::DiffNode { old, new, .. } => self.diff_node(old, new),
 
-                DiffInstruction::DiffChildren { old, new } => {
-                    self.diff_children(old, new);
-                }
+                DiffInstruction::DiffChildren { old, new } => self.diff_children(old, new),
 
-                DiffInstruction::Create { node } => {
-                    self.create_node(node);
-                }
+                DiffInstruction::Create { node } => self.create_node(node),
 
-                DiffInstruction::Mount { and } => {
-                    self.mount(and);
-                }
+                DiffInstruction::Mount { and } => self.mount(and),
 
-                DiffInstruction::PrepareMoveNode { node } => {
-                    for el in RealChildIterator::new(node, self.vdom) {
-                        self.mutations.push_root(el.direct_id());
-                        self.stack.add_child_count(1);
-                    }
-                }
+                DiffInstruction::PrepareMoveNode { node } => self.prepare_move_node(node),
             };
 
             // todo: call this less frequently, there is a bit of overhead involved
             yield_now().await;
+        }
+    }
+
+    fn prepare_move_node(&mut self, node: &'bump VNode<'bump>) {
+        for el in RealChildIterator::new(node, self.vdom) {
+            self.mutations.push_root(el.direct_id());
+            self.stack.add_child_count(1);
         }
     }
 
@@ -363,21 +357,11 @@ impl<'bump> DiffMachine<'bump> {
         let new_component = self.vdom.get_scope_mut(new_idx).unwrap();
 
         // Run the scope for one iteration to initialize it
-        match new_component.run_scope() {
-            Ok(_g) => {
-                // all good, new nodes exist
-            }
-            Err(err) => {
-                // failed to run. this is the first time the component ran, and it failed
-                // we manually set its head node to an empty fragment
-                panic!("failing components not yet implemented");
-            }
+        if new_component.run_scope() {
+            // Take the node that was just generated from running the component
+            let nextnode = new_component.frames.fin_head();
+            self.stack.create_component(new_idx, nextnode);
         }
-
-        // Take the node that was just generated from running the component
-        let nextnode = new_component.frames.fin_head();
-
-        self.stack.create_component(new_idx, nextnode);
 
         // Finally, insert this scope as a seen node.
         self.seen_scopes.insert(new_idx);
@@ -545,8 +529,9 @@ impl<'bump> DiffMachine<'bump> {
                 }
                 false => {
                     // the props are different...
-                    scope.run_scope().unwrap();
-                    self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
+                    if scope.run_scope() {
+                        self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
+                    }
                 }
             }
 

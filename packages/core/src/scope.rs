@@ -113,7 +113,9 @@ impl Scope {
         self.child_nodes = child_nodes;
     }
 
-    pub(crate) fn run_scope<'sel>(&'sel mut self) -> Result<()> {
+    /// Returns true if the scope completed successfully
+    ///
+    pub(crate) fn run_scope<'sel>(&'sel mut self) -> bool {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
@@ -133,17 +135,12 @@ impl Scope {
         let render: &WrappedCaller = self.caller.as_ref();
 
         match render(self) {
-            None => {
-                // the user's component failed. We avoid cycling to the next frame
-                log::error!("Running your component failed! It will no longer receive events.");
-                Err(Error::ComponentFailed)
-            }
+            None => false,
             Some(new_head) => {
                 // the user's component succeeded. We can safely cycle to the next frame
                 self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
                 self.frames.cycle_frame();
-                log::debug!("Successfully rendered component");
-                Ok(())
+                true
             }
         }
     }
@@ -202,7 +199,7 @@ impl Scope {
         &mut self,
         event: SyntheticEvent,
         element: ElementId,
-    ) -> Result<()> {
+    ) -> Option<()> {
         let listners = self.listeners.borrow_mut();
 
         let raw_listener = listners.iter().find(|lis| {
@@ -226,7 +223,7 @@ impl Scope {
             log::warn!("An event was triggered but there was no listener to handle it");
         }
 
-        Ok(())
+        Some(())
     }
 
     pub fn root(&self) -> &VNode {

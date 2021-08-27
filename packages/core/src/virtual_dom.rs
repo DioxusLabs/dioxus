@@ -18,6 +18,7 @@
 //!
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
+
 use crate::innerlude::*;
 use futures_util::{pin_mut, Future, FutureExt};
 use std::{
@@ -35,23 +36,13 @@ use std::{
 ///
 ///
 pub struct VirtualDom {
-    /// All mounted components are arena allocated to make additions, removals, and references easy to work with
-    /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
-    ///
-    /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
-    /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    pub scheduler: Scheduler,
+    scheduler: Scheduler,
 
-    /// The index of the root component
-    /// Should always be the first (gen=0, id=0)
     base_scope: ScopeId,
 
-    // for managing the props that were used to create the dom
-    #[doc(hidden)]
-    _root_prop_type: std::any::TypeId,
+    root_prop_type: std::any::TypeId,
 
-    #[doc(hidden)]
-    _root_props: std::pin::Pin<Box<dyn std::any::Any>>,
+    root_props: Pin<Box<dyn std::any::Any>>,
 }
 
 impl VirtualDom {
@@ -67,8 +58,8 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```
-    /// fn Example(cx: Context<SomeProps>) -> VNode  {
-    ///     cx.render(rsx!{ div{"hello world"} })
+    /// fn Example(cx: Context<()>) -> DomTree  {
+    ///     cx.render(rsx!( div { "hello world" } ))
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
@@ -91,25 +82,34 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```
-    /// fn Example(cx: Context<SomeProps>) -> VNode  {
-    ///     cx.render(rsx!{ div{"hello world"} })
+    /// #[derive(PartialEq, Props)]
+    /// struct SomeProps {
+    ///     name: &'static str
+    /// }
+    ///
+    /// fn Example(cx: Context<SomeProps>) -> DomTree  {
+    ///     cx.render(rsx!{ div{ "hello {cx.name}" } })
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
     /// ```
     ///
-    /// Note: the VirtualDOM is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
+    /// Note: the VirtualDOM is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
+    ///
+    /// ```rust
+    /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
+    /// let mutations = dom.rebuild();
+    /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let scheduler = Scheduler::new();
 
         let _root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
         let _root_prop_type = TypeId::of::<P>();
 
-        let props_ptr = _root_props.as_ref().downcast_ref::<P>().unwrap() as *const P;
+        let props_ptr = _root_props.downcast_ref::<P>().unwrap() as *const P;
 
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
             let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
-            let name = type_name_of(root);
             Scope::new(
                 caller,
                 myidx,
@@ -122,9 +122,9 @@ impl VirtualDom {
 
         Self {
             base_scope,
-            _root_props,
             scheduler,
-            _root_prop_type,
+            root_props: _root_props,
+            root_prop_type: _root_prop_type,
         }
     }
 
@@ -168,7 +168,7 @@ impl VirtualDom {
             .expect("The base scope should never be moved");
 
         // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope().is_ok() {
+        if cur_component.run_scope() {
             diff_machine
                 .stack
                 .create_node(cur_component.frames.fin_head(), MountType::Append);
@@ -204,9 +204,9 @@ impl VirtualDom {
             .get_scope_mut(self.base_scope)
             .expect("The base scope should never be moved");
 
-        cur_component.run_scope().unwrap();
-
-        diff_machine.diff_scope(self.base_scope).await;
+        if cur_component.run_scope() {
+            diff_machine.diff_scope(self.base_scope).await;
+        }
 
         diff_machine.mutations
     }

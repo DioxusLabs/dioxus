@@ -16,9 +16,6 @@ dioxus-core-macro = { path = "../core-macro", version = "0.1.1" }
 # Bumpalo is used as a micro heap backing each component
 bumpalo = { version = "3.6.0", features = ["collections", "boxed"] }
 
-# custom error type
-thiserror = "1"
-
 # faster hashmaps
 fxhash = "0.2.1"
 

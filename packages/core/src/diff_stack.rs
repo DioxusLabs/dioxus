@@ -40,7 +40,7 @@ pub enum MountType<'a> {
     InsertBefore { other_node: &'a VNode<'a> },
 }
 
-pub struct DiffStack<'bump> {
+pub(crate) struct DiffStack<'bump> {
     instructions: Vec<DiffInstruction<'bump>>,
     nodes_created_stack: SmallVec<[usize; 10]>,
     pub scope_stack: SmallVec<[ScopeId; 5]>,

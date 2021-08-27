@@ -128,7 +128,12 @@ pub enum SchedulerMsg {
 /// We can prevent this safety issue from occurring if we track which scopes are invalidated when starting a new task.
 ///
 ///
-pub struct Scheduler {
+pub(crate) struct Scheduler {
+    /// All mounted components are arena allocated to make additions, removals, and references easy to work with
+    /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
+    ///
+    /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
+    /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
     pub pool: ResourcePool,
 
     pub heuristics: HeuristicsEngine,
@@ -523,7 +528,7 @@ impl Scheduler {
     }
 }
 
-pub struct PriorityLane {
+pub(crate) struct PriorityLane {
     pub dirty_scopes: IndexSet<ScopeId>,
     pub saved_state: Option<SavedDiffWork<'static>>,
     pub in_progress: bool,
@@ -682,7 +687,7 @@ impl ResourcePool {
         &'b self,
         _id: ScopeId,
         _f: impl FnOnce(&'b mut Scope) -> O,
-    ) -> Result<O> {
+    ) -> Option<O> {
         todo!()
     }
 
@@ -692,13 +697,13 @@ impl ResourcePool {
         &self,
         _id: ScopeId,
         _f: impl FnOnce(&mut Scope) -> &VNode<'b>,
-    ) -> Result<&VNode<'b>> {
+    ) -> Option<&VNode<'b>> {
         todo!()
     }
 
-    pub fn try_remove(&self, id: ScopeId) -> Result<Scope> {
+    pub fn try_remove(&self, id: ScopeId) -> Option<Scope> {
         let inner = unsafe { &mut *self.components.get() };
-        Ok(inner.remove(id.0))
+        Some(inner.remove(id.0))
         // .try_remove(id.0)
         // .ok_or_else(|| Error::FatalInternal("Scope not found"))
     }

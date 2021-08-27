@@ -1,14 +1,5 @@
 #![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
-//! Dioxus Core
-//! ----------
-//!
-//!
-//!
-//!
-//!
-//!
-//!
 
 pub use crate::innerlude::{
     format_args_f, html, rsx, Context, DiffInstruction, DioxusElement, DomEdit, DomTree, ElementId,
@@ -26,7 +17,6 @@ pub mod prelude {
     pub use dioxus_core_macro::{format_args_f, html, rsx, Props};
 }
 
-// types used internally that are important
 pub(crate) mod innerlude {
     pub use crate::bumpframe::*;
     pub use crate::childiter::*;
@@ -34,8 +24,6 @@ pub(crate) mod innerlude {
     pub use crate::context::*;
     pub use crate::diff::*;
     pub use crate::diff_stack::*;
-    pub use crate::dom_edits::*;
-    pub use crate::error::*;
     pub use crate::events::*;
     pub use crate::heuristics::*;
     pub use crate::hooklist::*;
@@ -43,7 +31,6 @@ pub(crate) mod innerlude {
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::scheduler::*;
-    // pub use crate::scheduler::*;
     pub use crate::scope::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
@@ -57,19 +44,29 @@ pub(crate) mod innerlude {
 
 pub mod exports {
     //! Important dependencies that are used by the rest of the library
-
     // the foundation of this library
     pub use bumpalo;
 }
 
+/*
+Navigating this crate:
+- virtual_dom: the primary entrypoint for the crate
+- scheduler: the core interior logic called by virtual_dom
+- nodes: the definition of VNodes, listeners, etc.
+-
+
+
+Some utilities
+
+
+
+*/
 pub mod bumpframe;
 pub mod childiter;
 pub mod component;
 pub mod context;
 pub mod diff;
 pub mod diff_stack;
-pub mod dom_edits;
-pub mod error;
 pub mod events;
 pub mod heuristics;
 pub mod hooklist;
