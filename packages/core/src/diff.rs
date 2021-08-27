@@ -341,7 +341,7 @@ impl<'bump> DiffMachine<'bump> {
         });
 
         // Actually initialize the caller's slot with the right address
-        vcomponent.ass_scope.set(Some(new_idx));
+        vcomponent.associated_scope.set(Some(new_idx));
 
         if !vcomponent.can_memoize {
             let cur_scope = self.vdom.get_scope_mut(parent_idx).unwrap();
@@ -357,7 +357,7 @@ impl<'bump> DiffMachine<'bump> {
         let new_component = self.vdom.get_scope_mut(new_idx).unwrap();
 
         // Run the scope for one iteration to initialize it
-        if new_component.run_scope() {
+        if new_component.run_scope(self.vdom) {
             // Take the node that was just generated from running the component
             let nextnode = new_component.frames.fin_head();
             self.stack.create_component(new_idx, nextnode);
@@ -505,7 +505,7 @@ impl<'bump> DiffMachine<'bump> {
         old: &'bump VComponent<'bump>,
         new: &'bump VComponent<'bump>,
     ) {
-        let scope_addr = old.ass_scope.get().unwrap();
+        let scope_addr = old.associated_scope.get().unwrap();
 
         // Make sure we're dealing with the same component (by function pointer)
         if old.user_fc == new.user_fc {
@@ -513,7 +513,7 @@ impl<'bump> DiffMachine<'bump> {
             self.stack.scope_stack.push(scope_addr);
 
             // Make sure the new component vnode is referencing the right scope id
-            new.ass_scope.set(Some(scope_addr));
+            new.associated_scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
             let scope = self.vdom.get_scope_mut(scope_addr).unwrap();
@@ -529,7 +529,7 @@ impl<'bump> DiffMachine<'bump> {
                 }
                 false => {
                     // the props are different...
-                    if scope.run_scope() {
+                    if scope.run_scope(self.vdom) {
                         self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
                     }
                 }
@@ -967,7 +967,7 @@ impl<'bump> DiffMachine<'bump> {
                     search_node = frag.children.last();
                 }
                 VNode::Component(el) => {
-                    let scope_id = el.ass_scope.get().unwrap();
+                    let scope_id = el.associated_scope.get().unwrap();
                     let scope = self.vdom.get_scope(scope_id).unwrap();
                     search_node = Some(scope.root());
                 }
@@ -985,7 +985,7 @@ impl<'bump> DiffMachine<'bump> {
                     search_node = Some(&frag.children[0]);
                 }
                 VNode::Component(el) => {
-                    let scope_id = el.ass_scope.get().unwrap();
+                    let scope_id = el.associated_scope.get().unwrap();
                     let scope = self.vdom.get_scope(scope_id).unwrap();
                     search_node = Some(scope.root());
                 }
@@ -1043,7 +1043,7 @@ impl<'bump> DiffMachine<'bump> {
                 }
 
                 VNode::Component(c) => {
-                    let scope_id = c.ass_scope.get().unwrap();
+                    let scope_id = c.associated_scope.get().unwrap();
                     let scope = self.vdom.get_scope(scope_id).unwrap();
                     let root = scope.root();
                     self.remove_nodes(Some(root));

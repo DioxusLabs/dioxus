@@ -169,7 +169,7 @@ impl<'a> TextRenderer<'a> {
                 }
             }
             VNode::Component(vcomp) => {
-                let idx = vcomp.ass_scope.get().unwrap();
+                let idx = vcomp.associated_scope.get().unwrap();
                 match (self.vdom, self.cfg.skip_components) {
                     (Some(vdom), false) => {
                         let new_node = vdom.get_scope(idx).unwrap().root();

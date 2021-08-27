@@ -168,7 +168,7 @@ impl VirtualDom {
             .expect("The base scope should never be moved");
 
         // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope() {
+        if cur_component.run_scope(&self.scheduler.pool) {
             diff_machine
                 .stack
                 .create_node(cur_component.frames.fin_head(), MountType::Append);
@@ -204,7 +204,7 @@ impl VirtualDom {
             .get_scope_mut(self.base_scope)
             .expect("The base scope should never be moved");
 
-        if cur_component.run_scope() {
+        if cur_component.run_scope(&self.scheduler.pool) {
             diff_machine.diff_scope(self.base_scope).await;
         }
 

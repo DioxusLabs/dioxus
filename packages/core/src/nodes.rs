@@ -13,7 +13,6 @@ use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
-    mem::ManuallyDrop,
     rc::Rc,
 };
 
@@ -43,8 +42,8 @@ impl<'src> VNode<'src> {
             VNode::Component(c) => c.key,
             VNode::Fragment(f) => f.key,
             VNode::Text(_t) => None,
-            VNode::Suspended(s) => None,
-            VNode::Anchor(f) => None,
+            VNode::Suspended(_s) => None,
+            VNode::Anchor(_f) => None,
         }
     }
     pub fn direct_id(&self) -> ElementId {
@@ -68,14 +67,34 @@ pub struct VAnchor {
 
 pub struct VText<'src> {
     pub text: &'src str,
+
     pub dom_id: Cell<Option<ElementId>>,
+
     pub is_static: bool,
 }
 
 pub struct VFragment<'src> {
-    pub children: &'src [VNode<'src>],
     pub key: Option<&'src str>,
+
+    pub children: &'src [VNode<'src>],
+
     pub is_static: bool,
+}
+
+pub struct VElement<'a> {
+    pub tag_name: &'static str,
+
+    pub namespace: Option<&'static str>,
+
+    pub key: Option<&'a str>,
+
+    pub dom_id: Cell<Option<ElementId>>,
+
+    pub listeners: &'a [Listener<'a>],
+
+    pub attributes: &'a [Attribute<'a>],
+
+    pub children: &'a [VNode<'a>],
 }
 
 pub trait DioxusElement {
@@ -89,19 +108,6 @@ pub trait DioxusElement {
     fn namespace(&self) -> Option<&'static str> {
         Self::NAME_SPACE
     }
-}
-
-pub struct VElement<'a> {
-    pub key: Option<&'a str>,
-
-    // tag is always static
-    pub tag_name: &'static str,
-    pub namespace: Option<&'static str>,
-    pub dom_id: Cell<Option<ElementId>>,
-
-    pub listeners: &'a [Listener<'a>],
-    pub attributes: &'a [Attribute<'a>],
-    pub children: &'a [VNode<'a>],
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or
@@ -131,22 +137,12 @@ pub struct Listener<'bump> {
     pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(SyntheticEvent) + 'bump>>>,
 }
 
-impl Listener<'_> {
-    // serialize the listener event stuff to a string
-    pub fn serialize(&self) {
-        //
-    }
-    pub fn deserialize() {
-        //
-    }
-}
-
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
     pub key: Option<&'src str>,
 
-    pub ass_scope: Cell<Option<ScopeId>>,
+    pub associated_scope: Cell<Option<ScopeId>>,
 
     pub(crate) caller: Rc<dyn Fn(&Scope) -> DomTree>,
 
@@ -158,21 +154,19 @@ pub struct VComponent<'src> {
 
     pub is_static: bool,
 
-    pub can_memoize: bool,
+    pub(crate) can_memoize: bool,
 
-    pub name: &'static str,
-
-    // a pointer into the bump arena (given by the 'src lifetime)
+    // Raw pointer into the bump arena for the props of the component
     pub(crate) raw_props: *const (),
 
-    // a pointer to the raw fn typ
+    // Function pointer to the FC that was used to generate this component
     pub(crate) user_fc: *const (),
 }
 
 pub struct VSuspended<'a> {
-    pub dom_id: Cell<Option<ElementId>>,
     pub task_id: u64,
-    pub callback: RefCell<Option<&'a dyn FnOnce(SuspendedContext<'a>) -> DomTree<'a>>>,
+    pub dom_id: Cell<Option<ElementId>>,
+    pub(crate) callback: RefCell<Option<&'a dyn FnOnce(SuspendedContext<'a>) -> DomTree<'a>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -350,10 +344,8 @@ impl<'a> NodeFactory<'a> {
     {
         let bump = self.bump();
 
-        let name = crate::util::type_name_of(component);
-
         // We don't want the fat part of the fat pointer
-        // This function does static dispatch so we don't need any VTable stuff
+        // THe "Fat" part is provided on next-render
         let children: &'a V = bump.alloc(children);
         let children = children.as_ref();
 
@@ -415,9 +407,8 @@ impl<'a> NodeFactory<'a> {
             is_static,
             drop_props: RefCell::new(Some(drop_props)),
             can_memoize: P::IS_STATIC,
-            ass_scope: Cell::new(None),
+            associated_scope: Cell::new(None),
             key,
-            name,
         }))
     }
 
@@ -663,7 +654,7 @@ impl Debug for VNode<'_> {
             VNode::Component(comp) => write!(
                 s,
                 "VComponent {{ fc: {:?}, children: {:?} }}",
-                comp.name, comp.children
+                comp.user_fc, comp.children
             ),
         }
     }

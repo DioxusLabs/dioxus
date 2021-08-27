@@ -115,12 +115,12 @@ impl Scope {
 
     /// Returns true if the scope completed successfully
     ///
-    pub(crate) fn run_scope<'sel>(&'sel mut self) -> bool {
+    pub(crate) fn run_scope<'sel>(&'sel mut self, pool: &ResourcePool) -> bool {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
 
-        self.ensure_drop_safety();
+        self.ensure_drop_safety(pool);
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
@@ -154,7 +154,7 @@ impl Scope {
     ///
     /// Refrences to hook data can only be stored in listeners and component props. During diffing, we make sure to log
     /// all listeners and borrowed props so we can clear them here.
-    fn ensure_drop_safety(&mut self) {
+    fn ensure_drop_safety(&mut self, pool: &ResourcePool) {
         // make sure all garabge is collected before trying to proceed with anything else
         debug_assert!(
             self.pending_garbage.borrow().is_empty(),
@@ -163,33 +163,33 @@ impl Scope {
 
         // todo!("arch changes");
 
-        // // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
-        // // run the hooks (which hold an &mut Referrence)
-        // // right now, we don't drop
-        // // let vdom = &self.vdom;
-        // self.borrowed_props
-        //     .get_mut()
-        //     .drain(..)
-        //     .map(|li| unsafe { &*li })
-        //     .for_each(|comp| {
-        //         // First drop the component's undropped references
-        //         let scope_id = comp.ass_scope.get().unwrap();
-        //         let scope = unsafe { vdom.get_scope_mut(scope_id) }.unwrap();
-        //         scope.ensure_drop_safety();
+        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+        // run the hooks (which hold an &mut Referrence)
+        // right now, we don't drop
+        // let vdom = &self.vdom;
+        self.borrowed_props
+            .get_mut()
+            .drain(..)
+            .map(|li| unsafe { &*li })
+            .for_each(|comp| {
+                // First drop the component's undropped references
+                let scope_id = comp.associated_scope.get().unwrap();
+                let scope = pool.get_scope_mut(scope_id).unwrap();
+                scope.ensure_drop_safety(pool);
 
-        //         // Now, drop our own reference
-        //         let mut dropper = comp.drop_props.borrow_mut().take().unwrap();
-        //         dropper();
-        //     });
+                // Now, drop our own reference
+                let mut dropper = comp.drop_props.borrow_mut().take().unwrap();
+                dropper();
+            });
 
-        // // Now that all the references are gone, we can safely drop our own references in our listeners.
-        // self.listeners
-        //     .get_mut()
-        //     .drain(..)
-        //     .map(|li| unsafe { &*li })
-        //     .for_each(|listener| {
-        //         listener.callback.borrow_mut().take();
-        //     });
+        // Now that all the references are gone, we can safely drop our own references in our listeners.
+        self.listeners
+            .get_mut()
+            .drain(..)
+            .map(|li| unsafe { &*li })
+            .for_each(|listener| {
+                listener.callback.borrow_mut().take();
+            });
     }
 
     // A safe wrapper around calling listeners
