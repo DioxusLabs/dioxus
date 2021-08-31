@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 use dioxus_core::{
-    events::{on::GenericEventInner, EventTrigger, SyntheticEvent},
+    events::{on::GenericEventInner, SyntheticEvent, UiEvent},
     mutations::NodeRefMutation,
     scheduler::SchedulerMsg,
     DomEdit, ElementId, ScopeId,
@@ -519,7 +519,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
 
 /// This function decodes a websys event and produces an EventTrigger
 /// With the websys implementation, we attach a unique key to the nodes
-fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
+fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UiEvent> {
     log::debug!("Handling event!");
 
     let target = event
@@ -561,7 +561,7 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
     let triggered_scope = gi_id;
     // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
-    Ok(EventTrigger {
+    Ok(UiEvent {
         event: virtual_event_from_websys_event(event.clone()),
         mounted_dom_id: Some(ElementId(real_id as usize)),
         scope: ScopeId(triggered_scope as usize),
