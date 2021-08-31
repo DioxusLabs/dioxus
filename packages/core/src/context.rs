@@ -112,7 +112,6 @@ impl<'src, P> Context<'src, P> {
     }
 
     /// Get's this component's unique identifier.
-    ///
     pub fn get_scope_id(&self) -> ScopeId {
         self.scope.our_arena_idx.clone()
     }

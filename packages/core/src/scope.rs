@@ -195,11 +195,7 @@ impl Scope {
     // A safe wrapper around calling listeners
     //
     //
-    pub(crate) fn call_listener(
-        &mut self,
-        event: SyntheticEvent,
-        element: ElementId,
-    ) -> Option<()> {
+    pub(crate) fn call_listener(&mut self, event: SyntheticEvent, element: ElementId) {
         let listners = self.listeners.borrow_mut();
 
         let raw_listener = listners.iter().find(|lis| {
@@ -222,8 +218,6 @@ impl Scope {
         } else {
             log::warn!("An event was triggered but there was no listener to handle it");
         }
-
-        Some(())
     }
 
     pub fn root(&self) -> &VNode {

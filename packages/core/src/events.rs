@@ -6,12 +6,14 @@
 use crate::innerlude::{ElementId, ScopeId};
 
 #[derive(Debug)]
-pub struct EventTrigger {
+pub struct UiEvent {
     /// The originator of the event trigger
     pub scope: ScopeId,
 
     /// The optional real node associated with the trigger
     pub mounted_dom_id: Option<ElementId>,
+
+    pub listener_type: &'static str,
 
     /// The type of event
     pub event: SyntheticEvent,
@@ -26,7 +28,6 @@ pub enum SyntheticEvent {
     FocusEvent(on::FocusEvent),
     FormEvent(on::FormEvent),
     SelectionEvent(on::SelectionEvent),
-    UIEvent(on::UIEvent),
     WheelEvent(on::WheelEvent),
     MediaEvent(on::MediaEvent),
     AnimationEvent(on::AnimationEvent),
@@ -46,7 +47,6 @@ impl std::fmt::Debug for SyntheticEvent {
             SyntheticEvent::FormEvent(_) => "FormEvent",
             SyntheticEvent::SelectionEvent(_) => "SelectionEvent",
             SyntheticEvent::TouchEvent(_) => "TouchEvent",
-            SyntheticEvent::UIEvent(_) => "UIEvent",
             SyntheticEvent::WheelEvent(_) => "WheelEvent",
             SyntheticEvent::MediaEvent(_) => "MediaEvent",
             SyntheticEvent::AnimationEvent(_) => "AnimationEvent",
@@ -284,6 +284,9 @@ pub mod on {
             /// onmouseout
             onmouseout
 
+            ///
+            onscroll
+
             /// onmouseover
             ///
             /// Triggered when the users's mouse hovers over an element.
@@ -331,14 +334,9 @@ pub mod on {
             ontouchstart
         ];
 
-        UIEventInner(UIEvent): [
-            ///
-            scroll
-        ];
-
         WheelEventInner(WheelEvent): [
             ///
-            wheel
+            onwheel
         ];
 
         MediaEventInner(MediaEvent): [

@@ -2,7 +2,7 @@ use crate::innerlude::*;
 use bumpalo::Bump;
 use std::cell::Cell;
 
-pub struct ActiveFrame {
+pub(crate) struct ActiveFrame {
     // We use a "generation" for users of contents in the bump frames to ensure their data isn't broken
     pub generation: Cell<usize>,
 
@@ -10,7 +10,7 @@ pub struct ActiveFrame {
     pub frames: [BumpFrame; 2],
 }
 
-pub struct BumpFrame {
+pub(crate) struct BumpFrame {
     pub bump: Bump,
     pub(crate) head_node: VNode<'static>,
 

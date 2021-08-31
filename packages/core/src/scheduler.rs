@@ -97,7 +97,7 @@ pub struct EventChannel {
 
 pub enum SchedulerMsg {
     Immediate(ScopeId),
-    UiEvent(EventTrigger),
+    UiEvent(UiEvent),
     SubmitTask(FiberTask, u64),
     ToggleTask(u64),
     PauseTask(u64),
@@ -140,11 +140,11 @@ pub(crate) struct Scheduler {
     // scheduler stuff
     pub current_priority: EventPriority,
 
-    pub ui_events: VecDeque<EventTrigger>,
+    pub ui_events: VecDeque<UiEvent>,
 
     pub pending_immediates: VecDeque<ScopeId>,
 
-    pub pending_tasks: VecDeque<EventTrigger>,
+    pub pending_tasks: VecDeque<UiEvent>,
 
     pub garbage_scopes: HashSet<ScopeId>,
 
@@ -248,39 +248,37 @@ impl Scheduler {
 
     // Converts UI events into dirty scopes with various priorities
     pub fn consume_pending_events(&mut self) {
-        // while let Some(trigger) = self.ui_events.pop_back() {
-        //     match &trigger.event {
-        //         SyntheticEvent::ClipboardEvent(_)
-        //         | SyntheticEvent::CompositionEvent(_)
-        //         | SyntheticEvent::KeyboardEvent(_)
-        //         | SyntheticEvent::FocusEvent(_)
-        //         | SyntheticEvent::FormEvent(_)
-        //         | SyntheticEvent::SelectionEvent(_)
-        //         | SyntheticEvent::TouchEvent(_)
-        //         | SyntheticEvent::UIEvent(_)
-        //         | SyntheticEvent::WheelEvent(_)
-        //         | SyntheticEvent::MediaEvent(_)
-        //         | SyntheticEvent::AnimationEvent(_)
-        //         | SyntheticEvent::TransitionEvent(_)
-        //         | SyntheticEvent::ToggleEvent(_)
-        //         | SyntheticEvent::MouseEvent(_)
-        //         | SyntheticEvent::PointerEvent(_) => {
-        //             if let Some(scope) = self.get_scope_mut(trigger.scope) {
-        //                 if let Some(element) = trigger.mounted_dom_id {
-        //                     scope.call_listener(trigger.event, element)?;
+        while let Some(trigger) = self.ui_events.pop_back() {
+            if let Some(scope) = self.pool.get_scope_mut(trigger.scope) {
+                if let Some(element) = trigger.mounted_dom_id {
+                    let priority = match &trigger.event {
+                        SyntheticEvent::ClipboardEvent(_) => {}
+                        SyntheticEvent::CompositionEvent(_) => {}
+                        SyntheticEvent::KeyboardEvent(_) => {}
+                        SyntheticEvent::FocusEvent(_) => {}
+                        SyntheticEvent::FormEvent(_) => {}
+                        SyntheticEvent::SelectionEvent(_) => {}
+                        SyntheticEvent::TouchEvent(_) => {}
+                        SyntheticEvent::WheelEvent(_) => {}
+                        SyntheticEvent::MediaEvent(_) => {}
+                        SyntheticEvent::AnimationEvent(_) => {}
+                        SyntheticEvent::TransitionEvent(_) => {}
+                        SyntheticEvent::ToggleEvent(_) => {}
+                        SyntheticEvent::MouseEvent(_) => {}
+                        SyntheticEvent::PointerEvent(_) => {}
+                    };
 
-        //                     // let receiver = self.immediate_receiver.clone();
-        //                     // let mut receiver = receiver.borrow_mut();
+                    scope.call_listener(trigger.event, element);
+                    // let receiver = self.immediate_receiver.clone();
+                    // let mut receiver = receiver.borrow_mut();
 
-        //                     // // Drain the immediates into the dirty scopes, setting the appropiate priorities
-        //                     // while let Ok(Some(dirty_scope)) = receiver.try_next() {
-        //                     //     self.add_dirty_scope(dirty_scope, trigger.priority)
-        //                     // }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+                    // // Drain the immediates into the dirty scopes, setting the appropiate priorities
+                    // while let Ok(Some(dirty_scope)) = receiver.try_next() {
+                    //     self.add_dirty_scope(dirty_scope, trigger.priority)
+                    // }
+                }
+            }
+        }
     }
 
     // nothing to do, no events on channels, no work
@@ -293,24 +291,11 @@ impl Scheduler {
     }
 
     pub fn has_work(&self) -> bool {
-        todo!()
-        // self.high_priorty.has_work()
-        //     || self.medium_priority.has_work()
-        //     || self.low_priority.has_work()
+        self.lanes.iter().find(|f| f.has_work()).is_some()
     }
 
     pub fn has_pending_garbage(&self) -> bool {
         !self.garbage_scopes.is_empty()
-    }
-
-    fn get_current_fiber<'a>(&'a mut self) -> &mut DiffMachine<'a> {
-        todo!()
-        // let fib = match self.current_priority {
-        //     EventPriority::High => &mut self.high_priorty,
-        //     EventPriority::Medium => &mut self.medium_priority,
-        //     EventPriority::Low => &mut self.low_priority,
-        // };
-        // unsafe { std::mem::transmute(fib) }
     }
 
     fn shift_priorities(&mut self) {
@@ -634,7 +619,7 @@ pub enum EventPriority {
 }
 
 #[derive(Clone)]
-pub struct ResourcePool {
+pub(crate) struct ResourcePool {
     /*
     This *has* to be an UnsafeCell.
 
