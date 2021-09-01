@@ -3,7 +3,7 @@ use std::{
     cell::{Cell, RefCell, UnsafeCell},
 };
 
-pub struct HookList {
+pub(crate) struct HookList {
     vals: RefCell<Vec<InnerHook<Box<dyn Any>>>>,
     idx: Cell<usize>,
 }
@@ -20,6 +20,7 @@ impl Default for HookList {
 struct InnerHook<T> {
     cell: UnsafeCell<T>,
 }
+
 impl<T> InnerHook<T> {
     fn new(new: T) -> Self {
         Self {
@@ -27,6 +28,7 @@ impl<T> InnerHook<T> {
         }
     }
 }
+
 impl HookList {
     pub(crate) fn next<T: 'static>(&self) -> Option<&mut T> {
         self.vals.borrow().get(self.idx.get()).and_then(|inn| {

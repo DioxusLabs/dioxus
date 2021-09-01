@@ -23,6 +23,7 @@ use futures_util::{Future, FutureExt};
 use std::{
     any::{Any, TypeId},
     pin::Pin,
+    rc::Rc,
 };
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
@@ -38,6 +39,8 @@ pub struct VirtualDom {
     scheduler: Scheduler,
 
     base_scope: ScopeId,
+
+    root_fc: Box<dyn Any>,
 
     root_prop_type: std::any::TypeId,
 
@@ -120,6 +123,7 @@ impl VirtualDom {
         });
 
         Self {
+            root_fc: Box::new(root),
             base_scope,
             scheduler,
             root_props: _root_props,
@@ -133,6 +137,32 @@ impl VirtualDom {
 
     pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
         self.scheduler.pool.get_scope(id)
+    }
+
+    /// Update the root props of this VirtualDOM.
+    ///
+    /// This method retuns None if the old props could not be removed. The entire VirtualDOM will be rebuilt immediately,
+    /// so calling this method will block the main thread until computation is done.
+    pub fn update_root_props<'s, P: 'static>(&'s mut self, root_props: P) -> Option<Mutations<'s>> {
+        let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
+        root_scope.ensure_drop_safety(&self.scheduler.pool);
+
+        let mut _root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+        let _root_prop_type = TypeId::of::<P>();
+
+        if let Some(props_ptr) = _root_props.downcast_ref::<P>().map(|p| p as *const P) {
+            std::mem::swap(&mut self.root_props, &mut _root_props);
+
+            let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
+
+            let new_caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
+
+            root_scope.update_scope_dependencies(new_caller, ScopeChildren(&[]));
+
+            Some(self.rebuild())
+        } else {
+            None
+        }
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch

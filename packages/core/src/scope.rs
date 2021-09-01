@@ -36,8 +36,7 @@ pub struct Scope {
     // Listeners
     pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
-
-    pub(crate) suspended_nodes: RefCell<HashMap<u64, *const VNode<'static>>>,
+    pub(crate) suspended_nodes: RefCell<HashMap<u64, *const VSuspended<'static>>>,
 
     // State
     pub(crate) hooks: HookList,
@@ -146,7 +145,7 @@ impl Scope {
     ///
     /// Refrences to hook data can only be stored in listeners and component props. During diffing, we make sure to log
     /// all listeners and borrowed props so we can clear them here.
-    fn ensure_drop_safety(&mut self, pool: &ResourcePool) {
+    pub(crate) fn ensure_drop_safety(&mut self, pool: &ResourcePool) {
         // make sure all garabge is collected before trying to proceed with anything else
         debug_assert!(
             self.pending_garbage.borrow().is_empty(),
@@ -218,6 +217,26 @@ impl Scope {
 
     pub fn child_nodes<'a>(&'a self) -> ScopeChildren {
         unsafe { self.child_nodes.shorten_lifetime() }
+    }
+
+    pub fn call_suspended_node<'a>(&'a self, task: u64) {
+        let g = self.suspended_nodes.borrow_mut();
+
+        if let Some(suspended) = g.get(&task) {
+            let sus: &'a VSuspended<'static> = unsafe { &**suspended };
+            let sus: &'a VSuspended<'a> = unsafe { std::mem::transmute(sus) };
+
+            let bump = self.frames.wip_frame();
+            let mut cb = sus.callback.borrow_mut();
+            let mut _cb = cb.take().unwrap();
+            let cx: SuspendedContext<'a> = SuspendedContext {
+                inner: Context {
+                    props: &(),
+                    scope: &self,
+                },
+            };
+            let n: DomTree<'a> = (_cb)(cx);
+        }
     }
 
     pub fn consume_garbage(&self) -> Vec<&VNode> {

@@ -67,12 +67,6 @@ impl ActiveFrame {
         }
     }
 
-    pub fn finished_frame_mut(&mut self) -> &mut BumpFrame {
-        match self.generation.get() & 1 == 1 {
-            true => &mut self.frames[0],
-            false => &mut self.frames[1],
-        }
-    }
     /// Give out our self-referential item with our own borrowed lifetime
     pub fn fin_head<'b>(&'b self) -> &'b VNode<'b> {
         let cur_head = &self.finished_frame().head_node;

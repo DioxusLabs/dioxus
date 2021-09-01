@@ -38,7 +38,7 @@ pub(crate) mod innerlude {
     pub use crate::diff_stack::*;
     pub use crate::events::*;
     pub use crate::heuristics::*;
-    pub use crate::hooklist::*;
+    pub(crate) use crate::hooklist::*;
     pub use crate::hooks::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;

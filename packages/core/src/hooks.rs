@@ -3,11 +3,11 @@
 //! This module contains all the low-level built-in hooks that require 1st party support to work.
 //!
 //! Hooks:
-//! - use_hook
-//! - use_state_provider
-//! - use_state_consumer
-//! - use_task
-//! - use_suspense
+//! - [`use_hook`]
+//! - [`use_state_provider`]
+//! - [`use_state_consumer`]
+//! - [`use_task`]
+//! - [`use_suspense`]
 
 use crate::innerlude::*;
 use futures_util::FutureExt;
@@ -53,15 +53,7 @@ where
         (true, true) => {}
 
         // Needs to be initialized
-        (false, false) => {
-            log::debug!("Initializing context...");
-            cx.add_shared_state(init());
-            log::info!(
-                "There are now {} shared contexts for scope {:?}",
-                cx.scope.shared_contexts.borrow().len(),
-                cx.scope.our_arena_idx,
-            );
-        }
+        (false, false) => cx.add_shared_state(init()),
 
         _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
     };
@@ -205,7 +197,10 @@ where
 
                 cx.render(LazyNodes::new(|f| {
                     let bump = f.bump();
-                    let g: &dyn FnOnce(SuspendedContext<'src>) -> DomTree<'src> =
+
+                    use bumpalo::boxed::Box as BumpBox;
+
+                    let f: &mut dyn FnMut(SuspendedContext<'src>) -> DomTree<'src> =
                         bump.alloc(move |sus| {
                             let val = value.borrow();
 
@@ -218,11 +213,12 @@ where
 
                             user_callback(sus, out)
                         });
+                    let callback = unsafe { BumpBox::from_raw(f) };
 
                     VNode::Suspended(bump.alloc(VSuspended {
                         dom_id: empty_cell(),
                         task_id: hook.handle.our_id,
-                        callback: RefCell::new(Some(g)),
+                        callback: RefCell::new(Some(callback)),
                     }))
                 }))
             }
@@ -235,10 +231,13 @@ pub(crate) struct SuspenseHook {
     pub handle: TaskHandle,
     pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
 }
+
 type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> DomTree<'a>>;
+
 pub struct SuspendedContext<'a> {
     pub(crate) inner: Context<'a, ()>,
 }
+
 impl<'src> SuspendedContext<'src> {
     pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
         self,

@@ -283,7 +283,8 @@ pub struct VComponent<'src> {
 pub struct VSuspended<'a> {
     pub task_id: u64,
     pub dom_id: Cell<Option<ElementId>>,
-    pub(crate) callback: RefCell<Option<&'a dyn FnOnce(SuspendedContext<'a>) -> DomTree<'a>>>,
+    pub(crate) callback:
+        RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> DomTree<'a>>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -518,7 +519,7 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    pub fn create_component_caller<'g, P: 'g>(
+    pub(crate) fn create_component_caller<'g, P: 'g>(
         component: FC<P>,
         raw_props: *const (),
     ) -> Rc<dyn for<'r> Fn(&'r Scope) -> DomTree<'r>> {
@@ -530,12 +531,8 @@ impl<'a> NodeFactory<'a> {
                 props: safe_props,
                 scope: scp,
             };
-
             let res = component(cx);
-
-            let g2 = unsafe { std::mem::transmute(res) };
-
-            g2
+            unsafe { std::mem::transmute(res) }
         });
         unsafe { std::mem::transmute::<_, Captured<'static>>(caller) }
     }
