@@ -60,9 +60,10 @@ impl<'a> Iterator for RealChildIterator<'a> {
 
                     // For components, we load their root and push them onto the stack
                     VNode::Component(sc) => {
-                        let scope =
-                            unsafe { self.scopes.get_scope(sc.associated_scope.get().unwrap()) }
-                                .unwrap();
+                        let scope = self
+                            .scopes
+                            .get_scope(sc.associated_scope.get().unwrap())
+                            .unwrap();
                         // let scope = self.scopes.get(sc.ass_scope.get().unwrap()).unwrap();
 
                         // Simply swap the current node on the stack with the root of the component

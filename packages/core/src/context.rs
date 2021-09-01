@@ -87,6 +87,10 @@ impl<'src, P> Context<'src, P> {
     ///     })
     /// }
     /// ```
+    ///
+    /// ## Notes:
+    ///
+    /// This method returns a "ScopeChildren" object. This object is copy-able and preserve the correct lifetime.
     pub fn children(&self) -> ScopeChildren<'src> {
         self.scope.child_nodes()
     }
@@ -101,19 +105,6 @@ impl<'src, P> Context<'src, P> {
 
     pub fn prepare_update(&self) -> Rc<dyn Fn(ScopeId)> {
         self.scope.shared.schedule_any_immediate.clone()
-    }
-
-    pub fn schedule_effect(&self) -> Rc<dyn Fn() + 'static> {
-        todo!()
-    }
-
-    pub fn schedule_layout_effect(&self) {
-        todo!()
-    }
-
-    /// Get's this component's unique identifier.
-    pub fn get_scope_id(&self) -> ScopeId {
-        self.scope.our_arena_idx.clone()
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -175,7 +166,7 @@ impl<'src, P> Context<'src, P> {
         let getter = &self.scope.shared.get_shared_context;
         let ty = TypeId::of::<T>();
         let idx = self.scope.our_arena_idx;
-        getter(idx, ty).map(|f| f.downcast().unwrap())
+        getter(idx, ty).map(|f| f.downcast().expect("TypeID already validated"))
     }
 
     /// Store a value between renders

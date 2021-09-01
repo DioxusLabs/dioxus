@@ -16,12 +16,12 @@ about 10ms, which is way more than enough for diffing/creating to happen.
 async fn batch() {
     let (sender, mut recver) = futures_channel::mpsc::unbounded::<i32>();
 
-    let handle = async_std::task::spawn(async move {
-        let msg = recver.next().await;
+    let _handle = async_std::task::spawn(async move {
+        let _msg = recver.next().await;
         while let Ok(msg) = recver.try_next() {
             println!("{:#?}", msg);
         }
-        let msg = recver.next().await;
+        let _msg = recver.next().await;
         while let Ok(msg) = recver.try_next() {
             println!("{:#?}", msg);
         }

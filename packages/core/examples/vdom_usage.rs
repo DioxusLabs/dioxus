@@ -10,6 +10,6 @@ async fn main() {
 
     dom.rebuild();
 
-    let mut deadline = async_std::task::sleep(Duration::from_millis(50));
-    let fut = dom.run_with_deadline(deadline);
+    let deadline = async_std::task::sleep(Duration::from_millis(50));
+    let _fut = dom.run_with_deadline(deadline);
 }

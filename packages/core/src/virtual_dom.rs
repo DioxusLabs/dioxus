@@ -14,13 +14,12 @@
 //! - The [`ActiveFrame`] object for managing the Scope`s microheap
 //! - The [`Context`] object for exposing VirtualDOM API to components
 //! - The [`NodeFactory`] object for lazyily exposing the `Context` API to the nodebuilder API
-//! - The [`Hook`] object for exposing state management in components.
 //!
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
 use crate::innerlude::*;
-use futures_util::{pin_mut, Future, FutureExt};
+use futures_util::{Future, FutureExt};
 use std::{
     any::{Any, TypeId},
     pin::Pin,

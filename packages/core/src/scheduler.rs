@@ -703,6 +703,8 @@ impl ResourcePool {
         id
     }
 
+    pub fn borrow_bumpframe(&self) {}
+
     pub fn clean_up_garbage(&mut self) {
         // let mut scopes_to_kill = Vec::new();
         // let mut garbage_list = Vec::new();

@@ -1,6 +1,6 @@
 pub fn set_up_logging(enabled: bool) {
     use fern::colors::{Color, ColoredLevelConfig};
-    use log::debug;
+    
 
     if !enabled {
         return;

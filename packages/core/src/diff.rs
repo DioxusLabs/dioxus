@@ -200,7 +200,7 @@ impl<'bump> DiffMachine<'bump> {
 
     fn prepare_move_node(&mut self, node: &'bump VNode<'bump>) {
         for el in RealChildIterator::new(node, self.vdom) {
-            self.mutations.push_root(el.direct_id());
+            self.mutations.push_root(el.mounted_id());
             self.stack.add_child_count(1);
         }
     }
@@ -223,7 +223,7 @@ impl<'bump> DiffMachine<'bump> {
                 let mut iter = RealChildIterator::new(old, self.vdom);
                 let first = iter.next().unwrap();
                 self.mutations
-                    .replace_with(first.direct_id(), nodes_created as u32);
+                    .replace_with(first.mounted_id(), nodes_created as u32);
                 self.remove_nodes(iter);
             }
 
@@ -1090,5 +1090,47 @@ impl<'bump> DiffMachine<'bump> {
         let mut queue = scope.listeners.borrow_mut();
         let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
         queue.push(long_listener as *const _)
+    }
+
+    /// Destroy a scope and all of its descendents.
+    ///
+    /// Calling this will run the destuctors on all hooks in the tree.
+    /// It will also add the destroyed nodes to the `seen_nodes` cache to prevent them from being renderered.
+    fn destroy_scopes(&mut self, old_scope: ScopeId) {
+        let mut nodes_to_delete = vec![old_scope];
+        let mut scopes_to_explore = vec![old_scope];
+
+        // explore the scope tree breadth first
+        while let Some(scope_id) = scopes_to_explore.pop() {
+            // If we're planning on deleting this node, then we don't need to both rendering it
+            self.seen_scopes.insert(scope_id);
+            let scope = self.vdom.get_scope(scope_id).unwrap();
+            for child in scope.descendents.borrow().iter() {
+                // Add this node to be explored
+                scopes_to_explore.push(child.clone());
+
+                // Also add it for deletion
+                nodes_to_delete.push(child.clone());
+            }
+        }
+
+        // Delete all scopes that we found as part of this subtree
+        for node in nodes_to_delete {
+            log::debug!("Removing scope {:#?}", node);
+            let _scope = self.vdom.try_remove(node).unwrap();
+            // do anything we need to do to delete the scope
+            // I think we need to run the destructors on the hooks
+            // TODO
+        }
+    }
+}
+
+fn compare_strs(a: &str, b: &str) -> bool {
+    // Check by pointer, optimizing for static strs
+    if !std::ptr::eq(a, b) {
+        // If the pointers are different then check by value
+        a == b
+    } else {
+        true
     }
 }

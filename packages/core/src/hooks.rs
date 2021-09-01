@@ -119,13 +119,11 @@ where
             let slot = task_dump.clone();
 
             let updater = cx.prepare_update();
-            let update_id = cx.get_scope_id();
-
-            let originator = cx.scope.our_arena_idx.clone();
+            let originator = cx.scope.our_arena_idx;
 
             let handle = cx.submit_task(Box::pin(task_fut.then(move |output| async move {
                 *slot.as_ref().borrow_mut() = Some(output);
-                updater(update_id);
+                updater(originator);
                 originator
             })));
 

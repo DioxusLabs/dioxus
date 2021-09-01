@@ -1,12 +1,9 @@
 use crate::innerlude::*;
-use bumpalo::boxed::Box as BumpBox;
-use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashSet;
 use std::{
     any::{Any, TypeId},
-    borrow::BorrowMut,
-    cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
+    cell::RefCell,
+    collections::HashMap,
     future::Future,
     pin::Pin,
     rc::Rc,
@@ -68,15 +65,10 @@ impl Scope {
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub fn new<'creator_node>(
         caller: Rc<WrappedCaller>,
-
         arena_idx: ScopeId,
-
         parent: Option<ScopeId>,
-
         height: u32,
-
         child_nodes: ScopeChildren,
-
         shared: EventChannel,
     ) -> Self {
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
@@ -225,7 +217,7 @@ impl Scope {
     }
 
     pub fn child_nodes<'a>(&'a self) -> ScopeChildren {
-        unsafe { self.child_nodes.unextend_lfetime() }
+        unsafe { self.child_nodes.shorten_lifetime() }
     }
 
     pub fn consume_garbage(&self) -> Vec<&VNode> {

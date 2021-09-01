@@ -31,7 +31,7 @@ async fn test_iterative_create_components() {
                     }
                 }
             }
-            {(0..0).map(|f| rsx!{ div { "walalla"}})}
+            {(0..0).map(|_f| rsx!{ div { "walalla"}})}
             p {}
         })
     }
