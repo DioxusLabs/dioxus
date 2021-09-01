@@ -42,8 +42,6 @@ pub struct VirtualDom {
 
     root_fc: Box<dyn Any>,
 
-    root_prop_type: std::any::TypeId,
-
     root_props: Pin<Box<dyn std::any::Any>>,
 }
 
@@ -105,10 +103,8 @@ impl VirtualDom {
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let scheduler = Scheduler::new();
 
-        let _root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
-        let _root_prop_type = TypeId::of::<P>();
-
-        let props_ptr = _root_props.downcast_ref::<P>().unwrap() as *const P;
+        let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+        let props_ptr = root_props.downcast_ref::<P>().unwrap() as *const P;
 
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
             let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
@@ -126,15 +122,19 @@ impl VirtualDom {
             root_fc: Box::new(root),
             base_scope,
             scheduler,
-            root_props: _root_props,
-            root_prop_type: _root_prop_type,
+            root_props,
         }
     }
 
+    /// Get the [`Scope`] for the root component.
+    ///
+    /// This is useful for traversing the tree from the root for heuristics or altnerative renderers that use Dioxus
+    /// directly.
     pub fn base_scope(&self) -> &Scope {
         self.scheduler.pool.get_scope(self.base_scope).unwrap()
     }
 
+    /// Get the [`Scope`] for a component given its [`ScopeId`]
     pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
         self.scheduler.pool.get_scope(id)
     }
@@ -143,15 +143,28 @@ impl VirtualDom {
     ///
     /// This method retuns None if the old props could not be removed. The entire VirtualDOM will be rebuilt immediately,
     /// so calling this method will block the main thread until computation is done.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// #[derive(Props, PartialEq)]
+    /// struct AppProps {
+    ///     route: &'static str
+    /// }
+    /// static App: FC<AppProps> = |cx| cx.render(rsx!{ "route is {cx.route}" });
+    ///
+    /// let mut dom = VirtualDom::new_with_props(App, AppProps { route: "start" });
+    ///
+    /// let mutations = dom.update_root_props(AppProps { route: "end" }).unwrap();
+    /// ```
     pub fn update_root_props<'s, P: 'static>(&'s mut self, root_props: P) -> Option<Mutations<'s>> {
         let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
         root_scope.ensure_drop_safety(&self.scheduler.pool);
 
-        let mut _root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
-        let _root_prop_type = TypeId::of::<P>();
+        let mut root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
 
-        if let Some(props_ptr) = _root_props.downcast_ref::<P>().map(|p| p as *const P) {
-            std::mem::swap(&mut self.root_props, &mut _root_props);
+        if let Some(props_ptr) = root_props.downcast_ref::<P>().map(|p| p as *const P) {
+            std::mem::swap(&mut self.root_props, &mut root_props);
 
             let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
 
