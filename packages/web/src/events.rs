@@ -171,11 +171,71 @@ impl KeyboardEventInner for WebsysKeyboardEvent {
 }
 
 pub struct WebsysGenericUiEvent(pub UiEvent);
+impl GenericEventInner for WebsysGenericUiEvent {
+    fn raw_event(&self) -> &dyn std::any::Any {
+        // self.0.raw_event()
+        todo!()
+    }
+
+    fn bubbles(&self) -> bool {
+        self.0.bubbles()
+    }
+
+    fn cancel_bubble(&self) {
+        self.0.cancel_bubble();
+    }
+
+    fn cancelable(&self) -> bool {
+        self.0.cancelable()
+    }
+
+    fn composed(&self) -> bool {
+        self.0.composed()
+    }
+
+    fn current_target(&self) {
+        // self.0.current_target()
+    }
+
+    fn default_prevented(&self) -> bool {
+        self.0.default_prevented()
+    }
+
+    fn event_phase(&self) -> u16 {
+        self.0.event_phase()
+    }
+
+    fn is_trusted(&self) -> bool {
+        self.0.is_trusted()
+    }
+
+    fn prevent_default(&self) {
+        self.0.prevent_default()
+    }
+
+    fn stop_immediate_propagation(&self) {
+        self.0.stop_immediate_propagation()
+    }
+
+    fn stop_propagation(&self) {
+        self.0.stop_propagation()
+    }
+
+    fn target(&self) {
+        // self.0.target()
+    }
+
+    fn time_stamp(&self) -> f64 {
+        self.0.time_stamp()
+    }
+}
+
 impl UIEventInner for WebsysGenericUiEvent {
     fn detail(&self) -> i32 {
         todo!()
     }
 }
+
 impl SelectionEventInner for WebsysGenericUiEvent {}
 
 pub struct WebsysFocusEvent(pub web_sys::FocusEvent);

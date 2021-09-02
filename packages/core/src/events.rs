@@ -5,8 +5,17 @@
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
 use crate::innerlude::{ElementId, ScopeId};
 
+use bumpalo::boxed::Box as BumpBox;
+use std::{any::Any, cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
+
+use crate::{
+    innerlude::NodeFactory,
+    innerlude::{Attribute, Listener, VNode},
+};
+use std::cell::Cell;
+
 #[derive(Debug)]
-pub struct UiEvent {
+pub struct UserEvent {
     /// The originator of the event trigger
     pub scope: ScopeId,
 
@@ -23,22 +32,23 @@ pub struct UiEvent {
 }
 
 pub enum SyntheticEvent {
-    KeyboardEvent(on::KeyboardEvent),
-    TouchEvent(on::TouchEvent),
-    MouseEvent(on::MouseEvent),
+    AnimationEvent(on::AnimationEvent),
     ClipboardEvent(on::ClipboardEvent),
     CompositionEvent(on::CompositionEvent),
     FocusEvent(on::FocusEvent),
     FormEvent(on::FormEvent),
-    SelectionEvent(on::SelectionEvent),
-    WheelEvent(on::WheelEvent),
-    MediaEvent(on::MediaEvent),
-    AnimationEvent(on::AnimationEvent),
-    TransitionEvent(on::TransitionEvent),
+    KeyboardEvent(on::KeyboardEvent),
+    GenericEvent(on::GenericEvent),
+    TouchEvent(on::TouchEvent),
     ToggleEvent(on::ToggleEvent),
+    MediaEvent(on::MediaEvent),
+    MouseEvent(on::MouseEvent),
+    WheelEvent(on::WheelEvent),
+    SelectionEvent(on::SelectionEvent),
+    TransitionEvent(on::TransitionEvent),
     PointerEvent(on::PointerEvent),
-    // ImageEvent(event_data::ImageEvent),
 }
+// ImageEvent(event_data::ImageEvent),
 
 impl std::fmt::Debug for SyntheticEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -57,6 +67,7 @@ impl std::fmt::Debug for SyntheticEvent {
             SyntheticEvent::ToggleEvent(_) => "ToggleEvent",
             SyntheticEvent::MouseEvent(_) => "MouseEvent",
             SyntheticEvent::PointerEvent(_) => "PointerEvent",
+            SyntheticEvent::GenericEvent(_) => "GenericEvent",
         };
 
         f.debug_struct("VirtualEvent").field("type", &name).finish()
@@ -71,18 +82,7 @@ pub mod on {
     //! Arc allocation through "get_mut"
     //!
     //! React recently dropped support for re-using event allocation and just passes the real event along.
-
-    #![allow(unused)]
-    use bumpalo::boxed::Box as BumpBox;
-    use std::{any::Any, cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
-
-    use crate::{
-        innerlude::NodeFactory,
-        innerlude::{Attribute, ElementId, Listener, VNode},
-    };
-    use std::cell::Cell;
-
-    use super::SyntheticEvent;
+    use super::*;
 
     macro_rules! event_directory {
         ( $(
@@ -409,11 +409,9 @@ pub mod on {
             ///
             ontoggle
         ];
-
-        GenericEventInner(GenericEvent): [
-
-        ];
     }
+
+    pub struct GenericEvent(pub Rc<dyn GenericEventInner>);
 
     pub trait GenericEventInner {
         /// Return a reference to the raw event. User will need to downcast the event to the right platform-specific type.

@@ -58,7 +58,7 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     format_args_f, html, rsx, Context, DiffInstruction, DioxusElement, DomEdit, DomTree, ElementId,
     EventPriority, LazyNodes, MountType, Mutations, NodeFactory, Properties, ScopeId,
-    SuspendedContext, SyntheticEvent, TestDom, UiEvent, VNode, VirtualDom, FC,
+    SuspendedContext, SyntheticEvent, TestDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {

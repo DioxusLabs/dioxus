@@ -8,7 +8,7 @@ use dioxus_core::{
         on::{MouseEvent, MouseEventInner},
         SyntheticEvent,
     },
-    ElementId, EventPriority, ScopeId, UiEvent,
+    ElementId, EventPriority, ScopeId, UserEvent,
 };
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -17,14 +17,14 @@ struct ImEvent {
     mounted_dom_id: u64,
     scope: u64,
 }
-pub fn trigger_from_serialized(val: serde_json::Value) -> UiEvent {
+pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
     let mut data: Vec<ImEvent> = serde_json::from_value(val).unwrap();
     let data = data.drain(..).next().unwrap();
 
     let event = SyntheticEvent::MouseEvent(MouseEvent(Rc::new(WebviewMouseEvent)));
     let scope = ScopeId(data.scope as usize);
     let mounted_dom_id = Some(ElementId(data.mounted_dom_id as usize));
-    UiEvent {
+    UserEvent {
         name: todo!(),
         event,
         scope,

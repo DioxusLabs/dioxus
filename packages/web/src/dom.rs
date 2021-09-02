@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 use dioxus_core::{
-    events::{on::GenericEventInner, SyntheticEvent, UiEvent},
+    events::{on::GenericEventInner, SyntheticEvent, UserEvent},
     mutations::NodeRefMutation,
     scheduler::SchedulerMsg,
     DomEdit, ElementId, ScopeId,
@@ -458,7 +458,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
         }
         "change" => {
             let evt = event.dyn_into().unwrap();
-            SyntheticEvent::UIEvent(UIEvent(Rc::new(WebsysGenericUiEvent(evt))))
+            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
         "input" | "invalid" | "reset" | "submit" => {
             let evt: web_sys::InputEvent = event.clone().dyn_into().unwrap();
@@ -485,7 +485,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
         }
         "scroll" => {
             let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
-            SyntheticEvent::UIEvent(UIEvent(Rc::new(WebsysGenericUiEvent(evt))))
+            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
         "wheel" => {
             let evt: web_sys::WheelEvent = event.clone().dyn_into().unwrap();
@@ -512,14 +512,14 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
         }
         _ => {
             let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
-            SyntheticEvent::UIEvent(UIEvent(Rc::new(WebsysGenericUiEvent(evt))))
+            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
     }
 }
 
 /// This function decodes a websys event and produces an EventTrigger
 /// With the websys implementation, we attach a unique key to the nodes
-fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UiEvent> {
+fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
     log::debug!("Handling event!");
 
     let target = event
@@ -561,7 +561,7 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UiEvent> {
     let triggered_scope = gi_id;
     // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
-    Ok(UiEvent {
+    Ok(UserEvent {
         name: event_name_from_typ(&typ),
         event: virtual_event_from_websys_event(event.clone()),
         mounted_dom_id: Some(ElementId(real_id as usize)),

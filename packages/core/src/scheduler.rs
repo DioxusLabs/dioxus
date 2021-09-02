@@ -97,7 +97,7 @@ pub struct EventChannel {
 
 pub enum SchedulerMsg {
     Immediate(ScopeId),
-    UiEvent(UiEvent),
+    UiEvent(UserEvent),
     SubmitTask(FiberTask, u64),
     ToggleTask(u64),
     PauseTask(u64),
@@ -140,11 +140,11 @@ pub(crate) struct Scheduler {
     // scheduler stuff
     pub current_priority: EventPriority,
 
-    pub ui_events: VecDeque<UiEvent>,
+    pub ui_events: VecDeque<UserEvent>,
 
     pub pending_immediates: VecDeque<ScopeId>,
 
-    pub pending_tasks: VecDeque<UiEvent>,
+    pub pending_tasks: VecDeque<UserEvent>,
 
     pub garbage_scopes: HashSet<ScopeId>,
 
@@ -266,6 +266,7 @@ impl Scheduler {
                         SyntheticEvent::ToggleEvent(_) => {}
                         SyntheticEvent::MouseEvent(_) => {}
                         SyntheticEvent::PointerEvent(_) => {}
+                        SyntheticEvent::GenericEvent(_) => {}
                     };
 
                     scope.call_listener(trigger.event, element);

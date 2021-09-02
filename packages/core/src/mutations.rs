@@ -1,5 +1,6 @@
 //! Instructions returned by the VirtualDOM on how to modify the Real DOM.
 //!
+//! This module contains an internal API to generate these instructions.
 
 use crate::innerlude::*;
 use std::any::Any;
@@ -102,30 +103,14 @@ impl<'a> Mutations<'a> {
         let Attribute {
             name,
             value,
-            is_static,
-            is_volatile,
             namespace,
-        } = attribute;
-
-        self.edits.push(SetAttribute {
-            field: name,
-            value,
-            ns: *namespace,
-        });
-    }
-    pub(crate) fn set_attribute_ns(&mut self, attribute: &'a Attribute, namespace: &'a str) {
-        let Attribute {
-            name,
-            value,
-            is_static,
-            is_volatile,
             ..
         } = attribute;
 
         self.edits.push(SetAttribute {
             field: name,
             value,
-            ns: Some(namespace),
+            ns: *namespace,
         });
     }
 
