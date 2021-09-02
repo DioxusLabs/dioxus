@@ -153,7 +153,7 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    pub fn diff_scope(&'bump mut self, id: ScopeId) {
+    pub fn diff_scope(&mut self, id: ScopeId) {
         if let Some(component) = self.vdom.get_scope_mut(id) {
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             self.stack.push(DiffInstruction::DiffNode { new, old });

@@ -228,6 +228,9 @@ impl VirtualDom {
         unsafe { std::mem::transmute(diff_machine.mutations) }
     }
 
+    /// Compute a manual diff of the VirtualDOM between states.
+    ///
+    /// This can be useful when state inside the DOM is remotely changed from the outside, but not propogated as an event.
     pub fn diff<'s>(&'s mut self) -> Mutations<'s> {
         let cur_component = self
             .scheduler
@@ -236,7 +239,8 @@ impl VirtualDom {
             .expect("The base scope should never be moved");
 
         if cur_component.run_scope(&self.scheduler.pool) {
-            let mut diff_machine = DiffMachine::new(Mutations::new(), todo!());
+            let mut diff_machine: DiffMachine<'s> =
+                DiffMachine::new(Mutations::new(), &mut self.scheduler.pool);
             diff_machine.diff_scope(self.base_scope);
             diff_machine.mutations
         } else {

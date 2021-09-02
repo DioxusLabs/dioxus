@@ -335,20 +335,20 @@ impl Scheduler {
     ///
     /// Will use the standard priority-based scheduling, batching, etc, but just won't interact with the async reactor.
     pub fn work_sync<'a>(&'a mut self) -> Vec<Mutations<'a>> {
-        let mut committed_mutations = Vec::<Mutations<'static>>::new();
+        let mut committed_mutations = Vec::new();
 
-        // Internalize any pending work since the last time we ran
         self.manually_poll_events();
 
         if !self.has_any_work() {
             self.pool.clean_up_garbage();
+            return committed_mutations;
         }
 
-        while self.has_any_work() {
-            // do work
+        self.consume_pending_events();
 
-            // Create work from the pending event queue
-            self.consume_pending_events();
+        while self.has_any_work() {
+            self.shift_priorities();
+            self.work_on_current_lane(&mut || false, &mut committed_mutations);
         }
 
         committed_mutations
@@ -419,7 +419,9 @@ impl Scheduler {
         committed_mutations
     }
 
-    // returns true if the lane is finished
+    /// Load the current lane, and work on it, periodically checking in if the deadline has been reached.
+    ///
+    /// Returns true if the lane is finished before the deadline could be met.
     pub fn work_on_current_lane(
         &mut self,
         deadline_reached: &mut impl FnMut() -> bool,
