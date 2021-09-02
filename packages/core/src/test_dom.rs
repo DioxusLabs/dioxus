@@ -12,9 +12,10 @@ pub struct TestDom {
 impl TestDom {
     pub fn new() -> TestDom {
         let bump = Bump::new();
-        let scheduler = Scheduler::new();
+        let mut scheduler = Scheduler::new();
         TestDom { bump, scheduler }
     }
+
     pub fn new_factory<'a>(&'a self) -> NodeFactory<'a> {
         NodeFactory::new(&self.bump)
     }
@@ -30,7 +31,6 @@ impl TestDom {
         let mutations = Mutations::new();
         let mut machine = DiffMachine::new(mutations, &self.scheduler.pool);
         machine.stack.push(DiffInstruction::DiffNode { new, old });
-
         machine.mutations
     }
 

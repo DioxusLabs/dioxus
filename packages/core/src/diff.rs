@@ -294,15 +294,18 @@ impl<'bump> DiffMachine<'bump> {
 
         self.stack.add_child_count(1);
 
-        let cur_scope_id = self.stack.current_scope().unwrap();
-        let scope = self.vdom.get_scope(cur_scope_id).unwrap();
+        if let Some(cur_scope_id) = self.stack.current_scope() {
+            let scope = self.vdom.get_scope(cur_scope_id).unwrap();
 
-        listeners.iter().for_each(|listener| {
-            self.attach_listener_to_scope(listener, scope);
-            listener.mounted_node.set(Some(real_id));
-            self.mutations
-                .new_event_listener(listener, cur_scope_id.clone());
-        });
+            listeners.iter().for_each(|listener| {
+                self.attach_listener_to_scope(listener, scope);
+                listener.mounted_node.set(Some(real_id));
+                self.mutations
+                    .new_event_listener(listener, cur_scope_id.clone());
+            });
+        } else {
+            log::warn!("create element called with no scope on the stack - this is an error for a live dom");
+        }
 
         for attr in *attributes {
             self.mutations.set_attribute(attr);
@@ -465,28 +468,29 @@ impl<'bump> DiffMachine<'bump> {
         //
         // TODO: take a more efficient path than this
 
-        let cur_scope_id = self.stack.current_scope().unwrap();
-        let scope = self.vdom.get_scope(cur_scope_id).unwrap();
+        if let Some(cur_scope_id) = self.stack.current_scope() {
+            let scope = self.vdom.get_scope(cur_scope_id).unwrap();
 
-        if old.listeners.len() == new.listeners.len() {
-            for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
-                if old_l.event != new_l.event {
-                    please_commit(&mut self.mutations.edits);
-                    self.mutations.remove_event_listener(old_l.event);
-                    self.mutations.new_event_listener(new_l, cur_scope_id);
+            if old.listeners.len() == new.listeners.len() {
+                for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
+                    if old_l.event != new_l.event {
+                        please_commit(&mut self.mutations.edits);
+                        self.mutations.remove_event_listener(old_l.event);
+                        self.mutations.new_event_listener(new_l, cur_scope_id);
+                    }
+                    new_l.mounted_node.set(old_l.mounted_node.get());
+                    self.attach_listener_to_scope(new_l, scope);
                 }
-                new_l.mounted_node.set(old_l.mounted_node.get());
-                self.attach_listener_to_scope(new_l, scope);
-            }
-        } else {
-            please_commit(&mut self.mutations.edits);
-            for listener in old.listeners {
-                self.mutations.remove_event_listener(listener.event);
-            }
-            for listener in new.listeners {
-                listener.mounted_node.set(Some(root));
-                self.mutations.new_event_listener(listener, cur_scope_id);
-                self.attach_listener_to_scope(listener, scope);
+            } else {
+                please_commit(&mut self.mutations.edits);
+                for listener in old.listeners {
+                    self.mutations.remove_event_listener(listener.event);
+                }
+                for listener in new.listeners {
+                    listener.mounted_node.set(Some(root));
+                    self.mutations.new_event_listener(listener, cur_scope_id);
+                    self.attach_listener_to_scope(listener, scope);
+                }
             }
         }
 

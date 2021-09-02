@@ -62,7 +62,7 @@ impl Scope {
     //
     // Scopes cannot be made anywhere else except for this file
     // Therefore, their lifetimes are connected exclusively to the virtual dom
-    pub fn new<'creator_node>(
+    pub(crate) fn new<'creator_node>(
         caller: Rc<WrappedCaller>,
         arena_idx: ScopeId,
         parent: Option<ScopeId>,
@@ -211,15 +211,11 @@ impl Scope {
         }
     }
 
-    pub fn root(&self) -> &VNode {
-        self.frames.fin_head()
-    }
-
-    pub fn child_nodes<'a>(&'a self) -> ScopeChildren {
+    pub(crate) fn child_nodes<'a>(&'a self) -> ScopeChildren {
         unsafe { self.child_nodes.shorten_lifetime() }
     }
 
-    pub fn call_suspended_node<'a>(&'a self, task: u64) {
+    pub(crate) fn call_suspended_node<'a>(&'a self, task: u64) {
         let g = self.suspended_nodes.borrow_mut();
 
         if let Some(suspended) = g.get(&task) {
@@ -239,7 +235,7 @@ impl Scope {
         }
     }
 
-    pub fn consume_garbage(&self) -> Vec<&VNode> {
+    pub(crate) fn consume_garbage(&self) -> Vec<&VNode> {
         self.pending_garbage
             .borrow_mut()
             .drain(..)
@@ -250,5 +246,9 @@ impl Scope {
                 node
             })
             .collect::<Vec<_>>()
+    }
+
+    pub fn root(&self) -> &VNode {
+        self.frames.fin_head()
     }
 }

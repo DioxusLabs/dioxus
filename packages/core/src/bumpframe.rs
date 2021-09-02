@@ -40,10 +40,6 @@ impl ActiveFrame {
         self.wip_frame_mut().bump.reset()
     }
 
-    pub fn update_head_node<'a>(&mut self, node: VNode<'a>) {
-        self.wip_frame_mut().head_node = unsafe { std::mem::transmute(node) };
-    }
-
     /// The "work in progress frame" represents the frame that is currently being worked on.
     pub fn wip_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 0 {

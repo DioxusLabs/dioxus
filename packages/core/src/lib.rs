@@ -45,6 +45,7 @@ pub(crate) mod innerlude {
     pub use crate::nodes::*;
     pub use crate::scheduler::*;
     pub use crate::scope::*;
+    pub use crate::test_dom::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -57,7 +58,7 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     format_args_f, html, rsx, Context, DiffInstruction, DioxusElement, DomEdit, DomTree, ElementId,
     EventPriority, LazyNodes, MountType, Mutations, NodeFactory, Properties, ScopeId,
-    SuspendedContext, SyntheticEvent, UiEvent, VNode, VirtualDom, FC,
+    SuspendedContext, SyntheticEvent, TestDom, UiEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {

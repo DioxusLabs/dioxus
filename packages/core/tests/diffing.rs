@@ -1,13 +1,13 @@
 //! Diffing Tests
+//!
+//! These tests only verify that the diffing algorithm works properly for single components.
+//!
+//! It does not validated that component lifecycles work properly. This is done in another test file.
 
-use bumpalo::Bump;
-
-use dioxus::{
-    diff::DiffMachine, prelude::*, scheduler::Scheduler, DiffInstruction, DomEdit, MountType,
-};
+use dioxus::{prelude::*, DomEdit, TestDom};
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
-use futures_util::FutureExt;
+
 mod test_logging;
 use DomEdit::*;
 
@@ -15,13 +15,18 @@ use DomEdit::*;
 // feel free to enable while debugging
 const IS_LOGGING_ENABLED: bool = false;
 
+fn new_dom() -> TestDom {
+    test_logging::set_up_logging(IS_LOGGING_ENABLED);
+    TestDom::new()
+}
+
 #[test]
 fn diffing_works() {}
 
 /// Should push the text node onto the stack and modify it
 #[test]
 fn html_and_rsx_generate_the_same_output() {
-    let dom = TestDom::new();
+    let dom = new_dom();
     let (create, change) = dom.lazy_diff(
         rsx! ( div { "Hello world" } ),
         rsx! ( div { "Goodbye world" } ),
@@ -54,7 +59,7 @@ fn html_and_rsx_generate_the_same_output() {
 /// Should result in 3 elements on the stack
 #[test]
 fn fragments_create_properly() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let create = dom.create(rsx! {
         div { "Hello a" }
@@ -91,7 +96,7 @@ fn fragments_create_properly() {
 /// Should result in the creation of an anchor (placeholder) and then a replacewith
 #[test]
 fn empty_fragments_create_anchors() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({ (0..0).map(|f| rsx! { div {}}) });
     let right = rsx!({ (0..1).map(|f| rsx! { div {}}) });
@@ -114,7 +119,7 @@ fn empty_fragments_create_anchors() {
 /// Should result in the creation of an anchor (placeholder) and then a replacewith m=5
 #[test]
 fn empty_fragments_create_many_anchors() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({ (0..0).map(|f| rsx! { div {}}) });
     let right = rsx!({ (0..5).map(|f| rsx! { div {}}) });
@@ -141,7 +146,7 @@ fn empty_fragments_create_many_anchors() {
 /// Includes child nodes inside the fragment
 #[test]
 fn empty_fragments_create_anchors_with_many_children() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({ (0..0).map(|f| rsx! { div {} }) });
     let right = rsx!({
@@ -184,7 +189,7 @@ fn empty_fragments_create_anchors_with_many_children() {
 /// Should result in every node being pushed and then replaced with an anchor
 #[test]
 fn many_items_become_fragment() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         (0..2).map(|f| {
@@ -227,7 +232,7 @@ fn many_items_become_fragment() {
 /// Should result in no edits
 #[test]
 fn two_equal_fragments_are_equal() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         (0..2).map(|f| {
@@ -247,7 +252,7 @@ fn two_equal_fragments_are_equal() {
 /// Should result the creation of more nodes appended after the old last node
 #[test]
 fn two_fragments_with_differrent_elements_are_differet() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!(
         { (0..2).map(|_| rsx! { div {  }} ) }
@@ -280,7 +285,7 @@ fn two_fragments_with_differrent_elements_are_differet() {
 /// Should result in multiple nodes destroyed - with changes to the first nodes
 #[test]
 fn two_fragments_with_differrent_elements_are_differet_shorter() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!(
         {(0..5).map(|f| {rsx! { div {  }}})}
@@ -321,7 +326,7 @@ fn two_fragments_with_differrent_elements_are_differet_shorter() {
 /// Should result in multiple nodes destroyed - with no changes
 #[test]
 fn two_fragments_with_same_elements_are_differet() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!(
         {(0..2).map(|f| {rsx! { div {  }}})}
@@ -356,7 +361,7 @@ fn two_fragments_with_same_elements_are_differet() {
 /// should result in the removal of elements
 #[test]
 fn keyed_diffing_order() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!(
         {(0..5).map(|f| {rsx! { div { key: "{f}"  }}})}
@@ -377,7 +382,7 @@ fn keyed_diffing_order() {
 /// Should result in moves, but not removals or additions
 #[test]
 fn keyed_diffing_out_of_order() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [0, 1, 2, 3, /**/ 4, 5, 6, /**/ 7, 8, 9].iter().map(|f| {
@@ -402,7 +407,7 @@ fn keyed_diffing_out_of_order() {
 /// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
@@ -429,7 +434,7 @@ fn keyed_diffing_out_of_order_adds() {
 /// Should result in moves onl
 #[test]
 fn keyed_diffing_out_of_order_adds_2() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
@@ -457,7 +462,7 @@ fn keyed_diffing_out_of_order_adds_2() {
 /// Should result in moves onl
 #[test]
 fn keyed_diffing_out_of_order_adds_3() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
@@ -485,7 +490,7 @@ fn keyed_diffing_out_of_order_adds_3() {
 /// Should result in moves onl
 #[test]
 fn keyed_diffing_out_of_order_adds_4() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
@@ -513,7 +518,7 @@ fn keyed_diffing_out_of_order_adds_4() {
 /// Should result in moves onl
 #[test]
 fn keyed_diffing_out_of_order_adds_5() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
@@ -536,7 +541,7 @@ fn keyed_diffing_out_of_order_adds_5() {
 
 #[test]
 fn keyed_diffing_additions() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
@@ -563,7 +568,7 @@ fn keyed_diffing_additions() {
 
 #[test]
 fn keyed_diffing_additions_and_moves_on_ends() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [/**/ 4, 5, 6, 7 /**/].iter().map(|f| {
@@ -595,7 +600,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 
 #[test]
 fn keyed_diffing_additions_and_moves_in_middle() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [/**/ 4, 5, 6, 7 /**/].iter().map(|f| {
@@ -632,7 +637,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
 
 #[test]
 fn controlled_keyed_diffing_out_of_order() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [4, 5, 6, 7].iter().map(|f| {
@@ -669,7 +674,7 @@ fn controlled_keyed_diffing_out_of_order() {
 
 #[test]
 fn controlled_keyed_diffing_out_of_order_max_test() {
-    let dom = TestDom::new();
+    let dom = new_dom();
 
     let left = rsx!({
         [0, 1, 2, 3, 4].iter().map(|f| {
