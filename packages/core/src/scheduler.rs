@@ -18,7 +18,7 @@ point if being "fast" if you can't also be "responsive."
 
 As such, Dioxus can manually decide on what work is most important at any given moment in time. With a properly tuned
 priority system, Dioxus can ensure that user interaction is prioritized and committed as soon as possible (sub 100ms).
-The controller responsible for this priority management is called the "scheduler" and is responsible for juggle many
+The controller responsible for this priority management is called the "scheduler" and is responsible for juggling many
 different types of work simultaneously.
 
 # How does it work?
@@ -155,7 +155,7 @@ impl Scheduler {
     pub fn new() -> Self {
         /*
         Preallocate 2000 elements and 100 scopes to avoid dynamic allocation.
-        Perhaps this should be configurable?
+        Perhaps this should be configurable from some external config?
         */
         let components = Rc::new(UnsafeCell::new(Slab::with_capacity(100)));
         let raw_elements = Rc::new(UnsafeCell::new(Slab::with_capacity(2000)));
@@ -283,19 +283,12 @@ impl Scheduler {
 
     // nothing to do, no events on channels, no work
     pub fn has_any_work(&self) -> bool {
-        self.has_work() || self.has_pending_events() || self.has_pending_garbage()
+        let pending_lanes = self.lanes.iter().find(|f| f.has_work()).is_some();
+        pending_lanes || self.has_pending_events()
     }
 
     pub fn has_pending_events(&self) -> bool {
         self.ui_events.len() > 0
-    }
-
-    pub fn has_work(&self) -> bool {
-        self.lanes.iter().find(|f| f.has_work()).is_some()
-    }
-
-    pub fn has_pending_garbage(&self) -> bool {
-        !self.garbage_scopes.is_empty()
     }
 
     fn shift_priorities(&mut self) {
@@ -311,6 +304,9 @@ impl Scheduler {
             (false, false, false, _) => EventPriority::Low,
         };
     }
+
+    /// re-balance the work lanes, ensuring high-priority work properly bumps away low priority work
+    fn balance_lanes(&mut self) {}
 
     fn load_current_lane(&mut self) -> &mut PriorityLane {
         match self.current_priority {
@@ -335,6 +331,29 @@ impl Scheduler {
         }
     }
 
+    /// Work the scheduler down, not polling any ongoing tasks.
+    ///
+    /// Will use the standard priority-based scheduling, batching, etc, but just won't interact with the async reactor.
+    pub fn work_sync<'a>(&'a mut self) -> Vec<Mutations<'a>> {
+        let mut committed_mutations = Vec::<Mutations<'static>>::new();
+
+        // Internalize any pending work since the last time we ran
+        self.manually_poll_events();
+
+        if !self.has_any_work() {
+            self.pool.clean_up_garbage();
+        }
+
+        while self.has_any_work() {
+            // do work
+
+            // Create work from the pending event queue
+            self.consume_pending_events();
+        }
+
+        committed_mutations
+    }
+
     /// The primary workhorse of the VirtualDOM.
     ///
     /// Uses some fairly complex logic to schedule what work should be produced.
@@ -342,7 +361,7 @@ impl Scheduler {
     /// Returns a list of successful mutations.
     pub async fn work_with_deadline<'a>(
         &'a mut self,
-        mut deadline: Pin<Box<impl FusedFuture<Output = ()>>>,
+        mut deadline_reached: Pin<Box<impl FusedFuture<Output = ()>>>,
     ) -> Vec<Mutations<'a>> {
         /*
         Strategy:
@@ -374,7 +393,7 @@ impl Scheduler {
             // Wait for any new events if we have nothing to do
             if !self.has_any_work() {
                 self.pool.clean_up_garbage();
-                let deadline_expired = self.wait_for_any_trigger(&mut deadline).await;
+                let deadline_expired = self.wait_for_any_trigger(&mut deadline_reached).await;
 
                 if deadline_expired {
                     return committed_mutations;
@@ -384,63 +403,71 @@ impl Scheduler {
             // Create work from the pending event queue
             self.consume_pending_events();
 
-            // Work through the current subtree, and commit the results when it finishes
-            // When the deadline expires, give back the work
+            // shift to the correct lane
             self.shift_priorities();
 
-            let saved_state = self.load_work();
+            let mut deadline_reached = || (&mut deadline_reached).now_or_never().is_some();
 
-            // We have to split away some parts of ourself - current lane is borrowed mutably
-            let mut shared = self.pool.clone();
-            let mut machine = unsafe { saved_state.promote(&mut shared) };
+            let finished_before_deadline =
+                self.work_on_current_lane(&mut deadline_reached, &mut committed_mutations);
 
-            if machine.stack.is_empty() {
-                let shared = self.pool.clone();
-                self.current_lane().dirty_scopes.sort_by(|a, b| {
-                    let h1 = shared.get_scope(*a).unwrap().height;
-                    let h2 = shared.get_scope(*b).unwrap().height;
-                    h1.cmp(&h2)
-                });
-
-                if let Some(scope) = self.current_lane().dirty_scopes.pop() {
-                    let component = self.pool.get_scope(scope).unwrap();
-                    let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                    machine.stack.push(DiffInstruction::DiffNode { new, old });
-                }
-            }
-
-            let completed = {
-                let fut = machine.work();
-                pin_mut!(fut);
-                use futures_util::future::{select, Either};
-                match select(fut, &mut deadline).await {
-                    Either::Left((_, _other)) => true,
-                    Either::Right((_, _other)) => false,
-                }
-            };
-
-            let machine: DiffMachine<'static> = unsafe { std::mem::transmute(machine) };
-            let mut saved = machine.save();
-
-            if completed {
-                for node in saved.seen_scopes.drain() {
-                    self.current_lane().dirty_scopes.remove(&node);
-                }
-
-                let mut new_mutations = Mutations::new();
-                std::mem::swap(&mut new_mutations, &mut saved.mutations);
-
-                committed_mutations.push(new_mutations);
-            }
-
-            self.save_work(saved);
-
-            if !completed {
+            if !finished_before_deadline {
                 break;
             }
         }
 
         committed_mutations
+    }
+
+    // returns true if the lane is finished
+    pub fn work_on_current_lane(
+        &mut self,
+        deadline_reached: &mut impl FnMut() -> bool,
+        mutations: &mut Vec<Mutations>,
+    ) -> bool {
+        // Work through the current subtree, and commit the results when it finishes
+        // When the deadline expires, give back the work
+        let saved_state = self.load_work();
+
+        // We have to split away some parts of ourself - current lane is borrowed mutably
+        let mut shared = self.pool.clone();
+        let mut machine = unsafe { saved_state.promote(&mut shared) };
+
+        if machine.stack.is_empty() {
+            let shared = self.pool.clone();
+            self.current_lane().dirty_scopes.sort_by(|a, b| {
+                let h1 = shared.get_scope(*a).unwrap().height;
+                let h2 = shared.get_scope(*b).unwrap().height;
+                h1.cmp(&h2)
+            });
+
+            if let Some(scope) = self.current_lane().dirty_scopes.pop() {
+                let component = self.pool.get_scope(scope).unwrap();
+                let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                machine.stack.push(DiffInstruction::DiffNode { new, old });
+            }
+        }
+
+        let deadline_expired = machine.work(deadline_reached);
+
+        let machine: DiffMachine<'static> = unsafe { std::mem::transmute(machine) };
+        let mut saved = machine.save();
+
+        if deadline_expired {
+            self.save_work(saved);
+            false
+        } else {
+            for node in saved.seen_scopes.drain() {
+                self.current_lane().dirty_scopes.remove(&node);
+            }
+
+            let mut new_mutations = Mutations::new();
+            std::mem::swap(&mut new_mutations, &mut saved.mutations);
+
+            mutations.push(new_mutations);
+            self.save_work(saved);
+            true
+        }
     }
 
     // waits for a trigger, canceling early if the deadline is reached
@@ -537,16 +564,32 @@ impl TaskHandle {
     /// Toggles this coroutine off/on.
     ///
     /// This method is not synchronous - your task will not stop immediately.
-    pub fn toggle(&self) {}
+    pub fn toggle(&self) {
+        self.sender
+            .unbounded_send(SchedulerMsg::ToggleTask(self.our_id))
+            .unwrap()
+    }
 
     /// This method is not synchronous - your task will not stop immediately.
-    pub fn start(&self) {}
+    pub fn resume(&self) {
+        self.sender
+            .unbounded_send(SchedulerMsg::ResumeTask(self.our_id))
+            .unwrap()
+    }
 
     /// This method is not synchronous - your task will not stop immediately.
-    pub fn stop(&self) {}
+    pub fn stop(&self) {
+        self.sender
+            .unbounded_send(SchedulerMsg::ToggleTask(self.our_id))
+            .unwrap()
+    }
 
     /// This method is not synchronous - your task will not stop immediately.
-    pub fn restart(&self) {}
+    pub fn restart(&self) {
+        self.sender
+            .unbounded_send(SchedulerMsg::ToggleTask(self.our_id))
+            .unwrap()
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -589,9 +632,9 @@ impl ElementId {
 /// flushed before proceeding. Multiple discrete events is highly unlikely, though.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub enum EventPriority {
-    /// Work that must be completed during the EventHandler phase
+    /// Work that must be completed during the EventHandler phase.
     ///
-    ///
+    /// Currently this is reserved for controlled inputs.
     Immediate = 3,
 
     /// "High Priority" work will not interrupt other high priority work, but will interrupt medium and low priority work.

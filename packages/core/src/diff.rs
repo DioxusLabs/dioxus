@@ -88,9 +88,8 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
-use crate::{innerlude::*, scheduler::Scheduler};
+use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
-use slab::Slab;
 use DomEdit::*;
 
 /// Our DiffMachine is an iterative tree differ.
@@ -154,14 +153,7 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    // pub fn new_headless(shared: &'bump SharedResources) -> Self {
-    //     let edits = Mutations::new();
-    //     let cur_scope = ScopeId(0);
-    //     Self::new(edits, cur_scope, shared)
-    // }
-
-    //
-    pub async fn diff_scope(&'bump mut self, id: ScopeId) {
+    pub fn diff_scope(&'bump mut self, id: ScopeId) {
         if let Some(component) = self.vdom.get_scope_mut(id) {
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             self.stack.push(DiffInstruction::DiffNode { new, old });
@@ -173,7 +165,9 @@ impl<'bump> DiffMachine<'bump> {
     /// This method implements a depth-first iterative tree traversal.
     ///
     /// We do depth-first to maintain high cache locality (nodes were originally generated recursively).
-    pub async fn work(&mut self) {
+    ///
+    /// Returns a `bool` indicating that the work completed properly.
+    pub fn work(&mut self, deadline_expired: &mut impl FnMut() -> bool) -> bool {
         while let Some(instruction) = self.stack.pop() {
             // defer to individual functions so the compiler produces better code
             // large functions tend to be difficult for the compiler to work with
@@ -193,9 +187,12 @@ impl<'bump> DiffMachine<'bump> {
                 DiffInstruction::PrepareMoveNode { node } => self.prepare_move_node(node),
             };
 
-            // todo: call this less frequently, there is a bit of overhead involved
-            yield_now().await;
+            if deadline_expired() {
+                return false;
+            }
         }
+
+        true
     }
 
     fn prepare_move_node(&mut self, node: &'bump VNode<'bump>) {

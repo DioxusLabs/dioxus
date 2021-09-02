@@ -209,13 +209,14 @@ impl VirtualDom {
             .get_scope_mut(self.base_scope)
             .expect("The base scope should never be moved");
 
-        // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
+        // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope(&self.scheduler.pool) {
             diff_machine
                 .stack
                 .create_node(cur_component.frames.fin_head(), MountType::Append);
             diff_machine.stack.scope_stack.push(self.base_scope);
-            diff_machine.work().await;
+
+            // let completed = diff_machine.work();
         } else {
             // todo: should this be a hard error?
             log::warn!(
@@ -227,19 +228,7 @@ impl VirtualDom {
         unsafe { std::mem::transmute(diff_machine.mutations) }
     }
 
-    pub fn diff_sync<'s>(&'s mut self) -> Mutations<'s> {
-        let mut fut = self.diff_async().boxed_local();
-
-        loop {
-            if let Some(edits) = (&mut fut).now_or_never() {
-                break edits;
-            }
-        }
-    }
-
-    pub async fn diff_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut diff_machine = DiffMachine::new(Mutations::new(), todo!());
-
+    pub fn diff<'s>(&'s mut self) -> Mutations<'s> {
         let cur_component = self
             .scheduler
             .pool
@@ -247,22 +236,24 @@ impl VirtualDom {
             .expect("The base scope should never be moved");
 
         if cur_component.run_scope(&self.scheduler.pool) {
-            diff_machine.diff_scope(self.base_scope).await;
+            let mut diff_machine = DiffMachine::new(Mutations::new(), todo!());
+            diff_machine.diff_scope(self.base_scope);
+            diff_machine.mutations
+        } else {
+            Mutations::new()
         }
-
-        diff_machine.mutations
     }
 
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
     ///
-    /// This method will not wait for any suspended nodes to complete.
-    pub fn run_immediate<'s>(&'s mut self) -> Mutations<'s> {
-        todo!()
-        // use futures_util::FutureExt;
-        // let mut is_ready = || false;
-        // self.run_with_deadline(futures_util::future::ready(()), &mut is_ready)
-        //     .now_or_never()
-        //     .expect("this future will always resolve immediately")
+    /// This method will not wait for any suspended nodes to complete. If there is no pending work, then this method will
+    /// return "None"
+    pub fn run_immediate<'s>(&'s mut self) -> Option<Vec<Mutations<'s>>> {
+        if self.scheduler.has_any_work() {
+            Some(self.scheduler.work_sync())
+        } else {
+            None
+        }
     }
 
     /// Run the virtualdom with a deadline.

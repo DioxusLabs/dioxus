@@ -47,7 +47,7 @@ pub static Example: FC<()> = |cx| {
             }
             button {
                 "Start counting"
-                onclick: move |_| task.start()
+                onclick: move |_| task.resume()
             }
             button {
                 "Switch counting direcion"
