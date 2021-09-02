@@ -340,7 +340,7 @@ impl Scheduler {
         self.manually_poll_events();
 
         if !self.has_any_work() {
-            self.pool.clean_up_garbage();
+            self.clean_up_garbage();
             return committed_mutations;
         }
 
@@ -392,7 +392,7 @@ impl Scheduler {
 
             // Wait for any new events if we have nothing to do
             if !self.has_any_work() {
-                self.pool.clean_up_garbage();
+                self.clean_up_garbage();
                 let deadline_expired = self.wait_for_any_trigger(&mut deadline_reached).await;
 
                 if deadline_expired {
@@ -437,6 +437,7 @@ impl Scheduler {
 
         if machine.stack.is_empty() {
             let shared = self.pool.clone();
+
             self.current_lane().dirty_scopes.sort_by(|a, b| {
                 let h1 = shared.get_scope(*a).unwrap().height;
                 let h2 = shared.get_scope(*b).unwrap().height;
@@ -530,6 +531,65 @@ impl Scheduler {
         //     EventPriority::Medium => self.medium_priority.dirty_scopes.insert(scope),
         //     EventPriority::Low => self.low_priority.dirty_scopes.insert(scope),
         // };
+    }
+
+    fn collect_garbage(&mut self, id: ElementId) {
+        //
+    }
+
+    pub fn clean_up_garbage(&mut self) {
+        let mut scopes_to_kill = Vec::new();
+        let mut garbage_list = Vec::new();
+
+        for scope in self.garbage_scopes.drain() {
+            let scope = self.pool.get_scope_mut(scope).unwrap();
+            for node in scope.consume_garbage() {
+                garbage_list.push(node);
+            }
+
+            while let Some(node) = garbage_list.pop() {
+                match &node {
+                    VNode::Text(_) => {
+                        self.pool.collect_garbage(node.mounted_id());
+                    }
+                    VNode::Anchor(_) => {
+                        self.pool.collect_garbage(node.mounted_id());
+                    }
+                    VNode::Suspended(_) => {
+                        self.pool.collect_garbage(node.mounted_id());
+                    }
+
+                    VNode::Element(el) => {
+                        self.pool.collect_garbage(node.mounted_id());
+                        for child in el.children {
+                            garbage_list.push(child);
+                        }
+                    }
+
+                    VNode::Fragment(frag) => {
+                        for child in frag.children {
+                            garbage_list.push(child);
+                        }
+                    }
+
+                    VNode::Component(comp) => {
+                        // TODO: run the hook destructors and then even delete the scope
+
+                        let scope_id = comp.associated_scope.get().unwrap();
+                        let scope = self.pool.get_scope(scope_id).unwrap();
+                        let root = scope.root();
+
+                        garbage_list.push(root);
+                        scopes_to_kill.push(scope_id);
+                    }
+                }
+            }
+        }
+
+        for scope in scopes_to_kill.drain(..) {
+            //
+            // kill em
+        }
     }
 }
 
@@ -749,59 +809,4 @@ impl ResourcePool {
     }
 
     pub fn borrow_bumpframe(&self) {}
-
-    pub fn clean_up_garbage(&mut self) {
-        // let mut scopes_to_kill = Vec::new();
-        // let mut garbage_list = Vec::new();
-
-        todo!("garbage collection is currently immediate")
-        // for scope in self.garbage_scopes.drain() {
-        //     let scope = self.get_scope_mut(scope).unwrap();
-        //     for node in scope.consume_garbage() {
-        //         garbage_list.push(node);
-        //     }
-
-        //     while let Some(node) = garbage_list.pop() {
-        //         match &node {
-        //             VNode::Text(_) => {
-        //                 self.collect_garbage(node.direct_id());
-        //             }
-        //             VNode::Anchor(_) => {
-        //                 self.collect_garbage(node.direct_id());
-        //             }
-        //             VNode::Suspended(_) => {
-        //                 self.collect_garbage(node.direct_id());
-        //             }
-
-        //             VNode::Element(el) => {
-        //                 self.collect_garbage(node.direct_id());
-        //                 for child in el.children {
-        //                     garbage_list.push(child);
-        //                 }
-        //             }
-
-        //             VNode::Fragment(frag) => {
-        //                 for child in frag.children {
-        //                     garbage_list.push(child);
-        //                 }
-        //             }
-
-        //             VNode::Component(comp) => {
-        //                 // TODO: run the hook destructors and then even delete the scope
-
-        //                 let scope_id = comp.ass_scope.get().unwrap();
-        //                 let scope = self.get_scope(scope_id).unwrap();
-        //                 let root = scope.root();
-        //                 garbage_list.push(root);
-        //                 scopes_to_kill.push(scope_id);
-        //             }
-        //         }
-        //     }
-        // }
-
-        // for scope in scopes_to_kill.drain(..) {
-        //     //
-        //     // kill em
-        // }
-    }
 }
