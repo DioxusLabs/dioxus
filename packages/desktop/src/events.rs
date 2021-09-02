@@ -25,6 +25,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UiEvent {
     let scope = ScopeId(data.scope as usize);
     let mounted_dom_id = Some(ElementId(data.mounted_dom_id as usize));
     UiEvent {
+        name: todo!(),
         event,
         scope,
         mounted_dom_id,

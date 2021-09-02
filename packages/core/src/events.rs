@@ -13,7 +13,10 @@ pub struct UiEvent {
     /// The optional real node associated with the trigger
     pub mounted_dom_id: Option<ElementId>,
 
-    pub listener_type: &'static str,
+    /// The event type IE "onclick" or "onmouseover"
+    ///
+    /// The name that the renderer will use to mount the listener.
+    pub name: &'static str,
 
     /// The type of event
     pub event: SyntheticEvent,
@@ -405,6 +408,10 @@ pub mod on {
         ToggleEventInner(ToggleEvent): [
             ///
             ontoggle
+        ];
+
+        GenericEventInner(GenericEvent): [
+
         ];
     }
 

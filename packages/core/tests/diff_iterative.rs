@@ -43,6 +43,6 @@ async fn test_iterative_create_components() {
     let mutations = dom.rebuild_async().await;
     dbg!(mutations);
 
-    let mutations = dom.diff_async().await;
+    let mutations = dom.diff();
     dbg!(mutations);
 }

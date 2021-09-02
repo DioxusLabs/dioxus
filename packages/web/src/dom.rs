@@ -530,13 +530,13 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UiEvent> {
 
     let typ = event.type_();
 
-    use anyhow::Context;
+    // let attrs = target.attributes();
+    // for x in 0..attrs.length() {
+    //     let attr = attrs.item(x).unwrap();
+    //     log::debug!("attrs include: {:#?}", attr);
+    // }
 
-    let attrs = target.attributes();
-    for x in 0..attrs.length() {
-        let attr = attrs.item(x).unwrap();
-        log::debug!("attrs include: {:#?}", attr);
-    }
+    use anyhow::Context;
 
     // The error handling here is not very descriptive and needs to be replaced with a zero-cost error system
     let val: String = target
@@ -562,6 +562,7 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UiEvent> {
     // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
     Ok(UiEvent {
+        name: event_name_from_typ(&typ),
         event: virtual_event_from_websys_event(event.clone()),
         mounted_dom_id: Some(ElementId(real_id as usize)),
         scope: ScopeId(triggered_scope as usize),
@@ -577,4 +578,91 @@ pub fn load_document() -> Document {
         .expect("should have access to the Window")
         .document()
         .expect("should have access to the Document")
+}
+
+pub fn event_name_from_typ(typ: &str) -> &'static str {
+    match typ {
+        "copy" => "oncopy",
+        "cut" => "oncut",
+        "paste" => "onpaste",
+        "compositionend" => "oncompositionend",
+        "compositionstart" => "oncompositionstart",
+        "compositionupdate" => "oncompositionupdate",
+        "keydown" => "onkeydown",
+        "keypress" => "onkeypress",
+        "keyup" => "onkeyup",
+        "focus" => "onfocus",
+        "blur" => "onblur",
+        "change" => "onchange",
+        "input" => "oninput",
+        "invalid" => "oninvalid",
+        "reset" => "onreset",
+        "submit" => "onsubmit",
+        "click" => "onclick",
+        "contextmenu" => "oncontextmenu",
+        "doubleclick" => "ondoubleclick",
+        "drag" => "ondrag",
+        "dragend" => "ondragend",
+        "dragenter" => "ondragenter",
+        "dragexit" => "ondragexit",
+        "dragleave" => "ondragleave",
+        "dragover" => "ondragover",
+        "dragstart" => "ondragstart",
+        "drop" => "ondrop",
+        "mousedown" => "onmousedown",
+        "mouseenter" => "onmouseenter",
+        "mouseleave" => "onmouseleave",
+        "mousemove" => "onmousemove",
+        "mouseout" => "onmouseout",
+        "mouseover" => "onmouseover",
+        "mouseup" => "onmouseup",
+        "pointerdown" => "onpointerdown",
+        "pointermove" => "onpointermove",
+        "pointerup" => "onpointerup",
+        "pointercancel" => "onpointercancel",
+        "gotpointercapture" => "ongotpointercapture",
+        "lostpointercapture" => "onlostpointercapture",
+        "pointerenter" => "onpointerenter",
+        "pointerleave" => "onpointerleave",
+        "pointerover" => "onpointerover",
+        "pointerout" => "onpointerout",
+        "select" => "onselect",
+        "touchcancel" => "ontouchcancel",
+        "touchend" => "ontouchend",
+        "touchmove" => "ontouchmove",
+        "touchstart" => "ontouchstart",
+        "scroll" => "onscroll",
+        "wheel" => "onwheel",
+        "animationstart" => "onanimationstart",
+        "animationend" => "onanimationend",
+        "animationiteration" => "onanimationiteration",
+        "transitionend" => "ontransitionend",
+        "abort" => "onabort",
+        "canplay" => "oncanplay",
+        "canplaythrough" => "oncanplaythrough",
+        "durationchange" => "ondurationchange",
+        "emptied" => "onemptied",
+        "encrypted" => "onencrypted",
+        "ended" => "onended",
+        "error" => "onerror",
+        "loadeddata" => "onloadeddata",
+        "loadedmetadata" => "onloadedmetadata",
+        "loadstart" => "onloadstart",
+        "pause" => "onpause",
+        "play" => "onplay",
+        "playing" => "onplaying",
+        "progress" => "onprogress",
+        "ratechange" => "onratechange",
+        "seeked" => "onseeked",
+        "seeking" => "onseeking",
+        "stalled" => "onstalled",
+        "suspend" => "onsuspend",
+        "timeupdate" => "ontimeupdate",
+        "volumechange" => "onvolumechange",
+        "waiting" => "onwaiting",
+        "toggle" => "ontoggle",
+        _ => {
+            panic!("unsupported event type")
+        }
+    }
 }

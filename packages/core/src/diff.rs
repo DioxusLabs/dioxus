@@ -136,7 +136,7 @@ impl<'a> SavedDiffWork<'a> {
 }
 
 impl<'bump> DiffMachine<'bump> {
-    pub(crate) fn new(edits: Mutations<'bump>, shared: &'bump mut ResourcePool) -> Self {
+    pub(crate) fn new(edits: Mutations<'bump>, shared: &'bump ResourcePool) -> Self {
         Self {
             stack: DiffStack::new(),
             mutations: edits,
