@@ -231,7 +231,7 @@ impl Scope {
                     scope: &self,
                 },
             };
-            let n: DomTree<'a> = (_cb)(cx);
+            let new_node: DomTree<'a> = (_cb)(cx);
         }
     }
 
