@@ -1,12 +1,7 @@
 use bumpalo::Bump;
 
 use anyhow::{Context, Result};
-use dioxus::{
-    arena::SharedResources,
-    diff::{CreateMeta, DiffMachine},
-    prelude::*,
-    DomEdit,
-};
+use dioxus::{prelude::*, DomEdit};
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 
@@ -19,14 +14,9 @@ async fn event_queue_works() {
     };
 
     let mut dom = VirtualDom::new(App);
-    let edits = dom.rebuild().unwrap();
+    let edits = dom.rebuild();
 
     async_std::task::spawn_local(async move {
-        match dom.run_unbounded().await {
-            Err(_) => todo!(),
-            Ok(mutations) => {
-                //
-            }
-        }
+        // let mutations = dom.run_unbounded().await;
     });
 }

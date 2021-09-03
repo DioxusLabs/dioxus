@@ -6,7 +6,7 @@ pub static Example: FC<()> = |cx| {
         // Currently, SSR is only supported for whole VirtualDOMs
         // This is an easy/low hanging fruit to improve upon
         let mut dom = VirtualDom::new(SomeApp);
-        dom.rebuild_in_place().unwrap();
+        dom.rebuild();
         ssr::render_vdom(&dom, |c| c)
     });
 

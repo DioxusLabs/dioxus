@@ -19,7 +19,7 @@ fn app_runs() {
         cx.render(rsx!( div{"hello"} ))
     };
     let mut vdom = VirtualDom::new(App);
-    let edits = vdom.rebuild_in_place().unwrap();
+    let edits = vdom.rebuild();
     dbg!(edits);
 }
 
@@ -32,7 +32,7 @@ fn fragments_work() {
         ))
     };
     let mut vdom = VirtualDom::new(App);
-    let edits = vdom.rebuild_in_place().unwrap();
+    let edits = vdom.rebuild();
     // should result in a final "appendchildren n=2"
     dbg!(edits);
 }
@@ -46,7 +46,7 @@ fn lists_work() {
         ))
     };
     let mut vdom = VirtualDom::new(App);
-    let edits = vdom.rebuild_in_place().unwrap();
+    let edits = vdom.rebuild();
     dbg!(edits);
 }
 
@@ -61,10 +61,10 @@ fn conditional_rendering() {
     };
     let mut vdom = VirtualDom::new(App);
 
-    let edits = vdom.rebuild_in_place().unwrap();
-    dbg!(&edits);
+    let mutations = vdom.rebuild();
+    dbg!(&mutations);
     // the "false" fragment should generate an empty placeholder to re-visit
-    assert!(edits[edits.len() - 2].is("CreatePlaceholder"));
+    assert!(mutations.edits[mutations.edits.len() - 2].is("CreatePlaceholder"));
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn child_components() {
         ))
     };
     let mut vdom = VirtualDom::new(App);
-    let edits = vdom.rebuild_in_place().unwrap();
+    let edits = vdom.rebuild();
     dbg!(edits);
 }
 
@@ -94,6 +94,6 @@ fn suspended_works() {
     };
 
     let mut vdom = VirtualDom::new(App);
-    let edits = vdom.rebuild_in_place().unwrap();
+    let edits = vdom.rebuild();
     dbg!(edits);
 }

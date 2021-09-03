@@ -2,7 +2,7 @@ use crate::innerlude::*;
 use bumpalo::Bump;
 use std::cell::Cell;
 
-pub struct ActiveFrame {
+pub(crate) struct ActiveFrame {
     // We use a "generation" for users of contents in the bump frames to ensure their data isn't broken
     pub generation: Cell<usize>,
 
@@ -10,7 +10,7 @@ pub struct ActiveFrame {
     pub frames: [BumpFrame; 2],
 }
 
-pub struct BumpFrame {
+pub(crate) struct BumpFrame {
     pub bump: Bump,
     pub(crate) head_node: VNode<'static>,
 
@@ -40,10 +40,6 @@ impl ActiveFrame {
         self.wip_frame_mut().bump.reset()
     }
 
-    pub fn update_head_node<'a>(&mut self, node: VNode<'a>) {
-        self.wip_frame_mut().head_node = unsafe { std::mem::transmute(node) };
-    }
-
     /// The "work in progress frame" represents the frame that is currently being worked on.
     pub fn wip_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 0 {
@@ -67,12 +63,6 @@ impl ActiveFrame {
         }
     }
 
-    pub fn finished_frame_mut(&mut self) -> &mut BumpFrame {
-        match self.generation.get() & 1 == 1 {
-            true => &mut self.frames[0],
-            false => &mut self.frames[1],
-        }
-    }
     /// Give out our self-referential item with our own borrowed lifetime
     pub fn fin_head<'b>(&'b self) -> &'b VNode<'b> {
         let cur_head = &self.finished_frame().head_node;

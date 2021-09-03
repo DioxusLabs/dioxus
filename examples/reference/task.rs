@@ -30,7 +30,7 @@ pub static Example: FC<()> = |cx| {
 
     // Tasks are 'static, so we need to copy relevant items in
     let (async_count, dir) = (count.for_async(), *direction);
-    
+
     let (task, result) = use_task(cx, move || async move {
         loop {
             gloo_timers::future::TimeoutFuture::new(250).await;
@@ -47,7 +47,7 @@ pub static Example: FC<()> = |cx| {
             }
             button {
                 "Start counting"
-                onclick: move |_| task.start()
+                onclick: move |_| task.resume()
             }
             button {
                 "Switch counting direcion"

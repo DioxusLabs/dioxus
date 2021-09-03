@@ -1,14 +1,16 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 use dioxus_core::{
-    events::{EventTrigger, VirtualEvent},
+    events::{on::GenericEventInner, SyntheticEvent, UserEvent},
+    mutations::NodeRefMutation,
+    scheduler::SchedulerMsg,
     DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     window, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, Node, NodeList,
+    HtmlOptionElement, Node, NodeList, UiEvent,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};
@@ -23,7 +25,7 @@ pub struct WebsysDom {
 
     root: Element,
 
-    sender_callback: Rc<dyn Fn(EventTrigger)>,
+    sender_callback: Rc<dyn Fn(SchedulerMsg)>,
 
     // map of listener types to number of those listeners
     // This is roughly a delegater
@@ -38,7 +40,7 @@ pub struct WebsysDom {
     last_node_was_text: bool,
 }
 impl WebsysDom {
-    pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(EventTrigger)>) -> Self {
+    pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         let document = load_document();
 
         let mut nodes = NodeSlab::new(2000);
@@ -77,6 +79,18 @@ impl WebsysDom {
         }
     }
 
+    pub fn apply_refs(&mut self, refs: &[NodeRefMutation]) {
+        for item in refs {
+            if let Some(bla) = &item.element {
+                let node = self.nodes[item.element_id.as_u64() as usize]
+                    .as_ref()
+                    .unwrap()
+                    .clone();
+                bla.set(Box::new(node)).unwrap();
+            }
+        }
+    }
+
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
         for edit in edits.drain(..) {
             log::info!("Handling edit: {:#?}", edit);
@@ -84,26 +98,27 @@ impl WebsysDom {
                 DomEdit::PushRoot { id: root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
                 DomEdit::AppendChildren { many } => self.append_children(many),
-                DomEdit::ReplaceWith { n, m } => self.replace_with(n, m),
-                DomEdit::Remove => self.remove(),
+                DomEdit::ReplaceWith { m, root } => self.replace_with(m, root),
+                DomEdit::Remove { root } => self.remove(root),
                 DomEdit::RemoveAllChildren => self.remove_all_children(),
                 DomEdit::CreateTextNode { text, id } => self.create_text_node(text, id),
                 DomEdit::CreateElement { tag, id } => self.create_element(tag, None, id),
                 DomEdit::CreateElementNs { tag, id, ns } => self.create_element(tag, Some(ns), id),
                 DomEdit::CreatePlaceholder { id } => self.create_placeholder(id),
                 DomEdit::NewEventListener {
-                    event_name: event,
+                    event_name,
                     scope,
-                    mounted_node_id: node,
-                } => self.new_event_listener(event, scope, node),
+                    mounted_node_id,
+                } => self.new_event_listener(event_name, scope, mounted_node_id),
 
                 DomEdit::RemoveEventListener { event } => todo!(),
+
                 DomEdit::SetText { text } => self.set_text(text),
                 DomEdit::SetAttribute { field, value, ns } => self.set_attribute(field, value, ns),
                 DomEdit::RemoveAttribute { name } => self.remove_attribute(name),
 
-                DomEdit::InsertAfter { n } => self.insert_after(n),
-                DomEdit::InsertBefore { n } => self.insert_before(n),
+                DomEdit::InsertAfter { n, root } => self.insert_after(n, root),
+                DomEdit::InsertBefore { n, root } => self.insert_before(n, root),
             }
         }
     }
@@ -118,14 +133,13 @@ impl WebsysDom {
 
         self.stack.push(real_node);
     }
+
     // drop the node off the stack
     fn pop(&mut self) {
         self.stack.pop();
     }
 
     fn append_children(&mut self, many: u32) {
-        log::debug!("Called [`append_child`]");
-
         let root: Node = self
             .stack
             .list
@@ -133,9 +147,11 @@ impl WebsysDom {
             .unwrap()
             .clone();
 
-        for _ in 0..many {
-            let child = self.stack.pop();
-
+        for child in self
+            .stack
+            .list
+            .drain((self.stack.list.len() - many as usize)..)
+        {
             if child.dyn_ref::<web_sys::Text>().is_some() {
                 if self.last_node_was_text {
                     let comment_node = self
@@ -143,75 +159,46 @@ impl WebsysDom {
                         .create_comment("dioxus")
                         .dyn_into::<Node>()
                         .unwrap();
-                    self.stack.top().append_child(&comment_node).unwrap();
+                    root.append_child(&comment_node).unwrap();
                 }
                 self.last_node_was_text = true;
             } else {
                 self.last_node_was_text = false;
             }
-
             root.append_child(&child).unwrap();
         }
     }
 
-    fn replace_with(&mut self, n: u32, m: u32) {
-        log::debug!("Called [`replace_with`]");
+    fn replace_with(&mut self, m: u32, root: u64) {
+        let old = self.nodes[root as usize].as_ref().unwrap();
 
-        let mut new_nodes = vec![];
-        for _ in 0..m {
-            new_nodes.push(self.stack.pop());
+        let arr: js_sys::Array = self
+            .stack
+            .list
+            .drain((self.stack.list.len() - m as usize)..)
+            .collect();
+
+        if let Some(el) = old.dyn_ref::<Element>() {
+            el.replace_with_with_node(&arr).unwrap();
+        } else if let Some(el) = old.dyn_ref::<web_sys::CharacterData>() {
+            el.replace_with_with_node(&arr).unwrap();
+        } else if let Some(el) = old.dyn_ref::<web_sys::DocumentType>() {
+            el.replace_with_with_node(&arr).unwrap();
         }
-
-        let mut old_nodes = vec![];
-        for _ in 0..n {
-            old_nodes.push(self.stack.pop());
-        }
-
-        for node in &old_nodes[1..] {
-            node.dyn_ref::<Element>().unwrap().remove();
-        }
-
-        let old = old_nodes[0].clone();
-        let arr: js_sys::Array = new_nodes.iter().collect();
-        let el = old.dyn_into::<Element>().unwrap();
-        el.replace_with_with_node(&arr).unwrap();
-        // let arr = js_sys::Array::from();
-
-        // TODO: use different-sized replace withs
-        // if m == 1 {
-        //     if old_node.has_type::<Element>() {
-        //         old_node
-        //             .dyn_ref::<Element>()
-        //             .unwrap()
-        //             .replace_with_with_node_1(&new_node)
-        //             .unwrap();
-        //     } else if old_node.has_type::<web_sys::CharacterData>() {
-        //         old_node
-        //             .dyn_ref::<web_sys::CharacterData>()
-        //             .unwrap()
-        //             .replace_with_with_node_1(&new_node)
-        //             .unwrap();
-        //     } else if old_node.has_type::<web_sys::DocumentType>() {
-        //         old_node
-        //             .dyn_ref::<web_sys::DocumentType>()
-        //             .unwrap()
-        //             .replace_with_with_node_1(&new_node)
-        //             .unwrap();
-        //     } else {
-        //         panic!("Cannot replace node: {:?}", old_node);
-        //     }
-        // }
-
-        // self.stack.push(new_node);
     }
 
-    fn remove(&mut self) {
-        log::debug!("Called [`remove`]");
-        todo!()
+    fn remove(&mut self, root: u64) {
+        let node = self.nodes[root as usize].as_ref().unwrap();
+        if let Some(element) = node.dyn_ref::<Element>() {
+            element.remove();
+        } else {
+            if let Some(parent) = node.parent_node() {
+                parent.remove_child(&node).unwrap();
+            }
+        }
     }
 
     fn remove_all_children(&mut self) {
-        log::debug!("Called [`remove_all_children`]");
         todo!()
     }
 
@@ -219,22 +206,22 @@ impl WebsysDom {
         self.create_element("pre", None, id);
         self.set_attribute("hidden", "", None);
     }
-    fn create_text_node(&mut self, text: &str, id: u64) {
-        // let nid = self.node_counter.next();
 
+    fn create_text_node(&mut self, text: &str, id: u64) {
         let textnode = self
             .document
             .create_text_node(text)
             .dyn_into::<Node>()
             .unwrap();
 
-        let id = id as usize;
         self.stack.push(textnode.clone());
-        self.nodes[id] = Some(textnode);
+
+        self.nodes[(id as usize)] = Some(textnode);
     }
 
     fn create_element(&mut self, tag: &str, ns: Option<&'static str>, id: u64) {
         let tag = wasm_bindgen::intern(tag);
+
         let el = match ns {
             Some(ns) => self
                 .document
@@ -249,18 +236,12 @@ impl WebsysDom {
                 .dyn_into::<Node>()
                 .unwrap(),
         };
-        let id = id as usize;
 
         self.stack.push(el.clone());
-        self.nodes[id] = Some(el);
-        // let nid = self.node_counter.?next();
-        // let nid = self.nodes.insert(el).data().as_ffi();
-        // log::debug!("Called [`create_element`]: {}, {:?}", tag, nid);
-        // ElementId::new(nid)
+        self.nodes[(id as usize)] = Some(el);
     }
 
     fn new_event_listener(&mut self, event: &'static str, scope: ScopeId, real_id: u64) {
-        // let (_on, event) = event.split_at(2);
         let event = wasm_bindgen::intern(event);
 
         // attach the correct attributes to the element
@@ -297,7 +278,7 @@ impl WebsysDom {
                 // "Result" cannot be received from JS
                 // Instead, we just build and immediately execute a closure that returns result
                 match decode_trigger(event) {
-                    Ok(synthetic_event) => trigger.as_ref()(synthetic_event),
+                    Ok(synthetic_event) => trigger.as_ref()(SchedulerMsg::UiEvent(synthetic_event)),
                     Err(e) => log::error!("Error decoding Dioxus event attribute. {:#?}", e),
                 };
             }) as Box<dyn FnMut(&Event)>);
@@ -320,7 +301,8 @@ impl WebsysDom {
     }
 
     fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
-        if let Some(el) = self.stack.top().dyn_ref::<Element>() {
+        let node = self.stack.top();
+        if let Some(el) = node.dyn_ref::<Element>() {
             match ns {
                 // inline style support
                 Some("style") => {
@@ -330,11 +312,20 @@ impl WebsysDom {
                 }
                 _ => el.set_attribute(name, value).unwrap(),
             }
-            match name {
-                "value" => {}
-                "checked" => {}
-                "selected" => {}
-                _ => {}
+        }
+
+        if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
+            if name == "value" {
+                node.set_value(value);
+            }
+            if name == "checked" {
+                node.set_checked(true);
+            }
+        }
+
+        if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
+            if name == "selected" {
+                node.set_selected(true);
             }
         }
     }
@@ -361,49 +352,52 @@ impl WebsysDom {
         }
     }
 
-    fn insert_after(&mut self, n: u32) {
-        let mut new_nodes = vec![];
-        for _ in 0..n {
-            new_nodes.push(self.stack.pop());
-        }
+    fn insert_after(&mut self, n: u32, root: u64) {
+        let old = self.nodes[root as usize].as_ref().unwrap();
 
-        let after = self.stack.top().clone();
-        let arr: js_sys::Array = new_nodes.iter().collect();
-
-        let el = after.dyn_into::<Element>().unwrap();
-        el.after_with_node(&arr).unwrap();
-        // let mut old_nodes = vec![];
-        // for _ in 0..n {
-        //     old_nodes.push(self.stack.pop());
-        // }
-
-        // let el = self.stack.top();
-    }
-
-    fn insert_before(&mut self, n: u32) {
-        let n = n as usize;
-        let root = self
+        let arr: js_sys::Array = self
             .stack
             .list
-            .get(self.stack.list.len() - n)
-            .unwrap()
-            .clone();
-        for _ in 0..n {
-            let el = self.stack.pop();
-            root.insert_before(&el, None).unwrap();
+            .drain((self.stack.list.len() - n as usize)..)
+            .collect();
+
+        if let Some(el) = old.dyn_ref::<Element>() {
+            el.after_with_node(&arr).unwrap();
+        } else if let Some(el) = old.dyn_ref::<web_sys::CharacterData>() {
+            el.after_with_node(&arr).unwrap();
+        } else if let Some(el) = old.dyn_ref::<web_sys::DocumentType>() {
+            el.after_with_node(&arr).unwrap();
         }
     }
-}
 
-impl<'a> dioxus_core::diff::RealDom for WebsysDom {
-    // fn request_available_node(&mut self) -> ElementId {
-    //     let key = self.nodes.insert(None);
-    //     log::debug!("making new key: {:#?}", key);
-    //     ElementId(key.data().as_ffi())
-    // }
+    fn insert_before(&mut self, n: u32, root: u64) {
+        let after = self.nodes[root as usize].as_ref().unwrap();
 
-    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-        todo!()
+        if n == 1 {
+            let before = self.stack.pop();
+
+            after
+                .parent_node()
+                .unwrap()
+                .insert_before(&before, Some(&after))
+                .unwrap();
+
+            after.insert_before(&before, None).unwrap();
+        } else {
+            let arr: js_sys::Array = self
+                .stack
+                .list
+                .drain((self.stack.list.len() - n as usize)..)
+                .collect();
+
+            if let Some(el) = after.dyn_ref::<Element>() {
+                el.before_with_node(&arr).unwrap();
+            } else if let Some(el) = after.dyn_ref::<web_sys::CharacterData>() {
+                el.before_with_node(&arr).unwrap();
+            } else if let Some(el) = after.dyn_ref::<web_sys::DocumentType>() {
+                el.before_with_node(&arr).unwrap();
+            }
+        }
     }
 }
 
@@ -443,287 +437,89 @@ impl Stack {
     }
 }
 
-fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
+fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
+    use crate::events::*;
     use dioxus_core::events::on::*;
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => {
-            struct WebsysClipboardEvent();
-            impl ClipboardEventInner for WebsysClipboardEvent {}
-            VirtualEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent())))
+            SyntheticEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent(event))))
         }
-
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: web_sys::CompositionEvent = event.clone().dyn_into().unwrap();
-            struct WebsysCompositionEvent(web_sys::CompositionEvent);
-            impl CompositionEventInner for WebsysCompositionEvent {
-                fn data(&self) -> String {
-                    todo!()
-                }
-            }
-            VirtualEvent::CompositionEvent(CompositionEvent(Rc::new(WebsysCompositionEvent(evt))))
+            SyntheticEvent::CompositionEvent(CompositionEvent(Rc::new(WebsysCompositionEvent(evt))))
         }
-
         "keydown" | "keypress" | "keyup" => {
-            struct Event(web_sys::KeyboardEvent);
-            impl KeyboardEventInner for Event {
-                fn char_code(&self) -> u32 {
-                    todo!()
-                }
-                fn key_code(&self) -> KeyCode {
-                    todo!()
-                }
-                fn ctrl_key(&self) -> bool {
-                    todo!()
-                }
-
-                fn key(&self) -> String {
-                    todo!()
-                }
-
-                fn locale(&self) -> String {
-                    todo!()
-                }
-
-                fn location(&self) -> usize {
-                    todo!()
-                }
-
-                fn meta_key(&self) -> bool {
-                    todo!()
-                }
-
-                fn repeat(&self) -> bool {
-                    todo!()
-                }
-
-                fn shift_key(&self) -> bool {
-                    todo!()
-                }
-
-                fn which(&self) -> usize {
-                    todo!()
-                }
-
-                fn get_modifier_state(&self, key_code: usize) -> bool {
-                    todo!()
-                }
-            }
-            let evt: web_sys::KeyboardEvent = event.clone().dyn_into().unwrap();
-            VirtualEvent::KeyboardEvent(KeyboardEvent(Rc::new(Event(evt))))
+            let evt: web_sys::KeyboardEvent = event.dyn_into().unwrap();
+            SyntheticEvent::KeyboardEvent(KeyboardEvent(Rc::new(WebsysKeyboardEvent(evt))))
         }
-
         "focus" | "blur" => {
-            struct Event(web_sys::FocusEvent);
-            impl FocusEventInner for Event {}
-            let evt: web_sys::FocusEvent = event.clone().dyn_into().unwrap();
-            VirtualEvent::FocusEvent(FocusEvent(Rc::new(Event(evt))))
+            let evt: web_sys::FocusEvent = event.dyn_into().unwrap();
+            SyntheticEvent::FocusEvent(FocusEvent(Rc::new(WebsysFocusEvent(evt))))
         }
-
         "change" => {
-            // struct Event(web_sys::Event);
-            // impl GenericEventInner for Event {
-            //     fn bubbles(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn cancel_bubble(&self) {
-            //         todo!()
-            //     }
-
-            //     fn cancelable(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn composed(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn composed_path(&self) -> String {
-            //         todo!()
-            //     }
-
-            //     fn current_target(&self) {
-            //         todo!()
-            //     }
-
-            //     fn default_prevented(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn event_phase(&self) -> usize {
-            //         todo!()
-            //     }
-
-            //     fn is_trusted(&self) -> bool {
-            //         todo!()
-            //     }
-
-            //     fn prevent_default(&self) {
-            //         todo!()
-            //     }
-
-            //     fn stop_immediate_propagation(&self) {
-            //         todo!()
-            //     }
-
-            //     fn stop_propagation(&self) {
-            //         todo!()
-            //     }
-
-            //     fn target(&self) {
-            //         todo!()
-            //     }
-
-            //     fn time_stamp(&self) -> usize {
-            //         todo!()
-            //     }
-            // }
-            // let evt: web_sys::Event = event.clone().dyn_into().expect("wrong error typ");
-            // VirtualEvent::Event(GenericEvent(Rc::new(Event(evt))))
-            todo!()
+            let evt = event.dyn_into().unwrap();
+            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
-
         "input" | "invalid" | "reset" | "submit" => {
-            // is a special react events
-            let evt: web_sys::InputEvent = event.clone().dyn_into().expect("wrong event type");
-            let this: web_sys::EventTarget = evt.target().unwrap();
-
-            let value = (&this)
-                .dyn_ref()
-                .map(|input: &web_sys::HtmlInputElement| input.value())
-                .or_else(|| {
-                    (&this)
-                        .dyn_ref()
-                        .map(|input: &web_sys::HtmlTextAreaElement| input.value())
-                })
-                .or_else(|| {
-                    (&this)
-                        .dyn_ref::<web_sys::HtmlElement>()
-                        .unwrap()
-                        .text_content()
-                })
-                .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
-
-            todo!()
-            // VirtualEvent::FormEvent(FormEvent { value })
+            let evt: web_sys::InputEvent = event.clone().dyn_into().unwrap();
+            SyntheticEvent::FormEvent(FormEvent(Rc::new(WebsysFormEvent(evt))))
         }
-
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             let evt: web_sys::MouseEvent = event.clone().dyn_into().unwrap();
-
-            #[derive(Debug)]
-            pub struct CustomMouseEvent(web_sys::MouseEvent);
-            impl dioxus_core::events::on::MouseEventInner for CustomMouseEvent {
-                fn alt_key(&self) -> bool {
-                    self.0.alt_key()
-                }
-                fn button(&self) -> i16 {
-                    self.0.button()
-                }
-                fn buttons(&self) -> u16 {
-                    self.0.buttons()
-                }
-                fn client_x(&self) -> i32 {
-                    self.0.client_x()
-                }
-                fn client_y(&self) -> i32 {
-                    self.0.client_y()
-                }
-                fn ctrl_key(&self) -> bool {
-                    self.0.ctrl_key()
-                }
-                fn meta_key(&self) -> bool {
-                    self.0.meta_key()
-                }
-                fn page_x(&self) -> i32 {
-                    self.0.page_x()
-                }
-                fn page_y(&self) -> i32 {
-                    self.0.page_y()
-                }
-                fn screen_x(&self) -> i32 {
-                    self.0.screen_x()
-                }
-                fn screen_y(&self) -> i32 {
-                    self.0.screen_y()
-                }
-                fn shift_key(&self) -> bool {
-                    self.0.shift_key()
-                }
-
-                // yikes
-                // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values
-                fn get_modifier_state(&self, key_code: &str) -> bool {
-                    self.0.get_modifier_state(key_code)
-                }
-            }
-            VirtualEvent::MouseEvent(MouseEvent(Rc::new(CustomMouseEvent(evt))))
+            SyntheticEvent::MouseEvent(MouseEvent(Rc::new(WebsysMouseEvent(evt))))
         }
-
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             let evt: web_sys::PointerEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            SyntheticEvent::PointerEvent(PointerEvent(Rc::new(WebsysPointerEvent(evt))))
         }
-
         "select" => {
-            // let evt: web_sys::SelectionEvent = event.clone().dyn_into().unwrap();
-            // not required to construct anything special beyond standard event stuff
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            SyntheticEvent::SelectionEvent(SelectionEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
-
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
             let evt: web_sys::TouchEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            SyntheticEvent::TouchEvent(TouchEvent(Rc::new(WebsysTouchEvent(evt))))
         }
-
         "scroll" => {
-            // let evt: web_sys::UIEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
-
         "wheel" => {
             let evt: web_sys::WheelEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            SyntheticEvent::WheelEvent(WheelEvent(Rc::new(WebsysWheelEvent(evt))))
         }
         "animationstart" | "animationend" | "animationiteration" => {
             let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            SyntheticEvent::AnimationEvent(AnimationEvent(Rc::new(WebsysAnimationEvent(evt))))
         }
-
         "transitionend" => {
             let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            SyntheticEvent::TransitionEvent(TransitionEvent(Rc::new(WebsysTransitionEvent(evt))))
         }
-
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
-            // not required to construct anything special beyond standard event stuff
-
-            // let evt: web_sys::MediaEvent = event.clone().dyn_into().unwrap();
-            // let evt: web_sys::MediaEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            SyntheticEvent::MediaEvent(MediaEvent(Rc::new(WebsysMediaEvent(evt))))
         }
-
         "toggle" => {
-            // not required to construct anything special beyond standard event stuff (target)
-
-            // let evt: web_sys::ToggleEvent = event.clone().dyn_into().unwrap();
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            SyntheticEvent::ToggleEvent(ToggleEvent(Rc::new(WebsysToggleEvent(evt))))
         }
         _ => {
-            todo!()
+            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
     }
 }
 
 /// This function decodes a websys event and produces an EventTrigger
 /// With the websys implementation, we attach a unique key to the nodes
-fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
+fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
     log::debug!("Handling event!");
 
     let target = event
@@ -734,13 +530,13 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
 
     let typ = event.type_();
 
-    use anyhow::Context;
+    // let attrs = target.attributes();
+    // for x in 0..attrs.length() {
+    //     let attr = attrs.item(x).unwrap();
+    //     log::debug!("attrs include: {:#?}", attr);
+    // }
 
-    let attrs = target.attributes();
-    for x in 0..attrs.length() {
-        let attr = attrs.item(x).unwrap();
-        log::debug!("attrs include: {:#?}", attr);
-    }
+    use anyhow::Context;
 
     // The error handling here is not very descriptive and needs to be replaced with a zero-cost error system
     let val: String = target
@@ -765,12 +561,12 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<EventTrigger> {
     let triggered_scope = gi_id;
     // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
     log::debug!("Triggered scope is {:#?}", triggered_scope);
-    Ok(EventTrigger::new(
-        virtual_event_from_websys_event(event),
-        ScopeId(triggered_scope as usize),
-        Some(ElementId(real_id as usize)),
-        dioxus_core::events::EventPriority::High,
-    ))
+    Ok(UserEvent {
+        name: event_name_from_typ(&typ),
+        event: virtual_event_from_websys_event(event.clone()),
+        mounted_dom_id: Some(ElementId(real_id as usize)),
+        scope: ScopeId(triggered_scope as usize),
+    })
 }
 
 pub fn prepare_websys_dom() -> Element {
@@ -782,4 +578,91 @@ pub fn load_document() -> Document {
         .expect("should have access to the Window")
         .document()
         .expect("should have access to the Document")
+}
+
+pub fn event_name_from_typ(typ: &str) -> &'static str {
+    match typ {
+        "copy" => "oncopy",
+        "cut" => "oncut",
+        "paste" => "onpaste",
+        "compositionend" => "oncompositionend",
+        "compositionstart" => "oncompositionstart",
+        "compositionupdate" => "oncompositionupdate",
+        "keydown" => "onkeydown",
+        "keypress" => "onkeypress",
+        "keyup" => "onkeyup",
+        "focus" => "onfocus",
+        "blur" => "onblur",
+        "change" => "onchange",
+        "input" => "oninput",
+        "invalid" => "oninvalid",
+        "reset" => "onreset",
+        "submit" => "onsubmit",
+        "click" => "onclick",
+        "contextmenu" => "oncontextmenu",
+        "doubleclick" => "ondoubleclick",
+        "drag" => "ondrag",
+        "dragend" => "ondragend",
+        "dragenter" => "ondragenter",
+        "dragexit" => "ondragexit",
+        "dragleave" => "ondragleave",
+        "dragover" => "ondragover",
+        "dragstart" => "ondragstart",
+        "drop" => "ondrop",
+        "mousedown" => "onmousedown",
+        "mouseenter" => "onmouseenter",
+        "mouseleave" => "onmouseleave",
+        "mousemove" => "onmousemove",
+        "mouseout" => "onmouseout",
+        "mouseover" => "onmouseover",
+        "mouseup" => "onmouseup",
+        "pointerdown" => "onpointerdown",
+        "pointermove" => "onpointermove",
+        "pointerup" => "onpointerup",
+        "pointercancel" => "onpointercancel",
+        "gotpointercapture" => "ongotpointercapture",
+        "lostpointercapture" => "onlostpointercapture",
+        "pointerenter" => "onpointerenter",
+        "pointerleave" => "onpointerleave",
+        "pointerover" => "onpointerover",
+        "pointerout" => "onpointerout",
+        "select" => "onselect",
+        "touchcancel" => "ontouchcancel",
+        "touchend" => "ontouchend",
+        "touchmove" => "ontouchmove",
+        "touchstart" => "ontouchstart",
+        "scroll" => "onscroll",
+        "wheel" => "onwheel",
+        "animationstart" => "onanimationstart",
+        "animationend" => "onanimationend",
+        "animationiteration" => "onanimationiteration",
+        "transitionend" => "ontransitionend",
+        "abort" => "onabort",
+        "canplay" => "oncanplay",
+        "canplaythrough" => "oncanplaythrough",
+        "durationchange" => "ondurationchange",
+        "emptied" => "onemptied",
+        "encrypted" => "onencrypted",
+        "ended" => "onended",
+        "error" => "onerror",
+        "loadeddata" => "onloadeddata",
+        "loadedmetadata" => "onloadedmetadata",
+        "loadstart" => "onloadstart",
+        "pause" => "onpause",
+        "play" => "onplay",
+        "playing" => "onplaying",
+        "progress" => "onprogress",
+        "ratechange" => "onratechange",
+        "seeked" => "onseeked",
+        "seeking" => "onseeking",
+        "stalled" => "onstalled",
+        "suspend" => "onsuspend",
+        "timeupdate" => "ontimeupdate",
+        "volumechange" => "onvolumechange",
+        "waiting" => "onwaiting",
+        "toggle" => "ontoggle",
+        _ => {
+            panic!("unsupported event type")
+        }
+    }
 }

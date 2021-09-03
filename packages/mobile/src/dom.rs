@@ -1,6 +1,6 @@
 //! webview dom
 
-use dioxus_core::{DomEdit, ElementId, RealDom, ScopeId};
+use dioxus_core::{DomEdit, ElementId, ScopeId};
 use DomEdit::*;
 
 pub struct WebviewRegistry {}
@@ -28,11 +28,5 @@ impl WebviewDom<'_> {
     // Finish using the dom (for its edit list) and give back the node and event registry
     pub fn consume(self) -> WebviewRegistry {
         self.registry
-    }
-}
-impl<'bump> RealDom for WebviewDom<'bump> {
-    fn raw_node_as_any(&self) -> &mut dyn std::any::Any {
-        todo!()
-        // self.edits.push(PushRoot { root });
     }
 }

@@ -13,7 +13,7 @@ use dioxus::prelude::*;
 use dioxus::ssr;
 
 fn main() {
-    let mut vdom = VirtualDom::launch_in_place(App);
+    let vdom = VirtualDom::new(App);
     let content = ssr::render_vdom(&vdom, |f| f.pre_render(true));
 
     dioxus::desktop::launch(App, |c| c.with_prerendered(content)).unwrap();

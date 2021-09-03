@@ -13,7 +13,8 @@ fn main() {
     let mut file = File::create("example.html").unwrap();
 
     let mut dom = VirtualDom::new(App);
-    dom.rebuild_in_place().expect("failed to run virtualdom");
+
+    dom.rebuild();
 
     file.write_fmt(format_args!(
         "{}",

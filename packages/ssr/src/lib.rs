@@ -46,7 +46,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
 /// ```ignore
 /// static App: FC<()> = |cx| cx.render(rsx!(div { "hello world" }));
 /// let mut vdom = VirtualDom::new(App);
-/// vdom.rebuild_in_place();
+/// vdom.rebuild();
 ///
 /// let renderer = TextRenderer::new(&vdom);
 /// let output = format!("{}", renderer);
@@ -74,8 +74,8 @@ impl<'a> TextRenderer<'a> {
     }
 
     fn html_render(&self, node: &VNode, f: &mut std::fmt::Formatter, il: u16) -> std::fmt::Result {
-        match &node.kind {
-            VNodeKind::Text(text) => {
+        match &node {
+            VNode::Text(text) => {
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
@@ -83,7 +83,7 @@ impl<'a> TextRenderer<'a> {
                 }
                 write!(f, "{}", text.text)?
             }
-            VNodeKind::Anchor(anchor) => {
+            VNode::Anchor(anchor) => {
                 //
                 if self.cfg.indent {
                     for _ in 0..il {
@@ -92,7 +92,7 @@ impl<'a> TextRenderer<'a> {
                 }
                 write!(f, "<!-- -->")?;
             }
-            VNodeKind::Element(el) => {
+            VNode::Element(el) => {
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
@@ -129,7 +129,7 @@ impl<'a> TextRenderer<'a> {
                 //
                 // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
                 // them interpreter's stack
-                match (self.cfg.pre_render, node.try_direct_id()) {
+                match (self.cfg.pre_render, node.try_mounted_id()) {
                     (true, Some(id)) => {
                         write!(f, " dio_el=\"{}\"", id)?;
                         //
@@ -163,13 +163,13 @@ impl<'a> TextRenderer<'a> {
                     write!(f, "\n")?;
                 }
             }
-            VNodeKind::Fragment(frag) => {
+            VNode::Fragment(frag) => {
                 for child in frag.children {
                     self.html_render(child, f, il + 1)?;
                 }
             }
-            VNodeKind::Component(vcomp) => {
-                let idx = vcomp.ass_scope.get().unwrap();
+            VNode::Component(vcomp) => {
+                let idx = vcomp.associated_scope.get().unwrap();
                 match (self.vdom, self.cfg.skip_components) {
                     (Some(vdom), false) => {
                         let new_node = vdom.get_scope(idx).unwrap().root();
@@ -180,7 +180,7 @@ impl<'a> TextRenderer<'a> {
                     }
                 }
             }
-            VNodeKind::Suspended { .. } => {
+            VNode::Suspended { .. } => {
                 // we can't do anything with suspended nodes
             }
         }
@@ -286,28 +286,28 @@ mod tests {
     #[test]
     fn to_string_works() {
         let mut dom = VirtualDom::new(SIMPLE_APP);
-        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
     }
 
     #[test]
     fn hydration() {
         let mut dom = VirtualDom::new(NESTED_APP);
-        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c.pre_render(true)));
     }
 
     #[test]
     fn nested() {
         let mut dom = VirtualDom::new(NESTED_APP);
-        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
     }
 
     #[test]
     fn fragment_app() {
         let mut dom = VirtualDom::new(FRAGMENT_APP);
-        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
     }
 
@@ -319,7 +319,7 @@ mod tests {
         let mut file = File::create("index.html").unwrap();
 
         let mut dom = VirtualDom::new(SLIGHTLY_MORE_COMPLEX);
-        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dom.rebuild();
 
         file.write_fmt(format_args!(
             "{}",
@@ -337,7 +337,7 @@ mod tests {
         };
 
         let mut dom = VirtualDom::new(STLYE_APP);
-        dom.rebuild_in_place().expect("failed to run virtualdom");
+        dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
     }
 }
