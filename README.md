@@ -99,6 +99,16 @@ If you know React, then you already know Dioxus.
         <th><a href="http://github.com/jkelleyrtp/dioxus">Tools</a></th>
     <tr>
 </table>
+
+## Fun Examples:
+
+- File navigator (desktop app)
+- Bluetooth scanner (desktop app, possibly works on iOS)
+- Shopping app (liveview web and mobile app)
+- TODO MVC (works on all platforms)
+- Sierpinski's triangle (web SPA)
+- Doxie Documentation Library (Web SPA with Hydration)
+
 <!-- 
 currently commented out until we have more content on the website
 ## Explore
