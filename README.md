@@ -99,9 +99,9 @@ If you know React, then you already know Dioxus.
         <th><a href="http://github.com/jkelleyrtp/dioxus">Tools</a></th>
     <tr>
 </table>
-
+<!-- 
+currently commented out until we have more content on the website
 ## Explore
-
 - [**Fine-grained reactivity**: Skip the diff overhead with signals ](docs/guides/00-index.md)
 - [**HTML Templates**: Drop in existing HTML5 templates with html! macro](docs/guides/00-index.md)
 - [**RSX Templates**: Clean component design with rsx! macro](docs/guides/00-index.md)
@@ -112,15 +112,14 @@ If you know React, then you already know Dioxus.
 - [**Concurrency**: Drop in async where it fits and suspend components until new data is ready](docs/guides/01-ssr.md)
 - [**1st party hooks**: Cross-platform router hook](docs/guides/01-ssr.md)
 - [**Community hooks**: 3D renderers](docs/guides/01-ssr.md)
-
 ## Blog Posts
-
 - [Why we need a stronger typed web]()
 - [Isomorphic webapps in 10 minutes]()
 - [Rust is high level too]()
 - [Eliminating crashes with Rust webapps]()
 - [Tailwind for Dioxus]()
-- [The monoglot startup]()
+- [The monoglot startup]() 
+-->
 
 ## Why?
 
