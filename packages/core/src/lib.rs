@@ -4,7 +4,7 @@
 /*
 Navigating this crate:
 - virtual_dom: the primary entrypoint for the crate
-- scheduler: the core interior logic called by virtual_dom
+- scheduler: the core interior logic called by the [`VirtualDom`]
 - nodes: the definition of VNodes, listeners, etc.
 - diff: the stackmachine-based diffing algorithm
 - hooks: foundational hooks that require crate-private APIs

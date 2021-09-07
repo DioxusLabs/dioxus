@@ -7,38 +7,38 @@
 
 <div align="center">
   <!-- Crates version -->
-  <a href="https://crates.io/crates/async-imap">
-    <img src="https://img.shields.io/crates/v/async-imap.svg?style=flat-square"
+  <a href="https://crates.io/crates/dioxus">
+    <img src="https://img.shields.io/crates/v/dioxus.svg?style=flat-square"
     alt="Crates.io version" />
   </a>
   <!-- Downloads -->
-  <a href="https://crates.io/crates/async-imap">
-    <img src="https://img.shields.io/crates/d/async-imap.svg?style=flat-square"
+  <a href="https://crates.io/crates/dioxus">
+    <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square"
       alt="Download" />
   </a>
   <!-- docs.rs docs -->
-  <a href="https://docs.rs/async-imap">
+  <a href="https://docs.rs/dioxus">
     <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
       alt="docs.rs docs" />
   </a>
   <!-- CI -->
-  <a href="https://github.com/async-email/async-imap/actions">
-    <img src="https://github.com/async-email/async-imap/workflows/CI/badge.svg"
+  <a href="https://github.com/async-email/dioxus/actions">
+    <img src="https://github.com/async-email/dioxus/workflows/CI/badge.svg"
       alt="CI status" />
   </a>
 </div>
 
 <div align="center">
   <h3>
-    <a href="https://docs.rs/async-imap">
+    <a href="https://docs.rs/dioxus">
       API Docs
     </a>
     <span> | </span>
-    <a href="https://docs.rs/async-imap">
+    <a href="https://docs.rs/dioxus">
       Website
     </a>
     <span> | </span>
-    <a href="https://docs.rs/async-imap">
+    <a href="https://docs.rs/dioxus">
       Examples
     </a>
   </h3>
