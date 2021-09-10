@@ -64,7 +64,6 @@ impl<'a> Iterator for RealChildIterator<'a> {
                             .scopes
                             .get_scope(sc.associated_scope.get().unwrap())
                             .unwrap();
-                        // let scope = self.scopes.get(sc.ass_scope.get().unwrap()).unwrap();
 
                         // Simply swap the current node on the stack with the root of the component
                         *node = scope.frames.fin_head();

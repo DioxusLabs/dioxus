@@ -7,6 +7,32 @@
 
 use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 
+/// Create inline fragments using Component syntax.
+///
+/// Fragments capture a series of children without rendering extra nodes.
+///
+/// # Example
+///
+/// ```rust
+/// rsx!{
+///     Fragment { key: "abc" }
+/// }
+/// ```
+///
+/// # Details
+///
+/// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
+/// Try to avoid nesting fragments if you can. There is no protection against infinitely nested fragments.
+///
+/// This function defines a dedicated `Fragment` component that can be used to create inline fragments in the RSX macro.
+///
+/// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
+///
+#[allow(non_upper_case_globals, non_snake_case)]
+pub fn Fragment<'a>(cx: Context<'a, ()>) -> DomTree<'a> {
+    cx.render(LazyNodes::new(|f| f.fragment_from_iter(cx.children())))
+}
+
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
 /// on how to memoize the props and some additional optimizations that can be made. We strongly encourage using the
 /// derive macro to implement the `Properties` trait automatically as guarantee that your memoization strategy is safe.
@@ -44,7 +70,7 @@ pub trait Properties: Sized {
     const IS_STATIC: bool;
     fn builder() -> Self::Builder;
 
-    /// Memoization can only happen if the props are 'static
+    /// Memoization can only happen if the props are valid for the 'static lifetime
     /// The user must know if their props are static, but if they make a mistake, UB happens
     /// Therefore it's unsafe to memeoize.
     unsafe fn memoize(&self, other: &Self) -> bool;
@@ -74,25 +100,4 @@ impl EmptyBuilder {
 /// to initialize a component's props.
 pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
     T::builder()
-}
-
-/// Create inline fragments
-///
-/// Fragments capture a series of children without rendering extra nodes.
-///
-/// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
-/// Try to avoid nesting fragments if you can. Infinitely nested Fragments *will* cause diffing to crash.
-///
-/// This function defines a dedicated `Fragment` component that can be used to create inline fragments in the RSX macro.
-///
-/// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
-///
-/// ```rust
-/// rsx!{
-///     Fragment { key: "abc" }
-/// }
-/// ```
-#[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>(cx: Context<'a, ()>) -> DomTree<'a> {
-    cx.render(LazyNodes::new(move |f| f.fragment_from_iter(cx.children())))
 }

@@ -3,15 +3,10 @@ use smallvec::{smallvec, SmallVec};
 
 /// The stack instructions we use to diff and create new nodes.
 #[derive(Debug)]
-pub enum DiffInstruction<'a> {
-    DiffNode {
+pub(crate) enum DiffInstruction<'a> {
+    Diff {
         old: &'a VNode<'a>,
         new: &'a VNode<'a>,
-    },
-
-    DiffChildren {
-        old: &'a [VNode<'a>],
-        new: &'a [VNode<'a>],
     },
 
     Create {
@@ -19,7 +14,7 @@ pub enum DiffInstruction<'a> {
     },
 
     /// pushes the node elements onto the stack for use in mount
-    PrepareMoveNode {
+    PrepareMove {
         node: &'a VNode<'a>,
     },
 
@@ -35,7 +30,7 @@ pub enum MountType<'a> {
     Absorb,
     Append,
     Replace { old: &'a VNode<'a> },
-    ReplaceByElementId { el: ElementId },
+    ReplaceByElementId { el: Option<ElementId> },
     InsertAfter { other_node: &'a VNode<'a> },
     InsertBefore { other_node: &'a VNode<'a> },
 }
@@ -61,6 +56,10 @@ impl<'bump> DiffStack<'bump> {
 
     pub fn pop(&mut self) -> Option<DiffInstruction<'bump>> {
         self.instructions.pop()
+    }
+
+    pub fn pop_off_scope(&mut self) {
+        self.scope_stack.pop();
     }
 
     pub fn pop_scope(&mut self) -> Option<ScopeId> {

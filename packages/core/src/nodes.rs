@@ -26,6 +26,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
+    /// ```
     /// let node = cx.render(rsx!{ "hello" }).unwrap();
     ///
     /// if let VNode::Text(vtext) = node {
@@ -248,7 +249,7 @@ pub struct Listener<'bump> {
 
     /// The type of event to listen for.
     ///
-    /// IE "onclick" - whatever the renderer needs to attach the listener by name.
+    /// IE "click" - whatever the renderer needs to attach the listener by name.
     pub event: &'static str,
 
     pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(SyntheticEvent) + 'bump>>>,
@@ -283,8 +284,7 @@ pub struct VComponent<'src> {
 pub struct VSuspended<'a> {
     pub task_id: u64,
     pub dom_id: Cell<Option<ElementId>>,
-    pub(crate) callback:
-        RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> DomTree<'a>>>>,
+    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> DomTree<'a>>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.

@@ -31,7 +31,6 @@ pub struct Scope {
     pub(crate) frames: ActiveFrame,
     pub(crate) caller: Rc<WrappedCaller>,
     pub(crate) child_nodes: ScopeChildren<'static>,
-    pub(crate) pending_garbage: RefCell<Vec<*const VNode<'static>>>,
 
     // Listeners
     pub(crate) listeners: RefCell<Vec<*const Listener<'static>>>,
@@ -90,7 +89,6 @@ impl Scope {
             listeners: Default::default(),
             borrowed_props: Default::default(),
             descendents: Default::default(),
-            pending_garbage: Default::default(),
         }
     }
 
@@ -110,7 +108,6 @@ impl Scope {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
-
         self.ensure_drop_safety(pool);
 
         // Safety:
@@ -146,12 +143,6 @@ impl Scope {
     /// Refrences to hook data can only be stored in listeners and component props. During diffing, we make sure to log
     /// all listeners and borrowed props so we can clear them here.
     pub(crate) fn ensure_drop_safety(&mut self, pool: &ResourcePool) {
-        // make sure all garabge is collected before trying to proceed with anything else
-        debug_assert!(
-            self.pending_garbage.borrow().is_empty(),
-            "clean up your garabge please"
-        );
-
         // todo!("arch changes");
 
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
@@ -233,19 +224,6 @@ impl Scope {
             };
             let new_node: DomTree<'a> = (_cb)(cx);
         }
-    }
-
-    pub(crate) fn consume_garbage(&self) -> Vec<&VNode> {
-        self.pending_garbage
-            .borrow_mut()
-            .drain(..)
-            .map(|node| {
-                // safety: scopes cannot cycle without their garbage being collected. these nodes are safe
-                let node: &VNode<'static> = unsafe { &*node };
-                let node: &VNode = unsafe { std::mem::transmute(node) };
-                node
-            })
-            .collect::<Vec<_>>()
     }
 
     pub fn root(&self) -> &VNode {

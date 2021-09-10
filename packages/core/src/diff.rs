@@ -124,6 +124,7 @@ impl<'a> SavedDiffWork<'a> {
     pub unsafe fn extend(self: SavedDiffWork<'a>) -> SavedDiffWork<'static> {
         std::mem::transmute(self)
     }
+
     pub unsafe fn promote<'b>(self, vdom: &'b mut ResourcePool) -> DiffMachine<'b> {
         let extended: SavedDiffWork<'b> = std::mem::transmute(self);
         DiffMachine {
@@ -136,10 +137,10 @@ impl<'a> SavedDiffWork<'a> {
 }
 
 impl<'bump> DiffMachine<'bump> {
-    pub(crate) fn new(edits: Mutations<'bump>, shared: &'bump ResourcePool) -> Self {
+    pub(crate) fn new(mutations: Mutations<'bump>, shared: &'bump ResourcePool) -> Self {
         Self {
+            mutations,
             stack: DiffStack::new(),
-            mutations: edits,
             vdom: shared,
             seen_scopes: FxHashSet::default(),
         }
@@ -156,7 +157,7 @@ impl<'bump> DiffMachine<'bump> {
     pub fn diff_scope(&mut self, id: ScopeId) {
         if let Some(component) = self.vdom.get_scope_mut(id) {
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-            self.stack.push(DiffInstruction::DiffNode { new, old });
+            self.stack.push(DiffInstruction::Diff { new, old });
         }
     }
 
@@ -167,24 +168,14 @@ impl<'bump> DiffMachine<'bump> {
     /// We do depth-first to maintain high cache locality (nodes were originally generated recursively).
     ///
     /// Returns a `bool` indicating that the work completed properly.
-    pub fn work(&mut self, deadline_expired: &mut impl FnMut() -> bool) -> bool {
+    pub fn work(&mut self, mut deadline_expired: impl FnMut() -> bool) -> bool {
         while let Some(instruction) = self.stack.pop() {
-            // defer to individual functions so the compiler produces better code
-            // large functions tend to be difficult for the compiler to work with
             match instruction {
-                DiffInstruction::PopScope => {
-                    self.stack.pop_scope();
-                }
-
-                DiffInstruction::DiffNode { old, new, .. } => self.diff_node(old, new),
-
-                DiffInstruction::DiffChildren { old, new } => self.diff_children(old, new),
-
+                DiffInstruction::Diff { old, new } => self.diff_node(old, new),
                 DiffInstruction::Create { node } => self.create_node(node),
-
                 DiffInstruction::Mount { and } => self.mount(and),
-
-                DiffInstruction::PrepareMoveNode { node } => self.prepare_move_node(node),
+                DiffInstruction::PrepareMove { node } => self.prepare_move_node(node),
+                DiffInstruction::PopScope => self.stack.pop_off_scope(),
             };
 
             if deadline_expired() {
@@ -217,15 +208,21 @@ impl<'bump> DiffMachine<'bump> {
             }
 
             MountType::Replace { old } => {
-                let mut iter = RealChildIterator::new(old, self.vdom);
-                let first = iter.next().unwrap();
-                self.mutations
-                    .replace_with(first.mounted_id(), nodes_created as u32);
-                self.remove_nodes(iter);
+                if let Some(old_id) = old.try_mounted_id() {
+                    self.mutations.replace_with(old_id, nodes_created as u32);
+                } else {
+                    let mut iter = RealChildIterator::new(old, self.vdom);
+                    let first = iter.next().unwrap();
+                    self.mutations
+                        .replace_with(first.mounted_id(), nodes_created as u32);
+                    self.remove_nodes(iter);
+                }
             }
 
-            MountType::ReplaceByElementId { el: old } => {
-                self.mutations.replace_with(old, nodes_created as u32);
+            MountType::ReplaceByElementId { el } => {
+                if let Some(old) = el {
+                    self.mutations.replace_with(old, nodes_created as u32);
+                }
             }
 
             MountType::InsertAfter { other_node } => {
@@ -326,6 +323,7 @@ impl<'bump> DiffMachine<'bump> {
         let parent_idx = self.stack.current_scope().unwrap();
 
         let shared = self.vdom.channel.clone();
+
         // Insert a new scope into our component list
         let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
@@ -376,7 +374,9 @@ impl<'bump> DiffMachine<'bump> {
         match (old_node, new_node) {
             // Check the most common cases first
             (Text(old), Text(new)) => self.diff_text_nodes(old, new),
-            (Component(old), Component(new)) => self.diff_component_nodes(old, new),
+            (Component(old), Component(new)) => {
+                self.diff_component_nodes(old_node, new_node, old, new)
+            }
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
             (Suspended(old), Suspended(new)) => new.dom_id.set(old.dom_id.get()),
@@ -393,19 +393,19 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     fn diff_text_nodes(&mut self, old: &'bump VText<'bump>, new: &'bump VText<'bump>) {
-        let root = old.dom_id.get().unwrap();
+        if let Some(root) = old.dom_id.get() {
+            if old.text != new.text {
+                self.mutations.push_root(root);
+                self.mutations.set_text(new.text);
+                self.mutations.pop();
+            }
 
-        if old.text != new.text {
-            self.mutations.push_root(root);
-            self.mutations.set_text(new.text);
-            self.mutations.pop();
+            new.dom_id.set(Some(root));
         }
-
-        new.dom_id.set(Some(root));
     }
 
     fn diff_element_nodes(&mut self, old: &'bump VElement<'bump>, new: &'bump VElement<'bump>) {
-        let root = old.dom_id.get().unwrap();
+        let root = old.dom_id.get();
 
         // If the element type is completely different, the element needs to be re-rendered completely
         // This is an optimization React makes due to how users structure their code
@@ -417,21 +417,23 @@ impl<'bump> DiffMachine<'bump> {
             self.stack.push_nodes_created(0);
             self.stack.push(DiffInstruction::Mount {
                 and: MountType::ReplaceByElementId {
-                    el: old.dom_id.get().unwrap(),
+                    el: old.dom_id.get(),
                 },
             });
             self.create_element_node(new);
             return;
         }
 
-        new.dom_id.set(Some(root));
+        new.dom_id.set(root);
 
         // Don't push the root if we don't have to
         let mut has_comitted = false;
         let mut please_commit = |edits: &mut Vec<DomEdit>| {
             if !has_comitted {
                 has_comitted = true;
-                edits.push(PushRoot { id: root.as_u64() });
+                if let Some(root) = root {
+                    edits.push(PushRoot { id: root.as_u64() });
+                }
             }
         };
 
@@ -449,7 +451,6 @@ impl<'bump> DiffMachine<'bump> {
                 }
             }
         } else {
-            // TODO: provide some sort of report on how "good" the diffing was
             please_commit(&mut self.mutations.edits);
             for attribute in old.attributes {
                 self.mutations.remove_attribute(attribute);
@@ -467,7 +468,6 @@ impl<'bump> DiffMachine<'bump> {
         // We also need to make sure that all listeners are properly attached to the parent scope (fix_listener)
         //
         // TODO: take a more efficient path than this
-
         if let Some(cur_scope_id) = self.stack.current_scope() {
             let scope = self.vdom.get_scope(cur_scope_id).unwrap();
 
@@ -487,15 +487,11 @@ impl<'bump> DiffMachine<'bump> {
                     self.mutations.remove_event_listener(listener.event);
                 }
                 for listener in new.listeners {
-                    listener.mounted_node.set(Some(root));
+                    listener.mounted_node.set(root);
                     self.mutations.new_event_listener(listener, cur_scope_id);
                     self.attach_listener_to_scope(listener, scope);
                 }
             }
-        }
-
-        if has_comitted {
-            self.mutations.pop();
         }
 
         self.diff_children(old.children, new.children);
@@ -503,6 +499,9 @@ impl<'bump> DiffMachine<'bump> {
 
     fn diff_component_nodes(
         &mut self,
+        old_node: &'bump VNode<'bump>,
+        new_node: &'bump VNode<'bump>,
+
         old: &'bump VComponent<'bump>,
         new: &'bump VComponent<'bump>,
     ) {
@@ -526,7 +525,7 @@ impl<'bump> DiffMachine<'bump> {
 
             match compare(new) {
                 true => {
-                    // the props are the same...
+                    // the props are the same... do nothing
                 }
                 false => {
                     // the props are different...
@@ -540,25 +539,8 @@ impl<'bump> DiffMachine<'bump> {
 
             self.seen_scopes.insert(scope_addr);
         } else {
-            todo!();
-
-            // let mut old_iter = RealChildIterator::new(old_node, &self.vdom);
-            // let first = old_iter
-            //     .next()
-            //     .expect("Components should generate a placeholder root");
-
-            // // remove any leftovers
-            // for to_remove in old_iter {
-            //     self.mutations.push_root(to_remove.direct_id());
-            //     self.mutations.remove();
-            // }
-
-            // // seems like we could combine this into a single instruction....
-            // self.replace_node_with_node(first.direct_id(), old_node, new_node);
-
-            // // Wipe the old one and plant the new one
-            // let old_scope = old.ass_scope.get().unwrap();
-            // self.destroy_scopes(old_scope);
+            self.stack
+                .create_node(new_node, MountType::Replace { old: old_node });
         }
     }
 
@@ -608,7 +590,7 @@ impl<'bump> DiffMachine<'bump> {
                 old_anchor.dom_id.set(new_anchor.dom_id.get());
             }
             ([VNode::Anchor(anchor)], _) => {
-                let el = anchor.dom_id.get().unwrap();
+                let el = anchor.dom_id.get();
                 self.stack
                     .create_children(new, MountType::ReplaceByElementId { el });
             }
@@ -652,7 +634,7 @@ impl<'bump> DiffMachine<'bump> {
         debug_assert!(!old.is_empty());
 
         for (new, old) in new.iter().zip(old.iter()).rev() {
-            self.stack.push(DiffInstruction::DiffNode { new, old });
+            self.stack.push(DiffInstruction::Diff { new, old });
         }
 
         if old.len() > new.len() {
@@ -748,7 +730,7 @@ impl<'bump> DiffMachine<'bump> {
             if old.key() != new.key() {
                 break;
             }
-            self.stack.push(DiffInstruction::DiffNode { old, new });
+            self.stack.push(DiffInstruction::Diff { old, new });
             left_offset += 1;
         }
 
@@ -887,8 +869,8 @@ impl<'bump> DiffMachine<'bump> {
                 stack.create_node(new_node, MountType::Absorb);
             } else {
                 // this funciton should never take LIS indicies
-                stack.push(DiffInstruction::PrepareMoveNode { node: new_node });
-                stack.push(DiffInstruction::DiffNode {
+                stack.push(DiffInstruction::PrepareMove { node: new_node });
+                stack.push(DiffInstruction::Diff {
                     new: new_node,
                     old: &old[old_index],
                 });
@@ -943,7 +925,7 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         for idx in lis_sequence.iter().rev() {
-            self.stack.push(DiffInstruction::DiffNode {
+            self.stack.push(DiffInstruction::Diff {
                 new: &new[*idx],
                 old: &old[new_index_to_old_index[*idx]],
             });
@@ -996,6 +978,14 @@ impl<'bump> DiffMachine<'bump> {
                 VNode::Anchor(t) => break t.dom_id.get(),
             }
         }
+    }
+
+    fn replace_and_create_one_with_many(
+        &mut self,
+        old: &'bump VNode<'bump>,
+        new: &'bump [VNode<'bump>],
+    ) {
+        //
     }
 
     fn replace_and_create_many_with_one(
@@ -1070,59 +1060,11 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    fn create_garbage(&mut self, node: &'bump VNode<'bump>) {
-        match self
-            .stack
-            .current_scope()
-            .and_then(|id| self.vdom.get_scope(id))
-        {
-            Some(scope) => {
-                let garbage: &'bump VNode<'static> = unsafe { std::mem::transmute(node) };
-                scope.pending_garbage.borrow_mut().push(garbage);
-            }
-            None => {
-                log::info!("No scope to collect garbage into")
-            }
-        }
-    }
-
     /// Adds a listener closure to a scope during diff.
     fn attach_listener_to_scope<'a>(&mut self, listener: &'a Listener<'a>, scope: &Scope) {
         let mut queue = scope.listeners.borrow_mut();
         let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
         queue.push(long_listener as *const _)
-    }
-
-    /// Destroy a scope and all of its descendents.
-    ///
-    /// Calling this will run the destuctors on all hooks in the tree.
-    /// It will also add the destroyed nodes to the `seen_nodes` cache to prevent them from being renderered.
-    fn destroy_scopes(&mut self, old_scope: ScopeId) {
-        let mut nodes_to_delete = vec![old_scope];
-        let mut scopes_to_explore = vec![old_scope];
-
-        // explore the scope tree breadth first
-        while let Some(scope_id) = scopes_to_explore.pop() {
-            // If we're planning on deleting this node, then we don't need to both rendering it
-            self.seen_scopes.insert(scope_id);
-            let scope = self.vdom.get_scope(scope_id).unwrap();
-            for child in scope.descendents.borrow().iter() {
-                // Add this node to be explored
-                scopes_to_explore.push(child.clone());
-
-                // Also add it for deletion
-                nodes_to_delete.push(child.clone());
-            }
-        }
-
-        // Delete all scopes that we found as part of this subtree
-        for node in nodes_to_delete {
-            log::debug!("Removing scope {:#?}", node);
-            let _scope = self.vdom.try_remove(node).unwrap();
-            // do anything we need to do to delete the scope
-            // I think we need to run the destructors on the hooks
-            // TODO
-        }
     }
 }
 

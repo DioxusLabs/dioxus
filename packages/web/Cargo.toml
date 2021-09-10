@@ -65,10 +65,6 @@ features = [
     "HtmlOptionElement",
 ]
 
-[profile.release]
-lto = true
-opt-level = 's'
-
 [lib]
 crate-type = ["cdylib", "rlib"]
 

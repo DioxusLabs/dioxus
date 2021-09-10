@@ -1,4 +1,5 @@
 //! # VirtualDOM Implementation for Rust
+//!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 //!
 //! In this file, multiple items are defined. This file is big, but should be documented well to
@@ -20,21 +21,38 @@
 
 use crate::innerlude::*;
 use futures_util::{Future, FutureExt};
-use std::{
-    any::{Any, TypeId},
-    pin::Pin,
-    rc::Rc,
-};
+use std::{any::Any, pin::Pin};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
+///
 /// Differences are converted into patches which a renderer can use to draw the UI.
 ///
+/// If you are building an App with Dioxus, you probably won't want to reach for this directly, instead opting to defer
+/// to a particular crate's wrapper over the [`VirtualDom`] API.
 ///
+/// Example
+/// ```rust
+/// static App: FC<()> = |cx| {
+///     cx.render(rsx!{
+///         div {
+///             "Hello World"
+///         }
+///     })
+/// }
 ///
+/// async fn main() {
+///     let mut dom = VirtualDom::new(App);
+///     let mut inital_edits = dom.rebuild();
+///     initialize_screen(inital_edits);
 ///
-///
-///
-///
+///     loop {
+///         let next_frame = TimeoutFuture::new(Duration::from_millis(16));
+///         let edits = dom.run_with_deadline(next_frame).await;
+///         apply_edits(edits);
+///         render_frame();
+///     }
+/// }
+/// ```
 pub struct VirtualDom {
     scheduler: Scheduler,
 
@@ -42,7 +60,7 @@ pub struct VirtualDom {
 
     root_fc: Box<dyn Any>,
 
-    root_props: Pin<Box<dyn std::any::Any>>,
+    root_props: Pin<Box<dyn Any>>,
 }
 
 impl VirtualDom {
@@ -178,28 +196,22 @@ impl VirtualDom {
         }
     }
 
-    /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
+    /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch
     ///
-    /// The diff machine expects the RealDom's stack to be the root of the application
+    /// The diff machine expects the RealDom's stack to be the root of the application.
     ///
-    /// Events like garabge collection, application of refs, etc are not handled by this method and can only be progressed
-    /// through "run". We completely avoid the task scheduler infrastructure.
+    /// Tasks will not be polled with this method, nor will any events be processed from the event queue. Instead, the
+    /// root component will be ran once and then diffed. All updates will flow out as mutations.
+    ///
+    /// # Example
+    /// ```
+    /// static App: FC<()> = |cx| cx.render(rsx!{ "hello world" });
+    /// let mut dom = VirtualDom::new();
+    /// let edits = dom.rebuild();
+    ///
+    /// apply_edits(edits);
+    /// ```
     pub fn rebuild<'s>(&'s mut self) -> Mutations<'s> {
-        let mut fut = self.rebuild_async().boxed_local();
-
-        loop {
-            if let Some(edits) = (&mut fut).now_or_never() {
-                break edits;
-            }
-        }
-    }
-
-    /// Rebuild the dom from the ground up
-    ///
-    /// This method is asynchronous to prevent the application from blocking while the dom is being rebuilt. Computing
-    /// the diff and creating nodes can be expensive, so we provide this method to avoid blocking the main thread. This
-    /// method can be useful when needing to perform some crucial periodic tasks.
-    pub async fn rebuild_async<'s>(&'s mut self) -> Mutations<'s> {
         let mut shared = self.scheduler.pool.clone();
         let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
 
@@ -214,9 +226,10 @@ impl VirtualDom {
             diff_machine
                 .stack
                 .create_node(cur_component.frames.fin_head(), MountType::Append);
+
             diff_machine.stack.scope_stack.push(self.base_scope);
 
-            // let completed = diff_machine.work();
+            diff_machine.work(|| false);
         } else {
             // todo: should this be a hard error?
             log::warn!(

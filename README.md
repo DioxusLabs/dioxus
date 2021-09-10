@@ -109,6 +109,8 @@ If you know React, then you already know Dioxus.
 - Sierpinski's triangle (web SPA)
 - Doxie Documentation Library (Web SPA with Hydration)
 
+See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
+
 <!-- 
 currently commented out until we have more content on the website
 ## Explore

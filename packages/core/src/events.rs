@@ -125,8 +125,13 @@ pub mod on {
 
                         let callback: BumpBox<dyn FnMut(SyntheticEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
 
+
+                        // ie oncopy
                         let event_name = stringify!($name);
+
+                        // ie copy
                         let shortname: &'static str = &event_name[2..];
+
                         Listener {
                             event: shortname,
                             mounted_node: Cell::new(None),

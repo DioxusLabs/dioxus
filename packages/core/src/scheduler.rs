@@ -14,7 +14,7 @@ Some essential reading:
 
 Dioxus is a framework for "user experience" - not just "user interfaces." Part of the "experience" is keeping the UI
 snappy and "jank free" even under heavy work loads. Dioxus already has the "speed" part figured out - but there's no
-point if being "fast" if you can't also be "responsive."
+point in being "fast" if you can't also be "responsive."
 
 As such, Dioxus can manually decide on what work is most important at any given moment in time. With a properly tuned
 priority system, Dioxus can ensure that user interaction is prioritized and committed as soon as possible (sub 100ms).
@@ -87,7 +87,7 @@ use std::{
 };
 
 #[derive(Clone)]
-pub struct EventChannel {
+pub(crate) struct EventChannel {
     pub task_counter: Rc<Cell<u64>>,
     pub sender: UnboundedSender<SchedulerMsg>,
     pub schedule_any_immediate: Rc<dyn Fn(ScopeId)>,
@@ -96,8 +96,13 @@ pub struct EventChannel {
 }
 
 pub enum SchedulerMsg {
-    Immediate(ScopeId),
+    // events from the host
     UiEvent(UserEvent),
+
+    // setstate
+    Immediate(ScopeId),
+
+    // tasks
     SubmitTask(FiberTask, u64),
     ToggleTask(u64),
     PauseTask(u64),
@@ -109,7 +114,7 @@ pub enum SchedulerMsg {
 ///
 /// Each scope has the ability to lightly interact with the scheduler (IE, schedule an update) but ultimately the scheduler calls the components.
 ///
-/// In Dioxus, the scheduler provides 3 priority levels - each with their own "DiffMachine". The DiffMachine state can be saved if the deadline runs
+/// In Dioxus, the scheduler provides 4 priority levels - each with their own "DiffMachine". The DiffMachine state can be saved if the deadline runs
 /// out.
 ///
 /// Saved DiffMachine state can be self-referential, so we need to be careful about how we save it. All self-referential data is a link between
@@ -211,6 +216,7 @@ impl Scheduler {
 
         Self {
             pool,
+
             receiver,
 
             async_tasks: FuturesUnordered::new(),
@@ -219,7 +225,6 @@ impl Scheduler {
 
             heuristics,
 
-            // a storage for our receiver to dump into
             ui_events: VecDeque::new(),
 
             pending_immediates: VecDeque::new(),
@@ -230,7 +235,7 @@ impl Scheduler {
 
             current_priority: EventPriority::Low,
 
-            // a dedicated fiber for each priority
+            // sorted high to low by priority (0 = immediate, 3 = low)
             lanes: [
                 PriorityLane::new(),
                 PriorityLane::new(),
@@ -248,25 +253,69 @@ impl Scheduler {
 
     // Converts UI events into dirty scopes with various priorities
     pub fn consume_pending_events(&mut self) {
+        // consume all events that are "continuous" to be batched
+        // if we run into a discrete event, then bail early
+
         while let Some(trigger) = self.ui_events.pop_back() {
             if let Some(scope) = self.pool.get_scope_mut(trigger.scope) {
                 if let Some(element) = trigger.mounted_dom_id {
-                    let priority = match &trigger.event {
-                        SyntheticEvent::ClipboardEvent(_) => {}
-                        SyntheticEvent::CompositionEvent(_) => {}
-                        SyntheticEvent::KeyboardEvent(_) => {}
-                        SyntheticEvent::FocusEvent(_) => {}
-                        SyntheticEvent::FormEvent(_) => {}
-                        SyntheticEvent::SelectionEvent(_) => {}
-                        SyntheticEvent::TouchEvent(_) => {}
-                        SyntheticEvent::WheelEvent(_) => {}
-                        SyntheticEvent::MediaEvent(_) => {}
-                        SyntheticEvent::AnimationEvent(_) => {}
-                        SyntheticEvent::TransitionEvent(_) => {}
-                        SyntheticEvent::ToggleEvent(_) => {}
-                        SyntheticEvent::MouseEvent(_) => {}
-                        SyntheticEvent::PointerEvent(_) => {}
-                        SyntheticEvent::GenericEvent(_) => {}
+                    let priority = match trigger.name {
+                        // clipboard
+                        "copy" | "cut" | "paste" => EventPriority::Medium,
+
+                        // Composition
+                        "compositionend" | "compositionstart" | "compositionupdate" => {
+                            EventPriority::Low
+                        }
+
+                        // Keyboard
+                        "keydown" | "keypress" | "keyup" => EventPriority::Low,
+
+                        // Focus
+                        "focus" | "blur" => EventPriority::Low,
+
+                        // Form
+                        "change" | "input" | "invalid" | "reset" | "submit" => EventPriority::Low,
+
+                        // Mouse
+                        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend"
+                        | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
+                        | "drop" | "mousedown" | "mouseenter" | "mouseleave" | "mousemove"
+                        | "mouseout" | "mouseover" | "mouseup" => EventPriority::Low,
+
+                        // Pointer
+                        "pointerdown" | "pointermove" | "pointerup" | "pointercancel"
+                        | "gotpointercapture" | "lostpointercapture" | "pointerenter"
+                        | "pointerleave" | "pointerover" | "pointerout" => EventPriority::Low,
+
+                        // Selection
+                        "select" | "touchcancel" | "touchend" => EventPriority::Low,
+
+                        // Touch
+                        "touchmove" | "touchstart" => EventPriority::Low,
+
+                        // Wheel
+                        "scroll" | "wheel" => EventPriority::Low,
+
+                        // Media
+                        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied"
+                        | "encrypted" | "ended" | "error" | "loadeddata" | "loadedmetadata"
+                        | "loadstart" | "pause" | "play" | "playing" | "progress"
+                        | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
+                        | "timeupdate" | "volumechange" | "waiting" => EventPriority::Low,
+
+                        // Animation
+                        "animationstart" | "animationend" | "animationiteration" => {
+                            EventPriority::Low
+                        }
+
+                        // Transition
+                        "transitionend" => EventPriority::Low,
+
+                        // Toggle
+                        "toggle" => EventPriority::Low,
+
+                        _ => EventPriority::Low,
                     };
 
                     scope.call_listener(trigger.event, element);
@@ -341,7 +390,6 @@ impl Scheduler {
         self.manually_poll_events();
 
         if !self.has_any_work() {
-            self.clean_up_garbage();
             return committed_mutations;
         }
 
@@ -349,7 +397,7 @@ impl Scheduler {
 
         while self.has_any_work() {
             self.shift_priorities();
-            self.work_on_current_lane(&mut || false, &mut committed_mutations);
+            self.work_on_current_lane(|| false, &mut committed_mutations);
         }
 
         committed_mutations
@@ -393,7 +441,6 @@ impl Scheduler {
 
             // Wait for any new events if we have nothing to do
             if !self.has_any_work() {
-                self.clean_up_garbage();
                 let deadline_expired = self.wait_for_any_trigger(&mut deadline_reached).await;
 
                 if deadline_expired {
@@ -425,7 +472,7 @@ impl Scheduler {
     /// Returns true if the lane is finished before the deadline could be met.
     pub fn work_on_current_lane(
         &mut self,
-        deadline_reached: &mut impl FnMut() -> bool,
+        deadline_reached: impl FnMut() -> bool,
         mutations: &mut Vec<Mutations>,
     ) -> bool {
         // Work through the current subtree, and commit the results when it finishes
@@ -448,7 +495,7 @@ impl Scheduler {
             if let Some(scope) = self.current_lane().dirty_scopes.pop() {
                 let component = self.pool.get_scope(scope).unwrap();
                 let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                machine.stack.push(DiffInstruction::DiffNode { new, old });
+                machine.stack.push(DiffInstruction::Diff { new, old });
             }
         }
 
@@ -537,61 +584,6 @@ impl Scheduler {
     fn collect_garbage(&mut self, id: ElementId) {
         //
     }
-
-    pub fn clean_up_garbage(&mut self) {
-        let mut scopes_to_kill = Vec::new();
-        let mut garbage_list = Vec::new();
-
-        for scope in self.garbage_scopes.drain() {
-            let scope = self.pool.get_scope_mut(scope).unwrap();
-            for node in scope.consume_garbage() {
-                garbage_list.push(node);
-            }
-
-            while let Some(node) = garbage_list.pop() {
-                match &node {
-                    VNode::Text(_) => {
-                        self.pool.collect_garbage(node.mounted_id());
-                    }
-                    VNode::Anchor(_) => {
-                        self.pool.collect_garbage(node.mounted_id());
-                    }
-                    VNode::Suspended(_) => {
-                        self.pool.collect_garbage(node.mounted_id());
-                    }
-
-                    VNode::Element(el) => {
-                        self.pool.collect_garbage(node.mounted_id());
-                        for child in el.children {
-                            garbage_list.push(child);
-                        }
-                    }
-
-                    VNode::Fragment(frag) => {
-                        for child in frag.children {
-                            garbage_list.push(child);
-                        }
-                    }
-
-                    VNode::Component(comp) => {
-                        // TODO: run the hook destructors and then even delete the scope
-
-                        let scope_id = comp.associated_scope.get().unwrap();
-                        let scope = self.pool.get_scope(scope_id).unwrap();
-                        let root = scope.root();
-
-                        garbage_list.push(root);
-                        scopes_to_kill.push(scope_id);
-                    }
-                }
-            }
-        }
-
-        for scope in scopes_to_kill.drain(..) {
-            //
-            // kill em
-        }
-    }
 }
 
 pub(crate) struct PriorityLane {
@@ -619,8 +611,8 @@ impl PriorityLane {
 }
 
 pub struct TaskHandle {
-    pub sender: UnboundedSender<SchedulerMsg>,
-    pub our_id: u64,
+    pub(crate) sender: UnboundedSender<SchedulerMsg>,
+    pub(crate) our_id: u64,
 }
 
 impl TaskHandle {
