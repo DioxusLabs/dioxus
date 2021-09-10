@@ -320,7 +320,6 @@ impl VirtualDom {
         &'s mut self,
         deadline: impl Future<Output = ()>,
     ) -> Vec<Mutations<'s>> {
-        let mut deadline = Box::pin(deadline.fuse());
         self.scheduler.work_with_deadline(deadline).await
     }
 

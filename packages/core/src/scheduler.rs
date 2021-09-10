@@ -410,7 +410,7 @@ impl Scheduler {
     /// Returns a list of successful mutations.
     pub async fn work_with_deadline<'a>(
         &'a mut self,
-        mut deadline_reached: Pin<Box<impl FusedFuture<Output = ()>>>,
+        deadline: impl Future<Output = ()>,
     ) -> Vec<Mutations<'a>> {
         /*
         Strategy:
@@ -434,6 +434,7 @@ impl Scheduler {
             - but if we received both - then we don't need to diff, do we? run as many as we can and then finally diff?
         */
         let mut committed_mutations = Vec::<Mutations<'static>>::new();
+        let mut deadline = Box::pin(deadline.fuse());
 
         loop {
             // Internalize any pending work since the last time we ran
@@ -441,7 +442,7 @@ impl Scheduler {
 
             // Wait for any new events if we have nothing to do
             if !self.has_any_work() {
-                let deadline_expired = self.wait_for_any_trigger(&mut deadline_reached).await;
+                let deadline_expired = self.wait_for_any_trigger(&mut deadline).await;
 
                 if deadline_expired {
                     return committed_mutations;
@@ -454,7 +455,7 @@ impl Scheduler {
             // shift to the correct lane
             self.shift_priorities();
 
-            let mut deadline_reached = || (&mut deadline_reached).now_or_never().is_some();
+            let mut deadline_reached = || (&mut deadline).now_or_never().is_some();
 
             let finished_before_deadline =
                 self.work_on_current_lane(&mut deadline_reached, &mut committed_mutations);
