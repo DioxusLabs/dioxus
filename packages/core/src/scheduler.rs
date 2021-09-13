@@ -566,10 +566,6 @@ impl Scheduler {
         //     EventPriority::Low => self.low_priority.dirty_scopes.insert(scope),
         // };
     }
-
-    fn collect_garbage(&mut self, id: ElementId) {
-        //
-    }
 }
 
 pub(crate) struct PriorityLane {

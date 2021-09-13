@@ -488,6 +488,8 @@ impl<'a> NodeFactory<'a> {
                         std::mem::drop(b);
 
                         has_dropped = true;
+                    } else {
+                        panic!("Drop props called twice - this is an internal failure of Dioxus");
                     }
                 }
             });

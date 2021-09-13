@@ -13,6 +13,8 @@ type Shared<T> = Rc<RefCell<T>>;
 
 #[test]
 fn manual_diffing() {
+    test_logging::set_up_logging(IS_LOGGING_ENABLED);
+
     #[derive(PartialEq, Props)]
     struct AppProps {
         value: Shared<&'static str>,
@@ -23,9 +25,7 @@ fn manual_diffing() {
         cx.render(rsx! { div { "{val}" } })
     };
 
-    test_logging::set_up_logging(IS_LOGGING_ENABLED);
-
-    let mut value = Rc::new(RefCell::new("Hello"));
+    let value = Rc::new(RefCell::new("Hello"));
     let mut dom = VirtualDom::new_with_props(
         App,
         AppProps {

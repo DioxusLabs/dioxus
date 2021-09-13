@@ -113,7 +113,7 @@ pub(crate) struct DiffMachine<'bump> {
 }
 
 pub(crate) struct DiffCfg {
-    force_diff: bool,
+    pub force_diff: bool,
 }
 impl Default for DiffCfg {
     fn default() -> Self {
@@ -172,6 +172,7 @@ impl<'bump> DiffMachine<'bump> {
         if let Some(component) = self.vdom.get_scope_mut(id) {
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             self.stack.push(DiffInstruction::Diff { new, old });
+            self.work(|| false);
         }
     }
 
@@ -535,17 +536,11 @@ impl<'bump> DiffMachine<'bump> {
             scope.update_scope_dependencies(new.caller.clone(), ScopeChildren(new.children));
 
             // React doesn't automatically memoize, but we do.
-            let compare = old.comparator.unwrap();
+            let props_are_the_same = old.comparator.unwrap();
 
-            match compare(new) {
-                true => {
-                    // the props are the same... do nothing
-                }
-                false => {
-                    // the props are different...
-                    if scope.run_scope(self.vdom) {
-                        self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
-                    }
+            if self.cfg.force_diff || !props_are_the_same(new) {
+                if scope.run_scope(self.vdom) {
+                    self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
                 }
             }
 

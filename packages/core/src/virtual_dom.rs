@@ -120,15 +120,18 @@ impl VirtualDom {
     /// let mutations = dom.rebuild();
     /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let scheduler = Scheduler::new();
+        let root_fc = Box::new(root);
 
         let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+
         let props_ptr = root_props.downcast_ref::<P>().unwrap() as *const P;
 
         let root_caller: Box<dyn Fn(&Scope) -> DomTree> = Box::new(move |scope: &Scope| unsafe {
             let props: &'_ P = &*(props_ptr as *const P);
             std::mem::transmute(root(Context { props, scope }))
         });
+
+        let scheduler = Scheduler::new();
 
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
             Scope::new(
@@ -143,7 +146,7 @@ impl VirtualDom {
 
         Self {
             root_caller,
-            root_fc: Box::new(root),
+            root_fc,
             base_scope,
             scheduler,
             root_props,
@@ -253,6 +256,37 @@ impl VirtualDom {
     /// Compute a manual diff of the VirtualDOM between states.
     ///
     /// This can be useful when state inside the DOM is remotely changed from the outside, but not propogated as an event.
+    ///
+    /// In this case, every component will be diffed, even if their props are memoized. This method is intended to be used
+    /// to force an update of the DOM when the state of the app is changed outside of the app.
+    ///
+    ///
+    /// # Example
+    /// ```rust
+    /// #[derive(PartialEq, Props)]
+    /// struct AppProps {
+    ///     value: Shared<&'static str>,
+    /// }
+    ///
+    /// static App: FC<AppProps> = |cx| {
+    ///     let val = cx.value.borrow();
+    ///     cx.render(rsx! { div { "{val}" } })
+    /// };
+    ///
+    /// let value = Rc::new(RefCell::new("Hello"));
+    /// let mut dom = VirtualDom::new_with_props(
+    ///     App,
+    ///     AppProps {
+    ///         value: value.clone(),
+    ///     },
+    /// );
+    ///
+    /// let _ = dom.rebuild();
+    ///
+    /// *value.borrow_mut() = "goodbye";
+    ///
+    /// let edits = dom.diff();
+    /// ```
     pub fn diff<'s>(&'s mut self) -> Mutations<'s> {
         let cur_component = self
             .scheduler
@@ -263,6 +297,7 @@ impl VirtualDom {
         if cur_component.run_scope(&self.scheduler.pool) {
             let mut diff_machine: DiffMachine<'s> =
                 DiffMachine::new(Mutations::new(), &mut self.scheduler.pool);
+            diff_machine.cfg.force_diff = true;
             diff_machine.diff_scope(self.base_scope);
             diff_machine.mutations
         } else {
