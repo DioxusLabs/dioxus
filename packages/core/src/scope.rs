@@ -1,10 +1,9 @@
 use crate::innerlude::*;
-use fxhash::{FxHashMap, FxHashSet};
+use fxhash::FxHashMap;
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::HashMap,
-    fmt::Formatter,
     future::Future,
     pin::Pin,
     rc::Rc,
@@ -204,6 +203,9 @@ impl Scope {
     ///
     /// Refrences to hook data can only be stored in listeners and component props. During diffing, we make sure to log
     /// all listeners and borrowed props so we can clear them here.
+    ///
+    /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
+    /// be dropped.
     pub(crate) fn ensure_drop_safety(&mut self, pool: &ResourcePool) {
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Referrence)
@@ -214,13 +216,17 @@ impl Scope {
             .map(|li| unsafe { &*li })
             .for_each(|comp| {
                 // First drop the component's undropped references
-                let scope_id = comp.associated_scope.get().unwrap();
-                let scope = pool.get_scope_mut(scope_id).unwrap();
-                scope.ensure_drop_safety(pool);
+                let scope_id = comp
+                    .associated_scope
+                    .get()
+                    .expect("VComponents should be associated with a valid Scope");
 
-                // Now, drop our own reference
-                let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
-                drop_props();
+                if let Some(scope) = pool.get_scope_mut(scope_id) {
+                    scope.ensure_drop_safety(pool);
+
+                    let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
+                    drop_props();
+                }
             });
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
