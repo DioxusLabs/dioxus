@@ -1,10 +1,15 @@
+use std::{cell::RefCell, rc::Rc};
+
 use anyhow::{Context, Result};
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 
+type Shared<T> = Rc<RefCell<T>>;
+
 #[test]
 fn sample_refs() {
+
     // static App: FC<()> = |cx| {
     //     let div_ref = use_node_ref::<MyRef, _>(cx);
 

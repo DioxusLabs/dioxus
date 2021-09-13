@@ -267,7 +267,7 @@ pub struct VComponent<'src> {
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
 
-    pub(crate) caller: Rc<dyn Fn(&Scope) -> DomTree>,
+    pub(crate) caller: &'src dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
 
     pub(crate) children: &'src [VNode<'src>],
 
@@ -501,11 +501,16 @@ impl<'a> NodeFactory<'a> {
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller = NodeFactory::create_component_caller(component, raw_props);
+        let caller: &'a mut dyn for<'b> Fn(&'b Scope) -> DomTree<'b> =
+            bump.alloc(move |scope: &Scope| -> DomTree {
+                let props: &'_ P = unsafe { &*(raw_props as *const P) };
+                let res = component(Context { props, scope });
+                unsafe { std::mem::transmute(res) }
+            });
 
         let can_memoize = children.len() == 0 && P::IS_STATIC;
 
-        VNode::Component(bump.alloc_with(|| VComponent {
+        VNode::Component(bump.alloc(VComponent {
             user_fc,
             comparator,
             raw_props,
@@ -517,24 +522,6 @@ impl<'a> NodeFactory<'a> {
             drop_props,
             associated_scope: Cell::new(None),
         }))
-    }
-
-    pub(crate) fn create_component_caller<'g, P: 'g>(
-        component: FC<P>,
-        raw_props: *const (),
-    ) -> Rc<dyn for<'r> Fn(&'r Scope) -> DomTree<'r>> {
-        type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> DomTree<'r> + 'a>;
-        let caller: Captured = Rc::new(move |scp: &Scope| -> DomTree {
-            // cast back into the right lifetime
-            let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
-            let cx: Context<P> = Context {
-                props: safe_props,
-                scope: scp,
-            };
-            let res = component(cx);
-            unsafe { std::mem::transmute(res) }
-        });
-        unsafe { std::mem::transmute::<_, Captured<'static>>(caller) }
     }
 
     pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a>) -> VNode<'a> {

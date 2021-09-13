@@ -4,6 +4,7 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::HashMap,
+    fmt::Formatter,
     future::Future,
     pin::Pin,
     rc::Rc,
@@ -29,7 +30,7 @@ pub struct Scope {
     // an internal, highly efficient storage of vnodes
     // lots of safety condsiderations
     pub(crate) frames: ActiveFrame,
-    pub(crate) caller: Rc<WrappedCaller>,
+    pub(crate) caller: *const dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
     pub(crate) child_nodes: ScopeChildren<'static>,
 
     // Listeners
@@ -47,7 +48,6 @@ pub struct Scope {
 }
 
 // The type of closure that wraps calling components
-pub type WrappedCaller = dyn for<'b> Fn(&'b Scope) -> DomTree<'b>;
 
 /// The type of task that gets sent to the task scheduler
 /// Submitting a fiber task returns a handle to that task, which can be used to wake up suspended nodes
@@ -62,7 +62,7 @@ impl Scope {
     // Scopes cannot be made anywhere else except for this file
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub(crate) fn new<'creator_node>(
-        caller: Rc<WrappedCaller>,
+        caller: &'creator_node dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
         arena_idx: ScopeId,
         parent: Option<ScopeId>,
         height: u32,
@@ -73,6 +73,9 @@ impl Scope {
 
         let up = shared.schedule_any_immediate.clone();
         let memoized_updater = Rc::new(move || up(arena_idx));
+
+        let caller = caller as *const _;
+        let caller = unsafe { std::mem::transmute(caller) };
 
         Self {
             memoized_updater,
@@ -94,10 +97,12 @@ impl Scope {
 
     pub(crate) fn update_scope_dependencies<'creator_node>(
         &mut self,
-        caller: Rc<WrappedCaller>,
+        caller: &'creator_node dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
         child_nodes: ScopeChildren,
     ) {
-        self.caller = caller;
+        let caller = caller as *const _;
+        self.caller = unsafe { std::mem::transmute(caller) };
+
         let child_nodes = unsafe { child_nodes.extend_lifetime() };
         self.child_nodes = child_nodes;
     }
@@ -120,7 +125,7 @@ impl Scope {
         unsafe { self.frames.reset_wip_frame() };
 
         // Cast the caller ptr from static to one with our own reference
-        let render: &WrappedCaller = self.caller.as_ref();
+        let render: &dyn for<'b> Fn(&'b Scope) -> DomTree<'b> = unsafe { &*self.caller };
 
         match render(self) {
             None => false,
@@ -143,8 +148,6 @@ impl Scope {
     /// Refrences to hook data can only be stored in listeners and component props. During diffing, we make sure to log
     /// all listeners and borrowed props so we can clear them here.
     pub(crate) fn ensure_drop_safety(&mut self, pool: &ResourcePool) {
-        // todo!("arch changes");
-
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Referrence)
         // right now, we don't drop

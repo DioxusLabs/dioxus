@@ -3,7 +3,7 @@
 /// We intern all the HTML tags and attributes, making most operations much faster.
 ///
 /// Interning takes about 1ms at the start of the app, but saves a *ton* of time later on.
-pub fn intern_cache() {
+pub fn intern_cached_strings() {
     let cached_words = [
         // All the HTML Tags
         "a",
@@ -222,13 +222,11 @@ pub fn intern_cache() {
         "onmousewheel",
         "onoffline",
         "ononline",
-        "<body>",
         "onpageshow",
         "onpaste",
         "onpause",
         "onplay",
         "onplaying",
-        "<body>",
         "onprogress",
         "onratechange",
         "onreset",
@@ -239,7 +237,6 @@ pub fn intern_cache() {
         "onseeking",
         "onselect",
         "onstalled",
-        "<body>",
         "onsubmit",
         "onsuspend",
         "ontimeupdate",
@@ -284,6 +281,21 @@ pub fn intern_cache() {
         "value",
         "width",
         "wrap",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
     ];
 
     for s in cached_words {

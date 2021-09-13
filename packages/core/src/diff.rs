@@ -109,6 +109,18 @@ pub(crate) struct DiffMachine<'bump> {
     pub mutations: Mutations<'bump>,
     pub stack: DiffStack<'bump>,
     pub seen_scopes: FxHashSet<ScopeId>,
+    pub cfg: DiffCfg,
+}
+
+pub(crate) struct DiffCfg {
+    force_diff: bool,
+}
+impl Default for DiffCfg {
+    fn default() -> Self {
+        Self {
+            force_diff: Default::default(),
+        }
+    }
 }
 
 /// a "saved" form of a diff machine
@@ -129,6 +141,7 @@ impl<'a> SavedDiffWork<'a> {
         let extended: SavedDiffWork<'b> = std::mem::transmute(self);
         DiffMachine {
             vdom,
+            cfg: DiffCfg::default(),
             mutations: extended.mutations,
             stack: extended.stack,
             seen_scopes: extended.seen_scopes,
@@ -140,6 +153,7 @@ impl<'bump> DiffMachine<'bump> {
     pub(crate) fn new(mutations: Mutations<'bump>, shared: &'bump ResourcePool) -> Self {
         Self {
             mutations,
+            cfg: DiffCfg::default(),
             stack: DiffStack::new(),
             vdom: shared,
             seen_scopes: FxHashSet::default(),

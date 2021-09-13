@@ -157,7 +157,7 @@ pub(crate) struct Scheduler {
 }
 
 impl Scheduler {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         /*
         Preallocate 2000 elements and 100 scopes to avoid dynamic allocation.
         Perhaps this should be configurable from some external config?
@@ -214,12 +214,14 @@ impl Scheduler {
             channel,
         };
 
+        let mut async_tasks = FuturesUnordered::new();
+
         Self {
             pool,
 
             receiver,
 
-            async_tasks: FuturesUnordered::new(),
+            async_tasks,
 
             pending_garbage: FxHashSet::default(),
 
@@ -282,6 +284,8 @@ impl Scheduler {
                         | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
                         | "drop" | "mousedown" | "mouseenter" | "mouseleave" | "mousemove"
                         | "mouseout" | "mouseover" | "mouseup" => EventPriority::Low,
+
+                        "mousemove" => EventPriority::Medium,
 
                         // Pointer
                         "pointerdown" | "pointermove" | "pointerup" | "pointercancel"
@@ -360,10 +364,10 @@ impl Scheduler {
 
     fn load_current_lane(&mut self) -> &mut PriorityLane {
         match self.current_priority {
-            EventPriority::Immediate => todo!(),
-            EventPriority::High => todo!(),
-            EventPriority::Medium => todo!(),
-            EventPriority::Low => todo!(),
+            EventPriority::Immediate => &mut self.lanes[0],
+            EventPriority::High => &mut self.lanes[1],
+            EventPriority::Medium => &mut self.lanes[2],
+            EventPriority::Low => &mut self.lanes[3],
         }
     }
 
@@ -426,6 +430,14 @@ impl Scheduler {
 
         - If there are no pending discrete events, then check for continuous events. These can be completely batched
 
+        - we batch completely until we run into a discrete event
+        - all continuous events are batched together
+        - so D C C C C C would be two separate events - D and C. IE onclick and onscroll
+        - D C C C C C C D C C C D would be D C D C D in 5 distinct phases.
+
+        - !listener bubbling is not currently implemented properly and will need to be implemented somehow in the future
+            - we need to keep track of element parents to be able to traverse properly
+
 
         Open questions:
         - what if we get two clicks from the component during the same slice?
@@ -434,18 +446,19 @@ impl Scheduler {
             - but if we received both - then we don't need to diff, do we? run as many as we can and then finally diff?
         */
         let mut committed_mutations = Vec::<Mutations<'static>>::new();
-        let mut deadline = Box::pin(deadline.fuse());
+        pin_mut!(deadline);
 
         loop {
             // Internalize any pending work since the last time we ran
             self.manually_poll_events();
 
             // Wait for any new events if we have nothing to do
+            // todo: poll the events once even if there is work to do to prevent starvation
             if !self.has_any_work() {
-                let deadline_expired = self.wait_for_any_trigger(&mut deadline).await;
-
-                if deadline_expired {
-                    return committed_mutations;
+                futures_util::select! {
+                    msg = self.async_tasks.next() => {}
+                    msg = self.receiver.next() => self.handle_channel_msg(msg.unwrap()),
+                    _ = (&mut deadline).fuse() => return committed_mutations,
                 }
             }
 
@@ -519,34 +532,6 @@ impl Scheduler {
             mutations.push(new_mutations);
             self.save_work(saved);
             true
-        }
-    }
-
-    // waits for a trigger, canceling early if the deadline is reached
-    // returns true if the deadline was reached
-    // does not return the trigger, but caches it in the scheduler
-    pub async fn wait_for_any_trigger(
-        &mut self,
-        deadline: &mut Pin<Box<impl FusedFuture<Output = ()>>>,
-    ) -> bool {
-        use futures_util::future::{select, Either};
-
-        let event_fut = async {
-            match select(self.receiver.next(), self.async_tasks.next()).await {
-                Either::Left((msg, _other)) => {
-                    self.handle_channel_msg(msg.unwrap());
-                }
-                Either::Right((task, _other)) => {
-                    // do nothing, async task will likely generate a set of scheduler messages
-                }
-            }
-        };
-
-        pin_mut!(event_fut);
-
-        match select(event_fut, deadline).await {
-            Either::Left((msg, _other)) => false,
-            Either::Right((deadline, _)) => true,
         }
     }
 

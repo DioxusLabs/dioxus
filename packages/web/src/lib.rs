@@ -56,7 +56,7 @@ use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
 use crate::dom::load_document;
-use cache::intern_cache;
+use cache::intern_cached_strings;
 use dioxus::prelude::Properties;
 use dioxus::virtual_dom::VirtualDom;
 pub use dioxus_core as dioxus;
@@ -115,7 +115,7 @@ where
 pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    intern_cache();
+    intern_cached_strings();
 
     let hydrating = cfg.hydrate;
 
@@ -134,16 +134,22 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
     }
 
     let work_loop = ric_raf::RafLoop::new();
+
     loop {
         // if virtualdom has nothing, wait for it to have something before requesting idle time
-        if !dom.has_work() {
-            dom.wait_for_any_work().await;
-        }
+        // if there is work then this future resolves immediately.
+        dom.wait_for_work().await;
 
+        // wait for the mainthread to schedule us in
         let deadline = work_loop.wait_for_idle_time().await;
 
+        // run the virtualdom work phase until the frame deadline is reached
         let mut mutations = dom.run_with_deadline(deadline).await;
+
+        // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;
+
+        // actually apply our changes during the animation frame
         websys_dom.process_edits(&mut mutations[0].edits);
     }
 }

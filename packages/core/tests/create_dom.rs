@@ -1,4 +1,5 @@
 //! Prove that the dom works normally through virtualdom methods.
+//!
 //! This methods all use "rebuild" which completely bypasses the scheduler.
 //! Hard rebuilds don't consume any events from the event queue.
 
@@ -45,8 +46,8 @@ fn test_original_diff() {
     );
 }
 
-#[async_std::test]
-async fn create() {
+#[test]
+fn create() {
     static APP: FC<()> = |cx| {
         cx.render(rsx! {
             div {
@@ -96,8 +97,8 @@ async fn create() {
     );
 }
 
-#[async_std::test]
-async fn create_list() {
+#[test]
+fn create_list() {
     static APP: FC<()> = |cx| {
         cx.render(rsx! {
             {(0..3).map(|f| rsx!{ div {
@@ -136,8 +137,8 @@ async fn create_list() {
     );
 }
 
-#[async_std::test]
-async fn create_simple() {
+#[test]
+fn create_simple() {
     static APP: FC<()> = |cx| {
         cx.render(rsx! {
             div {}
@@ -162,9 +163,8 @@ async fn create_simple() {
         ]
     );
 }
-
-#[async_std::test]
-async fn create_components() {
+#[test]
+fn create_components() {
     static App: FC<()> = |cx| {
         cx.render(rsx! {
             Child { "abc1" }
@@ -215,9 +215,8 @@ async fn create_components() {
         ]
     );
 }
-
-#[async_std::test]
-async fn anchors() {
+#[test]
+fn anchors() {
     static App: FC<()> = |cx| {
         cx.render(rsx! {
             {true.then(|| rsx!{ div { "hello" } })}
@@ -242,8 +241,8 @@ async fn anchors() {
     );
 }
 
-#[async_std::test]
-async fn suspended() {
+#[test]
+fn suspended() {
     static App: FC<()> = |cx| {
         let val = use_suspense(
             cx,

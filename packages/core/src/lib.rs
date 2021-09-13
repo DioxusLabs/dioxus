@@ -28,6 +28,7 @@ pub mod scheduler;
 pub mod scope;
 pub mod test_dom;
 pub mod util;
+pub mod vdomdisplay;
 pub mod virtual_dom;
 
 pub(crate) mod innerlude {

@@ -20,7 +20,6 @@
 //! Additional functionality is defined in the respective files.
 
 use crate::innerlude::*;
-use futures_util::{Future, FutureExt};
 use std::{any::Any, pin::Pin};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
@@ -59,6 +58,8 @@ pub struct VirtualDom {
     base_scope: ScopeId,
 
     root_fc: Box<dyn Any>,
+
+    root_caller: Box<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>,
 
     root_props: Pin<Box<dyn Any>>,
 }
@@ -124,10 +125,14 @@ impl VirtualDom {
         let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
         let props_ptr = root_props.downcast_ref::<P>().unwrap() as *const P;
 
+        let root_caller: Box<dyn Fn(&Scope) -> DomTree> = Box::new(move |scope: &Scope| unsafe {
+            let props: &'_ P = &*(props_ptr as *const P);
+            std::mem::transmute(root(Context { props, scope }))
+        });
+
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
-            let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
             Scope::new(
-                caller,
+                root_caller.as_ref(),
                 myidx,
                 None,
                 0,
@@ -137,6 +142,7 @@ impl VirtualDom {
         });
 
         Self {
+            root_caller,
             root_fc: Box::new(root),
             base_scope,
             scheduler,
@@ -186,9 +192,10 @@ impl VirtualDom {
 
             let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
 
-            let new_caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
+            todo!();
 
-            root_scope.update_scope_dependencies(new_caller, ScopeChildren(&[]));
+            // let new_caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
+            // root_scope.update_scope_dependencies(new_caller, ScopeChildren(&[]));
 
             Some(self.rebuild())
         } else {
@@ -202,6 +209,8 @@ impl VirtualDom {
     ///
     /// Tasks will not be polled with this method, nor will any events be processed from the event queue. Instead, the
     /// root component will be ran once and then diffed. All updates will flow out as mutations.
+    ///
+    /// All state stored in components will be completely wiped away.
     ///
     /// # Example
     /// ```
@@ -318,7 +327,7 @@ impl VirtualDom {
     /// Mutations are the only link between the RealDOM and the VirtualDOM.
     pub async fn run_with_deadline<'s>(
         &'s mut self,
-        deadline: impl Future<Output = ()>,
+        deadline: impl std::future::Future<Output = ()>,
     ) -> Vec<Mutations<'s>> {
         self.scheduler.work_with_deadline(deadline).await
     }
@@ -327,13 +336,19 @@ impl VirtualDom {
         self.scheduler.pool.channel.sender.clone()
     }
 
-    pub fn has_work(&self) -> bool {
-        true
-    }
+    /// Waits for the scheduler to have work
+    /// This lets us poll async tasks during idle periods without blocking the main thread.
+    pub async fn wait_for_work(&mut self) {
+        if self.scheduler.has_any_work() {
+            return;
+        }
 
-    pub async fn wait_for_any_work(&mut self) {
-        let mut timeout = Box::pin(futures_util::future::pending().fuse());
-        self.scheduler.wait_for_any_trigger(&mut timeout).await;
+        use futures_util::StreamExt;
+        futures_util::select! {
+            // hmm - will this resolve to none if there are no async tasks?
+            _ = self.scheduler.async_tasks.next() => {}
+            msg = self.scheduler.receiver.next() => self.scheduler.handle_channel_msg(msg.unwrap()),
+        }
     }
 }
 
