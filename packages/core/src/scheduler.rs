@@ -739,14 +739,6 @@ impl ResourcePool {
         inner.get_mut(idx.0)
     }
 
-    pub fn with_scope<'b, O: 'static>(
-        &'b self,
-        _id: ScopeId,
-        _f: impl FnOnce(&'b mut Scope) -> O,
-    ) -> Option<O> {
-        todo!()
-    }
-
     // return a bumpframe with a lifetime attached to the arena borrow
     // this is useful for merging lifetimes
     pub fn with_scope_vnode<'b>(

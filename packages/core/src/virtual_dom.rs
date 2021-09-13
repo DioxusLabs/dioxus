@@ -61,7 +61,7 @@ pub struct VirtualDom {
 
     root_caller: Box<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>,
 
-    root_props: Pin<Box<dyn Any>>,
+    root_props: Box<dyn Any>,
 }
 
 impl VirtualDom {
@@ -122,10 +122,11 @@ impl VirtualDom {
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
         let root_fc = Box::new(root);
 
-        let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+        let root_props: Box<dyn Any> = Box::new(root_props);
 
         let props_ptr = root_props.downcast_ref::<P>().unwrap() as *const P;
 
+        // Safety: this callback is only valid for the lifetime of the root props
         let root_caller: Box<dyn Fn(&Scope) -> DomTree> = Box::new(move |scope: &Scope| unsafe {
             let props: &'_ P = &*(props_ptr as *const P);
             std::mem::transmute(root(Context { props, scope }))
@@ -188,17 +189,20 @@ impl VirtualDom {
         let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
         root_scope.ensure_drop_safety(&self.scheduler.pool);
 
-        let mut root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+        let mut root_props: Box<dyn Any> = Box::new(root_props);
 
         if let Some(props_ptr) = root_props.downcast_ref::<P>().map(|p| p as *const P) {
             std::mem::swap(&mut self.root_props, &mut root_props);
 
             let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
 
-            todo!();
+            let root_caller: Box<dyn Fn(&Scope) -> DomTree> =
+                Box::new(move |scope: &Scope| unsafe {
+                    let props: &'_ P = &*(props_ptr as *const P);
+                    std::mem::transmute(root(Context { props, scope }))
+                });
 
-            // let new_caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
-            // root_scope.update_scope_dependencies(new_caller, ScopeChildren(&[]));
+            root_scope.update_scope_dependencies(&root_caller, ScopeChildren(&[]));
 
             Some(self.rebuild())
         } else {
@@ -386,8 +390,3 @@ impl VirtualDom {
         }
     }
 }
-
-// TODO!
-// These impls are actually wrong. The DOM needs to have a mutex implemented.
-unsafe impl Sync for VirtualDom {}
-unsafe impl Send for VirtualDom {}

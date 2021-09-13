@@ -12,7 +12,6 @@ use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
-    rc::Rc,
 };
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -245,6 +244,8 @@ pub struct Attribute<'a> {
 /// An event listener.
 /// IE onclick, onkeydown, etc
 pub struct Listener<'bump> {
+    /// The ID of the node that this listener is mounted to
+    /// Used to generate the event listener's ID on the DOM
     pub mounted_node: Cell<Option<ElementId>>,
 
     /// The type of event to listen for.
@@ -252,6 +253,7 @@ pub struct Listener<'bump> {
     /// IE "click" - whatever the renderer needs to attach the listener by name.
     pub event: &'static str,
 
+    /// The actual callback that the user specified
     pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(SyntheticEvent) + 'bump>>>,
 }
 
