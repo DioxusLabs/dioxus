@@ -566,6 +566,53 @@ impl Scheduler {
         //     EventPriority::Low => self.low_priority.dirty_scopes.insert(scope),
         // };
     }
+
+    pub fn rebuild(&mut self, base_scope: ScopeId) -> Mutations {
+        //
+        let mut shared = self.pool.clone();
+        let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
+
+        // TODO: drain any in-flight work
+        let cur_component = self
+            .pool
+            .get_scope_mut(base_scope)
+            .expect("The base scope should never be moved");
+
+        // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
+        if cur_component.run_scope(&self.pool) {
+            diff_machine
+                .stack
+                .create_node(cur_component.frames.fin_head(), MountType::Append);
+
+            diff_machine.stack.scope_stack.push(base_scope);
+
+            diff_machine.work(|| false);
+        } else {
+            // todo: should this be a hard error?
+            log::warn!(
+                "Component failed to run succesfully during rebuild.
+                This does not result in a failed rebuild, but indicates a logic failure within your app."
+            );
+        }
+
+        unsafe { std::mem::transmute(diff_machine.mutations) }
+    }
+
+    pub fn hard_diff(&mut self, base_scope: ScopeId) -> Mutations {
+        let cur_component = self
+            .pool
+            .get_scope_mut(base_scope)
+            .expect("The base scope should never be moved");
+
+        if cur_component.run_scope(&self.pool) {
+            let mut diff_machine = DiffMachine::new(Mutations::new(), &mut self.pool);
+            diff_machine.cfg.force_diff = true;
+            diff_machine.diff_scope(base_scope);
+            diff_machine.mutations
+        } else {
+            Mutations::new()
+        }
+    }
 }
 
 pub(crate) struct PriorityLane {

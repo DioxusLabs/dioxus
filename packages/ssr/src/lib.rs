@@ -28,7 +28,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
         "{:}",
         TextRenderer {
             cfg: SsrConfig::default(),
-            root: vdom.get_scope(scope).unwrap().root(),
+            root: vdom.get_scope(scope).unwrap().root_node(),
             vdom: Some(vdom)
         }
     ))
@@ -68,7 +68,7 @@ impl<'a> TextRenderer<'a> {
     pub fn from_vdom(vdom: &'a VirtualDom, cfg: SsrConfig) -> Self {
         Self {
             cfg,
-            root: vdom.base_scope().root(),
+            root: vdom.base_scope().root_node(),
             vdom: Some(vdom),
         }
     }
@@ -172,7 +172,7 @@ impl<'a> TextRenderer<'a> {
                 let idx = vcomp.associated_scope.get().unwrap();
                 match (self.vdom, self.cfg.skip_components) {
                     (Some(vdom), false) => {
-                        let new_node = vdom.get_scope(idx).unwrap().root();
+                        let new_node = vdom.get_scope(idx).unwrap().root_node();
                         self.html_render(new_node, f, il + 1)?;
                     }
                     _ => {

@@ -100,7 +100,7 @@ impl std::fmt::Display for VirtualDom {
                     VNode::Component(vcomp) => {
                         let idx = vcomp.associated_scope.get().unwrap();
                         if !self.cfg.skip_components {
-                            let new_node = vdom.get_scope(idx).unwrap().root();
+                            let new_node = vdom.get_scope(idx).unwrap().root_node();
                             self.html_render(vdom, new_node, f, il)?;
                         }
                     }
@@ -113,7 +113,7 @@ impl std::fmt::Display for VirtualDom {
         }
 
         let base = self.base_scope();
-        let root = base.root();
+        let root = base.root_node();
         let renderer = ScopeRenderer {
             scope: base,
             cfg: Cfg {

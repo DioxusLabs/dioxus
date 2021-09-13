@@ -277,8 +277,11 @@ impl<'bump> DiffMachine<'bump> {
     fn create_suspended_node(&mut self, suspended: &'bump VSuspended) {
         let real_id = self.vdom.reserve_node();
         self.mutations.create_placeholder(real_id);
+
         suspended.dom_id.set(Some(real_id));
         self.stack.add_child_count(1);
+
+        self.attach_suspended_node_to_scope(suspended);
     }
 
     fn create_anchor_node(&mut self, anchor: &'bump VAnchor) {
@@ -394,7 +397,7 @@ impl<'bump> DiffMachine<'bump> {
             }
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
-            (Suspended(old), Suspended(new)) => new.dom_id.set(old.dom_id.get()),
+            (Suspended(old), Suspended(new)) => self.diff_suspended_nodes(old, new),
             (Element(old), Element(new)) => self.diff_element_nodes(old, new),
 
             // Anything else is just a basic replace and create
@@ -562,6 +565,11 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         self.diff_children(old.children, new.children);
+    }
+
+    fn diff_suspended_nodes(&mut self, old: &'bump VSuspended, new: &'bump VSuspended) {
+        new.dom_id.set(old.dom_id.get());
+        self.attach_suspended_node_to_scope(new);
     }
 
     // =============================================
@@ -961,7 +969,7 @@ impl<'bump> DiffMachine<'bump> {
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
                     let scope = self.vdom.get_scope(scope_id).unwrap();
-                    search_node = Some(scope.root());
+                    search_node = Some(scope.root_node());
                 }
             }
         }
@@ -979,7 +987,7 @@ impl<'bump> DiffMachine<'bump> {
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
                     let scope = self.vdom.get_scope(scope_id).unwrap();
-                    search_node = Some(scope.root());
+                    search_node = Some(scope.root_node());
                 }
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
@@ -1045,7 +1053,7 @@ impl<'bump> DiffMachine<'bump> {
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
                     let scope = self.vdom.get_scope(scope_id).unwrap();
-                    let root = scope.root();
+                    let root = scope.root_node();
                     self.remove_nodes(Some(root));
                 }
             }
@@ -1074,6 +1082,21 @@ impl<'bump> DiffMachine<'bump> {
         let mut queue = scope.listeners.borrow_mut();
         let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
         queue.push(long_listener as *const _)
+    }
+
+    fn attach_suspended_node_to_scope(&mut self, suspended: &'bump VSuspended) {
+        if let Some(scope) = self
+            .stack
+            .current_scope()
+            .and_then(|id| self.vdom.get_scope_mut(id))
+        {
+            // safety: this lifetime is managed by the logic on scope
+            let extended: &VSuspended<'static> = unsafe { std::mem::transmute(suspended) };
+            scope
+                .suspended_nodes
+                .borrow_mut()
+                .insert(suspended.task_id, extended as *const _);
+        }
     }
 }
 

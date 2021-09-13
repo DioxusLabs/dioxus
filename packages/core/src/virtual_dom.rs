@@ -20,7 +20,7 @@
 //! Additional functionality is defined in the respective files.
 
 use crate::innerlude::*;
-use std::{any::Any, pin::Pin};
+use std::any::Any;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 ///
@@ -59,9 +59,10 @@ pub struct VirtualDom {
 
     root_fc: Box<dyn Any>,
 
-    root_caller: Box<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>,
-
     root_props: Box<dyn Any>,
+
+    // we need to keep the allocation around, but we don't necessarily use it
+    _root_caller: Box<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>,
 }
 
 impl VirtualDom {
@@ -146,7 +147,7 @@ impl VirtualDom {
         });
 
         Self {
-            root_caller,
+            _root_caller: root_caller,
             root_fc,
             base_scope,
             scheduler,
@@ -187,11 +188,14 @@ impl VirtualDom {
     /// ```
     pub fn update_root_props<'s, P: 'static>(&'s mut self, root_props: P) -> Option<Mutations<'s>> {
         let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
+
+        // Pre-emptively drop any downstream references of the old props
         root_scope.ensure_drop_safety(&self.scheduler.pool);
 
         let mut root_props: Box<dyn Any> = Box::new(root_props);
 
         if let Some(props_ptr) = root_props.downcast_ref::<P>().map(|p| p as *const P) {
+            // Swap the old props and new props
             std::mem::swap(&mut self.root_props, &mut root_props);
 
             let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
@@ -203,6 +207,8 @@ impl VirtualDom {
                 });
 
             root_scope.update_scope_dependencies(&root_caller, ScopeChildren(&[]));
+
+            drop(root_props);
 
             Some(self.rebuild())
         } else {
@@ -228,33 +234,7 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild<'s>(&'s mut self) -> Mutations<'s> {
-        let mut shared = self.scheduler.pool.clone();
-        let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
-
-        let cur_component = self
-            .scheduler
-            .pool
-            .get_scope_mut(self.base_scope)
-            .expect("The base scope should never be moved");
-
-        // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope(&self.scheduler.pool) {
-            diff_machine
-                .stack
-                .create_node(cur_component.frames.fin_head(), MountType::Append);
-
-            diff_machine.stack.scope_stack.push(self.base_scope);
-
-            diff_machine.work(|| false);
-        } else {
-            // todo: should this be a hard error?
-            log::warn!(
-                "Component failed to run succesfully during rebuild.
-                This does not result in a failed rebuild, but indicates a logic failure within your app."
-            );
-        }
-
-        unsafe { std::mem::transmute(diff_machine.mutations) }
+        self.scheduler.rebuild(self.base_scope)
     }
 
     /// Compute a manual diff of the VirtualDOM between states.
@@ -292,21 +272,7 @@ impl VirtualDom {
     /// let edits = dom.diff();
     /// ```
     pub fn diff<'s>(&'s mut self) -> Mutations<'s> {
-        let cur_component = self
-            .scheduler
-            .pool
-            .get_scope_mut(self.base_scope)
-            .expect("The base scope should never be moved");
-
-        if cur_component.run_scope(&self.scheduler.pool) {
-            let mut diff_machine: DiffMachine<'s> =
-                DiffMachine::new(Mutations::new(), &mut self.scheduler.pool);
-            diff_machine.cfg.force_diff = true;
-            diff_machine.diff_scope(self.base_scope);
-            diff_machine.mutations
-        } else {
-            Mutations::new()
-        }
+        self.scheduler.hard_diff(self.base_scope)
     }
 
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
