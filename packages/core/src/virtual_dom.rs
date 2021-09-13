@@ -356,3 +356,25 @@ impl VirtualDom {
         }
     }
 }
+
+impl std::fmt::Display for VirtualDom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let base = self.base_scope();
+        let root = base.root_node();
+
+        use crate::vdomdisplay::ScopeRenderer;
+
+        let renderer = ScopeRenderer {
+            show_fragments: false,
+            skip_components: false,
+
+            _scope: base,
+            _pre_render: false,
+            _newline: true,
+            _indent: true,
+            _max_depth: usize::MAX,
+        };
+
+        renderer.render(self, root, f, 0)
+    }
+}
