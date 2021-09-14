@@ -362,8 +362,6 @@ impl std::fmt::Display for VirtualDom {
         let base = self.base_scope();
         let root = base.root_node();
 
-        use crate::vdomdisplay::ScopeRenderer;
-
         let renderer = ScopeRenderer {
             show_fragments: false,
             skip_components: false,

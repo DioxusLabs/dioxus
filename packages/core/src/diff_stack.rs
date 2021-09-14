@@ -62,10 +62,6 @@ impl<'bump> DiffStack<'bump> {
         self.scope_stack.pop();
     }
 
-    pub fn pop_scope(&mut self) -> Option<ScopeId> {
-        self.scope_stack.pop()
-    }
-
     pub fn push(&mut self, instruction: DiffInstruction<'bump>) {
         self.instructions.push(instruction)
     }

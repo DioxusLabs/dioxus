@@ -12,7 +12,7 @@ pub struct TestDom {
 impl TestDom {
     pub fn new() -> TestDom {
         let bump = Bump::new();
-        let mut scheduler = Scheduler::new();
+        let scheduler = Scheduler::new();
         TestDom { bump, scheduler }
     }
 

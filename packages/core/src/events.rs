@@ -3,16 +3,18 @@
 //!
 //! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
 //! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
-use crate::innerlude::{ElementId, ScopeId};
-
-use bumpalo::boxed::Box as BumpBox;
-use std::{any::Any, cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
-
 use crate::{
-    innerlude::NodeFactory,
-    innerlude::{Attribute, Listener, VNode},
+    innerlude::Listener,
+    innerlude::{ElementId, NodeFactory, ScopeId},
 };
-use std::cell::Cell;
+use bumpalo::boxed::Box as BumpBox;
+use std::{
+    any::Any,
+    cell::{Cell, RefCell},
+    fmt::Debug,
+    ops::Deref,
+    rc::Rc,
+};
 
 #[derive(Debug)]
 pub struct UserEvent {
@@ -832,7 +834,7 @@ pub mod on {
             }
 
             // get the raw code
-            fn raw_code(&self) -> u32 {
+            pub fn raw_code(&self) -> u32 {
                 *self as u32
             }
         }
