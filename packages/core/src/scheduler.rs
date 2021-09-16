@@ -151,6 +151,8 @@ pub(crate) struct Scheduler {
 
     pub pending_tasks: VecDeque<UserEvent>,
 
+    pub batched_events: VecDeque<UserEvent>,
+
     pub garbage_scopes: HashSet<ScopeId>,
 
     pub lanes: [PriorityLane; 4],
@@ -214,7 +216,7 @@ impl Scheduler {
             channel,
         };
 
-        let mut async_tasks = FuturesUnordered::new();
+        let async_tasks = FuturesUnordered::new();
 
         Self {
             pool,
@@ -233,6 +235,8 @@ impl Scheduler {
 
             pending_tasks: VecDeque::new(),
 
+            batched_events: VecDeque::new(),
+
             garbage_scopes: HashSet::new(),
 
             current_priority: EventPriority::Low,
@@ -249,89 +253,70 @@ impl Scheduler {
 
     pub fn manually_poll_events(&mut self) {
         while let Ok(Some(msg)) = self.receiver.try_next() {
-            self.handle_channel_msg(msg);
+            match msg {
+                SchedulerMsg::UiEvent(event) => self.ui_events.push_front(event),
+                SchedulerMsg::Immediate(im) => self.pending_immediates.push_front(im),
+
+                // task stuff
+                SchedulerMsg::SubmitTask(_, _) => todo!(),
+                SchedulerMsg::ToggleTask(_) => todo!(),
+                SchedulerMsg::PauseTask(_) => todo!(),
+                SchedulerMsg::ResumeTask(_) => todo!(),
+                SchedulerMsg::DropTask(_) => todo!(),
+            }
         }
     }
 
-    // Converts UI events into dirty scopes with various priorities
-    pub fn consume_pending_events(&mut self) {
+    // returns true if the event is discrete
+    pub fn handle_ui_event(&mut self, event: UserEvent) -> bool {
+        let (discrete, priority) = event_meta(&event);
+
+        if let Some(scope) = self.pool.get_scope_mut(event.scope) {
+            if let Some(element) = event.mounted_dom_id {
+                // TODO: bubble properly here
+                scope.call_listener(event.event, element);
+
+                while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
+                    //
+                    //     self.add_dirty_scope(dirty_scope, trigger.priority)
+                }
+            }
+        }
+
+        use EventPriority::*;
+
+        match priority {
+            Immediate => todo!(),
+            High => todo!(),
+            Medium => todo!(),
+            Low => todo!(),
+        }
+
+        discrete
+    }
+
+    fn prepare_work(&mut self) {
         // consume all events that are "continuous" to be batched
         // if we run into a discrete event, then bail early
 
-        while let Some(trigger) = self.ui_events.pop_back() {
-            if let Some(scope) = self.pool.get_scope_mut(trigger.scope) {
-                if let Some(element) = trigger.mounted_dom_id {
-                    let priority = match trigger.name {
-                        // clipboard
-                        "copy" | "cut" | "paste" => EventPriority::Medium,
-
-                        // Composition
-                        "compositionend" | "compositionstart" | "compositionupdate" => {
-                            EventPriority::Low
-                        }
-
-                        // Keyboard
-                        "keydown" | "keypress" | "keyup" => EventPriority::Low,
-
-                        // Focus
-                        "focus" | "blur" => EventPriority::Low,
-
-                        // Form
-                        "change" | "input" | "invalid" | "reset" | "submit" => EventPriority::Low,
-
-                        // Mouse
-                        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend"
-                        | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
-                        | "drop" | "mousedown" | "mouseenter" | "mouseleave" | "mousemove"
-                        | "mouseout" | "mouseover" | "mouseup" => EventPriority::Low,
-
-                        "mousemove" => EventPriority::Medium,
-
-                        // Pointer
-                        "pointerdown" | "pointermove" | "pointerup" | "pointercancel"
-                        | "gotpointercapture" | "lostpointercapture" | "pointerenter"
-                        | "pointerleave" | "pointerover" | "pointerout" => EventPriority::Low,
-
-                        // Selection
-                        "select" | "touchcancel" | "touchend" => EventPriority::Low,
-
-                        // Touch
-                        "touchmove" | "touchstart" => EventPriority::Low,
-
-                        // Wheel
-                        "scroll" | "wheel" => EventPriority::Low,
-
-                        // Media
-                        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied"
-                        | "encrypted" | "ended" | "error" | "loadeddata" | "loadedmetadata"
-                        | "loadstart" | "pause" | "play" | "playing" | "progress"
-                        | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-                        | "timeupdate" | "volumechange" | "waiting" => EventPriority::Low,
-
-                        // Animation
-                        "animationstart" | "animationend" | "animationiteration" => {
-                            EventPriority::Low
-                        }
-
-                        // Transition
-                        "transitionend" => EventPriority::Low,
-
-                        // Toggle
-                        "toggle" => EventPriority::Low,
-
-                        _ => EventPriority::Low,
-                    };
-
-                    scope.call_listener(trigger.event, element);
-                    // let receiver = self.immediate_receiver.clone();
-                    // let mut receiver = receiver.borrow_mut();
-
-                    // // Drain the immediates into the dirty scopes, setting the appropiate priorities
-                    // while let Ok(Some(dirty_scope)) = receiver.try_next() {
-                    //     self.add_dirty_scope(dirty_scope, trigger.priority)
-                    // }
-                }
+        self.current_priority = match (
+            self.lanes[0].has_work(),
+            self.lanes[1].has_work(),
+            self.lanes[2].has_work(),
+            self.lanes[3].has_work(),
+        ) {
+            (true, _, _, _) => EventPriority::Immediate,
+            (false, true, _, _) => EventPriority::High,
+            (false, false, true, _) => EventPriority::Medium,
+            (false, false, false, true) => EventPriority::Low,
+            (false, false, false, false) => {
+                // no work to do, process events
+                EventPriority::Low
             }
+        };
+
+        while let Some(trigger) = self.ui_events.pop_back() {
+            if let Some(scope) = self.pool.get_scope_mut(trigger.scope) {}
         }
     }
 
@@ -343,20 +328,6 @@ impl Scheduler {
 
     pub fn has_pending_events(&self) -> bool {
         self.ui_events.len() > 0
-    }
-
-    fn shift_priorities(&mut self) {
-        self.current_priority = match (
-            self.lanes[0].has_work(),
-            self.lanes[1].has_work(),
-            self.lanes[2].has_work(),
-            self.lanes[3].has_work(),
-        ) {
-            (true, _, _, _) => EventPriority::Immediate,
-            (false, true, _, _) => EventPriority::High,
-            (false, false, true, _) => EventPriority::Medium,
-            (false, false, false, _) => EventPriority::Low,
-        };
     }
 
     /// re-balance the work lanes, ensuring high-priority work properly bumps away low priority work
@@ -385,101 +356,44 @@ impl Scheduler {
         }
     }
 
-    /// Work the scheduler down, not polling any ongoing tasks.
-    ///
-    /// Will use the standard priority-based scheduling, batching, etc, but just won't interact with the async reactor.
-    pub fn work_sync<'a>(&'a mut self) -> Vec<Mutations<'a>> {
-        let mut committed_mutations = Vec::new();
-
-        self.manually_poll_events();
-
-        if !self.has_any_work() {
-            return committed_mutations;
+    pub fn current_lane(&mut self) -> &mut PriorityLane {
+        match self.current_priority {
+            EventPriority::Immediate => &mut self.lanes[0],
+            EventPriority::High => &mut self.lanes[1],
+            EventPriority::Medium => &mut self.lanes[2],
+            EventPriority::Low => &mut self.lanes[3],
         }
-
-        self.consume_pending_events();
-
-        while self.has_any_work() {
-            self.shift_priorities();
-            self.work_on_current_lane(|| false, &mut committed_mutations);
-        }
-
-        committed_mutations
     }
 
-    /// The primary workhorse of the VirtualDOM.
-    ///
-    /// Uses some fairly complex logic to schedule what work should be produced.
-    ///
-    /// Returns a list of successful mutations.
-    pub async fn work_with_deadline<'a>(
-        &'a mut self,
-        deadline: impl Future<Output = ()>,
-    ) -> Vec<Mutations<'a>> {
-        /*
-        Strategy:
-        - When called, check for any UI events that might've been received since the last frame.
-        - Dump all UI events into a "pending discrete" queue and a "pending continuous" queue.
+    pub fn handle_channel_msg(&mut self, msg: SchedulerMsg) {
+        match msg {
+            SchedulerMsg::Immediate(_) => todo!(),
 
-        - If there are any pending discrete events, then elevate our priorty level. If our priority level is already "high,"
-            then we need to finish the high priority work first. If the current work is "low" then analyze what scopes
-            will be invalidated by this new work. If this interferes with any in-flight medium or low work, then we need
-            to bump the other work out of the way, or choose to process it so we don't have any conflicts.
-            'static components have a leg up here since their work can be re-used among multiple scopes.
-            "High priority" is only for blocking! Should only be used on "clicks"
+            SchedulerMsg::UiEvent(event) => {
+                //
 
-        - If there are no pending discrete events, then check for continuous events. These can be completely batched
-
-        - we batch completely until we run into a discrete event
-        - all continuous events are batched together
-        - so D C C C C C would be two separate events - D and C. IE onclick and onscroll
-        - D C C C C C C D C C C D would be D C D C D in 5 distinct phases.
-
-        - !listener bubbling is not currently implemented properly and will need to be implemented somehow in the future
-            - we need to keep track of element parents to be able to traverse properly
-
-
-        Open questions:
-        - what if we get two clicks from the component during the same slice?
-            - should we batch?
-            - react says no - they are continuous
-            - but if we received both - then we don't need to diff, do we? run as many as we can and then finally diff?
-        */
-        let mut committed_mutations = Vec::<Mutations<'static>>::new();
-        pin_mut!(deadline);
-
-        loop {
-            // Internalize any pending work since the last time we ran
-            self.manually_poll_events();
-
-            // Wait for any new events if we have nothing to do
-            // todo: poll the events once even if there is work to do to prevent starvation
-            if !self.has_any_work() {
-                futures_util::select! {
-                    msg = self.async_tasks.next() => {}
-                    msg = self.receiver.next() => self.handle_channel_msg(msg.unwrap()),
-                    _ = (&mut deadline).fuse() => return committed_mutations,
-                }
+                self.handle_ui_event(event);
             }
 
-            // Create work from the pending event queue
-            self.consume_pending_events();
-
-            // shift to the correct lane
-            self.shift_priorities();
-
-            let mut deadline_reached = || (&mut deadline).now_or_never().is_some();
-
-            let finished_before_deadline =
-                self.work_on_current_lane(&mut deadline_reached, &mut committed_mutations);
-
-            if !finished_before_deadline {
-                break;
-            }
+            //
+            SchedulerMsg::SubmitTask(_, _) => todo!(),
+            SchedulerMsg::ToggleTask(_) => todo!(),
+            SchedulerMsg::PauseTask(_) => todo!(),
+            SchedulerMsg::ResumeTask(_) => todo!(),
+            SchedulerMsg::DropTask(_) => todo!(),
         }
-
-        committed_mutations
     }
+
+    fn add_dirty_scope(&mut self, scope: ScopeId, priority: EventPriority) {
+        todo!()
+        // match priority {
+        //     EventPriority::High => self.high_priorty.dirty_scopes.insert(scope),
+        //     EventPriority::Medium => self.medium_priority.dirty_scopes.insert(scope),
+        //     EventPriority::Low => self.low_priority.dirty_scopes.insert(scope),
+        // };
+    }
+
+    async fn wait_for_any_work(&mut self) {}
 
     /// Load the current lane, and work on it, periodically checking in if the deadline has been reached.
     ///
@@ -535,40 +449,105 @@ impl Scheduler {
         }
     }
 
-    pub fn current_lane(&mut self) -> &mut PriorityLane {
-        match self.current_priority {
-            EventPriority::Immediate => &mut self.lanes[0],
-            EventPriority::High => &mut self.lanes[1],
-            EventPriority::Medium => &mut self.lanes[2],
-            EventPriority::Low => &mut self.lanes[3],
+    /// The primary workhorse of the VirtualDOM.
+    ///
+    /// Uses some fairly complex logic to schedule what work should be produced.
+    ///
+    /// Returns a list of successful mutations.
+    pub async fn work_with_deadline<'a>(
+        &'a mut self,
+        deadline: impl Future<Output = ()>,
+    ) -> Vec<Mutations<'a>> {
+        /*
+        Strategy:
+        - When called, check for any UI events that might've been received since the last frame.
+        - Dump all UI events into a "pending discrete" queue and a "pending continuous" queue.
+
+        - If there are any pending discrete events, then elevate our priorty level. If our priority level is already "high,"
+            then we need to finish the high priority work first. If the current work is "low" then analyze what scopes
+            will be invalidated by this new work. If this interferes with any in-flight medium or low work, then we need
+            to bump the other work out of the way, or choose to process it so we don't have any conflicts.
+            'static components have a leg up here since their work can be re-used among multiple scopes.
+            "High priority" is only for blocking! Should only be used on "clicks"
+
+        - If there are no pending discrete events, then check for continuous events. These can be completely batched
+
+        - we batch completely until we run into a discrete event
+        - all continuous events are batched together
+        - so D C C C C C would be two separate events - D and C. IE onclick and onscroll
+        - D C C C C C C D C C C D would be D C D C D in 5 distinct phases.
+
+        - !listener bubbling is not currently implemented properly and will need to be implemented somehow in the future
+            - we need to keep track of element parents to be able to traverse properly
+
+
+        Open questions:
+        - what if we get two clicks from the component during the same slice?
+            - should we batch?
+            - react says no - they are continuous
+            - but if we received both - then we don't need to diff, do we? run as many as we can and then finally diff?
+        */
+        let mut committed_mutations = Vec::<Mutations<'static>>::new();
+        pin_mut!(deadline);
+
+        loop {
+            // Move work out of the scheduler message receiver and into dedicated message lanes
+            self.manually_poll_events();
+
+            // Wait for any new events if we have nothing to do
+            // todo: poll the events once even if there is work to do to prevent starvation
+            if !self.has_any_work() {
+                futures_util::select! {
+                    // todo: find a solution for the exhausted queue problem
+                    // msg = self.async_tasks.next() => {}
+                    msg = self.receiver.next() => {
+                        log::debug!("received work in scheduler");
+                        self.handle_channel_msg(msg.unwrap())
+                    },
+                    _ = (&mut deadline).fuse() => return committed_mutations,
+                }
+            }
+
+            // switch our priority, pop off any work
+            self.prepare_work();
+
+            let mut deadline_reached = || (&mut deadline).now_or_never().is_some();
+
+            let finished_before_deadline =
+                self.work_on_current_lane(&mut deadline_reached, &mut committed_mutations);
+
+            if !finished_before_deadline {
+                break;
+            }
         }
+
+        committed_mutations
     }
 
-    pub fn handle_channel_msg(&mut self, msg: SchedulerMsg) {
-        match msg {
-            SchedulerMsg::Immediate(_) => todo!(),
-            SchedulerMsg::UiEvent(_) => todo!(),
+    /// Work the scheduler down, not polling any ongoing tasks.
+    ///
+    /// Will use the standard priority-based scheduling, batching, etc, but just won't interact with the async reactor.
+    pub fn work_sync<'a>(&'a mut self) -> Vec<Mutations<'a>> {
+        let mut committed_mutations = Vec::new();
 
-            //
-            SchedulerMsg::SubmitTask(_, _) => todo!(),
-            SchedulerMsg::ToggleTask(_) => todo!(),
-            SchedulerMsg::PauseTask(_) => todo!(),
-            SchedulerMsg::ResumeTask(_) => todo!(),
-            SchedulerMsg::DropTask(_) => todo!(),
+        self.manually_poll_events();
+
+        if !self.has_any_work() {
+            return committed_mutations;
         }
+
+        while self.has_any_work() {
+            self.prepare_work();
+            self.work_on_current_lane(|| false, &mut committed_mutations);
+        }
+
+        committed_mutations
     }
 
-    fn add_dirty_scope(&mut self, scope: ScopeId, priority: EventPriority) {
-        todo!()
-        // match priority {
-        //     EventPriority::High => self.high_priorty.dirty_scopes.insert(scope),
-        //     EventPriority::Medium => self.medium_priority.dirty_scopes.insert(scope),
-        //     EventPriority::Low => self.low_priority.dirty_scopes.insert(scope),
-        // };
-    }
-
+    /// Restart the entire VirtualDOM from scratch, wiping away any old state and components.
+    ///
+    /// Typically used to kickstart the VirtualDOM after initialization.
     pub fn rebuild(&mut self, base_scope: ScopeId) -> Mutations {
-        //
         let mut shared = self.pool.clone();
         let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
 
@@ -615,6 +594,8 @@ impl Scheduler {
     }
 }
 
+impl Scheduler {}
+
 pub(crate) struct PriorityLane {
     pub dirty_scopes: IndexSet<ScopeId>,
     pub saved_state: Option<SavedDiffWork<'static>>,
@@ -631,7 +612,7 @@ impl PriorityLane {
     }
 
     fn has_work(&self) -> bool {
-        todo!()
+        self.dirty_scopes.len() > 0 || self.in_progress == true
     }
 
     fn work(&mut self) {
@@ -823,4 +804,64 @@ impl ResourcePool {
     }
 
     pub fn borrow_bumpframe(&self) {}
+}
+
+fn event_meta(event: &UserEvent) -> (bool, EventPriority) {
+    use EventPriority::*;
+
+    match event.name {
+        // clipboard
+        "copy" | "cut" | "paste" => (true, Medium),
+
+        // Composition
+        "compositionend" | "compositionstart" | "compositionupdate" => (true, Low),
+
+        // Keyboard
+        "keydown" | "keypress" | "keyup" => (true, High),
+
+        // Focus
+        "focus" | "blur" => (true, Low),
+
+        // Form
+        "change" | "input" | "invalid" | "reset" | "submit" => (true, Medium),
+
+        // Mouse
+        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
+        | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
+        | "mouseleave" | "mouseout" | "mouseover" | "mouseup" => (true, High),
+
+        "mousemove" => (false, Medium),
+
+        // Pointer
+        "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
+        | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
+            (true, Medium)
+        }
+
+        // Selection
+        "select" | "touchcancel" | "touchend" => (true, Medium),
+
+        // Touch
+        "touchmove" | "touchstart" => (true, Medium),
+
+        // Wheel
+        "scroll" | "wheel" => (false, Medium),
+
+        // Media
+        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
+        | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
+        | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
+        | "timeupdate" | "volumechange" | "waiting" => (true, Medium),
+
+        // Animation
+        "animationstart" | "animationend" | "animationiteration" => (true, Medium),
+
+        // Transition
+        "transitionend" => (true, Medium),
+
+        // Toggle
+        "toggle" => (true, Medium),
+
+        _ => (true, Low),
+    }
 }

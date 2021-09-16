@@ -27,7 +27,11 @@ static APP: FC<()> = |cx| {
 
     cx.render(rsx! {
         div {
-            button { onclick: move |_| count += 1, "add"  }
+            button {
+                onclick: move |_| count += 1,
+                "Click to add."
+                "Current count: {count}"
+            }
             ul {
                 {(0..*count).map(|f| rsx!{
                     li { "a - {f}" }

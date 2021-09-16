@@ -361,7 +361,7 @@ impl<'a> ScopeRenderer<'a> {
                 write_indent(f, il);
                 write!(f, "\"{}\"\n", text.text)?
             }
-            VNode::Anchor(anchor) => {
+            VNode::Anchor(_anchor) => {
                 write_indent(f, il);
                 write!(f, "Anchor {{}}\n")?;
             }

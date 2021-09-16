@@ -15,8 +15,8 @@ static App: FC<()> = |cx| {
     let (selection, set_selection) = use_state(cx, || None as Option<usize>).classic();
 
     let body = match selection {
-        Some(id) => rsx!(in cx, ReferenceItem { selected: *id }),
-        None => rsx!(in cx, div { "Select an concept to explore" }),
+        Some(id) => rsx!(cx, ReferenceItem { selected: *id }),
+        None => rsx!(cx, div { "Select an concept to explore" }),
     };
 
     cx.render(rsx! {

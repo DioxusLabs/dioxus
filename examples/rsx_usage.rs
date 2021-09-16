@@ -106,7 +106,7 @@ pub static Example: FC<()> = |cx| {
             // To fix this, call "render" method or use the "in" syntax to produce VNodes.
             // There's nothing we can do about it, sorry :/ (unless you want *really* unhygenic macros)
             {match true {
-                true => rsx!(in cx, h1 {"Top text"}),
+                true => rsx!(cx, h1 {"Top text"}),
                 false => cx.render(rsx!( h1 {"Bottom text"}))
             }}
 
@@ -117,9 +117,9 @@ pub static Example: FC<()> = |cx| {
 
             // True conditions need to be rendered (same reasons as matching)
             {if true {
-                rsx!(in cx, h1 {"Top text"})
+                rsx!(cx, h1 {"Top text"})
             } else {
-                rsx!(in cx, h1 {"Bottom text"})
+                rsx!(cx, h1 {"Bottom text"})
             }}
 
             // returning "None" is a bit noisy... but rare in practice

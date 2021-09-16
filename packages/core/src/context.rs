@@ -162,11 +162,82 @@ impl<'src, P> Context<'src, P> {
             });
     }
 
-    pub fn consume_shared_state<T: 'static>(self) -> Option<Rc<T>> {
+    pub fn try_consume_shared_state<T: 'static>(self) -> Option<Rc<T>> {
         let getter = &self.scope.shared.get_shared_context;
         let ty = TypeId::of::<T>();
         let idx = self.scope.our_arena_idx;
         getter(idx, ty).map(|f| f.downcast().expect("TypeID already validated"))
+    }
+
+    /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
+    ///
+    /// This is a hook, so it should not be called conditionally!
+    ///
+    /// The init method is ran *only* on first use, otherwise it is ignored. However, it uses hooks (ie `use`)
+    /// so don't put it in a conditional.
+    ///
+    /// When the component is dropped, so is the context. Be aware of this behavior when consuming
+    /// the context via Rc/Weak.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// struct SharedState(&'static str);
+    ///
+    /// static App: FC<()> = |cx| {
+    ///     cx.provide_state(|| SharedState("world"));
+    ///     rsx!(cx, Child {})
+    /// }
+    ///
+    /// static Child: FC<()> = |cx| {
+    ///     let state = cx.consume_state::<SharedState>();
+    ///     rsx!(cx, div { "hello {state.0}" })
+    /// }
+    /// ```
+    pub fn provide_state<T, F>(self, init: F) -> &'src Rc<T>
+    where
+        T: 'static,
+        F: FnOnce() -> T,
+    {
+        //
+        let ty = TypeId::of::<T>();
+        let contains_key = self.scope.shared_contexts.borrow().contains_key(&ty);
+
+        let is_initialized = self.use_hook(
+            |_| false,
+            |s| {
+                let i = s.clone();
+                *s = true;
+                i
+            },
+            |_| {},
+        );
+
+        match (is_initialized, contains_key) {
+            // Do nothing, already initialized and already exists
+            (true, true) => {}
+
+            // Needs to be initialized
+            (false, false) => self.add_shared_state(init()),
+
+            _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
+        };
+
+        self.consume_state().unwrap()
+    }
+
+    /// Uses a context, storing the cached value around
+    ///
+    /// If a context is not found on the first search, then this call will be  "dud", always returning "None" even if a
+    /// context was added later. This allows using another hook as a fallback
+    ///
+    pub fn consume_state<T: 'static>(self) -> Option<&'src Rc<T>> {
+        struct UseContextHook<C>(Option<Rc<C>>);
+        self.use_hook(
+            move |_| UseContextHook(self.try_consume_shared_state::<T>()),
+            move |hook| hook.0.as_ref(),
+            |_| {},
+        )
     }
 
     /// Store a value between renders

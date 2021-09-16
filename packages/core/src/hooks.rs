@@ -18,69 +18,6 @@ use std::{
     rc::Rc,
 };
 
-/// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
-///
-/// This is a hook, so it may not be called conditionally!
-///
-/// The init method is ran *only* on first use, otherwise it is ignored. However, it uses hooks (ie `use`)
-/// so don't put it in a conditional.
-///
-/// When the component is dropped, so is the context. Be aware of this behavior when consuming
-/// the context via Rc/Weak.
-///
-///
-///
-pub fn use_provide_state<'src, Pr, T, F>(cx: Context<'src, Pr>, init: F) -> &'src Rc<T>
-where
-    T: 'static,
-    F: FnOnce() -> T,
-{
-    let ty = TypeId::of::<T>();
-    let contains_key = cx.scope.shared_contexts.borrow().contains_key(&ty);
-
-    let is_initialized = cx.use_hook(
-        |_| false,
-        |s| {
-            let i = s.clone();
-            *s = true;
-            i
-        },
-        |_| {},
-    );
-
-    match (is_initialized, contains_key) {
-        // Do nothing, already initialized and already exists
-        (true, true) => {}
-
-        // Needs to be initialized
-        (false, false) => cx.add_shared_state(init()),
-
-        _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
-    };
-
-    use_consume_state::<T, _>(cx)
-}
-
-/// There are hooks going on here!
-pub fn use_consume_state<'src, T: 'static, P>(cx: Context<'src, P>) -> &'src Rc<T> {
-    use_try_consume_state::<T, _>(cx).unwrap()
-}
-
-/// Uses a context, storing the cached value around
-///
-/// If a context is not found on the first search, then this call will be  "dud", always returning "None" even if a
-/// context was added later. This allows using another hook as a fallback
-///
-pub fn use_try_consume_state<'src, T: 'static, P>(cx: Context<'src, P>) -> Option<&'src Rc<T>> {
-    struct UseContextHook<C>(Option<Rc<C>>);
-
-    cx.use_hook(
-        move |_| UseContextHook(cx.consume_shared_state::<T>()),
-        move |hook| hook.0.as_ref(),
-        |_| {},
-    )
-}
-
 /// Awaits the given task, forcing the component to re-render when the value is ready.
 ///
 ///

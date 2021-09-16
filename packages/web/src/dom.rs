@@ -93,7 +93,7 @@ impl WebsysDom {
 
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
         for edit in edits.drain(..) {
-            log::info!("Handling edit: {:#?}", edit);
+            // log::info!("Handling edit: {:#?}", edit);
             match edit {
                 DomEdit::PushRoot { id: root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
@@ -530,6 +530,8 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     let typ = event.type_();
 
+    log::debug!("Event type is {:?}", typ);
+
     // let attrs = target.attributes();
     // for x in 0..attrs.length() {
     //     let attr = attrs.item(x).unwrap();
@@ -567,10 +569,6 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
         mounted_dom_id: Some(ElementId(real_id as usize)),
         scope: ScopeId(triggered_scope as usize),
     })
-}
-
-pub fn prepare_websys_dom() -> Element {
-    load_document().get_element_by_id("dioxusroot").unwrap()
 }
 
 pub fn load_document() -> Document {

@@ -98,7 +98,7 @@ Sometimes you want a signal to propagate across your app, either through far-awa
 const TITLE: Atom<String> = || "".to_string();
 const Provider: FC<()> = |cx| {
     let title = use_signal(&cx, &TITLE);
-    rsx!(in cx, input { value: title })
+    rsx!(cx, input { value: title })
 };
 ```
 
@@ -108,7 +108,7 @@ If we use the `TITLE` atom in another component, we can cause updates to flow be
 const Receiver: FC<()> = |cx| {
     let title = use_signal(&cx, &TITLE);
     log::info!("This will only be called once!");
-    rsx!(in cx,
+    rsx!(cx,
         div {
             h1 { "{title}" }
             div {}

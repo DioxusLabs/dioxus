@@ -117,10 +117,12 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
 
     intern_cached_strings();
 
-    let hydrating = cfg.hydrate;
+    let should_hydrate = cfg.hydrate;
 
     let root_el = load_document().get_element_by_id(&cfg.rootname).unwrap();
+
     let tasks = dom.get_event_sender();
+
     let sender_callback = Rc::new(move |event| tasks.unbounded_send(event).unwrap());
 
     let mut websys_dom = dom::WebsysDom::new(root_el, cfg, sender_callback);
@@ -129,8 +131,10 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
 
     // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding
     // ElementIds should already line up because the web_sys dom has already loaded elements with the DioxusID into memory
-    if !hydrating {
+    if !should_hydrate {
         websys_dom.process_edits(&mut mutations.edits);
+    } else {
+        // websys dom processed the config and hydrated the dom already
     }
 
     let work_loop = ric_raf::RafLoop::new();
@@ -144,12 +148,14 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
         let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let mut mutations = dom.run_with_deadline(deadline).await;
+        let mutations = dom.run_with_deadline(deadline).await;
 
         // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;
 
-        // actually apply our changes during the animation frame
-        websys_dom.process_edits(&mut mutations[0].edits);
+        for mut edit in mutations {
+            // actually apply our changes during the animation frame
+            websys_dom.process_edits(&mut edit.edits);
+        }
     }
 }

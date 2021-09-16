@@ -34,7 +34,7 @@ static ButtonList: FC<()> = |cx| {
 /// This shows how listeners may be without a visible change in the display.
 /// Check the console.
 static NonUpdatingEvents: FC<()> = |cx| {
-    rsx!(in cx, div {
+    rsx!(cx, div {
         button {
             onclick: move |_| log::info!("Did not cause any updates!")
             "Click me to log!"
@@ -43,7 +43,7 @@ static NonUpdatingEvents: FC<()> = |cx| {
 };
 
 static DisablePropogation: FC<()> = |cx| {
-    rsx!(in cx,
+    rsx!(cx,
         div {
             onclick: move |_| log::info!("event propogated to the div!")
             button {

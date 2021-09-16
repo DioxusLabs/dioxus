@@ -19,8 +19,8 @@ pub static Example: FC<()> = |cx| {
         cx,
         || surf::get(ENDPOINT).recv_json::<DogApi>(),
         |cx, res| match res {
-            Ok(res) => rsx!(in cx, img { src: "{res.message}" }),
-            Err(_) => rsx!(in cx, div { "No doggos for you :(" }),
+            Ok(res) => rsx!(cx, img { src: "{res.message}" }),
+            Err(_) => rsx!(cx, div { "No doggos for you :(" }),
         },
     );
 

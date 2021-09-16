@@ -34,11 +34,11 @@ struct NoKeysProps {
 }
 static AntipatternNoKeys: FC<NoKeysProps> = |cx| {
     // WRONG: Make sure to add keys!
-    rsx!(in cx, ul {
+    rsx!(cx, ul {
         {cx.data.iter().map(|(k, v)| rsx!(li { "List item: {v}" }))}
     });
     // RIGHT: Like this:
-    rsx!(in cx, ul {
+    rsx!(cx, ul {
         {cx.data.iter().map(|(k, v)| rsx!(li { key: "{k}", "List item: {v}" }))}
     })
 };
@@ -56,7 +56,7 @@ static AntipatternNoKeys: FC<NoKeysProps> = |cx| {
 /// an API for registering shared state without the ContextProvider pattern.
 static AntipatternNestedFragments: FC<()> = |cx| {
     // Try to avoid heavily nesting fragments
-    rsx!(in cx,
+    rsx!(cx,
         Fragment {
             Fragment {
                 Fragment {
@@ -125,9 +125,9 @@ static AntipatternMisusedHooks: FC<MisuedHooksProps> = |cx| {
         // do not place a hook in the conditional!
         // prefer to move it out of the conditional
         let (state, set_state) = use_state(cx, || "hello world").classic();
-        rsx!(in cx, div { "{state}" })
+        rsx!(cx, div { "{state}" })
     } else {
-        rsx!(in cx, div { "Not rendering state" })
+        rsx!(cx, div { "Not rendering state" })
     }
 };
 

@@ -314,7 +314,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```no_run
-    /// static App: FC<()> = |cx| rsx!(in cx, div {"hello"} );
+    /// static App: FC<()> = |cx| rsx!(cx, div {"hello"} );
     /// let mut dom = VirtualDom::new(App);
     /// loop {
     ///     let deadline = TimeoutFuture::from_ms(16);
@@ -345,13 +345,17 @@ impl VirtualDom {
     /// This lets us poll async tasks during idle periods without blocking the main thread.
     pub async fn wait_for_work(&mut self) {
         if self.scheduler.has_any_work() {
+            log::debug!("No need to wait for work, we already have some");
             return;
         }
 
+        log::debug!("No active work.... waiting for some...");
         use futures_util::StreamExt;
         futures_util::select! {
-            // hmm - will this resolve to none if there are no async tasks?
-            _ = self.scheduler.async_tasks.next() => {}
+            // // hmm - will this resolve to none if there are no async tasks?
+            // _ = self.scheduler.async_tasks.next() => {
+            //     log::debug!("async task completed!");
+            // }
             msg = self.scheduler.receiver.next() => self.scheduler.handle_channel_msg(msg.unwrap()),
         }
     }

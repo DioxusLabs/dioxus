@@ -34,7 +34,7 @@ pub static Example0: FC<MyProps> = |cx| {
 // which will do essentially the same thing as `cx.render`.
 //
 // In short:
-// `rsx!(in cx, ...)` is shorthand for `cx.render(rsx!(...))`
+// `rsx!(cx, ...)` is shorthand for `cx.render(rsx!(...))`
 #[derive(PartialEq, Props)]
 pub struct MyProps1 {
     should_show: bool,
@@ -45,21 +45,21 @@ pub static Example1: FC<MyProps1> = |cx| {
             // With matching
             {match cx.should_show {
                 true => cx.render(rsx!(div {"it is true!"})),
-                false => rsx!(in cx, div {"it is false!"}),
+                false => rsx!(cx, div {"it is false!"}),
             }}
 
             // or with just regular conditions
             {if cx.should_show {
-                rsx!(in cx, div {"it is true!"})
+                rsx!(cx, div {"it is true!"})
             } else {
-                rsx!(in cx, div {"it is false!"})
+                rsx!(cx, div {"it is false!"})
             }}
 
             // or with optional chaining
             {
                 cx.should_show
-                .then(|| rsx!(in cx, div {"it is false!"}))
-                .unwrap_or_else(|| rsx!(in cx, div {"it is false!"}))
+                .then(|| rsx!(cx, div {"it is false!"}))
+                .unwrap_or_else(|| rsx!(cx, div {"it is false!"}))
             }
         }
     })
@@ -81,9 +81,9 @@ pub static Example2: FC<MyProps2> = |cx| {
     cx.render(rsx! {
         div {
             {match cx.color {
-                Color::Green => rsx!(in cx, div {"it is Green!"}),
-                Color::Yellow => rsx!(in cx, div {"it is Yellow!"}),
-                Color::Red => rsx!(in cx, div {"it is Red!"}),
+                Color::Green => rsx!(cx, div {"it is Green!"}),
+                Color::Yellow => rsx!(cx, div {"it is Yellow!"}),
+                Color::Red => rsx!(cx, div {"it is Red!"}),
             }}
         }
     })

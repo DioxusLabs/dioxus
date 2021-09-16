@@ -113,9 +113,9 @@ pub static Example: FC<()> = |cx| {
                 // rsx! is lazy, and the underlying closures cannot have the same type
                 // Rendering produces the VNode type
                 {match rand::gen_range::<i32>(1..3) {
-                    1 => rsx!(in cx, h1 { "big" })
-                    2 => rsx!(in cx, h2 { "medium" })
-                    _ => rsx!(in cx, h3 { "small" })
+                    1 => rsx!(cx, h1 { "big" })
+                    2 => rsx!(cx, h2 { "medium" })
+                    _ => rsx!(cx, h3 { "small" })
                 }}
 
                 // Optionals
@@ -128,7 +128,7 @@ pub static Example: FC<()> = |cx| {
                 // Duplicating nodes
                 // Clones the nodes by reference, so they are literally identical
                 {{
-                    let node = rsx!(in cx, h1{ "TopNode" });
+                    let node = rsx!(cx, h1{ "TopNode" });
                     (0..10).map(|_| node.clone())
                 }}
 
