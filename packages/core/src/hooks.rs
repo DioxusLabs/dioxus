@@ -15,6 +15,7 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     future::Future,
+    ops::Deref,
     rc::Rc,
 };
 
@@ -47,7 +48,7 @@ where
 
             let slot = task_dump.clone();
 
-            let updater = cx.prepare_update();
+            let updater = cx.schedule_update_any();
             let originator = cx.scope.our_arena_idx;
 
             let handle = cx.submit_task(Box::pin(task_fut.then(move |output| async move {
@@ -188,7 +189,14 @@ impl<'src> SuspendedContext<'src> {
 }
 
 #[derive(Clone, Copy)]
-pub struct NodeRef<'src, T: 'static>(&'src RefCell<T>);
+pub struct NodeRef<'src, T: 'static>(&'src RefCell<Option<T>>);
+
+impl<'a, T> Deref for NodeRef<'a, T> {
+    type Target = RefCell<Option<T>>;
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
 
 pub fn use_node_ref<T, P>(cx: Context<P>) -> NodeRef<T> {
     cx.use_hook(

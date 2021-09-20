@@ -16,12 +16,12 @@ fn shared_state_test() {
     struct MySharedState(&'static str);
 
     static App: FC<()> = |cx| {
-        cx.provide_state(|| MySharedState("world!"));
+        cx.use_provide_state(|| MySharedState("world!"));
         rsx!(cx, Child {})
     };
 
     static Child: FC<()> = |cx| {
-        let shared = cx.consume_state::<MySharedState>()?;
+        let shared = cx.use_consume_state::<MySharedState>()?;
         rsx!(cx, "Hello, {shared.0}")
     };
 

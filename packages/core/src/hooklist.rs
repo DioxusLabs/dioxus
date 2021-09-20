@@ -12,7 +12,7 @@ use std::{
 /// Todo: this could use its very own bump arena, but that might be a tad overkill
 #[derive(Default)]
 pub(crate) struct HookList {
-    vals: RefCell<Vec<UnsafeCell<Box<dyn Any>>>>,
+    vals: RefCell<Vec<(UnsafeCell<Box<dyn Any>>, Box<dyn FnOnce(&mut dyn Any)>)>>,
     idx: Cell<usize>,
 }
 
@@ -20,7 +20,7 @@ impl HookList {
     pub(crate) fn next<T: 'static>(&self) -> Option<&mut T> {
         self.vals.borrow().get(self.idx.get()).and_then(|inn| {
             self.idx.set(self.idx.get() + 1);
-            let raw_box = unsafe { &mut *inn.get() };
+            let raw_box = unsafe { &mut *inn.0.get() };
             raw_box.downcast_mut::<T>()
         })
     }
@@ -35,8 +35,10 @@ impl HookList {
         self.idx.set(0);
     }
 
-    pub(crate) fn push<T: 'static>(&self, new: T) {
-        self.vals.borrow_mut().push(UnsafeCell::new(Box::new(new)))
+    pub(crate) fn push_hook<T: 'static>(&self, new: T, cleanup: Box<dyn FnOnce(&mut dyn Any)>) {
+        self.vals
+            .borrow_mut()
+            .push((UnsafeCell::new(Box::new(new)), cleanup))
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -49,5 +51,12 @@ impl HookList {
 
     pub(crate) fn at_end(&self) -> bool {
         self.cur_idx() >= self.len()
+    }
+
+    pub(crate) fn cleanup_hooks(&mut self) {
+        self.vals
+            .borrow_mut()
+            .drain(..)
+            .for_each(|(mut state, cleanup)| cleanup(state.get_mut()));
     }
 }
