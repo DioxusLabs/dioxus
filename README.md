@@ -193,18 +193,6 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 - 👀 = not yet implemented or being worked on
 - ❓ = not sure if will or can implement
 
-### Coming up...
-
-- 1st class router      
-- Assets                
-- Integrated classnames 
-- Transition            
-- Animation             
-- Native Mobile         
-- Native Desktop        
-- 3D Renderer           
-- LiveView              
-
 ## FAQ:
 
 ### Aren't VDOMs just pure overhead? Why not something like Solid or Svelte?
@@ -244,7 +232,6 @@ You shouldn't use Dioxus if:
 - You don't like the React Hooks approach to frontend
 - You need a no-std renderer
 - You want to support browsers where WASM or asm.js are not supported.
-
 
 
 ## License
