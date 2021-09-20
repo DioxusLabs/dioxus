@@ -24,8 +24,10 @@ pub mod hooklist;
 pub mod hooks;
 pub mod mutations;
 pub mod nodes;
+pub mod resources;
 pub mod scheduler;
 pub mod scope;
+pub mod tasks;
 pub mod test_dom;
 pub mod util;
 pub mod virtual_dom;
@@ -43,8 +45,10 @@ pub(crate) mod innerlude {
     pub use crate::hooks::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
+    pub(crate) use crate::resources::*;
     pub use crate::scheduler::*;
     pub use crate::scope::*;
+    pub use crate::tasks::*;
     pub use crate::test_dom::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
@@ -58,7 +62,7 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority,
     LazyNodes, MountType, Mutations, NodeFactory, Properties, ScopeId, SuspendedContext,
-    SyntheticEvent, TestDom, UserEvent, VNode, VirtualDom, FC,
+    SyntheticEvent, TaskHandle, TestDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {

@@ -39,6 +39,7 @@ pub(crate) struct DiffStack<'bump> {
     instructions: Vec<DiffInstruction<'bump>>,
     nodes_created_stack: SmallVec<[usize; 10]>,
     pub scope_stack: SmallVec<[ScopeId; 5]>,
+    pub element_id_stack: SmallVec<[ElementId; 5]>,
 }
 
 impl<'bump> DiffStack<'bump> {
@@ -47,6 +48,7 @@ impl<'bump> DiffStack<'bump> {
             instructions: Vec::with_capacity(1000),
             nodes_created_stack: smallvec![],
             scope_stack: smallvec![],
+            element_id_stack: smallvec![],
         }
     }
 
@@ -78,6 +80,10 @@ impl<'bump> DiffStack<'bump> {
 
     pub fn push_nodes_created(&mut self, count: usize) {
         self.nodes_created_stack.push(count);
+    }
+
+    pub fn push_element_id(&mut self, id: ElementId) {
+        self.element_id_stack.push(id);
     }
 
     pub fn create_node(&mut self, node: &'bump VNode<'bump>, and: MountType<'bump>) {

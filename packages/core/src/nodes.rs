@@ -188,6 +188,8 @@ pub struct VElement<'a> {
 
     pub dom_id: Cell<Option<ElementId>>,
 
+    pub parent_id: Cell<Option<ElementId>>,
+
     pub listeners: &'a [Listener<'a>],
 
     pub attributes: &'a [Attribute<'a>],
@@ -415,6 +417,7 @@ impl<'a> NodeFactory<'a> {
             attributes,
             children,
             dom_id: empty_cell(),
+            parent_id: empty_cell(),
         }))
     }
 

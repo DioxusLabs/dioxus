@@ -380,3 +380,8 @@ impl std::fmt::Display for VirtualDom {
         renderer.render(self, root, f, 0)
     }
 }
+
+pub struct VirtualDomConfig {
+    component_slab_size: usize,
+    element_slab_size: usize,
+}

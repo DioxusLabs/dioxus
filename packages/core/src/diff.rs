@@ -216,11 +216,6 @@ impl<'bump> DiffMachine<'bump> {
             MountType::Absorb => {
                 self.stack.add_child_count(nodes_created);
             }
-            MountType::Append => {
-                self.mutations.edits.push(AppendChildren {
-                    many: nodes_created as u32,
-                });
-            }
 
             MountType::Replace { old } => {
                 if let Some(old_id) = old.try_mounted_id() {
@@ -238,6 +233,12 @@ impl<'bump> DiffMachine<'bump> {
                 if let Some(old) = el {
                     self.mutations.replace_with(old, nodes_created as u32);
                 }
+            }
+
+            MountType::Append => {
+                self.mutations.edits.push(AppendChildren {
+                    many: nodes_created as u32,
+                });
             }
 
             MountType::InsertAfter { other_node } => {
@@ -258,24 +259,24 @@ impl<'bump> DiffMachine<'bump> {
 
     fn create_node(&mut self, node: &'bump VNode<'bump>) {
         match node {
-            VNode::Text(vtext) => self.create_text_node(vtext),
-            VNode::Suspended(suspended) => self.create_suspended_node(suspended),
-            VNode::Anchor(anchor) => self.create_anchor_node(anchor),
-            VNode::Element(element) => self.create_element_node(element),
+            VNode::Text(vtext) => self.create_text_node(vtext, node),
+            VNode::Suspended(suspended) => self.create_suspended_node(suspended, node),
+            VNode::Anchor(anchor) => self.create_anchor_node(anchor, node),
+            VNode::Element(element) => self.create_element_node(element, node),
             VNode::Fragment(frag) => self.create_fragment_node(frag),
             VNode::Component(component) => self.create_component_node(component),
         }
     }
 
-    fn create_text_node(&mut self, vtext: &'bump VText<'bump>) {
-        let real_id = self.vdom.reserve_node();
+    fn create_text_node(&mut self, vtext: &'bump VText<'bump>, node: &'bump VNode<'bump>) {
+        let real_id = self.vdom.reserve_node(node);
         self.mutations.create_text_node(vtext.text, real_id);
         vtext.dom_id.set(Some(real_id));
         self.stack.add_child_count(1);
     }
 
-    fn create_suspended_node(&mut self, suspended: &'bump VSuspended) {
-        let real_id = self.vdom.reserve_node();
+    fn create_suspended_node(&mut self, suspended: &'bump VSuspended, node: &'bump VNode<'bump>) {
+        let real_id = self.vdom.reserve_node(node);
         self.mutations.create_placeholder(real_id);
 
         suspended.dom_id.set(Some(real_id));
@@ -284,14 +285,14 @@ impl<'bump> DiffMachine<'bump> {
         self.attach_suspended_node_to_scope(suspended);
     }
 
-    fn create_anchor_node(&mut self, anchor: &'bump VAnchor) {
-        let real_id = self.vdom.reserve_node();
+    fn create_anchor_node(&mut self, anchor: &'bump VAnchor, node: &'bump VNode<'bump>) {
+        let real_id = self.vdom.reserve_node(node);
         self.mutations.create_placeholder(real_id);
         anchor.dom_id.set(Some(real_id));
         self.stack.add_child_count(1);
     }
 
-    fn create_element_node(&mut self, element: &'bump VElement<'bump>) {
+    fn create_element_node(&mut self, element: &'bump VElement<'bump>, node: &'bump VNode<'bump>) {
         let VElement {
             tag_name,
             listeners,
@@ -302,7 +303,8 @@ impl<'bump> DiffMachine<'bump> {
             ..
         } = element;
 
-        let real_id = self.vdom.reserve_node();
+        let real_id = self.vdom.reserve_node(node);
+
         dom_id.set(Some(real_id));
 
         self.mutations.create_element(tag_name, *namespace, real_id);
@@ -398,7 +400,7 @@ impl<'bump> DiffMachine<'bump> {
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
             (Suspended(old), Suspended(new)) => self.diff_suspended_nodes(old, new),
-            (Element(old), Element(new)) => self.diff_element_nodes(old, new),
+            (Element(old), Element(new)) => self.diff_element_nodes(old, new, new_node),
 
             // Anything else is just a basic replace and create
             (
@@ -422,7 +424,12 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    fn diff_element_nodes(&mut self, old: &'bump VElement<'bump>, new: &'bump VElement<'bump>) {
+    fn diff_element_nodes(
+        &mut self,
+        old: &'bump VElement<'bump>,
+        new: &'bump VElement<'bump>,
+        new_node: &'bump VNode<'bump>,
+    ) {
         let root = old.dom_id.get();
 
         // If the element type is completely different, the element needs to be re-rendered completely
@@ -438,7 +445,7 @@ impl<'bump> DiffMachine<'bump> {
                     el: old.dom_id.get(),
                 },
             });
-            self.create_element_node(new);
+            self.create_element_node(new, new_node);
             return;
         }
 
