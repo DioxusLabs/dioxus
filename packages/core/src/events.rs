@@ -271,8 +271,10 @@ pub mod on {
         CompositionEventInner(CompositionEvent): [
             /// oncompositionend
             oncompositionend
+
             /// oncompositionstart
             oncompositionstart
+
             /// oncompositionupdate
             oncompositionupdate
         ];
@@ -280,8 +282,10 @@ pub mod on {
         KeyboardEventInner(KeyboardEvent): [
             /// onkeydown
             onkeydown
+
             /// onkeypress
             onkeypress
+
             /// onkeyup
             onkeyup
         ];
@@ -289,6 +293,7 @@ pub mod on {
         FocusEventInner(FocusEvent): [
             /// onfocus
             onfocus
+
             /// onblur
             onblur
         ];
@@ -297,12 +302,16 @@ pub mod on {
         FormEventInner(FormEvent): [
             /// onchange
             onchange
+
             /// oninput
             oninput
+
             /// oninvalid
             oninvalid
+
             /// onreset
             onreset
+
             /// onsubmit
             onsubmit
         ];
@@ -373,36 +382,50 @@ pub mod on {
             /// ## Reference
             /// - https://www.w3schools.com/tags/ev_onclick.asp
             /// - https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event
-            ///
             onclick
+
             /// oncontextmenu
             oncontextmenu
+
             /// ondoubleclick
             ondoubleclick
+
             /// ondrag
             ondrag
+
             /// ondragend
             ondragend
+
             /// ondragenter
             ondragenter
+
             /// ondragexit
             ondragexit
+
             /// ondragleave
             ondragleave
+
             /// ondragover
             ondragover
+
             /// ondragstart
             ondragstart
+
             /// ondrop
             ondrop
+
             /// onmousedown
             onmousedown
+
             /// onmouseenter
             onmouseenter
+
             /// onmouseleave
             onmouseleave
+
             /// onmousemove
             onmousemove
+
             /// onmouseout
             onmouseout
 
@@ -413,6 +436,7 @@ pub mod on {
             ///
             /// Triggered when the users's mouse hovers over an element.
             onmouseover
+
             /// onmouseup
             onmouseup
         ];
