@@ -22,8 +22,8 @@
       alt="docs.rs docs" />
   </a>
   <!-- CI -->
-  <a href="https://github.com/async-email/dioxus/actions">
-    <img src="https://github.com/async-email/dioxus/workflows/CI/badge.svg"
+  <a href="https://github.com/jkelleyrtp/dioxus/actions">
+    <img src="https://github.com/jkelleyrtp/dioxus/workflows/CI/badge.svg"
       alt="CI status" />
   </a>
 </div>
@@ -52,30 +52,18 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 fn App(cx: Context<()>) -> DomTree {
     let mut count = use_state(cx, || 0);
 
-    cx.render(rsx! {
+    cx.render(rsx!(
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
-    })
+    ))
 };
 ```
 
-Dioxus can be used to deliver webapps, desktop apps, static pages, liveview apps, eventually mobile apps (WIP), and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
+Dioxus can be used to deliver webapps, desktop apps, static sites, liveview apps, mobile apps (WIP), and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
 
 If you know React, then you already know Dioxus.
 
-### **Things you'll love ❤️:**
-
-- Ergonomic design
-- Minimal boilerplate
-- Simple build, test, and deploy
-- Compile-time correct templating
-- Support for fine-grained reactivity
-- Support for html! and rsx! templates
-- SSR, WASM, desktop, and mobile support
-- Support for asynchronous batched rendering
-- Powerful and simple integrated state management
-- Rust! (enums, static types, modules, efficiency)
 
 ### Unique features:
 - Incredible inline documentation. Supports hover and guides for all HTML elements, listeners, and events.
@@ -100,14 +88,26 @@ If you know React, then you already know Dioxus.
     <tr>
 </table>
 
-## Fun Examples:
+## Examples:
 
-- File navigator (desktop app)
-- Bluetooth scanner (desktop app, possibly works on iOS)
-- Shopping app (liveview web and mobile app)
-- TODO MVC (works on all platforms)
-- Sierpinski's triangle (web SPA)
-- Doxie Documentation Library (Web SPA with Hydration)
+| File Navigator (Desktop)                                         | Bluetooth scanner (Desktop)                                      | TodoMVC (All platforms)                                          | Widget Gallery                                                   |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
+
+
+
+| E-Commerce Site                                                  | Doxie Documentation Generator                                    | Chatroom                                                         | Widget Gallery                                                   |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
+
+
+
+| Printer Demo                                                     | Slide Puzzle                                                     | Todo                                                             | Widget Gallery                                                   |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
+
+
+
 
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
 
@@ -156,7 +156,6 @@ And much more. Dioxus makes Rust apps just as fast to write as React apps, but a
 
 Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. This parity table does not necessarily include important ecosystem crates like code blocks, markdown, resizing hooks, etc.
 
-### Phase 1: The Basics
 
 | Feature                   | Dioxus | React | Notes for Dioxus                                                     |
 | ------------------------- | ------ | ----- | -------------------------------------------------------------------- |
@@ -189,34 +188,22 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Fine-grained reactivity   | 🛠      | ❓     | Skip diffing for fine-grain updates                                  |
 | Effects                   | 🛠      | ✅     | Run effects after a component has been committed to render           |
 
-
-### Phase 2: Advanced Toolkits
-
-| Feature               | Dioxus | React | Notes for Dioxus                   |
-| --------------------- | ------ | ----- | ---------------------------------- |
-| 1st class router      | 👀      | ✅     | Hook built on top of history       |
-| Assets                | 👀      | ✅     | include css/svg/img url statically |
-| Integrated classnames | 🛠      | ❓     | built-in `classnames`              |
-| Transition            | 👀      | 🛠     | High-level control over suspense   |
-| Animation             | 👀      | ✅     | Spring-style animations            |
-| Native Mobile         | 👀      | ✅     | Render with cacao                  |
-| Native Desktop        | 👀      | ✅     | Render with native desktop         |
-| 3D Renderer           | 👀      | ✅     | react-three-fiber                  |
-
-### Phase 3: Additional Complexity
-
-| Feature              | Dioxus | React | Notes for Dioxus                     |
-| -------------------- | ------ | ----- | ------------------------------------ |
-| Portal               | ❓      | ✅     | cast elements through tree           |
-| Error/Panic boundary | 👀      | ✅     | catch panics and display custom BSOD |
-| Code-splitting       | 👀      | ✅     | Make bundle smaller/lazy             |
-| LiveView             | 👀      | ❓     | Example for SSR + WASM apps          |
-
 - ✅ = implemented and working
 - 🛠 = actively being worked on
 - 👀 = not yet implemented or being worked on
 - ❓ = not sure if will or can implement
 
+### Coming up...
+
+- 1st class router      
+- Assets                
+- Integrated classnames 
+- Transition            
+- Animation             
+- Native Mobile         
+- Native Desktop        
+- 3D Renderer           
+- LiveView              
 
 ## FAQ:
 
@@ -228,9 +215,9 @@ Remember: Dioxus is a library - not a compiler like Svelte. Plus, the inner Virt
 The overhead layer between WASM and JS APIs is extremely poorly understood. Rust web benchmarks typically suffer from differences in how Rust and JS cache strings. In Dioxus, we solve most of these issues and our JS Framework Benchmark actually beats the WASM Bindgen benchmark in many cases. Compared to a "pure vanilla JS" solution, Dioxus adds less than 5% of overhead and takes advantage of batched DOM manipulation.
 
 ### Aren't WASM binaries too huge to deploy in production?
-WASM binary sizes are another poorly understood characteristic of Rust web apps. 50kb of WASM and 50kb of JS are not made equally. In JS, the code must be downloaded _first_ and _then_ JIT-ted. Just-in-time compiling 50kb of JavaScript takes some time which is why 50kb of JavaScript sounds like a lot! However, with WASM, the code is downloaded and JIT-ted _simultaneously_ through the magic of streaming compilation. By the time the 50kb of Rust is finished downloading, it is already ready to go. Again, Dioxus beats out many benchmarks with time-to-interactivity.
+WASM binary sizes are another poorly understood characteristic of Rust web apps. 50kb of WASM and 50kb of JS are _not_ made equally. In JS, the code must be downloaded _first_ and _then_ JIT-ted. Just-in-time compiling 50kb of JavaScript takes a while which is why 50kb of JavaScript sounds like a lot! However, with WASM, the code is downloaded and JIT-ted _simultaneously_ through the magic of streaming compilation. By the time the 50kb of Rust is finished downloading, it is already ready to go. Again, Dioxus beats out many benchmarks with time-to-interactivity.
 
-For reference, Dioxus `hello-world` gzipped clocks in at around 60kb.
+For reference, Dioxus `hello-world` clocks in at around 70kb gzip or 60kb brotli, and Dioxus supports SSR.
 
 ### Why hooks? Why not MVC, classes, traits, messages, etc?
 There are plenty Rust Elm-like frameworks in the world - we were not interested in making another! Instead, we borrowed hooks from React. JS and Rust share many structural similarities, so if you're comfortable with React, then you'll be plenty comfortable with Dioxus.

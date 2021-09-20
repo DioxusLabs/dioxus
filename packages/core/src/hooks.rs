@@ -170,8 +170,6 @@ pub(crate) struct SuspenseHook {
     pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
 }
 
-type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> DomTree<'a>>;
-
 pub struct SuspendedContext<'a> {
     pub(crate) inner: Context<'a, ()>,
 }

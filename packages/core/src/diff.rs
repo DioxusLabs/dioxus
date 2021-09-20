@@ -329,6 +329,9 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         if children.len() > 0 {
+            self.stack.element_id_stack.push(real_id);;
+            // push our element_id onto the stack
+            // drop our element off the stack
             self.stack.create_children(children, MountType::Append);
         }
     }
