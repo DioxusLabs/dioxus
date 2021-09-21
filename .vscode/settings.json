@@ -1,0 +1,4 @@
+{
+  "rust-analyzer.inlayHints.enable": false,
+  "rust-analyzer.cargo.allFeatures": true
+}

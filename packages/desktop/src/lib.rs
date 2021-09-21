@@ -64,10 +64,12 @@ impl<T: Properties + 'static> WebviewRenderer<T> {
         Self::run_with_edits(root, props, user_builder, None)
     }
 
-    pub fn run_with_edits(
+    pub fn run_with_edits<
+        F: for<'a, 'b> FnOnce(&'a mut DesktopConfig<'b>) -> &'a mut DesktopConfig<'b>,
+    >(
         root: FC<T>,
         props: T,
-        user_builder: impl for<'a, 'b> FnOnce(&'a mut DesktopConfig<'b>) -> &'a mut DesktopConfig<'b>,
+        user_builder: F,
         redits: Option<Vec<DomEdit<'static>>>,
     ) -> anyhow::Result<()> {
         log::info!("hello edits");

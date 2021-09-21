@@ -16,7 +16,7 @@ impl TestDom {
         TestDom { bump, scheduler }
     }
 
-    pub fn new_factory<'a>(&'a self) -> NodeFactory<'a> {
+    pub fn new_factory(&self) -> NodeFactory {
         NodeFactory::new(&self.bump)
     }
 
@@ -84,6 +84,12 @@ impl TestDom {
         let edits = machine.mutations;
 
         (create_edits, edits)
+    }
+}
+
+impl Default for TestDom {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

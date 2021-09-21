@@ -34,10 +34,7 @@ pub struct Context<'src> {
 impl<'src> Copy for Context<'src> {}
 impl<'src> Clone for Context<'src> {
     fn clone(&self) -> Self {
-        Self {
-            // props: self.props,
-            scope: self.scope,
-        }
+        Self { scope: self.scope }
     }
 }
 
@@ -202,16 +199,18 @@ impl<'src> Context<'src> {
         );
 
         if !is_initialized {
-            self.scope
-            .shared_contexts
-            .borrow_mut()
-            .insert(TypeId::of::<T>(), Rc::new(init()))
-            .map(|_| {
+            let existing = self
+                .scope
+                .shared_contexts
+                .borrow_mut()
+                .insert(TypeId::of::<T>(), Rc::new(init()));
+
+            if existing.is_some() {
                 log::warn!(
                     "A shared state was replaced with itself. \
                     This is does not result in a panic, but is probably not what you are trying to do"
                 );
-            });
+            }
         }
 
         self.use_consume_state().unwrap()
@@ -244,12 +243,15 @@ impl<'src> Context<'src> {
     /// - Runner: closure used to output a value every time the hook is used
     /// - Cleanup: closure used to teardown the hook once the dom is cleaned up
     ///
+    ///
+    /// # Example
+    ///
     /// ```ignore
     /// // use_ref is the simplest way of storing a value between renders
-    /// pub fn use_ref<T: 'static>(initial_value: impl FnOnce() -> T + 'static) -> Rc<RefCell<T>> {
+    /// fn use_ref<T: 'static>(initial_value: impl FnOnce() -> T) -> &RefCell<T> {
     ///     use_hook(
     ///         || Rc::new(RefCell::new(initial_value())),
-    ///         |state| state.clone(),
+    ///         |state| state,
     ///         |_| {},
     ///     )
     /// }
@@ -275,14 +277,14 @@ impl<'src> Context<'src> {
             );
         }
 
-        const ERR_MSG: &str = r###"
+        runner(self.scope.hooks.next::<State>().expect(HOOK_ERR_MSG))
+    }
+}
+
+const HOOK_ERR_MSG: &str = r###"
 Unable to retrive the hook that was initialized in this index.
 Consult the `rules of hooks` to understand how to use hooks properly.
 
 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
 Any function prefixed with "use" should not be called conditionally.
 "###;
-
-        runner(self.scope.hooks.next::<State>().expect(ERR_MSG))
-    }
-}

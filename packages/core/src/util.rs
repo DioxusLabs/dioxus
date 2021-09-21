@@ -1,8 +1,6 @@
 use std::cell::Cell;
 use std::fmt::Display;
 
-use crate::innerlude::*;
-
 // create a cell with a "none" value
 #[inline]
 pub fn empty_cell() -> Cell<Option<ElementId>> {

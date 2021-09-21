@@ -1,12 +1,9 @@
 //! Example: Calculator
 //! -------------------------
 
-// use dioxus::events::on::*;
-// use dioxus::prelude::*;
-
 fn main() {
     env_logger::init();
-    dioxus::desktop::launch(App, |cfg| cfg);
+    dioxus::desktop::launch(App, |cfg| cfg).unwrap();
 }
 
 use dioxus::events::on::*;
@@ -97,10 +94,10 @@ const App: FC<()> = |cx, props| {
                 }
                 div { class: "digit-keys"
                     CalculatorKey { name: "key-0", onclick: move |_| input_digit(0), "0" }
-                    CalculatorKey { name: "key-dot", onclick: move |_|  input_dot(), "●" }
+                    CalculatorKey { name: "key-dot", onclick: move |_| input_dot(), "●" }
 
-                    {(1..9).map(move |k| rsx!{
-                        CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  input_digit(k), "{k}" }
+                    {(1..9).map(|k| rsx!{
+                        CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_| input_digit(k), "{k}" }
                     })}
                 }
                 div { class: "operator-keys"

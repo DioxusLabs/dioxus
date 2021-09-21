@@ -11,13 +11,7 @@
 
 use crate::innerlude::*;
 use futures_util::FutureExt;
-use std::{
-    any::{Any, TypeId},
-    cell::RefCell,
-    future::Future,
-    ops::Deref,
-    rc::Rc,
-};
+use std::{any::Any, cell::RefCell, future::Future, ops::Deref, rc::Rc};
 
 /// Awaits the given task, forcing the component to re-render when the value is ready.
 ///
@@ -104,11 +98,10 @@ where
     - if it doesn't, then we render a suspended node along with with the callback and task id
     */
     cx.use_hook(
-        move |hook_idx| {
+        move |_| {
             let value = Rc::new(RefCell::new(None));
             let slot = value.clone();
-
-            let originator = cx.scope.our_arena_idx.clone();
+            let originator = cx.scope.our_arena_idx;
 
             let handle = cx.submit_task(Box::pin(task_initializer().then(
                 move |output| async move {
@@ -176,9 +169,7 @@ impl<'src> SuspendedContext<'src> {
         self,
         lazy_nodes: LazyNodes<'src, F>,
     ) -> DomTree<'src> {
-        let scope_ref = self.inner.scope;
         let bump = &self.inner.scope.frames.wip_frame().bump;
-
         Some(lazy_nodes.into_vnode(NodeFactory { bump }))
     }
 }
@@ -194,14 +185,5 @@ impl<'a, T> Deref for NodeRef<'a, T> {
 }
 
 pub fn use_node_ref<T, P>(cx: Context) -> NodeRef<T> {
-    cx.use_hook(
-        |f| {},
-        |f| {
-            //
-            todo!()
-        },
-        |f| {
-            //
-        },
-    )
+    cx.use_hook(|_| RefCell::new(None), |f| NodeRef { 0: f }, |_| {})
 }

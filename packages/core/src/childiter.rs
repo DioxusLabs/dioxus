@@ -39,7 +39,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         should_pop = true;
-                        returned_node = Some(&*node);
+                        returned_node = Some(node);
                     }
 
                     // If we get a fragment we push the next child

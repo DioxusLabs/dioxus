@@ -17,6 +17,7 @@ fn main() {
         AppendChildren { many: 1 },
         // ReplaceWith { many: 1 },
     ];
+
     dioxus_desktop::WebviewRenderer::run_with_edits(App, (), |c| c, Some(edits)).expect("failed");
 }
 

@@ -190,7 +190,7 @@ impl Scope {
         self.child_nodes = child_nodes;
     }
 
-    pub(crate) fn child_nodes<'a>(&'a self) -> ScopeChildren {
+    pub(crate) fn child_nodes(&self) -> ScopeChildren {
         unsafe { self.child_nodes.shorten_lifetime() }
     }
 
@@ -246,10 +246,7 @@ impl Scope {
             let search_id = search.mounted_node.get();
 
             // this assumes the node might not be mounted - should we assume that though?
-            match search_id.map(|f| f == element) {
-                Some(same) => same,
-                None => false,
-            }
+            search_id.map(|f| f == element).unwrap_or(false)
         });
 
         if let Some(raw_listener) = raw_listener {
@@ -356,11 +353,11 @@ impl<'a> ScopeRenderer<'a> {
         match &node {
             VNode::Text(text) => {
                 write_indent(f, il);
-                write!(f, "\"{}\"\n", text.text)?
+                writeln!(f, "\"{}\"", text.text)?
             }
             VNode::Anchor(_anchor) => {
                 write_indent(f, il);
-                write!(f, "Anchor {{}}\n")?;
+                writeln!(f, "Anchor {{}}")?;
             }
             VNode::Element(el) => {
                 write_indent(f, il);
@@ -373,7 +370,7 @@ impl<'a> ScopeRenderer<'a> {
                         None => {
                             //
                             write_indent(f, il + 1);
-                            write!(f, "{}: \"{}\"\n", attr.name, attr.value)?
+                            writeln!(f, "{}: \"{}\"", attr.name, attr.value)?
                         }
 
                         Some(ns) => {
@@ -401,17 +398,17 @@ impl<'a> ScopeRenderer<'a> {
                 }
                 write_indent(f, il);
 
-                write!(f, "}}\n")?;
+                writeln!(f, "}}")?;
             }
             VNode::Fragment(frag) => {
                 if self.show_fragments {
                     write_indent(f, il);
-                    write!(f, "Fragment {{\n")?;
+                    writeln!(f, "Fragment {{")?;
                     for child in frag.children {
                         self.render(vdom, child, f, il + 1)?;
                     }
                     write_indent(f, il);
-                    write!(f, "}}\n")?;
+                    writeln!(f, "}}")?;
                 } else {
                     for child in frag.children {
                         self.render(vdom, child, f, il)?;

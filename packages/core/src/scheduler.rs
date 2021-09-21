@@ -88,8 +88,10 @@ pub(crate) struct EventChannel {
     pub sender: UnboundedSender<SchedulerMsg>,
     pub schedule_any_immediate: Rc<dyn Fn(ScopeId)>,
     pub submit_task: Rc<dyn Fn(FiberTask) -> TaskHandle>,
-    pub get_shared_context: Rc<dyn Fn(ScopeId, TypeId) -> Option<Rc<dyn Any>>>,
+    pub get_shared_context: GetSharedContext,
 }
+
+pub type GetSharedContext = Rc<dyn Fn(ScopeId, TypeId) -> Option<Rc<dyn Any>>>;
 
 pub enum SchedulerMsg {
     // events from the host
@@ -175,7 +177,6 @@ impl Scheduler {
                 Rc::new(move |id| sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap())
             },
             submit_task: {
-                let sender = sender.clone();
                 Rc::new(move |fiber_task| {
                     let task_id = task_counter.get();
                     task_counter.set(task_id + 1);
@@ -206,7 +207,7 @@ impl Scheduler {
         };
 
         let pool = ResourcePool {
-            components: components.clone(),
+            components,
             raw_elements,
             channel,
         };
@@ -295,7 +296,7 @@ impl Scheduler {
     }
 
     pub fn has_pending_events(&self) -> bool {
-        self.ui_events.len() > 0
+        !self.ui_events.is_empty()
     }
 
     /// re-balance the work lanes, ensuring high-priority work properly bumps away low priority work
@@ -550,6 +551,6 @@ impl PriorityLane {
     }
 
     fn has_work(&self) -> bool {
-        self.dirty_scopes.len() > 0 || self.in_progress == true
+        !self.dirty_scopes.is_empty() || self.in_progress
     }
 }

@@ -307,7 +307,7 @@ impl<'a> NodeFactory<'a> {
 
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        &self.bump
+        self.bump
     }
 
     pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> DomTree<'a>
@@ -466,12 +466,12 @@ impl<'a> NodeFactory<'a> {
                     // - This comparator is only called on a corresponding set of bumpframes
                     let props_memoized = unsafe {
                         let real_other: &P = &*(other.raw_props as *const _ as *const P);
-                        props.memoize(&real_other)
+                        props.memoize(real_other)
                     };
 
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
-                    match (props_memoized, children.len() == 0) {
+                    match (props_memoized, children.is_empty()) {
                         (true, true) => true,
                         _ => false,
                     }
@@ -504,7 +504,7 @@ impl<'a> NodeFactory<'a> {
             RefCell::new(Some(drop_props))
         };
 
-        let is_static = children.len() == 0 && P::IS_STATIC && key.is_none();
+        let is_static = children.is_empty() && P::IS_STATIC && key.is_none();
 
         let key = key.map(|f| self.raw_text(f).0);
 
@@ -515,7 +515,7 @@ impl<'a> NodeFactory<'a> {
                 unsafe { std::mem::transmute(res) }
             });
 
-        let can_memoize = children.len() == 0 && P::IS_STATIC;
+        let can_memoize = children.is_empty() && P::IS_STATIC;
 
         VNode::Component(bump.alloc(VComponent {
             user_fc,
@@ -596,7 +596,7 @@ where
             nodes.push(node.into_vnode(cx));
         }
 
-        if nodes.len() == 0 {
+        if nodes.is_empty() {
             nodes.push(VNode::Anchor(VAnchor {
                 dom_id: empty_cell(),
             }));
@@ -716,14 +716,14 @@ where
 
 // Conveniently, we also support "null" (nothing) passed in
 impl IntoVNode<'_> for () {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.fragment_from_iter(None as Option<VNode>)
     }
 }
 
 // Conveniently, we also support "None"
 impl IntoVNode<'_> for Option<()> {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.fragment_from_iter(None as Option<VNode>)
     }
 }
@@ -738,12 +738,12 @@ impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
 }
 
 impl IntoVNode<'_> for &'static str {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.static_text(self)
     }
 }
 impl IntoVNode<'_> for Arguments<'_> {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.text(self)
     }
 }

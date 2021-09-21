@@ -20,6 +20,7 @@
 //! Additional functionality is defined in the respective files.
 
 use crate::innerlude::*;
+use futures_util::Future;
 use std::any::Any;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
@@ -186,7 +187,10 @@ impl VirtualDom {
     ///
     /// let mutations = dom.update_root_props(AppProps { route: "end" }).unwrap();
     /// ```
-    pub fn update_root_props<'s, P: 'static>(&'s mut self, root_props: P) -> Option<Mutations<'s>> {
+    pub fn update_root_props<P>(&mut self, root_props: P) -> Option<Mutations>
+    where
+        P: 'static,
+    {
         let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
 
         // Pre-emptively drop any downstream references of the old props
@@ -233,7 +237,7 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
-    pub fn rebuild<'s>(&'s mut self) -> Mutations<'s> {
+    pub fn rebuild(&mut self) -> Mutations {
         self.scheduler.rebuild(self.base_scope)
     }
 
@@ -271,7 +275,7 @@ impl VirtualDom {
     ///
     /// let edits = dom.diff();
     /// ```
-    pub fn diff<'s>(&'s mut self) -> Mutations<'s> {
+    pub fn diff(&mut self) -> Mutations {
         self.scheduler.hard_diff(self.base_scope)
     }
 
@@ -279,7 +283,7 @@ impl VirtualDom {
     ///
     /// This method will not wait for any suspended nodes to complete. If there is no pending work, then this method will
     /// return "None"
-    pub fn run_immediate<'s>(&'s mut self) -> Option<Vec<Mutations<'s>>> {
+    pub fn run_immediate(&mut self) -> Option<Vec<Mutations>> {
         if self.scheduler.has_any_work() {
             Some(self.scheduler.work_sync())
         } else {
@@ -330,10 +334,10 @@ impl VirtualDom {
     /// applied the edits.
     ///
     /// Mutations are the only link between the RealDOM and the VirtualDOM.
-    pub async fn run_with_deadline<'s>(
-        &'s mut self,
-        deadline: impl std::future::Future<Output = ()>,
-    ) -> Vec<Mutations<'s>> {
+    pub async fn run_with_deadline(
+        &mut self,
+        deadline: impl Future<Output = ()>,
+    ) -> Vec<Mutations<'_>> {
         self.scheduler.work_with_deadline(deadline).await
     }
 
@@ -379,9 +383,4 @@ impl std::fmt::Display for VirtualDom {
 
         renderer.render(self, root, f, 0)
     }
-}
-
-pub struct VirtualDomConfig {
-    component_slab_size: usize,
-    element_slab_size: usize,
 }

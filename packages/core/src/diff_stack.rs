@@ -72,7 +72,7 @@ impl<'bump> DiffStack<'bump> {
         self.nodes_created_stack.push(0);
         self.instructions.push(DiffInstruction::Mount { and });
 
-        for child in children.into_iter().rev() {
+        for child in children.iter().rev() {
             self.instructions
                 .push(DiffInstruction::Create { node: child });
         }
@@ -82,7 +82,7 @@ impl<'bump> DiffStack<'bump> {
         self.nodes_created_stack.push(count);
     }
 
-    pub fn push_element_id(&mut self, id: ElementId) {
+    pub fn _push_element_id(&mut self, id: ElementId) {
         self.element_id_stack.push(id);
     }
 
@@ -101,7 +101,7 @@ impl<'bump> DiffStack<'bump> {
     }
 
     pub fn current_scope(&self) -> Option<ScopeId> {
-        self.scope_stack.last().map(|f| f.clone())
+        self.scope_stack.last().copied()
     }
 
     pub fn create_component(&mut self, idx: ScopeId, node: &'bump VNode<'bump>) {

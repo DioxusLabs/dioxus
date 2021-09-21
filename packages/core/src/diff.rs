@@ -328,8 +328,8 @@ impl<'bump> DiffMachine<'bump> {
             self.mutations.set_attribute(attr);
         }
 
-        if children.len() > 0 {
-            self.stack.element_id_stack.push(real_id);;
+        if children.is_empty() {
+            self.stack.element_id_stack.push(real_id);
             // push our element_id onto the stack
             // drop our element off the stack
             self.stack.create_children(children, MountType::Append);
@@ -341,7 +341,7 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
-        let caller = vcomponent.caller.clone();
+        let caller = vcomponent.caller;
 
         let parent_idx = self.stack.current_scope().unwrap();
 
@@ -546,13 +546,15 @@ impl<'bump> DiffMachine<'bump> {
             // make sure the component's caller function is up to date
             let scope = self.vdom.get_scope_mut(scope_addr).unwrap();
 
-            scope.update_scope_dependencies(new.caller.clone(), ScopeChildren(new.children));
+            scope.update_scope_dependencies(new.caller, ScopeChildren(new.children));
 
             // React doesn't automatically memoize, but we do.
             let props_are_the_same = old.comparator.unwrap();
 
             if self.cfg.force_diff || !props_are_the_same(new) {
-                if scope.run_scope(self.vdom) {
+                let succeeded = scope.run_scope(self.vdom);
+
+                if succeeded {
                     self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
                 }
             }
@@ -664,16 +666,20 @@ impl<'bump> DiffMachine<'bump> {
             self.stack.push(DiffInstruction::Diff { new, old });
         }
 
-        if old.len() > new.len() {
-            self.remove_nodes(&old[new.len()..]);
-        } else if new.len() > old.len() {
-            log::debug!("Calling create children on array differences");
-            self.stack.create_children(
-                &new[old.len()..],
-                MountType::InsertAfter {
-                    other_node: old.last().unwrap(),
-                },
-            );
+        use std::cmp::Ordering;
+        match old.len().cmp(&new.len()) {
+            Ordering::Greater => self.remove_nodes(&old[new.len()..]),
+            Ordering::Less => {
+                self.stack.create_children(
+                    &new[old.len()..],
+                    MountType::InsertAfter {
+                        other_node: old.last().unwrap(),
+                    },
+                );
+            }
+            Ordering::Equal => {
+                // nothing - they're the same size
+            }
         }
     }
 
@@ -922,7 +928,7 @@ impl<'bump> DiffMachine<'bump> {
         // for each spacing, generate a mount instruction
         let mut lis_iter = lis_sequence.iter().rev();
         let mut last = *lis_iter.next().unwrap();
-        while let Some(&next) = lis_iter.next() {
+        for next in lis_iter {
             if last - next > 1 {
                 self.stack.push_nodes_created(0);
                 self.stack.push(DiffInstruction::Mount {
@@ -934,7 +940,7 @@ impl<'bump> DiffMachine<'bump> {
                     apply(idx + next + 1, new_node, &mut self.stack);
                 }
             }
-            last = next;
+            last = *next;
         }
 
         // add mount instruction for the first items not covered by the lis
@@ -1036,25 +1042,27 @@ impl<'bump> DiffMachine<'bump> {
         for node in nodes {
             match node {
                 VNode::Text(t) => {
-                    t.dom_id.get().map(|id| {
+                    if let Some(id) = t.dom_id.get() {
                         self.mutations.remove(id.as_u64());
                         self.vdom.collect_garbage(id);
-                    });
+                    }
                 }
                 VNode::Suspended(s) => {
-                    s.dom_id.get().map(|id| {
+                    if let Some(id) = s.dom_id.get() {
                         self.mutations.remove(id.as_u64());
                         self.vdom.collect_garbage(id);
-                    });
+                    }
                 }
                 VNode::Anchor(a) => {
-                    a.dom_id.get().map(|id| {
+                    if let Some(id) = a.dom_id.get() {
                         self.mutations.remove(id.as_u64());
                         self.vdom.collect_garbage(id);
-                    });
+                    }
                 }
                 VNode::Element(e) => {
-                    e.dom_id.get().map(|id| self.mutations.remove(id.as_u64()));
+                    if let Some(id) = e.dom_id.get() {
+                        self.mutations.remove(id.as_u64());
+                    }
                 }
                 VNode::Fragment(f) => {
                     self.remove_nodes(f.children);

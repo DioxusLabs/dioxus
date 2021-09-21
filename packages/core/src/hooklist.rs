@@ -52,8 +52,11 @@ impl HookList {
     pub(crate) fn at_end(&self) -> bool {
         self.cur_idx() >= self.len()
     }
+}
 
-    pub(crate) fn cleanup_hooks(&mut self) {
+// When the scope is dropped, we want to call the cleanup function for each of the hooks
+impl Drop for HookList {
+    fn drop(&mut self) {
         self.vals
             .borrow_mut()
             .drain(..)
