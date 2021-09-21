@@ -25,7 +25,7 @@ static App: FC<()> = |cx| {
 
     let file_list = files.path_names.iter().enumerate().map(|(dir_id, path)| {
         rsx! (
-            li { a {"{path}", onclick: move |_| files.get_mut().enter_dir(dir_id), href: "#"} }
+            li { a {"{path}", onclick: move |_| files.modify().enter_dir(dir_id), href: "#"} }
         )
     });
 
@@ -33,7 +33,7 @@ static App: FC<()> = |cx| {
         rsx! {
             div {
                 code {"{err}"}
-                button {"x", onclick: move |_| files.get_mut().clear_err() }
+                button {"x", onclick: move |_| files.modify().clear_err() }
             }
         }
     });
@@ -43,7 +43,7 @@ static App: FC<()> = |cx| {
         div {
             h1 {"Files: "}
             h3 {"Cur dir: {cur}"}
-            button { "go up", onclick: move |_| files.get_mut().go_up() }
+            button { "go up", onclick: move |_| files.modify().go_up() }
             ol { {file_list} }
             {err_disp}
         }

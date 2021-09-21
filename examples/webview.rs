@@ -25,8 +25,8 @@ static App: FC<()> = |cx| {
     cx.render(rsx! {
         div {
             h1 {"{state}"}
-            CalculatorKey { name: "key-clear", onclick: move |_| state.get_mut().push_str("hello"), "{clear_text}" }
-            CalculatorKey { name: "key-sign", onclick: move |_| { state.get_mut().pop(); }, "±"}
+            CalculatorKey { name: "key-clear", onclick: move |_| state.modify().push_str("hello"), "{clear_text}" }
+            CalculatorKey { name: "key-sign", onclick: move |_| { state.modify().pop(); }, "±"}
         }
     })
 };

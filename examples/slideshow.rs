@@ -34,9 +34,9 @@ static App: FC<()> = |cx| {
             div {
                 div { h1 {"my awesome slideshow"} }
                 div {
-                    button {"<-", onclick: move |_| slides.get_mut().go_forward()}
+                    button {"<-", onclick: move |_| slides.modify().go_forward()}
                     h3 { "{slides.slide_id}" }
-                    button {"->" onclick: move |_| slides.get_mut().go_backward()}
+                    button {"->" onclick: move |_| slides.modify().go_backward()}
                  }
             }
             {slide}

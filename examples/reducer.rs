@@ -22,11 +22,11 @@ pub static App: FC<()> = |cx| {
             h3 {"The radio is... {is_playing}!"}
             button {
                 "Pause"
-                onclick: move |_| state.get_mut().reduce(PlayerAction::Pause)
+                onclick: move |_| state.modify().reduce(PlayerAction::Pause)
             }
             button {
                 "Play"
-                onclick: move |_| state.get_mut().reduce(PlayerAction::Play)
+                onclick: move |_| state.modify().reduce(PlayerAction::Play)
             }
         }
     })

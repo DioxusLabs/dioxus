@@ -42,29 +42,29 @@ static App: FC<()> = |cx| {
     cx.render(rsx! {
         div { id: "wrapper"
             div { class: "app", style { "{STYLE}" }
-                div { class: "calculator", onkeypress: move |evt| state.get_mut().handle_keydown(evt),
+                div { class: "calculator", onkeypress: move |evt| state.modify().handle_keydown(evt),
                     div { class: "calculator-display", "{formatted}"}
                     div { class: "calculator-keypad"
                         div { class: "input-keys"
                             div { class: "function-keys"
-                                CalculatorKey { name: "key-clear", onclick: move |_| state.get_mut().clear_display(), "{clear_text}" }
-                                CalculatorKey { name: "key-sign", onclick: move |_| state.get_mut().toggle_sign(), "±"}
-                                CalculatorKey { name: "key-percent", onclick: move |_| state.get_mut().toggle_percent(), "%"}
+                                CalculatorKey { name: "key-clear", onclick: move |_| state.modify().clear_display(), "{clear_text}" }
+                                CalculatorKey { name: "key-sign", onclick: move |_| state.modify().toggle_sign(), "±"}
+                                CalculatorKey { name: "key-percent", onclick: move |_| state.modify().toggle_percent(), "%"}
                             }
                             div { class: "digit-keys"
-                                CalculatorKey { name: "key-0", onclick: move |_| state.get_mut().input_digit(0), "0" }
-                                CalculatorKey { name: "key-dot", onclick: move |_|  state.get_mut().input_dot(), "●" }
+                                CalculatorKey { name: "key-0", onclick: move |_| state.modify().input_digit(0), "0" }
+                                CalculatorKey { name: "key-dot", onclick: move |_|  state.modify().input_dot(), "●" }
                                 {(1..10).map(move |k| rsx!{
-                                    CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  state.get_mut().input_digit(k), "{k}" }
+                                    CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  state.modify().input_digit(k), "{k}" }
                                 })}
                             }
                         }
                         div { class: "operator-keys"
-                            CalculatorKey { name:"key-divide", onclick: move |_| state.get_mut().set_operator(Operator::Div), "÷" }
-                            CalculatorKey { name:"key-multiply", onclick: move |_| state.get_mut().set_operator(Operator::Mul), "×" }
-                            CalculatorKey { name:"key-subtract", onclick: move |_| state.get_mut().set_operator(Operator::Sub), "−" }
-                            CalculatorKey { name:"key-add", onclick: move |_| state.get_mut().set_operator(Operator::Add), "+" }
-                            CalculatorKey { name:"key-equals", onclick: move |_| state.get_mut().perform_operation(), "=" }
+                            CalculatorKey { name:"key-divide", onclick: move |_| state.modify().set_operator(Operator::Div), "÷" }
+                            CalculatorKey { name:"key-multiply", onclick: move |_| state.modify().set_operator(Operator::Mul), "×" }
+                            CalculatorKey { name:"key-subtract", onclick: move |_| state.modify().set_operator(Operator::Sub), "−" }
+                            CalculatorKey { name:"key-add", onclick: move |_| state.modify().set_operator(Operator::Add), "+" }
+                            CalculatorKey { name:"key-equals", onclick: move |_| state.modify().perform_operation(), "=" }
                         }
                     }
                 }

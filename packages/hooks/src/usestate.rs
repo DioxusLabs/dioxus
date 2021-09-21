@@ -82,6 +82,7 @@ struct UseStateInner<T: 'static> {
 pub struct UseState<'a, T: 'static> {
     inner: &'a UseStateInner<T>,
 }
+
 impl<T> Copy for UseState<'_, T> {}
 impl<'a, T> Clone for UseState<'a, T>
 where
@@ -115,6 +116,11 @@ impl<'a, T: 'static> UseState<'a, T> {
         self.inner.wip.borrow()
     }
 
+    /// Get the current status of the work-in-progress data
+    pub fn get_wip_mut(&self) -> RefMut<Option<T>> {
+        self.inner.wip.borrow_mut()
+    }
+
     pub fn classic(self) -> (&'a T, &'a Rc<dyn Fn(T)>) {
         todo!()
     }
@@ -136,7 +142,12 @@ impl<'a, T: 'static> UseState<'a, T> {
 }
 
 impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
-    pub fn get_mut(self) -> RefMut<'a, T> {
+    /// Gain mutable access to the new value. This method is only available when the value is a `ToOwned` type.
+    ///
+    /// Mutable access is derived by calling "ToOwned" (IE cloning) on the current value.
+    ///
+    /// To get a reference to the current value, use `.get()`
+    pub fn modify(self) -> RefMut<'a, T> {
         // make sure we get processed
         self.needs_update();
 

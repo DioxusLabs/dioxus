@@ -188,6 +188,8 @@ pub(crate) fn event_meta(event: &UserEvent) -> (bool, EventPriority) {
     }
 }
 
+pub use on::KeyCode;
+
 pub mod on {
     //! This module defines the synthetic events that all Dioxus apps enable. No matter the platform, every dioxus renderer
     //! will implement the same events and same behavior (bubbling, cancelation, etc).

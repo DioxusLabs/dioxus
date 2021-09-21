@@ -27,9 +27,9 @@ const App: FC<()> = |cx| {
     let clear_display = display_value == "0";
     let clear_text = if clear_display { "C" } else { "AC" };
 
-    let input_digit = move |num: u8| display_value.get_mut().push_str(num.to_string().as_str());
+    let input_digit = move |num: u8| display_value.modify().push_str(num.to_string().as_str());
 
-    let input_dot = move || display_value.get_mut().push_str(".");
+    let input_dot = move || display_value.modify().push_str(".");
 
     let perform_operation = move || {
         if let Some(op) = operator.as_ref() {
@@ -67,7 +67,7 @@ const App: FC<()> = |cx| {
     let keydownhandler = move |evt: KeyboardEvent| match evt.key_code() {
         KeyCode::Backspace => {
             if !display_value.as_str().eq("0") {
-                display_value.get_mut().pop();
+                display_value.modify().pop();
             }
         }
         KeyCode::_0 => input_digit(0),
