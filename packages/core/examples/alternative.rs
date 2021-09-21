@@ -2,7 +2,7 @@ use dioxus_core::prelude::*;
 
 fn main() {}
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     let list = (0..10).map(|_f| LazyNodes::new(move |_f| todo!()));
 
     cx.render(LazyNodes::new(move |cx| {

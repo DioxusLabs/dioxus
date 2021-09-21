@@ -19,7 +19,7 @@ fn main() {
     dioxus::web::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let mut rng = SmallRng::from_entropy();
     let rows = (0..1_000).map(|f| {
         let label = Label::new(&mut rng);
@@ -45,11 +45,11 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row<'a>(cx: Context<'a, RowProps>) -> DomTree {
-    let [adj, col, noun] = cx.label.0;
+fn Row<'a>(cx: Context<'a>, props: &'a RowProps) -> DomTree<'a> {
+    let [adj, col, noun] = props.label.0;
     cx.render(rsx! {
         tr {
-            td { class:"col-md-1", "{cx.row_id}" }
+            td { class:"col-md-1", "{props.row_id}" }
             td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
                 a { class: "lbl", "{adj}" "{col}" "{noun}" }
             }

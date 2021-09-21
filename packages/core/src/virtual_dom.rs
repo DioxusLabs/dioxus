@@ -31,7 +31,7 @@ use std::any::Any;
 ///
 /// Example
 /// ```rust
-/// static App: FC<()> = |cx| {
+/// static App: FC<()> = |cx, props|{
 ///     cx.render(rsx!{
 ///         div {
 ///             "Hello World"
@@ -180,7 +180,7 @@ impl VirtualDom {
     /// struct AppProps {
     ///     route: &'static str
     /// }
-    /// static App: FC<AppProps> = |cx| cx.render(rsx!{ "route is {cx.route}" });
+    /// static App: FC<AppProps> = |cx, props|cx.render(rsx!{ "route is {cx.route}" });
     ///
     /// let mut dom = VirtualDom::new_with_props(App, AppProps { route: "start" });
     ///
@@ -227,7 +227,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```
-    /// static App: FC<()> = |cx| cx.render(rsx!{ "hello world" });
+    /// static App: FC<()> = |cx, props|cx.render(rsx!{ "hello world" });
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();
     ///
@@ -252,7 +252,7 @@ impl VirtualDom {
     ///     value: Shared<&'static str>,
     /// }
     ///
-    /// static App: FC<AppProps> = |cx| {
+    /// static App: FC<AppProps> = |cx, props|{
     ///     let val = cx.value.borrow();
     ///     cx.render(rsx! { div { "{val}" } })
     /// };
@@ -314,7 +314,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```no_run
-    /// static App: FC<()> = |cx| rsx!(cx, div {"hello"} );
+    /// static App: FC<()> = |cx, props|rsx!(cx, div {"hello"} );
     /// let mut dom = VirtualDom::new(App);
     /// loop {
     ///     let deadline = TimeoutFuture::from_ms(16);

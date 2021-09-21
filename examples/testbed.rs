@@ -17,7 +17,7 @@ h1   {color: blue;}
 p    {color: red;}
 "#;
 
-const Example: FC<()> = |cx| {
+const Example: FC<()> = |cx, props| {
     cx.render(rsx! {
         Fragment {
             Fragment {
@@ -38,7 +38,7 @@ const Example: FC<()> = |cx| {
     })
 };
 
-const Child: FC<()> = |cx| {
+const Child: FC<()> = |cx, props| {
     cx.render(rsx!(
         h1 {"1" }
         h1 {"2" }
@@ -48,7 +48,7 @@ const Child: FC<()> = |cx| {
 };
 
 // this is a bad case that hurts our subtree memoization :(
-const AbTest: FC<()> = |cx| {
+const AbTest: FC<()> = |cx, props| {
     if 1 == 2 {
         cx.render(rsx!(
             h1 {"1"}

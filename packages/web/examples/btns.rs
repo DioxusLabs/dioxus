@@ -22,7 +22,7 @@ fn main() {
     // dioxus::web::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props|{
     dbg!("rednering parent");
     cx.render(rsx! {
         div {
@@ -39,7 +39,7 @@ static App: FC<()> = |cx| {
     })
 };
 
-static But: FC<()> = |cx| {
+static But: FC<()> = |cx, props|{
     let mut count = use_state(cx, || 0);
 
     // let d = Dropper { name: "asd" };

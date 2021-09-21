@@ -14,7 +14,7 @@ fn main() {
 }
 
 // this is a component
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props|{
     let (event, set_event) = use_state_classic(cx, || None);
 
     let handler = move |evt| {
@@ -50,7 +50,7 @@ struct ExampleProps {
     name: String,
 }
 
-pub static Example2: FC<ExampleProps> = |cx| {
+pub static Example2: FC<ExampleProps> = |cx, props|{
     cx.render(rsx! {
         div {
             h1 {"hello {cx.name}"}

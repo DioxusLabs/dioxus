@@ -7,7 +7,7 @@ fn main() {
     dioxus::desktop::launch(App, |c| c).expect("faield to launch");
 }
 
-pub static App: FC<()> = |cx| {
+pub static App: FC<()> = |cx, props| {
     let count = use_state(cx, || 0);
     let mut direction = use_state(cx, || 1);
 

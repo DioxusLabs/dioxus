@@ -25,7 +25,7 @@ fn main() {
 #[derive(Debug)]
 struct CustomContext([&'static str; 3]);
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props|{
     cx.use_create_context(|| CustomContext(["Jack", "Jill", "Bob"]));
 
     cx.render(rsx! {

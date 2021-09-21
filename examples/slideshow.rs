@@ -15,7 +15,7 @@ fn main() {
     dioxus::desktop::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let slides = use_state(cx, SlideController::new);
 
     let slide = match slides.slide_id {
@@ -70,7 +70,7 @@ impl SlideController {
     }
 }
 
-const Title: FC<()> = |cx| {
+const Title: FC<()> = |cx, props| {
     cx.render(rsx! {
         div {
             h1 { "Title" }
@@ -78,7 +78,7 @@ const Title: FC<()> = |cx| {
         }
     })
 };
-const Slide1: FC<()> = |cx| {
+const Slide1: FC<()> = |cx, props| {
     cx.render(rsx! {
         div {
             h1 { "Slide1" }
@@ -86,7 +86,7 @@ const Slide1: FC<()> = |cx| {
         }
     })
 };
-const Slide2: FC<()> = |cx| {
+const Slide2: FC<()> = |cx, props| {
     cx.render(rsx! {
         div {
             h1 { "Slide2" }
@@ -94,7 +94,7 @@ const Slide2: FC<()> = |cx| {
         }
     })
 };
-const Slide3: FC<()> = |cx| {
+const Slide3: FC<()> = |cx, props| {
     cx.render(rsx! {
         div {
             h1 { "Slide3" }
@@ -102,7 +102,7 @@ const Slide3: FC<()> = |cx| {
         }
     })
 };
-const End: FC<()> = |cx| {
+const End: FC<()> = |cx, props| {
     cx.render(rsx! {
         div {
             h1 { "End" }

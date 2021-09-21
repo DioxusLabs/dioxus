@@ -19,7 +19,7 @@ fn main() {
     .expect("Webview finished");
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let state = use_model(&cx, || Calculator::new());
 
     let clear_display = state.display_value.eq("0");

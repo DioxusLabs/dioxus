@@ -68,7 +68,7 @@ impl<'src> Context<'src> {
     /// ## Example
     ///
     /// ```rust
-    /// const App: FC<()> = |cx| {
+    /// const App: FC<()> = |cx, props|{
     ///     cx.render(rsx!{
     ///         CustomCard {
     ///             h1 {}
@@ -77,7 +77,7 @@ impl<'src> Context<'src> {
     ///     })
     /// }
     ///
-    /// const CustomCard: FC<()> = |cx| {
+    /// const CustomCard: FC<()> = |cx, props|{
     ///     cx.render(rsx!{
     ///         div {
     ///             h1 {"Title card"}
@@ -176,12 +176,12 @@ impl<'src> Context<'src> {
     /// ```
     /// struct SharedState(&'static str);
     ///
-    /// static App: FC<()> = |cx| {
+    /// static App: FC<()> = |cx, props|{
     ///     cx.use_provide_state(|| SharedState("world"));
     ///     rsx!(cx, Child {})
     /// }
     ///
-    /// static Child: FC<()> = |cx| {
+    /// static Child: FC<()> = |cx, props|{
     ///     let state = cx.use_consume_state::<SharedState>();
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }

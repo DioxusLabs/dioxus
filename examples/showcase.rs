@@ -11,7 +11,7 @@ fn main() {}
 use dioxus::prelude::*;
 use std::rc::Rc;
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let (selection, set_selection) = use_state(cx, || None as Option<usize>).classic();
 
     let body = match selection {
@@ -33,7 +33,7 @@ struct ScrollSelectorProps<'a> {
     onselect: &'a dyn Fn(Option<usize>),
 }
 
-fn ScrollSelector<'a>(cx: Context<'a, ScrollSelectorProps>) -> DomTree<'a> {
+fn ScrollSelector<'a>(cx: Context<'a>, props: &'a ScrollSelectorProps) -> DomTree<'a> {
     let selection_list = (&REFERENCES).iter().enumerate().map(|(id, _)| {
         rsx! {
             li {
@@ -47,7 +47,7 @@ fn ScrollSelector<'a>(cx: Context<'a, ScrollSelectorProps>) -> DomTree<'a> {
             ul {
                 {selection_list}
                 button {
-                    onclick: move |_| (cx.onselect)(Some(10))
+                    onclick: move |_| (props.onselect)(Some(10))
                 }
             }
         }
@@ -59,8 +59,8 @@ struct ReferenceItemProps {
     selected: usize,
 }
 
-static ReferenceItem: FC<ReferenceItemProps> = |cx| {
-    let (caller, name, code) = REFERENCES[cx.selected];
+static ReferenceItem: FC<ReferenceItemProps> = |cx, props| {
+    let (caller, name, code) = REFERENCES[props.selected];
 
     // Create the component using the factory API directly
     let caller_node = LazyNodes::new(move |f| f.component(caller, (), None, &[]));

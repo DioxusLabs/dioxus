@@ -19,7 +19,7 @@ enum Operator {
     Div,
 }
 
-const App: FC<()> = |cx| {
+const App: FC<()> = |cx, props| {
     let cur_val = use_state(cx, || 0.0_f64);
     let operator = use_state(cx, || None as Option<Operator>);
     let display_value = use_state(cx, || "".to_string());
@@ -70,16 +70,16 @@ const App: FC<()> = |cx| {
                 display_value.modify().pop();
             }
         }
-        KeyCode::_0 => input_digit(0),
-        KeyCode::_1 => input_digit(1),
-        KeyCode::_2 => input_digit(2),
-        KeyCode::_3 => input_digit(3),
-        KeyCode::_4 => input_digit(4),
-        KeyCode::_5 => input_digit(5),
-        KeyCode::_6 => input_digit(6),
-        KeyCode::_7 => input_digit(7),
-        KeyCode::_8 => input_digit(8),
-        KeyCode::_9 => input_digit(9),
+        KeyCode::Num0 => input_digit(0),
+        KeyCode::Num1 => input_digit(1),
+        KeyCode::Num2 => input_digit(2),
+        KeyCode::Num3 => input_digit(3),
+        KeyCode::Num4 => input_digit(4),
+        KeyCode::Num5 => input_digit(5),
+        KeyCode::Num6 => input_digit(6),
+        KeyCode::Num7 => input_digit(7),
+        KeyCode::Num8 => input_digit(8),
+        KeyCode::Num9 => input_digit(9),
         KeyCode::Add => operator.set(Some(Operator::Add)),
         KeyCode::Subtract => operator.set(Some(Operator::Sub)),
         KeyCode::Divide => operator.set(Some(Operator::Div)),
@@ -124,11 +124,11 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> DomTree<'a> {
+fn CalculatorKey<'a>(cx: Context<'a>, props: &'a CalculatorKeyProps) -> DomTree<'a> {
     cx.render(rsx! {
         button {
-            class: "calculator-key {cx.name}"
-            onclick: {cx.onclick}
+            class: "calculator-key {props.name}"
+            onclick: {props.onclick}
             {cx.children()}
         }
     })
@@ -139,10 +139,10 @@ struct CalculatorDisplayProps {
     val: f64,
 }
 
-fn CalculatorDisplay(cx: Context<CalculatorDisplayProps>) -> DomTree {
+fn CalculatorDisplay<'a>(cx: Context<'a>, props: &CalculatorDisplayProps) -> DomTree<'a> {
     use separator::Separatable;
     // Todo, add float support to the num-format crate
-    let formatted = cx.val.separated_string();
+    let formatted = props.val.separated_string();
     // TODO: make it autoscaling with css
     cx.render(rsx! {
         div { class: "calculator-display"

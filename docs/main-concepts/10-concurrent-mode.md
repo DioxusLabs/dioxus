@@ -50,8 +50,8 @@ async fn ExampleLoader(cx: Context<()>) -> Vnode {
     This API stores the result on the Context object, so the loaded data is taken as reference.
     */
     let name: &Result<SomeStructure> = use_fetch_data("http://example.com/json", ())
-                                        .place_holder(|cx| rsx!{<div> "loading..." </div>})
-                                        .delayed_place_holder(1000, |cx| rsx!{ <div> "still loading..." </div>})
+                                        .place_holder(|cx, props|rsx!{<div> "loading..." </div>})
+                                        .delayed_place_holder(1000, |cx, props|rsx!{ <div> "still loading..." </div>})
                                         .await;
 
     match name {

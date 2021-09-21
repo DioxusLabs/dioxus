@@ -10,7 +10,7 @@ type Shared<T> = Rc<RefCell<T>>;
 #[test]
 fn sample_refs() {
 
-    // static App: FC<()> = |cx| {
+    // static App: FC<()> = |cx, props|{
     //     let div_ref = use_node_ref::<MyRef, _>(cx);
 
     //     cx.render(rsx! {

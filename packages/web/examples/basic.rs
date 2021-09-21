@@ -22,7 +22,7 @@ fn main() {
     dioxus_web::launch(APP, |c| c)
 }
 
-static APP: FC<()> = |cx| {
+static APP: FC<()> = |cx, props|{
     let mut count = use_state(cx, || 3);
 
     cx.render(rsx! {
@@ -44,7 +44,7 @@ static APP: FC<()> = |cx| {
     })
 };
 
-static Child: FC<()> = |cx| {
+static Child: FC<()> = |cx, props|{
     cx.render(rsx! {
         div {
             div {

@@ -93,7 +93,7 @@
 //! Dioxus uses hooks for state management. Hooks are a form of state persisted between calls of the function component.
 //!
 //! ```
-//! pub pub static Example: FC<()> = |cx| {
+//! pub pub static Example: FC<()> = |cx, props|{
 //!     let (val, set_val) = use_state(cx, || 0);
 //!     cx.render(rsx!(
 //!         button { onclick: move |_| set_val(val + 1) }
@@ -156,7 +156,7 @@
 //!     diouxs::web::launch(Example);
 //! }
 //!
-//! pub pub static Example: FC<()> = |cx| {
+//! pub pub static Example: FC<()> = |cx, props|{
 //!     cx.render(rsx! {
 //!         div { "Hello World!" }
 //!     })

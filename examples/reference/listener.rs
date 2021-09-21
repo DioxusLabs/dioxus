@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     cx.render(rsx! {
         ButtonList {}
         NonUpdatingEvents {}
@@ -16,7 +16,7 @@ pub static Example: FC<()> = |cx| {
 };
 
 /// We can use `set_name` in multiple closures; the closures automatically *copy* the reference to set_name.
-static ButtonList: FC<()> = |cx| {
+static ButtonList: FC<()> = |cx, props| {
     let name = use_state(cx, || "...?");
 
     let names = ["jack", "jill", "john", "jane"]
@@ -33,7 +33,7 @@ static ButtonList: FC<()> = |cx| {
 
 /// This shows how listeners may be without a visible change in the display.
 /// Check the console.
-static NonUpdatingEvents: FC<()> = |cx| {
+static NonUpdatingEvents: FC<()> = |cx, props| {
     rsx!(cx, div {
         button {
             onclick: move |_| log::info!("Did not cause any updates!")
@@ -42,7 +42,7 @@ static NonUpdatingEvents: FC<()> = |cx| {
     })
 };
 
-static DisablePropogation: FC<()> = |cx| {
+static DisablePropogation: FC<()> = |cx, props| {
     rsx!(cx,
         div {
             onclick: move |_| log::info!("event propogated to the div!")

@@ -22,7 +22,7 @@ pub struct TodoItem {
 }
 
 const STYLE: &str = include_str!("./_examples/todomvc/style.css");
-const App: FC<()> = |cx| {
+const App: FC<()> = |cx, props| {
     let draft = use_state(cx, || "".to_string());
     let todos = use_state(cx, || HashMap::<u32, Rc<TodoItem>>::new());
     let filter = use_state(cx, || FilterState::All);
@@ -87,8 +87,7 @@ pub struct TodoEntryProps {
     todo: std::rc::Rc<TodoItem>,
 }
 
-pub fn TodoEntry(cx: Context<TodoEntryProps>) -> DomTree {
-    let TodoEntryProps { todo } = *cx;
+pub fn TodoEntry<'a>(cx: Context<'a>, TodoEntryProps { todo }: &'a TodoEntryProps) -> DomTree<'a> {
     let is_editing = use_state(cx, || false);
     let contents = "";
 

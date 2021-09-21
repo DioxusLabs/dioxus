@@ -32,7 +32,7 @@ fn main() {
     .expect("failed to launch dioxus app");
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let state = use_state(cx, || Calculator::new());
 
     let clear_display = state.display_value.eq("0");
@@ -79,11 +79,11 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> DomTree<'a> {
+fn CalculatorKey<'a, 'r>(cx: Context<'a>, props: &'a CalculatorKeyProps) -> DomTree<'a> {
     cx.render(rsx! {
         button {
-            class: "calculator-key {cx.name}"
-            onclick: {cx.onclick}
+            class: "calculator-key {props.name}"
+            onclick: {props.onclick}
             {cx.children()}
         }
     })
@@ -174,16 +174,16 @@ impl Calculator {
     fn handle_keydown(&mut self, evt: KeyboardEvent) {
         match evt.key_code() {
             KeyCode::Backspace => self.backspace(),
-            KeyCode::_0 => self.input_digit(0),
-            KeyCode::_1 => self.input_digit(1),
-            KeyCode::_2 => self.input_digit(2),
-            KeyCode::_3 => self.input_digit(3),
-            KeyCode::_4 => self.input_digit(4),
-            KeyCode::_5 => self.input_digit(5),
-            KeyCode::_6 => self.input_digit(6),
-            KeyCode::_7 => self.input_digit(7),
-            KeyCode::_8 => self.input_digit(8),
-            KeyCode::_9 => self.input_digit(9),
+            KeyCode::Num0 => self.input_digit(0),
+            KeyCode::Num1 => self.input_digit(1),
+            KeyCode::Num2 => self.input_digit(2),
+            KeyCode::Num3 => self.input_digit(3),
+            KeyCode::Num4 => self.input_digit(4),
+            KeyCode::Num5 => self.input_digit(5),
+            KeyCode::Num6 => self.input_digit(6),
+            KeyCode::Num7 => self.input_digit(7),
+            KeyCode::Num8 => self.input_digit(8),
+            KeyCode::Num9 => self.input_digit(9),
             KeyCode::Add => self.operator = Some(Operator::Add),
             KeyCode::Subtract => self.operator = Some(Operator::Sub),
             KeyCode::Divide => self.operator = Some(Operator::Div),

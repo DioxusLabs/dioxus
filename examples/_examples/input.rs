@@ -12,7 +12,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props|{
     let (val, set_val) = use_state_classic(cx, || "asd".to_string());
 
     cx.render(rsx! {
@@ -37,7 +37,7 @@ static App: FC<()> = |cx| {
     })
 };
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props|{
     cx.render(rsx! {
         div { class: "max-w-lg max-w-xs bg-blue-800 shadow-2xl rounded-lg mx-auto text-center py-12 mt-4 rounded-xl"
             div { class: "container py-5 max-w-md mx-auto"
@@ -50,7 +50,7 @@ pub static Example: FC<()> = |cx| {
     })
 };
 
-static UserInput: FC<()> = |cx| {
+static UserInput: FC<()> = |cx, props|{
     let (val, set_val) = use_state_classic(cx, || "asd".to_string());
 
     rsx! { in cx,

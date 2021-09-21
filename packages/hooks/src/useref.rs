@@ -33,6 +33,6 @@ impl<T> Clone for UseRef<'_, T> {
 }
 impl<T> Copy for UseRef<'_, T> {}
 
-pub fn use_ref<P, T: 'static>(cx: Context<P>, f: impl FnOnce() -> T) -> UseRef<T> {
+pub fn use_ref<T: 'static>(cx: Context, f: impl FnOnce() -> T) -> UseRef<T> {
     cx.use_hook(|_| RefCell::new(f()), |f| UseRef { inner: f }, |_| {})
 }

@@ -11,7 +11,7 @@
 use dioxus::prelude::*;
 
 // Returning multiple elements with rsx! or html!
-static App1: FC<()> = |cx| {
+static App1: FC<()> = |cx, props| {
     cx.render(rsx! {
         h1 { }
         h2 { }
@@ -20,7 +20,7 @@ static App1: FC<()> = |cx| {
 };
 
 // Using the Fragment component
-static App2: FC<()> = |cx| {
+static App2: FC<()> = |cx, props| {
     cx.render(rsx! {
         Fragment {
             div {}
@@ -31,7 +31,7 @@ static App2: FC<()> = |cx| {
 };
 
 // Using the `fragment` method on the NodeFactory
-static App3: FC<()> = |cx| {
+static App3: FC<()> = |cx, props| {
     cx.render(LazyNodes::new(move |fac| {
         fac.fragment_from_iter([
             fac.text(format_args!("A")),
@@ -42,7 +42,7 @@ static App3: FC<()> = |cx| {
     }))
 };
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     cx.render(rsx! {
         App1 {}
         App2 {}

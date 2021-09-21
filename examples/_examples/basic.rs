@@ -15,7 +15,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let (state, set_state) = use_state_classic(cx, || 0);
     cx.render(rsx! {
         div {

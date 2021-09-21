@@ -9,7 +9,7 @@ fn main() {
     println!("{}", ssr::render_vdom(&vdom, |c| c));
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     cx.render(rsx!(
         div {
             h1 { "Title" }
@@ -21,6 +21,6 @@ static App: FC<()> = |cx| {
 struct MyProps<'a> {
     text: &'a str,
 }
-fn App2<'a>(cx: Context<'a, MyProps>) -> DomTree<'a> {
+fn App2<'a>(cx: Context<'a>, props: &'a MyProps) -> DomTree<'a> {
     None
 }
