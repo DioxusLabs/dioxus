@@ -54,7 +54,7 @@ pub(crate) mod innerlude {
     pub use crate::virtual_dom::*;
 
     pub type DomTree<'a> = Option<VNode<'a>>;
-    pub type FC<P> = fn(Context<P>) -> DomTree;
+    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> DomTree<'a>;
 
     pub use dioxus_core_macro::{format_args_f, html, rsx};
 }

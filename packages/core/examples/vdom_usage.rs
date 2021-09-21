@@ -4,7 +4,7 @@ use dioxus_core::prelude::*;
 
 #[async_std::main]
 async fn main() {
-    static App: FC<()> = |cx| cx.render(LazyNodes::new(|f| f.text(format_args!("hello"))));
+    static App: FC<()> = |cx, props|cx.render(LazyNodes::new(|f| f.text(format_args!("hello"))));
 
     let mut dom = VirtualDom::new(App);
 

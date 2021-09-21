@@ -27,7 +27,7 @@ enum Operator {
     Div,
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let (cur_val, set_cur_val) = use_state_classic(cx, || 0.0_f64);
     let (operator, set_operator) = use_state_classic(cx, || None as Option<Operator>);
     let (display_value, set_display_value) = use_state_classic(cx, || "0".to_string());

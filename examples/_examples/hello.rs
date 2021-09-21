@@ -13,7 +13,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
 }
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     let nodes = (0..500).map(|f| rsx! (li {"div"}));
     cx.render(rsx! {
         div {

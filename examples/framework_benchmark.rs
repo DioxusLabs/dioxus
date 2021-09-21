@@ -19,7 +19,7 @@ fn main() {
 // We use a special immutable hashmap to make hashmap operations efficient
 type RowList = im_rc::HashMap<usize, Rc<str>, FxBuildHasher>;
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let items = use_state(cx, || RowList::default());
 
     let create_rendered_rows = move |from, num| move |_| items.set(create_row_list(from, num));
@@ -92,14 +92,14 @@ struct ActionButtonProps<F: Fn(MouseEvent)> {
     id: &'static str,
     action: F,
 }
-fn ActionButton<F>(cx: Context<ActionButtonProps<F>>) -> DomTree
+fn ActionButton<'a, F>(cx: Context<'a>, props: &'a ActionButtonProps<F>) -> DomTree<'a>
 where
     F: Fn(MouseEvent),
 {
     cx.render(rsx! {
         div { class: "col-sm-6 smallpad"
-            button { class:"btn btn-primary btn-block", r#type: "button", id: "{cx.id}",  onclick: {&cx.action},
-                "{cx.name}"
+            button { class:"btn btn-primary btn-block", r#type: "button", id: "{props.id}",  onclick: {&props.action},
+                "{props.name}"
             }
         }
     })
@@ -110,12 +110,12 @@ struct RowProps {
     row_id: usize,
     label: Rc<str>,
 }
-fn Row<'a>(cx: Context<'a, RowProps>) -> DomTree {
+fn Row<'a>(cx: Context<'a>, props: &'a RowProps) -> DomTree<'a> {
     cx.render(rsx! {
         tr {
-            td { class:"col-md-1", "{cx.row_id}" }
+            td { class:"col-md-1", "{props.row_id}" }
             td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
-                a { class: "lbl", "{cx.label}" }
+                a { class: "lbl", "{props.label}" }
             }
             td { class: "col-md-1"
                 a { class: "remove", onclick: move |_| {/* remove */}

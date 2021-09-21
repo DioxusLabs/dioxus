@@ -27,16 +27,15 @@ use std::{any::TypeId, ops::Deref, rc::Rc};
 ///     }
 /// }
 /// ```
-pub struct Context<'src, T> {
-    pub props: &'src T,
+pub struct Context<'src> {
     pub scope: &'src Scope,
 }
 
-impl<'src, T> Copy for Context<'src, T> {}
-impl<'src, T> Clone for Context<'src, T> {
+impl<'src> Copy for Context<'src> {}
+impl<'src> Clone for Context<'src> {
     fn clone(&self) -> Self {
         Self {
-            props: self.props,
+            // props: self.props,
             scope: self.scope,
         }
     }
@@ -44,14 +43,14 @@ impl<'src, T> Clone for Context<'src, T> {
 
 // We currently deref to props, but it might make more sense to deref to Scope?
 // This allows for code that takes cx.xyz instead of cx.props.xyz
-impl<'a, T> Deref for Context<'a, T> {
-    type Target = &'a T;
+impl<'a> Deref for Context<'a> {
+    type Target = &'a Scope;
     fn deref(&self) -> &Self::Target {
-        &self.props
+        &self.scope
     }
 }
 
-impl<'src, P> Context<'src, P> {
+impl<'src> Context<'src> {
     /// Access the children elements passed into the component
     ///
     /// This enables patterns where a component is passed children from its parent.
@@ -69,7 +68,7 @@ impl<'src, P> Context<'src, P> {
     /// ## Example
     ///
     /// ```rust
-    /// const App: FC<()> = |cx| {
+    /// const App: FC<()> = |cx, props|{
     ///     cx.render(rsx!{
     ///         CustomCard {
     ///             h1 {}
@@ -78,7 +77,7 @@ impl<'src, P> Context<'src, P> {
     ///     })
     /// }
     ///
-    /// const CustomCard: FC<()> = |cx| {
+    /// const CustomCard: FC<()> = |cx, props|{
     ///     cx.render(rsx!{
     ///         div {
     ///             h1 {"Title card"}
@@ -177,12 +176,12 @@ impl<'src, P> Context<'src, P> {
     /// ```
     /// struct SharedState(&'static str);
     ///
-    /// static App: FC<()> = |cx| {
+    /// static App: FC<()> = |cx, props|{
     ///     cx.use_provide_state(|| SharedState("world"));
     ///     rsx!(cx, Child {})
     /// }
     ///
-    /// static Child: FC<()> = |cx| {
+    /// static Child: FC<()> = |cx, props|{
     ///     let state = cx.use_consume_state::<SharedState>();
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }

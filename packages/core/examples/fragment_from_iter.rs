@@ -2,7 +2,7 @@ use dioxus_core::prelude::*;
 
 fn main() {}
 
-fn app(cx: Context<()>) -> DomTree {
+fn app<'a>(cx: Context<'a>, props: &()) -> DomTree<'a> {
     let vak = use_suspense(
         cx,
         || async {},

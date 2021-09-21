@@ -15,12 +15,12 @@ fn new_dom() -> TestDom {
 fn shared_state_test() {
     struct MySharedState(&'static str);
 
-    static App: FC<()> = |cx| {
+    static App: FC<()> = |cx, props| {
         cx.use_provide_state(|| MySharedState("world!"));
         rsx!(cx, Child {})
     };
 
-    static Child: FC<()> = |cx| {
+    static Child: FC<()> = |cx, props| {
         let shared = cx.use_consume_state::<MySharedState>()?;
         rsx!(cx, "Hello, {shared.0}")
     };

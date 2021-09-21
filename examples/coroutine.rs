@@ -27,7 +27,7 @@ fn main() {
 
 use dioxus::prelude::*;
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let p1 = use_state(cx, || 0);
     let p2 = use_state(cx, || 0);
 
@@ -59,7 +59,7 @@ struct HorseyProps {
     pos: i32,
 }
 
-static Horsey: FC<HorseyProps> = |cx| {
+static Horsey: FC<HorseyProps> = |cx, props| {
     cx.render(rsx! {
     div {
         button { "pause" }

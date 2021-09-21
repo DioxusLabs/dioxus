@@ -10,7 +10,7 @@ fn main() {
     assert!(g.edits.len() > 1);
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let mut rng = SmallRng::from_entropy();
     let rows = (0..10_000).map(|f| {
         let label = Label::new(&mut rng);
@@ -35,12 +35,12 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row<'a>(cx: Context<'a, RowProps>) -> DomTree {
+fn Row<'a>(cx: Context<'a>, props: &'a RowProps) -> DomTree<'a> {
     cx.render(rsx! {
         tr {
-            td { class:"col-md-1", "{cx.row_id}" }
+            td { class:"col-md-1", "{props.row_id}" }
             td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
-                a { class: "lbl", "{cx.label}" }
+                a { class: "lbl", "{props.label}" }
             }
             td { class: "col-md-1"
                 a { class: "remove", onclick: move |_| {/* remove */}

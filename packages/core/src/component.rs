@@ -29,7 +29,7 @@ use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 ///
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>(cx: Context<'a, ()>) -> DomTree<'a> {
+pub fn Fragment<'a>(cx: Context<'a>, props: &'a ()) -> DomTree<'a> {
     cx.render(LazyNodes::new(|f| f.fragment_from_iter(cx.children())))
 }
 

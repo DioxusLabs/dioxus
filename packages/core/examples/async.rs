@@ -2,7 +2,7 @@ use dioxus_core::prelude::*;
 
 fn main() {}
 
-const App: FC<()> = |cx| {
+const App: FC<()> = |cx, props| {
     // create a new future
     let _fut = cx.use_hook(
         |_| {
@@ -20,7 +20,7 @@ const App: FC<()> = |cx| {
     todo!()
 };
 
-const Task: FC<()> = |cx| {
+const Task: FC<()> = |cx, props| {
     let (_task, _res) = use_task(cx, || async { true });
     // task.pause();
     // task.restart();
@@ -34,6 +34,6 @@ const Task: FC<()> = |cx| {
     todo!()
 };
 
-fn use_mut<P, T>(_cx: Context<P>, _f: impl FnOnce() -> T) -> &mut T {
+fn use_mut<P, T>(_cx: Context, _f: impl FnOnce() -> T) -> &mut T {
     todo!()
 }

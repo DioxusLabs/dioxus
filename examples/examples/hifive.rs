@@ -17,7 +17,7 @@ fn main() {
     .expect("Webview finished");
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let hifives = use_model(&cx, || 0);
     cx.render(rsx! {
         div {

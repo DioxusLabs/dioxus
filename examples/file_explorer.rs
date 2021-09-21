@@ -20,7 +20,7 @@ fn main() {
     .unwrap();
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let files = use_state(cx, || Files::new());
 
     let file_list = files.path_names.iter().enumerate().map(|(dir_id, path)| {

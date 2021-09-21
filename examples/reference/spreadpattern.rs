@@ -9,7 +9,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     let props = MyProps {
         count: 0,
         live: true,
@@ -27,12 +27,12 @@ pub struct MyProps {
     name: &'static str,
 }
 
-pub static Example1: FC<MyProps> = |cx| {
+pub static Example1: FC<MyProps> = |cx, MyProps { count, live, name }| {
     cx.render(rsx! {
         div {
-            h1 { "Hello, {cx.name}"}
-            h3 {"Are we alive? {cx.live}"}
-            p {"Count is {cx.count}"}
+            h1 { "Hello, {name}"}
+            h3 {"Are we alive? {live}"}
+            p {"Count is {count}"}
             { cx.children() }
         }
     })

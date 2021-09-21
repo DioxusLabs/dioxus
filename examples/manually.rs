@@ -20,4 +20,4 @@ fn main() {
     dioxus_desktop::WebviewRenderer::run_with_edits(App, (), |c| c, Some(edits)).expect("failed");
 }
 
-const App: FC<()> = |cx| todo!();
+const App: FC<()> = |cx, props| todo!();

@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
     dioxus::desktop::launch(App, |c| c)
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let state = use_state(cx, || String::from("hello"));
     let clear_text = state == "hello";
 
@@ -37,11 +37,11 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a, 'r>(cx: Context<'a, CalculatorKeyProps<'r>>) -> DomTree<'a> {
+fn CalculatorKey<'a>(cx: Context<'a>, props: &'a CalculatorKeyProps) -> DomTree<'a> {
     cx.render(rsx! {
         button {
-            class: "calculator-key {cx.name}"
-            onclick: {cx.onclick}
+            class: "calculator-key {props.name}"
+            onclick: {props.onclick}
             {cx.children()}
         }
     })

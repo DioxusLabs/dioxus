@@ -78,15 +78,16 @@ Now, let's edit our `main.rs` file:
 ```rust
 use diouxs::prelude::*;
 
+
 fn main() {
-    dioxus::web::start(App)
+    dioxus::web::start(App, |c| c).unwrap();
 }
 
-fn App(cx: Context<()>) -> DomTree {
+static App: FC<()> = |cx, props| {
     cx.render(rsx! {
         div { "Hello, world!" }
     })
-}
+};
 ```
 
 Let's dissect our example a bit.
@@ -97,22 +98,34 @@ This bit of code imports everything from the the `prelude` module. This brings i
 use diouxs::prelude::*;
 ```
 
-This bit of code starts the WASM renderer as a future (JS Promise) and then awaits it. This is very similar to the `ReactDOM.render()` method you use for a React app. We pass in the `App` function as a our app.
+This bit of code starts the WASM renderer as a future (JS Promise) and then awaits it. This is very similar to the `ReactDOM.render()` method you use for a React app. We pass in the `App` function as a our app. The `|c| c` closure provides a way to configure the WebSys app, enabling things like hydration, pre-rendering, and other tweaks. The simplest configuration is just the defaults.
+
+Calling "start" will launch Dioxus on the web's main thread, running `wasm_bindgen_futures::block_on`. It's possible to "launch" the WebSys renderer as an async function - check the documentation for more details.
 
 ```rust
 fn main() {
-    dioxus::web::start(App)
+    dioxus::web::start(App, |c| c).unwrap();
 }
 ```
 
-Finally, our app. Every component in Dioxus is a function that takes in a `Context` object and returns a `VNode`.
+Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Option<VNode>`.
 
 ```rust
-fn App(cx: Context<()>) -> DomTree {
+static App: FC<()> = |cx, props| {
     cx.render(rsx! {
         div { "Hello, world!" }
     })
 };
+```
+
+The closure `FC<()>` syntax is identical to the function syntax, but with lifetimes managed for you. In cases where props need to borrow from their parent, you will need to specify lifetimes using the function syntax:
+
+```rust
+fn App<'a>(cx: Context<'a>, props: &()) -> DomTree<'a> {
+    cx.render(rsx! {
+        div { "Hello, world!" }
+    })    
+}
 ```
 
 In React, you'll save data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data.
@@ -135,7 +148,7 @@ If we wanted to golf a bit, we can shrink our hello-world even smaller:
 
 ```rust
 fn main() {
-    dioxus::web::start(|cx| cx.render(diouxs::rsx!( div { "Hello, World!" } ))
+    dioxus::web::start(|cx, _| cx.render(diouxs::rsx!( div { "Hello, World!" } ))
 }
 ```
 

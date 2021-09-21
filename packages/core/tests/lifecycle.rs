@@ -20,8 +20,8 @@ fn manual_diffing() {
         value: Shared<&'static str>,
     }
 
-    static App: FC<AppProps> = |cx| {
-        let val = cx.value.borrow();
+    static App: FC<AppProps> = |cx, props| {
+        let val = props.value.borrow();
         cx.render(rsx! { div { "{val}" } })
     };
 

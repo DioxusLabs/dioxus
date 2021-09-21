@@ -35,7 +35,7 @@ use std::{
 ///
 /// Usage:
 /// ```ignore
-/// const Example: FC<()> = |cx| {
+/// const Example: FC<()> = |cx, props|{
 ///     let counter = use_state(cx, || 0);
 ///     let increment = |_| counter += 1;
 ///     let decrement = |_| counter += 1;
@@ -49,8 +49,8 @@ use std::{
 ///     }
 /// }
 /// ```
-pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
-    cx: Context<'a, P>,
+pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
+    cx: Context<'a>,
     initial_state_fn: F,
 ) -> UseState<'a, T> {
     cx.use_hook(

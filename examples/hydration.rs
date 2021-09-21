@@ -19,7 +19,7 @@ fn main() {
     dioxus::desktop::launch(App, |c| c.with_prerendered(content)).unwrap();
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let mut val = use_state(cx, || 0);
     cx.render(rsx! {
         div {

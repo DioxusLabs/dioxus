@@ -13,7 +13,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(App));
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     cx.render(rsx! {
         Calcier {
             h2 {"abc 1"}
@@ -25,7 +25,7 @@ static App: FC<()> = |cx| {
     })
 };
 
-static Calcier: FC<()> = |cx| {
+static Calcier: FC<()> = |cx, props| {
     cx.render(rsx! {
         div {
             h1 {
