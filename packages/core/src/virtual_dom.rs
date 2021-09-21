@@ -130,7 +130,7 @@ impl VirtualDom {
         // Safety: this callback is only valid for the lifetime of the root props
         let root_caller: Box<dyn Fn(&Scope) -> DomTree> = Box::new(move |scope: &Scope| unsafe {
             let props: &'_ P = &*(props_ptr as *const P);
-            std::mem::transmute(root(Context { props, scope }))
+            std::mem::transmute(root(Context { scope }, props))
         });
 
         let scheduler = Scheduler::new();
@@ -203,7 +203,7 @@ impl VirtualDom {
             let root_caller: Box<dyn Fn(&Scope) -> DomTree> =
                 Box::new(move |scope: &Scope| unsafe {
                     let props: &'_ P = &*(props_ptr as *const P);
-                    std::mem::transmute(root(Context { props, scope }))
+                    std::mem::transmute(root(Context { scope }, props))
                 });
 
             root_scope.update_scope_dependencies(&root_caller, ScopeChildren(&[]));

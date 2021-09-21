@@ -7,7 +7,7 @@ use dioxus_html as dioxus_elements;
 
 #[async_std::test]
 async fn event_queue_works() {
-    static App: FC<()> = |cx| {
+    static App: FC<()> = |cx, props| {
         cx.render(rsx! {
             div { "hello world" }
         })

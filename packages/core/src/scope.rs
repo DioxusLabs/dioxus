@@ -275,10 +275,7 @@ impl Scope {
             let sus: &'a VSuspended<'a> = unsafe { std::mem::transmute(sus) };
 
             let cx: SuspendedContext<'a> = SuspendedContext {
-                inner: Context {
-                    props: &(),
-                    scope: self,
-                },
+                inner: Context { scope: self },
             };
 
             let mut cb = sus.callback.borrow_mut().take().unwrap();

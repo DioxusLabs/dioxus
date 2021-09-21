@@ -24,8 +24,8 @@ use std::{
 ///
 ///
 ///
-pub fn use_task<'src, Out, Fut, Init, P>(
-    cx: Context<'src, P>,
+pub fn use_task<'src, Out, Fut, Init>(
+    cx: Context<'src>,
     task_initializer: Init,
 ) -> (&'src TaskHandle, &'src Option<Out>)
 where
@@ -83,8 +83,8 @@ where
 /// # Example
 ///
 ///
-pub fn use_suspense<'src, Out, Fut, Cb, P>(
-    cx: Context<'src, P>,
+pub fn use_suspense<'src, Out, Fut, Cb>(
+    cx: Context<'src>,
     task_initializer: impl FnOnce() -> Fut,
     user_callback: Cb,
 ) -> DomTree<'src>
@@ -123,10 +123,7 @@ where
             Some(value) => {
                 let out = value.downcast_ref::<Out>().unwrap();
                 let sus = SuspendedContext {
-                    inner: Context {
-                        props: &(),
-                        scope: cx.scope,
-                    },
+                    inner: Context { scope: cx.scope },
                 };
                 user_callback(sus, out)
             }
@@ -171,7 +168,7 @@ pub(crate) struct SuspenseHook {
 }
 
 pub struct SuspendedContext<'a> {
-    pub(crate) inner: Context<'a, ()>,
+    pub(crate) inner: Context<'a>,
 }
 
 impl<'src> SuspendedContext<'src> {
@@ -196,7 +193,7 @@ impl<'a, T> Deref for NodeRef<'a, T> {
     }
 }
 
-pub fn use_node_ref<T, P>(cx: Context<P>) -> NodeRef<T> {
+pub fn use_node_ref<T, P>(cx: Context) -> NodeRef<T> {
     cx.use_hook(
         |f| {},
         |f| {
