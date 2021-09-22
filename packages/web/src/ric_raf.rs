@@ -8,7 +8,7 @@ use web_sys::Window;
 
 pub struct RafLoop {
     window: Window,
-    ric_receiver: async_channel::Receiver<()>,
+    ric_receiver: async_channel::Receiver<u32>,
     raf_receiver: async_channel::Receiver<()>,
     ric_closure: Closure<dyn Fn(JsValue)>,
     raf_closure: Closure<dyn Fn(JsValue)>,
@@ -25,7 +25,10 @@ impl RafLoop {
         let (ric_sender, ric_receiver) = async_channel::unbounded();
 
         let ric_closure: Closure<dyn Fn(JsValue)> = Closure::wrap(Box::new(move |_v: JsValue| {
-            ric_sender.try_send(()).unwrap()
+            //
+            let deadline = _v.dyn_into::<web_sys::IdleDeadline>().unwrap();
+            let time_remaining = deadline.time_remaining() as u32;
+            ric_sender.try_send(time_remaining).unwrap()
         }));
 
         // execute the polyfill for safari
@@ -46,8 +49,8 @@ impl RafLoop {
     /// waits for some idle time and returns a timeout future that expires after the idle time has passed
     pub async fn wait_for_idle_time(&self) -> TimeoutFuture {
         let ric_fn = self.ric_closure.as_ref().dyn_ref::<Function>().unwrap();
-        let deadline: u32 = self.window.request_idle_callback(ric_fn).unwrap();
-        self.ric_receiver.recv().await.unwrap();
+        let _cb_id: u32 = self.window.request_idle_callback(ric_fn).unwrap();
+        let deadline = self.ric_receiver.recv().await.unwrap();
         let deadline = TimeoutFuture::new(deadline);
         deadline
     }

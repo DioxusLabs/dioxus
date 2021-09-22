@@ -379,7 +379,7 @@ impl Scheduler {
 
         log::debug!("Working finished? {:?}", work_completed);
 
-        log::debug!("raw edits {:?}", machine.mutations.edits);
+        // log::debug!("raw edits {:?}", machine.mutations.edits);
 
         let mut machine: DiffMachine<'static> = unsafe { std::mem::transmute(machine) };
         // let mut saved = machine.save();
@@ -406,16 +406,16 @@ impl Scheduler {
 
             mutations.push(new_mutations);
 
-            log::debug!("saved edits {:?}", mutations);
+            // log::debug!("saved edits {:?}", mutations);
 
             let mut saved = machine.save();
             self.save_work(saved);
-            false
+            true
 
             // self.save_work(saved);
             // false
         } else {
-            true
+            false
         }
     }
 
@@ -461,7 +461,7 @@ impl Scheduler {
 
         while self.has_any_work() {
             // switch our priority, pop off any work
-            for event in self.ui_events.drain(..) {
+            while let Some(event) = self.ui_events.pop_front() {
                 if let Some(scope) = self.pool.get_scope_mut(event.scope) {
                     if let Some(element) = event.mounted_dom_id {
                         log::info!("Calling listener {:?}, {:?}", event.scope, element);
@@ -482,18 +482,18 @@ impl Scheduler {
                                         }
                                     }
                                 }
-                                _ => todo!(),
+                                SchedulerMsg::UiEvent(e) => self.ui_events.push_back(e),
+                                SchedulerMsg::Task(_) => todo!(),
                             }
                         }
                     }
                 }
             }
 
-            let deadline_expired =
-                self.work_on_current_lane(&mut deadline, &mut committed_mutations);
+            let work_complete = self.work_on_current_lane(&mut deadline, &mut committed_mutations);
 
-            if deadline_expired {
-                break;
+            if !work_complete {
+                return committed_mutations;
             }
         }
 

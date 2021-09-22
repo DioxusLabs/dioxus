@@ -429,6 +429,11 @@ impl<'a> NodeFactory<'a> {
         is_volatile: bool,
     ) -> Attribute<'a> {
         let (value, is_static) = self.raw_text(val);
+        let is_volatile = match name {
+            "value" | "checked" | "selected" => true,
+            _ => false,
+        };
+
         Attribute {
             name,
             value,

@@ -62,6 +62,7 @@ features = [
     "SvgElement",
     "SvgAnimatedString",
     "HtmlOptionElement",
+    "IdleDeadline",
 ]
 
 [lib]

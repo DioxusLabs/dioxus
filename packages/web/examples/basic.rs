@@ -15,7 +15,7 @@ use std::{pin::Pin, time::Duration};
 
 fn main() {
     // Setup logging
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+    // wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
     // Run the app
@@ -25,26 +25,34 @@ fn main() {
 static APP: FC<()> = |cx, props| {
     let mut count = use_state(cx, || 3);
 
+    let mut content = use_state(cx, || String::new());
     cx.render(rsx! {
         div {
+            input {
+                value: "{content}"
+                oninput: move |e| {
+                    content.set(e.value());
+                }
+            }
             button {
                 onclick: move |_| count += 1,
                 "Click to add."
                 "Current count: {count}"
             }
+
             select {
-                name:"cars"
-                id:"cars"
+                name: "cars"
+                id: "cars"
+                value: "h1"
                 oninput: move |ev| {
                     match ev.value().as_str() {
                         "h1" => count.set(0),
                         "h2" => count.set(5),
                         "h3" => count.set(10),
-                        s => {
-                            log::debug!("real value is {}", s);
-                        }
+                        s => {}
                     }
                 },
+
                 option { value: "h1", "h1" }
                 option { value: "h2", "h2" }
                 option { value: "h3", "h3" }
@@ -56,18 +64,20 @@ static APP: FC<()> = |cx, props| {
                     li { "b - {f}" }
                     li { "c - {f}" }
                 })}
+
             }
+
+            {render_bullets(cx)}
+
             Child {}
         }
     })
 };
 
-static Child: FC<()> = |cx, props| {
-    cx.render(rsx! {
-        div {
-            div {
-                "hello child"
-            }
-        }
+fn render_bullets(cx: Context) -> DomTree {
+    rsx!(cx, div {
+        "bite me"
     })
-};
+}
+
+static Child: FC<()> = |cx, props| rsx!(cx, div {"hello child"});

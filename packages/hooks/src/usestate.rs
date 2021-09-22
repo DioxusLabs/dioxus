@@ -56,7 +56,7 @@ pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
     cx.use_hook(
         move |_| UseStateInner {
             current_val: initial_state_fn(),
-            callback: cx.schedule_update(),
+            update_callback: cx.schedule_update(),
             wip: Rc::new(RefCell::new(None)),
             update_scheuled: Cell::new(false),
         },
@@ -75,7 +75,7 @@ pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
 struct UseStateInner<T: 'static> {
     current_val: T,
     update_scheuled: Cell<bool>,
-    callback: Rc<dyn Fn()>,
+    update_callback: Rc<dyn Fn()>,
     wip: Rc<RefCell<Option<T>>>,
 }
 
@@ -98,13 +98,13 @@ impl<'a, T: 'static> UseState<'a, T> {
     pub fn needs_update(&self) {
         if !self.inner.update_scheuled.get() {
             self.inner.update_scheuled.set(true);
-            (self.inner.callback)();
+            (self.inner.update_callback)();
         }
     }
 
     pub fn set(&self, new_val: T) {
-        self.needs_update();
         *self.inner.wip.borrow_mut() = Some(new_val);
+        self.needs_update();
     }
 
     pub fn get(&self) -> &'a T {

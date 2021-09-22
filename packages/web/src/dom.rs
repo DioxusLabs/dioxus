@@ -520,8 +520,6 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
 /// This function decodes a websys event and produces an EventTrigger
 /// With the websys implementation, we attach a unique key to the nodes
 fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
-    log::debug!("Handling event!");
-
     let target = event
         .target()
         .expect("missing target")
@@ -535,7 +533,7 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
     let attrs = target.attributes();
     for x in 0..attrs.length() {
         let attr: Attr = attrs.item(x).unwrap();
-        log::debug!("attrs include: {:#?}, {:#?}", attr.name(), attr.value());
+        // log::debug!("attrs include: {:#?}, {:#?}", attr.name(), attr.value());
     }
 
     use anyhow::Context;
@@ -558,11 +556,11 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
         .context("failed to parse real id")?;
 
     // Call the trigger
-    log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
+    // log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
 
     let triggered_scope = gi_id;
     // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
-    log::debug!("Triggered scope is {:#?}", triggered_scope);
+    // log::debug!("Triggered scope is {:#?}", triggered_scope);
     Ok(UserEvent {
         name: event_name_from_typ(&typ),
         event: virtual_event_from_websys_event(event.clone()),

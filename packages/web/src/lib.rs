@@ -152,8 +152,6 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
         // run the virtualdom work phase until the frame deadline is reached
         let mutations = dom.run_with_deadline(|| (&mut deadline).now_or_never().is_some());
 
-        log::debug!("received mutations {:#?}", mutations);
-
         // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;
 

@@ -185,7 +185,6 @@ impl<'bump> DiffMachine<'bump> {
     /// Returns a `bool` indicating that the work completed properly.
     pub fn work(&mut self, mut deadline_expired: impl FnMut() -> bool) -> bool {
         while let Some(instruction) = self.stack.pop() {
-            log::debug!("working {:?}", instruction);
             match instruction {
                 DiffInstruction::Diff { old, new } => self.diff_node(old, new),
                 DiffInstruction::Create { node } => self.create_node(node),
@@ -351,6 +350,7 @@ impl<'bump> DiffMachine<'bump> {
 
         // Insert a new scope into our component list
         let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
+
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
             let height = parent_scope.height + 1;
             Scope::new(
@@ -475,7 +475,7 @@ impl<'bump> DiffMachine<'bump> {
         // TODO: take a more efficient path than this
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
-                if old_attr.value != new_attr.value {
+                if old_attr.value != new_attr.value || old_attr.is_volatile {
                     please_commit(&mut self.mutations.edits);
                     self.mutations.set_attribute(new_attr);
                 }
@@ -664,7 +664,6 @@ impl<'bump> DiffMachine<'bump> {
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Handled these cases in `diff_children` before calling this function.
-        log::debug!("diffing non-keyed case");
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
