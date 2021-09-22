@@ -228,6 +228,12 @@ impl Scheduler {
             ScopeId(0)
         }) as FiberTask);
 
+        let saved_state = SavedDiffWork {
+            mutations: Mutations::new(),
+            stack: DiffStack::new(),
+            seen_scopes: Default::default(),
+        };
+
         Self {
             pool,
 
@@ -250,7 +256,7 @@ impl Scheduler {
             garbage_scopes: HashSet::new(),
 
             dirty_scopes: Default::default(),
-            saved_state: None,
+            saved_state: Some(saved_state),
             in_progress: false,
         }
     }
@@ -262,7 +268,7 @@ impl Scheduler {
         if let Some(scope) = self.pool.get_scope_mut(event.scope) {
             if let Some(element) = event.mounted_dom_id {
                 // TODO: bubble properly here
-                scope.call_listener(event.event, element);
+                scope.call_listener(event, element);
 
                 while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
                     //
@@ -321,7 +327,7 @@ impl Scheduler {
                 if let Some(scope) = self.pool.get_scope_mut(event.scope) {
                     if let Some(element) = event.mounted_dom_id {
                         // TODO: bubble properly here
-                        scope.call_listener(event.event, element);
+                        scope.call_listener(event, element);
 
                         while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
                             //
@@ -360,31 +366,55 @@ impl Scheduler {
                 h1.cmp(&h2)
             });
 
-            if let Some(scope) = self.dirty_scopes.pop() {
-                let component = self.pool.get_scope(scope).unwrap();
+            if let Some(scopeid) = self.dirty_scopes.pop() {
+                let component = self.pool.get_scope(scopeid).unwrap();
                 let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                machine.stack.scope_stack.push(scopeid);
                 machine.stack.push(DiffInstruction::Diff { new, old });
             }
         }
 
-        let deadline_expired = machine.work(deadline_reached);
+        let work_completed = machine.work(deadline_reached);
 
-        let machine: DiffMachine<'static> = unsafe { std::mem::transmute(machine) };
-        let mut saved = machine.save();
+        log::debug!("Working finished? {:?}", work_completed);
 
-        if deadline_expired {
-            self.save_work(saved);
-            false
-        } else {
-            for node in saved.seen_scopes.drain() {
+        log::debug!("raw edits {:?}", machine.mutations.edits);
+
+        let mut machine: DiffMachine<'static> = unsafe { std::mem::transmute(machine) };
+        // let mut saved = machine.save();
+
+        if work_completed {
+            for node in machine.seen_scopes.drain() {
+                // self.dirty_scopes.clear();
+                // self.ui_events.clear();
                 self.dirty_scopes.remove(&node);
+                // self.dirty_scopes.remove(&node);
             }
 
             let mut new_mutations = Mutations::new();
-            std::mem::swap(&mut new_mutations, &mut saved.mutations);
+
+            for edit in machine.mutations.edits.drain(..) {
+                new_mutations.edits.push(edit);
+            }
+
+            // for edit in saved.edits.drain(..) {
+            //     new_mutations.edits.push(edit);
+            // }
+
+            // std::mem::swap(&mut new_mutations, &mut saved.mutations);
 
             mutations.push(new_mutations);
+
+            log::debug!("saved edits {:?}", mutations);
+
+            let mut saved = machine.save();
             self.save_work(saved);
+            false
+
+            // self.save_work(saved);
+            // false
+        } else {
             true
         }
     }
@@ -429,18 +459,28 @@ impl Scheduler {
         */
         let mut committed_mutations = Vec::<Mutations<'static>>::new();
 
-        loop {
+        while self.has_any_work() {
             // switch our priority, pop off any work
             for event in self.ui_events.drain(..) {
                 if let Some(scope) = self.pool.get_scope_mut(event.scope) {
                     if let Some(element) = event.mounted_dom_id {
+                        log::info!("Calling listener {:?}, {:?}", event.scope, element);
+
                         // TODO: bubble properly here
-                        scope.call_listener(event.event, element);
+                        scope.call_listener(event, element);
 
                         while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
                             match dirty_scope {
                                 SchedulerMsg::Immediate(im) => {
-                                    self.dirty_scopes.insert(im);
+                                    log::debug!("Handling immediate {:?}", im);
+
+                                    if let Some(scope) = self.pool.get_scope_mut(im) {
+                                        if scope.run_scope(&self.pool) {
+                                            self.dirty_scopes.insert(im);
+                                        } else {
+                                            todo!()
+                                        }
+                                    }
                                 }
                                 _ => todo!(),
                             }
@@ -449,10 +489,10 @@ impl Scheduler {
                 }
             }
 
-            let finished_before_deadline =
+            let deadline_expired =
                 self.work_on_current_lane(&mut deadline, &mut committed_mutations);
 
-            if !finished_before_deadline {
+            if deadline_expired {
                 break;
             }
         }

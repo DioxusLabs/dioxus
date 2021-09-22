@@ -7,9 +7,9 @@ use dioxus_core::{
     DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{
-    window, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
+    window, Attr, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
     HtmlOptionElement, Node, NodeList, UiEvent,
 };
 
@@ -264,8 +264,8 @@ impl WebsysDom {
         )
         .unwrap();
 
-        el.set_attribute(&format!("dioxus-event"), &format!("{}", event))
-            .unwrap();
+        // el.set_attribute(&format!("dioxus-event"), &format!("{}", event))
+        //     .unwrap();
 
         // Register the callback to decode
 
@@ -532,11 +532,11 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     log::debug!("Event type is {:?}", typ);
 
-    // let attrs = target.attributes();
-    // for x in 0..attrs.length() {
-    //     let attr = attrs.item(x).unwrap();
-    //     log::debug!("attrs include: {:#?}", attr);
-    // }
+    let attrs = target.attributes();
+    for x in 0..attrs.length() {
+        let attr: Attr = attrs.item(x).unwrap();
+        log::debug!("attrs include: {:#?}, {:#?}", attr.name(), attr.value());
+    }
 
     use anyhow::Context;
 

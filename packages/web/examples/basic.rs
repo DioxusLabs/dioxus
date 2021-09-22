@@ -22,36 +22,43 @@ fn main() {
     dioxus_web::launch(APP, |c| c)
 }
 
-static APP: FC<()> = |cx, props|{
+static APP: FC<()> = |cx, props| {
     let mut count = use_state(cx, || 3);
 
     cx.render(rsx! {
-        div {
-            button {
-                onclick: move |_| count += 1,
-                "Click to add."
-                "Current count: {count}"
-            }
-            ul {
-                {(0..*count).map(|f| rsx!{
-                    li { "a - {f}" }
-                    li { "b - {f}" }
-                    li { "c - {f}" }
-                })}
-            }
-            Child {}
+        button {
+            // onclick: move |_| count += 1,
+            onmouseover: move |_| count += 5,
+            onmouseout: move |_| count -= 5,
+            "Click to add."
+            "Current count: {count}"
         }
+        // div {
+        //     button {
+        //         onclick: move |_| count += 1,
+        //         "Click to add."
+        //         "Current count: {count}"
+        //     }
+        //     ul {
+        //         {(0..*count).map(|f| rsx!{
+        //             li { "a - {f}" }
+        //             li { "b - {f}" }
+        //             li { "c - {f}" }
+        //         })}
+        //     }
+        //     Child {}
+        // }
     })
 };
 
-static Child: FC<()> = |cx, props|{
-    cx.render(rsx! {
-        div {
-            div {
-                div {
-                    "hello child"
-                }
-            }
-        }
-    })
-};
+// static Child: FC<()> = |cx, props| {
+//     cx.render(rsx! {
+//         div {
+//             div {
+//                 div {
+//                     "hello child"
+//                 }
+//             }
+//         }
+//     })
+// };

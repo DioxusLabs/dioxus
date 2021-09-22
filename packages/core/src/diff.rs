@@ -185,6 +185,7 @@ impl<'bump> DiffMachine<'bump> {
     /// Returns a `bool` indicating that the work completed properly.
     pub fn work(&mut self, mut deadline_expired: impl FnMut() -> bool) -> bool {
         while let Some(instruction) = self.stack.pop() {
+            log::debug!("working {:?}", instruction);
             match instruction {
                 DiffInstruction::Diff { old, new } => self.diff_node(old, new),
                 DiffInstruction::Create { node } => self.create_node(node),
@@ -194,6 +195,7 @@ impl<'bump> DiffMachine<'bump> {
             };
 
             if deadline_expired() {
+                log::debug!("Deadling expired before we could finished!");
                 return false;
             }
         }

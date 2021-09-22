@@ -238,22 +238,24 @@ impl Scope {
     }
 
     /// A safe wrapper around calling listeners
-    pub(crate) fn call_listener(&mut self, event: SyntheticEvent, element: ElementId) {
+    pub(crate) fn call_listener(&mut self, event: UserEvent, element: ElementId) {
         let listners = self.listeners.borrow_mut();
 
         let raw_listener = listners.iter().find(|lis| {
             let search = unsafe { &***lis };
-            let search_id = search.mounted_node.get();
-
-            // this assumes the node might not be mounted - should we assume that though?
-            search_id.map(|f| f == element).unwrap_or(false)
+            if search.event == event.name {
+                let search_id = search.mounted_node.get();
+                search_id.map(|f| f == element).unwrap_or(false)
+            } else {
+                false
+            }
         });
 
         if let Some(raw_listener) = raw_listener {
             let listener = unsafe { &**raw_listener };
             let mut cb = listener.callback.borrow_mut();
             if let Some(cb) = cb.as_mut() {
-                (cb)(event);
+                (cb)(event.event);
             }
         } else {
             log::warn!("An event was triggered but there was no listener to handle it");
