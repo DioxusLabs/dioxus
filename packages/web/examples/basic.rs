@@ -26,39 +26,48 @@ static APP: FC<()> = |cx, props| {
     let mut count = use_state(cx, || 3);
 
     cx.render(rsx! {
-        button {
-            // onclick: move |_| count += 1,
-            onmouseover: move |_| count += 5,
-            onmouseout: move |_| count -= 5,
-            "Click to add."
-            "Current count: {count}"
+        div {
+            button {
+                onclick: move |_| count += 1,
+                "Click to add."
+                "Current count: {count}"
+            }
+            select {
+                name:"cars"
+                id:"cars"
+                oninput: move |ev| {
+                    match ev.value().as_str() {
+                        "h1" => count.set(0),
+                        "h2" => count.set(5),
+                        "h3" => count.set(10),
+                        s => {
+                            log::debug!("real value is {}", s);
+                        }
+                    }
+                },
+                option { value: "h1", "h1" }
+                option { value: "h2", "h2" }
+                option { value: "h3", "h3" }
+            }
+
+            ul {
+                {(0..*count).map(|f| rsx!{
+                    li { "a - {f}" }
+                    li { "b - {f}" }
+                    li { "c - {f}" }
+                })}
+            }
+            Child {}
         }
-        // div {
-        //     button {
-        //         onclick: move |_| count += 1,
-        //         "Click to add."
-        //         "Current count: {count}"
-        //     }
-        //     ul {
-        //         {(0..*count).map(|f| rsx!{
-        //             li { "a - {f}" }
-        //             li { "b - {f}" }
-        //             li { "c - {f}" }
-        //         })}
-        //     }
-        //     Child {}
-        // }
     })
 };
 
-// static Child: FC<()> = |cx, props| {
-//     cx.render(rsx! {
-//         div {
-//             div {
-//                 div {
-//                     "hello child"
-//                 }
-//             }
-//         }
-//     })
-// };
+static Child: FC<()> = |cx, props| {
+    cx.render(rsx! {
+        div {
+            div {
+                "hello child"
+            }
+        }
+    })
+};

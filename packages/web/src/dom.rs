@@ -445,7 +445,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
             SyntheticEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent(event))))
         }
         "compositionend" | "compositionstart" | "compositionupdate" => {
-            let evt: web_sys::CompositionEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::CompositionEvent = event.dyn_into().unwrap();
             SyntheticEvent::CompositionEvent(CompositionEvent(Rc::new(WebsysCompositionEvent(evt))))
         }
         "keydown" | "keypress" | "keyup" => {
@@ -461,57 +461,57 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
             SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
         "input" | "invalid" | "reset" | "submit" => {
-            let evt: web_sys::InputEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::Event = event.dyn_into().unwrap();
             SyntheticEvent::FormEvent(FormEvent(Rc::new(WebsysFormEvent(evt))))
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            let evt: web_sys::MouseEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::MouseEvent = event.dyn_into().unwrap();
             SyntheticEvent::MouseEvent(MouseEvent(Rc::new(WebsysMouseEvent(evt))))
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            let evt: web_sys::PointerEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::PointerEvent = event.dyn_into().unwrap();
             SyntheticEvent::PointerEvent(PointerEvent(Rc::new(WebsysPointerEvent(evt))))
         }
         "select" => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::SelectionEvent(SelectionEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
-            let evt: web_sys::TouchEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::TouchEvent = event.dyn_into().unwrap();
             SyntheticEvent::TouchEvent(TouchEvent(Rc::new(WebsysTouchEvent(evt))))
         }
         "scroll" => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
         "wheel" => {
-            let evt: web_sys::WheelEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::WheelEvent = event.dyn_into().unwrap();
             SyntheticEvent::WheelEvent(WheelEvent(Rc::new(WebsysWheelEvent(evt))))
         }
         "animationstart" | "animationend" | "animationiteration" => {
-            let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::AnimationEvent = event.dyn_into().unwrap();
             SyntheticEvent::AnimationEvent(AnimationEvent(Rc::new(WebsysAnimationEvent(evt))))
         }
         "transitionend" => {
-            let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::TransitionEvent = event.dyn_into().unwrap();
             SyntheticEvent::TransitionEvent(TransitionEvent(Rc::new(WebsysTransitionEvent(evt))))
         }
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::MediaEvent(MediaEvent(Rc::new(WebsysMediaEvent(evt))))
         }
         "toggle" => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::ToggleEvent(ToggleEvent(Rc::new(WebsysToggleEvent(evt))))
         }
         _ => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
     }
