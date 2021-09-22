@@ -20,5 +20,5 @@ struct SomeProps {
 /// This implementation does not require a "PartialEq" because it does not memoize
 #[derive(dioxus_core_macro::Props)]
 struct SomePropsTwo<'a> {
-    a: &'a str,
+    _a: &'a str,
 }

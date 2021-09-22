@@ -334,11 +334,8 @@ impl VirtualDom {
     /// applied the edits.
     ///
     /// Mutations are the only link between the RealDOM and the VirtualDOM.
-    pub async fn run_with_deadline(
-        &mut self,
-        deadline: impl Future<Output = ()>,
-    ) -> Vec<Mutations<'_>> {
-        self.scheduler.work_with_deadline(deadline).await
+    pub fn run_with_deadline(&mut self, deadline: impl FnMut() -> bool) -> Vec<Mutations<'_>> {
+        self.scheduler.work_with_deadline(deadline)
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
@@ -355,12 +352,38 @@ impl VirtualDom {
 
         log::debug!("No active work.... waiting for some...");
         use futures_util::StreamExt;
+
+        // right now this won't poll events if there is ongoing work
+        // in the future we want to prioritize some events over ongoing work
+        // this is coming in the "priorities" PR
+
+        // Wait for any new events if we have nothing to do
+        // todo: poll the events once even if there is work to do to prevent starvation
         futures_util::select! {
-            // // hmm - will this resolve to none if there are no async tasks?
-            // _ = self.scheduler.async_tasks.next() => {
-            //     log::debug!("async task completed!");
-            // }
-            msg = self.scheduler.receiver.next() => self.scheduler.handle_channel_msg(msg.unwrap()),
+            _ = self.scheduler.async_tasks.next() => {}
+            msg = self.scheduler.receiver.next() => {
+                match msg.unwrap() {
+                    SchedulerMsg::Task(t) => todo!(),
+                    SchedulerMsg::Immediate(im) => {
+                        self.scheduler.dirty_scopes.insert(im);
+                    }
+                    SchedulerMsg::UiEvent(evt) => {
+                        self.scheduler.ui_events.push_back(evt);
+                    }
+                }
+            },
+        }
+
+        while let Ok(Some(msg)) = self.scheduler.receiver.try_next() {
+            match msg {
+                SchedulerMsg::Task(t) => todo!(),
+                SchedulerMsg::Immediate(im) => {
+                    self.scheduler.dirty_scopes.insert(im);
+                }
+                SchedulerMsg::UiEvent(evt) => {
+                    self.scheduler.ui_events.push_back(evt);
+                }
+            }
         }
     }
 }

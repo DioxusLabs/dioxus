@@ -137,7 +137,7 @@ impl<'a> SavedDiffWork<'a> {
         std::mem::transmute(self)
     }
 
-    pub unsafe fn promote<'b>(self, vdom: &'b mut ResourcePool) -> DiffMachine<'b> {
+    pub unsafe fn promote<'b>(self, vdom: &'b ResourcePool) -> DiffMachine<'b> {
         let extended: SavedDiffWork<'b> = std::mem::transmute(self);
         DiffMachine {
             vdom,

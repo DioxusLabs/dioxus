@@ -15,9 +15,21 @@ use std::{any::Any, cell::RefCell, future::Future, ops::Deref, rc::Rc};
 
 /// Awaits the given task, forcing the component to re-render when the value is ready.
 ///
+/// Returns the handle to the task and the value (if it is ready, else None).
 ///
+/// ```
+/// static Example: FC<()> = |cx, props| {
+///     let (task, value) = use_task(|| async {
+///         timer::sleep(Duration::from_secs(1)).await;
+///         "Hello World"
+///     });
 ///
-///
+///     match contents {
+///         Some(contents) => rsx!(cx, div { "{title}" }),
+///         None => rsx!(cx, div { "Loading..." }),
+///     }
+/// };
+/// ```
 pub fn use_task<'src, Out, Fut, Init>(
     cx: Context<'src>,
     task_initializer: Init,

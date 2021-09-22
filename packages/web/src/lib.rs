@@ -61,6 +61,7 @@ use dioxus::prelude::Properties;
 use dioxus::virtual_dom::VirtualDom;
 pub use dioxus_core as dioxus;
 use dioxus_core::prelude::FC;
+use futures_util::FutureExt;
 
 mod cache;
 mod cfg;
@@ -145,10 +146,10 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
         dom.wait_for_work().await;
 
         // wait for the mainthread to schedule us in
-        let deadline = work_loop.wait_for_idle_time().await;
+        let mut deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let mutations = dom.run_with_deadline(deadline).await;
+        let mutations = dom.run_with_deadline(|| (&mut deadline).now_or_never().is_some());
 
         // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;

@@ -33,8 +33,10 @@ impl RafLoop {
             .call0(&JsValue::NULL)
             .unwrap();
 
+        let window = web_sys::window().unwrap();
+
         Self {
-            window: web_sys::window().unwrap(),
+            window,
             raf_receiver,
             raf_closure,
             ric_receiver,

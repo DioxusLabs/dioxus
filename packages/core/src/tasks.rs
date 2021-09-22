@@ -12,28 +12,28 @@ impl TaskHandle {
     /// This method is not synchronous - your task will not stop immediately.
     pub fn toggle(&self) {
         self.sender
-            .unbounded_send(SchedulerMsg::ToggleTask(self.our_id))
+            .unbounded_send(SchedulerMsg::Task(TaskMsg::ToggleTask(self.our_id)))
             .unwrap()
     }
 
     /// This method is not synchronous - your task will not stop immediately.
     pub fn resume(&self) {
         self.sender
-            .unbounded_send(SchedulerMsg::ResumeTask(self.our_id))
+            .unbounded_send(SchedulerMsg::Task(TaskMsg::ResumeTask(self.our_id)))
             .unwrap()
     }
 
     /// This method is not synchronous - your task will not stop immediately.
     pub fn stop(&self) {
         self.sender
-            .unbounded_send(SchedulerMsg::ToggleTask(self.our_id))
+            .unbounded_send(SchedulerMsg::Task(TaskMsg::ToggleTask(self.our_id)))
             .unwrap()
     }
 
     /// This method is not synchronous - your task will not stop immediately.
     pub fn restart(&self) {
         self.sender
-            .unbounded_send(SchedulerMsg::ToggleTask(self.our_id))
+            .unbounded_send(SchedulerMsg::Task(TaskMsg::ToggleTask(self.our_id)))
             .unwrap()
     }
 }
