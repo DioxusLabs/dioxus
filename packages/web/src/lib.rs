@@ -133,6 +133,7 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
     // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding
     // ElementIds should already line up because the web_sys dom has already loaded elements with the DioxusID into memory
     if !should_hydrate {
+        log::info!("Applying rebuild edits..., {:?}", mutations);
         websys_dom.process_edits(&mut mutations.edits);
     } else {
         // websys dom processed the config and hydrated the dom already
