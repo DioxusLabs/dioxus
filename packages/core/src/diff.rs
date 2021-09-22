@@ -328,8 +328,8 @@ impl<'bump> DiffMachine<'bump> {
             self.mutations.set_attribute(attr);
         }
 
-        if children.is_empty() {
-            self.stack.element_id_stack.push(real_id);
+        if !children.is_empty() {
+            // self.stack.element_id_stack.push(real_id);
             // push our element_id onto the stack
             // drop our element off the stack
             self.stack.create_children(children, MountType::Append);
@@ -520,6 +520,10 @@ impl<'bump> DiffMachine<'bump> {
                     self.attach_listener_to_scope(listener, scope);
                 }
             }
+        }
+
+        if has_comitted {
+            self.mutations.pop();
         }
 
         self.diff_children(old.children, new.children);
