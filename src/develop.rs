@@ -40,7 +40,7 @@ async fn watch_directory(config: Config) -> Result<()> {
 
     // Automatically select the best implementation for your platform.
     // You can also access each implementation directly e.g. INotifyWatcher.
-    let mut watcher: RecommendedWatcher = Watcher::new_immediate(move |res| {
+    let mut watcher: RecommendedWatcher = Watcher::new(move |res| {
         async_std::task::block_on(watcher_tx.send(res));
     })
     .expect("failed to make watcher");
@@ -50,11 +50,11 @@ async fn watch_directory(config: Config) -> Result<()> {
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
     watcher
-        .watch(src_dir.join("src"), RecursiveMode::Recursive)
+        .watch(&src_dir.join("src"), RecursiveMode::Recursive)
         .expect("Failed to watch dir");
 
     watcher
-        .watch(src_dir.join("examples"), RecursiveMode::Recursive)
+        .watch(&src_dir.join("examples"), RecursiveMode::Recursive)
         .expect("Failed to watch dir");
 
     let build_config = BuildConfig::default();
