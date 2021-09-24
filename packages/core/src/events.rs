@@ -188,7 +188,11 @@ pub(crate) fn event_meta(event: &UserEvent) -> (bool, EventPriority) {
     }
 }
 
-pub use on::KeyCode;
+pub use on::{
+    AnimationEvent, ClipboardEvent, CompositionEvent, FocusEvent, FormEvent, GenericEvent, KeyCode,
+    KeyboardEvent, MediaEvent, MouseEvent, PointerEvent, SelectionEvent, ToggleEvent, TouchEvent,
+    TransitionEvent, WheelEvent,
+};
 
 pub mod on {
     //! This module defines the synthetic events that all Dioxus apps enable. No matter the platform, every dioxus renderer

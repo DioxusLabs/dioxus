@@ -1,25 +1,15 @@
-//! JS Framework Benchmark
-//! ----------------------
-//!
-//! This example is used in the JS framework benchmarking tool to compare Dioxus' performance with other frontend frameworks.
-//!
-//!
-//!
-
-use dioxus::{events::on::MouseEvent, prelude::*};
-use dioxus_html as dioxus_elements;
-use fxhash::{FxBuildHasher, FxHasher32};
+use dioxus::{events::MouseEvent, prelude::*};
+use fxhash::FxBuildHasher;
 use std::rc::Rc;
 
 fn main() {
-    log::debug!("starting!");
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App, |c| c).unwrap();
 }
 
 // We use a special immutable hashmap to make hashmap operations efficient
 type RowList = im_rc::HashMap<usize, Rc<str>, FxBuildHasher>;
 
-static App: FC<()> = |cx, props| {
+static App: FC<()> = |cx, _props| {
     let items = use_state(cx, || RowList::default());
 
     let create_rendered_rows = move |from, num| move |_| items.set(create_row_list(from, num));
@@ -63,12 +53,12 @@ static App: FC<()> = |cx, props| {
                     div { class: "col-md-6", h1 { "Dioxus" } }
                     div { class: "col-md-6"
                         div { class: "row"
-                            ActionButton { name: "Create 1,000 rows", id: "run", action: create_rendered_rows(0, 1_000) }
-                            ActionButton { name: "Create 10,000 rows", id: "runlots", action: create_rendered_rows(0, 10_000) }
-                            ActionButton { name: "Append 1,000 rows", id: "add", action: append_1_000_rows }
-                            ActionButton { name: "Update every 10th row", id: "update", action: update_every_10th_row, }
-                            ActionButton { name: "Clear", id: "clear", action: clear_rows }
-                            ActionButton { name: "Swap rows", id: "swaprows", action: swap_rows }
+                            ActionButton { name: "Create 1,000 rows", id: "run", onclick: {create_rendered_rows(0, 1_000)} }
+                            ActionButton { name: "Create 10,000 rows", id: "runlots", onclick: {create_rendered_rows(0, 10_000)} }
+                            ActionButton { name: "Append 1,000 rows", id: "add", onclick: {append_1_000_rows} }
+                            ActionButton { name: "Update every 10th row", id: "update", onclick: {update_every_10th_row} }
+                            ActionButton { name: "Clear", id: "clear", onclick: {clear_rows} }
+                            ActionButton { name: "Swap rows", id: "swaprows", onclick: {swap_rows} }
                         }
                     }
                 }
@@ -83,24 +73,17 @@ static App: FC<()> = |cx, props| {
     })
 };
 
-#[derive(Clone)]
-struct RowController {}
-
 #[derive(Props)]
-struct ActionButtonProps<F: Fn(MouseEvent)> {
+struct ActionButtonProps<'a> {
     name: &'static str,
     id: &'static str,
-    action: F,
+    onclick: &'a dyn Fn(MouseEvent),
 }
-fn ActionButton<'a, F>(cx: Context<'a>, props: &'a ActionButtonProps<F>) -> DomTree<'a>
-where
-    F: Fn(MouseEvent),
-{
-    cx.render(rsx! {
-        div { class: "col-sm-6 smallpad"
-            button { class:"btn btn-primary btn-block", r#type: "button", id: "{props.id}",  onclick: {&props.action},
-                "{props.name}"
-            }
+
+fn ActionButton<'a>(cx: Context<'a>, props: &'a ActionButtonProps) -> DomTree<'a> {
+    rsx!(cx, div { class: "col-sm-6 smallpad"
+        button { class:"btn btn-primary btn-block", r#type: "button", id: "{props.id}",  onclick: {props.onclick},
+            "{props.name}"
         }
     })
 }
@@ -111,19 +94,17 @@ struct RowProps {
     label: Rc<str>,
 }
 fn Row<'a>(cx: Context<'a>, props: &'a RowProps) -> DomTree<'a> {
-    cx.render(rsx! {
-        tr {
-            td { class:"col-md-1", "{props.row_id}" }
-            td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
-                a { class: "lbl", "{props.label}" }
-            }
-            td { class: "col-md-1"
-                a { class: "remove", onclick: move |_| {/* remove */}
-                    span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
-                }
-            }
-            td { class: "col-md-6" }
+    rsx!(cx, tr {
+        td { class:"col-md-1", "{props.row_id}" }
+        td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
+            a { class: "lbl", "{props.label}" }
         }
+        td { class: "col-md-1"
+            a { class: "remove", onclick: move |_| {/* remove */}
+                span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
+            }
+        }
+        td { class: "col-md-6" }
     })
 }
 
