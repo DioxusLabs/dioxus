@@ -7,7 +7,6 @@
 
 use dioxus::desktop::wry::application::dpi::LogicalSize;
 use dioxus::prelude::*;
-use std::fs::{self, DirEntry};
 
 fn main() {
     env_logger::init();
@@ -73,7 +72,7 @@ impl Files {
 
     fn reload_path_list(&mut self) {
         let cur_path = self.path_stack.last().unwrap();
-        let paths = match fs::read_dir(cur_path) {
+        let paths = match std::fs::read_dir(cur_path) {
             Ok(e) => e,
             Err(err) => {
                 let err = format!("An error occured: {:?}", err);

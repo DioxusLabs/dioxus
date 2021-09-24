@@ -48,62 +48,60 @@ const App: FC<()> = |cx, props| {
         _ => "items",
     };
 
-    cx.render(rsx! {
-        div { id: "app"
-            style {"{STYLE}"}
-            div {
-                header { class: "header"
-                    h1 {"todos"}
-                    input {
-                        class: "new-todo"
-                        placeholder: "What needs to be done?"
-                        value: "{draft}"
-                        oninput: move |evt| draft.set(evt.value())
+    rsx!(cx, div { id: "app"
+        style {"{STYLE}"}
+        div {
+            header { class: "header"
+                h1 {"todos"}
+                input {
+                    class: "new-todo"
+                    placeholder: "What needs to be done?"
+                    value: "{draft}"
+                    oninput: move |evt| draft.set(evt.value())
+                }
+            }
+            {todolist}
+            {(!todos.is_empty()).then(|| rsx!(
+                footer {
+                    span { strong {"{items_left}"} span {"{item_text} left"} }
+                    ul { class: "filters"
+                        li { class: "All", a { href: "", onclick: move |_| filter.set(FilterState::All), "All" }}
+                        li { class: "Active", a { href: "active", onclick: move |_| filter.set(FilterState::Active), "Active" }}
+                        li { class: "Completed", a { href: "completed", onclick: move |_| filter.set(FilterState::Completed), "Completed" }}
                     }
                 }
-                {todolist}
-                {(!todos.is_empty()).then(|| rsx!(
-                    footer {
-                        span { strong {"{items_left}"} span {"{item_text} left"} }
-                        ul { class: "filters"
-                            li { class: "All", a { href: "", onclick: move |_| filter.set(FilterState::All), "All" }}
-                            li { class: "Active", a { href: "active", onclick: move |_| filter.set(FilterState::Active), "Active" }}
-                            li { class: "Completed", a { href: "completed", onclick: move |_| filter.set(FilterState::Completed), "Completed" }}
-                        }
-                    }
-                ))}
-            }
-            footer { class: "info"
-                p {"Double-click to edit a todo"}
-                p { "Created by ", a { "jkelleyrtp", href: "http://github.com/jkelleyrtp/" }}
-                p { "Part of ", a { "TodoMVC", href: "http://todomvc.com" }}
-            }
+            ))}
+        }
+        footer { class: "info"
+            p {"Double-click to edit a todo"}
+            p { "Created by ", a { "jkelleyrtp", href: "http://github.com/jkelleyrtp/" }}
+            p { "Part of ", a { "TodoMVC", href: "http://todomvc.com" }}
         }
     })
 };
 
 #[derive(PartialEq, Props)]
 pub struct TodoEntryProps {
-    todo: std::rc::Rc<TodoItem>,
+    todo: Rc<TodoItem>,
 }
 
-pub fn TodoEntry<'a>(cx: Context<'a>, TodoEntryProps { todo }: &'a TodoEntryProps) -> DomTree<'a> {
+pub fn TodoEntry<'a>(cx: Context<'a>, props: &TodoEntryProps) -> DomTree<'a> {
     let is_editing = use_state(cx, || false);
-    let contents = "";
+    let contents = use_state(cx, || String::from(""));
+    let todo = &props.todo;
 
-    cx.render(rsx! (
-        li {
-            "{todo.id}"
-            input {
-                class: "toggle"
-                r#type: "checkbox"
-                "{todo.checked}"
-            }
-           {is_editing.then(|| rsx!{
-                input {
-                    value: "{contents}"
-                }
-            })}
+    rsx!(cx, li {
+        "{todo.id}"
+        input {
+            class: "toggle"
+            r#type: "checkbox"
+            "{todo.checked}"
         }
-    ))
+       {is_editing.then(|| rsx!{
+            input {
+                value: "{contents}"
+                oninput: move |evt| contents.set(evt.value())
+            }
+        })}
+    })
 }

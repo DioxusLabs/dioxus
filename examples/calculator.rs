@@ -12,7 +12,7 @@ fn main() {
 
 const APP: FC<()> = |cx, _| {
     let cur_val = use_state(cx, || 0.0_f64);
-    let operator = use_state(cx, || None);
+    let operator = use_state(cx, || None as Option<&'static str>);
     let display_value = use_state(cx, || String::from(""));
 
     let clear_display = display_value == "0";
@@ -25,11 +25,12 @@ const APP: FC<()> = |cx, _| {
     let perform_operation = move || {
         if let Some(op) = operator.as_ref() {
             let rhs = display_value.parse::<f64>().unwrap();
-            let new_val = match op {
-                Operator::Add => *cur_val + rhs,
-                Operator::Sub => *cur_val - rhs,
-                Operator::Mul => *cur_val * rhs,
-                Operator::Div => *cur_val / rhs,
+            let new_val = match *op {
+                "+" => *cur_val + rhs,
+                "-" => *cur_val - rhs,
+                "*" => *cur_val * rhs,
+                "/" => *cur_val / rhs,
+                _ => unreachable!(),
             };
             cur_val.set(new_val);
             display_value.set(new_val.to_string());
@@ -56,10 +57,10 @@ const APP: FC<()> = |cx, _| {
     };
 
     let keydownhandler = move |evt: KeyboardEvent| match evt.key_code() {
-        KeyCode::Add => operator.set(Some(Operator::Add)),
-        KeyCode::Subtract => operator.set(Some(Operator::Sub)),
-        KeyCode::Divide => operator.set(Some(Operator::Div)),
-        KeyCode::Multiply => operator.set(Some(Operator::Mul)),
+        KeyCode::Add => operator.set(Some("+")),
+        KeyCode::Subtract => operator.set(Some("-")),
+        KeyCode::Divide => operator.set(Some("/")),
+        KeyCode::Multiply => operator.set(Some("*")),
         KeyCode::Num0 => input_digit(0),
         KeyCode::Num1 => input_digit(1),
         KeyCode::Num2 => input_digit(2),
@@ -99,22 +100,15 @@ const APP: FC<()> = |cx, _| {
                 })}
             }
             div { class: "operator-keys"
-                CalculatorKey { name: "key-divide", onclick: move |_| operator.set(Some(Operator::Div)) "÷" }
-                CalculatorKey { name: "key-multiply", onclick: move |_| operator.set(Some(Operator::Mul)) "×" }
-                CalculatorKey { name: "key-subtract", onclick: move |_| operator.set(Some(Operator::Sub)) "−" }
-                CalculatorKey { name: "key-add", onclick: move |_| operator.set(Some(Operator::Add)) "+" }
+                CalculatorKey { name: "key-divide", onclick: move |_| operator.set(Some("/")) "÷" }
+                CalculatorKey { name: "key-multiply", onclick: move |_| operator.set(Some("*")) "×" }
+                CalculatorKey { name: "key-subtract", onclick: move |_| operator.set(Some("-")) "−" }
+                CalculatorKey { name: "key-add", onclick: move |_| operator.set(Some("+")) "+" }
                 CalculatorKey { name: "key-equals", onclick: move |_| perform_operation() "=" }
             }
         }
     })
 };
-
-enum Operator {
-    Add,
-    Sub,
-    Mul,
-    Div,
-}
 
 #[derive(Props)]
 struct CalculatorKeyProps<'a> {

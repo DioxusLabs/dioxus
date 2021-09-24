@@ -6,7 +6,6 @@ use dioxus::prelude::*;
 fn main() {
     dioxus::web::launch(App, |c| c);
 }
-
 enum Scene {
     ClientsList,
     NewClientForm,
@@ -28,50 +27,78 @@ static App: FC<()> = |cx, _| {
     let lastname = use_state(cx, || String::new());
     let description = use_state(cx, || String::new());
 
-    match *scene {
+    let scene = match *scene {
         Scene::ClientsList => {
             rsx!(cx, div { class: "crm"
-                h1 { "List of clients" }
-                div { class: "clients" {clients.read().iter().map(|client| rsx!(
-                    div { class: "client" style: "margin-bottom: 50px"
-                        p { "First Name: {client.first_name}" }
-                        p { "Last Name: {client.last_name}" }
-                        p {"Description: {client.description}"}
-                    }))}
+                h2 { "List of clients" margin_bottom: "10px" }
+                div { class: "clients" margin_left: "10px"
+                    {clients.read().iter().map(|client| rsx!(
+                        div { class: "client" style: "margin-bottom: 50px"
+                            p { "First Name: {client.first_name}" }
+                            p { "Last Name: {client.last_name}" }
+                            p {"Description: {client.description}"}
+                        })
+                    )}
                 }
-                button { onclick: move |_| scene.set(Scene::NewClientForm), "Add New" }
-                button { onclick: move |_| scene.set(Scene::Settings), "Settings" }
+                button { class: "pure-button pure-button-primary" onclick: move |_| scene.set(Scene::NewClientForm), "Add New" }
+                button { class: "pure-button" onclick: move |_| scene.set(Scene::Settings), "Settings" }
             })
         }
         Scene::NewClientForm => {
-            rsx!(cx, div { class: "crm"
-                h1 {"Add new client"}
-                div { class: "names"
-                    input { class: "new-client firstname" placeholder: "First name"
-                        onchange: move |e| firstname.set(e.value())
-                    }
-                    input { class: "new-client lastname" placeholder: "Last name"
-                        onchange: move |e| lastname.set(e.value())
-                    }
-                    textarea { class: "new-client description" placeholder: "Description"
-                        onchange: move |e| description.set(e.value())
-                    }
-                }
-                button { disabled: "false", onclick: move |_| clients.write().push(Client {
+            let add_new = move |_| {
+                clients.write().push(Client {
                     description: (*description).clone(),
                     first_name: (*firstname).clone(),
                     last_name: (*lastname).clone(),
-
-                }), "Add New" }
-                button { onclick: move |_| scene.set(Scene::ClientsList), "Go Back" }
+                });
+                description.set(String::new());
+                firstname.set(String::new());
+                lastname.set(String::new());
+            };
+            rsx!(cx, div { class: "crm"
+                h2 {"Add new client" margin_bottom: "10px" }
+                form { class: "pure-form"
+                    input { class: "new-client firstname" placeholder: "First name" value: "{firstname}"
+                        oninput: move |e| firstname.set(e.value())
+                    }
+                    input { class: "new-client lastname" placeholder: "Last name" value: "{lastname}"
+                        oninput: move |e| lastname.set(e.value())
+                    }
+                    textarea { class: "new-client description" placeholder: "Description" value: "{description}"
+                        oninput: move |e| description.set(e.value())
+                    }
+                }
+                button { class: "pure-button pure-button-primary", onclick: {add_new}, "Add New" }
+                button { class: "pure-button", onclick: move |_| scene.set(Scene::ClientsList), "Go Back" }
             })
         }
         Scene::Settings => {
             rsx!(cx, div {
-                h1 {"Settings"}
-                button { onclick: move |_| clients.write().clear() "Remove all clients"  }
-                button { onclick: move |_| scene.set(Scene::ClientsList), "Go Back"  }
+                h2 {"Settings" margin_bottom: "10px" }
+                button {
+                    background: "rgb(202, 60, 60)"
+                    class: "pure-button pure-button-primary"
+                    onclick: move |_| clients.write().clear(),
+                    "Remove all clients"
+                }
+                button {
+                    class: "pure-button pure-button-primary"
+                    onclick: move |_| scene.set(Scene::ClientsList),
+                    "Go Back"
+                }
             })
         }
-    }
+    };
+
+    rsx!(cx, body {
+        link {
+            rel: "stylesheet"
+            href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css"
+            integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5"
+            crossorigin: "anonymous"
+        }
+        margin_left: "35%"
+        h1 {"Dioxus CRM Example"}
+        {scene}
+    })
 };
