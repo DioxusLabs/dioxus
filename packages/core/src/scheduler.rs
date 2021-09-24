@@ -72,6 +72,7 @@ use crate::heuristics::*;
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{pin_mut, stream::FuturesUnordered, Future, FutureExt, StreamExt};
+use fxhash::FxHashMap;
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use slab::Slab;
@@ -357,6 +358,8 @@ impl Scheduler {
         let shared = self.pool.clone();
         let mut machine = unsafe { saved_state.promote(&shared) };
 
+        let mut ran_scopes = FxHashSet::default();
+
         if machine.stack.is_empty() {
             let shared = self.pool.clone();
 
@@ -367,11 +370,18 @@ impl Scheduler {
             });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                let component = self.pool.get_scope(scopeid).unwrap();
-                let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                machine.stack.scope_stack.push(scopeid);
-                machine.stack.push(DiffInstruction::Diff { new, old });
+                log::info!("handlng dirty scope {:#?}", scopeid);
+                if !ran_scopes.contains(&scopeid) {
+                    ran_scopes.insert(scopeid);
+
+                    let mut component = self.pool.get_scope_mut(scopeid).unwrap();
+                    if component.run_scope(&self.pool) {
+                        let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                        // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                        machine.stack.scope_stack.push(scopeid);
+                        machine.stack.push(DiffInstruction::Diff { new, old });
+                    }
+                }
             }
         }
 
@@ -472,15 +482,7 @@ impl Scheduler {
                         while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
                             match dirty_scope {
                                 SchedulerMsg::Immediate(im) => {
-                                    log::debug!("Handling immediate {:?}", im);
-
-                                    if let Some(scope) = self.pool.get_scope_mut(im) {
-                                        if scope.run_scope(&self.pool) {
-                                            self.dirty_scopes.insert(im);
-                                        } else {
-                                            todo!()
-                                        }
-                                    }
+                                    self.dirty_scopes.insert(im);
                                 }
                                 SchedulerMsg::UiEvent(e) => self.ui_events.push_back(e),
                                 SchedulerMsg::Task(_) => todo!(),

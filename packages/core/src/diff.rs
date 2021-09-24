@@ -461,9 +461,10 @@ impl<'bump> DiffMachine<'bump> {
         let mut please_commit = |edits: &mut Vec<DomEdit>| {
             if !has_comitted {
                 has_comitted = true;
-                if let Some(root) = root {
-                    edits.push(PushRoot { id: root.as_u64() });
-                }
+                log::info!("planning on committing... {:#?}, {:#?}", old, new);
+                edits.push(PushRoot {
+                    id: root.unwrap().as_u64(),
+                });
             }
         };
 
@@ -475,7 +476,12 @@ impl<'bump> DiffMachine<'bump> {
         // TODO: take a more efficient path than this
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
-                if old_attr.value != new_attr.value || old_attr.is_volatile {
+                log::info!("checking attribute");
+                if old_attr.value != new_attr.value {
+                    please_commit(&mut self.mutations.edits);
+                    self.mutations.set_attribute(new_attr);
+                } else if new_attr.is_volatile {
+                    log::debug!("setting due to volatile atttributes");
                     please_commit(&mut self.mutations.edits);
                     self.mutations.set_attribute(new_attr);
                 }

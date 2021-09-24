@@ -264,8 +264,10 @@ pub mod on {
         ClipboardEventInner(ClipboardEvent): [
             /// Called when "copy"
             oncopy
+
             /// oncut
             oncut
+
             /// onpaste
             onpaste
         ];
@@ -305,7 +307,7 @@ pub mod on {
             /// onchange
             onchange
 
-            /// oninput
+            /// oninput handler
             oninput
 
             /// oninvalid
@@ -446,22 +448,31 @@ pub mod on {
         PointerEventInner(PointerEvent): [
             /// pointerdown
             onpointerdown
+
             /// pointermove
             onpointermove
+
             /// pointerup
             onpointerup
+
             /// pointercancel
             onpointercancel
+
             /// gotpointercapture
             ongotpointercapture
+
             /// lostpointercapture
             onlostpointercapture
+
             /// pointerenter
             onpointerenter
+
             /// pointerleave
             onpointerleave
+
             /// pointerover
             onpointerover
+
             /// pointerout
             onpointerout
         ];
@@ -474,10 +485,13 @@ pub mod on {
         TouchEventInner(TouchEvent): [
             /// ontouchcancel
             ontouchcancel
+
             /// ontouchend
             ontouchend
+
             /// ontouchmove
             ontouchmove
+
             /// ontouchstart
             ontouchstart
         ];
@@ -490,48 +504,70 @@ pub mod on {
         MediaEventInner(MediaEvent): [
             ///abort
             onabort
+
             ///canplay
             oncanplay
+
             ///canplaythrough
             oncanplaythrough
+
             ///durationchange
             ondurationchange
+
             ///emptied
             onemptied
+
             ///encrypted
             onencrypted
+
             ///ended
             onended
+
             ///error
             onerror
+
             ///loadeddata
             onloadeddata
+
             ///loadedmetadata
             onloadedmetadata
+
             ///loadstart
             onloadstart
+
             ///pause
             onpause
+
             ///play
             onplay
+
             ///playing
             onplaying
+
             ///progress
             onprogress
+
             ///ratechange
             onratechange
+
             ///seeked
             onseeked
+
             ///seeking
             onseeking
+
             ///stalled
             onstalled
+
             ///suspend
             onsuspend
+
             ///timeupdate
             ontimeupdate
+
             ///volumechange
             onvolumechange
+
             ///waiting
             onwaiting
         ];
@@ -539,8 +575,10 @@ pub mod on {
         AnimationEventInner(AnimationEvent): [
             /// onanimationstart
             onanimationstart
+
             /// onanimationend
             onanimationend
+
             /// onanimationiteration
             onanimationiteration
         ];

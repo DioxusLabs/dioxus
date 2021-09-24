@@ -1,25 +1,19 @@
-//! Example: Calculator
-//! -------------------------
-
-fn main() {
-    env_logger::init();
-    dioxus::desktop::launch(App, |cfg| cfg).unwrap();
-}
+/*
+This example is a simple iOS-style calculator. This particular example can run any platform - Web, Mobile, Desktop.
+This calculator version uses React-style state management. All state is held as individual use_states.
+*/
 
 use dioxus::events::on::*;
 use dioxus::prelude::*;
 
-enum Operator {
-    Add,
-    Sub,
-    Mul,
-    Div,
+fn main() {
+    dioxus::desktop::launch(APP, |cfg| cfg).unwrap();
 }
 
-const App: FC<()> = |cx, props| {
+const APP: FC<()> = |cx, _| {
     let cur_val = use_state(cx, || 0.0_f64);
-    let operator = use_state(cx, || None as Option<Operator>);
-    let display_value = use_state(cx, || "".to_string());
+    let operator = use_state(cx, || None);
+    let display_value = use_state(cx, || String::from(""));
 
     let clear_display = display_value == "0";
     let clear_text = if clear_display { "C" } else { "AC" };
@@ -62,11 +56,10 @@ const App: FC<()> = |cx, props| {
     };
 
     let keydownhandler = move |evt: KeyboardEvent| match evt.key_code() {
-        KeyCode::Backspace => {
-            if !display_value.as_str().eq("0") {
-                display_value.modify().pop();
-            }
-        }
+        KeyCode::Add => operator.set(Some(Operator::Add)),
+        KeyCode::Subtract => operator.set(Some(Operator::Sub)),
+        KeyCode::Divide => operator.set(Some(Operator::Div)),
+        KeyCode::Multiply => operator.set(Some(Operator::Mul)),
         KeyCode::Num0 => input_digit(0),
         KeyCode::Num1 => input_digit(1),
         KeyCode::Num2 => input_digit(2),
@@ -77,73 +70,62 @@ const App: FC<()> = |cx, props| {
         KeyCode::Num7 => input_digit(7),
         KeyCode::Num8 => input_digit(8),
         KeyCode::Num9 => input_digit(9),
-        KeyCode::Add => operator.set(Some(Operator::Add)),
-        KeyCode::Subtract => operator.set(Some(Operator::Sub)),
-        KeyCode::Divide => operator.set(Some(Operator::Div)),
-        KeyCode::Multiply => operator.set(Some(Operator::Mul)),
+        KeyCode::Backspace => {
+            if !display_value.as_str().eq("0") {
+                display_value.modify().pop();
+            }
+        }
         _ => {}
     };
 
-    cx.render(rsx! {
-        div { class: "calculator", onkeydown: {keydownhandler}
-            div { class: "input-keys"
-                div { class: "function-keys"
-                    CalculatorKey { name: "key-clear", onclick: {clear_key} "{clear_text}" }
-                    CalculatorKey { name: "key-sign", onclick: {toggle_sign}, "±"}
-                    CalculatorKey { name: "key-percent", onclick: {toggle_percent} "%"}
-                }
-                div { class: "digit-keys"
-                    CalculatorKey { name: "key-0", onclick: move |_| input_digit(0), "0" }
-                    CalculatorKey { name: "key-dot", onclick: move |_| input_dot(), "●" }
+    use separator::Separatable;
+    let formatted_display = cur_val.separated_string();
 
-                    {(1..9).map(|k| rsx!{
-                        CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_| input_digit(k), "{k}" }
-                    })}
-                }
-                div { class: "operator-keys"
-                    CalculatorKey { name: "key-divide", onclick: move |_| operator.set(Some(Operator::Div)) "÷" }
-                    CalculatorKey { name: "key-multiply", onclick: move |_| operator.set(Some(Operator::Mul)) "×" }
-                    CalculatorKey { name: "key-subtract", onclick: move |_| operator.set(Some(Operator::Sub)) "−" }
-                    CalculatorKey { name: "key-add", onclick: move |_| operator.set(Some(Operator::Add)) "+" }
-                    CalculatorKey { name: "key-equals", onclick: move |_| perform_operation() "=" }
-                }
+    rsx!(cx, div {
+        class: "calculator", onkeydown: {keydownhandler}
+        div { class: "calculator-display", "{formatted_display}" }
+        div { class: "input-keys"
+            div { class: "function-keys"
+                CalculatorKey { name: "key-clear", onclick: {clear_key} "{clear_text}" }
+                CalculatorKey { name: "key-sign", onclick: {toggle_sign}, "±"}
+                CalculatorKey { name: "key-percent", onclick: {toggle_percent} "%"}
+            }
+            div { class: "digit-keys"
+                CalculatorKey { name: "key-0", onclick: move |_| input_digit(0), "0" }
+                CalculatorKey { name: "key-dot", onclick: move |_| input_dot(), "●" }
+
+                {(1..9).map(|k| rsx!{
+                    CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_| input_digit(k), "{k}" }
+                })}
+            }
+            div { class: "operator-keys"
+                CalculatorKey { name: "key-divide", onclick: move |_| operator.set(Some(Operator::Div)) "÷" }
+                CalculatorKey { name: "key-multiply", onclick: move |_| operator.set(Some(Operator::Mul)) "×" }
+                CalculatorKey { name: "key-subtract", onclick: move |_| operator.set(Some(Operator::Sub)) "−" }
+                CalculatorKey { name: "key-add", onclick: move |_| operator.set(Some(Operator::Add)) "+" }
+                CalculatorKey { name: "key-equals", onclick: move |_| perform_operation() "=" }
             }
         }
     })
 };
 
+enum Operator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
 #[derive(Props)]
 struct CalculatorKeyProps<'a> {
-    /// Name!
     name: &'static str,
-
-    /// Click!
     onclick: &'a dyn Fn(MouseEvent),
 }
 
 fn CalculatorKey<'a>(cx: Context<'a>, props: &'a CalculatorKeyProps) -> DomTree<'a> {
-    cx.render(rsx! {
-        button {
-            class: "calculator-key {props.name}"
-            onclick: {props.onclick}
-            {cx.children()}
-        }
-    })
-}
-
-#[derive(Props, PartialEq)]
-struct CalculatorDisplayProps {
-    val: f64,
-}
-
-fn CalculatorDisplay<'a>(cx: Context<'a>, props: &CalculatorDisplayProps) -> DomTree<'a> {
-    use separator::Separatable;
-    // Todo, add float support to the num-format crate
-    let formatted = props.val.separated_string();
-    // TODO: make it autoscaling with css
-    cx.render(rsx! {
-        div { class: "calculator-display"
-            "{formatted}"
-        }
+    rsx!(cx, button {
+        class: "calculator-key {props.name}"
+        onclick: {props.onclick}
+        {cx.children()}
     })
 }

@@ -49,9 +49,9 @@ use std::{
 ///     }
 /// }
 /// ```
-pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T>(
+pub fn use_state<'a, 'c, T: 'static>(
     cx: Context<'a>,
-    initial_state_fn: F,
+    initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
     cx.use_hook(
         move |_| UseStateInner {

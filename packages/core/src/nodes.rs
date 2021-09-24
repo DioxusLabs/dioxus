@@ -197,6 +197,21 @@ pub struct VElement<'a> {
     pub children: &'a [VNode<'a>],
 }
 
+impl Debug for VElement<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VElement")
+            .field("tag_name", &self.tag_name)
+            .field("namespace", &self.namespace)
+            .field("key", &self.key)
+            .field("dom_id", &self.dom_id)
+            .field("parent_id", &self.parent_id)
+            .field("listeners", &self.listeners.len())
+            .field("attributes", &self.attributes)
+            .field("children", &self.children)
+            .finish()
+    }
+}
+
 /// A trait for any generic Dioxus Element.
 ///
 /// This trait provides the ability to use custom elements in the `rsx!` macro.
@@ -429,11 +444,6 @@ impl<'a> NodeFactory<'a> {
         is_volatile: bool,
     ) -> Attribute<'a> {
         let (value, is_static) = self.raw_text(val);
-        let is_volatile = match name {
-            "value" | "checked" | "selected" => true,
-            _ => false,
-        };
-
         Attribute {
             name,
             value,

@@ -681,7 +681,10 @@ macro_rules! builder_constructors {
         $(
             $(#[$attr:meta])*
             $name:ident {
-                $($fil:ident: $vil:ident,)*
+                $(
+                    $(#[$attr_method:meta])*
+                    $fil:ident: $vil:ident,
+                )*
             };
          )*
     ) => {
@@ -699,6 +702,7 @@ macro_rules! builder_constructors {
 
             impl $name {
                 $(
+                    $(#[$attr_method])*
                     pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
                         cx.attr(stringify!($fil), val, None, false)
                     }
@@ -1525,7 +1529,10 @@ builder_constructors! {
         src: Uri,
         step: String,
         tabindex: usize,
-        r#type: InputType,
+
+        // This has a manual implementation below
+        // r#type: InputType,
+
         value: String,
         width: isize,
     };
@@ -1570,7 +1577,10 @@ builder_constructors! {
     option {
         disabled: Bool,
         label: String,
-        selected: Bool,
+
+        // defined below
+        // selected: Bool,
+
         value: String,
     };
 
@@ -1595,7 +1605,8 @@ builder_constructors! {
     /// [`<select>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select)
     /// element.
     select {
-        value: String,
+        // defined below
+        // value: String,
         autocomplete: String,
         autofocus: Bool,
         disabled: Bool,
@@ -1654,6 +1665,54 @@ builder_constructors! {
     /// [`<template>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)
     /// element.
     template {};
+}
+
+impl input {
+    /// The type of input
+    ///
+    /// Here are the different input types you can use in HTML:
+    ///
+    /// - `button`
+    /// - `checkbox`
+    /// - `color`
+    /// - `date`
+    /// - `datetime-local`
+    /// - `email`
+    /// - `file`
+    /// - `hidden`
+    /// - `image`
+    /// - `month`
+    /// - `number`
+    /// - `password`
+    /// - `radio`
+    /// - `range`
+    /// - `reset`
+    /// - `search`
+    /// - `submit`
+    /// - `tel`
+    /// - `text`
+    /// - `time`
+    /// - `url`
+    /// - `week`    
+    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("type", val, None, false)
+    }
+}
+
+/*
+volatile attributes
+*/
+
+impl select {
+    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("value", val, None, true)
+    }
+}
+
+impl option {
+    fn selected<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("selected", val, None, true)
+    }
 }
 
 pub trait SvgAttributes {

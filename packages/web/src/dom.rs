@@ -314,12 +314,20 @@ impl WebsysDom {
             }
         }
 
-        if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
+        if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
             if name == "value" {
-                node.set_value(value);
+                /*
+                if the attribute being set is the same as the value of the input, then don't bother setting it.
+                This is used in controlled components to keep the cursor in the right spot.
+
+                this logic should be moved into the virtualdom since we have the notion of "volatile"
+                */
+                if input.value() != value {
+                    input.set_value(value);
+                }
             }
             if name == "checked" {
-                node.set_checked(true);
+                input.set_checked(true);
             }
         }
 

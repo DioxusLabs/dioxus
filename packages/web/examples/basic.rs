@@ -15,7 +15,7 @@ use std::{pin::Pin, time::Duration};
 
 fn main() {
     // Setup logging
-    // wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
     // Run the app
@@ -24,32 +24,44 @@ fn main() {
 
 static APP: FC<()> = |cx, props| {
     let mut count = use_state(cx, || 3);
+    let mut content = use_state(cx, || String::from("h1"));
+    let mut text_content = use_state(cx, || String::from("Hello, world!"));
 
-    let mut content = use_state(cx, || String::new());
+    log::debug!("running scope...");
+
     cx.render(rsx! {
         div {
+            h1 { "content val is {content}" }
+
             input {
-                value: "{content}"
-                oninput: move |e| {
-                    content.set(e.value());
-                }
+                r#type: "text",
+                value: "{text_content}"
+                oninput: move |e| text_content.set(e.value())
             }
-            button {
-                onclick: move |_| count += 1,
-                "Click to add."
-                "Current count: {count}"
-            }
+
+            br {}
+            {(0..10).map(|f| {
+                rsx!(
+                    button {
+                        onclick: move |_| count += 1,
+                        "Click to add."
+                        "Current count: {count}"
+                    }
+                    br {}
+                )
+            })}
 
             select {
                 name: "cars"
                 id: "cars"
-                value: "h1"
+                value: "{content}"
                 oninput: move |ev| {
+                    content.set(ev.value());
                     match ev.value().as_str() {
                         "h1" => count.set(0),
                         "h2" => count.set(5),
                         "h3" => count.set(10),
-                        s => {}
+                        _ => {}
                     }
                 },
 
@@ -58,14 +70,7 @@ static APP: FC<()> = |cx, props| {
                 option { value: "h3", "h3" }
             }
 
-            ul {
-                {(0..*count).map(|f| rsx!{
-                    li { "a - {f}" }
-                    li { "b - {f}" }
-                    li { "c - {f}" }
-                })}
-
-            }
+            {render_list(cx, *count)}
 
             {render_bullets(cx)}
 
@@ -80,4 +85,19 @@ fn render_bullets(cx: Context) -> DomTree {
     })
 }
 
-static Child: FC<()> = |cx, props| rsx!(cx, div {"hello child"});
+fn render_list(cx: Context, count: usize) -> DomTree {
+    let items = (0..count).map(|f| {
+        rsx! {
+            li { "a - {f}" }
+            li { "b - {f}" }
+            li { "c - {f}" }
+        }
+    });
+
+    rsx!(cx, ul { {items} })
+}
+
+static Child: FC<()> = |cx, props| {
+    // render
+    rsx!(cx, div {"hello child"})
+};

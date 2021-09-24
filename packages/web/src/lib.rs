@@ -156,6 +156,7 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
         work_loop.wait_for_raf().await;
 
         for mut edit in mutations {
+            log::debug!("edits are {:#?}", edit);
             // actually apply our changes during the animation frame
             websys_dom.process_edits(&mut edit.edits);
         }

@@ -3,7 +3,6 @@ use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 
 static Parent: FC<()> = |cx, props| {
-    //
     let value = cx.use_hook(|_| String::new(), |f| &*f, |_| {});
 
     cx.render(rsx! {
