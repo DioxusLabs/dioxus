@@ -1,17 +1,24 @@
-//! tests to prove that the iterative implementation works
+//! Prove that the dom works normally through virtualdom methods.
+//!
+//! This methods all use "rebuild" which completely bypasses the scheduler.
+//! Hard rebuilds don't consume any events from the event queue.
 
-use anyhow::{Context, Result};
-use dioxus::{prelude::*, DomEdit, Mutations};
-mod test_logging;
+use dioxus::{prelude::*, DomEdit};
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
+
+mod test_logging;
 use DomEdit::*;
 
-const LOGGING_ENABLED: bool = false;
+fn new_dom<P: Properties + 'static>(app: FC<P>, props: P) -> VirtualDom {
+    const IS_LOGGING_ENABLED: bool = false;
+    test_logging::set_up_logging(IS_LOGGING_ENABLED);
+    VirtualDom::new_with_props(app, props)
+}
 
 #[test]
 fn test_original_diff() {
-    static App: FC<()> = |cx| {
+    static APP: FC<()> = |cx, props| {
         cx.render(rsx! {
             div {
                 div {
@@ -21,7 +28,7 @@ fn test_original_diff() {
         })
     };
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = new_dom(APP, ());
     let mutations = dom.rebuild();
     assert_eq!(
         mutations.edits,
@@ -39,9 +46,9 @@ fn test_original_diff() {
     );
 }
 
-#[async_std::test]
-async fn create() {
-    static App: FC<()> = |cx| {
+#[test]
+fn create() {
+    static APP: FC<()> = |cx, props| {
         cx.render(rsx! {
             div {
                 div {
@@ -59,9 +66,9 @@ async fn create() {
         })
     };
 
-    test_logging::set_up_logging(LOGGING_ENABLED);
-    let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await;
+    let mut dom = new_dom(APP, ());
+    let mutations = dom.rebuild();
+
     assert_eq!(
         mutations.edits,
         [
@@ -90,9 +97,9 @@ async fn create() {
     );
 }
 
-#[async_std::test]
-async fn create_list() {
-    static App: FC<()> = |cx| {
+#[test]
+fn create_list() {
+    static APP: FC<()> = |cx, props| {
         cx.render(rsx! {
             {(0..3).map(|f| rsx!{ div {
                 "hello"
@@ -100,10 +107,8 @@ async fn create_list() {
         })
     };
 
-    test_logging::set_up_logging(LOGGING_ENABLED);
-
-    let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await;
+    let mut dom = new_dom(APP, ());
+    let mutations = dom.rebuild();
 
     // copilot wrote this test :P
     assert_eq!(
@@ -132,9 +137,9 @@ async fn create_list() {
     );
 }
 
-#[async_std::test]
-async fn create_simple() {
-    static App: FC<()> = |cx| {
+#[test]
+fn create_simple() {
+    static APP: FC<()> = |cx, props| {
         cx.render(rsx! {
             div {}
             div {}
@@ -143,10 +148,8 @@ async fn create_simple() {
         })
     };
 
-    test_logging::set_up_logging(LOGGING_ENABLED);
-
-    let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await;
+    let mut dom = new_dom(APP, ());
+    let mutations = dom.rebuild();
 
     // copilot wrote this test :P
     assert_eq!(
@@ -160,10 +163,9 @@ async fn create_simple() {
         ]
     );
 }
-
-#[async_std::test]
-async fn create_components() {
-    static App: FC<()> = |cx| {
+#[test]
+fn create_components() {
+    static App: FC<()> = |cx, props| {
         cx.render(rsx! {
             Child { "abc1" }
             Child { "abc2" }
@@ -171,7 +173,7 @@ async fn create_components() {
         })
     };
 
-    static Child: FC<()> = |cx| {
+    static Child: FC<()> = |cx, props| {
         cx.render(rsx! {
             h1 {}
             div { {cx.children()} }
@@ -179,10 +181,8 @@ async fn create_components() {
         })
     };
 
-    test_logging::set_up_logging(LOGGING_ENABLED);
-
-    let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await;
+    let mut dom = new_dom(App, ());
+    let mutations = dom.rebuild();
 
     assert_eq!(
         mutations.edits,
@@ -215,20 +215,17 @@ async fn create_components() {
         ]
     );
 }
-
-#[async_std::test]
-async fn anchors() {
-    static App: FC<()> = |cx| {
+#[test]
+fn anchors() {
+    static App: FC<()> = |cx, props| {
         cx.render(rsx! {
             {true.then(|| rsx!{ div { "hello" } })}
             {false.then(|| rsx!{ div { "goodbye" } })}
         })
     };
 
-    test_logging::set_up_logging(LOGGING_ENABLED);
-
-    let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await;
+    let mut dom = new_dom(App, ());
+    let mutations = dom.rebuild();
     assert_eq!(
         mutations.edits,
         [
@@ -244,17 +241,21 @@ async fn anchors() {
     );
 }
 
-#[async_std::test]
-async fn suspended() {
-    static App: FC<()> = |cx| {
-        let val = use_suspense(cx, || async {}, |cx, _| cx.render(rsx! { "hi "}));
+#[test]
+fn suspended() {
+    static App: FC<()> = |cx, props| {
+        let val = use_suspense(
+            cx,
+            || async {
+                //
+            },
+            |cx, _| cx.render(rsx! { "hi "}),
+        );
         cx.render(rsx! { {val} })
     };
 
-    test_logging::set_up_logging(LOGGING_ENABLED);
-
-    let mut dom = VirtualDom::new(App);
-    let mutations = dom.rebuild_async().await;
+    let mut dom = new_dom(App, ());
+    let mutations = dom.rebuild();
 
     assert_eq!(
         mutations.edits,

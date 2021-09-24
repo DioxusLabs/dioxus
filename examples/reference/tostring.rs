@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus::ssr;
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     let as_string = use_state(cx, || {
         // Currently, SSR is only supported for whole VirtualDOMs
         // This is an easy/low hanging fruit to improve upon
@@ -15,7 +15,7 @@ pub static Example: FC<()> = |cx| {
     })
 };
 
-static SomeApp: FC<()> = |cx| {
+static SomeApp: FC<()> = |cx, props| {
     cx.render(rsx! {
         div { style: {background_color: "blue"}
             h1 {"Some amazing app or component"}

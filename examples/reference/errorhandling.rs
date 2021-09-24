@@ -23,14 +23,14 @@ fn main() {}
 /// This is one way to go about error handling (just toss things away with unwrap).
 /// However, if you get it wrong, the whole app will crash.
 /// This is pretty flimsy.
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let data = get_data().unwrap();
     cx.render(rsx!( div { "{data}" } ))
 };
 
 /// This is a pretty verbose way of error handling
 /// However, it's still pretty good since we don't panic, just fail to render anything
-static App1: FC<()> = |cx| {
+static App1: FC<()> = |cx, props| {
     let data = match get_data() {
         Some(data) => data,
         None => return None,
@@ -46,7 +46,7 @@ static App1: FC<()> = |cx| {
 /// a user is logged in.
 ///
 /// Dioxus will throw an error in the console if the None-path is ever taken.
-static App2: FC<()> = |cx| {
+static App2: FC<()> = |cx, props| {
     let data = get_data()?;
     cx.render(rsx!( div { "{data}" } ))
 };
@@ -54,14 +54,14 @@ static App2: FC<()> = |cx| {
 /// This is top-tier error handling since it displays a failure state.
 ///
 /// However, the error is lacking in context.
-static App3: FC<()> = |cx| match get_data() {
+static App3: FC<()> = |cx, props| match get_data() {
     Some(data) => cx.render(rsx!( div { "{data}" } )),
     None => cx.render(rsx!( div { "Failed to load data :(" } )),
 };
 
 /// For errors that return results, it's possible short-circuit the match-based error handling with `.ok()` which converts
 /// a Result<T, V> into an Option<T> and lets you
-static App4: FC<()> = |cx| {
+static App4: FC<()> = |cx, props| {
     let data = get_data_err().ok()?;
     cx.render(rsx!( div { "{data}" } ))
 };
@@ -69,7 +69,7 @@ static App4: FC<()> = |cx| {
 /// This is great error handling since it displays a failure state... with context!
 ///
 /// Hopefully you never need to disply a screen like this. It's rather bad taste
-static App5: FC<()> = |cx| match get_data_err() {
+static App5: FC<()> = |cx, props| match get_data_err() {
     Ok(data) => cx.render(rsx!( div { "{data}" } )),
     Err(c) => cx.render(rsx!( div { "Failed to load data: {c}" } )),
 };

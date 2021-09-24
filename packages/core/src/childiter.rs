@@ -39,7 +39,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         should_pop = true;
-                        returned_node = Some(&*node);
+                        returned_node = Some(node);
                     }
 
                     // If we get a fragment we push the next child
@@ -64,7 +64,6 @@ impl<'a> Iterator for RealChildIterator<'a> {
                             .scopes
                             .get_scope(sc.associated_scope.get().unwrap())
                             .unwrap();
-                        // let scope = self.scopes.get(sc.ass_scope.get().unwrap()).unwrap();
 
                         // Simply swap the current node on the stack with the root of the component
                         *node = scope.frames.fin_head();

@@ -16,10 +16,10 @@ use dioxus::prelude::*;
 pub struct MyProps {
     should_show: bool,
 }
-pub static Example0: FC<MyProps> = |cx| {
+pub static Example0: FC<MyProps> = |cx, props| {
     cx.render(rsx! {
         div {
-            {cx.should_show.then(|| rsx!{
+            {props.should_show.then(|| rsx!{
                 h1 { "showing the title!" }
             })}
         }
@@ -34,32 +34,32 @@ pub static Example0: FC<MyProps> = |cx| {
 // which will do essentially the same thing as `cx.render`.
 //
 // In short:
-// `rsx!(in cx, ...)` is shorthand for `cx.render(rsx!(...))`
+// `rsx!(cx, ...)` is shorthand for `cx.render(rsx!(...))`
 #[derive(PartialEq, Props)]
 pub struct MyProps1 {
     should_show: bool,
 }
-pub static Example1: FC<MyProps1> = |cx| {
+pub static Example1: FC<MyProps1> = |cx, props| {
     cx.render(rsx! {
         div {
             // With matching
-            {match cx.should_show {
+            {match props.should_show {
                 true => cx.render(rsx!(div {"it is true!"})),
-                false => rsx!(in cx, div {"it is false!"}),
+                false => rsx!(cx, div {"it is false!"}),
             }}
 
             // or with just regular conditions
-            {if cx.should_show {
-                rsx!(in cx, div {"it is true!"})
+            {if props.should_show {
+                rsx!(cx, div {"it is true!"})
             } else {
-                rsx!(in cx, div {"it is false!"})
+                rsx!(cx, div {"it is false!"})
             }}
 
             // or with optional chaining
             {
-                cx.should_show
-                .then(|| rsx!(in cx, div {"it is false!"}))
-                .unwrap_or_else(|| rsx!(in cx, div {"it is false!"}))
+                props.should_show
+                .then(|| rsx!(cx, div {"it is false!"}))
+                .unwrap_or_else(|| rsx!(cx, div {"it is false!"}))
             }
         }
     })
@@ -77,19 +77,19 @@ pub enum Color {
 pub struct MyProps2 {
     color: Color,
 }
-pub static Example2: FC<MyProps2> = |cx| {
+pub static Example2: FC<MyProps2> = |cx, props| {
     cx.render(rsx! {
         div {
-            {match cx.color {
-                Color::Green => rsx!(in cx, div {"it is Green!"}),
-                Color::Yellow => rsx!(in cx, div {"it is Yellow!"}),
-                Color::Red => rsx!(in cx, div {"it is Red!"}),
+            {match props.color {
+                Color::Green => rsx!(cx, div {"it is Green!"}),
+                Color::Yellow => rsx!(cx, div {"it is Yellow!"}),
+                Color::Red => rsx!(cx, div {"it is Red!"}),
             }}
         }
     })
 };
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     let should_show = use_state(cx, || false);
     let mut color_index = use_state(cx, || 0);
     let color = match *color_index % 2 {

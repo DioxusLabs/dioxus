@@ -14,6 +14,7 @@ pub(crate) struct BumpFrame {
     pub bump: Bump,
     pub(crate) head_node: VNode<'static>,
 
+    #[cfg(test)]
     // used internally for debugging
     _name: &'static str,
 }
@@ -23,11 +24,15 @@ impl ActiveFrame {
         let frame_a = BumpFrame {
             bump: Bump::new(),
             head_node: NodeFactory::unstable_place_holder(),
+
+            #[cfg(test)]
             _name: "wip",
         };
         let frame_b = BumpFrame {
             bump: Bump::new(),
             head_node: NodeFactory::unstable_place_holder(),
+
+            #[cfg(test)]
             _name: "fin",
         };
         Self {

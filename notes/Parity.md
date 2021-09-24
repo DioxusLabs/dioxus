@@ -12,7 +12,7 @@ https://github.com/rustwasm/gloo
 For example, resize observer would function like this:
 
 ```rust
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props|{
     let observer = use_resize_observer();
 
     cx.render(rsx!(

@@ -26,7 +26,7 @@ pub struct TodoItem {
     pub contents: String,
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props| {
     let (draft, set_draft) = use_state_classic(cx, || "".to_string());
     let (filter, set_filter) = use_state_classic(cx, || FilterState::All);
     let todos = use_state(cx, || BTreeMap::<uuid::Uuid, TodoItem>::new());

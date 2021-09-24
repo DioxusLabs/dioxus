@@ -43,6 +43,7 @@ macro_rules! style_trait_methods {
         )*
     ) => {
         $(
+            #[inline]
             $(#[$attr])*
             fn $name<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
                 cx.attr($lit, val, Some("style"), false)
@@ -112,6 +113,13 @@ pub trait GlobalAttributes {
         title;
         translate;
     }
+
+    // This macro creates an explicit method call for each of the style attributes.
+    //
+    // The left token specifies the name of the attribute in the rsx! macro, and the right string literal specifies the
+    // actual name of the attribute generated.
+    //
+    // This roughly follows the html spec
     style_trait_methods! {
         /// Specifies the alignment of flexible container's items within the flex container.
         align_content: "align-content",
@@ -152,33 +160,32 @@ pub trait GlobalAttributes {
         /// Specifies whether or not the "back" side of a transformed element is visible when facing the user.
         backface_visibility: "backface-visibility",
 
-
         /// Defines a variety of background properties within one declaration.
         background: "background",
 
         /// Specify whether the background image is fixed in the viewport or scrolls.
         background_attachment: "background-attachment",
+
         /// Specifies the painting area of the background.
         background_clip: "background-clip",
-
 
         /// Defines an element's background color.
         background_color: "background-color",
 
         /// Defines an element's background image.
         background_image: "background-image",
+
         /// Specifies the positioning area of the background images.
         background_origin: "background-origin",
-
 
         /// Defines the origin of a background image.
         background_position: "background-position",
 
         /// Specify whether/how the background image is tiled.
         background_repeat: "background-repeat",
+
         /// Specifies the size of the background images.
         background_size: "background-size",
-
 
         /// Sets the width, style, and color for all four sides of an element's border.
         border: "border",
@@ -188,12 +195,12 @@ pub trait GlobalAttributes {
 
         /// Sets the color of the bottom border of an element.
         border_bottom_color: "border-bottom-color",
+
         /// Defines the shape of the bottom_left border corner of an element.
         border_bottom_left_radius: "border-bottom-left-radius",
 
         /// Defines the shape of the bottom_right border corner of an element.
         border_bottom_right_radius: "border-bottom-right-radius",
-
 
         /// Sets the style of the bottom border of an element.
         border_bottom_style: "border-bottom-style",
@@ -206,6 +213,7 @@ pub trait GlobalAttributes {
 
         /// Sets the color of the border on all the four sides of an element.
         border_color: "border-color",
+
         /// Specifies how an image is to be used in place of the border styles.
         border_image: "border-image",
 
@@ -224,7 +232,6 @@ pub trait GlobalAttributes {
         /// Specifies the width of the image_border.
         border_image_width: "border-image-width",
 
-
         /// Sets the width, style, and color of the left border of an element.
         border_left: "border-left",
 
@@ -236,9 +243,9 @@ pub trait GlobalAttributes {
 
         /// Sets the width of the left border of an element.
         border_left_width: "border-left-width",
+
         /// Defines the shape of the border corners of an element.
         border_radius: "border-radius",
-
 
         /// Sets the width, style, and color of the right border of an element.
         border_right: "border-right",
@@ -263,12 +270,12 @@ pub trait GlobalAttributes {
 
         /// Sets the color of the top border of an element.
         border_top_color: "border-top-color",
+
         /// Defines the shape of the top_left border corner of an element.
         border_top_left_radius: "border-top-left-radius",
 
         /// Defines the shape of the top_right border corner of an element.
         border_top_right_radius: "border-top-right-radius",
-
 
         /// Sets the style of the top border of an element.
         border_top_style: "border-top-style",
@@ -281,12 +288,12 @@ pub trait GlobalAttributes {
 
         /// Specify the location of the bottom edge of the positioned element.
         bottom: "bottom",
+
         /// Applies one or more drop_shadows to the element's box.
         box_shadow: "box-shadow",
 
         /// Alter the default CSS box model.
         box_sizing: "box-sizing",
-
 
         /// Specify the position of table's caption.
         caption_side: "caption-side",
@@ -299,6 +306,7 @@ pub trait GlobalAttributes {
 
         /// Specify the color of the text of an element.
         color: "color",
+
         /// Specifies the number of columns in a multi_column element.
         column_count: "column-count",
 
@@ -329,7 +337,6 @@ pub trait GlobalAttributes {
         /// A shorthand property for setting column_width and column_count properties.
         columns: "columns",
 
-
         /// Inserts generated content.
         content: "content",
 
@@ -350,6 +357,7 @@ pub trait GlobalAttributes {
 
         /// Show or hide borders and backgrounds of empty table cells.
         empty_cells: "empty-cells",
+
         /// Specifies the components of a flexible length.
         flex: "flex",
 
@@ -371,7 +379,6 @@ pub trait GlobalAttributes {
         /// Specifies whether the flexible items should wrap or not.
         flex_wrap: "flex-wrap",
 
-
         /// Specifies whether or not a box should float.
         float: "float",
 
@@ -383,12 +390,12 @@ pub trait GlobalAttributes {
 
         /// Defines the font size for the text.
         font_size: "font-size",
+
         /// Preserves the readability of text when font fallback occurs.
         font_size_adjust: "font-size-adjust",
 
         /// Selects a normal, condensed, or expanded face from a font.
         font_stretch: "font-stretch",
-
 
         /// Defines the font style for the text.
         font_style: "font-style",
@@ -401,9 +408,9 @@ pub trait GlobalAttributes {
 
         /// Specify the height of an element.
         height: "height",
+
         /// Specifies how flex items are aligned along the main axis of the flex container after any flexible lengths and auto margins have been resolved.
         justify_content: "auto margins have been resolved.",
-
 
         /// Specify the location of the left edge of the positioned element.
         left: "left",
@@ -452,21 +459,21 @@ pub trait GlobalAttributes {
 
         /// Specify the minimum width of an element.
         min_width: "min-width",
+
         /// Specifies the transparency of an element.
         opacity: "opacity",
 
         /// Specifies the order in which a flex items are displayed and laid out within a flex container.
         order: "order",
 
-
         /// Sets the width, style, and color for all four sides of an element's outline.
         outline: "outline",
 
         /// Sets the color of the outline.
         outline_color: "outline-color",
+
         /// Set the space between an outline and the border edge of an element.
         outline_offset: "outline-offset",
-
 
         /// Sets a style for an outline.
         outline_style: "outline-style",
@@ -481,7 +488,6 @@ pub trait GlobalAttributes {
 
         /// Specifies the treatment of content that overflows the element's box vertically.
         overflow_y: "overflow-y",
-
 
         /// Sets the padding on all four sides of the element.
         padding: "padding",
@@ -506,24 +512,25 @@ pub trait GlobalAttributes {
 
         /// Insert a page breaks inside an element.
         page_break_inside: "page-break-inside",
+
         /// Defines the perspective from which all child elements of the object are viewed.
         perspective: "perspective",
 
         /// Defines the origin (the vanishing point for the 3D space) for the perspective property.
         perspective_origin: "perspective-origin",
 
-
         /// Specifies how an element is positioned.
         position: "position",
 
         /// Specifies quotation marks for embedded quotations.
         quotes: "quotes",
+
         /// Specifies whether or not an element is resizable by the user.
         resize: "resize",
 
-
         /// Specify the location of the right edge of the positioned element.
         right: "right",
+
         /// Specifies the length of the tab character.
         tab_size: "tab-size",
 
@@ -546,9 +553,9 @@ pub trait GlobalAttributes {
         /// Specifies the style of the lines specified by the text_decoration_line property
         text_decoration_style: "text-decoration-style",
 
-
         /// Indent the first line of text.
         text_indent: "text-indent",
+
         /// Specifies the justification method to use when the text_align property is set to justify.
         text_justify: "text-justify",
 
@@ -558,12 +565,12 @@ pub trait GlobalAttributes {
         /// Applies one or more shadows to the text content of an element.
         text_shadow: "text-shadow",
 
-
         /// Transforms the case of the text.
         text_transform: "text-transform",
 
         /// Specify the location of the top edge of the positioned element.
         top: "top",
+
         /// Applies a 2D or 3D transformation to an element.
         transform: "transform",
 
@@ -588,7 +595,6 @@ pub trait GlobalAttributes {
         /// Specifies the speed curve of the transition effect.
         transition_timing_function: "transition-timing-function",
 
-
         /// Sets the vertical positioning of an element relative to the current text baseline.
         vertical_align: "vertical-align",
 
@@ -600,12 +606,13 @@ pub trait GlobalAttributes {
 
         /// Specify the width of an element.
         width: "width",
+
         /// Specifies how to break lines within words.
         word_break: "word-break",
 
-
         /// Sets the spacing between words.
         word_spacing: "word-spacing",
+
         /// Specifies whether to break words when the content overflows the boundaries of its container.
         word_wrap: "word-wrap",
 
@@ -674,7 +681,10 @@ macro_rules! builder_constructors {
         $(
             $(#[$attr:meta])*
             $name:ident {
-                $($fil:ident: $vil:ident,)*
+                $(
+                    $(#[$attr_method:meta])*
+                    $fil:ident: $vil:ident,
+                )*
             };
          )*
     ) => {
@@ -692,6 +702,7 @@ macro_rules! builder_constructors {
 
             impl $name {
                 $(
+                    $(#[$attr_method])*
                     pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
                         cx.attr(stringify!($fil), val, None, false)
                     }
@@ -767,6 +778,7 @@ builder_constructors! {
         sizes: String, // FIXME
         title: String, // FIXME
         r#type: Mime,
+        integrity: String,
     };
 
     /// Build a
@@ -1518,7 +1530,10 @@ builder_constructors! {
         src: Uri,
         step: String,
         tabindex: usize,
-        r#type: InputType,
+
+        // This has a manual implementation below
+        // r#type: InputType,
+
         value: String,
         width: isize,
     };
@@ -1563,7 +1578,10 @@ builder_constructors! {
     option {
         disabled: Bool,
         label: String,
-        selected: Bool,
+
+        // defined below
+        // selected: Bool,
+
         value: String,
     };
 
@@ -1588,7 +1606,8 @@ builder_constructors! {
     /// [`<select>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select)
     /// element.
     select {
-        value: String,
+        // defined below
+        // value: String,
         autocomplete: String,
         autofocus: Bool,
         disabled: Bool,
@@ -1647,6 +1666,60 @@ builder_constructors! {
     /// [`<template>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)
     /// element.
     template {};
+}
+
+impl input {
+    /// The type of input
+    ///
+    /// Here are the different input types you can use in HTML:
+    ///
+    /// - `button`
+    /// - `checkbox`
+    /// - `color`
+    /// - `date`
+    /// - `datetime-local`
+    /// - `email`
+    /// - `file`
+    /// - `hidden`
+    /// - `image`
+    /// - `month`
+    /// - `number`
+    /// - `password`
+    /// - `radio`
+    /// - `range`
+    /// - `reset`
+    /// - `search`
+    /// - `submit`
+    /// - `tel`
+    /// - `text`
+    /// - `time`
+    /// - `url`
+    /// - `week`    
+    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("type", val, None, false)
+    }
+}
+
+/*
+volatile attributes
+*/
+
+impl select {
+    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("value", val, None, true)
+    }
+}
+
+impl option {
+    fn selected<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("selected", val, None, true)
+    }
+}
+
+impl textarea {
+    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("value", val, None, true)
+    }
 }
 
 pub trait SvgAttributes {

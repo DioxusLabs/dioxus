@@ -11,14 +11,13 @@ license = "MIT/Apache-2.0"
 dioxus-core = { path = "../core", version = "0.1.2" }
 dioxus-html = { path = "../html" }
 js-sys = "0.3"
-wasm-bindgen = { version = "0.2.71", features = ["enable-interning"] }
+wasm-bindgen = { version = "0.2.78", features = ["enable-interning"] }
 lazy_static = "1.4.0"
 wasm-bindgen-futures = "0.4.20"
 log = "0.4.14"
 fxhash = "0.2.1"
 wasm-logger = "0.2.0"
 console_error_panic_hook = "0.1.6"
-generational-arena = "0.2.8"
 wasm-bindgen-test = "0.3.21"
 once_cell = "1.8"
 async-channel = "1.6.1"
@@ -63,23 +62,20 @@ features = [
     "SvgElement",
     "SvgAnimatedString",
     "HtmlOptionElement",
+    "IdleDeadline",
 ]
-
-[profile.release]
-lto = true
-opt-level = 's'
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dev-dependencies]
 im-rc = "15.0.0"
-# rand = { version="0.8.4", features=["small_rng"] }
 separator = "0.4.1"
 uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
 dioxus-hooks = { path = "../hooks" }
 serde = { version = "1.0.126", features = ["derive"] }
-surf = { git = "https://github.com/http-rs/surf", rev = "1ffaba8873", default-features = false, features = [
-    "wasm-client",
-] }
-# wasm-timer = "0.2.5"
+
+# rand = { version="0.8.4", features=["small_rng"] }
+# surf = { version = "2.3.1", default-features = false, features = [
+#     "wasm-client",
+# ] }

@@ -19,7 +19,7 @@ dioxus-mobile = { path = "./packages/mobile", optional = true }
 
 [features]
 # core
-default = ["core", "ssr"]
+default = ["core", "ssr", "web"]
 core = ["macro", "hooks", "html"]
 macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
@@ -51,8 +51,10 @@ argh = "0.1.5"
 env_logger = "*"
 async-std = { version = "1.9.0", features = ["attributes"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
-surf = { version = "2.2.0", git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm" }
 gloo-timers = "0.2.1"
+# surf = { version = "2.3.1", default-features = false, features = [
+#     "wasm-client",
+# ] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 gloo-timers = "0.2.1"

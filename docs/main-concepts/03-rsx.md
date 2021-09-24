@@ -12,15 +12,14 @@ You'll want to write RSX where you can, and in a future release we'll have a too
 
 ```rust
 #[derive(PartialEq, Props)]
-struct ExampleProps { name: &str, pending: bool, count: i32 }
+struct ExampleProps { name: &'static str, pending: bool, count: i32 }
 
-fn Example(cx: Context<ExampleProps> ) -> DomTree {
-    let ExampleProps { name, pending, count } = cx.props;
+static Example: FC<ExampleProps> = |cx, props| {
     cx.render(html! {
         <div>
-            <p> "Hello, {name}!" </p>
-            <p> "Status: {pending}!" </p>
-            <p> "Count {count}!" </p>
+            <p> "Hello, {props.name}!" </p>
+            <p> "Status: {props.pending}!" </p>
+            <p> "Count {props.count}!" </p>
         </div>
     })
 }
@@ -35,13 +34,12 @@ The Dioxus VSCode extension will eventually provide a macro to convert a selecti
 It's also a bit easier on the eyes 🙂 than HTML.
 
 ```rust
-fn Example(cx: Context<ExampleProps>) -> DomTree {
+static Example: FC<ExampleProps> = |cx, props| {
     cx.render(rsx! {
         div {
-            // cx derefs to props so you can access fields directly
-            p {"Hello, {cx.name}!"}
-            p {"Status: {cx.pending}!"}
-            p {"Count {cx.count}!"}
+            p {"Hello, {props.name}!"}
+            p {"Status: {props.pending}!"}
+            p {"Count {props.count}!"}
         }
     })
 }
@@ -60,7 +58,7 @@ Commas are entirely optional, but might be useful to delineate between elements 
 The `render` function provides an **extremely efficient** allocator for VNodes and text, so try not to use the `format!` macro in your components. Rust's default `ToString` methods pass through the global allocator, but all text in components is allocated inside a manually-managed Bump arena. To push you in the right direction, all text-based attributes take `std::fmt::Arguments` directly, so you'll want to reach for `format_args!` when the built-in `f-string` interpolation just doesn't cut it.
 
 ```rust
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props|{
 
     let text = "example";
 
@@ -113,9 +111,9 @@ pub static Example: FC<()> = |cx| {
                 // rsx! is lazy, and the underlying closures cannot have the same type
                 // Rendering produces the VNode type
                 {match rand::gen_range::<i32>(1..3) {
-                    1 => rsx!(in cx, h1 { "big" })
-                    2 => rsx!(in cx, h2 { "medium" })
-                    _ => rsx!(in cx, h3 { "small" })
+                    1 => rsx!(cx, h1 { "big" })
+                    2 => rsx!(cx, h2 { "medium" })
+                    _ => rsx!(cx, h3 { "small" })
                 }}
 
                 // Optionals
@@ -128,7 +126,7 @@ pub static Example: FC<()> = |cx| {
                 // Duplicating nodes
                 // Clones the nodes by reference, so they are literally identical
                 {{
-                    let node = rsx!(in cx, h1{ "TopNode" });
+                    let node = rsx!(cx, h1{ "TopNode" });
                     (0..10).map(|_| node.clone())
                 }}
 

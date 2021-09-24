@@ -56,11 +56,12 @@ use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
 use crate::dom::load_document;
-use cache::intern_cache;
+use cache::intern_cached_strings;
 use dioxus::prelude::Properties;
 use dioxus::virtual_dom::VirtualDom;
 pub use dioxus_core as dioxus;
 use dioxus_core::prelude::FC;
+use futures_util::FutureExt;
 
 mod cache;
 mod cfg;
@@ -115,12 +116,14 @@ where
 pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    intern_cache();
+    intern_cached_strings();
 
-    let hydrating = cfg.hydrate;
+    let should_hydrate = cfg.hydrate;
 
     let root_el = load_document().get_element_by_id(&cfg.rootname).unwrap();
+
     let tasks = dom.get_event_sender();
+
     let sender_callback = Rc::new(move |event| tasks.unbounded_send(event).unwrap());
 
     let mut websys_dom = dom::WebsysDom::new(root_el, cfg, sender_callback);
@@ -129,21 +132,33 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
 
     // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding
     // ElementIds should already line up because the web_sys dom has already loaded elements with the DioxusID into memory
-    if !hydrating {
+    if !should_hydrate {
+        log::info!("Applying rebuild edits..., {:?}", mutations);
         websys_dom.process_edits(&mut mutations.edits);
+    } else {
+        // websys dom processed the config and hydrated the dom already
     }
 
     let work_loop = ric_raf::RafLoop::new();
+
     loop {
         // if virtualdom has nothing, wait for it to have something before requesting idle time
-        if !dom.has_work() {
-            dom.wait_for_any_work().await;
-        }
+        // if there is work then this future resolves immediately.
+        dom.wait_for_work().await;
 
-        let deadline = work_loop.wait_for_idle_time().await;
+        // wait for the mainthread to schedule us in
+        let mut deadline = work_loop.wait_for_idle_time().await;
 
-        let mut mutations = dom.run_with_deadline(deadline).await;
+        // run the virtualdom work phase until the frame deadline is reached
+        let mutations = dom.run_with_deadline(|| (&mut deadline).now_or_never().is_some());
+
+        // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;
-        websys_dom.process_edits(&mut mutations[0].edits);
+
+        for mut edit in mutations {
+            log::debug!("edits are {:#?}", edit);
+            // actually apply our changes during the animation frame
+            websys_dom.process_edits(&mut edit.edits);
+        }
     }
 }

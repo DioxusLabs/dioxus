@@ -1,4 +1,5 @@
 //! # VirtualDOM Implementation for Rust
+//!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 //!
 //! In this file, multiple items are defined. This file is big, but should be documented well to
@@ -19,22 +20,39 @@
 //! Additional functionality is defined in the respective files.
 
 use crate::innerlude::*;
-use futures_util::{Future, FutureExt};
-use std::{
-    any::{Any, TypeId},
-    pin::Pin,
-    rc::Rc,
-};
+use futures_util::Future;
+use std::any::Any;
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
+///
 /// Differences are converted into patches which a renderer can use to draw the UI.
 ///
+/// If you are building an App with Dioxus, you probably won't want to reach for this directly, instead opting to defer
+/// to a particular crate's wrapper over the [`VirtualDom`] API.
 ///
+/// Example
+/// ```rust
+/// static App: FC<()> = |cx, props|{
+///     cx.render(rsx!{
+///         div {
+///             "Hello World"
+///         }
+///     })
+/// }
 ///
+/// async fn main() {
+///     let mut dom = VirtualDom::new(App);
+///     let mut inital_edits = dom.rebuild();
+///     initialize_screen(inital_edits);
 ///
-///
-///
-///
+///     loop {
+///         let next_frame = TimeoutFuture::new(Duration::from_millis(16));
+///         let edits = dom.run_with_deadline(next_frame).await;
+///         apply_edits(edits);
+///         render_frame();
+///     }
+/// }
+/// ```
 pub struct VirtualDom {
     scheduler: Scheduler,
 
@@ -42,7 +60,10 @@ pub struct VirtualDom {
 
     root_fc: Box<dyn Any>,
 
-    root_props: Pin<Box<dyn std::any::Any>>,
+    root_props: Box<dyn Any>,
+
+    // we need to keep the allocation around, but we don't necessarily use it
+    _root_caller: Box<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>,
 }
 
 impl VirtualDom {
@@ -101,15 +122,23 @@ impl VirtualDom {
     /// let mutations = dom.rebuild();
     /// ```
     pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
-        let scheduler = Scheduler::new();
+        let root_fc = Box::new(root);
 
-        let root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+        let root_props: Box<dyn Any> = Box::new(root_props);
+
         let props_ptr = root_props.downcast_ref::<P>().unwrap() as *const P;
 
+        // Safety: this callback is only valid for the lifetime of the root props
+        let root_caller: Box<dyn Fn(&Scope) -> DomTree> = Box::new(move |scope: &Scope| unsafe {
+            let props: &'_ P = &*(props_ptr as *const P);
+            std::mem::transmute(root(Context { scope }, props))
+        });
+
+        let scheduler = Scheduler::new();
+
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
-            let caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
             Scope::new(
-                caller,
+                root_caller.as_ref(),
                 myidx,
                 None,
                 0,
@@ -119,7 +148,8 @@ impl VirtualDom {
         });
 
         Self {
-            root_fc: Box::new(root),
+            _root_caller: root_caller,
+            root_fc,
             base_scope,
             scheduler,
             root_props,
@@ -151,26 +181,38 @@ impl VirtualDom {
     /// struct AppProps {
     ///     route: &'static str
     /// }
-    /// static App: FC<AppProps> = |cx| cx.render(rsx!{ "route is {cx.route}" });
+    /// static App: FC<AppProps> = |cx, props|cx.render(rsx!{ "route is {cx.route}" });
     ///
     /// let mut dom = VirtualDom::new_with_props(App, AppProps { route: "start" });
     ///
     /// let mutations = dom.update_root_props(AppProps { route: "end" }).unwrap();
     /// ```
-    pub fn update_root_props<'s, P: 'static>(&'s mut self, root_props: P) -> Option<Mutations<'s>> {
+    pub fn update_root_props<P>(&mut self, root_props: P) -> Option<Mutations>
+    where
+        P: 'static,
+    {
         let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
+
+        // Pre-emptively drop any downstream references of the old props
         root_scope.ensure_drop_safety(&self.scheduler.pool);
 
-        let mut root_props: Pin<Box<dyn Any>> = Box::pin(root_props);
+        let mut root_props: Box<dyn Any> = Box::new(root_props);
 
         if let Some(props_ptr) = root_props.downcast_ref::<P>().map(|p| p as *const P) {
+            // Swap the old props and new props
             std::mem::swap(&mut self.root_props, &mut root_props);
 
             let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
 
-            let new_caller = NodeFactory::create_component_caller(root, props_ptr as *const _);
+            let root_caller: Box<dyn Fn(&Scope) -> DomTree> =
+                Box::new(move |scope: &Scope| unsafe {
+                    let props: &'_ P = &*(props_ptr as *const P);
+                    std::mem::transmute(root(Context { scope }, props))
+                });
 
-            root_scope.update_scope_dependencies(new_caller, ScopeChildren(&[]));
+            root_scope.update_scope_dependencies(&root_caller, ScopeChildren(&[]));
+
+            drop(root_props);
 
             Some(self.rebuild())
         } else {
@@ -178,81 +220,70 @@ impl VirtualDom {
         }
     }
 
-    /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom rom scratch
+    /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch
     ///
-    /// The diff machine expects the RealDom's stack to be the root of the application
+    /// The diff machine expects the RealDom's stack to be the root of the application.
     ///
-    /// Events like garabge collection, application of refs, etc are not handled by this method and can only be progressed
-    /// through "run". We completely avoid the task scheduler infrastructure.
-    pub fn rebuild<'s>(&'s mut self) -> Mutations<'s> {
-        let mut fut = self.rebuild_async().boxed_local();
-
-        loop {
-            if let Some(edits) = (&mut fut).now_or_never() {
-                break edits;
-            }
-        }
-    }
-
-    /// Rebuild the dom from the ground up
+    /// Tasks will not be polled with this method, nor will any events be processed from the event queue. Instead, the
+    /// root component will be ran once and then diffed. All updates will flow out as mutations.
     ///
-    /// This method is asynchronous to prevent the application from blocking while the dom is being rebuilt. Computing
-    /// the diff and creating nodes can be expensive, so we provide this method to avoid blocking the main thread. This
-    /// method can be useful when needing to perform some crucial periodic tasks.
-    pub async fn rebuild_async<'s>(&'s mut self) -> Mutations<'s> {
-        let mut shared = self.scheduler.pool.clone();
-        let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
-
-        let cur_component = self
-            .scheduler
-            .pool
-            .get_scope_mut(self.base_scope)
-            .expect("The base scope should never be moved");
-
-        // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope(&self.scheduler.pool) {
-            diff_machine
-                .stack
-                .create_node(cur_component.frames.fin_head(), MountType::Append);
-            diff_machine.stack.scope_stack.push(self.base_scope);
-
-            // let completed = diff_machine.work();
-        } else {
-            // todo: should this be a hard error?
-            log::warn!(
-                "Component failed to run succesfully during rebuild.
-                This does not result in a failed rebuild, but indicates a logic failure within your app."
-            );
-        }
-
-        unsafe { std::mem::transmute(diff_machine.mutations) }
+    /// All state stored in components will be completely wiped away.
+    ///
+    /// # Example
+    /// ```
+    /// static App: FC<()> = |cx, props|cx.render(rsx!{ "hello world" });
+    /// let mut dom = VirtualDom::new();
+    /// let edits = dom.rebuild();
+    ///
+    /// apply_edits(edits);
+    /// ```
+    pub fn rebuild(&mut self) -> Mutations {
+        self.scheduler.rebuild(self.base_scope)
     }
 
     /// Compute a manual diff of the VirtualDOM between states.
     ///
     /// This can be useful when state inside the DOM is remotely changed from the outside, but not propogated as an event.
-    pub fn diff<'s>(&'s mut self) -> Mutations<'s> {
-        let cur_component = self
-            .scheduler
-            .pool
-            .get_scope_mut(self.base_scope)
-            .expect("The base scope should never be moved");
-
-        if cur_component.run_scope(&self.scheduler.pool) {
-            let mut diff_machine: DiffMachine<'s> =
-                DiffMachine::new(Mutations::new(), &mut self.scheduler.pool);
-            diff_machine.diff_scope(self.base_scope);
-            diff_machine.mutations
-        } else {
-            Mutations::new()
-        }
+    ///
+    /// In this case, every component will be diffed, even if their props are memoized. This method is intended to be used
+    /// to force an update of the DOM when the state of the app is changed outside of the app.
+    ///
+    ///
+    /// # Example
+    /// ```rust
+    /// #[derive(PartialEq, Props)]
+    /// struct AppProps {
+    ///     value: Shared<&'static str>,
+    /// }
+    ///
+    /// static App: FC<AppProps> = |cx, props|{
+    ///     let val = cx.value.borrow();
+    ///     cx.render(rsx! { div { "{val}" } })
+    /// };
+    ///
+    /// let value = Rc::new(RefCell::new("Hello"));
+    /// let mut dom = VirtualDom::new_with_props(
+    ///     App,
+    ///     AppProps {
+    ///         value: value.clone(),
+    ///     },
+    /// );
+    ///
+    /// let _ = dom.rebuild();
+    ///
+    /// *value.borrow_mut() = "goodbye";
+    ///
+    /// let edits = dom.diff();
+    /// ```
+    pub fn diff(&mut self) -> Mutations {
+        self.scheduler.hard_diff(self.base_scope)
     }
 
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
     ///
     /// This method will not wait for any suspended nodes to complete. If there is no pending work, then this method will
     /// return "None"
-    pub fn run_immediate<'s>(&'s mut self) -> Option<Vec<Mutations<'s>>> {
+    pub fn run_immediate(&mut self) -> Option<Vec<Mutations>> {
         if self.scheduler.has_any_work() {
             Some(self.scheduler.work_sync())
         } else {
@@ -287,7 +318,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```no_run
-    /// static App: FC<()> = |cx| rsx!(in cx, div {"hello"} );
+    /// static App: FC<()> = |cx, props|rsx!(cx, div {"hello"} );
     /// let mut dom = VirtualDom::new(App);
     /// loop {
     ///     let deadline = TimeoutFuture::from_ms(16);
@@ -303,29 +334,76 @@ impl VirtualDom {
     /// applied the edits.
     ///
     /// Mutations are the only link between the RealDOM and the VirtualDOM.
-    pub async fn run_with_deadline<'s>(
-        &'s mut self,
-        deadline: impl Future<Output = ()>,
-    ) -> Vec<Mutations<'s>> {
-        let mut deadline = Box::pin(deadline.fuse());
-        self.scheduler.work_with_deadline(deadline).await
+    pub fn run_with_deadline(&mut self, deadline: impl FnMut() -> bool) -> Vec<Mutations<'_>> {
+        self.scheduler.work_with_deadline(deadline)
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
         self.scheduler.pool.channel.sender.clone()
     }
 
-    pub fn has_work(&self) -> bool {
-        true
-    }
+    /// Waits for the scheduler to have work
+    /// This lets us poll async tasks during idle periods without blocking the main thread.
+    pub async fn wait_for_work(&mut self) {
+        if self.scheduler.has_any_work() {
+            log::debug!("No need to wait for work, we already have some");
+            return;
+        }
 
-    pub async fn wait_for_any_work(&mut self) {
-        let mut timeout = Box::pin(futures_util::future::pending().fuse());
-        self.scheduler.wait_for_any_trigger(&mut timeout).await;
+        log::debug!("No active work.... waiting for some...");
+        use futures_util::StreamExt;
+
+        // right now this won't poll events if there is ongoing work
+        // in the future we want to prioritize some events over ongoing work
+        // this is coming in the "priorities" PR
+
+        // Wait for any new events if we have nothing to do
+        // todo: poll the events once even if there is work to do to prevent starvation
+        futures_util::select! {
+            _ = self.scheduler.async_tasks.next() => {}
+            msg = self.scheduler.receiver.next() => {
+                match msg.unwrap() {
+                    SchedulerMsg::Task(t) => todo!(),
+                    SchedulerMsg::Immediate(im) => {
+                        self.scheduler.dirty_scopes.insert(im);
+                    }
+                    SchedulerMsg::UiEvent(evt) => {
+                        self.scheduler.ui_events.push_back(evt);
+                    }
+                }
+            },
+        }
+
+        while let Ok(Some(msg)) = self.scheduler.receiver.try_next() {
+            match msg {
+                SchedulerMsg::Task(t) => todo!(),
+                SchedulerMsg::Immediate(im) => {
+                    self.scheduler.dirty_scopes.insert(im);
+                }
+                SchedulerMsg::UiEvent(evt) => {
+                    self.scheduler.ui_events.push_back(evt);
+                }
+            }
+        }
     }
 }
 
-// TODO!
-// These impls are actually wrong. The DOM needs to have a mutex implemented.
-unsafe impl Sync for VirtualDom {}
-unsafe impl Send for VirtualDom {}
+impl std::fmt::Display for VirtualDom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let base = self.base_scope();
+        let root = base.root_node();
+
+        let renderer = ScopeRenderer {
+            show_fragments: false,
+            skip_components: false,
+
+            _scope: base,
+            _pre_render: false,
+            _newline: true,
+            _indent: true,
+            _max_depth: usize::MAX,
+        };
+
+        renderer.render(self, root, f, 0)
+    }
+}

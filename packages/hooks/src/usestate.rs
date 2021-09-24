@@ -35,7 +35,7 @@ use std::{
 ///
 /// Usage:
 /// ```ignore
-/// const Example: FC<()> = |cx| {
+/// const Example: FC<()> = |cx, props|{
 ///     let counter = use_state(cx, || 0);
 ///     let increment = |_| counter += 1;
 ///     let decrement = |_| counter += 1;
@@ -49,14 +49,14 @@ use std::{
 ///     }
 /// }
 /// ```
-pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
-    cx: Context<'a, P>,
-    initial_state_fn: F,
+pub fn use_state<'a, 'c, T: 'static>(
+    cx: Context<'a>,
+    initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
     cx.use_hook(
         move |_| UseStateInner {
             current_val: initial_state_fn(),
-            callback: cx.schedule_update(),
+            update_callback: cx.schedule_update(),
             wip: Rc::new(RefCell::new(None)),
             update_scheuled: Cell::new(false),
         },
@@ -75,13 +75,14 @@ pub fn use_state<'a, 'c, T: 'static, F: FnOnce() -> T, P>(
 struct UseStateInner<T: 'static> {
     current_val: T,
     update_scheuled: Cell<bool>,
-    callback: Rc<dyn Fn()>,
+    update_callback: Rc<dyn Fn()>,
     wip: Rc<RefCell<Option<T>>>,
 }
 
 pub struct UseState<'a, T: 'static> {
     inner: &'a UseStateInner<T>,
 }
+
 impl<T> Copy for UseState<'_, T> {}
 impl<'a, T> Clone for UseState<'a, T>
 where
@@ -97,13 +98,13 @@ impl<'a, T: 'static> UseState<'a, T> {
     pub fn needs_update(&self) {
         if !self.inner.update_scheuled.get() {
             self.inner.update_scheuled.set(true);
-            (self.inner.callback)();
+            (self.inner.update_callback)();
         }
     }
 
     pub fn set(&self, new_val: T) {
-        self.needs_update();
         *self.inner.wip.borrow_mut() = Some(new_val);
+        self.needs_update();
     }
 
     pub fn get(&self) -> &'a T {
@@ -113,6 +114,11 @@ impl<'a, T: 'static> UseState<'a, T> {
     /// Get the current status of the work-in-progress data
     pub fn get_wip(&self) -> Ref<Option<T>> {
         self.inner.wip.borrow()
+    }
+
+    /// Get the current status of the work-in-progress data
+    pub fn get_wip_mut(&self) -> RefMut<Option<T>> {
+        self.inner.wip.borrow_mut()
     }
 
     pub fn classic(self) -> (&'a T, &'a Rc<dyn Fn(T)>) {
@@ -136,7 +142,12 @@ impl<'a, T: 'static> UseState<'a, T> {
 }
 
 impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
-    pub fn get_mut(self) -> RefMut<'a, T> {
+    /// Gain mutable access to the new value. This method is only available when the value is a `ToOwned` type.
+    ///
+    /// Mutable access is derived by calling "ToOwned" (IE cloning) on the current value.
+    ///
+    /// To get a reference to the current value, use `.get()`
+    pub fn modify(self) -> RefMut<'a, T> {
         // make sure we get processed
         self.needs_update();
 

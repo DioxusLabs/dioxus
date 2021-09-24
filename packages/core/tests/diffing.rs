@@ -4,24 +4,19 @@
 //!
 //! It does not validated that component lifecycles work properly. This is done in another test file.
 
-use dioxus::{prelude::*, DomEdit, TestDom};
+use dioxus::{nodes::VSuspended, prelude::*, DomEdit, TestDom};
 use dioxus_core as dioxus;
 use dioxus_html as dioxus_elements;
 
 mod test_logging;
-use DomEdit::*;
-
-// logging is wired up to the test harness
-// feel free to enable while debugging
-const IS_LOGGING_ENABLED: bool = false;
 
 fn new_dom() -> TestDom {
+    const IS_LOGGING_ENABLED: bool = false;
     test_logging::set_up_logging(IS_LOGGING_ENABLED);
     TestDom::new()
 }
 
-#[test]
-fn diffing_works() {}
+use DomEdit::*;
 
 /// Should push the text node onto the stack and modify it
 #[test]
@@ -98,8 +93,8 @@ fn fragments_create_properly() {
 fn empty_fragments_create_anchors() {
     let dom = new_dom();
 
-    let left = rsx!({ (0..0).map(|f| rsx! { div {}}) });
-    let right = rsx!({ (0..1).map(|f| rsx! { div {}}) });
+    let left = rsx!({ (0..0).map(|_f| rsx! { div {}}) });
+    let right = rsx!({ (0..1).map(|_f| rsx! { div {}}) });
 
     let (create, change) = dom.lazy_diff(left, right);
 
@@ -121,8 +116,8 @@ fn empty_fragments_create_anchors() {
 fn empty_fragments_create_many_anchors() {
     let dom = new_dom();
 
-    let left = rsx!({ (0..0).map(|f| rsx! { div {}}) });
-    let right = rsx!({ (0..5).map(|f| rsx! { div {}}) });
+    let left = rsx!({ (0..0).map(|_f| rsx! { div {}}) });
+    let right = rsx!({ (0..5).map(|_f| rsx! { div {}}) });
 
     let (create, change) = dom.lazy_diff(left, right);
     assert_eq!(
@@ -148,7 +143,7 @@ fn empty_fragments_create_many_anchors() {
 fn empty_fragments_create_anchors_with_many_children() {
     let dom = new_dom();
 
-    let left = rsx!({ (0..0).map(|f| rsx! { div {} }) });
+    let left = rsx!({ (0..0).map(|_| rsx! { div {} }) });
     let right = rsx!({
         (0..3).map(|f| {
             rsx! { div { "hello: {f}" }}
@@ -192,11 +187,11 @@ fn many_items_become_fragment() {
     let dom = new_dom();
 
     let left = rsx!({
-        (0..2).map(|f| {
+        (0..2).map(|_| {
             rsx! { div { "hello" }}
         })
     });
-    let right = rsx!({ (0..0).map(|f| rsx! { div {} }) });
+    let right = rsx!({ (0..0).map(|_| rsx! { div {} }) });
 
     let (create, change) = dom.lazy_diff(left, right);
     assert_eq!(
@@ -235,17 +230,17 @@ fn two_equal_fragments_are_equal() {
     let dom = new_dom();
 
     let left = rsx!({
-        (0..2).map(|f| {
+        (0..2).map(|_| {
             rsx! { div { "hello" }}
         })
     });
     let right = rsx!({
-        (0..2).map(|f| {
+        (0..2).map(|_| {
             rsx! { div { "hello" }}
         })
     });
 
-    let (create, change) = dom.lazy_diff(left, right);
+    let (_create, change) = dom.lazy_diff(left, right);
     assert!(change.edits.is_empty());
 }
 
@@ -263,7 +258,7 @@ fn two_fragments_with_differrent_elements_are_differet() {
         p {}
     );
 
-    let (create, changes) = dom.lazy_diff(left, right);
+    let (_create, changes) = dom.lazy_diff(left, right);
     log::debug!("{:#?}", &changes);
     assert_eq!(
         changes.edits,
@@ -698,5 +693,23 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
             PushRoot { id: 3 },
             InsertBefore { n: 1, root: 0 },
         ]
+    );
+}
+
+#[test]
+fn suspense() {
+    let dom = new_dom();
+
+    let edits = dom.create(LazyNodes::new(|f| {
+        use std::cell::{Cell, RefCell};
+        VNode::Suspended(f.bump().alloc(VSuspended {
+            task_id: 0,
+            callback: RefCell::new(None),
+            dom_id: Cell::new(None),
+        }))
+    }));
+    assert_eq!(
+        edits.edits,
+        [CreatePlaceholder { id: 0 }, AppendChildren { many: 1 }]
     );
 }

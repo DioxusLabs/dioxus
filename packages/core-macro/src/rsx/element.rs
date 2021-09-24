@@ -270,7 +270,7 @@ fn parse_rsx_element_field(
             name,
             value: ty,
             namespace: None,
-            element_name: element_name.clone(),
+            element_name,
         });
         return Ok(());
     }

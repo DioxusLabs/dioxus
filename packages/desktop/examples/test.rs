@@ -6,7 +6,7 @@ fn main() {
     dioxus_desktop::launch(App, |f| f.with_window(|w| w.with_maximized(true))).expect("Failed");
 }
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props|{
     //
     cx.render(rsx!(
         div {

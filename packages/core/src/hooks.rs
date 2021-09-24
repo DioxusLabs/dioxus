@@ -11,83 +11,27 @@
 
 use crate::innerlude::*;
 use futures_util::FutureExt;
-use std::{
-    any::{Any, TypeId},
-    cell::RefCell,
-    future::Future,
-    rc::Rc,
-};
-
-/// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
-///
-/// This is a hook, so it may not be called conditionally!
-///
-/// The init method is ran *only* on first use, otherwise it is ignored. However, it uses hooks (ie `use`)
-/// so don't put it in a conditional.
-///
-/// When the component is dropped, so is the context. Be aware of this behavior when consuming
-/// the context via Rc/Weak.
-///
-///
-///
-pub fn use_provide_state<'src, Pr, T, F>(cx: Context<'src, Pr>, init: F) -> &'src Rc<T>
-where
-    T: 'static,
-    F: FnOnce() -> T,
-{
-    let ty = TypeId::of::<T>();
-    let contains_key = cx.scope.shared_contexts.borrow().contains_key(&ty);
-
-    let is_initialized = cx.use_hook(
-        |_| false,
-        |s| {
-            let i = s.clone();
-            *s = true;
-            i
-        },
-        |_| {},
-    );
-
-    match (is_initialized, contains_key) {
-        // Do nothing, already initialized and already exists
-        (true, true) => {}
-
-        // Needs to be initialized
-        (false, false) => cx.add_shared_state(init()),
-
-        _ => debug_assert!(false, "Cannot initialize two contexts of the same type"),
-    };
-
-    use_consume_state::<T, _>(cx)
-}
-
-/// There are hooks going on here!
-pub fn use_consume_state<'src, T: 'static, P>(cx: Context<'src, P>) -> &'src Rc<T> {
-    use_try_consume_state::<T, _>(cx).unwrap()
-}
-
-/// Uses a context, storing the cached value around
-///
-/// If a context is not found on the first search, then this call will be  "dud", always returning "None" even if a
-/// context was added later. This allows using another hook as a fallback
-///
-pub fn use_try_consume_state<'src, T: 'static, P>(cx: Context<'src, P>) -> Option<&'src Rc<T>> {
-    struct UseContextHook<C>(Option<Rc<C>>);
-
-    cx.use_hook(
-        move |_| UseContextHook(cx.consume_shared_state::<T>()),
-        move |hook| hook.0.as_ref(),
-        |_| {},
-    )
-}
+use std::{any::Any, cell::RefCell, future::Future, ops::Deref, rc::Rc};
 
 /// Awaits the given task, forcing the component to re-render when the value is ready.
 ///
+/// Returns the handle to the task and the value (if it is ready, else None).
 ///
+/// ```
+/// static Example: FC<()> = |cx, props| {
+///     let (task, value) = use_task(|| async {
+///         timer::sleep(Duration::from_secs(1)).await;
+///         "Hello World"
+///     });
 ///
-///
-pub fn use_task<'src, Out, Fut, Init, P>(
-    cx: Context<'src, P>,
+///     match contents {
+///         Some(contents) => rsx!(cx, div { "{title}" }),
+///         None => rsx!(cx, div { "Loading..." }),
+///     }
+/// };
+/// ```
+pub fn use_task<'src, Out, Fut, Init>(
+    cx: Context<'src>,
     task_initializer: Init,
 ) -> (&'src TaskHandle, &'src Option<Out>)
 where
@@ -110,7 +54,7 @@ where
 
             let slot = task_dump.clone();
 
-            let updater = cx.prepare_update();
+            let updater = cx.schedule_update_any();
             let originator = cx.scope.our_arena_idx;
 
             let handle = cx.submit_task(Box::pin(task_fut.then(move |output| async move {
@@ -145,8 +89,8 @@ where
 /// # Example
 ///
 ///
-pub fn use_suspense<'src, Out, Fut, Cb, P>(
-    cx: Context<'src, P>,
+pub fn use_suspense<'src, Out, Fut, Cb>(
+    cx: Context<'src>,
     task_initializer: impl FnOnce() -> Fut,
     user_callback: Cb,
 ) -> DomTree<'src>
@@ -166,11 +110,10 @@ where
     - if it doesn't, then we render a suspended node along with with the callback and task id
     */
     cx.use_hook(
-        move |hook_idx| {
+        move |_| {
             let value = Rc::new(RefCell::new(None));
             let slot = value.clone();
-
-            let originator = cx.scope.our_arena_idx.clone();
+            let originator = cx.scope.our_arena_idx;
 
             let handle = cx.submit_task(Box::pin(task_initializer().then(
                 move |output| async move {
@@ -185,10 +128,7 @@ where
             Some(value) => {
                 let out = value.downcast_ref::<Out>().unwrap();
                 let sus = SuspendedContext {
-                    inner: Context {
-                        props: &(),
-                        scope: cx.scope,
-                    },
+                    inner: Context { scope: cx.scope },
                 };
                 user_callback(sus, out)
             }
@@ -232,10 +172,8 @@ pub(crate) struct SuspenseHook {
     pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
 }
 
-type SuspendedCallback = Box<dyn for<'a> Fn(SuspendedContext<'a>) -> DomTree<'a>>;
-
 pub struct SuspendedContext<'a> {
-    pub(crate) inner: Context<'a, ()>,
+    pub(crate) inner: Context<'a>,
 }
 
 impl<'src> SuspendedContext<'src> {
@@ -243,25 +181,21 @@ impl<'src> SuspendedContext<'src> {
         self,
         lazy_nodes: LazyNodes<'src, F>,
     ) -> DomTree<'src> {
-        let scope_ref = self.inner.scope;
         let bump = &self.inner.scope.frames.wip_frame().bump;
-
         Some(lazy_nodes.into_vnode(NodeFactory { bump }))
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct NodeRef<'src, T: 'static>(&'src RefCell<T>);
+pub struct NodeRef<'src, T: 'static>(&'src RefCell<Option<T>>);
 
-pub fn use_node_ref<T, P>(cx: Context<P>) -> NodeRef<T> {
-    cx.use_hook(
-        |f| {},
-        |f| {
-            //
-            todo!()
-        },
-        |f| {
-            //
-        },
-    )
+impl<'a, T> Deref for NodeRef<'a, T> {
+    type Target = RefCell<Option<T>>;
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+pub fn use_node_ref<T, P>(cx: Context) -> NodeRef<T> {
+    cx.use_hook(|_| RefCell::new(None), |f| NodeRef { 0: f }, |_| {})
 }

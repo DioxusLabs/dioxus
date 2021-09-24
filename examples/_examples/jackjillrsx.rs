@@ -9,7 +9,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example))
 }
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     let (name, set_name) = use_state_classic(cx, || "...?");
     cx.render(rsx! {
         section { class: "py-12 px-4 text-center"

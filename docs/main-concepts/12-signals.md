@@ -96,19 +96,19 @@ Sometimes you want a signal to propagate across your app, either through far-awa
 
 ```rust
 const TITLE: Atom<String> = || "".to_string();
-const Provider: FC<()> = |cx| {
+const Provider: FC<()> = |cx, props|{
     let title = use_signal(&cx, &TITLE);
-    rsx!(in cx, input { value: title })
+    rsx!(cx, input { value: title })
 };
 ```
 
 If we use the `TITLE` atom in another component, we can cause updates to flow between components without calling render or diffing either component trees:
 
 ```rust
-const Receiver: FC<()> = |cx| {
+const Receiver: FC<()> = |cx, props|{
     let title = use_signal(&cx, &TITLE);
     log::info!("This will only be called once!");
-    rsx!(in cx,
+    rsx!(cx,
         div {
             h1 { "{title}" }
             div {}
@@ -132,7 +132,7 @@ Dioxus automatically understands how to use your signals when mixed with iterato
 
 ```rust
 const DICT: AtomFamily<String, String> = |_| {};
-const List: FC<()> = |cx| {
+const List: FC<()> = |cx, props|{
     let dict = use_signal(&cx, &DICT);
     cx.render(rsx!(
         ul {

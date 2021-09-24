@@ -1,8 +1,12 @@
 use dioxus_core::prelude::*;
 
-fn main() {}
+fn main() {
+    let mut dom = VirtualDom::new(EXAMPLE);
+    dom.rebuild();
+    println!("{}", dom);
+}
 
-pub static Example: FC<()> = |cx| {
+pub static EXAMPLE: FC<()> = |cx, _| {
     let list = (0..10).map(|_f| LazyNodes::new(move |_f| todo!()));
 
     cx.render(LazyNodes::new(move |cx| {

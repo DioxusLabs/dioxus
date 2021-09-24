@@ -7,10 +7,10 @@ use dioxus_core::{
     DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{
-    window, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, Node, NodeList, UiEvent,
+    window, Attr, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
+    HtmlOptionElement, HtmlTextAreaElement, Node, NodeList, UiEvent,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};
@@ -93,7 +93,7 @@ impl WebsysDom {
 
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
         for edit in edits.drain(..) {
-            log::info!("Handling edit: {:#?}", edit);
+            // log::info!("Handling edit: {:#?}", edit);
             match edit {
                 DomEdit::PushRoot { id: root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
@@ -264,8 +264,8 @@ impl WebsysDom {
         )
         .unwrap();
 
-        el.set_attribute(&format!("dioxus-event"), &format!("{}", event))
-            .unwrap();
+        // el.set_attribute(&format!("dioxus-event"), &format!("{}", event))
+        //     .unwrap();
 
         // Register the callback to decode
 
@@ -302,30 +302,52 @@ impl WebsysDom {
 
     fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
         let node = self.stack.top();
-        if let Some(el) = node.dyn_ref::<Element>() {
-            match ns {
-                // inline style support
-                Some("style") => {
-                    let el = el.dyn_ref::<HtmlElement>().unwrap();
-                    let style_dc: CssStyleDeclaration = el.style();
-                    style_dc.set_property(name, value).unwrap();
+        if ns == Some("style") {
+            if let Some(el) = node.dyn_ref::<Element>() {
+                let el = el.dyn_ref::<HtmlElement>().unwrap();
+                let style_dc: CssStyleDeclaration = el.style();
+                style_dc.set_property(name, value).unwrap();
+            }
+        } else {
+            let fallback = || {
+                let el = node.dyn_ref::<Element>().unwrap();
+                el.set_attribute(name, value).unwrap()
+            };
+            match name {
+                "value" => {
+                    if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
+                        /*
+                        if the attribute being set is the same as the value of the input, then don't bother setting it.
+                        This is used in controlled components to keep the cursor in the right spot.
+
+                        this logic should be moved into the virtualdom since we have the notion of "volatile"
+                        */
+                        if input.value() != value {
+                            input.set_value(value);
+                        }
+                    } else if let Some(node) = node.dyn_ref::<HtmlTextAreaElement>() {
+                        if name == "value" {
+                            node.set_value(value);
+                        }
+                    } else {
+                        fallback();
+                    }
                 }
-                _ => el.set_attribute(name, value).unwrap(),
-            }
-        }
-
-        if let Some(node) = node.dyn_ref::<HtmlInputElement>() {
-            if name == "value" {
-                node.set_value(value);
-            }
-            if name == "checked" {
-                node.set_checked(true);
-            }
-        }
-
-        if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
-            if name == "selected" {
-                node.set_selected(true);
+                "checked" => {
+                    if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
+                        input.set_checked(true);
+                    } else {
+                        fallback();
+                    }
+                }
+                "selected" => {
+                    if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
+                        node.set_selected(true);
+                    } else {
+                        fallback();
+                    }
+                }
+                _ => fallback(),
             }
         }
     }
@@ -445,7 +467,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
             SyntheticEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent(event))))
         }
         "compositionend" | "compositionstart" | "compositionupdate" => {
-            let evt: web_sys::CompositionEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::CompositionEvent = event.dyn_into().unwrap();
             SyntheticEvent::CompositionEvent(CompositionEvent(Rc::new(WebsysCompositionEvent(evt))))
         }
         "keydown" | "keypress" | "keyup" => {
@@ -461,57 +483,57 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
             SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
         "input" | "invalid" | "reset" | "submit" => {
-            let evt: web_sys::InputEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::Event = event.dyn_into().unwrap();
             SyntheticEvent::FormEvent(FormEvent(Rc::new(WebsysFormEvent(evt))))
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            let evt: web_sys::MouseEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::MouseEvent = event.dyn_into().unwrap();
             SyntheticEvent::MouseEvent(MouseEvent(Rc::new(WebsysMouseEvent(evt))))
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            let evt: web_sys::PointerEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::PointerEvent = event.dyn_into().unwrap();
             SyntheticEvent::PointerEvent(PointerEvent(Rc::new(WebsysPointerEvent(evt))))
         }
         "select" => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::SelectionEvent(SelectionEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
-            let evt: web_sys::TouchEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::TouchEvent = event.dyn_into().unwrap();
             SyntheticEvent::TouchEvent(TouchEvent(Rc::new(WebsysTouchEvent(evt))))
         }
         "scroll" => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
         "wheel" => {
-            let evt: web_sys::WheelEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::WheelEvent = event.dyn_into().unwrap();
             SyntheticEvent::WheelEvent(WheelEvent(Rc::new(WebsysWheelEvent(evt))))
         }
         "animationstart" | "animationend" | "animationiteration" => {
-            let evt: web_sys::AnimationEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::AnimationEvent = event.dyn_into().unwrap();
             SyntheticEvent::AnimationEvent(AnimationEvent(Rc::new(WebsysAnimationEvent(evt))))
         }
         "transitionend" => {
-            let evt: web_sys::TransitionEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::TransitionEvent = event.dyn_into().unwrap();
             SyntheticEvent::TransitionEvent(TransitionEvent(Rc::new(WebsysTransitionEvent(evt))))
         }
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::MediaEvent(MediaEvent(Rc::new(WebsysMediaEvent(evt))))
         }
         "toggle" => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::ToggleEvent(ToggleEvent(Rc::new(WebsysToggleEvent(evt))))
         }
         _ => {
-            let evt: web_sys::UiEvent = event.clone().dyn_into().unwrap();
+            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
             SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
         }
     }
@@ -520,8 +542,6 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
 /// This function decodes a websys event and produces an EventTrigger
 /// With the websys implementation, we attach a unique key to the nodes
 fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
-    log::debug!("Handling event!");
-
     let target = event
         .target()
         .expect("missing target")
@@ -530,11 +550,13 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     let typ = event.type_();
 
-    // let attrs = target.attributes();
-    // for x in 0..attrs.length() {
-    //     let attr = attrs.item(x).unwrap();
-    //     log::debug!("attrs include: {:#?}", attr);
-    // }
+    log::debug!("Event type is {:?}", typ);
+
+    let attrs = target.attributes();
+    for x in 0..attrs.length() {
+        let attr: Attr = attrs.item(x).unwrap();
+        // log::debug!("attrs include: {:#?}, {:#?}", attr.name(), attr.value());
+    }
 
     use anyhow::Context;
 
@@ -556,21 +578,17 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
         .context("failed to parse real id")?;
 
     // Call the trigger
-    log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
+    // log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
 
     let triggered_scope = gi_id;
     // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
-    log::debug!("Triggered scope is {:#?}", triggered_scope);
+    // log::debug!("Triggered scope is {:#?}", triggered_scope);
     Ok(UserEvent {
         name: event_name_from_typ(&typ),
         event: virtual_event_from_websys_event(event.clone()),
         mounted_dom_id: Some(ElementId(real_id as usize)),
         scope: ScopeId(triggered_scope as usize),
     })
-}
-
-pub fn prepare_websys_dom() -> Element {
-    load_document().get_element_by_id("dioxusroot").unwrap()
 }
 
 pub fn load_document() -> Document {
@@ -582,85 +600,85 @@ pub fn load_document() -> Document {
 
 pub fn event_name_from_typ(typ: &str) -> &'static str {
     match typ {
-        "copy" => "oncopy",
-        "cut" => "oncut",
-        "paste" => "onpaste",
-        "compositionend" => "oncompositionend",
-        "compositionstart" => "oncompositionstart",
-        "compositionupdate" => "oncompositionupdate",
-        "keydown" => "onkeydown",
-        "keypress" => "onkeypress",
-        "keyup" => "onkeyup",
-        "focus" => "onfocus",
-        "blur" => "onblur",
-        "change" => "onchange",
-        "input" => "oninput",
-        "invalid" => "oninvalid",
-        "reset" => "onreset",
-        "submit" => "onsubmit",
-        "click" => "onclick",
-        "contextmenu" => "oncontextmenu",
-        "doubleclick" => "ondoubleclick",
-        "drag" => "ondrag",
-        "dragend" => "ondragend",
-        "dragenter" => "ondragenter",
-        "dragexit" => "ondragexit",
-        "dragleave" => "ondragleave",
-        "dragover" => "ondragover",
-        "dragstart" => "ondragstart",
-        "drop" => "ondrop",
-        "mousedown" => "onmousedown",
-        "mouseenter" => "onmouseenter",
-        "mouseleave" => "onmouseleave",
-        "mousemove" => "onmousemove",
-        "mouseout" => "onmouseout",
-        "mouseover" => "onmouseover",
-        "mouseup" => "onmouseup",
-        "pointerdown" => "onpointerdown",
-        "pointermove" => "onpointermove",
-        "pointerup" => "onpointerup",
-        "pointercancel" => "onpointercancel",
-        "gotpointercapture" => "ongotpointercapture",
-        "lostpointercapture" => "onlostpointercapture",
-        "pointerenter" => "onpointerenter",
-        "pointerleave" => "onpointerleave",
-        "pointerover" => "onpointerover",
-        "pointerout" => "onpointerout",
-        "select" => "onselect",
-        "touchcancel" => "ontouchcancel",
-        "touchend" => "ontouchend",
-        "touchmove" => "ontouchmove",
-        "touchstart" => "ontouchstart",
-        "scroll" => "onscroll",
-        "wheel" => "onwheel",
-        "animationstart" => "onanimationstart",
-        "animationend" => "onanimationend",
-        "animationiteration" => "onanimationiteration",
-        "transitionend" => "ontransitionend",
-        "abort" => "onabort",
-        "canplay" => "oncanplay",
-        "canplaythrough" => "oncanplaythrough",
-        "durationchange" => "ondurationchange",
-        "emptied" => "onemptied",
-        "encrypted" => "onencrypted",
-        "ended" => "onended",
-        "error" => "onerror",
-        "loadeddata" => "onloadeddata",
-        "loadedmetadata" => "onloadedmetadata",
-        "loadstart" => "onloadstart",
-        "pause" => "onpause",
-        "play" => "onplay",
-        "playing" => "onplaying",
-        "progress" => "onprogress",
-        "ratechange" => "onratechange",
-        "seeked" => "onseeked",
-        "seeking" => "onseeking",
-        "stalled" => "onstalled",
-        "suspend" => "onsuspend",
-        "timeupdate" => "ontimeupdate",
-        "volumechange" => "onvolumechange",
-        "waiting" => "onwaiting",
-        "toggle" => "ontoggle",
+        "copy" => "copy",
+        "cut" => "cut",
+        "paste" => "paste",
+        "compositionend" => "compositionend",
+        "compositionstart" => "compositionstart",
+        "compositionupdate" => "compositionupdate",
+        "keydown" => "keydown",
+        "keypress" => "keypress",
+        "keyup" => "keyup",
+        "focus" => "focus",
+        "blur" => "blur",
+        "change" => "change",
+        "input" => "input",
+        "invalid" => "invalid",
+        "reset" => "reset",
+        "submit" => "submit",
+        "click" => "click",
+        "contextmenu" => "contextmenu",
+        "doubleclick" => "doubleclick",
+        "drag" => "drag",
+        "dragend" => "dragend",
+        "dragenter" => "dragenter",
+        "dragexit" => "dragexit",
+        "dragleave" => "dragleave",
+        "dragover" => "dragover",
+        "dragstart" => "dragstart",
+        "drop" => "drop",
+        "mousedown" => "mousedown",
+        "mouseenter" => "mouseenter",
+        "mouseleave" => "mouseleave",
+        "mousemove" => "mousemove",
+        "mouseout" => "mouseout",
+        "mouseover" => "mouseover",
+        "mouseup" => "mouseup",
+        "pointerdown" => "pointerdown",
+        "pointermove" => "pointermove",
+        "pointerup" => "pointerup",
+        "pointercancel" => "pointercancel",
+        "gotpointercapture" => "gotpointercapture",
+        "lostpointercapture" => "lostpointercapture",
+        "pointerenter" => "pointerenter",
+        "pointerleave" => "pointerleave",
+        "pointerover" => "pointerover",
+        "pointerout" => "pointerout",
+        "select" => "select",
+        "touchcancel" => "touchcancel",
+        "touchend" => "touchend",
+        "touchmove" => "touchmove",
+        "touchstart" => "touchstart",
+        "scroll" => "scroll",
+        "wheel" => "wheel",
+        "animationstart" => "animationstart",
+        "animationend" => "animationend",
+        "animationiteration" => "animationiteration",
+        "transitionend" => "transitionend",
+        "abort" => "abort",
+        "canplay" => "canplay",
+        "canplaythrough" => "canplaythrough",
+        "durationchange" => "durationchange",
+        "emptied" => "emptied",
+        "encrypted" => "encrypted",
+        "ended" => "ended",
+        "error" => "error",
+        "loadeddata" => "loadeddata",
+        "loadedmetadata" => "loadedmetadata",
+        "loadstart" => "loadstart",
+        "pause" => "pause",
+        "play" => "play",
+        "playing" => "playing",
+        "progress" => "progress",
+        "ratechange" => "ratechange",
+        "seeked" => "seeked",
+        "seeking" => "seeking",
+        "stalled" => "stalled",
+        "suspend" => "suspend",
+        "timeupdate" => "timeupdate",
+        "volumechange" => "volumechange",
+        "waiting" => "waiting",
+        "toggle" => "toggle",
         _ => {
             panic!("unsupported event type")
         }

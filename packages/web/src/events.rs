@@ -241,7 +241,7 @@ impl SelectionEventInner for WebsysGenericUiEvent {}
 pub struct WebsysFocusEvent(pub web_sys::FocusEvent);
 impl FocusEventInner for WebsysFocusEvent {}
 
-pub struct WebsysFormEvent(pub web_sys::InputEvent);
+pub struct WebsysFormEvent(pub web_sys::Event);
 impl FormEventInner for WebsysFormEvent {
     // technically a controlled component, so we need to manually grab out the target data
     fn value(&self) -> String {
@@ -253,6 +253,12 @@ impl FormEventInner for WebsysFormEvent {
                     this
                         .dyn_ref()
                         .map(|input: &web_sys::HtmlTextAreaElement| input.value())
+                })
+                // select elements are NOT input events - because - why woudn't they be??
+                .or_else(|| {
+                    this
+                        .dyn_ref()
+                        .map(|input: &web_sys::HtmlSelectElement| input.value())
                 })
                 .or_else(|| {
                     this

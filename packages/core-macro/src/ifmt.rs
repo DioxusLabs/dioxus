@@ -237,8 +237,8 @@ where
                 // # Safety
                 //
                 //   - This is the canonical example of using `ManuallyDrop`.
-                let value = ManuallyDrop::into_inner(ptr::read(&mut self.0));
-                let drop = ManuallyDrop::into_inner(ptr::read(&mut self.1));
+                let value = ManuallyDrop::into_inner(ptr::read(&self.0));
+                let drop = ManuallyDrop::into_inner(ptr::read(&self.1));
                 drop(value);
             }
         }

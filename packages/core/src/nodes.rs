@@ -12,7 +12,6 @@ use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
-    rc::Rc,
 };
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -26,6 +25,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
+    /// ```
     /// let node = cx.render(rsx!{ "hello" }).unwrap();
     ///
     /// if let VNode::Text(vtext) = node {
@@ -188,11 +188,28 @@ pub struct VElement<'a> {
 
     pub dom_id: Cell<Option<ElementId>>,
 
+    pub parent_id: Cell<Option<ElementId>>,
+
     pub listeners: &'a [Listener<'a>],
 
     pub attributes: &'a [Attribute<'a>],
 
     pub children: &'a [VNode<'a>],
+}
+
+impl Debug for VElement<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VElement")
+            .field("tag_name", &self.tag_name)
+            .field("namespace", &self.namespace)
+            .field("key", &self.key)
+            .field("dom_id", &self.dom_id)
+            .field("parent_id", &self.parent_id)
+            .field("listeners", &self.listeners.len())
+            .field("attributes", &self.attributes)
+            .field("children", &self.children)
+            .finish()
+    }
 }
 
 /// A trait for any generic Dioxus Element.
@@ -244,13 +261,16 @@ pub struct Attribute<'a> {
 /// An event listener.
 /// IE onclick, onkeydown, etc
 pub struct Listener<'bump> {
+    /// The ID of the node that this listener is mounted to
+    /// Used to generate the event listener's ID on the DOM
     pub mounted_node: Cell<Option<ElementId>>,
 
     /// The type of event to listen for.
     ///
-    /// IE "onclick" - whatever the renderer needs to attach the listener by name.
+    /// IE "click" - whatever the renderer needs to attach the listener by name.
     pub event: &'static str,
 
+    /// The actual callback that the user specified
     pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(SyntheticEvent) + 'bump>>>,
 }
 
@@ -266,7 +286,7 @@ pub struct VComponent<'src> {
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
 
-    pub(crate) caller: Rc<dyn Fn(&Scope) -> DomTree>,
+    pub(crate) caller: &'src dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
 
     pub(crate) children: &'src [VNode<'src>],
 
@@ -283,8 +303,7 @@ pub struct VComponent<'src> {
 pub struct VSuspended<'a> {
     pub task_id: u64,
     pub dom_id: Cell<Option<ElementId>>,
-    pub(crate) callback:
-        RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> DomTree<'a>>>>,
+    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> DomTree<'a>>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -303,7 +322,7 @@ impl<'a> NodeFactory<'a> {
 
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        &self.bump
+        self.bump
     }
 
     pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> DomTree<'a>
@@ -413,6 +432,7 @@ impl<'a> NodeFactory<'a> {
             attributes,
             children,
             dom_id: empty_cell(),
+            parent_id: empty_cell(),
         }))
     }
 
@@ -461,12 +481,12 @@ impl<'a> NodeFactory<'a> {
                     // - This comparator is only called on a corresponding set of bumpframes
                     let props_memoized = unsafe {
                         let real_other: &P = &*(other.raw_props as *const _ as *const P);
-                        props.memoize(&real_other)
+                        props.memoize(real_other)
                     };
 
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
-                    match (props_memoized, children.len() == 0) {
+                    match (props_memoized, children.is_empty()) {
                         (true, true) => true,
                         _ => false,
                     }
@@ -488,6 +508,8 @@ impl<'a> NodeFactory<'a> {
                         std::mem::drop(b);
 
                         has_dropped = true;
+                    } else {
+                        panic!("Drop props called twice - this is an internal failure of Dioxus");
                     }
                 }
             });
@@ -497,15 +519,20 @@ impl<'a> NodeFactory<'a> {
             RefCell::new(Some(drop_props))
         };
 
-        let is_static = children.len() == 0 && P::IS_STATIC && key.is_none();
+        let is_static = children.is_empty() && P::IS_STATIC && key.is_none();
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller = NodeFactory::create_component_caller(component, raw_props);
+        let caller: &'a mut dyn for<'b> Fn(&'b Scope) -> DomTree<'b> =
+            bump.alloc(move |scope: &Scope| -> DomTree {
+                let props: &'_ P = unsafe { &*(raw_props as *const P) };
+                let res = component(Context { scope }, props);
+                unsafe { std::mem::transmute(res) }
+            });
 
-        let can_memoize = children.len() == 0 && P::IS_STATIC;
+        let can_memoize = children.is_empty() && P::IS_STATIC;
 
-        VNode::Component(bump.alloc_with(|| VComponent {
+        VNode::Component(bump.alloc(VComponent {
             user_fc,
             comparator,
             raw_props,
@@ -517,24 +544,6 @@ impl<'a> NodeFactory<'a> {
             drop_props,
             associated_scope: Cell::new(None),
         }))
-    }
-
-    pub(crate) fn create_component_caller<'g, P: 'g>(
-        component: FC<P>,
-        raw_props: *const (),
-    ) -> Rc<dyn for<'r> Fn(&'r Scope) -> DomTree<'r>> {
-        type Captured<'a> = Rc<dyn for<'r> Fn(&'r Scope) -> DomTree<'r> + 'a>;
-        let caller: Captured = Rc::new(move |scp: &Scope| -> DomTree {
-            // cast back into the right lifetime
-            let safe_props: &'_ P = unsafe { &*(raw_props as *const P) };
-            let cx: Context<P> = Context {
-                props: safe_props,
-                scope: scp,
-            };
-            let res = component(cx);
-            unsafe { std::mem::transmute(res) }
-        });
-        unsafe { std::mem::transmute::<_, Captured<'static>>(caller) }
     }
 
     pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a>) -> VNode<'a> {
@@ -602,7 +611,7 @@ where
             nodes.push(node.into_vnode(cx));
         }
 
-        if nodes.len() == 0 {
+        if nodes.is_empty() {
             nodes.push(VNode::Anchor(VAnchor {
                 dom_id: empty_cell(),
             }));
@@ -722,14 +731,14 @@ where
 
 // Conveniently, we also support "null" (nothing) passed in
 impl IntoVNode<'_> for () {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.fragment_from_iter(None as Option<VNode>)
     }
 }
 
 // Conveniently, we also support "None"
 impl IntoVNode<'_> for Option<()> {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.fragment_from_iter(None as Option<VNode>)
     }
 }
@@ -744,12 +753,12 @@ impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
 }
 
 impl IntoVNode<'_> for &'static str {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.static_text(self)
     }
 }
 impl IntoVNode<'_> for Arguments<'_> {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.text(self)
     }
 }
@@ -763,13 +772,12 @@ impl Debug for NodeFactory<'_> {
 impl Debug for VNode<'_> {
     fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match &self {
-            VNode::Element(el) => {
-                //
-                s.debug_struct("VElement")
-                    .field("name", &el.tag_name)
-                    .field("key", &el.key)
-                    .finish()
-            }
+            VNode::Element(el) => s
+                .debug_struct("VElement")
+                .field("name", &el.tag_name)
+                .field("key", &el.key)
+                .finish(),
+
             VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
             VNode::Anchor(_) => write!(s, "VAnchor"),
 

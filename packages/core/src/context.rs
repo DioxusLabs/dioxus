@@ -27,31 +27,27 @@ use std::{any::TypeId, ops::Deref, rc::Rc};
 ///     }
 /// }
 /// ```
-pub struct Context<'src, T> {
-    pub props: &'src T,
+pub struct Context<'src> {
     pub scope: &'src Scope,
 }
 
-impl<'src, T> Copy for Context<'src, T> {}
-impl<'src, T> Clone for Context<'src, T> {
+impl<'src> Copy for Context<'src> {}
+impl<'src> Clone for Context<'src> {
     fn clone(&self) -> Self {
-        Self {
-            props: self.props,
-            scope: self.scope,
-        }
+        Self { scope: self.scope }
     }
 }
 
 // We currently deref to props, but it might make more sense to deref to Scope?
 // This allows for code that takes cx.xyz instead of cx.props.xyz
-impl<'a, T> Deref for Context<'a, T> {
-    type Target = &'a T;
+impl<'a> Deref for Context<'a> {
+    type Target = &'a Scope;
     fn deref(&self) -> &Self::Target {
-        &self.props
+        &self.scope
     }
 }
 
-impl<'src, P> Context<'src, P> {
+impl<'src> Context<'src> {
     /// Access the children elements passed into the component
     ///
     /// This enables patterns where a component is passed children from its parent.
@@ -69,7 +65,7 @@ impl<'src, P> Context<'src, P> {
     /// ## Example
     ///
     /// ```rust
-    /// const App: FC<()> = |cx| {
+    /// const App: FC<()> = |cx, props|{
     ///     cx.render(rsx!{
     ///         CustomCard {
     ///             h1 {}
@@ -78,7 +74,7 @@ impl<'src, P> Context<'src, P> {
     ///     })
     /// }
     ///
-    /// const CustomCard: FC<()> = |cx| {
+    /// const CustomCard: FC<()> = |cx, props|{
     ///     cx.render(rsx!{
     ///         div {
     ///             h1 {"Title card"}
@@ -98,13 +94,24 @@ impl<'src, P> Context<'src, P> {
     /// Create a subscription that schedules a future render for the reference component
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
-    ///
     pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
         self.scope.memoized_updater.clone()
     }
 
-    pub fn prepare_update(&self) -> Rc<dyn Fn(ScopeId)> {
+    /// Schedule an update for any component given its ScopeId.
+    ///
+    /// A component's ScopeId can be obtained from `use_hook` or the [`Context::scope_id`] method.
+    ///
+    /// This method should be used when you want to schedule an update for a component
+    pub fn schedule_update_any(&self) -> Rc<dyn Fn(ScopeId)> {
         self.scope.shared.schedule_any_immediate.clone()
+    }
+
+    /// Get the [`ScopeId`] of a mounted component.
+    ///
+    /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
+    pub fn scope_id(&self) -> ScopeId {
+        self.scope.our_arena_idx
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -151,22 +158,81 @@ impl<'src, P> Context<'src, P> {
         (self.scope.shared.submit_task)(task)
     }
 
-    /// Add a state globally accessible to child components via tree walking
-    pub fn add_shared_state<T: 'static>(self, val: T) {
-        self.scope
-            .shared_contexts
-            .borrow_mut()
-            .insert(TypeId::of::<T>(), Rc::new(val))
-            .map(|_| {
-                log::warn!("A shared state was replaced with itself. This is does not result in a panic, but is probably not what you are trying to do");
-            });
+    /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
+    ///
+    /// This is a hook, so it should not be called conditionally!
+    ///
+    /// The init method is ran *only* on first use, otherwise it is ignored. However, it uses hooks (ie `use`)
+    /// so don't put it in a conditional.
+    ///
+    /// When the component is dropped, so is the context. Be aware of this behavior when consuming
+    /// the context via Rc/Weak.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// struct SharedState(&'static str);
+    ///
+    /// static App: FC<()> = |cx, props|{
+    ///     cx.use_provide_state(|| SharedState("world"));
+    ///     rsx!(cx, Child {})
+    /// }
+    ///
+    /// static Child: FC<()> = |cx, props|{
+    ///     let state = cx.use_consume_state::<SharedState>();
+    ///     rsx!(cx, div { "hello {state.0}" })
+    /// }
+    /// ```
+    pub fn use_provide_state<T, F>(self, init: F) -> &'src Rc<T>
+    where
+        T: 'static,
+        F: FnOnce() -> T,
+    {
+        let is_initialized = self.use_hook(
+            |_| false,
+            |s| {
+                let i = *s;
+                *s = true;
+                i
+            },
+            |_| {},
+        );
+
+        if !is_initialized {
+            let existing = self
+                .scope
+                .shared_contexts
+                .borrow_mut()
+                .insert(TypeId::of::<T>(), Rc::new(init()));
+
+            if existing.is_some() {
+                log::warn!(
+                    "A shared state was replaced with itself. \
+                    This is does not result in a panic, but is probably not what you are trying to do"
+                );
+            }
+        }
+
+        self.use_consume_state().unwrap()
     }
 
-    pub fn consume_shared_state<T: 'static>(self) -> Option<Rc<T>> {
-        let getter = &self.scope.shared.get_shared_context;
-        let ty = TypeId::of::<T>();
-        let idx = self.scope.our_arena_idx;
-        getter(idx, ty).map(|f| f.downcast().expect("TypeID already validated"))
+    /// Uses a context, storing the cached value around
+    ///
+    /// If a context is not found on the first search, then this call will be  "dud", always returning "None" even if a
+    /// context was added later. This allows using another hook as a fallback
+    ///
+    pub fn use_consume_state<T: 'static>(self) -> Option<&'src Rc<T>> {
+        struct UseContextHook<C>(Option<Rc<C>>);
+        self.use_hook(
+            move |_| {
+                let getter = &self.scope.shared.get_shared_context;
+                let ty = TypeId::of::<T>();
+                let idx = self.scope.our_arena_idx;
+                UseContextHook(getter(idx, ty).map(|f| f.downcast().unwrap()))
+            },
+            move |hook| hook.0.as_ref(),
+            |_| {},
+        )
     }
 
     /// Store a value between renders
@@ -177,12 +243,15 @@ impl<'src, P> Context<'src, P> {
     /// - Runner: closure used to output a value every time the hook is used
     /// - Cleanup: closure used to teardown the hook once the dom is cleaned up
     ///
+    ///
+    /// # Example
+    ///
     /// ```ignore
     /// // use_ref is the simplest way of storing a value between renders
-    /// pub fn use_ref<T: 'static>(initial_value: impl FnOnce() -> T + 'static) -> Rc<RefCell<T>> {
+    /// fn use_ref<T: 'static>(initial_value: impl FnOnce() -> T) -> &RefCell<T> {
     ///     use_hook(
     ///         || Rc::new(RefCell::new(initial_value())),
-    ///         |state| state.clone(),
+    ///         |state| state,
     ///         |_| {},
     ///     )
     /// }
@@ -191,29 +260,31 @@ impl<'src, P> Context<'src, P> {
         self,
         initializer: Init,
         runner: Run,
-        _cleanup: Cleanup,
+        cleanup: Cleanup,
     ) -> Output
     where
         State: 'static,
         Output: 'src,
         Init: FnOnce(usize) -> State,
         Run: FnOnce(&'src mut State) -> Output,
-        Cleanup: FnOnce(State),
+        Cleanup: FnOnce(&mut State) + 'static,
     {
         // If the idx is the same as the hook length, then we need to add the current hook
         if self.scope.hooks.at_end() {
-            let new_state = initializer(self.scope.hooks.len());
-            self.scope.hooks.push(new_state);
+            self.scope.hooks.push_hook(
+                initializer(self.scope.hooks.len()),
+                Box::new(|raw| cleanup(raw.downcast_mut::<State>().unwrap())),
+            );
         }
 
-        const ERR_MSG: &str = r###"
+        runner(self.scope.hooks.next::<State>().expect(HOOK_ERR_MSG))
+    }
+}
+
+const HOOK_ERR_MSG: &str = r###"
 Unable to retrive the hook that was initialized in this index.
 Consult the `rules of hooks` to understand how to use hooks properly.
 
 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
 Any function prefixed with "use" should not be called conditionally.
 "###;
-
-        runner(self.scope.hooks.next::<State>().expect(ERR_MSG))
-    }
-}

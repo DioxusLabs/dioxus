@@ -28,15 +28,20 @@ struct DogApi {
 
 const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random/";
 
-static App: FC<()> = |cx| {
+static App: FC<()> = |cx, props|{
     let state = use_state(cx, || 0);
 
     let dog_node = use_suspense(
         cx,
         || surf::get(ENDPOINT).recv_json::<DogApi>(),
         |cx, res| match res {
-            Ok(res) => rsx!(in cx, img { src: "{res.message}" }),
-            Err(_err) => rsx!(in cx, div { "No doggos for you :(" }),
+            Ok(res) => rsx!(
+                cx,
+                img {
+                    src: "{res.message}"
+                }
+            ),
+            Err(_err) => rsx!(cx, div { "No doggos for you :(" }),
         },
     );
 

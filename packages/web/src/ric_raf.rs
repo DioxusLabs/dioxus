@@ -4,11 +4,11 @@ use gloo_timers::future::TimeoutFuture;
 use js_sys::Function;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::{prelude::Closure, JsValue};
-use web_sys::Window;
+use web_sys::{window, Window};
 
 pub struct RafLoop {
     window: Window,
-    ric_receiver: async_channel::Receiver<()>,
+    ric_receiver: async_channel::Receiver<u32>,
     raf_receiver: async_channel::Receiver<()>,
     ric_closure: Closure<dyn Fn(JsValue)>,
     raf_closure: Closure<dyn Fn(JsValue)>,
@@ -24,8 +24,22 @@ impl RafLoop {
 
         let (ric_sender, ric_receiver) = async_channel::unbounded();
 
-        let ric_closure: Closure<dyn Fn(JsValue)> = Closure::wrap(Box::new(move |_v: JsValue| {
-            ric_sender.try_send(()).unwrap()
+        let has_idle_callback = {
+            let bo = window().unwrap().dyn_into::<js_sys::Object>().unwrap();
+            bo.has_own_property(&JsValue::from_str("requestIdleCallback"))
+        };
+        let ric_closure: Closure<dyn Fn(JsValue)> = Closure::wrap(Box::new(move |v: JsValue| {
+            let time_remaining = if has_idle_callback {
+                if let Ok(deadline) = v.dyn_into::<web_sys::IdleDeadline>() {
+                    deadline.time_remaining() as u32
+                } else {
+                    10
+                }
+            } else {
+                10
+            };
+
+            ric_sender.try_send(time_remaining).unwrap()
         }));
 
         // execute the polyfill for safari
@@ -33,8 +47,10 @@ impl RafLoop {
             .call0(&JsValue::NULL)
             .unwrap();
 
+        let window = web_sys::window().unwrap();
+
         Self {
-            window: web_sys::window().unwrap(),
+            window,
             raf_receiver,
             raf_closure,
             ric_receiver,
@@ -44,8 +60,8 @@ impl RafLoop {
     /// waits for some idle time and returns a timeout future that expires after the idle time has passed
     pub async fn wait_for_idle_time(&self) -> TimeoutFuture {
         let ric_fn = self.ric_closure.as_ref().dyn_ref::<Function>().unwrap();
-        let deadline: u32 = self.window.request_idle_callback(ric_fn).unwrap();
-        self.ric_receiver.recv().await.unwrap();
+        let _cb_id: u32 = self.window.request_idle_callback(ric_fn).unwrap();
+        let deadline = self.ric_receiver.recv().await.unwrap();
         let deadline = TimeoutFuture::new(deadline);
         deadline
     }

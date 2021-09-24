@@ -39,8 +39,7 @@ impl Parse for RsxBody<AS_HTML> {
 }
 
 fn try_parse_custom_context(input: ParseStream) -> Result<Option<Ident>> {
-    let res = if input.peek(Token![in]) && input.peek2(Ident) && input.peek3(Token![,]) {
-        let _ = input.parse::<Token![in]>()?;
+    let res = if input.peek(Ident) && input.peek2(Token![,]) {
         let name = input.parse::<Ident>()?;
         input.parse::<Token![,]>()?;
         Some(name)

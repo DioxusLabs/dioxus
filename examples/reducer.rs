@@ -11,23 +11,21 @@ fn main() {
     dioxus::desktop::launch(App, |c| c);
 }
 
-pub static App: FC<()> = |cx| {
+pub static App: FC<()> = |cx, _| {
     let state = use_state(cx, PlayerState::new);
 
     let is_playing = state.is_playing();
 
-    cx.render(rsx! {
-        div {
-            h1 {"Select an option"}
-            h3 {"The radio is... {is_playing}!"}
-            button {
-                "Pause"
-                onclick: move |_| state.get_mut().reduce(PlayerAction::Pause)
-            }
-            button {
-                "Play"
-                onclick: move |_| state.get_mut().reduce(PlayerAction::Play)
-            }
+    rsx!(cx, div {
+        h1 {"Select an option"}
+        h3 {"The radio is... {is_playing}!"}
+        button {
+            "Pause"
+            onclick: move |_| state.modify().reduce(PlayerAction::Pause)
+        }
+        button {
+            "Play"
+            onclick: move |_| state.modify().reduce(PlayerAction::Play)
         }
     })
 };

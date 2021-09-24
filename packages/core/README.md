@@ -15,7 +15,7 @@ Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus 
 - Preact: approach for normalization and ref
 - Yew: passion and inspiration ❤️
 
-Dioxus-core leverages some really cool techniques and hits a very high level of parity with mature frameworks. Some unique features include:
+Dioxus-core leverages some really cool techniques and hits a very high level of parity with mature frameworks. However, Dioxus also brings some new unique features:
 
 - managed lifetimes for borrowed data
 - suspended nodes (task/fiber endpoints) for asynchronous vnodes
@@ -24,7 +24,7 @@ Dioxus-core leverages some really cool techniques and hits a very high level of 
 - slab allocator for scopes
 - mirrored-slab approach for remote vdoms
 
-There's certainly more to the story, but these optimizations make Dioxus memory use and allocation count extremely minimal. For an average application, it is likely that zero allocations will need to be performed once the app has been mounted. Only when new components are added to the dom will allocations occur - and only en mass. The space of old VNodes is dynamically recycled as new nodes are added. Additionally, Dioxus tracks the average memory footprint of previous components to estimate how much memory allocate for future components.
+There's certainly more to the story, but these optimizations make Dioxus memory use and allocation count extremely minimal. For an average application, it is possible that zero allocations will need to be performed once the app has been mounted. Only when new components are added to the dom will allocations occur - and only en mass. The space of old VNodes is dynamically recycled as new nodes are added. Additionally, Dioxus tracks the average memory footprint of previous components to estimate how much memory allocate for future components.
 
 All in all, Dioxus treats memory as an incredibly valuable resource. Combined with the memory-efficient footprint of WASM compilation, Dioxus apps can scale to thousands of components and still stay snappy and respect your RAM usage.
 

@@ -49,7 +49,7 @@ const NONE_ELEMENT: Option<()> = None;
 use baller::Baller;
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |cx| {
+pub static Example: FC<()> = |cx, props| {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
@@ -106,7 +106,7 @@ pub static Example: FC<()> = |cx| {
             // To fix this, call "render" method or use the "in" syntax to produce VNodes.
             // There's nothing we can do about it, sorry :/ (unless you want *really* unhygenic macros)
             {match true {
-                true => rsx!(in cx, h1 {"Top text"}),
+                true => rsx!(cx, h1 {"Top text"}),
                 false => cx.render(rsx!( h1 {"Bottom text"}))
             }}
 
@@ -117,9 +117,9 @@ pub static Example: FC<()> = |cx| {
 
             // True conditions need to be rendered (same reasons as matching)
             {if true {
-                rsx!(in cx, h1 {"Top text"})
+                rsx!(cx, h1 {"Top text"})
             } else {
-                rsx!(in cx, h1 {"Bottom text"})
+                rsx!(cx, h1 {"Bottom text"})
             }}
 
             // returning "None" is a bit noisy... but rare in practice
@@ -180,10 +180,11 @@ pub static Example: FC<()> = |cx| {
 
 mod baller {
     use super::*;
+    #[derive(PartialEq, Props)]
     pub struct BallerProps {}
 
     /// This component totally balls
-    pub fn Baller(cx: Context<()>) -> DomTree {
+    pub fn Baller<'a>(cx: Context<'a>, props: &BallerProps) -> DomTree<'a> {
         todo!()
     }
 }
@@ -194,7 +195,7 @@ pub struct TallerProps {
 }
 
 /// This component is taller than most :)
-pub fn Taller(cx: Context<TallerProps>) -> DomTree {
+pub fn Taller<'a>(cx: Context<'a>, props: &'a TallerProps) -> DomTree<'a> {
     let b = true;
     todo!()
 }

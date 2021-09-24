@@ -4,7 +4,7 @@
 /*
 Navigating this crate:
 - virtual_dom: the primary entrypoint for the crate
-- scheduler: the core interior logic called by virtual_dom
+- scheduler: the core interior logic called by the [`VirtualDom`]
 - nodes: the definition of VNodes, listeners, etc.
 - diff: the stackmachine-based diffing algorithm
 - hooks: foundational hooks that require crate-private APIs
@@ -24,8 +24,10 @@ pub mod hooklist;
 pub mod hooks;
 pub mod mutations;
 pub mod nodes;
+pub mod resources;
 pub mod scheduler;
 pub mod scope;
+pub mod tasks;
 pub mod test_dom;
 pub mod util;
 pub mod virtual_dom;
@@ -43,22 +45,24 @@ pub(crate) mod innerlude {
     pub use crate::hooks::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
+    pub(crate) use crate::resources::*;
     pub use crate::scheduler::*;
     pub use crate::scope::*;
+    pub use crate::tasks::*;
     pub use crate::test_dom::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
     pub type DomTree<'a> = Option<VNode<'a>>;
-    pub type FC<P> = fn(Context<P>) -> DomTree;
+    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> DomTree<'a>;
 
     pub use dioxus_core_macro::{format_args_f, html, rsx};
 }
 
 pub use crate::innerlude::{
-    format_args_f, html, rsx, Context, DiffInstruction, DioxusElement, DomEdit, DomTree, ElementId,
-    EventPriority, LazyNodes, MountType, Mutations, NodeFactory, Properties, ScopeId,
-    SuspendedContext, SyntheticEvent, TestDom, UserEvent, VNode, VirtualDom, FC,
+    format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority,
+    LazyNodes, MountType, Mutations, NodeFactory, Properties, ScopeId, SuspendedContext,
+    SyntheticEvent, TaskHandle, TestDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {

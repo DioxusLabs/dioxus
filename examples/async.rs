@@ -1,41 +1,43 @@
-//! Example: README.md showcase
-//!
-//! The example from the README.md
+/*
+This example shows how to use async and loops to implement a coroutine in a component. Coroutines can be controlled via
+the `TaskHandle` object.
+*/
 
 use dioxus::prelude::*;
+use gloo_timers::future::TimeoutFuture;
+
 fn main() {
-    dioxus::desktop::launch(App, |c| c).expect("faield to launch");
+    dioxus::desktop::launch(App, |c| c).unwrap();
 }
 
-pub static App: FC<()> = |cx| {
+pub static App: FC<()> = |cx, _| {
     let count = use_state(cx, || 0);
     let mut direction = use_state(cx, || 1);
 
     let (async_count, dir) = (count.for_async(), *direction);
-    let (task, _result) = use_task(cx, move || async move {
+
+    let (task, _) = use_task(cx, move || async move {
         loop {
-            gloo_timers::future::TimeoutFuture::new(250).await;
+            TimeoutFuture::new(250).await;
             *async_count.get_mut() += dir;
         }
     });
 
-    cx.render(rsx! {
-        div {
-            h1 {"count is {count}"}
-            button {
-                "Stop counting"
-                onclick: move |_| task.stop()
-            }
-            button {
-                "Start counting"
-                onclick: move |_| task.resume()
-            }
-            button {
-                "Switch counting direcion"
-                onclick: move |_| {
-                    direction *= -1;
-                    task.restart();
-                }
+    rsx!(cx, div {
+        h1 {"count is {count}"}
+        button {
+            "Stop counting"
+            onclick: move |_| task.stop()
+        }
+        button {
+            "Start counting"
+            onclick: move |_| task.resume()
+        }
+        button {
+            "Switch counting direcion"
+            onclick: move |_| {
+                direction *= -1;
+                task.restart();
             }
         }
     })

@@ -10,7 +10,7 @@ fn main() {}
 //     Remvoe,
 // }
 
-// static Component: FC<()> = |cx| {
+// static Component: FC<()> = |cx, props|{
 //     let (tasks, dispatch) = use_reducer(
 //         cx,
 //         || CompState { tasks: Vec::new() },

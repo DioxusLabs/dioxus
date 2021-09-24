@@ -40,8 +40,8 @@ struct ExampleProps {
     initial_name: String,
 }
 
-static Example: FC<ExampleProps> = |cx| {
-    let dispaly_name = use_state(cx, move || cx.initial_name.clone());
+static Example: FC<ExampleProps> = |cx, props| {
+    let dispaly_name = use_state(cx, move || props.initial_name.clone());
 
     cx.render(rsx! {
         div { class: "py-12 px-4 text-center w-full max-w-2xl mx-auto",
