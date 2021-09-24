@@ -21,6 +21,7 @@ fn main() {
 
 static App: FC<()> = |cx, props| {
     let mut val = use_state(cx, || 0);
+
     cx.render(rsx! {
         div {
             h1 {"hello world. Count: {val}"}

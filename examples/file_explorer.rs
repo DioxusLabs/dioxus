@@ -5,52 +5,50 @@
 //!
 //! This example is interesting because it's mixing filesystem operations and GUI, which is typically hard for UI to do.
 
-use dioxus::desktop::wry::application::dpi::LogicalSize;
 use dioxus::prelude::*;
 
 fn main() {
     env_logger::init();
     dioxus::desktop::launch(App, |c| {
         c.with_window(|w| {
-            w.with_resizable(false)
-                .with_inner_size(LogicalSize::new(800.0, 400.0))
+            w.with_resizable(false).with_inner_size(
+                dioxus::desktop::wry::application::dpi::LogicalSize::new(800.0, 400.0),
+            )
         })
     })
     .unwrap();
 }
 
 static App: FC<()> = |cx, props| {
-    let files = use_state(cx, || Files::new());
+    let file_manager = use_ref(cx, || Files::new());
+    let files = file_manager.read();
 
     let file_list = files.path_names.iter().enumerate().map(|(dir_id, path)| {
         rsx! (
-            li { a {"{path}", onclick: move |_| files.modify().enter_dir(dir_id), href: "#"} }
+            li { a {"{path}", onclick: move |_| file_manager.write().enter_dir(dir_id), href: "#"} }
         )
     });
 
     let err_disp = files.err.as_ref().map(|err| {
-        rsx! {
+        rsx! (
             div {
                 code {"{err}"}
-                button {"x", onclick: move |_| files.modify().clear_err() }
+                button {"x", onclick: move |_| file_manager.write().clear_err() }
             }
-        }
+        )
     });
 
-    let cur = files.current();
-    cx.render(rsx! {
-        div {
-            h1 {"Files: "}
-            h3 {"Cur dir: {cur}"}
-            button { "go up", onclick: move |_| files.modify().go_up() }
-            ol { {file_list} }
-            {err_disp}
-        }
+    let current_dir = files.current();
+
+    rsx!(cx, div {
+        h1 {"Files: "}
+        h3 {"Cur dir: {current_dir}"}
+        button { "go up", onclick: move |_| file_manager.write().go_up() }
+        ol { {file_list} }
+        {err_disp}
     })
 };
 
-// right now, this gets cloned every time. It might be a bit better to use im_rc's collections instead
-#[derive(Clone)]
 struct Files {
     path_stack: Vec<String>,
     path_names: Vec<String>,
