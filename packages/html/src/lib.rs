@@ -778,6 +778,7 @@ builder_constructors! {
         sizes: String, // FIXME
         title: String, // FIXME
         r#type: Mime,
+        integrity: String,
     };
 
     /// Build a
@@ -1712,6 +1713,12 @@ impl select {
 impl option {
     fn selected<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("selected", val, None, true)
+    }
+}
+
+impl textarea {
+    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("value", val, None, true)
     }
 }
 

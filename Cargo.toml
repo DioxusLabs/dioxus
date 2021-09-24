@@ -19,7 +19,7 @@ dioxus-mobile = { path = "./packages/mobile", optional = true }
 
 [features]
 # core
-default = ["core", "ssr"]
+default = ["core", "ssr", "web"]
 core = ["macro", "hooks", "html"]
 macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]

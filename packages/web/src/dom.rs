@@ -10,7 +10,7 @@ use fxhash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{
     window, Attr, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, Node, NodeList, UiEvent,
+    HtmlOptionElement, HtmlTextAreaElement, Node, NodeList, UiEvent,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};
@@ -302,38 +302,52 @@ impl WebsysDom {
 
     fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
         let node = self.stack.top();
-        if let Some(el) = node.dyn_ref::<Element>() {
-            match ns {
-                // inline style support
-                Some("style") => {
-                    let el = el.dyn_ref::<HtmlElement>().unwrap();
-                    let style_dc: CssStyleDeclaration = el.style();
-                    style_dc.set_property(name, value).unwrap();
+        if ns == Some("style") {
+            if let Some(el) = node.dyn_ref::<Element>() {
+                let el = el.dyn_ref::<HtmlElement>().unwrap();
+                let style_dc: CssStyleDeclaration = el.style();
+                style_dc.set_property(name, value).unwrap();
+            }
+        } else {
+            let fallback = || {
+                let el = node.dyn_ref::<Element>().unwrap();
+                el.set_attribute(name, value).unwrap()
+            };
+            match name {
+                "value" => {
+                    if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
+                        /*
+                        if the attribute being set is the same as the value of the input, then don't bother setting it.
+                        This is used in controlled components to keep the cursor in the right spot.
+
+                        this logic should be moved into the virtualdom since we have the notion of "volatile"
+                        */
+                        if input.value() != value {
+                            input.set_value(value);
+                        }
+                    } else if let Some(node) = node.dyn_ref::<HtmlTextAreaElement>() {
+                        if name == "value" {
+                            node.set_value(value);
+                        }
+                    } else {
+                        fallback();
+                    }
                 }
-                _ => el.set_attribute(name, value).unwrap(),
-            }
-        }
-
-        if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
-            if name == "value" {
-                /*
-                if the attribute being set is the same as the value of the input, then don't bother setting it.
-                This is used in controlled components to keep the cursor in the right spot.
-
-                this logic should be moved into the virtualdom since we have the notion of "volatile"
-                */
-                if input.value() != value {
-                    input.set_value(value);
+                "checked" => {
+                    if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
+                        input.set_checked(true);
+                    } else {
+                        fallback();
+                    }
                 }
-            }
-            if name == "checked" {
-                input.set_checked(true);
-            }
-        }
-
-        if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
-            if name == "selected" {
-                node.set_selected(true);
+                "selected" => {
+                    if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
+                        node.set_selected(true);
+                    } else {
+                        fallback();
+                    }
+                }
+                _ => fallback(),
             }
         }
     }
