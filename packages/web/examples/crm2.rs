@@ -12,21 +12,7 @@ fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
-    // Run the app
-    static WrappedApp: FC<()> = |cx, _| {
-        rsx!(cx, body {
-            link {
-                rel: "stylesheet"
-                href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css"
-                integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5"
-                crossorigin: "anonymous"
-            }
-            margin_left: "35%"
-            h1 {"Dioxus CRM Example"}
-            App {}
-        })
-    };
-    dioxus_web::launch(WrappedApp, |c| c)
+    dioxus_web::launch(App, |c| c)
 }
 
 enum Scene {
@@ -50,7 +36,7 @@ static App: FC<()> = |cx, _| {
     let lastname = use_state(cx, || String::new());
     let description = use_state(cx, || String::new());
 
-    match *scene {
+    let scene = match *scene {
         Scene::ClientsList => {
             rsx!(cx, div { class: "crm"
                 h2 { "List of clients" margin_bottom: "10px" }
@@ -111,5 +97,17 @@ static App: FC<()> = |cx, _| {
                 }
             })
         }
-    }
+    };
+
+    rsx!(cx, body {
+        link {
+            rel: "stylesheet"
+            href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css"
+            integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5"
+            crossorigin: "anonymous"
+        }
+        margin_left: "35%"
+        h1 {"Dioxus CRM Example"}
+        {scene}
+    })
 };
