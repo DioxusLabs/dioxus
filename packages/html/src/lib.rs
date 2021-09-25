@@ -11,10 +11,6 @@
 //! All elements are used as zero-sized unit structs with trait impls.
 //!
 //! Currently, we don't validate for structures, but do validate attributes.
-//!
-//!
-//!
-//!
 
 use std::fmt::Arguments;
 
