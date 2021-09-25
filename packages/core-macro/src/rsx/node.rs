@@ -10,7 +10,7 @@ use syn::{
 // ==============================================
 // Parse any div {} as a VElement
 // ==============================================
-pub enum BodyNode<const AS: HTML_OR_RSX> {
+pub enum BodyNode<const AS: HtmlOrRsx> {
     Element(AmbiguousElement<AS>),
     Text(TextNode),
     RawExpr(Expr),
@@ -57,7 +57,7 @@ impl Parse for BodyNode<AS_HTML> {
     }
 }
 
-impl<const AS: HTML_OR_RSX> ToTokens for BodyNode<AS> {
+impl<const AS: HtmlOrRsx> ToTokens for BodyNode<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self {
             BodyNode::Element(el) => el.to_tokens(tokens),

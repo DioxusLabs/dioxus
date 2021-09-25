@@ -14,13 +14,12 @@
 //!
 
 use {
-    proc_macro::TokenStream,
-    proc_macro2::{Span, TokenStream as TokenStream2},
+    proc_macro2::TokenStream as TokenStream2,
     quote::{quote, ToTokens, TokenStreamExt},
     syn::{
         ext::IdentExt,
         parse::{Parse, ParseStream},
-        token, Error, Expr, ExprClosure, Ident, LitBool, LitStr, Path, Result, Token,
+        token, Error, Expr, ExprClosure, Ident, LitStr, Result, Token,
     },
 };
 
@@ -121,7 +120,7 @@ impl ToTokens for ToToksCtx<&Node> {
 }
 
 impl Node {
-    fn peek(s: ParseStream) -> bool {
+    fn _peek(s: ParseStream) -> bool {
         (s.peek(Token![<]) && !s.peek2(Token![/])) || s.peek(token::Brace) || s.peek(LitStr)
     }
 }

@@ -11,13 +11,13 @@ use syn::{
 // =======================================
 // Parse the VNode::Element type
 // =======================================
-pub struct Element<const AS: HTML_OR_RSX> {
+pub struct Element<const AS: HtmlOrRsx> {
     name: Ident,
     key: Option<LitStr>,
     attributes: Vec<ElementAttr<AS>>,
     listeners: Vec<ElementAttr<AS>>,
     children: Vec<BodyNode<AS>>,
-    is_static: bool,
+    _is_static: bool,
 }
 
 impl Parse for Element<AS_RSX> {
@@ -66,31 +66,21 @@ impl Parse for Element<AS_RSX> {
             attributes,
             children,
             listeners,
-            is_static: false,
+            _is_static: false,
         })
     }
 }
 
 impl Parse for Element<AS_HTML> {
     fn parse(stream: ParseStream) -> Result<Self> {
-        let l_tok = stream.parse::<Token![<]>()?;
+        let _l_tok = stream.parse::<Token![<]>()?;
         let el_name = Ident::parse(stream)?;
-
-        // parse the guts
-        // let content: ParseBuffer;
-        // syn::braced!(content in stream);
 
         let mut attributes: Vec<ElementAttr<AS_HTML>> = vec![];
         let mut listeners: Vec<ElementAttr<AS_HTML>> = vec![];
-        let mut children: Vec<BodyNode<AS_HTML>> = vec![];
-        let mut key = None;
+        let children: Vec<BodyNode<AS_HTML>> = vec![];
+        let key = None;
 
-        // loop {
-        //     if stream.peek(Token![>]) {
-        //         break;
-        //     } else {
-        //     }
-        // }
         while !stream.peek(Token![>]) {
             // self-closing
             if stream.peek(Token![/]) {
@@ -101,7 +91,7 @@ impl Parse for Element<AS_HTML> {
                     name: el_name,
                     key: None,
                     attributes,
-                    is_static: false,
+                    _is_static: false,
                     listeners,
                     children,
                 });
@@ -186,12 +176,12 @@ impl Parse for Element<AS_HTML> {
             attributes,
             children,
             listeners,
-            is_static: false,
+            _is_static: false,
         })
     }
 }
 
-impl<const AS: HTML_OR_RSX> ToTokens for Element<AS> {
+impl<const AS: HtmlOrRsx> ToTokens for Element<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
         let attr = &self.attributes;
@@ -217,7 +207,7 @@ impl<const AS: HTML_OR_RSX> ToTokens for Element<AS> {
 /// =======================================
 /// Parse a VElement's Attributes
 /// =======================================
-struct ElementAttr<const AS: HTML_OR_RSX> {
+struct ElementAttr<const AS: HtmlOrRsx> {
     element_name: Ident,
     name: Ident,
     value: AttrType,
@@ -346,13 +336,14 @@ fn parse_rsx_element_field(
     Ok(())
 }
 
-impl<const AS: HTML_OR_RSX> ToTokens for ElementAttr<AS> {
+impl<const AS: HtmlOrRsx> ToTokens for ElementAttr<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let el_name = &self.element_name;
-        let name_str = self.name.to_string();
         let nameident = &self.name;
 
-        let namespace = match &self.namespace {
+        // TODO: wire up namespace
+        let _name_str = self.name.to_string();
+        let _namespace = match &self.namespace {
             Some(t) => quote! { Some(#t) },
             None => quote! { None },
         };
@@ -376,15 +367,3 @@ impl<const AS: HTML_OR_RSX> ToTokens for ElementAttr<AS> {
         }
     }
 }
-
-// __cx.attr(#name, format_args_f!(#value), #namespace, false)
-//
-// AttrType::BumpText(value) => tokens.append_all(quote! {
-//     __cx.attr(#name, format_args_f!(#value), #namespace, false)
-// }),
-// __cx.attr(#name_str, #exp, #namespace, false)
-
-// AttrType::FieldTokens(exp) => tokens.append_all(quote! {
-//     dioxus_elements::#el_name.#nameident(__cx, format_args_f!(#value))
-//     __cx.attr(#name_str, #exp, #namespace, false)
-// }),

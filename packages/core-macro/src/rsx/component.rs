@@ -22,7 +22,7 @@ use syn::{
     token, Error, Expr, ExprClosure, Ident, Result, Token,
 };
 
-pub struct Component<const AS: HTML_OR_RSX> {
+pub struct Component<const AS: HtmlOrRsx> {
     // accept any path-like argument
     name: syn::Path,
     body: Vec<ComponentField<AS>>,
@@ -82,13 +82,13 @@ impl Parse for Component<AS_HTML> {
     }
 }
 
-pub struct BodyParseConfig<const AS: HTML_OR_RSX> {
+pub struct BodyParseConfig<const AS: HtmlOrRsx> {
     pub allow_fields: bool,
     pub allow_children: bool,
     pub allow_manual_props: bool,
 }
 
-impl<const AS: HTML_OR_RSX> BodyParseConfig<AS> {
+impl<const AS: HtmlOrRsx> BodyParseConfig<AS> {
     /// The configuration to parse the root
     pub fn new_as_body() -> Self {
         Self {
@@ -214,7 +214,7 @@ impl BodyParseConfig<AS_HTML> {
     }
 }
 
-impl<const AS: HTML_OR_RSX> ToTokens for Component<AS> {
+impl<const AS: HtmlOrRsx> ToTokens for Component<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
 
@@ -284,7 +284,7 @@ impl<const AS: HTML_OR_RSX> ToTokens for Component<AS> {
 }
 
 // the struct's fields info
-pub struct ComponentField<const AS: HTML_OR_RSX> {
+pub struct ComponentField<const AS: HtmlOrRsx> {
     name: Ident,
     content: ContentField,
 }
@@ -354,7 +354,7 @@ impl Parse for ComponentField<AS_HTML> {
     }
 }
 
-impl<const AS: HTML_OR_RSX> ToTokens for ComponentField<AS> {
+impl<const AS: HtmlOrRsx> ToTokens for ComponentField<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ComponentField { name, content, .. } = self;
         tokens.append_all(quote! {

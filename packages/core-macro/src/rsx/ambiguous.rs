@@ -12,10 +12,10 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
-    Error, Ident, LitStr, Result, Token,
+    Error, Ident, Result, Token,
 };
 
-pub enum AmbiguousElement<const AS: HTML_OR_RSX> {
+pub enum AmbiguousElement<const AS: HtmlOrRsx> {
     Element(Element<AS>),
     Component(Component<AS>),
 }
@@ -98,7 +98,7 @@ impl Parse for AmbiguousElement<AS_HTML> {
     }
 }
 
-impl<const AS: HTML_OR_RSX> ToTokens for AmbiguousElement<AS> {
+impl<const AS: HtmlOrRsx> ToTokens for AmbiguousElement<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             AmbiguousElement::Element(el) => el.to_tokens(tokens),

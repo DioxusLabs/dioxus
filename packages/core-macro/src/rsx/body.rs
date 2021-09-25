@@ -2,12 +2,12 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    Error, Ident, Result, Token,
+    Ident, Result, Token,
 };
 
 use super::*;
 
-pub struct RsxBody<const AS: HTML_OR_RSX> {
+pub struct RsxBody<const AS: HtmlOrRsx> {
     custom_context: Option<Ident>,
     roots: Vec<BodyNode<AS>>,
 }
@@ -50,7 +50,7 @@ fn try_parse_custom_context(input: ParseStream) -> Result<Option<Ident>> {
 }
 
 /// Serialize the same way, regardless of flavor
-impl<const A: HTML_OR_RSX> ToTokens for RsxBody<A> {
+impl<const A: HtmlOrRsx> ToTokens for RsxBody<A> {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let inner = if self.roots.len() == 1 {
             let inner = &self.roots[0];

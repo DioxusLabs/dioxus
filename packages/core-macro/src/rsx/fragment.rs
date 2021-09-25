@@ -8,22 +8,18 @@
 //! - [ ] Children
 //! - [ ] Keys
 
+use super::{AmbiguousElement, HtmlOrRsx, AS_HTML, AS_RSX};
 use syn::parse::ParseBuffer;
-
-use super::{AmbiguousElement, AS_HTML, AS_RSX, HTML_OR_RSX};
-
 use {
-    proc_macro::TokenStream,
-    proc_macro2::{Span, TokenStream as TokenStream2},
+    proc_macro2::TokenStream as TokenStream2,
     quote::{quote, ToTokens, TokenStreamExt},
     syn::{
-        ext::IdentExt,
         parse::{Parse, ParseStream},
-        token, Error, Expr, ExprClosure, Ident, LitBool, LitStr, Path, Result, Token,
+        Ident, Result, Token,
     },
 };
 
-pub struct Fragment<const AS: HTML_OR_RSX> {
+pub struct Fragment<const AS: HtmlOrRsx> {
     children: Vec<AmbiguousElement<AS>>,
 }
 
@@ -67,7 +63,7 @@ impl Parse for Fragment<AS_HTML> {
     }
 }
 
-impl<const AS: HTML_OR_RSX> ToTokens for Fragment<AS> {
+impl<const AS: HtmlOrRsx> ToTokens for Fragment<AS> {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let childs = &self.children;
         let children = quote! {
