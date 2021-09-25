@@ -1,12 +1,10 @@
 //! Ported events into Dioxus Synthetic Event system
-//!
-//! event porting is pretty boring, sorry.
 
 use dioxus_core::events::on::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Event, UiEvent};
 
-/// All events implement the generic event type - they're all UI events
+/// All events implement the generic event type - they're all `UI events`
 trait WebsysGenericEvent {
     fn as_ui_event(&self) -> &UiEvent;
 }

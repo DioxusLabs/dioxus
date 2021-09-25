@@ -49,7 +49,7 @@ use std::{
 ///     }
 /// }
 /// ```
-pub fn use_state<'a, 'c, T: 'static>(
+pub fn use_state<'a, T: 'static>(
     cx: Context<'a>,
     initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {

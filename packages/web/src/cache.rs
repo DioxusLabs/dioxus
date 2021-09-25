@@ -2,8 +2,10 @@
 /// This saves the decoding cost, making the interaction of Rust<->JS more performant.
 /// We intern all the HTML tags and attributes, making most operations much faster.
 ///
-/// Interning takes about 1ms at the start of the app, but saves a *ton* of time later on.
-pub fn intern_cached_strings() {
+/// Interning takes < 1ms at the start of the app, but saves a *ton* of time later on.
+///
+/// Eventually we might want to procedurally generate these strings for common words, phrases, and values.
+pub(crate) fn intern_cached_strings() {
     let cached_words = [
         // All the HTML Tags
         "a",

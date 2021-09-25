@@ -1,12 +1,18 @@
-//! RequestAnimationFrame and RequestIdleCallback port and polyfill.
+//! This module provides some utilities around scheduling tasks on the main thread of the browser.
+//!
+//! The ultimate goal here is to not block the main thread during animation frames, so our animations don't result in "jank".
+//!
+//! Hence, this module provides Dioxus "Jank Free Rendering" on the web.
+//!
+//! Because RIC doesn't work on Safari, we polyfill using the "ricpolyfill.js" file and use some basic detection to see
+//! if RIC is available.
 
 use gloo_timers::future::TimeoutFuture;
 use js_sys::Function;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::{prelude::Closure, JsValue};
+use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use web_sys::{window, Window};
 
-pub struct RafLoop {
+pub(crate) struct RafLoop {
     window: Window,
     ric_receiver: async_channel::Receiver<u32>,
     raf_receiver: async_channel::Receiver<()>,

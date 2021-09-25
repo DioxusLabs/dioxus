@@ -27,9 +27,9 @@ static HTML_CONTENT: &'static str = include_str!("./index.html");
 
 pub fn launch(
     root: FC<()>,
-    builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
+    config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) -> anyhow::Result<()> {
-    launch_with_props(root, (), builder)
+    launch_with_props(root, (), config_builder)
 }
 pub fn launch_with_props<P: Properties + 'static>(
     root: FC<P>,

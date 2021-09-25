@@ -1711,7 +1711,7 @@ impl select {
 }
 
 impl option {
-    fn selected<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+    pub fn selected<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("selected", val, None, true)
     }
 }

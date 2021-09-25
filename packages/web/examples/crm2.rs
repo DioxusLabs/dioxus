@@ -68,13 +68,13 @@ static App: FC<()> = |cx, _| {
                 h2 {"Add new client" margin_bottom: "10px" }
                 form { class: "pure-form"
                     input { class: "new-client firstname" placeholder: "First name" value: "{firstname}"
-                        oninput: move |e| firstname.set(e.value())
+                        oninput: move |evt| firstname.set(evt.value())
                     }
                     input { class: "new-client lastname" placeholder: "Last name" value: "{lastname}"
-                        oninput: move |e| lastname.set(e.value())
+                        oninput: move |evt| lastname.set(evt.value())
                     }
                     textarea { class: "new-client description" placeholder: "Description" value: "{description}"
-                        oninput: move |e| description.set(e.value())
+                        oninput: move |evt| description.set(evt.value())
                     }
                 }
                 button { class: "pure-button pure-button-primary", onclick: {add_new}, "Add New" }
@@ -83,7 +83,7 @@ static App: FC<()> = |cx, _| {
         }
         Scene::Settings => {
             rsx!(cx, div {
-                h2 {"Settings" margin_bottom: "10px" }
+                h2 { "Settings" margin_bottom: "10px" }
                 button {
                     background: "rgb(202, 60, 60)"
                     class: "pure-button pure-button-primary"

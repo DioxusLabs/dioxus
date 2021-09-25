@@ -1,16 +1,15 @@
-use std::{collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
-
 use dioxus_core::{
-    events::{on::GenericEventInner, SyntheticEvent, UserEvent},
+    events::{SyntheticEvent, UserEvent},
     mutations::NodeRefMutation,
     scheduler::SchedulerMsg,
     DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+use std::{fmt::Debug, rc::Rc};
+use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
-    window, Attr, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, HtmlTextAreaElement, Node, NodeList, UiEvent,
+    Attr, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
+    HtmlOptionElement, HtmlTextAreaElement, Node, NodeList,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};

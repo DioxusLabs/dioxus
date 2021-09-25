@@ -70,19 +70,28 @@ mod events;
 mod nodeslab;
 mod ric_raf;
 
-/// Launches the VirtualDOM from the specified component function.
+/// Launch the VirtualDOM given a root component and a configuration.
 ///
-/// This method will block the thread with `spawn_local`
+/// This function expects the root component to not have root props. To launch the root component with root props, use
+/// `launch_with_props` instead.
+///
+/// This method will block the thread with `spawn_local` from wasm_bindgen_futures.
+///
+/// If you need to run the VirtualDOM in its own thread, use `run_with_props` instead and await the future.
 ///
 /// # Example
 ///
+/// ```rust
+/// fn main() {
+///     dioxus_web::launch(App, |c| c);
+/// }
 ///
-///
-pub fn launch<F>(root: FC<()>, config: F)
-where
-    F: FnOnce(WebConfig) -> WebConfig,
-{
-    launch_with_props(root, (), config)
+/// static App: FC<()> = |cx, props| {
+///     rsx!(cx, div {"hello world"})
+/// }
+/// ```
+pub fn launch(root_component: FC<()>, configuration: impl FnOnce(WebConfig) -> WebConfig) {
+    launch_with_props(root_component, (), configuration)
 }
 
 /// Launches the VirtualDOM from the specified component function and props.
@@ -91,28 +100,41 @@ where
 ///
 /// # Example
 ///
+/// ```rust
+/// fn main() {
+///     dioxus_web::launch_with_props(App, RootProps { name: String::from("joe") }, |c| c);
+/// }
 ///
-pub fn launch_with_props<T, F>(root: FC<T>, root_props: T, config: F)
+/// #[derive(ParitalEq, Props)]
+/// struct RootProps {
+///     name: String
+/// }
+///
+/// static App: FC<RootProps> = |cx, props| {
+///     rsx!(cx, div {"hello {props.name}"})
+/// }
+/// ```
+pub fn launch_with_props<T, F>(root_component: FC<T>, root_properties: T, configuration_builder: F)
 where
     T: Properties + 'static,
     F: FnOnce(WebConfig) -> WebConfig,
 {
-    let config = config(WebConfig::default());
-    wasm_bindgen_futures::spawn_local(run_with_props(root, root_props, config));
+    let config = configuration_builder(WebConfig::default());
+    wasm_bindgen_futures::spawn_local(run_with_props(root_component, root_properties, config));
 }
-/// This method is the primary entrypoint for Websys Dioxus apps. Will panic if an error occurs while rendering.
-/// See DioxusErrors for more information on how these errors could occour.
+
+/// Runs the app as a future that can be scheduled around the main thread.
+///
+/// Polls futures internal to the VirtualDOM, hence the async nature of this function.
 ///
 /// # Example
 ///
 /// ```ignore
 /// fn main() {
-///     wasm_bindgen_futures::spawn_local(WebsysRenderer::start(Example));
+///     let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("joe") }, |c| c);
+///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-///
-/// Run the app to completion, panicing if any error occurs while rendering.
-/// Pairs well with the wasm_bindgen async handler
 pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
@@ -135,8 +157,6 @@ pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T,
     if !should_hydrate {
         log::info!("Applying rebuild edits..., {:?}", mutations);
         websys_dom.process_edits(&mut mutations.edits);
-    } else {
-        // websys dom processed the config and hydrated the dom already
     }
 
     let work_loop = ric_raf::RafLoop::new();

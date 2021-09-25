@@ -1,18 +1,15 @@
-use std::ops::{Index, IndexMut};
+//! This module provides a mirror of the VirtualDOM Element Slab using a Vector.
 
+use std::ops::{Index, IndexMut};
 use web_sys::Node;
 
-pub struct NodeSlab {
+pub(crate) struct NodeSlab {
     nodes: Vec<Option<Node>>,
 }
 
 impl NodeSlab {
     pub fn new(capacity: usize) -> NodeSlab {
-        let mut nodes = Vec::with_capacity(capacity);
-        for x in 0..5 {
-            nodes.push(None);
-        }
-
+        let nodes = Vec::with_capacity(capacity);
         NodeSlab { nodes }
     }
 }
