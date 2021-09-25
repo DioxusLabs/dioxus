@@ -1,3 +1,12 @@
+//! Implementation of a renderer for Dioxus on the web.
+//!
+//! Oustanding todos:
+//! - Removing event listeners (delegation)
+//! - Passive event listeners
+//! - no-op event listener patch for safari
+//! - tests to ensure dyn_into works for various event types.
+//! - Partial delegation?>
+
 use dioxus_core::{
     events::{SyntheticEvent, UserEvent},
     mutations::NodeRefMutation,
@@ -29,7 +38,7 @@ pub struct WebsysDom {
     // map of listener types to number of those listeners
     // This is roughly a delegater
     // TODO: check how infero delegates its events - some are more performant
-    listeners: FxHashMap<&'static str, (usize, Closure<dyn FnMut(&Event)>)>,
+    listeners: FxHashMap<&'static str, ListenerEntry>,
 
     // We need to make sure to add comments between text nodes
     // We ensure that the text siblings are patched by preventing the browser from merging
@@ -38,6 +47,9 @@ pub struct WebsysDom {
     //  -> https://github.com/facebook/react/pull/5753
     last_node_was_text: bool,
 }
+
+type ListenerEntry = (usize, Closure<dyn FnMut(&Event)>);
+
 impl WebsysDom {
     pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         let document = load_document();
@@ -92,7 +104,6 @@ impl WebsysDom {
 
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
         for edit in edits.drain(..) {
-            // log::info!("Handling edit: {:#?}", edit);
             match edit {
                 DomEdit::PushRoot { id: root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
@@ -423,34 +434,29 @@ impl WebsysDom {
 }
 
 #[derive(Debug, Default)]
-pub struct Stack {
-    pub list: Vec<Node>,
+struct Stack {
+    list: Vec<Node>,
 }
 
 impl Stack {
     #[inline]
-    pub fn with_capacity(cap: usize) -> Self {
+    fn with_capacity(cap: usize) -> Self {
         Stack {
             list: Vec::with_capacity(cap),
         }
     }
 
     #[inline]
-    pub fn push(&mut self, node: Node) {
+    fn push(&mut self, node: Node) {
         self.list.push(node);
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Node {
+    fn pop(&mut self) -> Node {
         self.list.pop().unwrap()
     }
 
-    #[inline]
-    pub fn clear(&mut self) {
-        self.list.clear();
-    }
-
-    pub fn top(&self) -> &Node {
+    fn top(&self) -> &Node {
         match self.list.last() {
             Some(a) => a,
             None => panic!("Called 'top' of an empty stack, make sure to push the root first"),
@@ -458,6 +464,8 @@ impl Stack {
     }
 }
 
+// todo: some of these events are being casted to the wrong event type.
+// We need tests that simulate clicks/etc and make sure every event type works.
 fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
     use crate::events::*;
     use dioxus_core::events::on::*;
@@ -549,12 +557,13 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     let typ = event.type_();
 
-    log::debug!("Event type is {:?}", typ);
-
-    let attrs = target.attributes();
-    for x in 0..attrs.length() {
-        let attr: Attr = attrs.item(x).unwrap();
-        // log::debug!("attrs include: {:#?}, {:#?}", attr.name(), attr.value());
+    // TODO: clean this up
+    if cfg!(debug_assertions) {
+        let attrs = target.attributes();
+        for x in 0..attrs.length() {
+            let attr: Attr = attrs.item(x).unwrap();
+            // log::debug!("attrs include: {:#?}, {:#?}", attr.name(), attr.value());
+        }
     }
 
     use anyhow::Context;
@@ -576,12 +585,8 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
         .and_then(|raw_id| raw_id.parse::<u64>().ok())
         .context("failed to parse real id")?;
 
-    // Call the trigger
-    // log::debug!("decoded scope_id: {}, node_id: {:#?}", gi_id, real_id);
-
     let triggered_scope = gi_id;
-    // let triggered_scope: ScopeId = KeyData::from_ffi(gi_id).into();
-    // log::debug!("Triggered scope is {:#?}", triggered_scope);
+
     Ok(UserEvent {
         name: event_name_from_typ(&typ),
         event: virtual_event_from_websys_event(event.clone()),
@@ -590,14 +595,14 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
     })
 }
 
-pub fn load_document() -> Document {
+pub(crate) fn load_document() -> Document {
     web_sys::window()
         .expect("should have access to the Window")
         .document()
         .expect("should have access to the Document")
 }
 
-pub fn event_name_from_typ(typ: &str) -> &'static str {
+fn event_name_from_typ(typ: &str) -> &'static str {
     match typ {
         "copy" => "copy",
         "cut" => "cut",

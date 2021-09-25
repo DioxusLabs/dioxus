@@ -1,17 +1,8 @@
 //! Basic example that renders a simple VNode to the browser.
-
-// all these imports are done automatically with the `dioxus` crate and `prelude`
-// need to do them manually for this example
-use dioxus::events::on::MouseEvent;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
-
-use dioxus::prelude::*;
-use dioxus_web::*;
-use std::future::Future;
-use std::{pin::Pin, time::Duration};
 
 fn main() {
     // Setup logging
@@ -22,12 +13,10 @@ fn main() {
     dioxus_web::launch(APP, |c| c)
 }
 
-static APP: FC<()> = |cx, props| {
+static APP: FC<()> = |cx, _| {
     let mut count = use_state(cx, || 3);
-    let mut content = use_state(cx, || String::from("h1"));
-    let mut text_content = use_state(cx, || String::from("Hello, world!"));
-
-    log::debug!("running scope...");
+    let content = use_state(cx, || String::from("h1"));
+    let text_content = use_state(cx, || String::from("Hello, world!"));
 
     cx.render(rsx! {
         div {
@@ -39,8 +28,7 @@ static APP: FC<()> = |cx, props| {
                 oninput: move |e| text_content.set(e.value())
             }
 
-            br {}
-            {(0..10).map(|f| {
+            {(0..10).map(|_| {
                 rsx!(
                     button {
                         onclick: move |_| count += 1,
@@ -74,7 +62,7 @@ static APP: FC<()> = |cx, props| {
 
             {render_bullets(cx)}
 
-            Child {}
+            CHILD {}
         }
     })
 };
@@ -97,7 +85,4 @@ fn render_list(cx: Context, count: usize) -> DomTree {
     rsx!(cx, ul { {items} })
 }
 
-static Child: FC<()> = |cx, props| {
-    // render
-    rsx!(cx, div {"hello child"})
-};
+static CHILD: FC<()> = |cx, _| rsx!(cx, div {"hello child"});
