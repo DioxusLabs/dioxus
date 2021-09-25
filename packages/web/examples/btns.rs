@@ -11,6 +11,7 @@
 
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
+use dioxus_core_macro::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 
@@ -22,7 +23,7 @@ fn main() {
     // dioxus::web::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx, props|{
+static App: FC<()> = |cx, props| {
     dbg!("rednering parent");
     cx.render(rsx! {
         div {
@@ -39,7 +40,7 @@ static App: FC<()> = |cx, props|{
     })
 };
 
-static But: FC<()> = |cx, props|{
+static But: FC<()> = |cx, props| {
     let mut count = use_state(cx, || 0);
 
     // let d = Dropper { name: "asd" };

@@ -1,6 +1,7 @@
 use dioxus::virtual_dom::VirtualDom;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
+use dioxus_core_macro::*;
 use dioxus_hooks::use_state;
 use dioxus_html as dioxus_elements;
 use dioxus_html::{GlobalAttributes, SvgAttributes};
@@ -23,7 +24,7 @@ fn main() {
     .unwrap();
 }
 
-pub static App: FC<()> = |cx, props|{
+pub static App: FC<()> = |cx, props| {
     cx.render(rsx!(
         div { class: "overflow-hidden"
             link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel:"stylesheet" }
@@ -38,7 +39,7 @@ pub static App: FC<()> = |cx, props|{
     ))
 };
 
-pub static Header: FC<()> = |cx, props|{
+pub static Header: FC<()> = |cx, props| {
     cx.render(rsx! {
         div {
             header { class: "text-gray-400 bg-gray-900 body-font"
@@ -64,7 +65,7 @@ pub static Header: FC<()> = |cx, props|{
     })
 };
 
-pub static Hero: FC<()> = |cx, props|{
+pub static Hero: FC<()> = |cx, props| {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -102,7 +103,7 @@ pub static Hero: FC<()> = |cx, props|{
         }
     })
 };
-pub static Entry: FC<()> = |cx, props|{
+pub static Entry: FC<()> = |cx, props| {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -115,7 +116,7 @@ pub static Entry: FC<()> = |cx, props|{
     })
 };
 
-pub static StacksIcon: FC<()> = |cx, props|{
+pub static StacksIcon: FC<()> = |cx, props| {
     cx.render(rsx!(
         svg {
             // xmlns: "http://www.w3.org/2000/svg"
@@ -130,7 +131,7 @@ pub static StacksIcon: FC<()> = |cx, props|{
         }
     ))
 };
-pub static RightArrowIcon: FC<()> = |cx, props|{
+pub static RightArrowIcon: FC<()> = |cx, props| {
     cx.render(rsx!(
         svg {
             fill: "none"

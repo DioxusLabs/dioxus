@@ -75,7 +75,7 @@ uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
 dioxus-hooks = { path = "../hooks" }
 serde = { version = "1.0.126", features = ["derive"] }
 reqwest = { version = "0.11", features = ["json"] }
-
+dioxus-core-macro = { path = "../core-macro" }
 # rand = { version="0.8.4", features=["small_rng"] }
 # surf = { version = "2.3.1", default-features = false, features = [
 #     "wasm-client",

@@ -55,14 +55,12 @@ pub(crate) mod innerlude {
 
     pub type DomTree<'a> = Option<VNode<'a>>;
     pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> DomTree<'a>;
-
-    pub use dioxus_core_macro::{format_args_f, html, rsx};
 }
 
 pub use crate::innerlude::{
-    format_args_f, html, rsx, Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority,
-    LazyNodes, MountType, Mutations, NodeFactory, Properties, ScopeId, SuspendedContext,
-    SyntheticEvent, TaskHandle, TestDom, UserEvent, VNode, VirtualDom, FC,
+    Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority, LazyNodes, MountType,
+    Mutations, NodeFactory, Properties, ScopeId, SuspendedContext, SyntheticEvent, TaskHandle,
+    TestDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {
@@ -72,7 +70,6 @@ pub mod prelude {
     pub use crate::innerlude::{DioxusElement, DomTree, LazyNodes, Mutations, NodeFactory, FC};
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
-    pub use dioxus_core_macro::{format_args_f, html, rsx, Props};
 }
 
 pub mod exports {

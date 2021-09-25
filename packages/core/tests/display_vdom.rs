@@ -8,6 +8,7 @@ use std::{cell::RefCell, rc::Rc};
 use anyhow::{Context, Result};
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
+use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 mod test_logging;
 

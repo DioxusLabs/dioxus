@@ -4,9 +4,9 @@ Tiny CRM: A port of the Yew CRM example to Dioxus.
 
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
+use dioxus_core_macro::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
-
 fn main() {
     // Setup logging
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));

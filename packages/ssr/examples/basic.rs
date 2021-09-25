@@ -1,8 +1,8 @@
 use dioxus::virtual_dom::VirtualDom;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
+use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-
 fn main() {
     let mut dom = VirtualDom::new(App);
     dom.rebuild();
@@ -12,7 +12,7 @@ fn main() {
     )
 }
 
-pub static App: FC<()> = |cx, props|{
+pub static App: FC<()> = |cx, props| {
     cx.render(rsx!(
         div {
             class: "overflow-hidden"
