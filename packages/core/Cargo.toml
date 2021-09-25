@@ -10,7 +10,6 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
 # Bumpalo is used as a micro heap backing each component
 bumpalo = { version = "3.6.0", features = ["collections", "boxed"] }
 
@@ -21,7 +20,7 @@ fxhash = "0.2.1"
 longest-increasing-subsequence = "0.1.0"
 
 # internall used
-log = { verison = "0.4", features = ["release_max_level_off"] }
+log = { version = "0.4.14", features = ["release_max_level_off"] }
 
 futures-util = "0.3.15"
 
