@@ -87,7 +87,10 @@ static App: FC<()> = |cx, _| {
                 button {
                     background: "rgb(202, 60, 60)"
                     class: "pure-button pure-button-primary"
-                    onclick: move |_| clients.write().clear(),
+                    onclick: move |_| {
+                        clients.write().clear();
+                        scene.set(Scene::ClientsList);
+                    },
                     "Remove all clients"
                 }
                 button {

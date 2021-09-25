@@ -189,13 +189,13 @@ impl<'a> TextRenderer<'a> {
 }
 
 pub struct SsrConfig {
-    // currently not supported - control if we indent the HTML output
+    /// currently not supported - control if we indent the HTML output
     indent: bool,
 
-    // Control if elements are written onto a new line
+    /// Control if elements are written onto a new line
     newline: bool,
 
-    // Choose to write ElementIDs into elements so the page can be re-hydrated later on
+    /// Choose to write ElementIDs into elements so the page can be re-hydrated later on
     pre_render: bool,
 
     // Currently not implemented
@@ -240,16 +240,16 @@ mod tests {
 
     use dioxus_core as dioxus;
     use dioxus_core::prelude::*;
-    use dioxus_html as dioxus_elements;
     use dioxus_core_macro::*;
+    use dioxus_html as dioxus_elements;
 
-    static SIMPLE_APP: FC<()> = |cx, props|{
+    static SIMPLE_APP: FC<()> = |cx, props| {
         cx.render(rsx!(div {
             "hello world!"
         }))
     };
 
-    static SLIGHTLY_MORE_COMPLEX: FC<()> = |cx, props|{
+    static SLIGHTLY_MORE_COMPLEX: FC<()> = |cx, props| {
         cx.render(rsx! {
             div {
                 title: "About W3Schools"
@@ -268,14 +268,14 @@ mod tests {
         })
     };
 
-    static NESTED_APP: FC<()> = |cx, props|{
+    static NESTED_APP: FC<()> = |cx, props| {
         cx.render(rsx!(
             div {
                 SIMPLE_APP {}
             }
         ))
     };
-    static FRAGMENT_APP: FC<()> = |cx, props|{
+    static FRAGMENT_APP: FC<()> = |cx, props| {
         cx.render(rsx!(
             div { "f1" }
             div { "f2" }
@@ -331,7 +331,7 @@ mod tests {
 
     #[test]
     fn styles() {
-        static STLYE_APP: FC<()> = |cx, props|{
+        static STLYE_APP: FC<()> = |cx, props| {
             cx.render(rsx! {
                 div { style: { color: "blue", font_size: "46px" } }
             })

@@ -20,7 +20,7 @@ fxhash = "0.2.1"
 longest-increasing-subsequence = "0.1.0"
 
 # internall used
-log = { version = "0.4.14", features = ["release_max_level_off"] }
+log = { version = "0.4", features = ["release_max_level_off"] }
 
 futures-util = "0.3.15"
 
