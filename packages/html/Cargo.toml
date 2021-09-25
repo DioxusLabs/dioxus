@@ -1,12 +1,15 @@
 [package]
 name = "dioxus-html"
 version = "0.0.0"
+authors = ["Jonathan Kelley"]
 edition = "2018"
+description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
+"license" = "MIT/Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "0.1" }
+dioxus-core = { path = "../core", version = "0.1.2" }
 
 [dev-dependencies]
 scraper = "0.12.0"
