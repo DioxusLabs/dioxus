@@ -7,15 +7,22 @@
 use dioxus::prelude::*;
 
 fn main() {
-    // dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App, |c| c);
 }
+
+const ENDPOINT: &str = "https://api.openweathermap.org/data/2.5/weather";
 
 static App: FC<()> = |cx, props| {
     //
     let body = use_suspense(
         cx,
         || async {
-            //
+            let content = reqwest::get(ENDPOINT)
+                .await
+                .unwrap()
+                .json::<serde_json::Value>()
+                .await
+                .unwrap();
         },
         |cx, props| {
             //

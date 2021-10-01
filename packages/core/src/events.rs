@@ -14,6 +14,7 @@ use std::{
     fmt::Debug,
     ops::Deref,
     rc::Rc,
+    sync::Arc,
 };
 
 #[derive(Debug)]
@@ -216,13 +217,13 @@ pub mod on {
         )* ) => {
             $(
                 $(#[$attr])*
-                pub struct $wrapper(pub Rc<dyn $eventdata>);
+                pub struct $wrapper(pub Arc<dyn $eventdata>);
 
                 // todo: derefing to the event is fine (and easy) but breaks some IDE stuff like (go to source)
                 // going to source in fact takes you to the source of Rc which is... less than useful
                 // Either we ask for this to be changed in Rust-analyzer or manually impkement the trait
                 impl Deref for $wrapper {
-                    type Target = Rc<dyn $eventdata>;
+                    type Target = Arc<dyn $eventdata>;
                     fn deref(&self) -> &Self::Target {
                         &self.0
                     }
@@ -598,7 +599,7 @@ pub mod on {
         ];
     }
 
-    pub struct GenericEvent(pub Rc<dyn GenericEventInner>);
+    pub struct GenericEvent(pub Arc<dyn GenericEventInner>);
 
     pub trait GenericEventInner {
         /// Return a reference to the raw event. User will need to downcast the event to the right platform-specific type.

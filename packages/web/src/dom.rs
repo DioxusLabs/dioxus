@@ -14,7 +14,7 @@ use dioxus_core::{
     DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     Attr, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
@@ -471,77 +471,79 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
     use dioxus_core::events::on::*;
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => {
-            SyntheticEvent::ClipboardEvent(ClipboardEvent(Rc::new(WebsysClipboardEvent(event))))
+            SyntheticEvent::ClipboardEvent(ClipboardEvent(Arc::new(WebsysClipboardEvent(event))))
         }
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: web_sys::CompositionEvent = event.dyn_into().unwrap();
-            SyntheticEvent::CompositionEvent(CompositionEvent(Rc::new(WebsysCompositionEvent(evt))))
+            SyntheticEvent::CompositionEvent(CompositionEvent(Arc::new(WebsysCompositionEvent(
+                evt,
+            ))))
         }
         "keydown" | "keypress" | "keyup" => {
             let evt: web_sys::KeyboardEvent = event.dyn_into().unwrap();
-            SyntheticEvent::KeyboardEvent(KeyboardEvent(Rc::new(WebsysKeyboardEvent(evt))))
+            SyntheticEvent::KeyboardEvent(KeyboardEvent(Arc::new(WebsysKeyboardEvent(evt))))
         }
         "focus" | "blur" => {
             let evt: web_sys::FocusEvent = event.dyn_into().unwrap();
-            SyntheticEvent::FocusEvent(FocusEvent(Rc::new(WebsysFocusEvent(evt))))
+            SyntheticEvent::FocusEvent(FocusEvent(Arc::new(WebsysFocusEvent(evt))))
         }
         "change" => {
             let evt = event.dyn_into().unwrap();
-            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
+            SyntheticEvent::GenericEvent(GenericEvent(Arc::new(WebsysGenericUiEvent(evt))))
         }
         "input" | "invalid" | "reset" | "submit" => {
             let evt: web_sys::Event = event.dyn_into().unwrap();
-            SyntheticEvent::FormEvent(FormEvent(Rc::new(WebsysFormEvent(evt))))
+            SyntheticEvent::FormEvent(FormEvent(Arc::new(WebsysFormEvent(evt))))
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             let evt: web_sys::MouseEvent = event.dyn_into().unwrap();
-            SyntheticEvent::MouseEvent(MouseEvent(Rc::new(WebsysMouseEvent(evt))))
+            SyntheticEvent::MouseEvent(MouseEvent(Arc::new(WebsysMouseEvent(evt))))
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             let evt: web_sys::PointerEvent = event.dyn_into().unwrap();
-            SyntheticEvent::PointerEvent(PointerEvent(Rc::new(WebsysPointerEvent(evt))))
+            SyntheticEvent::PointerEvent(PointerEvent(Arc::new(WebsysPointerEvent(evt))))
         }
         "select" => {
             let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::SelectionEvent(SelectionEvent(Rc::new(WebsysGenericUiEvent(evt))))
+            SyntheticEvent::SelectionEvent(SelectionEvent(Arc::new(WebsysGenericUiEvent(evt))))
         }
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
             let evt: web_sys::TouchEvent = event.dyn_into().unwrap();
-            SyntheticEvent::TouchEvent(TouchEvent(Rc::new(WebsysTouchEvent(evt))))
+            SyntheticEvent::TouchEvent(TouchEvent(Arc::new(WebsysTouchEvent(evt))))
         }
         "scroll" => {
             let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
+            SyntheticEvent::GenericEvent(GenericEvent(Arc::new(WebsysGenericUiEvent(evt))))
         }
         "wheel" => {
             let evt: web_sys::WheelEvent = event.dyn_into().unwrap();
-            SyntheticEvent::WheelEvent(WheelEvent(Rc::new(WebsysWheelEvent(evt))))
+            SyntheticEvent::WheelEvent(WheelEvent(Arc::new(WebsysWheelEvent(evt))))
         }
         "animationstart" | "animationend" | "animationiteration" => {
             let evt: web_sys::AnimationEvent = event.dyn_into().unwrap();
-            SyntheticEvent::AnimationEvent(AnimationEvent(Rc::new(WebsysAnimationEvent(evt))))
+            SyntheticEvent::AnimationEvent(AnimationEvent(Arc::new(WebsysAnimationEvent(evt))))
         }
         "transitionend" => {
             let evt: web_sys::TransitionEvent = event.dyn_into().unwrap();
-            SyntheticEvent::TransitionEvent(TransitionEvent(Rc::new(WebsysTransitionEvent(evt))))
+            SyntheticEvent::TransitionEvent(TransitionEvent(Arc::new(WebsysTransitionEvent(evt))))
         }
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
             let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::MediaEvent(MediaEvent(Rc::new(WebsysMediaEvent(evt))))
+            SyntheticEvent::MediaEvent(MediaEvent(Arc::new(WebsysMediaEvent(evt))))
         }
         "toggle" => {
             let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::ToggleEvent(ToggleEvent(Rc::new(WebsysToggleEvent(evt))))
+            SyntheticEvent::ToggleEvent(ToggleEvent(Arc::new(WebsysToggleEvent(evt))))
         }
         _ => {
             let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::GenericEvent(GenericEvent(Rc::new(WebsysGenericUiEvent(evt))))
+            SyntheticEvent::GenericEvent(GenericEvent(Arc::new(WebsysGenericUiEvent(evt))))
         }
     }
 }

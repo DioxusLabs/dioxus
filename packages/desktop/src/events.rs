@@ -2,6 +2,7 @@
 //!
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use dioxus_core::{
     events::{
@@ -21,7 +22,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
     let mut data: Vec<ImEvent> = serde_json::from_value(val).unwrap();
     let data = data.drain(..).next().unwrap();
 
-    let event = SyntheticEvent::MouseEvent(MouseEvent(Rc::new(WebviewMouseEvent)));
+    let event = SyntheticEvent::MouseEvent(MouseEvent(Arc::new(WebviewMouseEvent)));
     let scope = ScopeId(data.scope as usize);
     let mounted_dom_id = Some(ElementId(data.mounted_dom_id as usize));
     UserEvent {

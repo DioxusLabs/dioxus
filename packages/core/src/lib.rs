@@ -29,6 +29,7 @@ pub mod scheduler;
 pub mod scope;
 pub mod tasks;
 pub mod test_dom;
+pub mod threadsafe;
 pub mod util;
 pub mod virtual_dom;
 
@@ -50,6 +51,7 @@ pub(crate) mod innerlude {
     pub use crate::scope::*;
     pub use crate::tasks::*;
     pub use crate::test_dom::*;
+    pub use crate::threadsafe::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -60,7 +62,7 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority, LazyNodes, MountType,
     Mutations, NodeFactory, Properties, ScopeId, SuspendedContext, SyntheticEvent, TaskHandle,
-    TestDom, UserEvent, VNode, VirtualDom, FC,
+    TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {

@@ -20,14 +20,14 @@ log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }
 html-escape = "0.2.9"
 wry = "0.11.0"
-async-std = { version = "1.9.0", features = ["attributes"] }
+tokio = { version = "1.12.0", features = ["full"] }
 
 
 [dev-dependencies]
 dioxus-html = { path = "../html" }
 tide = "0.15.0"
 tide-websockets = "0.3.0"
-
+dioxus-core-macro = { path = "../core-macro" }
 # thiserror = "1.0.23"
 # log = "0.4.13"
 # fern = { version = "0.6.0", features = ["colored"] }

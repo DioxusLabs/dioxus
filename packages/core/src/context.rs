@@ -1,4 +1,8 @@
 //! Public APIs for managing component state, tasks, and lifecycles.
+//!
+//! This module is separate from `Scope` to narrow what exactly is exposed to user code.
+//!
+//! We unsafely implement `send` for the VirtualDom, but those guarantees can only be
 
 use crate::innerlude::*;
 use std::{any::TypeId, ops::Deref, rc::Rc};

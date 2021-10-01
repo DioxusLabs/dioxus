@@ -20,8 +20,7 @@
 //! Additional functionality is defined in the respective files.
 
 use crate::innerlude::*;
-use futures_util::Future;
-use std::any::Any;
+use std::{any::Any, rc::Rc, sync::Arc};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 ///
@@ -60,10 +59,10 @@ pub struct VirtualDom {
 
     root_fc: Box<dyn Any>,
 
-    root_props: Box<dyn Any>,
+    root_props: Rc<dyn Any + Send>,
 
     // we need to keep the allocation around, but we don't necessarily use it
-    _root_caller: Box<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>,
+    _root_caller: RootCaller,
 }
 
 impl VirtualDom {
@@ -121,16 +120,15 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P: Properties + 'static>(root: FC<P>, root_props: P) -> Self {
+    pub fn new_with_props<P: 'static + Send>(root: FC<P>, root_props: P) -> Self {
         let root_fc = Box::new(root);
 
-        let root_props: Box<dyn Any> = Box::new(root_props);
+        let root_props: Rc<dyn Any + Send> = Rc::new(root_props);
 
-        let props_ptr = root_props.downcast_ref::<P>().unwrap() as *const P;
-
+        let _p = root_props.clone();
         // Safety: this callback is only valid for the lifetime of the root props
-        let root_caller: Box<dyn Fn(&Scope) -> DomTree> = Box::new(move |scope: &Scope| unsafe {
-            let props: &'_ P = &*(props_ptr as *const P);
+        let root_caller: Rc<dyn Fn(&Scope) -> DomTree> = Rc::new(move |scope: &Scope| unsafe {
+            let props = _p.downcast_ref::<P>().unwrap();
             std::mem::transmute(root(Context { scope }, props))
         });
 
@@ -148,7 +146,7 @@ impl VirtualDom {
         });
 
         Self {
-            _root_caller: root_caller,
+            _root_caller: RootCaller(root_caller),
             root_fc,
             base_scope,
             scheduler,
@@ -189,14 +187,14 @@ impl VirtualDom {
     /// ```
     pub fn update_root_props<P>(&mut self, root_props: P) -> Option<Mutations>
     where
-        P: 'static,
+        P: 'static + Send,
     {
         let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
 
         // Pre-emptively drop any downstream references of the old props
         root_scope.ensure_drop_safety(&self.scheduler.pool);
 
-        let mut root_props: Box<dyn Any> = Box::new(root_props);
+        let mut root_props: Rc<dyn Any + Send> = Rc::new(root_props);
 
         if let Some(props_ptr) = root_props.downcast_ref::<P>().map(|p| p as *const P) {
             // Swap the old props and new props
@@ -345,46 +343,47 @@ impl VirtualDom {
     /// Waits for the scheduler to have work
     /// This lets us poll async tasks during idle periods without blocking the main thread.
     pub async fn wait_for_work(&mut self) {
-        if self.scheduler.has_any_work() {
-            log::debug!("No need to wait for work, we already have some");
-            return;
-        }
+        todo!("making vdom send right now");
+        // if self.scheduler.has_any_work() {
+        //     log::debug!("No need to wait for work, we already have some");
+        //     return;
+        // }
 
-        log::debug!("No active work.... waiting for some...");
-        use futures_util::StreamExt;
+        // log::debug!("No active work.... waiting for some...");
+        // use futures_util::StreamExt;
 
-        // right now this won't poll events if there is ongoing work
-        // in the future we want to prioritize some events over ongoing work
-        // this is coming in the "priorities" PR
+        // // right now this won't poll events if there is ongoing work
+        // // in the future we want to prioritize some events over ongoing work
+        // // this is coming in the "priorities" PR
 
-        // Wait for any new events if we have nothing to do
-        // todo: poll the events once even if there is work to do to prevent starvation
-        futures_util::select! {
-            _ = self.scheduler.async_tasks.next() => {}
-            msg = self.scheduler.receiver.next() => {
-                match msg.unwrap() {
-                    SchedulerMsg::Task(t) => todo!(),
-                    SchedulerMsg::Immediate(im) => {
-                        self.scheduler.dirty_scopes.insert(im);
-                    }
-                    SchedulerMsg::UiEvent(evt) => {
-                        self.scheduler.ui_events.push_back(evt);
-                    }
-                }
-            },
-        }
+        // // Wait for any new events if we have nothing to do
+        // // todo: poll the events once even if there is work to do to prevent starvation
+        // futures_util::select! {
+        //     _ = self.scheduler.async_tasks.next() => {}
+        //     msg = self.scheduler.receiver.next() => {
+        //         match msg.unwrap() {
+        //             SchedulerMsg::Task(t) => todo!(),
+        //             SchedulerMsg::Immediate(im) => {
+        //                 self.scheduler.dirty_scopes.insert(im);
+        //             }
+        //             SchedulerMsg::UiEvent(evt) => {
+        //                 self.scheduler.ui_events.push_back(evt);
+        //             }
+        //         }
+        //     },
+        // }
 
-        while let Ok(Some(msg)) = self.scheduler.receiver.try_next() {
-            match msg {
-                SchedulerMsg::Task(t) => todo!(),
-                SchedulerMsg::Immediate(im) => {
-                    self.scheduler.dirty_scopes.insert(im);
-                }
-                SchedulerMsg::UiEvent(evt) => {
-                    self.scheduler.ui_events.push_back(evt);
-                }
-            }
-        }
+        // while let Ok(Some(msg)) = self.scheduler.receiver.try_next() {
+        //     match msg {
+        //         SchedulerMsg::Task(t) => todo!(),
+        //         SchedulerMsg::Immediate(im) => {
+        //             self.scheduler.dirty_scopes.insert(im);
+        //         }
+        //         SchedulerMsg::UiEvent(evt) => {
+        //             self.scheduler.ui_events.push_back(evt);
+        //         }
+        //     }
+        // }
     }
 }
 
@@ -407,3 +406,15 @@ impl std::fmt::Display for VirtualDom {
         renderer.render(self, root, f, 0)
     }
 }
+
+/*
+Send safety...
+
+The VirtualDom can only be "send" if the internals exposed to user code are also "send".
+
+IE it's okay to move an Rc from one thread to another thread as long as it's only used internally
+
+*/
+
+// we never actually use the contents of this root caller
+struct RootCaller(Rc<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>);

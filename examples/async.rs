@@ -6,8 +6,9 @@ the `TaskHandle` object.
 use dioxus::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 
-fn main() {
-    dioxus::desktop::launch(App, |c| c).unwrap();
+#[tokio::main]
+async fn main() {
+    dioxus::desktop::launch(App, |c| c).await;
 }
 
 pub static App: FC<()> = |cx, _| {

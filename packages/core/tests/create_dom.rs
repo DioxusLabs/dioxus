@@ -11,7 +11,7 @@ use dioxus_html as dioxus_elements;
 mod test_logging;
 use DomEdit::*;
 
-fn new_dom<P: Properties + 'static>(app: FC<P>, props: P) -> VirtualDom {
+fn new_dom<P: 'static + Send>(app: FC<P>, props: P) -> VirtualDom {
     const IS_LOGGING_ENABLED: bool = false;
     test_logging::set_up_logging(IS_LOGGING_ENABLED);
     VirtualDom::new_with_props(app, props)
