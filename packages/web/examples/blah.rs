@@ -44,9 +44,9 @@ static App: FC<()> = |cx, props| {
                         "dynamic subtree {state}"
                     }
                     div {
-                        button { onclick: move |_| state+=1, "incr" }
+                        button { onclick: move |e| state+=1, "incr" }
                         br {}
-                        button { onclick: move |_| state-=1, "decr" }
+                        button { onclick: move |e| state-=1, "decr" }
                     }
                 }
             }

@@ -106,7 +106,8 @@ pub enum SchedulerMsg {
 }
 
 pub enum TaskMsg {
-    SubmitTask(FiberTask, u64),
+    // SubmitTask(FiberTask, u64),
+    // SubmitTask(FiberTask, u64),
     ToggleTask(u64),
     PauseTask(u64),
     ResumeTask(u64),
@@ -163,7 +164,10 @@ pub(crate) struct Scheduler {
 }
 
 impl Scheduler {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(
+        sender: UnboundedSender<SchedulerMsg>,
+        receiver: UnboundedReceiver<SchedulerMsg>,
+    ) -> Self {
         /*
         Preallocate 2000 elements and 100 scopes to avoid dynamic allocation.
         Perhaps this should be configurable from some external config?
@@ -173,7 +177,6 @@ impl Scheduler {
 
         let heuristics = HeuristicsEngine::new();
 
-        let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
         let task_counter = Rc::new(Cell::new(0));
 
         let channel = EventChannel {
@@ -183,15 +186,19 @@ impl Scheduler {
                 let sender = sender.clone();
                 Rc::new(move |id| sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap())
             },
+            // todo: we want to get the futures out of the scheduler message
+            // the scheduler message should be send/sync
             submit_task: {
                 Rc::new(move |fiber_task| {
                     let task_id = task_counter.get();
                     task_counter.set(task_id + 1);
-                    sender
-                        .unbounded_send(SchedulerMsg::Task(TaskMsg::SubmitTask(
-                            fiber_task, task_id,
-                        )))
-                        .unwrap();
+
+                    todo!();
+                    // sender
+                    //     .unbounded_send(SchedulerMsg::Task(TaskMsg::SubmitTask(
+                    //         fiber_task, task_id,
+                    //     )))
+                    //     .unwrap();
                     TaskHandle {
                         our_id: task_id,
                         sender: sender.clone(),

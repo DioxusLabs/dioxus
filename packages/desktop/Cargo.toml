@@ -19,15 +19,16 @@ thiserror = "1.0.23"
 log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }
 html-escape = "0.2.9"
-wry = "0.11.0"
+# wry = { version = "0.12.2", git = "https://github.com/jkelleyrtp/wry.git", branch = "jk/fnmut_rpc" }
+wry = "0.12.2"
 tokio = { version = "1.12.0", features = ["full"] }
+futures-channel = "0.3.16"
 
 
 [dev-dependencies]
 dioxus-html = { path = "../html" }
-tide = "0.15.0"
-tide-websockets = "0.3.0"
 dioxus-core-macro = { path = "../core-macro" }
+dioxus-hooks = { path = "../hooks" }
 # thiserror = "1.0.23"
 # log = "0.4.13"
 # fern = { version = "0.6.0", features = ["colored"] }

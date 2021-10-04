@@ -1,8 +1,8 @@
-//! This module provides a set of common events for all Dioxus apps to target, regardless of host platform.
-//! -------------------------------------------------------------------------------------------------------
+//! An event system that's less confusing than Traits + RC;
+//! This should hopefully make it easier to port to other platforms.
 //!
-//! 3rd party renderers are responsible for converting their native events into these virtual event types. Events might
-//! be heavy or need to interact through FFI, so the events themselves are designed to be lazy.
+//! Unfortunately, it is less efficient than the original, but hopefully it's negligible.
+
 use crate::{
     innerlude::Listener,
     innerlude::{ElementId, NodeFactory, ScopeId},
@@ -34,6 +34,7 @@ pub struct UserEvent {
     pub event: SyntheticEvent,
 }
 
+#[derive(Debug)]
 pub enum SyntheticEvent {
     AnimationEvent(on::AnimationEvent),
     ClipboardEvent(on::ClipboardEvent),
@@ -41,7 +42,7 @@ pub enum SyntheticEvent {
     FocusEvent(on::FocusEvent),
     FormEvent(on::FormEvent),
     KeyboardEvent(on::KeyboardEvent),
-    GenericEvent(on::GenericEvent),
+    GenericEvent(DioxusEvent<()>),
     TouchEvent(on::TouchEvent),
     ToggleEvent(on::ToggleEvent),
     MediaEvent(on::MediaEvent),
@@ -50,31 +51,6 @@ pub enum SyntheticEvent {
     SelectionEvent(on::SelectionEvent),
     TransitionEvent(on::TransitionEvent),
     PointerEvent(on::PointerEvent),
-}
-// ImageEvent(event_data::ImageEvent),
-
-impl std::fmt::Debug for SyntheticEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
-            SyntheticEvent::ClipboardEvent(_) => "ClipboardEvent",
-            SyntheticEvent::CompositionEvent(_) => "CompositionEvent",
-            SyntheticEvent::KeyboardEvent(_) => "KeyboardEvent",
-            SyntheticEvent::FocusEvent(_) => "FocusEvent",
-            SyntheticEvent::FormEvent(_) => "FormEvent",
-            SyntheticEvent::SelectionEvent(_) => "SelectionEvent",
-            SyntheticEvent::TouchEvent(_) => "TouchEvent",
-            SyntheticEvent::WheelEvent(_) => "WheelEvent",
-            SyntheticEvent::MediaEvent(_) => "MediaEvent",
-            SyntheticEvent::AnimationEvent(_) => "AnimationEvent",
-            SyntheticEvent::TransitionEvent(_) => "TransitionEvent",
-            SyntheticEvent::ToggleEvent(_) => "ToggleEvent",
-            SyntheticEvent::MouseEvent(_) => "MouseEvent",
-            SyntheticEvent::PointerEvent(_) => "PointerEvent",
-            SyntheticEvent::GenericEvent(_) => "GenericEvent",
-        };
-
-        f.debug_struct("VirtualEvent").field("type", &name).finish()
-    }
 }
 
 /// Priority of Event Triggers.
@@ -129,82 +105,101 @@ pub enum EventPriority {
     Low = 0,
 }
 
-pub(crate) fn event_meta(event: &UserEvent) -> (bool, EventPriority) {
-    use EventPriority::*;
+#[derive(Debug)]
+pub struct DioxusEvent<T: Send> {
+    inner: T,
+    raw: Box<dyn Any + Send>,
+}
 
-    match event.name {
-        // clipboard
-        "copy" | "cut" | "paste" => (true, Medium),
+impl<T: Send + Sync> DioxusEvent<T> {
+    pub fn new<F: Send + 'static>(inner: T, raw: F) -> Self {
+        let raw = Box::new(raw);
+        Self { inner, raw }
+    }
 
-        // Composition
-        "compositionend" | "compositionstart" | "compositionupdate" => (true, Low),
+    /// Return a reference to the raw event. User will need to downcast the event to the right platform-specific type.
+    pub fn native<E: 'static>(&self) -> Option<&E> {
+        self.raw.downcast_ref()
+    }
 
-        // Keyboard
-        "keydown" | "keypress" | "keyup" => (true, High),
+    /// Returns whether or not a specific event is a bubbling event
+    pub fn bubbles(&self) -> bool {
+        todo!()
+    }
+    /// Sets or returns whether the event should propagate up the hierarchy or not
+    pub fn cancel_bubble(&self) {
+        todo!()
+    }
+    /// Returns whether or not an event can have its default action prevented
+    pub fn cancelable(&self) -> bool {
+        todo!()
+    }
+    /// Returns whether the event is composed or not
+    pub fn composed(&self) -> bool {
+        todo!()
+    }
 
-        // Focus
-        "focus" | "blur" => (true, Low),
+    // Currently not supported because those no way we could possibly support it
+    // just cast the event to the right platform-specific type and return it
+    // /// Returns the event's path
+    // pub fn composed_path(&self) -> String {
+    //     todo!()
+    // }
 
-        // Form
-        "change" | "input" | "invalid" | "reset" | "submit" => (true, Medium),
+    /// Returns the element whose event listeners triggered the event
+    pub fn current_target(&self) {
+        todo!()
+    }
+    /// Returns whether or not the preventDefault method was called for the event
+    pub fn default_prevented(&self) -> bool {
+        todo!()
+    }
+    /// Returns which phase of the event flow is currently being evaluated
+    pub fn event_phase(&self) -> u16 {
+        todo!()
+    }
 
-        // Mouse
-        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
-        | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mouseout" | "mouseover" | "mouseup" => (true, High),
+    /// Returns whether or not an event is trusted
+    pub fn is_trusted(&self) -> bool {
+        todo!()
+    }
 
-        "mousemove" => (false, Medium),
+    /// Cancels the event if it is cancelable, meaning that the default action that belongs to the event will
+    pub fn prevent_default(&self) {
+        todo!()
+    }
 
-        // Pointer
-        "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
-        | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            (true, Medium)
-        }
+    /// Prevents other listeners of the same event from being called
+    pub fn stop_immediate_propagation(&self) {
+        todo!()
+    }
 
-        // Selection
-        "select" | "touchcancel" | "touchend" => (true, Medium),
+    /// Prevents further propagation of an event during event flow
+    pub fn stop_propagation(&self) {
+        todo!()
+    }
 
-        // Touch
-        "touchmove" | "touchstart" => (true, Medium),
+    /// Returns the element that triggered the event
+    pub fn target(&self) -> Option<Box<dyn Any>> {
+        todo!()
+    }
 
-        // Wheel
-        "scroll" | "wheel" => (false, Medium),
-
-        // Media
-        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
-        | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
-        | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => (true, Medium),
-
-        // Animation
-        "animationstart" | "animationend" | "animationiteration" => (true, Medium),
-
-        // Transition
-        "transitionend" => (true, Medium),
-
-        // Toggle
-        "toggle" => (true, Medium),
-
-        _ => (true, Low),
+    /// Returns the time (in milliseconds relative to the epoch) at which the event was created
+    pub fn time_stamp(&self) -> f64 {
+        todo!()
     }
 }
 
-pub use on::{
-    AnimationEvent, ClipboardEvent, CompositionEvent, FocusEvent, FormEvent, GenericEvent, KeyCode,
-    KeyboardEvent, MediaEvent, MouseEvent, PointerEvent, SelectionEvent, ToggleEvent, TouchEvent,
-    TransitionEvent, WheelEvent,
-};
+impl<T: Send + Sync> std::ops::Deref for DioxusEvent<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
 
 pub mod on {
-    //! This module defines the synthetic events that all Dioxus apps enable. No matter the platform, every dioxus renderer
-    //! will implement the same events and same behavior (bubbling, cancelation, etc).
-    //!
-    //! Synthetic events are immutable and wrapped in Arc. It is the intention for Dioxus renderers to re-use the underyling
-    //! Arc allocation through "get_mut"
-    //!
-    //! React recently dropped support for re-using event allocation and just passes the real event along.
     use super::*;
-
     macro_rules! event_directory {
         ( $(
             $( #[$attr:meta] )*
@@ -217,13 +212,14 @@ pub mod on {
         )* ) => {
             $(
                 $(#[$attr])*
-                pub struct $wrapper(pub Arc<dyn $eventdata>);
+                #[derive(Debug)]
+                pub struct $wrapper(pub DioxusEvent<$eventdata>);
 
                 // todo: derefing to the event is fine (and easy) but breaks some IDE stuff like (go to source)
                 // going to source in fact takes you to the source of Rc which is... less than useful
                 // Either we ask for this to be changed in Rust-analyzer or manually impkement the trait
                 impl Deref for $wrapper {
-                    type Target = Arc<dyn $eventdata>;
+                    type Target = DioxusEvent<$eventdata>;
                     fn deref(&self) -> &Self::Target {
                         &self.0
                     }
@@ -599,57 +595,20 @@ pub mod on {
         ];
     }
 
-    pub struct GenericEvent(pub Arc<dyn GenericEventInner>);
-
-    pub trait GenericEventInner {
-        /// Return a reference to the raw event. User will need to downcast the event to the right platform-specific type.
-        fn raw_event(&self) -> &dyn Any;
-        /// Returns whether or not a specific event is a bubbling event
-        fn bubbles(&self) -> bool;
-        /// Sets or returns whether the event should propagate up the hierarchy or not
-        fn cancel_bubble(&self);
-        /// Returns whether or not an event can have its default action prevented
-        fn cancelable(&self) -> bool;
-        /// Returns whether the event is composed or not
-        fn composed(&self) -> bool;
-
-        // Currently not supported because those no way we could possibly support it
-        // just cast the event to the right platform-specific type and return it
-        // /// Returns the event's path
-        // fn composed_path(&self) -> String;
-
-        /// Returns the element whose event listeners triggered the event
-        fn current_target(&self);
-        /// Returns whether or not the preventDefault method was called for the event
-        fn default_prevented(&self) -> bool;
-        /// Returns which phase of the event flow is currently being evaluated
-        fn event_phase(&self) -> u16;
-        /// Returns whether or not an event is trusted
-        fn is_trusted(&self) -> bool;
-        /// Cancels the event if it is cancelable, meaning that the default action that belongs to the event will
-        fn prevent_default(&self);
-        /// Prevents other listeners of the same event from being called
-        fn stop_immediate_propagation(&self);
-        /// Prevents further propagation of an event during event flow
-        fn stop_propagation(&self);
-        /// Returns the element that triggered the event
-        fn target(&self);
-        /// Returns the time (in milliseconds relative to the epoch) at which the event was created
-        fn time_stamp(&self) -> f64;
-    }
-
-    pub trait ClipboardEventInner {
+    #[derive(Debug)]
+    pub struct ClipboardEventInner(
         // DOMDataTransfer clipboardData
+    );
+
+    #[derive(Debug)]
+    pub struct CompositionEventInner {
+        pub data: String,
     }
 
-    pub trait CompositionEventInner {
-        fn data(&self) -> String;
-    }
-
-    pub trait KeyboardEventInner {
-        fn alt_key(&self) -> bool;
-
-        fn char_code(&self) -> u32;
+    #[derive(Debug)]
+    pub struct KeyboardEventInner {
+        pub alt_key: bool,
+        pub char_code: u32,
 
         /// Identify which "key" was entered.
         ///
@@ -669,8 +628,8 @@ pub mod on {
         ///      _ => {}
         /// }
         /// ```
-        ///
-        fn key(&self) -> String;
+        ///    
+        pub key: String,
 
         /// Get the key code as an enum Variant.
         ///
@@ -689,335 +648,393 @@ pub mod on {
         ///     _ => {}
         /// }
         /// ```
-        ///
-        fn key_code(&self) -> KeyCode;
-
-        /// Check if the ctrl key was pressed down
-        fn ctrl_key(&self) -> bool;
-
-        fn get_modifier_state(&self, key_code: &str) -> bool;
-
-        fn locale(&self) -> String;
-        fn location(&self) -> usize;
-        fn meta_key(&self) -> bool;
-        fn repeat(&self) -> bool;
-        fn shift_key(&self) -> bool;
-        fn which(&self) -> usize;
+        ///    
+        pub key_code: KeyCode,
+        pub ctrl_key: bool,
+        pub locale: String,
+        pub location: usize,
+        pub meta_key: bool,
+        pub repeat: bool,
+        pub shift_key: bool,
+        pub which: usize,
+        // get_modifier_state: bool,
     }
 
-    pub trait FocusEventInner {
-        /* DOMEventInnerTarget relatedTarget */
+    #[derive(Debug)]
+    pub struct FocusEventInner {/* DOMEventInner:  Send + SyncTarget relatedTarget */}
+
+    #[derive(Debug)]
+    pub struct FormEventInner {
+        /* DOMEventInner:  Send + SyncTarget relatedTarget */
+        pub value: String,
     }
 
-    pub trait FormEventInner {
-        fn value(&self) -> String;
+    #[derive(Debug)]
+    pub struct MouseEventInner {
+        pub alt_key: bool,
+        pub button: i16,
+        pub buttons: u16,
+        pub client_x: i32,
+        pub client_y: i32,
+        pub ctrl_key: bool,
+        pub meta_key: bool,
+        pub page_x: i32,
+        pub page_y: i32,
+        pub screen_x: i32,
+        pub screen_y: i32,
+        pub shift_key: bool,
+        // fn get_modifier_state(&self, key_code: &str) -> bool;
     }
 
-    pub trait MouseEventInner {
-        fn alt_key(&self) -> bool;
-        fn button(&self) -> i16;
-        fn buttons(&self) -> u16;
-        /// Get the X coordinate of the mouse relative to the window
-        fn client_x(&self) -> i32;
-        fn client_y(&self) -> i32;
-        fn ctrl_key(&self) -> bool;
-        fn meta_key(&self) -> bool;
-        fn page_x(&self) -> i32;
-        fn page_y(&self) -> i32;
-        fn screen_x(&self) -> i32;
-        fn screen_y(&self) -> i32;
-        fn shift_key(&self) -> bool;
-        fn get_modifier_state(&self, key_code: &str) -> bool;
-    }
-
-    pub trait PointerEventInner {
+    #[derive(Debug)]
+    pub struct PointerEventInner {
         // Mouse only
-        fn alt_key(&self) -> bool;
-        fn button(&self) -> i16;
-        fn buttons(&self) -> u16;
-        fn client_x(&self) -> i32;
-        fn client_y(&self) -> i32;
-        fn ctrl_key(&self) -> bool;
-        fn meta_key(&self) -> bool;
-        fn page_x(&self) -> i32;
-        fn page_y(&self) -> i32;
-        fn screen_x(&self) -> i32;
-        fn screen_y(&self) -> i32;
-        fn shift_key(&self) -> bool;
-        fn get_modifier_state(&self, key_code: &str) -> bool;
-        fn pointer_id(&self) -> i32;
-        fn width(&self) -> i32;
-        fn height(&self) -> i32;
-        fn pressure(&self) -> f32;
-        fn tangential_pressure(&self) -> f32;
-        fn tilt_x(&self) -> i32;
-        fn tilt_y(&self) -> i32;
-        fn twist(&self) -> i32;
-        fn pointer_type(&self) -> String;
-        fn is_primary(&self) -> bool;
+        pub alt_key: bool,
+        pub button: i16,
+        pub buttons: u16,
+        pub client_x: i32,
+        pub client_y: i32,
+        pub ctrl_key: bool,
+        pub meta_key: bool,
+        pub page_x: i32,
+        pub page_y: i32,
+        pub screen_x: i32,
+        pub screen_y: i32,
+        pub shift_key: bool,
+        pub pointer_id: i32,
+        pub width: i32,
+        pub height: i32,
+        pub pressure: f32,
+        pub tangential_pressure: f32,
+        pub tilt_x: i32,
+        pub tilt_y: i32,
+        pub twist: i32,
+        pub pointer_type: String,
+        pub is_primary: bool,
+        // pub get_modifier_state: bool,
     }
 
-    pub trait SelectionEventInner {}
+    #[derive(Debug)]
+    pub struct SelectionEventInner {}
 
-    pub trait TouchEventInner {
-        fn alt_key(&self) -> bool;
-        fn ctrl_key(&self) -> bool;
-        fn meta_key(&self) -> bool;
-        fn shift_key(&self) -> bool;
-        fn get_modifier_state(&self, key_code: &str) -> bool;
+    #[derive(Debug)]
+    pub struct TouchEventInner {
+        pub alt_key: bool,
+        pub ctrl_key: bool,
+        pub meta_key: bool,
+        pub shift_key: bool,
+        // get_modifier_state: bool,
         // changedTouches: DOMTouchList,
         // targetTouches: DOMTouchList,
         // touches: DOMTouchList,
     }
 
-    pub trait UIEventInner {
-        // DOMAbstractView view
-        fn detail(&self) -> i32;
+    #[derive(Debug)]
+    pub struct WheelEventInner {
+        pub delta_mode: u32,
+        pub delta_x: f64,
+        pub delta_y: f64,
+        pub delta_z: f64,
     }
 
-    pub trait WheelEventInner {
-        fn delta_mode(&self) -> u32;
-        fn delta_x(&self) -> f64;
-        fn delta_y(&self) -> f64;
-        fn delta_z(&self) -> f64;
-    }
+    #[derive(Debug)]
+    pub struct MediaEventInner {}
 
-    pub trait MediaEventInner {}
-
-    pub trait ImageEventInner {
+    #[derive(Debug)]
+    pub struct ImageEventInner {
         //     load error
+        pub load_error: bool,
     }
 
-    pub trait AnimationEventInner {
-        fn animation_name(&self) -> String;
-        fn pseudo_element(&self) -> String;
-        fn elapsed_time(&self) -> f32;
+    #[derive(Debug)]
+    pub struct AnimationEventInner {
+        pub animation_name: String,
+        pub pseudo_element: String,
+        pub elapsed_time: f32,
     }
 
-    pub trait TransitionEventInner {
-        fn property_name(&self) -> String;
-        fn pseudo_element(&self) -> String;
-        fn elapsed_time(&self) -> f32;
+    #[derive(Debug)]
+    pub struct TransitionEventInner {
+        pub property_name: String,
+        pub pseudo_element: String,
+        pub elapsed_time: f32,
     }
 
-    pub trait ToggleEventInner {}
+    #[derive(Debug)]
+    pub struct ToggleEventInner {}
+}
 
-    pub use util::KeyCode;
-    mod util {
+#[derive(Clone, Copy, Debug)]
+pub enum KeyCode {
+    Backspace = 8,
+    Tab = 9,
+    Enter = 13,
+    Shift = 16,
+    Ctrl = 17,
+    Alt = 18,
+    Pause = 19,
+    CapsLock = 20,
+    Escape = 27,
+    PageUp = 33,
+    PageDown = 34,
+    End = 35,
+    Home = 36,
+    LeftArrow = 37,
+    UpArrow = 38,
+    RightArrow = 39,
+    DownArrow = 40,
+    Insert = 45,
+    Delete = 46,
+    Num0 = 48,
+    Num1 = 49,
+    Num2 = 50,
+    Num3 = 51,
+    Num4 = 52,
+    Num5 = 53,
+    Num6 = 54,
+    Num7 = 55,
+    Num8 = 56,
+    Num9 = 57,
+    A = 65,
+    B = 66,
+    C = 67,
+    D = 68,
+    E = 69,
+    F = 70,
+    G = 71,
+    H = 72,
+    I = 73,
+    J = 74,
+    K = 75,
+    L = 76,
+    M = 77,
+    N = 78,
+    O = 79,
+    P = 80,
+    Q = 81,
+    R = 82,
+    S = 83,
+    T = 84,
+    U = 85,
+    V = 86,
+    W = 87,
+    X = 88,
+    Y = 89,
+    Z = 90,
+    LeftWindow = 91,
+    RightWindow = 92,
+    SelectKey = 93,
+    Numpad0 = 96,
+    Numpad1 = 97,
+    Numpad2 = 98,
+    Numpad3 = 99,
+    Numpad4 = 100,
+    Numpad5 = 101,
+    Numpad6 = 102,
+    Numpad7 = 103,
+    Numpad8 = 104,
+    Numpad9 = 105,
+    Multiply = 106,
+    Add = 107,
+    Subtract = 109,
+    DecimalPoint = 110,
+    Divide = 111,
+    F1 = 112,
+    F2 = 113,
+    F3 = 114,
+    F4 = 115,
+    F5 = 116,
+    F6 = 117,
+    F7 = 118,
+    F8 = 119,
+    F9 = 120,
+    F10 = 121,
+    F11 = 122,
+    F12 = 123,
+    NumLock = 144,
+    ScrollLock = 145,
+    Semicolon = 186,
+    EqualSign = 187,
+    Comma = 188,
+    Dash = 189,
+    Period = 190,
+    ForwardSlash = 191,
+    GraveAccent = 192,
+    OpenBracket = 219,
+    BackSlash = 220,
+    CloseBraket = 221,
+    SingleQuote = 222,
+    Unknown,
+}
 
-        #[derive(Clone, Copy)]
-        pub enum KeyCode {
-            Backspace = 8,
-            Tab = 9,
-            Enter = 13,
-            Shift = 16,
-            Ctrl = 17,
-            Alt = 18,
-            Pause = 19,
-            CapsLock = 20,
-            Escape = 27,
-            PageUp = 33,
-            PageDown = 34,
-            End = 35,
-            Home = 36,
-            LeftArrow = 37,
-            UpArrow = 38,
-            RightArrow = 39,
-            DownArrow = 40,
-            Insert = 45,
-            Delete = 46,
-            Num0 = 48,
-            Num1 = 49,
-            Num2 = 50,
-            Num3 = 51,
-            Num4 = 52,
-            Num5 = 53,
-            Num6 = 54,
-            Num7 = 55,
-            Num8 = 56,
-            Num9 = 57,
-            A = 65,
-            B = 66,
-            C = 67,
-            D = 68,
-            E = 69,
-            F = 70,
-            G = 71,
-            H = 72,
-            I = 73,
-            J = 74,
-            K = 75,
-            L = 76,
-            M = 77,
-            N = 78,
-            O = 79,
-            P = 80,
-            Q = 81,
-            R = 82,
-            S = 83,
-            T = 84,
-            U = 85,
-            V = 86,
-            W = 87,
-            X = 88,
-            Y = 89,
-            Z = 90,
-            LeftWindow = 91,
-            RightWindow = 92,
-            SelectKey = 93,
-            Numpad0 = 96,
-            Numpad1 = 97,
-            Numpad2 = 98,
-            Numpad3 = 99,
-            Numpad4 = 100,
-            Numpad5 = 101,
-            Numpad6 = 102,
-            Numpad7 = 103,
-            Numpad8 = 104,
-            Numpad9 = 105,
-            Multiply = 106,
-            Add = 107,
-            Subtract = 109,
-            DecimalPoint = 110,
-            Divide = 111,
-            F1 = 112,
-            F2 = 113,
-            F3 = 114,
-            F4 = 115,
-            F5 = 116,
-            F6 = 117,
-            F7 = 118,
-            F8 = 119,
-            F9 = 120,
-            F10 = 121,
-            F11 = 122,
-            F12 = 123,
-            NumLock = 144,
-            ScrollLock = 145,
-            Semicolon = 186,
-            EqualSign = 187,
-            Comma = 188,
-            Dash = 189,
-            Period = 190,
-            ForwardSlash = 191,
-            GraveAccent = 192,
-            OpenBracket = 219,
-            BackSlash = 220,
-            CloseBraket = 221,
-            SingleQuote = 222,
-            Unknown,
+impl KeyCode {
+    pub fn from_raw_code(i: u8) -> Self {
+        use KeyCode::*;
+        match i {
+            8 => Backspace,
+            9 => Tab,
+            13 => Enter,
+            16 => Shift,
+            17 => Ctrl,
+            18 => Alt,
+            19 => Pause,
+            20 => CapsLock,
+            27 => Escape,
+            33 => PageUp,
+            34 => PageDown,
+            35 => End,
+            36 => Home,
+            37 => LeftArrow,
+            38 => UpArrow,
+            39 => RightArrow,
+            40 => DownArrow,
+            45 => Insert,
+            46 => Delete,
+            48 => Num0,
+            49 => Num1,
+            50 => Num2,
+            51 => Num3,
+            52 => Num4,
+            53 => Num5,
+            54 => Num6,
+            55 => Num7,
+            56 => Num8,
+            57 => Num9,
+            65 => A,
+            66 => B,
+            67 => C,
+            68 => D,
+            69 => E,
+            70 => F,
+            71 => G,
+            72 => H,
+            73 => I,
+            74 => J,
+            75 => K,
+            76 => L,
+            77 => M,
+            78 => N,
+            79 => O,
+            80 => P,
+            81 => Q,
+            82 => R,
+            83 => S,
+            84 => T,
+            85 => U,
+            86 => V,
+            87 => W,
+            88 => X,
+            89 => Y,
+            90 => Z,
+            91 => LeftWindow,
+            92 => RightWindow,
+            93 => SelectKey,
+            96 => Numpad0,
+            97 => Numpad1,
+            98 => Numpad2,
+            99 => Numpad3,
+            100 => Numpad4,
+            101 => Numpad5,
+            102 => Numpad6,
+            103 => Numpad7,
+            104 => Numpad8,
+            105 => Numpad9,
+            106 => Multiply,
+            107 => Add,
+            109 => Subtract,
+            110 => DecimalPoint,
+            111 => Divide,
+            112 => F1,
+            113 => F2,
+            114 => F3,
+            115 => F4,
+            116 => F5,
+            117 => F6,
+            118 => F7,
+            119 => F8,
+            120 => F9,
+            121 => F10,
+            122 => F11,
+            123 => F12,
+            144 => NumLock,
+            145 => ScrollLock,
+            186 => Semicolon,
+            187 => EqualSign,
+            188 => Comma,
+            189 => Dash,
+            190 => Period,
+            191 => ForwardSlash,
+            192 => GraveAccent,
+            219 => OpenBracket,
+            220 => BackSlash,
+            221 => CloseBraket,
+            222 => SingleQuote,
+            _ => Unknown,
+        }
+    }
+
+    // get the raw code
+    pub fn raw_code(&self) -> u32 {
+        *self as u32
+    }
+}
+
+pub(crate) fn event_meta(event: &UserEvent) -> (bool, EventPriority) {
+    use EventPriority::*;
+
+    match event.name {
+        // clipboard
+        "copy" | "cut" | "paste" => (true, Medium),
+
+        // Composition
+        "compositionend" | "compositionstart" | "compositionupdate" => (true, Low),
+
+        // Keyboard
+        "keydown" | "keypress" | "keyup" => (true, High),
+
+        // Focus
+        "focus" | "blur" => (true, Low),
+
+        // Form
+        "change" | "input" | "invalid" | "reset" | "submit" => (true, Medium),
+
+        // Mouse
+        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
+        | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
+        | "mouseleave" | "mouseout" | "mouseover" | "mouseup" => (true, High),
+
+        "mousemove" => (false, Medium),
+
+        // Pointer
+        "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
+        | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
+            (true, Medium)
         }
 
-        impl KeyCode {
-            pub fn from_raw_code(i: u8) -> Self {
-                use KeyCode::*;
-                match i {
-                    8 => Backspace,
-                    9 => Tab,
-                    13 => Enter,
-                    16 => Shift,
-                    17 => Ctrl,
-                    18 => Alt,
-                    19 => Pause,
-                    20 => CapsLock,
-                    27 => Escape,
-                    33 => PageUp,
-                    34 => PageDown,
-                    35 => End,
-                    36 => Home,
-                    37 => LeftArrow,
-                    38 => UpArrow,
-                    39 => RightArrow,
-                    40 => DownArrow,
-                    45 => Insert,
-                    46 => Delete,
-                    48 => Num0,
-                    49 => Num1,
-                    50 => Num2,
-                    51 => Num3,
-                    52 => Num4,
-                    53 => Num5,
-                    54 => Num6,
-                    55 => Num7,
-                    56 => Num8,
-                    57 => Num9,
-                    65 => A,
-                    66 => B,
-                    67 => C,
-                    68 => D,
-                    69 => E,
-                    70 => F,
-                    71 => G,
-                    72 => H,
-                    73 => I,
-                    74 => J,
-                    75 => K,
-                    76 => L,
-                    77 => M,
-                    78 => N,
-                    79 => O,
-                    80 => P,
-                    81 => Q,
-                    82 => R,
-                    83 => S,
-                    84 => T,
-                    85 => U,
-                    86 => V,
-                    87 => W,
-                    88 => X,
-                    89 => Y,
-                    90 => Z,
-                    91 => LeftWindow,
-                    92 => RightWindow,
-                    93 => SelectKey,
-                    96 => Numpad0,
-                    97 => Numpad1,
-                    98 => Numpad2,
-                    99 => Numpad3,
-                    100 => Numpad4,
-                    101 => Numpad5,
-                    102 => Numpad6,
-                    103 => Numpad7,
-                    104 => Numpad8,
-                    105 => Numpad9,
-                    106 => Multiply,
-                    107 => Add,
-                    109 => Subtract,
-                    110 => DecimalPoint,
-                    111 => Divide,
-                    112 => F1,
-                    113 => F2,
-                    114 => F3,
-                    115 => F4,
-                    116 => F5,
-                    117 => F6,
-                    118 => F7,
-                    119 => F8,
-                    120 => F9,
-                    121 => F10,
-                    122 => F11,
-                    123 => F12,
-                    144 => NumLock,
-                    145 => ScrollLock,
-                    186 => Semicolon,
-                    187 => EqualSign,
-                    188 => Comma,
-                    189 => Dash,
-                    190 => Period,
-                    191 => ForwardSlash,
-                    192 => GraveAccent,
-                    219 => OpenBracket,
-                    220 => BackSlash,
-                    221 => CloseBraket,
-                    222 => SingleQuote,
-                    _ => Unknown,
-                }
-            }
+        // Selection
+        "select" | "touchcancel" | "touchend" => (true, Medium),
 
-            // get the raw code
-            pub fn raw_code(&self) -> u32 {
-                *self as u32
-            }
-        }
+        // Touch
+        "touchmove" | "touchstart" => (true, Medium),
+
+        // Wheel
+        "scroll" | "wheel" => (false, Medium),
+
+        // Media
+        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
+        | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
+        | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
+        | "timeupdate" | "volumechange" | "waiting" => (true, Medium),
+
+        // Animation
+        "animationstart" | "animationend" | "animationiteration" => (true, Medium),
+
+        // Transition
+        "transitionend" => (true, Medium),
+
+        // Toggle
+        "toggle" => (true, Medium),
+
+        _ => (true, Low),
     }
 }

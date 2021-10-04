@@ -185,7 +185,6 @@ pub enum DomEdit<'bump> {
         root: u64,
     },
 
-    RemoveAllChildren,
     CreateTextNode {
         text: &'bump str,
         id: u64,
@@ -232,7 +231,6 @@ impl DomEdit<'_> {
             DomEdit::AppendChildren { .. } => id == "AppendChildren",
             DomEdit::ReplaceWith { .. } => id == "ReplaceWith",
             DomEdit::Remove { .. } => id == "Remove",
-            DomEdit::RemoveAllChildren => id == "RemoveAllChildren",
             DomEdit::CreateTextNode { .. } => id == "CreateTextNode",
             DomEdit::CreateElement { .. } => id == "CreateElement",
             DomEdit::CreateElementNs { .. } => id == "CreateElementNs",

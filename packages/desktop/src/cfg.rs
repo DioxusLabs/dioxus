@@ -4,28 +4,34 @@ use dioxus_core::DomEdit;
 use wry::{
     application::{
         error::OsError,
-        event_loop::EventLoopWindowTarget,
+        event_loop::{EventLoop, EventLoopWindowTarget},
         menu::MenuBar,
         window::{Fullscreen, Icon, Window, WindowBuilder},
     },
-    webview::{RpcRequest, RpcResponse},
+    webview::{RpcRequest, RpcResponse, WebView},
 };
 
 pub struct DesktopConfig<'a> {
     pub window: WindowBuilder,
-    pub(crate) manual_edits: Option<DomEdit<'a>>,
+    pub(crate) manual_edits: Option<Vec<DomEdit<'a>>>,
     pub(crate) pre_rendered: Option<String>,
+    pub(crate) event_handler: Option<Box<dyn Fn(&mut EventLoop<()>, &mut WebView)>>,
 }
 
-impl DesktopConfig<'_> {
+impl<'a> DesktopConfig<'a> {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
         Self {
+            event_handler: None,
             window: Default::default(),
             pre_rendered: None,
             manual_edits: None,
         }
+    }
+
+    pub fn with_edits(&mut self, edits: Vec<DomEdit<'a>>) {
+        self.manual_edits = Some(edits);
     }
 
     pub fn with_prerendered(&mut self, content: String) -> &mut Self {

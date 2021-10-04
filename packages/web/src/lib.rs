@@ -116,7 +116,7 @@ pub fn launch(root_component: FC<()>, configuration: impl FnOnce(WebConfig) -> W
 /// ```
 pub fn launch_with_props<T, F>(root_component: FC<T>, root_properties: T, configuration_builder: F)
 where
-    T: Properties + 'static,
+    T: Send + 'static,
     F: FnOnce(WebConfig) -> WebConfig,
 {
     let config = configuration_builder(WebConfig::default());
@@ -135,7 +135,7 @@ where
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: Properties + 'static>(root: FC<T>, root_props: T, cfg: WebConfig) {
+pub async fn run_with_props<T: 'static + Send>(root: FC<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
     intern_cached_strings();

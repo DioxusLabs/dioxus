@@ -1,5 +1,12 @@
 //! A threadsafe wrapper for the VirtualDom
-
+//!
+//! This is an experimental module, and must be explicitly opted-into.
+//!
+//! It's not guaranteed that this module produces safe results, so use at your own peril.
+//!
+//! The only real "right" answer to a Send VirtualDom is by ensuring all hook data is Send
+//!
+//!
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::VirtualDom;
@@ -18,9 +25,17 @@ use crate::VirtualDom;
 /// directly. Even then, it's not possible to access any hook data. This means that non-Send types are only "in play"
 /// while the VirtualDom is locked with a non-Send marker.
 ///
-/// Note that calling "wait for work" on the regular VirtualDom is inherently non-Send. If there are async tasks that
-/// need to be awaited, they must be done thread-local since we don't place any requirements on user tasks. This can be
-/// done with the function "spawn_local" in either tokio or async_std.
+/// Calling "wait for work" on the ThreadsafeVirtualDom does indeed work, because this method only accesses `Send` types.
+/// Otherwise, the VirtualDom must be unlocked on the current thread to modify any data.
+///
+/// Dioxus does have the concept of local tasks and non-local tasks.
+///
+/// For the ThreadsafeVirtualDom, non-Send tasks are not ran - and will error out during a Debug build if one is submitted.
+///
+///
+///
+/// When Tasks are submitted to a thread-local executor,
+///
 pub struct ThreadsafeVirtualDom {
     inner: Arc<Mutex<VirtualDom>>,
 }

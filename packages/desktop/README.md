@@ -6,26 +6,19 @@ Dioxus-webview is an attempt at making a simpler "Tauri" where creating desktop 
 
 ```rust
 // main.rs
-#[async_std::main]
-async fn main() {
-   dioxus_desktop::new(|cx, props|{
-       let (count, set_count) = use_state(cx, || 0);
-       cx.render(html! {
-            <div>
-                <h1> "Dioxus Desktop Demo" </h1>
-                <p> "Count is {count}"</p>
-                <button onclick=|_| set_count(count + 1) >
-                    "Click to increment"
-                </button>
-            </div>
-       })
-   })
-   .configure_webview(|view| {
-      // custom webview config options
-   })
-   .launch()
-   .await;
+fn main() {
+    dioxus_desktop::new(App, |c| c)
+    .launch()
+    .await;
 }
+static App: FC<()> = |cx, props|{
+    let (count, set_count) = use_state(cx, || 0);
+    rsx!(cx, div {
+        h1 { "Dioxus Desktop Demo" }
+        p { "Count is {count}"}
+        button { onclick: move |_| count += 1}
+    })
+};
 ```
 
 and then to create a native .app:
@@ -45,3 +38,8 @@ By bridging the native process, desktop apps can access full multithreading powe
 Dioxus-desktop is a pure liveview application where all of the state and event handlers are proxied through the liveview and into the native process. For pure server-based liveview, this would normally be too slow (in both render performance and latency), but because the VDom is local, desktop apps are just as fast as Electron.
 
 Dioxus-desktop leverages dioxus-liveview under the hood, but with convenience wrappers around setting up the VDom bridge, proxying events, and serving the initial WebSys-Renderer. The backend is served by Tide, so an async runtime _is_ needed - we recommend async-std in Tokio mode.
+
+
+## Async Runtime
+
+

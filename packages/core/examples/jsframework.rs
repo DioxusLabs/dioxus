@@ -1,3 +1,5 @@
+use dioxus::events::on::MouseEvent;
+use dioxus::events::DioxusEvent;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
@@ -37,6 +39,9 @@ struct RowProps {
     label: Label,
 }
 fn Row<'a>(cx: Context<'a>, props: &'a RowProps) -> DomTree<'a> {
+    let handler = move |evt: MouseEvent| {
+        let g = evt.button;
+    };
     cx.render(rsx! {
         tr {
             td { class:"col-md-1", "{props.row_id}" }
@@ -44,7 +49,7 @@ fn Row<'a>(cx: Context<'a>, props: &'a RowProps) -> DomTree<'a> {
                 a { class: "lbl", "{props.label}" }
             }
             td { class: "col-md-1"
-                a { class: "remove", onclick: move |_| {/* remove */}
+                a { class: "remove", onclick: {handler}
                     span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
                 }
             }

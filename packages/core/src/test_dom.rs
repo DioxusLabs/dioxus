@@ -12,7 +12,8 @@ pub struct TestDom {
 impl TestDom {
     pub fn new() -> TestDom {
         let bump = Bump::new();
-        let scheduler = Scheduler::new();
+        let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
+        let scheduler = Scheduler::new(sender, receiver);
         TestDom { bump, scheduler }
     }
 

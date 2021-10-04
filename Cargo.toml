@@ -85,6 +85,7 @@ members = [
     "packages/ssr",
     "packages/desktop",
     "packages/mobile",
+    "packages/webview-client"
 ]
 
 

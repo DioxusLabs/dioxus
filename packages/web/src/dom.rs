@@ -8,7 +8,7 @@
 //! - Partial delegation?>
 
 use dioxus_core::{
-    events::{SyntheticEvent, UserEvent},
+    events::{DioxusEvent, KeyCode, SyntheticEvent, UserEvent},
     mutations::NodeRefMutation,
     scheduler::SchedulerMsg,
     DomEdit, ElementId, ScopeId,
@@ -110,7 +110,6 @@ impl WebsysDom {
                 DomEdit::AppendChildren { many } => self.append_children(many),
                 DomEdit::ReplaceWith { m, root } => self.replace_with(m, root),
                 DomEdit::Remove { root } => self.remove(root),
-                DomEdit::RemoveAllChildren => self.remove_all_children(),
                 DomEdit::CreateTextNode { text, id } => self.create_text_node(text, id),
                 DomEdit::CreateElement { tag, id } => self.create_element(tag, None, id),
                 DomEdit::CreateElementNs { tag, id, ns } => self.create_element(tag, Some(ns), id),
@@ -206,10 +205,6 @@ impl WebsysDom {
                 parent.remove_child(&node).unwrap();
             }
         }
-    }
-
-    fn remove_all_children(&mut self) {
-        todo!()
     }
 
     fn create_placeholder(&mut self, id: u64) {
@@ -464,87 +459,213 @@ impl Stack {
     }
 }
 
+pub struct DioxusWebsysEvent(web_sys::Event);
+unsafe impl Send for DioxusWebsysEvent {}
+unsafe impl Sync for DioxusWebsysEvent {}
+
+// trait MyTrait {}
+// impl MyTrait for web_sys::Event {}
+
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
 fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
     use crate::events::*;
     use dioxus_core::events::on::*;
     match event.type_().as_str() {
-        "copy" | "cut" | "paste" => {
-            SyntheticEvent::ClipboardEvent(ClipboardEvent(Arc::new(WebsysClipboardEvent(event))))
-        }
+        "copy" | "cut" | "paste" => SyntheticEvent::ClipboardEvent(ClipboardEvent(
+            DioxusEvent::new(ClipboardEventInner(), DioxusWebsysEvent(event)),
+        )),
         "compositionend" | "compositionstart" | "compositionupdate" => {
-            let evt: web_sys::CompositionEvent = event.dyn_into().unwrap();
-            SyntheticEvent::CompositionEvent(CompositionEvent(Arc::new(WebsysCompositionEvent(
-                evt,
-            ))))
+            let evt: &web_sys::CompositionEvent = event.dyn_ref().unwrap();
+            SyntheticEvent::CompositionEvent(CompositionEvent(DioxusEvent::new(
+                CompositionEventInner {
+                    data: evt.data().unwrap_or_default(),
+                },
+                DioxusWebsysEvent(event),
+            )))
         }
         "keydown" | "keypress" | "keyup" => {
-            let evt: web_sys::KeyboardEvent = event.dyn_into().unwrap();
-            SyntheticEvent::KeyboardEvent(KeyboardEvent(Arc::new(WebsysKeyboardEvent(evt))))
+            let evt: &web_sys::KeyboardEvent = event.dyn_ref().unwrap();
+            SyntheticEvent::KeyboardEvent(KeyboardEvent(DioxusEvent::new(
+                KeyboardEventInner {
+                    alt_key: evt.alt_key(),
+                    char_code: evt.char_code(),
+                    key: evt.key(),
+                    key_code: KeyCode::from_raw_code(evt.key_code() as u8),
+                    ctrl_key: evt.ctrl_key(),
+                    locale: "not implemented".to_string(),
+                    location: evt.location() as usize,
+                    meta_key: evt.meta_key(),
+                    repeat: evt.repeat(),
+                    shift_key: evt.shift_key(),
+                    which: evt.which() as usize,
+                },
+                DioxusWebsysEvent(event),
+            )))
         }
-        "focus" | "blur" => {
-            let evt: web_sys::FocusEvent = event.dyn_into().unwrap();
-            SyntheticEvent::FocusEvent(FocusEvent(Arc::new(WebsysFocusEvent(evt))))
-        }
-        "change" => {
-            let evt = event.dyn_into().unwrap();
-            SyntheticEvent::GenericEvent(GenericEvent(Arc::new(WebsysGenericUiEvent(evt))))
-        }
+        "focus" | "blur" => SyntheticEvent::FocusEvent(FocusEvent(DioxusEvent::new(
+            FocusEventInner {},
+            DioxusWebsysEvent(event),
+        ))),
+        "change" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
+
+        // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
+        // don't have a good solution with the serialized event problem
         "input" | "invalid" | "reset" | "submit" => {
-            let evt: web_sys::Event = event.dyn_into().unwrap();
-            SyntheticEvent::FormEvent(FormEvent(Arc::new(WebsysFormEvent(evt))))
+            let evt: &web_sys::Event = event.dyn_ref().unwrap();
+
+            let target: web_sys::EventTarget = evt.target().unwrap();
+            let value: String = (&target)
+                .dyn_ref()
+                .map(|input: &web_sys::HtmlInputElement| input.value())
+                .or_else(|| {
+                    target
+                        .dyn_ref()
+                        .map(|input: &web_sys::HtmlTextAreaElement| input.value())
+                })
+                // select elements are NOT input events - because - why woudn't they be??
+                .or_else(|| {
+                    target
+                        .dyn_ref()
+                        .map(|input: &web_sys::HtmlSelectElement| input.value())
+                })
+                .or_else(|| {
+                    target
+                        .dyn_ref::<web_sys::HtmlElement>()
+                        .unwrap()
+                        .text_content()
+                })
+                .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
+
+            SyntheticEvent::FormEvent(FormEvent(DioxusEvent::new(
+                FormEventInner { value },
+                DioxusWebsysEvent(event),
+            )))
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            let evt: web_sys::MouseEvent = event.dyn_into().unwrap();
-            SyntheticEvent::MouseEvent(MouseEvent(Arc::new(WebsysMouseEvent(evt))))
+            let evt: &web_sys::MouseEvent = event.dyn_ref().unwrap();
+            SyntheticEvent::MouseEvent(MouseEvent(DioxusEvent::new(
+                MouseEventInner {
+                    alt_key: evt.alt_key(),
+                    button: evt.button(),
+                    buttons: evt.buttons(),
+                    client_x: evt.client_x(),
+                    client_y: evt.client_y(),
+                    ctrl_key: evt.ctrl_key(),
+                    meta_key: evt.meta_key(),
+                    screen_x: evt.screen_x(),
+                    screen_y: evt.screen_y(),
+                    shift_key: evt.shift_key(),
+                    page_x: evt.page_x(),
+                    page_y: evt.page_y(),
+                },
+                DioxusWebsysEvent(event),
+            )))
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            let evt: web_sys::PointerEvent = event.dyn_into().unwrap();
-            SyntheticEvent::PointerEvent(PointerEvent(Arc::new(WebsysPointerEvent(evt))))
+            let evt: &web_sys::PointerEvent = event.dyn_ref().unwrap();
+            SyntheticEvent::PointerEvent(PointerEvent(DioxusEvent::new(
+                PointerEventInner {
+                    alt_key: evt.alt_key(),
+                    button: evt.button(),
+                    buttons: evt.buttons(),
+                    client_x: evt.client_x(),
+                    client_y: evt.client_y(),
+                    ctrl_key: evt.ctrl_key(),
+                    meta_key: evt.meta_key(),
+                    page_x: evt.page_x(),
+                    page_y: evt.page_y(),
+                    screen_x: evt.screen_x(),
+                    screen_y: evt.screen_y(),
+                    shift_key: evt.shift_key(),
+                    pointer_id: evt.pointer_id(),
+                    width: evt.width(),
+                    height: evt.height(),
+                    pressure: evt.pressure(),
+                    tangential_pressure: evt.tangential_pressure(),
+                    tilt_x: evt.tilt_x(),
+                    tilt_y: evt.tilt_y(),
+                    twist: evt.twist(),
+                    pointer_type: evt.pointer_type(),
+                    is_primary: evt.is_primary(),
+                    // get_modifier_state: evt.get_modifier_state(),
+                },
+                DioxusWebsysEvent(event),
+            )))
         }
-        "select" => {
-            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::SelectionEvent(SelectionEvent(Arc::new(WebsysGenericUiEvent(evt))))
-        }
+        "select" => SyntheticEvent::SelectionEvent(SelectionEvent(DioxusEvent::new(
+            SelectionEventInner {},
+            DioxusWebsysEvent(event),
+        ))),
+
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
-            let evt: web_sys::TouchEvent = event.dyn_into().unwrap();
-            SyntheticEvent::TouchEvent(TouchEvent(Arc::new(WebsysTouchEvent(evt))))
+            let evt: &web_sys::TouchEvent = event.dyn_ref().unwrap();
+            SyntheticEvent::TouchEvent(TouchEvent(DioxusEvent::new(
+                TouchEventInner {
+                    alt_key: evt.alt_key(),
+                    ctrl_key: evt.ctrl_key(),
+                    meta_key: evt.meta_key(),
+                    shift_key: evt.shift_key(),
+                },
+                DioxusWebsysEvent(event),
+            )))
         }
-        "scroll" => {
-            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::GenericEvent(GenericEvent(Arc::new(WebsysGenericUiEvent(evt))))
-        }
+
+        "scroll" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
+
         "wheel" => {
-            let evt: web_sys::WheelEvent = event.dyn_into().unwrap();
-            SyntheticEvent::WheelEvent(WheelEvent(Arc::new(WebsysWheelEvent(evt))))
+            let evt: &web_sys::WheelEvent = event.dyn_ref().unwrap();
+            SyntheticEvent::WheelEvent(WheelEvent(DioxusEvent::new(
+                WheelEventInner {
+                    delta_x: evt.delta_x(),
+                    delta_y: evt.delta_y(),
+                    delta_z: evt.delta_z(),
+                    delta_mode: evt.delta_mode(),
+                },
+                DioxusWebsysEvent(event),
+            )))
         }
+
         "animationstart" | "animationend" | "animationiteration" => {
-            let evt: web_sys::AnimationEvent = event.dyn_into().unwrap();
-            SyntheticEvent::AnimationEvent(AnimationEvent(Arc::new(WebsysAnimationEvent(evt))))
+            let evt: &web_sys::AnimationEvent = event.dyn_ref().unwrap();
+            SyntheticEvent::AnimationEvent(AnimationEvent(DioxusEvent::new(
+                AnimationEventInner {
+                    elapsed_time: evt.elapsed_time(),
+                    animation_name: evt.animation_name(),
+                    pseudo_element: evt.pseudo_element(),
+                },
+                DioxusWebsysEvent(event),
+            )))
         }
+
         "transitionend" => {
-            let evt: web_sys::TransitionEvent = event.dyn_into().unwrap();
-            SyntheticEvent::TransitionEvent(TransitionEvent(Arc::new(WebsysTransitionEvent(evt))))
+            let evt: &web_sys::TransitionEvent = event.dyn_ref().unwrap();
+            SyntheticEvent::TransitionEvent(TransitionEvent(DioxusEvent::new(
+                TransitionEventInner {
+                    elapsed_time: evt.elapsed_time(),
+                    property_name: evt.property_name(),
+                    pseudo_element: evt.pseudo_element(),
+                },
+                DioxusWebsysEvent(event),
+            )))
         }
+
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => {
-            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::MediaEvent(MediaEvent(Arc::new(WebsysMediaEvent(evt))))
-        }
-        "toggle" => {
-            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::ToggleEvent(ToggleEvent(Arc::new(WebsysToggleEvent(evt))))
-        }
-        _ => {
-            let evt: web_sys::UiEvent = event.dyn_into().unwrap();
-            SyntheticEvent::GenericEvent(GenericEvent(Arc::new(WebsysGenericUiEvent(evt))))
-        }
+        | "timeupdate" | "volumechange" | "waiting" => SyntheticEvent::MediaEvent(MediaEvent(
+            DioxusEvent::new(MediaEventInner {}, DioxusWebsysEvent(event)),
+        )),
+
+        "toggle" => SyntheticEvent::ToggleEvent(ToggleEvent(DioxusEvent::new(
+            ToggleEventInner {},
+            DioxusWebsysEvent(event),
+        ))),
+
+        _ => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
     }
 }
 

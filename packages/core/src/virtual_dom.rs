@@ -19,8 +19,10 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+
 use crate::innerlude::*;
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{any::Any, rc::Rc};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 ///
@@ -121,6 +123,20 @@ impl VirtualDom {
     /// let mutations = dom.rebuild();
     /// ```
     pub fn new_with_props<P: 'static + Send>(root: FC<P>, root_props: P) -> Self {
+        let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
+        Self::new_with_props_and_scheduler(root, root_props, sender, receiver)
+    }
+
+    /// Launch the VirtualDom, but provide your own channel for receiving and sending messages into the scheduler.
+    ///
+    /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
+    /// VirtualDom to be created just to retrive its channel receiver.
+    pub fn new_with_props_and_scheduler<P: 'static + Send>(
+        root: FC<P>,
+        root_props: P,
+        sender: UnboundedSender<SchedulerMsg>,
+        receiver: UnboundedReceiver<SchedulerMsg>,
+    ) -> Self {
         let root_fc = Box::new(root);
 
         let root_props: Rc<dyn Any + Send> = Rc::new(root_props);
@@ -132,7 +148,7 @@ impl VirtualDom {
             std::mem::transmute(root(Context { scope }, props))
         });
 
-        let scheduler = Scheduler::new();
+        let scheduler = Scheduler::new(sender, receiver);
 
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
             Scope::new(
@@ -343,47 +359,46 @@ impl VirtualDom {
     /// Waits for the scheduler to have work
     /// This lets us poll async tasks during idle periods without blocking the main thread.
     pub async fn wait_for_work(&mut self) {
-        todo!("making vdom send right now");
-        // if self.scheduler.has_any_work() {
-        //     log::debug!("No need to wait for work, we already have some");
-        //     return;
-        // }
+        if self.scheduler.has_any_work() {
+            log::debug!("No need to wait for work, we already have some");
+            return;
+        }
 
-        // log::debug!("No active work.... waiting for some...");
-        // use futures_util::StreamExt;
+        log::debug!("No active work.... waiting for some...");
+        use futures_util::StreamExt;
 
-        // // right now this won't poll events if there is ongoing work
-        // // in the future we want to prioritize some events over ongoing work
-        // // this is coming in the "priorities" PR
+        // right now this won't poll events if there is ongoing work
+        // in the future we want to prioritize some events over ongoing work
+        // this is coming in the "priorities" PR
 
-        // // Wait for any new events if we have nothing to do
-        // // todo: poll the events once even if there is work to do to prevent starvation
-        // futures_util::select! {
-        //     _ = self.scheduler.async_tasks.next() => {}
-        //     msg = self.scheduler.receiver.next() => {
-        //         match msg.unwrap() {
-        //             SchedulerMsg::Task(t) => todo!(),
-        //             SchedulerMsg::Immediate(im) => {
-        //                 self.scheduler.dirty_scopes.insert(im);
-        //             }
-        //             SchedulerMsg::UiEvent(evt) => {
-        //                 self.scheduler.ui_events.push_back(evt);
-        //             }
-        //         }
-        //     },
-        // }
+        // Wait for any new events if we have nothing to do
+        // todo: poll the events once even if there is work to do to prevent starvation
+        futures_util::select! {
+            _ = self.scheduler.async_tasks.next() => {}
+            msg = self.scheduler.receiver.next() => {
+                match msg.unwrap() {
+                    SchedulerMsg::Task(t) => todo!(),
+                    SchedulerMsg::Immediate(im) => {
+                        self.scheduler.dirty_scopes.insert(im);
+                    }
+                    SchedulerMsg::UiEvent(evt) => {
+                        self.scheduler.ui_events.push_back(evt);
+                    }
+                }
+            },
+        }
 
-        // while let Ok(Some(msg)) = self.scheduler.receiver.try_next() {
-        //     match msg {
-        //         SchedulerMsg::Task(t) => todo!(),
-        //         SchedulerMsg::Immediate(im) => {
-        //             self.scheduler.dirty_scopes.insert(im);
-        //         }
-        //         SchedulerMsg::UiEvent(evt) => {
-        //             self.scheduler.ui_events.push_back(evt);
-        //         }
-        //     }
-        // }
+        while let Ok(Some(msg)) = self.scheduler.receiver.try_next() {
+            match msg {
+                SchedulerMsg::Task(t) => todo!(),
+                SchedulerMsg::Immediate(im) => {
+                    self.scheduler.dirty_scopes.insert(im);
+                }
+                SchedulerMsg::UiEvent(evt) => {
+                    self.scheduler.ui_events.push_back(evt);
+                }
+            }
+        }
     }
 }
 
@@ -406,15 +421,6 @@ impl std::fmt::Display for VirtualDom {
         renderer.render(self, root, f, 0)
     }
 }
-
-/*
-Send safety...
-
-The VirtualDom can only be "send" if the internals exposed to user code are also "send".
-
-IE it's okay to move an Rc from one thread to another thread as long as it's only used internally
-
-*/
 
 // we never actually use the contents of this root caller
 struct RootCaller(Rc<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>);

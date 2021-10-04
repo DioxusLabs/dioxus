@@ -19,6 +19,7 @@ pub mod context;
 pub mod diff;
 pub mod diff_stack;
 pub mod events;
+// pub mod events2;
 pub mod heuristics;
 pub mod hooklist;
 pub mod hooks;
@@ -61,8 +62,8 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority, LazyNodes, MountType,
-    Mutations, NodeFactory, Properties, ScopeId, SuspendedContext, SyntheticEvent, TaskHandle,
-    TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
+    Mutations, NodeFactory, Properties, SchedulerMsg, ScopeId, SuspendedContext, SyntheticEvent,
+    TaskHandle, TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {
@@ -78,4 +79,5 @@ pub mod exports {
     //! Important dependencies that are used by the rest of the library
     // the foundation of this library
     pub use bumpalo;
+    pub use futures_channel;
 }

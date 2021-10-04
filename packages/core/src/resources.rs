@@ -43,16 +43,6 @@ impl ResourcePool {
         inner.get_mut(idx.0)
     }
 
-    // return a bumpframe with a lifetime attached to the arena borrow
-    // this is useful for merging lifetimes
-    pub fn with_scope_vnode<'b>(
-        &self,
-        _id: ScopeId,
-        _f: impl FnOnce(&mut Scope) -> &VNode<'b>,
-    ) -> Option<&VNode<'b>> {
-        todo!()
-    }
-
     pub fn try_remove(&self, id: ScopeId) -> Option<Scope> {
         let inner = unsafe { &mut *self.components.get() };
         Some(inner.remove(id.0))
