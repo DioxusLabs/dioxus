@@ -456,12 +456,16 @@ impl<'bump> DiffMachine<'bump> {
 
         new.dom_id.set(root);
 
+        // todo: attributes currently rely on the element on top of the stack, but in theory, we only need the id of the
+        // element to modify its attributes.
+        // it would result in fewer instructions if we just set the id directly.
+        // it would also clean up this code some, but that's not very important anyways
+
         // Don't push the root if we don't have to
         let mut has_comitted = false;
         let mut please_commit = |edits: &mut Vec<DomEdit>| {
             if !has_comitted {
                 has_comitted = true;
-                log::info!("planning on committing... {:#?}, {:#?}", old, new);
                 edits.push(PushRoot {
                     id: root.unwrap().as_u64(),
                 });
@@ -476,12 +480,10 @@ impl<'bump> DiffMachine<'bump> {
         // TODO: take a more efficient path than this
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
-                log::info!("checking attribute");
                 if old_attr.value != new_attr.value {
                     please_commit(&mut self.mutations.edits);
                     self.mutations.set_attribute(new_attr);
                 } else if new_attr.is_volatile {
-                    log::debug!("setting due to volatile atttributes");
                     please_commit(&mut self.mutations.edits);
                     self.mutations.set_attribute(new_attr);
                 }

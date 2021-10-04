@@ -106,7 +106,7 @@ pub enum EventPriority {
 }
 
 #[derive(Debug)]
-pub struct DioxusEvent<T: Send> {
+pub struct DioxusEvent<T: Send + Sync> {
     inner: T,
     raw: Box<dyn Any + Send>,
 }
@@ -595,19 +595,21 @@ pub mod on {
         ];
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct ClipboardEventInner(
         // DOMDataTransfer clipboardData
     );
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct CompositionEventInner {
         pub data: String,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct KeyboardEventInner {
-        pub alt_key: bool,
         pub char_code: u32,
 
         /// Identify which "key" was entered.
@@ -650,25 +652,41 @@ pub mod on {
         /// ```
         ///    
         pub key_code: KeyCode,
+
+        /// Indicate if the `alt` modifier key was pressed during this keyboard event
+        pub alt_key: bool,
+
+        /// Indicate if the `ctrl` modifier key was pressed during this keyboard event
         pub ctrl_key: bool,
-        pub locale: String,
-        pub location: usize,
+
+        /// Indicate if the `meta` modifier key was pressed during this keyboard event
         pub meta_key: bool,
-        pub repeat: bool,
+
+        /// Indicate if the `shift` modifier key was pressed during this keyboard event
         pub shift_key: bool,
+
+        pub locale: String,
+
+        pub location: usize,
+
+        pub repeat: bool,
+
         pub which: usize,
         // get_modifier_state: bool,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct FocusEventInner {/* DOMEventInner:  Send + SyncTarget relatedTarget */}
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct FormEventInner {
         /* DOMEventInner:  Send + SyncTarget relatedTarget */
         pub value: String,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct MouseEventInner {
         pub alt_key: bool,
@@ -686,6 +704,7 @@ pub mod on {
         // fn get_modifier_state(&self, key_code: &str) -> bool;
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct PointerEventInner {
         // Mouse only
@@ -714,9 +733,11 @@ pub mod on {
         // pub get_modifier_state: bool,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct SelectionEventInner {}
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct TouchEventInner {
         pub alt_key: bool,
@@ -729,6 +750,7 @@ pub mod on {
         // touches: DOMTouchList,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct WheelEventInner {
         pub delta_mode: u32,
@@ -737,15 +759,18 @@ pub mod on {
         pub delta_z: f64,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct MediaEventInner {}
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct ImageEventInner {
         //     load error
         pub load_error: bool,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct AnimationEventInner {
         pub animation_name: String,
@@ -753,6 +778,7 @@ pub mod on {
         pub elapsed_time: f32,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct TransitionEventInner {
         pub property_name: String,
@@ -760,10 +786,12 @@ pub mod on {
         pub elapsed_time: f32,
     }
 
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct ToggleEventInner {}
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug)]
 pub enum KeyCode {
     Backspace = 8,

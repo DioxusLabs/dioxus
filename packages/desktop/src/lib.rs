@@ -95,11 +95,10 @@ pub fn run<T: Properties + 'static + Send + Sync>(
     let webview = WebViewBuilder::new(window)?
         .with_url("wry://src/index.html")?
         .with_rpc_handler(move |_window: &Window, mut req: RpcRequest| {
+            //
             match req.method.as_str() {
                 "initiate" => {
-                    //
                     let mut rx = (*locked_receiver).borrow_mut();
-
                     match rx.try_recv() {
                         Ok(BridgeEvent::Initialize(edits)) => {
                             Some(RpcResponse::new_result(req.id.take(), Some(edits)))
@@ -108,27 +107,16 @@ pub fn run<T: Properties + 'static + Send + Sync>(
                     }
                 }
                 "user_event" => {
-                    //
                     let data = req.params.unwrap();
-                    log::debug!("Data: {:#?}", data);
                     let event = events::trigger_from_serialized(data);
                     sender.unbounded_send(SchedulerMsg::UiEvent(event)).unwrap();
 
                     let mut rx = (*locked_receiver).borrow_mut();
-
                     match rx.blocking_recv() {
                         Some(BridgeEvent::Update(edits)) => {
-                            log::info!("Passing response back");
                             Some(RpcResponse::new_result(req.id.take(), Some(edits)))
                         }
-                        None => {
-                            log::error!("Sender half is gone");
-                            None
-                        }
-                        _ => {
-                            log::error!("No update event received");
-                            None
-                        }
+                        _ => None,
                     }
                 }
                 _ => todo!("this message failed"),
@@ -200,12 +188,12 @@ fn launch_vdom_with_tokio<C: Send + 'static>(
 
             let edits = vir.rebuild();
 
+            // the receiving end expects something along these lines
             #[derive(Serialize)]
             struct Evt<'a> {
                 edits: Vec<DomEdit<'a>>,
             }
 
-            // let msg = RpcEvent::Initialize { edits: edits.edits };
             let edit_string = serde_json::to_value(Evt { edits: edits.edits }).unwrap();
             match event_tx.send(BridgeEvent::Initialize(edit_string)) {
                 Ok(_) => {}
@@ -214,10 +202,7 @@ fn launch_vdom_with_tokio<C: Send + 'static>(
 
             loop {
                 vir.wait_for_work().await;
-                log::info!("{}", vir);
-
                 let mut muts = vir.run_with_deadline(|| false);
-                log::info!("muts {:#?}", muts);
                 while let Some(edit) = muts.pop() {
                     let edit_string = serde_json::to_value(Evt { edits: edit.edits }).unwrap();
                     match event_tx.send(BridgeEvent::Update(edit_string)) {
