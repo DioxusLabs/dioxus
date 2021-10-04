@@ -59,13 +59,13 @@ static App: FC<()> = |cx, _| {
                 h2 {"Add new client" margin_bottom: "10px" }
                 form { class: "pure-form"
                     input { class: "new-client firstname" placeholder: "First name" value: "{firstname}"
-                        oninput: move |e| firstname.set(e.value())
+                        oninput: move |e| firstname.set(e.value.clone())
                     }
                     input { class: "new-client lastname" placeholder: "Last name" value: "{lastname}"
-                        oninput: move |e| lastname.set(e.value())
+                        oninput: move |e| lastname.set(e.value.clone())
                     }
                     textarea { class: "new-client description" placeholder: "Description" value: "{description}"
-                        oninput: move |e| description.set(e.value())
+                        oninput: move |e| description.set(e.value.clone())
                     }
                 }
                 button { class: "pure-button pure-button-primary", onclick: {add_new}, "Add New" }

@@ -17,6 +17,8 @@ use std::{
     sync::Arc,
 };
 
+pub use on::*;
+
 #[derive(Debug)]
 pub struct UserEvent {
     /// The originator of the event trigger

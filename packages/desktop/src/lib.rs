@@ -93,7 +93,7 @@ pub fn run<T: Properties + 'static + Send + Sync>(
     let locked_receiver = Rc::new(RefCell::new(event_rx));
 
     let webview = WebViewBuilder::new(window)?
-        .with_url("wry://src/index.html")?
+        .with_url("wry://index.html")?
         .with_rpc_handler(move |_window: &Window, mut req: RpcRequest| {
             //
             match req.method.as_str() {
@@ -130,20 +130,11 @@ pub fn run<T: Properties + 'static + Send + Sync>(
             use wry::http::ResponseBuilder;
             // Remove url scheme
             let path = request.uri().replace("wry://", "");
-            // Read the file content from file path
-            let content = read(canonicalize(&path)?)?;
 
-            // Return asset contents and mime types based on file extentions
-            // If you don't want to do this manually, there are some crates for you.
-            // Such as `infer` and `mime_guess`.
-            let (data, meta) = if path.ends_with(".html") {
-                (content, "text/html")
-            } else if path.ends_with(".js") {
-                (content, "text/javascript")
-            } else if path.ends_with(".png") {
-                (content, "image/png")
-            } else {
-                unimplemented!();
+            let (data, meta) = match path.as_str() {
+                "index.html" => (include_bytes!("./index.html").to_vec(), "text/html"),
+                "index.html/index.js" => (include_bytes!("./index.js").to_vec(), "text/javascript"),
+                _ => unimplemented!("path {}", path),
             };
 
             ResponseBuilder::new().mimetype(meta).body(data)

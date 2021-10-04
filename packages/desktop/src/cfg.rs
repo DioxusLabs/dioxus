@@ -30,8 +30,9 @@ impl<'a> DesktopConfig<'a> {
         }
     }
 
-    pub fn with_edits(&mut self, edits: Vec<DomEdit<'a>>) {
+    pub fn with_edits(&mut self, edits: Vec<DomEdit<'a>>) -> &mut Self {
         self.manual_edits = Some(edits);
+        self
     }
 
     pub fn with_prerendered(&mut self, content: String) -> &mut Self {

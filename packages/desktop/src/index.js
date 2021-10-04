@@ -153,6 +153,10 @@ class Interpreter {
       this.root.addEventListener(event_name, (event) => {
         const target = event.target;
         const val = target.getAttribute(`dioxus-event-${event_name}`);
+        if (val == null) {
+          return;
+        }
+
         const fields = val.split(".");
         const scope_id = parseInt(fields[0]);
         const real_id = parseInt(fields[1]);

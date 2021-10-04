@@ -30,7 +30,7 @@ fn main() {
         AppendChildren { many: 1 },
     ];
 
-    dioxus_desktop::WebviewRenderer::run_with_edits(APP, (), |c| c, Some(edits)).expect("failed");
+    dioxus_desktop::run(APP, (), |c| c.with_edits(edits)).unwrap();
 }
 
 const APP: FC<()> = |cx, _props| {

@@ -57,7 +57,7 @@ const App: FC<()> = |cx, props| {
                     class: "new-todo"
                     placeholder: "What needs to be done?"
                     value: "{draft}"
-                    oninput: move |evt| draft.set(evt.value())
+                    oninput: move |evt| draft.set(evt.value.clone())
                 }
             }
             {todolist}
@@ -100,7 +100,7 @@ pub fn TodoEntry<'a>(cx: Context<'a>, props: &TodoEntryProps) -> DomTree<'a> {
        {is_editing.then(|| rsx!{
             input {
                 value: "{contents}"
-                oninput: move |evt| contents.set(evt.value())
+                oninput: move |evt| contents.set(evt.value.clone())
             }
         })}
     })

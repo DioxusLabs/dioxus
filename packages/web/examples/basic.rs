@@ -26,7 +26,7 @@ static APP: FC<()> = |cx, _| {
             input {
                 r#type: "text",
                 value: "{text_content}"
-                oninput: move |e| text_content.set(e.value())
+                oninput: move |e| text_content.set(e.value.clone())
             }
 
             {(0..10).map(|_| {
@@ -45,8 +45,8 @@ static APP: FC<()> = |cx, _| {
                 id: "cars"
                 value: "{content}"
                 oninput: move |ev| {
-                    content.set(ev.value());
-                    match ev.value().as_str() {
+                    content.set(ev.value.clone());
+                    match ev.value.as_str() {
                         "h1" => count.set(0),
                         "h2" => count.set(5),
                         "h3" => count.set(10),

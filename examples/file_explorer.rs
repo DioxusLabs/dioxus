@@ -8,11 +8,11 @@
 use dioxus::prelude::*;
 
 fn main() {
-    env_logger::init();
+    simple_logger::init_with_level(log::Level::Debug);
     dioxus::desktop::launch(App, |c| {
         c.with_window(|w| {
-            w.with_resizable(false).with_inner_size(
-                dioxus::desktop::wry::application::dpi::LogicalSize::new(800.0, 400.0),
+            w.with_resizable(true).with_inner_size(
+                dioxus::desktop::wry::application::dpi::LogicalSize::new(400.0, 800.0),
             )
         })
     })
@@ -70,6 +70,7 @@ impl Files {
 
     fn reload_path_list(&mut self) {
         let cur_path = self.path_stack.last().unwrap();
+        log::info!("Reloading path list for {:?}", cur_path);
         let paths = match std::fs::read_dir(cur_path) {
             Ok(e) => e,
             Err(err) => {
@@ -79,15 +80,18 @@ impl Files {
                 return;
             }
         };
+        let collected = paths.collect::<Vec<_>>();
+        log::info!("Path list reloaded {:#?}", collected);
 
         // clear the current state
         self.clear_err();
         self.path_names.clear();
 
-        for path in paths {
+        for path in collected {
             self.path_names
                 .push(path.unwrap().path().display().to_string());
         }
+        log::info!("path namees are {:#?}", self.path_names);
     }
 
     fn go_up(&mut self) {

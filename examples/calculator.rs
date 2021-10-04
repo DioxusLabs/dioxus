@@ -3,7 +3,7 @@ This example is a simple iOS-style calculator. This particular example can run a
 This calculator version uses React-style state management. All state is held as individual use_states.
 */
 
-use dioxus::events::on::*;
+use dioxus::events::*;
 use dioxus::prelude::*;
 
 fn main() {
@@ -56,7 +56,7 @@ const APP: FC<()> = |cx, _| {
         }
     };
 
-    let keydownhandler = move |evt: KeyboardEvent| match evt.key_code() {
+    let keydownhandler = move |evt: KeyboardEvent| match evt.key_code {
         KeyCode::Add => operator.set(Some("+")),
         KeyCode::Subtract => operator.set(Some("-")),
         KeyCode::Divide => operator.set(Some("/")),

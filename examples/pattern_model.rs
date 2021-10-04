@@ -16,7 +16,7 @@
 //! RefMuts at the same time.
 
 use dioxus::desktop::wry::application::dpi::LogicalSize;
-use dioxus::events::on::*;
+use dioxus::events::{on::*, KeyCode};
 use dioxus::prelude::*;
 
 const STYLE: &str = include_str!("./assets/calculator.css");
@@ -169,7 +169,7 @@ impl Calculator {
         self.waiting_for_operand = true;
     }
     fn handle_keydown(&mut self, evt: KeyboardEvent) {
-        match evt.key_code() {
+        match evt.key_code {
             KeyCode::Backspace => self.backspace(),
             KeyCode::Num0 => self.input_digit(0),
             KeyCode::Num1 => self.input_digit(1),

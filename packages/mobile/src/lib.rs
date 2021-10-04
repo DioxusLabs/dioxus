@@ -29,7 +29,7 @@ static HTML_CONTENT: &'static str = include_str!("../../desktop/src/index.html")
 pub fn launch(root: FC<()>, builder: fn(WindowBuilder) -> WindowBuilder) -> anyhow::Result<()> {
     launch_with_props(root, (), builder)
 }
-pub fn launch_with_props<P: Properties + 'static>(
+pub fn launch_with_props<P: 'static + Send>(
     root: FC<P>,
     props: P,
     builder: fn(WindowBuilder) -> WindowBuilder,
@@ -50,7 +50,7 @@ enum RpcEvent<'a> {
     },
 }
 
-impl<T: Properties + 'static> WebviewRenderer<T> {
+impl<T: 'static + Send> WebviewRenderer<T> {
     pub fn run(
         root: FC<T>,
         props: T,
