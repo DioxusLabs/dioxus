@@ -13,8 +13,6 @@ use std::{
     cell::{Cell, RefCell},
     fmt::Debug,
     ops::Deref,
-    rc::Rc,
-    sync::Arc,
 };
 
 pub use on::*;

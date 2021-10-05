@@ -4,7 +4,8 @@
 //!
 
 use std::borrow::BorrowMut;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
@@ -14,15 +15,11 @@ use std::sync::{Arc, RwLock};
 use cfg::DesktopConfig;
 use dioxus_core::scheduler::SchedulerMsg;
 use dioxus_core::*;
-// use futures_channel::mpsc::UnboundedSender;
 use serde::{Deserialize, Serialize};
 
-mod logging;
-
-pub use logging::set_up_logging;
 pub use wry;
 
-use wry::application::event::{Event, WindowEvent};
+use wry::application::event::{Event, StartCause, WindowEvent};
 use wry::application::event_loop::{self, ControlFlow, EventLoop};
 use wry::application::window::Fullscreen;
 use wry::webview::{WebView, WebViewBuilder};
@@ -32,6 +29,7 @@ use wry::{
 };
 
 mod cfg;
+mod desktop_context;
 mod dom;
 mod escape;
 mod events;
@@ -41,7 +39,7 @@ static HTML_CONTENT: &'static str = include_str!("./index.html");
 pub fn launch(
     root: FC<()>,
     config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
-) -> anyhow::Result<()> {
+) {
     launch_with_props(root, (), config_builder)
 }
 
@@ -49,7 +47,7 @@ pub fn launch_with_props<P: Properties + 'static + Send + Sync>(
     root: FC<P>,
     props: P,
     builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
-) -> anyhow::Result<()> {
+) {
     run(root, props, builder)
 }
 
@@ -58,6 +56,7 @@ enum RpcEvent<'a> {
     Initialize { edits: Vec<DomEdit<'a>> },
 }
 
+#[derive(Debug)]
 enum BridgeEvent {
     Initialize(serde_json::Value),
     Update(serde_json::Value),
@@ -69,11 +68,12 @@ struct Response<'a> {
     edits: Vec<DomEdit<'a>>,
 }
 
-pub fn run<T: Properties + 'static + Send + Sync>(
+pub fn run<T: 'static + Send + Sync>(
     root: FC<T>,
     props: T,
     user_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
-) -> anyhow::Result<()> {
+) {
+    // Generate the config
     let mut cfg = DesktopConfig::new();
     user_builder(&mut cfg);
     let DesktopConfig {
@@ -83,67 +83,95 @@ pub fn run<T: Properties + 'static + Send + Sync>(
         ..
     } = cfg;
 
+    // All of our webview windows are stored in a way that we can look them up later
+    // The "DesktopContext" will provide functionality for spawning these windows
+    let mut webviews = HashMap::new();
     let event_loop = EventLoop::new();
-    let window = window.build(&event_loop)?;
 
-    let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let props_shared = Cell::new(Some(props));
 
-    let sender = launch_vdom_with_tokio(root, props, event_tx.clone());
+    event_loop.run(move |event, event_loop, control_flow| {
+        *control_flow = ControlFlow::Wait;
 
-    let locked_receiver = Rc::new(RefCell::new(event_rx));
+        match event {
+            Event::NewEvents(StartCause::Init) => {
+                let window = WindowBuilder::new().build(&event_loop).unwrap();
+                let window_id = window.id();
 
-    let webview = WebViewBuilder::new(window)?
-        .with_url("wry://index.html")?
-        .with_rpc_handler(move |_window: &Window, mut req: RpcRequest| {
-            //
-            match req.method.as_str() {
-                "initiate" => {
-                    let mut rx = (*locked_receiver).borrow_mut();
-                    match rx.try_recv() {
-                        Ok(BridgeEvent::Initialize(edits)) => {
-                            Some(RpcResponse::new_result(req.id.take(), Some(edits)))
+                let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+                let my_props = props_shared.take().unwrap();
+
+                let sender = launch_vdom_with_tokio(root, my_props, event_tx.clone());
+
+                let locked_receiver = Rc::new(RefCell::new(event_rx));
+
+                let webview = WebViewBuilder::new(window)
+                    .unwrap()
+                    .with_url("wry://index.html")
+                    .unwrap()
+                    .with_rpc_handler(move |_window: &Window, mut req: RpcRequest| {
+                        let mut rx = (*locked_receiver).borrow_mut();
+                        match req.method.as_str() {
+                            "initiate" => {
+                                if let Ok(BridgeEvent::Initialize(edits)) = rx.try_recv() {
+                                    Some(RpcResponse::new_result(req.id.take(), Some(edits)))
+                                } else {
+                                    None
+                                }
+                            }
+                            "user_event" => {
+                                let event = events::trigger_from_serialized(req.params.unwrap());
+                                sender.unbounded_send(SchedulerMsg::UiEvent(event)).unwrap();
+                                if let Some(BridgeEvent::Update(edits)) = rx.blocking_recv() {
+                                    Some(RpcResponse::new_result(req.id.take(), Some(edits)))
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => None,
                         }
-                        _ => None,
-                    }
-                }
-                "user_event" => {
-                    let data = req.params.unwrap();
-                    let event = events::trigger_from_serialized(data);
-                    sender.unbounded_send(SchedulerMsg::UiEvent(event)).unwrap();
+                    })
+                    // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"
+                    // For now, we only serve two pieces of content which get included as bytes into the final binary.
+                    .with_custom_protocol("wry".into(), move |request| {
+                        let path = request.uri().replace("wry://", "");
+                        let (data, meta) = match path.as_str() {
+                            "index.html" => (include_bytes!("./index.html").to_vec(), "text/html"),
+                            "index.html/index.js" => {
+                                (include_bytes!("./index.js").to_vec(), "text/javascript")
+                            }
+                            _ => unimplemented!("path {}", path),
+                        };
 
-                    let mut rx = (*locked_receiver).borrow_mut();
-                    match rx.blocking_recv() {
-                        Some(BridgeEvent::Update(edits)) => {
-                            Some(RpcResponse::new_result(req.id.take(), Some(edits)))
-                        }
-                        _ => None,
-                    }
-                }
-                _ => todo!("this message failed"),
+                        wry::http::ResponseBuilder::new().mimetype(meta).body(data)
+                    })
+                    .build()
+                    .unwrap();
+
+                webviews.insert(window_id, webview);
             }
-        })
-        // this isn't quite portable unfortunately :(
-        // todo: figure out a way to allow us to create the index.html with the index.js file separately
-        // it's a bit easier to hack with
-        .with_custom_protocol("wry".into(), move |request| {
-            use std::fs::{canonicalize, read};
-            use wry::http::ResponseBuilder;
-            // Remove url scheme
-            let path = request.uri().replace("wry://", "");
 
-            let (data, meta) = match path.as_str() {
-                "index.html" => (include_bytes!("./index.html").to_vec(), "text/html"),
-                "index.html/index.js" => (include_bytes!("./index.js").to_vec(), "text/javascript"),
-                _ => unimplemented!("path {}", path),
-            };
+            Event::WindowEvent {
+                event, window_id, ..
+            } => match event {
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
+                    if let Some(view) = webviews.get_mut(&window_id) {
+                        let _ = view.resize();
+                    }
+                }
+                // TODO: we want to shuttle all of these events into the user's app
+                _ => {}
+            },
 
-            ResponseBuilder::new().mimetype(meta).body(data)
-        })
-        .build()?;
+            Event::MainEventsCleared => {}
+            Event::Resumed => {}
+            Event::Suspended => {}
+            Event::LoopDestroyed => {}
 
-    run_event_loop(event_loop, webview, event_tx);
-
-    Ok(())
+            _ => {}
+        }
+    })
 }
 
 pub fn start<P: 'static + Send>(
@@ -155,17 +183,14 @@ pub fn start<P: 'static + Send>(
 }
 
 // Create a new tokio runtime on a dedicated thread and then launch the apps VirtualDom.
-fn launch_vdom_with_tokio<C: Send + 'static>(
-    root: FC<C>,
-    props: C,
+pub(crate) fn launch_vdom_with_tokio<P: Send + 'static>(
+    root: FC<P>,
+    props: P,
     event_tx: tokio::sync::mpsc::UnboundedSender<BridgeEvent>,
 ) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-    // Spawn the virtualdom onto its own thread
-    // if it wants to spawn multithreaded tasks, it can use the executor directly
-
     let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
+    let return_sender = sender.clone();
 
-    let sender_2 = sender.clone();
     std::thread::spawn(move || {
         // We create the runtim as multithreaded, so you can still "spawn" onto multiple threads
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -186,58 +211,29 @@ fn launch_vdom_with_tokio<C: Send + 'static>(
             }
 
             let edit_string = serde_json::to_value(Evt { edits: edits.edits }).unwrap();
-            match event_tx.send(BridgeEvent::Initialize(edit_string)) {
-                Ok(_) => {}
-                Err(_) => {}
-            }
+
+            event_tx
+                .send(BridgeEvent::Initialize(edit_string))
+                .expect("Sending should not fail");
 
             loop {
                 vir.wait_for_work().await;
-                let mut muts = vir.run_with_deadline(|| false);
-                while let Some(edit) = muts.pop() {
-                    let edit_string = serde_json::to_value(Evt { edits: edit.edits }).unwrap();
-                    match event_tx.send(BridgeEvent::Update(edit_string)) {
-                        Ok(_) => {}
-                        Err(er) => {
-                            log::error!("Sending should not fail {}", er);
-                        }
-                    }
-                }
+                // we're running on our own thread, so we don't need to worry about blocking anything
+                // todo: maybe we want to schedule ourselves in
+                // on average though, the virtualdom running natively is stupid fast
 
-                log::info!("mutations sent on channel");
+                let mut muts = vir.run_with_deadline(|| false);
+
+                while let Some(edit) = muts.pop() {
+                    let edit_string = serde_json::to_value(Evt { edits: edit.edits })
+                        .expect("serializing edits should never fail");
+                    event_tx
+                        .send(BridgeEvent::Update(edit_string))
+                        .expect("Sending should not fail");
+                }
             }
         })
     });
 
-    sender_2
-}
-
-fn run_event_loop(
-    event_loop: EventLoop<()>,
-    webview: WebView,
-    event_tx: tokio::sync::mpsc::UnboundedSender<BridgeEvent>,
-) {
-    let _ = event_tx.clone();
-    event_loop.run(move |event, target, control_flow| {
-        *control_flow = ControlFlow::Wait;
-
-        match event {
-            Event::WindowEvent {
-                event, window_id, ..
-            } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                    let _ = webview.resize();
-                }
-                _ => {}
-            },
-
-            Event::MainEventsCleared => {
-                webview.resize();
-                // window.request_redraw();
-            }
-
-            _ => {}
-        }
-    })
+    return_sender
 }

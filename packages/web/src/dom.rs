@@ -105,19 +105,21 @@ impl WebsysDom {
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
         for edit in edits.drain(..) {
             match edit {
-                DomEdit::PushRoot { id: root } => self.push(root),
+                DomEdit::PushRoot { root } => self.push(root),
                 DomEdit::PopRoot => self.pop(),
                 DomEdit::AppendChildren { many } => self.append_children(many),
                 DomEdit::ReplaceWith { m, root } => self.replace_with(m, root),
                 DomEdit::Remove { root } => self.remove(root),
-                DomEdit::CreateTextNode { text, id } => self.create_text_node(text, id),
-                DomEdit::CreateElement { tag, id } => self.create_element(tag, None, id),
-                DomEdit::CreateElementNs { tag, id, ns } => self.create_element(tag, Some(ns), id),
-                DomEdit::CreatePlaceholder { id } => self.create_placeholder(id),
+                DomEdit::CreateTextNode { text, root: id } => self.create_text_node(text, id),
+                DomEdit::CreateElement { tag, root: id } => self.create_element(tag, None, id),
+                DomEdit::CreateElementNs { tag, root: id, ns } => {
+                    self.create_element(tag, Some(ns), id)
+                }
+                DomEdit::CreatePlaceholder { root: id } => self.create_placeholder(id),
                 DomEdit::NewEventListener {
                     event_name,
                     scope,
-                    mounted_node_id,
+                    root: mounted_node_id,
                 } => self.new_event_listener(event_name, scope, mounted_node_id),
 
                 DomEdit::RemoveEventListener { event } => todo!(),

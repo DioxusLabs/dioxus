@@ -34,10 +34,16 @@ fn test_original_diff() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { id: 0, tag: "div" },
-            CreateElement { id: 1, tag: "div" },
+            CreateElement {
+                root: 0,
+                tag: "div"
+            },
+            CreateElement {
+                root: 1,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 2,
+                root: 2,
                 text: "Hello, world!"
             },
             AppendChildren { many: 1 },
@@ -73,20 +79,32 @@ fn create() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { id: 0, tag: "div" },
-            CreateElement { id: 1, tag: "div" },
+            CreateElement {
+                root: 0,
+                tag: "div"
+            },
+            CreateElement {
+                root: 1,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 2,
+                root: 2,
                 text: "Hello, world!"
             },
-            CreateElement { id: 3, tag: "div" },
-            CreateElement { id: 4, tag: "div" },
+            CreateElement {
+                root: 3,
+                tag: "div"
+            },
+            CreateElement {
+                root: 4,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 5,
+                root: 5,
                 text: "hello"
             },
             CreateTextNode {
-                id: 6,
+                root: 6,
                 text: "world"
             },
             AppendChildren { many: 2 },
@@ -115,21 +133,30 @@ fn create_list() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { id: 0, tag: "div" },
+            CreateElement {
+                root: 0,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 1,
+                root: 1,
                 text: "hello"
             },
             AppendChildren { many: 1 },
-            CreateElement { id: 2, tag: "div" },
+            CreateElement {
+                root: 2,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 3,
+                root: 3,
                 text: "hello"
             },
             AppendChildren { many: 1 },
-            CreateElement { id: 4, tag: "div" },
+            CreateElement {
+                root: 4,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 5,
+                root: 5,
                 text: "hello"
             },
             AppendChildren { many: 1 },
@@ -156,10 +183,22 @@ fn create_simple() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { id: 0, tag: "div" },
-            CreateElement { id: 1, tag: "div" },
-            CreateElement { id: 2, tag: "div" },
-            CreateElement { id: 3, tag: "div" },
+            CreateElement {
+                root: 0,
+                tag: "div"
+            },
+            CreateElement {
+                root: 1,
+                tag: "div"
+            },
+            CreateElement {
+                root: 2,
+                tag: "div"
+            },
+            CreateElement {
+                root: 3,
+                tag: "div"
+            },
             AppendChildren { many: 4 },
         ]
     );
@@ -188,30 +227,39 @@ fn create_components() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { id: 0, tag: "h1" },
-            CreateElement { id: 1, tag: "div" },
+            CreateElement { root: 0, tag: "h1" },
+            CreateElement {
+                root: 1,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 2,
+                root: 2,
                 text: "abc1"
             },
             AppendChildren { many: 1 },
-            CreateElement { id: 3, tag: "p" },
-            CreateElement { id: 4, tag: "h1" },
-            CreateElement { id: 5, tag: "div" },
+            CreateElement { root: 3, tag: "p" },
+            CreateElement { root: 4, tag: "h1" },
+            CreateElement {
+                root: 5,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 6,
+                root: 6,
                 text: "abc2"
             },
             AppendChildren { many: 1 },
-            CreateElement { id: 7, tag: "p" },
-            CreateElement { id: 8, tag: "h1" },
-            CreateElement { id: 9, tag: "div" },
+            CreateElement { root: 7, tag: "p" },
+            CreateElement { root: 8, tag: "h1" },
+            CreateElement {
+                root: 9,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 10,
+                root: 10,
                 text: "abc3"
             },
             AppendChildren { many: 1 },
-            CreateElement { id: 11, tag: "p" },
+            CreateElement { root: 11, tag: "p" },
             AppendChildren { many: 9 },
         ]
     );
@@ -230,13 +278,16 @@ fn anchors() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { id: 0, tag: "div" },
+            CreateElement {
+                root: 0,
+                tag: "div"
+            },
             CreateTextNode {
-                id: 1,
+                root: 1,
                 text: "hello"
             },
             AppendChildren { many: 1 },
-            CreatePlaceholder { id: 2 },
+            CreatePlaceholder { root: 2 },
             AppendChildren { many: 2 },
         ]
     );
@@ -260,6 +311,6 @@ fn suspended() {
 
     assert_eq!(
         mutations.edits,
-        [CreatePlaceholder { id: 0 }, AppendChildren { many: 1 },]
+        [CreatePlaceholder { root: 0 }, AppendChildren { many: 1 },]
     );
 }

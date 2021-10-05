@@ -467,7 +467,7 @@ impl<'bump> DiffMachine<'bump> {
             if !has_comitted {
                 has_comitted = true;
                 edits.push(PushRoot {
-                    id: root.unwrap().as_u64(),
+                    root: root.unwrap().as_u64(),
                 });
             }
         };
@@ -1026,14 +1026,6 @@ impl<'bump> DiffMachine<'bump> {
         }
     }
 
-    fn replace_and_create_one_with_many(
-        &mut self,
-        old: &'bump VNode<'bump>,
-        new: &'bump [VNode<'bump>],
-    ) {
-        //
-    }
-
     fn replace_and_create_many_with_one(
         &mut self,
         old: &'bump [VNode<'bump>],
@@ -1128,15 +1120,5 @@ impl<'bump> DiffMachine<'bump> {
                 .borrow_mut()
                 .insert(suspended.task_id, extended as *const _);
         }
-    }
-}
-
-fn compare_strs(a: &str, b: &str) -> bool {
-    // Check by pointer, optimizing for static strs
-    if !std::ptr::eq(a, b) {
-        // If the pointers are different then check by value
-        a == b
-    } else {
-        true
     }
 }

@@ -506,6 +506,8 @@ impl Scheduler {
             }
         }
 
+        log::debug!("work with deadline completed: {:#?}", committed_mutations);
+
         committed_mutations
     }
 

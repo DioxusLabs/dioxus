@@ -14,13 +14,16 @@ fn main() {
 
     let edits = vec![
         // create a container and push it onto the stack
-        CreateElement { tag: "div", id: 0 },
+        CreateElement {
+            tag: "div",
+            root: 0,
+        },
         // create an element and push it onto the stack
-        CreateElement { tag: "h1", id: 2 },
+        CreateElement { tag: "h1", root: 2 },
         // create a text node and push it onto the stack
         CreateTextNode {
             text: "hello world",
-            id: 3,
+            root: 3,
         },
         // append the text node to the h1 element
         AppendChildren { many: 1 },
@@ -30,7 +33,7 @@ fn main() {
         AppendChildren { many: 1 },
     ];
 
-    dioxus_desktop::run(APP, (), |c| c.with_edits(edits)).unwrap();
+    dioxus_desktop::run(APP, (), |c| c.with_edits(edits));
 }
 
 const APP: FC<()> = |cx, _props| {

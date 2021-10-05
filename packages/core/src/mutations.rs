@@ -23,7 +23,7 @@ impl<'a> Mutations<'a> {
     // Navigation
     pub(crate) fn push_root(&mut self, root: ElementId) {
         let id = root.as_u64();
-        self.edits.push(PushRoot { id });
+        self.edits.push(PushRoot { root: id });
     }
 
     pub(crate) fn pop(&mut self) {
@@ -53,7 +53,7 @@ impl<'a> Mutations<'a> {
     // Create
     pub(crate) fn create_text_node(&mut self, text: &'a str, id: ElementId) {
         let id = id.as_u64();
-        self.edits.push(CreateTextNode { text, id });
+        self.edits.push(CreateTextNode { text, root: id });
     }
 
     pub(crate) fn create_element(
@@ -64,14 +64,14 @@ impl<'a> Mutations<'a> {
     ) {
         let id = id.as_u64();
         match ns {
-            Some(ns) => self.edits.push(CreateElementNs { id, ns, tag }),
-            None => self.edits.push(CreateElement { id, tag }),
+            Some(ns) => self.edits.push(CreateElementNs { root: id, ns, tag }),
+            None => self.edits.push(CreateElement { root: id, tag }),
         }
     }
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     pub(crate) fn create_placeholder(&mut self, id: ElementId) {
         let id = id.as_u64();
-        self.edits.push(CreatePlaceholder { id });
+        self.edits.push(CreatePlaceholder { root: id });
     }
 
     // events
@@ -87,7 +87,7 @@ impl<'a> Mutations<'a> {
         self.edits.push(NewEventListener {
             scope,
             event_name: event,
-            mounted_node_id: element_id,
+            root: element_id,
         });
     }
     pub(crate) fn remove_event_listener(&mut self, event: &'static str) {
@@ -159,7 +159,7 @@ impl<'a> NodeRefMutation<'a> {
 )]
 pub enum DomEdit<'bump> {
     PushRoot {
-        id: u64,
+        root: u64,
     },
     PopRoot,
 
@@ -187,24 +187,24 @@ pub enum DomEdit<'bump> {
 
     CreateTextNode {
         text: &'bump str,
-        id: u64,
+        root: u64,
     },
     CreateElement {
         tag: &'bump str,
-        id: u64,
+        root: u64,
     },
     CreateElementNs {
         tag: &'bump str,
-        id: u64,
+        root: u64,
         ns: &'static str,
     },
     CreatePlaceholder {
-        id: u64,
+        root: u64,
     },
     NewEventListener {
         event_name: &'static str,
         scope: ScopeId,
-        mounted_node_id: u64,
+        root: u64,
     },
     RemoveEventListener {
         event: &'static str,

@@ -15,8 +15,7 @@ fn main() {
                 dioxus::desktop::wry::application::dpi::LogicalSize::new(400.0, 800.0),
             )
         })
-    })
-    .unwrap();
+    });
 }
 
 static App: FC<()> = |cx, props| {

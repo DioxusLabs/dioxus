@@ -7,7 +7,6 @@ use std::{
     future::Future,
     pin::Pin,
     rc::Rc,
-    sync::Arc,
 };
 
 /// Every component in Dioxus is represented by a `Scope`.
