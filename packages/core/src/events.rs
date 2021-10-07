@@ -122,70 +122,80 @@ impl<T: Send + Sync> DioxusEvent<T> {
         self.raw.downcast_ref()
     }
 
+    /*
+    Not implemented!
+
+    These methods come from the original web-based event system but are not implemented in Dioxus.
+
+    Currently, event bubbling doesn't exactly match dom-based event bubbling - IE there is no bubbling at all.
+
+    When bubbling is implemented, we'll make these methods public and possible to do things like cancel bubbling.
+    */
+
     /// Returns whether or not a specific event is a bubbling event
-    pub fn bubbles(&self) -> bool {
+    fn _bubbles(&self) -> bool {
         todo!()
     }
     /// Sets or returns whether the event should propagate up the hierarchy or not
-    pub fn cancel_bubble(&self) {
+    fn _cancel_bubble(&self) {
         todo!()
     }
     /// Returns whether or not an event can have its default action prevented
-    pub fn cancelable(&self) -> bool {
+    fn _cancelable(&self) -> bool {
         todo!()
     }
     /// Returns whether the event is composed or not
-    pub fn composed(&self) -> bool {
+    fn _composed(&self) -> bool {
         todo!()
     }
 
     // Currently not supported because those no way we could possibly support it
     // just cast the event to the right platform-specific type and return it
-    // /// Returns the event's path
-    // pub fn composed_path(&self) -> String {
-    //     todo!()
-    // }
+    /// Returns the event's path
+    fn _composed_path(&self) -> String {
+        todo!()
+    }
 
     /// Returns the element whose event listeners triggered the event
-    pub fn current_target(&self) {
+    fn _current_target(&self) {
         todo!()
     }
     /// Returns whether or not the preventDefault method was called for the event
-    pub fn default_prevented(&self) -> bool {
+    fn _default_prevented(&self) -> bool {
         todo!()
     }
     /// Returns which phase of the event flow is currently being evaluated
-    pub fn event_phase(&self) -> u16 {
+    fn _event_phase(&self) -> u16 {
         todo!()
     }
 
     /// Returns whether or not an event is trusted
-    pub fn is_trusted(&self) -> bool {
+    fn _is_trusted(&self) -> bool {
         todo!()
     }
 
     /// Cancels the event if it is cancelable, meaning that the default action that belongs to the event will
-    pub fn prevent_default(&self) {
+    fn _prevent_default(&self) {
         todo!()
     }
 
     /// Prevents other listeners of the same event from being called
-    pub fn stop_immediate_propagation(&self) {
+    fn _stop_immediate_propagation(&self) {
         todo!()
     }
 
     /// Prevents further propagation of an event during event flow
-    pub fn stop_propagation(&self) {
+    fn _stop_propagation(&self) {
         todo!()
     }
 
     /// Returns the element that triggered the event
-    pub fn target(&self) -> Option<Box<dyn Any>> {
+    fn _target(&self) -> Option<Box<dyn Any>> {
         todo!()
     }
 
     /// Returns the time (in milliseconds relative to the epoch) at which the event was created
-    pub fn time_stamp(&self) -> f64 {
+    fn _time_stamp(&self) -> f64 {
         todo!()
     }
 }
@@ -217,7 +227,7 @@ pub mod on {
 
                 // todo: derefing to the event is fine (and easy) but breaks some IDE stuff like (go to source)
                 // going to source in fact takes you to the source of Rc which is... less than useful
-                // Either we ask for this to be changed in Rust-analyzer or manually impkement the trait
+                // Either we ask for this to be changed in Rust-analyzer or manually implement the trait
                 impl Deref for $wrapper {
                     type Target = DioxusEvent<$eventdata>;
                     fn deref(&self) -> &Self::Target {
@@ -235,13 +245,15 @@ pub mod on {
                     {
                         let bump = &c.bump();
 
+                        // we can't allocate unsized in bumpalo's box, so we need to craft the box manually
+                        // safety: this is essentially the same as calling Box::new() but manually
+                        // The box is attached to the lifetime of the bumpalo allocator
                         let cb: &mut dyn FnMut(SyntheticEvent) = bump.alloc(move |evt: SyntheticEvent| match evt {
                             SyntheticEvent::$wrapper(event) => callback(event),
-                            _ => unreachable!("Downcasted SyntheticEvent to wrong event type - this is an internal bug!")
+                            _ => unreachable!("Downcasted SyntheticEvent to wrong spcific event type - this is an internal bug!")
                         });
 
                         let callback: BumpBox<dyn FnMut(SyntheticEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
-
 
                         // ie oncopy
                         let event_name = stringify!($name);
@@ -303,7 +315,6 @@ pub mod on {
             onblur
         ];
 
-
         FormEventInner(FormEvent): [
             /// onchange
             onchange
@@ -320,7 +331,6 @@ pub mod on {
             /// onsubmit
             onsubmit
         ];
-
 
         /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
         ///
@@ -682,8 +692,8 @@ pub mod on {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct FormEventInner {
-        /* DOMEventInner:  Send + SyncTarget relatedTarget */
         pub value: String,
+        /* DOMEventInner:  Send + SyncTarget relatedTarget */
     }
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -766,7 +776,6 @@ pub mod on {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
     pub struct ImageEventInner {
-        //     load error
         pub load_error: bool,
     }
 

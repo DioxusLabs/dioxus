@@ -122,7 +122,7 @@ impl WebsysDom {
                     root: mounted_node_id,
                 } => self.new_event_listener(event_name, scope, mounted_node_id),
 
-                DomEdit::RemoveEventListener { event } => todo!(),
+                DomEdit::RemoveEventListener { event } => self.remove_event_listener(event),
 
                 DomEdit::SetText { text } => self.set_text(text),
                 DomEdit::SetAttribute { field, value, ns } => self.set_attribute(field, value, ns),
@@ -300,7 +300,7 @@ impl WebsysDom {
     }
 
     fn remove_event_listener(&mut self, event: &str) {
-        todo!()
+        // todo!()
     }
 
     fn set_text(&mut self, text: &str) {
