@@ -76,6 +76,13 @@ impl<'bump> DiffStack<'bump> {
         }
     }
 
+    pub fn push_subtree(&mut self) {
+        self.nodes_created_stack.push(0);
+        self.instructions.push(DiffInstruction::Mount {
+            and: MountType::Append,
+        });
+    }
+
     pub fn push_nodes_created(&mut self, count: usize) {
         self.nodes_created_stack.push(count);
     }

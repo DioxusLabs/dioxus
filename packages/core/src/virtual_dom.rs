@@ -156,6 +156,7 @@ impl VirtualDom {
                 myidx,
                 None,
                 0,
+                0,
                 ScopeChildren(&[]),
                 scheduler.pool.channel.clone(),
             )

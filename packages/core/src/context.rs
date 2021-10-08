@@ -239,6 +239,46 @@ impl<'src> Context<'src> {
         )
     }
 
+    /// Create a new subtree with this scope as the root of the subtree.
+    ///
+    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
+    /// the mutations to the correct window/portal/subtree.
+    ///
+    /// This method
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// static App: FC<()> = |cx, props| {
+    ///     let id = cx.get_current_subtree();
+    ///     let id = cx.use_create_subtree();
+    ///     subtree {
+    ///         
+    ///     }
+    ///     rsx!(cx, div { "Subtree {id}"})
+    /// };
+    /// ```        
+    pub fn use_create_subtree(self) -> Option<u32> {
+        self.scope.new_subtree()
+    }
+
+    /// Get the subtree ID that this scope belongs to.
+    ///
+    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
+    /// the mutations to the correct window/portal/subtree.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// static App: FC<()> = |cx, props| {
+    ///     let id = cx.get_current_subtree();
+    ///     rsx!(cx, div { "Subtree {id}"})
+    /// };
+    /// ```
+    pub fn get_current_subtree(self) -> u32 {
+        self.scope.subtree()
+    }
+
     /// Store a value between renders
     ///
     /// This is *the* foundational hook for all other hooks.

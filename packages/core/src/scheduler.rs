@@ -86,6 +86,7 @@ use std::{
 #[derive(Clone)]
 pub(crate) struct EventChannel {
     pub task_counter: Rc<Cell<u64>>,
+    pub cur_subtree: Rc<Cell<u32>>,
     pub sender: UnboundedSender<SchedulerMsg>,
     pub schedule_any_immediate: Rc<dyn Fn(ScopeId)>,
     pub submit_task: Rc<dyn Fn(FiberTask) -> TaskHandle>,
@@ -178,8 +179,10 @@ impl Scheduler {
         let heuristics = HeuristicsEngine::new();
 
         let task_counter = Rc::new(Cell::new(0));
+        let cur_subtree = Rc::new(Cell::new(0));
 
         let channel = EventChannel {
+            cur_subtree,
             task_counter: task_counter.clone(),
             sender: sender.clone(),
             schedule_any_immediate: {

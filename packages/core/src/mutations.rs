@@ -184,7 +184,6 @@ pub enum DomEdit<'bump> {
     Remove {
         root: u64,
     },
-
     CreateTextNode {
         text: &'bump str,
         root: u64,

@@ -352,12 +352,12 @@ impl<'bump> DiffMachine<'bump> {
         let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
 
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
-            let height = parent_scope.height + 1;
             Scope::new(
                 caller,
                 new_idx,
                 Some(parent_idx),
-                height,
+                parent_scope.height + 1,
+                parent_scope.subtree(),
                 ScopeChildren(vcomponent.children),
                 shared,
             )
@@ -384,6 +384,17 @@ impl<'bump> DiffMachine<'bump> {
             // Take the node that was just generated from running the component
             let nextnode = new_component.frames.fin_head();
             self.stack.create_component(new_idx, nextnode);
+
+            //
+            /*
+            tree_item {
+
+            }
+
+            */
+            if new_component.is_subtree_root.get() {
+                self.stack.push_subtree();
+            }
         }
 
         // Finally, insert this scope as a seen node.
