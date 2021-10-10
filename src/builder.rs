@@ -127,10 +127,6 @@ fn gen_page(module: &str) -> String {
   <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
     <meta charset="UTF-8" />
-    <link
-    href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css"
-    rel="stylesheet"
-    />
   </head>
   <body>
     <!-- Note the usage of `type=module` here as this is an ES6 module -->
@@ -138,6 +134,7 @@ fn gen_page(module: &str) -> String {
       import init from "{}";
       init("./wasm/module_bg.wasm");
     </script>
+    <div id="dioxusroot"> </div>
   </body>
 </html>
 "#,
