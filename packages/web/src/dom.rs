@@ -122,11 +122,18 @@ impl WebsysDom {
                     root: mounted_node_id,
                 } => self.new_event_listener(event_name, scope, mounted_node_id),
 
-                DomEdit::RemoveEventListener { event } => self.remove_event_listener(event),
+                DomEdit::RemoveEventListener { event, root } => {
+                    self.remove_event_listener(event, root)
+                }
 
-                DomEdit::SetText { text } => self.set_text(text),
-                DomEdit::SetAttribute { field, value, ns } => self.set_attribute(field, value, ns),
-                DomEdit::RemoveAttribute { name } => self.remove_attribute(name),
+                DomEdit::SetText { text, root } => self.set_text(text, root),
+                DomEdit::SetAttribute {
+                    field,
+                    value,
+                    ns,
+                    root,
+                } => self.set_attribute(field, value, ns, root),
+                DomEdit::RemoveAttribute { name, root } => self.remove_attribute(name, root),
 
                 DomEdit::InsertAfter { n, root } => self.insert_after(n, root),
                 DomEdit::InsertBefore { n, root } => self.insert_before(n, root),
@@ -302,16 +309,17 @@ impl WebsysDom {
         }
     }
 
-    fn remove_event_listener(&mut self, event: &str) {
+    fn remove_event_listener(&mut self, event: &str, root: u64) {
         // todo!()
     }
 
-    fn set_text(&mut self, text: &str) {
-        self.stack.top().set_text_content(Some(text))
+    fn set_text(&mut self, text: &str, root: u64) {
+        let el = self.nodes[root as usize].as_ref().unwrap();
+        el.set_text_content(Some(text))
     }
 
-    fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
-        let node = self.stack.top();
+    fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>, root: u64) {
+        let node = self.nodes[root as usize].as_ref().unwrap();
         if ns == Some("style") {
             if let Some(el) = node.dyn_ref::<Element>() {
                 let el = el.dyn_ref::<HtmlElement>().unwrap();
@@ -345,7 +353,11 @@ impl WebsysDom {
                 }
                 "checked" => {
                     if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
-                        input.set_checked(true);
+                        match value {
+                            "true" => input.set_checked(true),
+                            "false" => input.set_checked(false),
+                            _ => fallback(),
+                        }
                     } else {
                         fallback();
                     }
@@ -362,8 +374,8 @@ impl WebsysDom {
         }
     }
 
-    fn remove_attribute(&mut self, name: &str) {
-        let node = self.stack.top();
+    fn remove_attribute(&mut self, name: &str, root: u64) {
+        let node = self.nodes[root as usize].as_ref().unwrap();
         if let Some(node) = node.dyn_ref::<web_sys::Element>() {
             node.remove_attribute(name).unwrap();
         }
@@ -510,17 +522,30 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
             FocusEventInner {},
             DioxusWebsysEvent(event),
         ))),
-        "change" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
+        // "change" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
-        "input" | "invalid" | "reset" | "submit" => {
+        "change" | "input" | "invalid" | "reset" | "submit" => {
             let evt: &web_sys::Event = event.dyn_ref().unwrap();
 
             let target: web_sys::EventTarget = evt.target().unwrap();
             let value: String = (&target)
                 .dyn_ref()
-                .map(|input: &web_sys::HtmlInputElement| input.value())
+                .map(|input: &web_sys::HtmlInputElement| {
+                    // todo: special case more input types
+                    match input.type_().as_str() {
+                        "checkbox" => {
+                           match input.checked() {
+                                true => "true".to_string(),
+                                false => "false".to_string(),
+                            }
+                        },
+                        _ => {
+                            input.value()
+                        }
+                    }
+                })
                 .or_else(|| {
                     target
                         .dyn_ref()

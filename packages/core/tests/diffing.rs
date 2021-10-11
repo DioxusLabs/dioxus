@@ -45,13 +45,10 @@ fn html_and_rsx_generate_the_same_output() {
 
     assert_eq!(
         change.edits,
-        [
-            PushRoot { root: 1 },
-            SetText {
-                text: "Goodbye world"
-            },
-            PopRoot
-        ]
+        [SetText {
+            text: "Goodbye world",
+            root: 1
+        },]
     );
 }
 

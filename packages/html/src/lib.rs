@@ -518,6 +518,8 @@ pub trait GlobalAttributes {
         /// Specifies how an element is positioned.
         position: "position",
 
+        pointer_events: "pointer-events",
+
         /// Specifies quotation marks for embedded quotations.
         quotes: "quotes",
 

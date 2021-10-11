@@ -326,7 +326,7 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         for attr in *attributes {
-            self.mutations.set_attribute(attr);
+            self.mutations.set_attribute(attr, real_id.as_u64());
         }
 
         if !children.is_empty() {
@@ -428,9 +428,7 @@ impl<'bump> DiffMachine<'bump> {
     fn diff_text_nodes(&mut self, old: &'bump VText<'bump>, new: &'bump VText<'bump>) {
         if let Some(root) = old.dom_id.get() {
             if old.text != new.text {
-                self.mutations.push_root(root);
-                self.mutations.set_text(new.text);
-                self.mutations.pop();
+                self.mutations.set_text(new.text, root.as_u64());
             }
 
             new.dom_id.set(Some(root));
@@ -443,7 +441,7 @@ impl<'bump> DiffMachine<'bump> {
         new: &'bump VElement<'bump>,
         new_node: &'bump VNode<'bump>,
     ) {
-        let root = old.dom_id.get();
+        let root = old.dom_id.get().unwrap();
 
         // If the element type is completely different, the element needs to be re-rendered completely
         // This is an optimization React makes due to how users structure their code
@@ -462,23 +460,12 @@ impl<'bump> DiffMachine<'bump> {
             return;
         }
 
-        new.dom_id.set(root);
+        new.dom_id.set(Some(root));
 
         // todo: attributes currently rely on the element on top of the stack, but in theory, we only need the id of the
         // element to modify its attributes.
         // it would result in fewer instructions if we just set the id directly.
         // it would also clean up this code some, but that's not very important anyways
-
-        // Don't push the root if we don't have to
-        let mut has_comitted = false;
-        let mut please_commit = |edits: &mut Vec<DomEdit>| {
-            if !has_comitted {
-                has_comitted = true;
-                edits.push(PushRoot {
-                    root: root.unwrap().as_u64(),
-                });
-            }
-        };
 
         // Diff Attributes
         //
@@ -489,20 +476,17 @@ impl<'bump> DiffMachine<'bump> {
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                 if old_attr.value != new_attr.value {
-                    please_commit(&mut self.mutations.edits);
-                    self.mutations.set_attribute(new_attr);
+                    self.mutations.set_attribute(new_attr, root.as_u64());
                 } else if new_attr.is_volatile {
-                    please_commit(&mut self.mutations.edits);
-                    self.mutations.set_attribute(new_attr);
+                    self.mutations.set_attribute(new_attr, root.as_u64());
                 }
             }
         } else {
-            please_commit(&mut self.mutations.edits);
             for attribute in old.attributes {
-                self.mutations.remove_attribute(attribute);
+                self.mutations.remove_attribute(attribute, root.as_u64());
             }
             for attribute in new.attributes {
-                self.mutations.set_attribute(attribute)
+                self.mutations.set_attribute(attribute, root.as_u64())
             }
         }
 
@@ -520,20 +504,20 @@ impl<'bump> DiffMachine<'bump> {
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                     if old_l.event != new_l.event {
-                        please_commit(&mut self.mutations.edits);
-                        self.mutations.remove_event_listener(old_l.event);
+                        self.mutations
+                            .remove_event_listener(old_l.event, root.as_u64());
                         self.mutations.new_event_listener(new_l, cur_scope_id);
                     }
                     new_l.mounted_node.set(old_l.mounted_node.get());
                     self.attach_listener_to_scope(new_l, scope);
                 }
             } else {
-                please_commit(&mut self.mutations.edits);
                 for listener in old.listeners {
-                    self.mutations.remove_event_listener(listener.event);
+                    self.mutations
+                        .remove_event_listener(listener.event, root.as_u64());
                 }
                 for listener in new.listeners {
-                    listener.mounted_node.set(root);
+                    listener.mounted_node.set(Some(root));
                     self.mutations.new_event_listener(listener, cur_scope_id);
                     self.attach_listener_to_scope(listener, scope);
                 }
@@ -541,13 +525,12 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         if old.children.len() == 0 && new.children.len() != 0 {
-            please_commit(&mut self.mutations.edits);
+            self.mutations.edits.push(PushRoot {
+                root: root.as_u64(),
+            });
             self.stack.create_children(new.children, MountType::Append);
         } else {
             self.diff_children(old.children, new.children);
-            if has_comitted {
-                self.mutations.pop();
-            }
         }
     }
 
