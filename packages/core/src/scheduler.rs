@@ -185,7 +185,11 @@ impl Scheduler {
             sender: sender.clone(),
             schedule_any_immediate: {
                 let sender = sender.clone();
-                Rc::new(move |id| sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap())
+                Rc::new(move |id| {
+                    //
+                    log::debug!("scheduling immedate! {:?}", id);
+                    sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap()
+                })
             },
             // todo: we want to get the futures out of the scheduler message
             // the scheduler message should be send/sync
@@ -374,23 +378,28 @@ impl Scheduler {
         if machine.stack.is_empty() {
             let shared = self.pool.clone();
 
+            self.dirty_scopes
+                .retain(|id| shared.get_scope(*id).is_some());
             self.dirty_scopes.sort_by(|a, b| {
                 let h1 = shared.get_scope(*a).unwrap().height;
                 let h2 = shared.get_scope(*b).unwrap().height;
-                h1.cmp(&h2)
+                h1.cmp(&h2).reverse()
             });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                log::info!("handlng dirty scope {:#?}", scopeid);
+                log::info!("handlng dirty scope {:?}", scopeid);
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
+                    log::debug!("about to run scope {:?}", scopeid);
 
-                    let mut component = self.pool.get_scope_mut(scopeid).unwrap();
-                    if component.run_scope(&self.pool) {
-                        let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                        // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                        machine.stack.scope_stack.push(scopeid);
-                        machine.stack.push(DiffInstruction::Diff { new, old });
+                    if let Some(component) = self.pool.get_scope_mut(scopeid) {
+                        if component.run_scope(&self.pool) {
+                            let (old, new) =
+                                (component.frames.wip_head(), component.frames.fin_head());
+                            // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                            machine.stack.scope_stack.push(scopeid);
+                            machine.stack.push(DiffInstruction::Diff { new, old });
+                        }
                     }
                 }
             }
@@ -522,8 +531,6 @@ impl Scheduler {
             }
         }
 
-        log::debug!("work with deadline completed: {:#?}", committed_mutations);
-
         committed_mutations
     }
 
@@ -562,6 +569,8 @@ impl Scheduler {
             .get_scope_mut(base_scope)
             .expect("The base scope should never be moved");
 
+        log::debug!("rebuild {:?}", base_scope);
+
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope(&self.pool) {
             diff_machine
@@ -587,6 +596,8 @@ impl Scheduler {
             .pool
             .get_scope_mut(base_scope)
             .expect("The base scope should never be moved");
+
+        log::debug!("hard diff {:?}", base_scope);
 
         if cur_component.run_scope(&self.pool) {
             let mut diff_machine = DiffMachine::new(Mutations::new(), &mut self.pool);

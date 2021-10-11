@@ -30,7 +30,6 @@ pub enum MountType<'a> {
     Absorb,
     Append,
     Replace { old: &'a VNode<'a> },
-    ReplaceByElementId { el: Option<ElementId> },
     InsertAfter { other_node: &'a VNode<'a> },
     InsertBefore { other_node: &'a VNode<'a> },
 }

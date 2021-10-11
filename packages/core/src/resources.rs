@@ -63,8 +63,8 @@ impl ResourcePool {
 
     /// return the id, freeing the space of the original node
     pub fn collect_garbage(&self, id: ElementId) {
-        todo!("garabge collection currently WIP")
-        // self.raw_elements.remove(id.0);
+        let els = unsafe { &mut *self.raw_elements.get() };
+        els.remove(id.0);
     }
 
     pub fn insert_scope_with_key(&self, f: impl FnOnce(ScopeId) -> Scope) -> ScopeId {

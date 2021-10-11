@@ -218,6 +218,7 @@ impl Scope {
         caller: &'creator_node dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
         child_nodes: ScopeChildren,
     ) {
+        log::debug!("Updating scope dependencies {:?}", self.our_arena_idx);
         let caller = caller as *const _;
         self.caller = unsafe { std::mem::transmute(caller) };
 

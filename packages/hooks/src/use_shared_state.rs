@@ -112,10 +112,10 @@ impl<'a, T: 'static> UseSharedState<'a, T> {
     }
 
     pub fn notify_consumers(self) {
-        if !self.needs_notification.get() {
-            self.needs_notification.set(true);
-            self.root.borrow_mut().notify_consumers();
-        }
+        // if !self.needs_notification.get() {
+        self.root.borrow_mut().notify_consumers();
+        //     self.needs_notification.set(true);
+        // }
     }
 
     pub fn read_write(&self) -> (Ref<'_, T>, &Self) {
@@ -161,16 +161,17 @@ where
 ///
 ///
 ///
-pub fn use_provide_state<'a, T: 'static>(cx: Context<'a>, f: impl FnOnce() -> T) -> Option<()> {
+pub fn use_provide_state<'a, T: 'static>(cx: Context<'a>, f: impl FnOnce() -> T) {
     cx.use_hook(
         |_| {
-            cx.provide_state(ProvidedStateInner {
+            let state: ProvidedState<T> = RefCell::new(ProvidedStateInner {
                 value: Rc::new(RefCell::new(f())),
                 notify_any: cx.schedule_update_any(),
                 consumers: HashSet::new(),
-            })
+            });
+            cx.provide_state(state)
         },
-        |inner| inner.as_ref().and_then(|_| Some(())),
+        |inner| {},
         |_| {},
     )
 }

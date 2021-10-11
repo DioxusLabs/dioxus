@@ -191,7 +191,7 @@ impl<'src> Context<'src> {
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_state<T>(self, value: T) -> Option<Rc<T>>
+    pub fn provide_state<T>(self, value: T)
     where
         T: 'static,
     {
@@ -200,7 +200,7 @@ impl<'src> Context<'src> {
             .borrow_mut()
             .insert(TypeId::of::<T>(), Rc::new(value))
             .map(|f| f.downcast::<T>().ok())
-            .flatten()
+            .flatten();
     }
 
     /// Try to retrive a SharedState with type T from the any parent Scope.
@@ -279,13 +279,17 @@ impl<'src> Context<'src> {
         Output: 'src,
         Init: FnOnce(usize) -> State,
         Run: FnOnce(&'src mut State) -> Output,
-        Cleanup: FnOnce(&mut State) + 'static,
+        Cleanup: FnOnce(Box<State>) + 'static,
     {
         // If the idx is the same as the hook length, then we need to add the current hook
         if self.scope.hooks.at_end() {
             self.scope.hooks.push_hook(
                 initializer(self.scope.hooks.len()),
-                Box::new(|raw| cleanup(raw.downcast_mut::<State>().unwrap())),
+                Box::new(|raw| {
+                    //
+                    let s = raw.downcast::<State>().unwrap();
+                    cleanup(s);
+                }),
             );
         }
 

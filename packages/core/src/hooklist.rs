@@ -12,7 +12,7 @@ use std::{
 /// Todo: this could use its very own bump arena, but that might be a tad overkill
 #[derive(Default)]
 pub(crate) struct HookList {
-    vals: RefCell<Vec<(UnsafeCell<Box<dyn Any>>, Box<dyn FnOnce(&mut dyn Any)>)>>,
+    vals: RefCell<Vec<(UnsafeCell<Box<dyn Any>>, Box<dyn FnOnce(Box<dyn Any>)>)>>,
     idx: Cell<usize>,
 }
 
@@ -35,7 +35,7 @@ impl HookList {
         self.idx.set(0);
     }
 
-    pub(crate) fn push_hook<T: 'static>(&self, new: T, cleanup: Box<dyn FnOnce(&mut dyn Any)>) {
+    pub(crate) fn push_hook<T: 'static>(&self, new: T, cleanup: Box<dyn FnOnce(Box<dyn Any>)>) {
         self.vals
             .borrow_mut()
             .push((UnsafeCell::new(Box::new(new)), cleanup))
@@ -52,14 +52,16 @@ impl HookList {
     pub(crate) fn at_end(&self) -> bool {
         self.cur_idx() >= self.len()
     }
-}
 
-// When the scope is dropped, we want to call the cleanup function for each of the hooks
-impl Drop for HookList {
-    fn drop(&mut self) {
+    pub fn clear_hooks(&mut self) {
         self.vals
             .borrow_mut()
             .drain(..)
-            .for_each(|(mut state, cleanup)| cleanup(state.get_mut()));
+            .for_each(|(mut state, cleanup)| {
+                //
+                let s: Box<dyn Any> = state.into_inner();
+                cleanup(s)
+                //
+            });
     }
 }

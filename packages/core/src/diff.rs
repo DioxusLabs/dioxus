@@ -221,18 +221,12 @@ impl<'bump> DiffMachine<'bump> {
             MountType::Replace { old } => {
                 if let Some(old_id) = old.try_mounted_id() {
                     self.mutations.replace_with(old_id, nodes_created as u32);
+                    self.remove_nodes(Some(old));
                 } else {
-                    let mut iter = RealChildIterator::new(old, self.vdom);
-                    let first = iter.next().unwrap();
-                    self.mutations
-                        .replace_with(first.mounted_id(), nodes_created as u32);
-                    self.remove_nodes(iter);
-                }
-            }
-
-            MountType::ReplaceByElementId { el } => {
-                if let Some(old) = el {
-                    self.mutations.replace_with(old, nodes_created as u32);
+                    if let Some(id) = self.find_first_element_id(old) {
+                        self.mutations.replace_with(id, nodes_created as u32);
+                    }
+                    self.remove_nodes(Some(old));
                 }
             }
 
@@ -376,6 +370,8 @@ impl<'bump> DiffMachine<'bump> {
 
         let new_component = self.vdom.get_scope_mut(new_idx).unwrap();
 
+        log::debug!("initializing component {:?}", new_idx);
+
         // Run the scope for one iteration to initialize it
         if new_component.run_scope(self.vdom) {
             // Take the node that was just generated from running the component
@@ -413,7 +409,7 @@ impl<'bump> DiffMachine<'bump> {
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
             (Suspended(old), Suspended(new)) => self.diff_suspended_nodes(old, new),
-            (Element(old), Element(new)) => self.diff_element_nodes(old, new, new_node),
+            (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
 
             // Anything else is just a basic replace and create
             (
@@ -439,6 +435,7 @@ impl<'bump> DiffMachine<'bump> {
         &mut self,
         old: &'bump VElement<'bump>,
         new: &'bump VElement<'bump>,
+        old_node: &'bump VNode<'bump>,
         new_node: &'bump VNode<'bump>,
     ) {
         let root = old.dom_id.get().unwrap();
@@ -452,9 +449,7 @@ impl<'bump> DiffMachine<'bump> {
             // issue is that we need the "vnode" but this method only has the velement
             self.stack.push_nodes_created(0);
             self.stack.push(DiffInstruction::Mount {
-                and: MountType::ReplaceByElementId {
-                    el: old.dom_id.get(),
-                },
+                and: MountType::Replace { old: old_node },
             });
             self.create_element_node(new, new_node);
             return;
@@ -546,6 +541,7 @@ impl<'bump> DiffMachine<'bump> {
 
         // Make sure we're dealing with the same component (by function pointer)
         if old.user_fc == new.user_fc {
+            log::debug!("Diffing component {:?} - {:?}", new.user_fc, scope_addr);
             //
             self.stack.scope_stack.push(scope_addr);
 
@@ -554,7 +550,6 @@ impl<'bump> DiffMachine<'bump> {
 
             // make sure the component's caller function is up to date
             let scope = self.vdom.get_scope_mut(scope_addr).unwrap();
-
             scope.update_scope_dependencies(new.caller, ScopeChildren(new.children));
 
             // React doesn't automatically memoize, but we do.
@@ -569,8 +564,6 @@ impl<'bump> DiffMachine<'bump> {
             }
 
             self.stack.scope_stack.pop();
-
-            self.seen_scopes.insert(scope_addr);
         } else {
             self.stack
                 .create_node(new_node, MountType::Replace { old: old_node });
@@ -624,17 +617,14 @@ impl<'bump> DiffMachine<'bump> {
                 self.stack.create_children(new, MountType::Append);
             }
             (_, []) => {
-                for node in old {
-                    self.remove_nodes(Some(node));
-                }
+                self.remove_nodes(old);
             }
             ([VNode::Anchor(old_anchor)], [VNode::Anchor(new_anchor)]) => {
                 old_anchor.dom_id.set(new_anchor.dom_id.get());
             }
-            ([VNode::Anchor(anchor)], _) => {
-                let el = anchor.dom_id.get();
+            ([VNode::Anchor(_)], _) => {
                 self.stack
-                    .create_children(new, MountType::ReplaceByElementId { el });
+                    .create_children(new, MountType::Replace { old: &old[0] });
             }
             (_, [VNode::Anchor(_)]) => {
                 self.replace_and_create_many_with_one(old, &new[0]);
@@ -743,13 +733,13 @@ impl<'bump> DiffMachine<'bump> {
             Some(count) => count,
             None => return,
         };
-        log::debug!(
-            "Left offset, right offset, {}, {}",
-            left_offset,
-            right_offset,
-        );
+        // log::debug!(
+        //     "Left offset, right offset, {}, {}",
+        //     left_offset,
+        //     right_offset,
+        // );
 
-        log::debug!("stack before lo is {:#?}", self.stack.instructions);
+        // log::debug!("stack before lo is {:#?}", self.stack.instructions);
         // Ok, we now hopefully have a smaller range of children in the middle
         // within which to re-order nodes with the same keys, remove old nodes with
         // now-unused keys, and create new nodes with fresh keys.
@@ -1126,9 +1116,11 @@ impl<'bump> DiffMachine<'bump> {
 
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
-                    let scope = self.vdom.get_scope(scope_id).unwrap();
+                    let scope = self.vdom.get_scope_mut(scope_id).unwrap();
                     let root = scope.root_node();
                     self.remove_nodes(Some(root));
+                    let mut s = self.vdom.try_remove(scope_id).unwrap();
+                    s.hooks.clear_hooks();
                 }
             }
         }
