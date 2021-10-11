@@ -121,8 +121,8 @@ impl<'a, T: 'static> UseState<'a, T> {
         self.inner.wip.borrow_mut()
     }
 
-    pub fn classic(self) -> (&'a T, &'a Rc<dyn Fn(T)>) {
-        todo!()
+    pub fn classic(self) -> (&'a T, Rc<dyn Fn(T)>) {
+        (&self.inner.current_val, self.setter())
     }
 
     pub fn setter(&self) -> Rc<dyn Fn(T)> {

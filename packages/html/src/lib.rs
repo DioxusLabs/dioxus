@@ -1530,7 +1530,7 @@ builder_constructors! {
         // This has a manual implementation below
         // r#type: InputType,
 
-        value: String,
+        // value: String,
         width: isize,
     };
 
@@ -1538,7 +1538,7 @@ builder_constructors! {
     /// [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/label)
     /// element.
     label {
-        r#for: Id,
+        // r#for: Id,
         form: Id,
     };
 
@@ -1694,6 +1694,10 @@ impl input {
     pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("type", val, None, false)
     }
+
+    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("value", val, None, true)
+    }
 }
 
 /*
@@ -1715,6 +1719,11 @@ impl option {
 impl textarea {
     pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("value", val, None, true)
+    }
+}
+impl label {
+    pub fn r#for<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("for", val, None, false)
     }
 }
 

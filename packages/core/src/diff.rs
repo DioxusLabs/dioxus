@@ -330,9 +330,6 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         if !children.is_empty() {
-            // self.stack.element_id_stack.push(real_id);
-            // push our element_id onto the stack
-            // drop our element off the stack
             self.stack.create_children(children, MountType::Append);
         }
     }
@@ -543,11 +540,15 @@ impl<'bump> DiffMachine<'bump> {
             }
         }
 
-        if has_comitted {
-            self.mutations.pop();
+        if old.children.len() == 0 && new.children.len() != 0 {
+            please_commit(&mut self.mutations.edits);
+            self.stack.create_children(new.children, MountType::Append);
+        } else {
+            self.diff_children(old.children, new.children);
+            if has_comitted {
+                self.mutations.pop();
+            }
         }
-
-        self.diff_children(old.children, new.children);
     }
 
     fn diff_component_nodes(
@@ -601,6 +602,9 @@ impl<'bump> DiffMachine<'bump> {
             return;
         }
 
+        debug_assert!(old.children.len() != 0);
+        debug_assert!(new.children.len() != 0);
+
         self.diff_children(old.children, new.children);
     }
 
@@ -633,6 +637,7 @@ impl<'bump> DiffMachine<'bump> {
         match (old, new) {
             ([], []) => {}
             ([], _) => {
+                // we need to push the
                 self.stack.create_children(new, MountType::Append);
             }
             (_, []) => {
@@ -761,13 +766,57 @@ impl<'bump> DiffMachine<'bump> {
             right_offset,
         );
 
+        log::debug!("stack before lo is {:#?}", self.stack.instructions);
         // Ok, we now hopefully have a smaller range of children in the middle
         // within which to re-order nodes with the same keys, remove old nodes with
         // now-unused keys, and create new nodes with fresh keys.
-        self.diff_keyed_middle(
-            &old[left_offset..(old.len() - right_offset)],
-            &new[left_offset..(new.len() - right_offset)],
+
+        let old_middle = &old[left_offset..(old.len() - right_offset)];
+        let new_middle = &new[left_offset..(new.len() - right_offset)];
+
+        debug_assert!(
+            !((old_middle.len() == new_middle.len()) && old_middle.len() == 0),
+            "keyed children must have the same number of children"
         );
+        if new_middle.len() == 0 {
+            // remove the old elements
+            self.remove_nodes(old_middle);
+        } else if old_middle.len() == 0 {
+            // there were no old elements, so just create the new elements
+            // we need to find the right "foothold" though - we shouldnt use the "append" at all
+            if left_offset == 0 {
+                // insert at the beginning of the old list
+                let foothold = &old[old.len() - right_offset];
+                self.stack.create_children(
+                    new_middle,
+                    MountType::InsertBefore {
+                        other_node: foothold,
+                    },
+                );
+            } else if right_offset == 0 {
+                // insert at the end  the old list
+                let foothold = old.last().unwrap();
+                self.stack.create_children(
+                    new_middle,
+                    MountType::InsertAfter {
+                        other_node: foothold,
+                    },
+                );
+            } else {
+                // inserting in the middle
+                let foothold = &old[left_offset - 1];
+                self.stack.create_children(
+                    new_middle,
+                    MountType::InsertAfter {
+                        other_node: foothold,
+                    },
+                );
+            }
+        } else {
+            self.diff_keyed_middle(old_middle, new_middle);
+        }
+
+        log::debug!("stack after km is {:#?}", self.stack.instructions);
     }
 
     /// Diff both ends of the children that share keys.
@@ -893,6 +942,14 @@ impl<'bump> DiffMachine<'bump> {
         // If none of the old keys are reused by the new children, then we remove all the remaining old children and
         // create the new children afresh.
         if shared_keys.is_empty() {
+            log::debug!(
+                "no shared keys, replacing and creating many with many, {:#?}, {:#?}",
+                old,
+                new
+            );
+            log::debug!("old_key_to_old_index, {:#?}", old_key_to_old_index);
+            log::debug!("new_index_to_old_index, {:#?}", new_index_to_old_index);
+            log::debug!("shared_keys, {:#?}", shared_keys);
             self.replace_and_create_many_with_many(old, new);
             return;
         }

@@ -36,7 +36,7 @@ pub enum MountType<'a> {
 }
 
 pub(crate) struct DiffStack<'bump> {
-    instructions: Vec<DiffInstruction<'bump>>,
+    pub(crate) instructions: Vec<DiffInstruction<'bump>>,
     nodes_created_stack: SmallVec<[usize; 10]>,
     pub scope_stack: SmallVec<[ScopeId; 5]>,
 }

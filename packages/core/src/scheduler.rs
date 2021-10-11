@@ -107,8 +107,6 @@ pub enum SchedulerMsg {
 }
 
 pub enum TaskMsg {
-    // SubmitTask(FiberTask, u64),
-    // SubmitTask(FiberTask, u64),
     ToggleTask(u64),
     PauseTask(u64),
     ResumeTask(u64),
@@ -322,6 +320,9 @@ impl Scheduler {
     unsafe fn load_work(&mut self) -> SavedDiffWork<'static> {
         self.saved_state.take().unwrap().extend()
     }
+    pub fn handle_task(&mut self, evt: TaskMsg) {
+        //
+    }
 
     pub fn handle_channel_msg(&mut self, msg: SchedulerMsg) {
         match msg {
@@ -480,6 +481,18 @@ impl Scheduler {
         let mut committed_mutations = Vec::<Mutations<'static>>::new();
 
         while self.has_any_work() {
+            while let Ok(Some(msg)) = self.receiver.try_next() {
+                match msg {
+                    SchedulerMsg::Task(t) => todo!(),
+                    SchedulerMsg::Immediate(im) => {
+                        self.dirty_scopes.insert(im);
+                    }
+                    SchedulerMsg::UiEvent(evt) => {
+                        self.ui_events.push_back(evt);
+                    }
+                }
+            }
+
             // switch our priority, pop off any work
             while let Some(event) = self.ui_events.pop_front() {
                 if let Some(scope) = self.pool.get_scope_mut(event.scope) {

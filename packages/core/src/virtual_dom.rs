@@ -360,25 +360,21 @@ impl VirtualDom {
     /// Waits for the scheduler to have work
     /// This lets us poll async tasks during idle periods without blocking the main thread.
     pub async fn wait_for_work(&mut self) {
+        // todo: poll the events once even if there is work to do to prevent starvation
         if self.scheduler.has_any_work() {
-            log::debug!("No need to wait for work, we already have some");
             return;
         }
 
-        log::debug!("No active work.... waiting for some...");
         use futures_util::StreamExt;
 
-        // right now this won't poll events if there is ongoing work
-        // in the future we want to prioritize some events over ongoing work
-        // this is coming in the "priorities" PR
-
         // Wait for any new events if we have nothing to do
-        // todo: poll the events once even if there is work to do to prevent starvation
         futures_util::select! {
             _ = self.scheduler.async_tasks.next() => {}
             msg = self.scheduler.receiver.next() => {
                 match msg.unwrap() {
-                    SchedulerMsg::Task(t) => todo!(),
+                    SchedulerMsg::Task(t) => {
+                        self.scheduler.handle_task(t);
+                    },
                     SchedulerMsg::Immediate(im) => {
                         self.scheduler.dirty_scopes.insert(im);
                     }
@@ -387,18 +383,6 @@ impl VirtualDom {
                     }
                 }
             },
-        }
-
-        while let Ok(Some(msg)) = self.scheduler.receiver.try_next() {
-            match msg {
-                SchedulerMsg::Task(t) => todo!(),
-                SchedulerMsg::Immediate(im) => {
-                    self.scheduler.dirty_scopes.insert(im);
-                }
-                SchedulerMsg::UiEvent(evt) => {
-                    self.scheduler.ui_events.push_back(evt);
-                }
-            }
         }
     }
 }

@@ -211,7 +211,7 @@ impl WebsysDom {
 
     fn create_placeholder(&mut self, id: u64) {
         self.create_element("pre", None, id);
-        self.set_attribute("hidden", "", None);
+        // self.set_attribute("hidden", "", None);
     }
 
     fn create_text_node(&mut self, text: &str, id: u64) {
@@ -243,6 +243,9 @@ impl WebsysDom {
                 .dyn_into::<Node>()
                 .unwrap(),
         };
+
+        let el2 = el.dyn_ref::<Element>().unwrap();
+        el2.set_attribute("dioxus-id", &format!("{}", id)).unwrap();
 
         self.stack.push(el.clone());
         self.nodes[(id as usize)] = Some(el);
@@ -400,18 +403,16 @@ impl WebsysDom {
     }
 
     fn insert_before(&mut self, n: u32, root: u64) {
-        let after = self.nodes[root as usize].as_ref().unwrap();
+        let anchor = self.nodes[root as usize].as_ref().unwrap();
 
         if n == 1 {
             let before = self.stack.pop();
 
-            after
+            anchor
                 .parent_node()
                 .unwrap()
-                .insert_before(&before, Some(&after))
+                .insert_before(&before, Some(&anchor))
                 .unwrap();
-
-            after.insert_before(&before, None).unwrap();
         } else {
             let arr: js_sys::Array = self
                 .stack
@@ -419,11 +420,11 @@ impl WebsysDom {
                 .drain((self.stack.list.len() - n as usize)..)
                 .collect();
 
-            if let Some(el) = after.dyn_ref::<Element>() {
+            if let Some(el) = anchor.dyn_ref::<Element>() {
                 el.before_with_node(&arr).unwrap();
-            } else if let Some(el) = after.dyn_ref::<web_sys::CharacterData>() {
+            } else if let Some(el) = anchor.dyn_ref::<web_sys::CharacterData>() {
                 el.before_with_node(&arr).unwrap();
-            } else if let Some(el) = after.dyn_ref::<web_sys::DocumentType>() {
+            } else if let Some(el) = anchor.dyn_ref::<web_sys::DocumentType>() {
                 el.before_with_node(&arr).unwrap();
             }
         }
