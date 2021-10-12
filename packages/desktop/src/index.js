@@ -50,6 +50,18 @@ class Interpreter {
     root.replaceWith(...els);
   }
 
+  InsertAfter(edit) {
+    let old = this.nodes[edit.root];
+    let new_nodes = this.stack.splice(this.stack.length - edit.n);
+    old.after(...new_nodes);
+  }
+
+  InsertBefore(edit) {
+    let old = this.nodes[edit.root];
+    let new_nodes = this.stack.splice(this.stack.length - edit.n);
+    old.before(...new_nodes);
+  }
+
   Remove(edit) {
     let node = this.nodes[edit.root];
     if (node !== undefined) {
@@ -78,74 +90,18 @@ class Interpreter {
 
   CreatePlaceholder(edit) {
     let el = document.createElement("pre");
-    // let el = document.createComment("vroot");
     this.stack.push(el);
     this.nodes[edit.root] = el;
   }
 
   RemoveEventListener(edit) { }
 
-  SetText(edit) {
-    this.top().textContent = edit.text;
-  }
-
-  SetAttribute(edit) {
-    const name = edit.field;
-    const value = edit.value;
-    const ns = edit.ns;
-    const node = this.top(this.stack);
-    if (ns == "style") {
-      node.style[name] = value;
-    } else if (ns !== undefined) {
-      node.setAttributeNS(ns, name, value);
-    } else {
-      node.setAttribute(name, value);
-    }
-    if (name === "value") {
-      node.value = value;
-    }
-    if (name === "checked") {
-      node.checked = true;
-    }
-    if (name === "selected") {
-      node.selected = true;
-    }
-  }
-  RemoveAttribute(edit) {
-    const name = edit.field;
-    const node = this.top(this.stack);
-    node.removeAttribute(name);
-
-    if (name === "value") {
-      node.value = null;
-    }
-    if (name === "checked") {
-      node.checked = false;
-    }
-    if (name === "selected") {
-      node.selected = false;
-    }
-  }
-
-  InsertAfter(edit) {
-    let old = this.nodes[edit.root];
-    let new_nodes = this.stack.splice(this.stack.length - edit.n);
-    // console.log("inserting nodes after", new_nodes, old);
-    old.after(...new_nodes);
-  }
-
-  InsertBefore(edit) {
-    let old = this.nodes[edit.root];
-    let new_nodes = this.stack.splice(this.stack.length - edit.n);
-    old.before(...new_nodes);
-  }
-
   NewEventListener(edit) {
     const event_name = edit.event_name;
     const mounted_node_id = edit.root;
     const scope = edit.scope;
 
-    const element = this.top();
+    const element = this.nodes[edit.root]
     element.setAttribute(`dioxus-event-${event_name}`, `${scope}.${mounted_node_id}`);
 
     if (this.listeners[event_name] === undefined) {
@@ -191,6 +147,49 @@ class Interpreter {
       });
     }
   }
+
+  SetText(edit) {
+    this.nodes[edit.root].textContent = edit.text;
+  }
+
+  SetAttribute(edit) {
+    const name = edit.field;
+    const value = edit.value;
+    const ns = edit.ns;
+    const node = this.nodes[edit.root]
+    if (ns == "style") {
+      node.style[name] = value;
+    } else if (ns !== undefined) {
+      node.setAttributeNS(ns, name, value);
+    } else {
+      node.setAttribute(name, value);
+    }
+    if (name === "value") {
+      node.value = value;
+    }
+    if (name === "checked") {
+      node.checked = true;
+    }
+    if (name === "selected") {
+      node.selected = true;
+    }
+  }
+  RemoveAttribute(edit) {
+    const name = edit.field;
+    const node = this.nodes[edit.root];
+    node.removeAttribute(name);
+
+    if (name === "value") {
+      node.value = null;
+    }
+    if (name === "checked") {
+      node.checked = false;
+    }
+    if (name === "selected") {
+      node.selected = false;
+    }
+  }
+
 }
 
 async function initialize() {
