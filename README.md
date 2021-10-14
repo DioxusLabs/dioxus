@@ -94,14 +94,6 @@ If you know React, then you already know Dioxus.
 | [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | [![asd](https://github.com/DioxusLabs/todomvc/blob/master/example.png)](https://github.com/dioxusLabs/todomvc/) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
 
 
-
-| E-Commerce Site                                                  | Doxie Documentation Generator                                    | Chatroom                                                         | Widget Gallery                                                   |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
-
-
-
-
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
 
 <!-- 
