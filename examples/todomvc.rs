@@ -3,8 +3,8 @@ use dioxus::prelude::*;
 use im_rc::HashMap;
 use std::rc::Rc;
 
-fn main() -> anyhow::Result<()> {
-    dioxus::desktop::launch(App, |c| c)
+fn main() {
+    dioxus::desktop::launch(App, |c| c);
 }
 
 #[derive(PartialEq)]

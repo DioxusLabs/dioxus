@@ -2,7 +2,7 @@ use crate::innerlude::*;
 use fxhash::FxHashMap;
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::HashMap,
     future::Future,
     pin::Pin,
@@ -23,6 +23,8 @@ pub struct Scope {
     pub(crate) parent_idx: Option<ScopeId>,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
+    pub(crate) subtree: Cell<u32>,
+    pub(crate) is_subtree_root: Cell<bool>,
 
     // Nodes
     pub(crate) frames: ActiveFrame,
@@ -69,6 +71,36 @@ impl Scope {
     /// ```
     pub fn root_node(&self) -> &VNode {
         self.frames.fin_head()
+    }
+
+    /// Get the subtree ID that this scope belongs to.
+    ///
+    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
+    /// the mutations to the correct window/portal/subtree.
+    ///
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// dom.rebuild();
+    ///
+    /// let base = dom.base_scope();
+    ///
+    /// assert_eq!(base.subtree(), 0);
+    /// ```
+    pub fn subtree(&self) -> u32 {
+        self.subtree.get()
+    }
+
+    pub(crate) fn new_subtree(&self) -> Option<u32> {
+        if self.is_subtree_root.get() {
+            None
+        } else {
+            let cur = self.shared.cur_subtree.get();
+            self.shared.cur_subtree.set(cur + 1);
+            Some(cur)
+        }
     }
 
     /// Get the height of this Scope - IE the number of scopes above it.
@@ -146,6 +178,7 @@ impl Scope {
         our_arena_idx: ScopeId,
         parent_idx: Option<ScopeId>,
         height: u32,
+        subtree: u32,
         child_nodes: ScopeChildren,
         shared: EventChannel,
     ) -> Self {
@@ -168,6 +201,8 @@ impl Scope {
             parent_idx,
             our_arena_idx,
             height,
+            subtree: Cell::new(subtree),
+            is_subtree_root: Cell::new(false),
 
             frames: ActiveFrame::new(),
             hooks: Default::default(),
@@ -183,6 +218,7 @@ impl Scope {
         caller: &'creator_node dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
         child_nodes: ScopeChildren,
     ) {
+        log::debug!("Updating scope dependencies {:?}", self.our_arena_idx);
         let caller = caller as *const _;
         self.caller = unsafe { std::mem::transmute(caller) };
 

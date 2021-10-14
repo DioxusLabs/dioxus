@@ -221,18 +221,12 @@ impl<'bump> DiffMachine<'bump> {
             MountType::Replace { old } => {
                 if let Some(old_id) = old.try_mounted_id() {
                     self.mutations.replace_with(old_id, nodes_created as u32);
+                    self.remove_nodes(Some(old));
                 } else {
-                    let mut iter = RealChildIterator::new(old, self.vdom);
-                    let first = iter.next().unwrap();
-                    self.mutations
-                        .replace_with(first.mounted_id(), nodes_created as u32);
-                    self.remove_nodes(iter);
-                }
-            }
-
-            MountType::ReplaceByElementId { el } => {
-                if let Some(old) = el {
-                    self.mutations.replace_with(old, nodes_created as u32);
+                    if let Some(id) = self.find_first_element_id(old) {
+                        self.mutations.replace_with(id, nodes_created as u32);
+                    }
+                    self.remove_nodes(Some(old));
                 }
             }
 
@@ -326,13 +320,10 @@ impl<'bump> DiffMachine<'bump> {
         }
 
         for attr in *attributes {
-            self.mutations.set_attribute(attr);
+            self.mutations.set_attribute(attr, real_id.as_u64());
         }
 
         if !children.is_empty() {
-            // self.stack.element_id_stack.push(real_id);
-            // push our element_id onto the stack
-            // drop our element off the stack
             self.stack.create_children(children, MountType::Append);
         }
     }
@@ -352,12 +343,12 @@ impl<'bump> DiffMachine<'bump> {
         let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
 
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
-            let height = parent_scope.height + 1;
             Scope::new(
                 caller,
                 new_idx,
                 Some(parent_idx),
-                height,
+                parent_scope.height + 1,
+                parent_scope.subtree(),
                 ScopeChildren(vcomponent.children),
                 shared,
             )
@@ -379,11 +370,24 @@ impl<'bump> DiffMachine<'bump> {
 
         let new_component = self.vdom.get_scope_mut(new_idx).unwrap();
 
+        log::debug!("initializing component {:?}", new_idx);
+
         // Run the scope for one iteration to initialize it
         if new_component.run_scope(self.vdom) {
             // Take the node that was just generated from running the component
             let nextnode = new_component.frames.fin_head();
             self.stack.create_component(new_idx, nextnode);
+
+            //
+            /*
+            tree_item {
+
+            }
+
+            */
+            if new_component.is_subtree_root.get() {
+                self.stack.push_subtree();
+            }
         }
 
         // Finally, insert this scope as a seen node.
@@ -405,7 +409,7 @@ impl<'bump> DiffMachine<'bump> {
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
             (Suspended(old), Suspended(new)) => self.diff_suspended_nodes(old, new),
-            (Element(old), Element(new)) => self.diff_element_nodes(old, new, new_node),
+            (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
 
             // Anything else is just a basic replace and create
             (
@@ -420,9 +424,7 @@ impl<'bump> DiffMachine<'bump> {
     fn diff_text_nodes(&mut self, old: &'bump VText<'bump>, new: &'bump VText<'bump>) {
         if let Some(root) = old.dom_id.get() {
             if old.text != new.text {
-                self.mutations.push_root(root);
-                self.mutations.set_text(new.text);
-                self.mutations.pop();
+                self.mutations.set_text(new.text, root.as_u64());
             }
 
             new.dom_id.set(Some(root));
@@ -433,9 +435,10 @@ impl<'bump> DiffMachine<'bump> {
         &mut self,
         old: &'bump VElement<'bump>,
         new: &'bump VElement<'bump>,
+        old_node: &'bump VNode<'bump>,
         new_node: &'bump VNode<'bump>,
     ) {
-        let root = old.dom_id.get();
+        let root = old.dom_id.get().unwrap();
 
         // If the element type is completely different, the element needs to be re-rendered completely
         // This is an optimization React makes due to how users structure their code
@@ -446,31 +449,18 @@ impl<'bump> DiffMachine<'bump> {
             // issue is that we need the "vnode" but this method only has the velement
             self.stack.push_nodes_created(0);
             self.stack.push(DiffInstruction::Mount {
-                and: MountType::ReplaceByElementId {
-                    el: old.dom_id.get(),
-                },
+                and: MountType::Replace { old: old_node },
             });
             self.create_element_node(new, new_node);
             return;
         }
 
-        new.dom_id.set(root);
+        new.dom_id.set(Some(root));
 
         // todo: attributes currently rely on the element on top of the stack, but in theory, we only need the id of the
         // element to modify its attributes.
         // it would result in fewer instructions if we just set the id directly.
         // it would also clean up this code some, but that's not very important anyways
-
-        // Don't push the root if we don't have to
-        let mut has_comitted = false;
-        let mut please_commit = |edits: &mut Vec<DomEdit>| {
-            if !has_comitted {
-                has_comitted = true;
-                edits.push(PushRoot {
-                    root: root.unwrap().as_u64(),
-                });
-            }
-        };
 
         // Diff Attributes
         //
@@ -481,20 +471,17 @@ impl<'bump> DiffMachine<'bump> {
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                 if old_attr.value != new_attr.value {
-                    please_commit(&mut self.mutations.edits);
-                    self.mutations.set_attribute(new_attr);
+                    self.mutations.set_attribute(new_attr, root.as_u64());
                 } else if new_attr.is_volatile {
-                    please_commit(&mut self.mutations.edits);
-                    self.mutations.set_attribute(new_attr);
+                    self.mutations.set_attribute(new_attr, root.as_u64());
                 }
             }
         } else {
-            please_commit(&mut self.mutations.edits);
             for attribute in old.attributes {
-                self.mutations.remove_attribute(attribute);
+                self.mutations.remove_attribute(attribute, root.as_u64());
             }
             for attribute in new.attributes {
-                self.mutations.set_attribute(attribute)
+                self.mutations.set_attribute(attribute, root.as_u64())
             }
         }
 
@@ -512,31 +499,34 @@ impl<'bump> DiffMachine<'bump> {
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                     if old_l.event != new_l.event {
-                        please_commit(&mut self.mutations.edits);
-                        self.mutations.remove_event_listener(old_l.event);
+                        self.mutations
+                            .remove_event_listener(old_l.event, root.as_u64());
                         self.mutations.new_event_listener(new_l, cur_scope_id);
                     }
                     new_l.mounted_node.set(old_l.mounted_node.get());
                     self.attach_listener_to_scope(new_l, scope);
                 }
             } else {
-                please_commit(&mut self.mutations.edits);
                 for listener in old.listeners {
-                    self.mutations.remove_event_listener(listener.event);
+                    self.mutations
+                        .remove_event_listener(listener.event, root.as_u64());
                 }
                 for listener in new.listeners {
-                    listener.mounted_node.set(root);
+                    listener.mounted_node.set(Some(root));
                     self.mutations.new_event_listener(listener, cur_scope_id);
                     self.attach_listener_to_scope(listener, scope);
                 }
             }
         }
 
-        if has_comitted {
-            self.mutations.pop();
+        if old.children.len() == 0 && new.children.len() != 0 {
+            self.mutations.edits.push(PushRoot {
+                root: root.as_u64(),
+            });
+            self.stack.create_children(new.children, MountType::Append);
+        } else {
+            self.diff_children(old.children, new.children);
         }
-
-        self.diff_children(old.children, new.children);
     }
 
     fn diff_component_nodes(
@@ -551,6 +541,7 @@ impl<'bump> DiffMachine<'bump> {
 
         // Make sure we're dealing with the same component (by function pointer)
         if old.user_fc == new.user_fc {
+            log::debug!("Diffing component {:?} - {:?}", new.user_fc, scope_addr);
             //
             self.stack.scope_stack.push(scope_addr);
 
@@ -559,7 +550,6 @@ impl<'bump> DiffMachine<'bump> {
 
             // make sure the component's caller function is up to date
             let scope = self.vdom.get_scope_mut(scope_addr).unwrap();
-
             scope.update_scope_dependencies(new.caller, ScopeChildren(new.children));
 
             // React doesn't automatically memoize, but we do.
@@ -574,8 +564,6 @@ impl<'bump> DiffMachine<'bump> {
             }
 
             self.stack.scope_stack.pop();
-
-            self.seen_scopes.insert(scope_addr);
         } else {
             self.stack
                 .create_node(new_node, MountType::Replace { old: old_node });
@@ -589,6 +577,9 @@ impl<'bump> DiffMachine<'bump> {
             self.diff_node(&old.children[0], &new.children[0]);
             return;
         }
+
+        debug_assert!(old.children.len() != 0);
+        debug_assert!(new.children.len() != 0);
 
         self.diff_children(old.children, new.children);
     }
@@ -622,20 +613,18 @@ impl<'bump> DiffMachine<'bump> {
         match (old, new) {
             ([], []) => {}
             ([], _) => {
+                // we need to push the
                 self.stack.create_children(new, MountType::Append);
             }
             (_, []) => {
-                for node in old {
-                    self.remove_nodes(Some(node));
-                }
+                self.remove_nodes(old);
             }
             ([VNode::Anchor(old_anchor)], [VNode::Anchor(new_anchor)]) => {
                 old_anchor.dom_id.set(new_anchor.dom_id.get());
             }
-            ([VNode::Anchor(anchor)], _) => {
-                let el = anchor.dom_id.get();
+            ([VNode::Anchor(_)], _) => {
                 self.stack
-                    .create_children(new, MountType::ReplaceByElementId { el });
+                    .create_children(new, MountType::Replace { old: &old[0] });
             }
             (_, [VNode::Anchor(_)]) => {
                 self.replace_and_create_many_with_one(old, &new[0]);
@@ -744,19 +733,63 @@ impl<'bump> DiffMachine<'bump> {
             Some(count) => count,
             None => return,
         };
-        log::debug!(
-            "Left offset, right offset, {}, {}",
-            left_offset,
-            right_offset,
-        );
+        // log::debug!(
+        //     "Left offset, right offset, {}, {}",
+        //     left_offset,
+        //     right_offset,
+        // );
 
+        // log::debug!("stack before lo is {:#?}", self.stack.instructions);
         // Ok, we now hopefully have a smaller range of children in the middle
         // within which to re-order nodes with the same keys, remove old nodes with
         // now-unused keys, and create new nodes with fresh keys.
-        self.diff_keyed_middle(
-            &old[left_offset..(old.len() - right_offset)],
-            &new[left_offset..(new.len() - right_offset)],
+
+        let old_middle = &old[left_offset..(old.len() - right_offset)];
+        let new_middle = &new[left_offset..(new.len() - right_offset)];
+
+        debug_assert!(
+            !((old_middle.len() == new_middle.len()) && old_middle.len() == 0),
+            "keyed children must have the same number of children"
         );
+        if new_middle.len() == 0 {
+            // remove the old elements
+            self.remove_nodes(old_middle);
+        } else if old_middle.len() == 0 {
+            // there were no old elements, so just create the new elements
+            // we need to find the right "foothold" though - we shouldnt use the "append" at all
+            if left_offset == 0 {
+                // insert at the beginning of the old list
+                let foothold = &old[old.len() - right_offset];
+                self.stack.create_children(
+                    new_middle,
+                    MountType::InsertBefore {
+                        other_node: foothold,
+                    },
+                );
+            } else if right_offset == 0 {
+                // insert at the end  the old list
+                let foothold = old.last().unwrap();
+                self.stack.create_children(
+                    new_middle,
+                    MountType::InsertAfter {
+                        other_node: foothold,
+                    },
+                );
+            } else {
+                // inserting in the middle
+                let foothold = &old[left_offset - 1];
+                self.stack.create_children(
+                    new_middle,
+                    MountType::InsertAfter {
+                        other_node: foothold,
+                    },
+                );
+            }
+        } else {
+            self.diff_keyed_middle(old_middle, new_middle);
+        }
+
+        log::debug!("stack after km is {:#?}", self.stack.instructions);
     }
 
     /// Diff both ends of the children that share keys.
@@ -882,6 +915,14 @@ impl<'bump> DiffMachine<'bump> {
         // If none of the old keys are reused by the new children, then we remove all the remaining old children and
         // create the new children afresh.
         if shared_keys.is_empty() {
+            log::debug!(
+                "no shared keys, replacing and creating many with many, {:#?}, {:#?}",
+                old,
+                new
+            );
+            log::debug!("old_key_to_old_index, {:#?}", old_key_to_old_index);
+            log::debug!("new_index_to_old_index, {:#?}", new_index_to_old_index);
+            log::debug!("shared_keys, {:#?}", shared_keys);
             self.replace_and_create_many_with_many(old, new);
             return;
         }
@@ -1075,9 +1116,11 @@ impl<'bump> DiffMachine<'bump> {
 
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
-                    let scope = self.vdom.get_scope(scope_id).unwrap();
+                    let scope = self.vdom.get_scope_mut(scope_id).unwrap();
                     let root = scope.root_node();
                     self.remove_nodes(Some(root));
+                    let mut s = self.vdom.try_remove(scope_id).unwrap();
+                    s.hooks.clear_hooks();
                 }
             }
         }

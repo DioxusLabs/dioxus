@@ -102,6 +102,10 @@ impl<'src> Context<'src> {
         self.scope.memoized_updater.clone()
     }
 
+    pub fn needs_update(&self) {
+        (self.scope.memoized_updater)()
+    }
+
     /// Schedule an update for any component given its ScopeId.
     ///
     /// A component's ScopeId can be obtained from `use_hook` or the [`Context::scope_id`] method.
@@ -178,65 +182,69 @@ impl<'src> Context<'src> {
     /// struct SharedState(&'static str);
     ///
     /// static App: FC<()> = |cx, props|{
-    ///     cx.use_provide_state(|| SharedState("world"));
+    ///     cx.provide_state(SharedState("world"));
     ///     rsx!(cx, Child {})
     /// }
     ///
     /// static Child: FC<()> = |cx, props|{
-    ///     let state = cx.use_consume_state::<SharedState>();
+    ///     let state = cx.consume_state::<SharedState>();
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn use_provide_state<T, F>(self, init: F) -> &'src Rc<T>
+    pub fn provide_state<T>(self, value: T)
     where
         T: 'static,
-        F: FnOnce() -> T,
     {
-        let is_initialized = self.use_hook(
-            |_| false,
-            |s| {
-                let i = *s;
-                *s = true;
-                i
-            },
-            |_| {},
-        );
-
-        if !is_initialized {
-            let existing = self
-                .scope
-                .shared_contexts
-                .borrow_mut()
-                .insert(TypeId::of::<T>(), Rc::new(init()));
-
-            if existing.is_some() {
-                log::warn!(
-                    "A shared state was replaced with itself. \
-                    This is does not result in a panic, but is probably not what you are trying to do"
-                );
-            }
-        }
-
-        self.use_consume_state().unwrap()
+        self.scope
+            .shared_contexts
+            .borrow_mut()
+            .insert(TypeId::of::<T>(), Rc::new(value))
+            .map(|f| f.downcast::<T>().ok())
+            .flatten();
     }
 
-    /// Uses a context, storing the cached value around
+    /// Try to retrive a SharedState with type T from the any parent Scope.
+    pub fn consume_state<T: 'static>(self) -> Option<Rc<T>> {
+        let getter = &self.scope.shared.get_shared_context;
+        let ty = TypeId::of::<T>();
+        let idx = self.scope.our_arena_idx;
+        getter(idx, ty).map(|f| f.downcast().unwrap())
+    }
+
+    /// Create a new subtree with this scope as the root of the subtree.
     ///
-    /// If a context is not found on the first search, then this call will be  "dud", always returning "None" even if a
-    /// context was added later. This allows using another hook as a fallback
+    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
+    /// the mutations to the correct window/portal/subtree.
     ///
-    pub fn use_consume_state<T: 'static>(self) -> Option<&'src Rc<T>> {
-        struct UseContextHook<C>(Option<Rc<C>>);
-        self.use_hook(
-            move |_| {
-                let getter = &self.scope.shared.get_shared_context;
-                let ty = TypeId::of::<T>();
-                let idx = self.scope.our_arena_idx;
-                UseContextHook(getter(idx, ty).map(|f| f.downcast().unwrap()))
-            },
-            move |hook| hook.0.as_ref(),
-            |_| {},
-        )
+    /// This method
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// static App: FC<()> = |cx, props| {
+    ///     todo!();
+    ///     rsx!(cx, div { "Subtree {id}"})
+    /// };
+    /// ```        
+    pub fn create_subtree(self) -> Option<u32> {
+        self.scope.new_subtree()
+    }
+
+    /// Get the subtree ID that this scope belongs to.
+    ///
+    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
+    /// the mutations to the correct window/portal/subtree.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// static App: FC<()> = |cx, props| {
+    ///     let id = cx.get_current_subtree();
+    ///     rsx!(cx, div { "Subtree {id}"})
+    /// };
+    /// ```
+    pub fn get_current_subtree(self) -> u32 {
+        self.scope.subtree()
     }
 
     /// Store a value between renders
@@ -271,13 +279,17 @@ impl<'src> Context<'src> {
         Output: 'src,
         Init: FnOnce(usize) -> State,
         Run: FnOnce(&'src mut State) -> Output,
-        Cleanup: FnOnce(&mut State) + 'static,
+        Cleanup: FnOnce(Box<State>) + 'static,
     {
         // If the idx is the same as the hook length, then we need to add the current hook
         if self.scope.hooks.at_end() {
             self.scope.hooks.push_hook(
                 initializer(self.scope.hooks.len()),
-                Box::new(|raw| cleanup(raw.downcast_mut::<State>().unwrap())),
+                Box::new(|raw| {
+                    //
+                    let s = raw.downcast::<State>().unwrap();
+                    cleanup(s);
+                }),
             );
         }
 

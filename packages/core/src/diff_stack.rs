@@ -30,13 +30,12 @@ pub enum MountType<'a> {
     Absorb,
     Append,
     Replace { old: &'a VNode<'a> },
-    ReplaceByElementId { el: Option<ElementId> },
     InsertAfter { other_node: &'a VNode<'a> },
     InsertBefore { other_node: &'a VNode<'a> },
 }
 
 pub(crate) struct DiffStack<'bump> {
-    instructions: Vec<DiffInstruction<'bump>>,
+    pub(crate) instructions: Vec<DiffInstruction<'bump>>,
     nodes_created_stack: SmallVec<[usize; 10]>,
     pub scope_stack: SmallVec<[ScopeId; 5]>,
 }
@@ -74,6 +73,13 @@ impl<'bump> DiffStack<'bump> {
             self.instructions
                 .push(DiffInstruction::Create { node: child });
         }
+    }
+
+    pub fn push_subtree(&mut self) {
+        self.nodes_created_stack.push(0);
+        self.instructions.push(DiffInstruction::Mount {
+            and: MountType::Append,
+        });
     }
 
     pub fn push_nodes_created(&mut self, count: usize) {

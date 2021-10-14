@@ -86,6 +86,7 @@ use std::{
 #[derive(Clone)]
 pub(crate) struct EventChannel {
     pub task_counter: Rc<Cell<u64>>,
+    pub cur_subtree: Rc<Cell<u32>>,
     pub sender: UnboundedSender<SchedulerMsg>,
     pub schedule_any_immediate: Rc<dyn Fn(ScopeId)>,
     pub submit_task: Rc<dyn Fn(FiberTask) -> TaskHandle>,
@@ -106,8 +107,6 @@ pub enum SchedulerMsg {
 }
 
 pub enum TaskMsg {
-    // SubmitTask(FiberTask, u64),
-    // SubmitTask(FiberTask, u64),
     ToggleTask(u64),
     PauseTask(u64),
     ResumeTask(u64),
@@ -178,13 +177,19 @@ impl Scheduler {
         let heuristics = HeuristicsEngine::new();
 
         let task_counter = Rc::new(Cell::new(0));
+        let cur_subtree = Rc::new(Cell::new(0));
 
         let channel = EventChannel {
+            cur_subtree,
             task_counter: task_counter.clone(),
             sender: sender.clone(),
             schedule_any_immediate: {
                 let sender = sender.clone();
-                Rc::new(move |id| sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap())
+                Rc::new(move |id| {
+                    //
+                    log::debug!("scheduling immedate! {:?}", id);
+                    sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap()
+                })
             },
             // todo: we want to get the futures out of the scheduler message
             // the scheduler message should be send/sync
@@ -319,6 +324,9 @@ impl Scheduler {
     unsafe fn load_work(&mut self) -> SavedDiffWork<'static> {
         self.saved_state.take().unwrap().extend()
     }
+    pub fn handle_task(&mut self, evt: TaskMsg) {
+        //
+    }
 
     pub fn handle_channel_msg(&mut self, msg: SchedulerMsg) {
         match msg {
@@ -370,23 +378,28 @@ impl Scheduler {
         if machine.stack.is_empty() {
             let shared = self.pool.clone();
 
+            self.dirty_scopes
+                .retain(|id| shared.get_scope(*id).is_some());
             self.dirty_scopes.sort_by(|a, b| {
                 let h1 = shared.get_scope(*a).unwrap().height;
                 let h2 = shared.get_scope(*b).unwrap().height;
-                h1.cmp(&h2)
+                h1.cmp(&h2).reverse()
             });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                log::info!("handlng dirty scope {:#?}", scopeid);
+                log::info!("handlng dirty scope {:?}", scopeid);
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
+                    log::debug!("about to run scope {:?}", scopeid);
 
-                    let mut component = self.pool.get_scope_mut(scopeid).unwrap();
-                    if component.run_scope(&self.pool) {
-                        let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                        // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                        machine.stack.scope_stack.push(scopeid);
-                        machine.stack.push(DiffInstruction::Diff { new, old });
+                    if let Some(component) = self.pool.get_scope_mut(scopeid) {
+                        if component.run_scope(&self.pool) {
+                            let (old, new) =
+                                (component.frames.wip_head(), component.frames.fin_head());
+                            // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                            machine.stack.scope_stack.push(scopeid);
+                            machine.stack.push(DiffInstruction::Diff { new, old });
+                        }
                     }
                 }
             }
@@ -477,6 +490,18 @@ impl Scheduler {
         let mut committed_mutations = Vec::<Mutations<'static>>::new();
 
         while self.has_any_work() {
+            while let Ok(Some(msg)) = self.receiver.try_next() {
+                match msg {
+                    SchedulerMsg::Task(t) => todo!(),
+                    SchedulerMsg::Immediate(im) => {
+                        self.dirty_scopes.insert(im);
+                    }
+                    SchedulerMsg::UiEvent(evt) => {
+                        self.ui_events.push_back(evt);
+                    }
+                }
+            }
+
             // switch our priority, pop off any work
             while let Some(event) = self.ui_events.pop_front() {
                 if let Some(scope) = self.pool.get_scope_mut(event.scope) {
@@ -505,8 +530,6 @@ impl Scheduler {
                 return committed_mutations;
             }
         }
-
-        log::debug!("work with deadline completed: {:#?}", committed_mutations);
 
         committed_mutations
     }
@@ -546,6 +569,8 @@ impl Scheduler {
             .get_scope_mut(base_scope)
             .expect("The base scope should never be moved");
 
+        log::debug!("rebuild {:?}", base_scope);
+
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if cur_component.run_scope(&self.pool) {
             diff_machine
@@ -571,6 +596,8 @@ impl Scheduler {
             .pool
             .get_scope_mut(base_scope)
             .expect("The base scope should never be moved");
+
+        log::debug!("hard diff {:?}", base_scope);
 
         if cur_component.run_scope(&self.pool) {
             let mut diff_machine = DiffMachine::new(Mutations::new(), &mut self.pool);

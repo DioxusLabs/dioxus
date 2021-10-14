@@ -1,9 +1,9 @@
 //! Basic example that renders a simple VNode to the browser.
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
+use dioxus_core_macro::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
-use dioxus_core_macro::*;
 
 fn main() {
     console_error_panic_hook::set_once();

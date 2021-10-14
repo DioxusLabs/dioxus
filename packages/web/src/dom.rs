@@ -8,13 +8,13 @@
 //! - Partial delegation?>
 
 use dioxus_core::{
-    events::{DioxusEvent, KeyCode, SyntheticEvent, UserEvent},
+    events::{KeyCode, UserEvent},
     mutations::NodeRefMutation,
     scheduler::SchedulerMsg,
     DomEdit, ElementId, ScopeId,
 };
 use fxhash::FxHashMap;
-use std::{fmt::Debug, rc::Rc, sync::Arc};
+use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     Attr, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
@@ -122,11 +122,18 @@ impl WebsysDom {
                     root: mounted_node_id,
                 } => self.new_event_listener(event_name, scope, mounted_node_id),
 
-                DomEdit::RemoveEventListener { event } => self.remove_event_listener(event),
+                DomEdit::RemoveEventListener { event, root } => {
+                    self.remove_event_listener(event, root)
+                }
 
-                DomEdit::SetText { text } => self.set_text(text),
-                DomEdit::SetAttribute { field, value, ns } => self.set_attribute(field, value, ns),
-                DomEdit::RemoveAttribute { name } => self.remove_attribute(name),
+                DomEdit::SetText { text, root } => self.set_text(text, root),
+                DomEdit::SetAttribute {
+                    field,
+                    value,
+                    ns,
+                    root,
+                } => self.set_attribute(field, value, ns, root),
+                DomEdit::RemoveAttribute { name, root } => self.remove_attribute(name, root),
 
                 DomEdit::InsertAfter { n, root } => self.insert_after(n, root),
                 DomEdit::InsertBefore { n, root } => self.insert_before(n, root),
@@ -211,7 +218,7 @@ impl WebsysDom {
 
     fn create_placeholder(&mut self, id: u64) {
         self.create_element("pre", None, id);
-        self.set_attribute("hidden", "", None);
+        // self.set_attribute("hidden", "", None);
     }
 
     fn create_text_node(&mut self, text: &str, id: u64) {
@@ -243,6 +250,9 @@ impl WebsysDom {
                 .dyn_into::<Node>()
                 .unwrap(),
         };
+
+        let el2 = el.dyn_ref::<Element>().unwrap();
+        el2.set_attribute("dioxus-id", &format!("{}", id)).unwrap();
 
         self.stack.push(el.clone());
         self.nodes[(id as usize)] = Some(el);
@@ -299,16 +309,17 @@ impl WebsysDom {
         }
     }
 
-    fn remove_event_listener(&mut self, event: &str) {
+    fn remove_event_listener(&mut self, event: &str, root: u64) {
         // todo!()
     }
 
-    fn set_text(&mut self, text: &str) {
-        self.stack.top().set_text_content(Some(text))
+    fn set_text(&mut self, text: &str, root: u64) {
+        let el = self.nodes[root as usize].as_ref().unwrap();
+        el.set_text_content(Some(text))
     }
 
-    fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>) {
-        let node = self.stack.top();
+    fn set_attribute(&mut self, name: &str, value: &str, ns: Option<&str>, root: u64) {
+        let node = self.nodes[root as usize].as_ref().unwrap();
         if ns == Some("style") {
             if let Some(el) = node.dyn_ref::<Element>() {
                 let el = el.dyn_ref::<HtmlElement>().unwrap();
@@ -342,7 +353,11 @@ impl WebsysDom {
                 }
                 "checked" => {
                     if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
-                        input.set_checked(true);
+                        match value {
+                            "true" => input.set_checked(true),
+                            "false" => input.set_checked(false),
+                            _ => fallback(),
+                        }
                     } else {
                         fallback();
                     }
@@ -359,8 +374,8 @@ impl WebsysDom {
         }
     }
 
-    fn remove_attribute(&mut self, name: &str) {
-        let node = self.stack.top();
+    fn remove_attribute(&mut self, name: &str, root: u64) {
+        let node = self.nodes[root as usize].as_ref().unwrap();
         if let Some(node) = node.dyn_ref::<web_sys::Element>() {
             node.remove_attribute(name).unwrap();
         }
@@ -400,18 +415,16 @@ impl WebsysDom {
     }
 
     fn insert_before(&mut self, n: u32, root: u64) {
-        let after = self.nodes[root as usize].as_ref().unwrap();
+        let anchor = self.nodes[root as usize].as_ref().unwrap();
 
         if n == 1 {
             let before = self.stack.pop();
 
-            after
+            anchor
                 .parent_node()
                 .unwrap()
-                .insert_before(&before, Some(&after))
+                .insert_before(&before, Some(&anchor))
                 .unwrap();
-
-            after.insert_before(&before, None).unwrap();
         } else {
             let arr: js_sys::Array = self
                 .stack
@@ -419,11 +432,11 @@ impl WebsysDom {
                 .drain((self.stack.list.len() - n as usize)..)
                 .collect();
 
-            if let Some(el) = after.dyn_ref::<Element>() {
+            if let Some(el) = anchor.dyn_ref::<Element>() {
                 el.before_with_node(&arr).unwrap();
-            } else if let Some(el) = after.dyn_ref::<web_sys::CharacterData>() {
+            } else if let Some(el) = anchor.dyn_ref::<web_sys::CharacterData>() {
                 el.before_with_node(&arr).unwrap();
-            } else if let Some(el) = after.dyn_ref::<web_sys::DocumentType>() {
+            } else if let Some(el) = anchor.dyn_ref::<web_sys::DocumentType>() {
                 el.before_with_node(&arr).unwrap();
             }
         }
@@ -470,56 +483,61 @@ unsafe impl Sync for DioxusWebsysEvent {}
 
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
-fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
+fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send> {
     use crate::events::*;
     use dioxus_core::events::on::*;
     match event.type_().as_str() {
-        "copy" | "cut" | "paste" => SyntheticEvent::ClipboardEvent(ClipboardEvent(
-            DioxusEvent::new(ClipboardEventInner(), DioxusWebsysEvent(event)),
-        )),
+        "copy" | "cut" | "paste" => Box::new(ClipboardEvent {}),
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: &web_sys::CompositionEvent = event.dyn_ref().unwrap();
-            SyntheticEvent::CompositionEvent(CompositionEvent(DioxusEvent::new(
-                CompositionEventInner {
-                    data: evt.data().unwrap_or_default(),
-                },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(CompositionEvent {
+                data: evt.data().unwrap_or_default(),
+            })
         }
         "keydown" | "keypress" | "keyup" => {
             let evt: &web_sys::KeyboardEvent = event.dyn_ref().unwrap();
-            SyntheticEvent::KeyboardEvent(KeyboardEvent(DioxusEvent::new(
-                KeyboardEventInner {
-                    alt_key: evt.alt_key(),
-                    char_code: evt.char_code(),
-                    key: evt.key(),
-                    key_code: KeyCode::from_raw_code(evt.key_code() as u8),
-                    ctrl_key: evt.ctrl_key(),
-                    locale: "not implemented".to_string(),
-                    location: evt.location() as usize,
-                    meta_key: evt.meta_key(),
-                    repeat: evt.repeat(),
-                    shift_key: evt.shift_key(),
-                    which: evt.which() as usize,
-                },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(KeyboardEvent {
+                alt_key: evt.alt_key(),
+                char_code: evt.char_code(),
+                key: evt.key(),
+                key_code: KeyCode::from_raw_code(evt.key_code() as u8),
+                ctrl_key: evt.ctrl_key(),
+                locale: "not implemented".to_string(),
+                location: evt.location() as usize,
+                meta_key: evt.meta_key(),
+                repeat: evt.repeat(),
+                shift_key: evt.shift_key(),
+                which: evt.which() as usize,
+            })
         }
-        "focus" | "blur" => SyntheticEvent::FocusEvent(FocusEvent(DioxusEvent::new(
-            FocusEventInner {},
-            DioxusWebsysEvent(event),
-        ))),
-        "change" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
+        "focus" | "blur" => {
+            //
+            Box::new(FocusEvent {})
+        }
+        // "change" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
-        "input" | "invalid" | "reset" | "submit" => {
+        "change" | "input" | "invalid" | "reset" | "submit" => {
             let evt: &web_sys::Event = event.dyn_ref().unwrap();
 
             let target: web_sys::EventTarget = evt.target().unwrap();
             let value: String = (&target)
                 .dyn_ref()
-                .map(|input: &web_sys::HtmlInputElement| input.value())
+                .map(|input: &web_sys::HtmlInputElement| {
+                    // todo: special case more input types
+                    match input.type_().as_str() {
+                        "checkbox" => {
+                           match input.checked() {
+                                true => "true".to_string(),
+                                false => "false".to_string(),
+                            }
+                        },
+                        _ => {
+                            input.value()
+                        }
+                    }
+                })
                 .or_else(|| {
                     target
                         .dyn_ref()
@@ -539,135 +557,112 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> SyntheticEvent {
                 })
                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-            SyntheticEvent::FormEvent(FormEvent(DioxusEvent::new(
-                FormEventInner { value },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(FormEvent { value })
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             let evt: &web_sys::MouseEvent = event.dyn_ref().unwrap();
-            SyntheticEvent::MouseEvent(MouseEvent(DioxusEvent::new(
-                MouseEventInner {
-                    alt_key: evt.alt_key(),
-                    button: evt.button(),
-                    buttons: evt.buttons(),
-                    client_x: evt.client_x(),
-                    client_y: evt.client_y(),
-                    ctrl_key: evt.ctrl_key(),
-                    meta_key: evt.meta_key(),
-                    screen_x: evt.screen_x(),
-                    screen_y: evt.screen_y(),
-                    shift_key: evt.shift_key(),
-                    page_x: evt.page_x(),
-                    page_y: evt.page_y(),
-                },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(MouseEvent {
+                alt_key: evt.alt_key(),
+                button: evt.button(),
+                buttons: evt.buttons(),
+                client_x: evt.client_x(),
+                client_y: evt.client_y(),
+                ctrl_key: evt.ctrl_key(),
+                meta_key: evt.meta_key(),
+                screen_x: evt.screen_x(),
+                screen_y: evt.screen_y(),
+                shift_key: evt.shift_key(),
+                page_x: evt.page_x(),
+                page_y: evt.page_y(),
+            })
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             let evt: &web_sys::PointerEvent = event.dyn_ref().unwrap();
-            SyntheticEvent::PointerEvent(PointerEvent(DioxusEvent::new(
-                PointerEventInner {
-                    alt_key: evt.alt_key(),
-                    button: evt.button(),
-                    buttons: evt.buttons(),
-                    client_x: evt.client_x(),
-                    client_y: evt.client_y(),
-                    ctrl_key: evt.ctrl_key(),
-                    meta_key: evt.meta_key(),
-                    page_x: evt.page_x(),
-                    page_y: evt.page_y(),
-                    screen_x: evt.screen_x(),
-                    screen_y: evt.screen_y(),
-                    shift_key: evt.shift_key(),
-                    pointer_id: evt.pointer_id(),
-                    width: evt.width(),
-                    height: evt.height(),
-                    pressure: evt.pressure(),
-                    tangential_pressure: evt.tangential_pressure(),
-                    tilt_x: evt.tilt_x(),
-                    tilt_y: evt.tilt_y(),
-                    twist: evt.twist(),
-                    pointer_type: evt.pointer_type(),
-                    is_primary: evt.is_primary(),
-                    // get_modifier_state: evt.get_modifier_state(),
-                },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(PointerEvent {
+                alt_key: evt.alt_key(),
+                button: evt.button(),
+                buttons: evt.buttons(),
+                client_x: evt.client_x(),
+                client_y: evt.client_y(),
+                ctrl_key: evt.ctrl_key(),
+                meta_key: evt.meta_key(),
+                page_x: evt.page_x(),
+                page_y: evt.page_y(),
+                screen_x: evt.screen_x(),
+                screen_y: evt.screen_y(),
+                shift_key: evt.shift_key(),
+                pointer_id: evt.pointer_id(),
+                width: evt.width(),
+                height: evt.height(),
+                pressure: evt.pressure(),
+                tangential_pressure: evt.tangential_pressure(),
+                tilt_x: evt.tilt_x(),
+                tilt_y: evt.tilt_y(),
+                twist: evt.twist(),
+                pointer_type: evt.pointer_type(),
+                is_primary: evt.is_primary(),
+                // get_modifier_state: evt.get_modifier_state(),
+            })
         }
-        "select" => SyntheticEvent::SelectionEvent(SelectionEvent(DioxusEvent::new(
-            SelectionEventInner {},
-            DioxusWebsysEvent(event),
-        ))),
+        "select" => Box::new(SelectionEvent {}),
 
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
             let evt: &web_sys::TouchEvent = event.dyn_ref().unwrap();
-            SyntheticEvent::TouchEvent(TouchEvent(DioxusEvent::new(
-                TouchEventInner {
-                    alt_key: evt.alt_key(),
-                    ctrl_key: evt.ctrl_key(),
-                    meta_key: evt.meta_key(),
-                    shift_key: evt.shift_key(),
-                },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(TouchEvent {
+                alt_key: evt.alt_key(),
+                ctrl_key: evt.ctrl_key(),
+                meta_key: evt.meta_key(),
+                shift_key: evt.shift_key(),
+            })
         }
 
-        "scroll" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
+        "scroll" => Box::new(()),
 
         "wheel" => {
             let evt: &web_sys::WheelEvent = event.dyn_ref().unwrap();
-            SyntheticEvent::WheelEvent(WheelEvent(DioxusEvent::new(
-                WheelEventInner {
-                    delta_x: evt.delta_x(),
-                    delta_y: evt.delta_y(),
-                    delta_z: evt.delta_z(),
-                    delta_mode: evt.delta_mode(),
-                },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(WheelEvent {
+                delta_x: evt.delta_x(),
+                delta_y: evt.delta_y(),
+                delta_z: evt.delta_z(),
+                delta_mode: evt.delta_mode(),
+            })
         }
 
         "animationstart" | "animationend" | "animationiteration" => {
             let evt: &web_sys::AnimationEvent = event.dyn_ref().unwrap();
-            SyntheticEvent::AnimationEvent(AnimationEvent(DioxusEvent::new(
-                AnimationEventInner {
-                    elapsed_time: evt.elapsed_time(),
-                    animation_name: evt.animation_name(),
-                    pseudo_element: evt.pseudo_element(),
-                },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(AnimationEvent {
+                elapsed_time: evt.elapsed_time(),
+                animation_name: evt.animation_name(),
+                pseudo_element: evt.pseudo_element(),
+            })
         }
 
         "transitionend" => {
             let evt: &web_sys::TransitionEvent = event.dyn_ref().unwrap();
-            SyntheticEvent::TransitionEvent(TransitionEvent(DioxusEvent::new(
-                TransitionEventInner {
-                    elapsed_time: evt.elapsed_time(),
-                    property_name: evt.property_name(),
-                    pseudo_element: evt.pseudo_element(),
-                },
-                DioxusWebsysEvent(event),
-            )))
+            Box::new(TransitionEvent {
+                elapsed_time: evt.elapsed_time(),
+                property_name: evt.property_name(),
+                pseudo_element: evt.pseudo_element(),
+            })
         }
 
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => SyntheticEvent::MediaEvent(MediaEvent(
-            DioxusEvent::new(MediaEventInner {}, DioxusWebsysEvent(event)),
-        )),
+        | "timeupdate" | "volumechange" | "waiting" => {
+            //
+            Box::new(MediaEvent {})
+        }
 
-        "toggle" => SyntheticEvent::ToggleEvent(ToggleEvent(DioxusEvent::new(
-            ToggleEventInner {},
-            DioxusWebsysEvent(event),
-        ))),
+        "toggle" => {
+            //
+            Box::new(ToggleEvent {})
+        }
 
-        _ => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
+        _ => Box::new(()),
     }
 }
 

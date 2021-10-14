@@ -479,6 +479,7 @@ pub trait GlobalAttributes {
 
         /// Specifies the treatment of content that overflows the element's box.
         overflow: "overflow",
+
         /// Specifies the treatment of content that overflows the element's box horizontally.
         overflow_x: "overflow-x",
 
@@ -518,6 +519,12 @@ pub trait GlobalAttributes {
         /// Specifies how an element is positioned.
         position: "position",
 
+        /// The pointer-events CSS property sets under what circumstances (if any) a particular graphic element can
+        /// become the target of pointer events.
+        ///
+        /// MDN: [`pointer_events`](https://developer.mozilla.org/en-US/docs/Web/CSS/pointer-events)
+        pointer_events: "pointer-events",
+
         /// Specifies quotation marks for embedded quotations.
         quotes: "quotes",
 
@@ -540,6 +547,7 @@ pub trait GlobalAttributes {
 
         /// Specifies the decoration added to text.
         text_decoration: "text-decoration",
+
         /// Specifies the color of the text_decoration_line.
         text_decoration_color: "text-decoration-color",
 
@@ -1527,19 +1535,19 @@ builder_constructors! {
         step: String,
         tabindex: usize,
 
-        // This has a manual implementation below
-        // r#type: InputType,
-
-        value: String,
         width: isize,
+
+        // Manual implementations below...
+        // r#type: InputType,
+        // value: String,
     };
 
     /// Build a
     /// [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/label)
     /// element.
     label {
-        r#for: Id,
         form: Id,
+        // r#for: Id,
     };
 
     /// Build a
@@ -1575,10 +1583,11 @@ builder_constructors! {
         disabled: Bool,
         label: String,
 
-        // defined below
-        // selected: Bool,
 
         value: String,
+
+        // defined below
+        // selected: Bool,
     };
 
     /// Build a
@@ -1694,6 +1703,10 @@ impl input {
     pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("type", val, None, false)
     }
+
+    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("value", val, None, true)
+    }
 }
 
 /*
@@ -1715,6 +1728,11 @@ impl option {
 impl textarea {
     pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("value", val, None, true)
+    }
+}
+impl label {
+    pub fn r#for<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("for", val, None, false)
     }
 }
 

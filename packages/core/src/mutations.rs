@@ -90,16 +90,16 @@ impl<'a> Mutations<'a> {
             root: element_id,
         });
     }
-    pub(crate) fn remove_event_listener(&mut self, event: &'static str) {
-        self.edits.push(RemoveEventListener { event });
+    pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: u64) {
+        self.edits.push(RemoveEventListener { event, root });
     }
 
     // modify
-    pub(crate) fn set_text(&mut self, text: &'a str) {
-        self.edits.push(SetText { text });
+    pub(crate) fn set_text(&mut self, text: &'a str, root: u64) {
+        self.edits.push(SetText { text, root });
     }
 
-    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute) {
+    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute, root: u64) {
         let Attribute {
             name,
             value,
@@ -111,12 +111,13 @@ impl<'a> Mutations<'a> {
             field: name,
             value,
             ns: *namespace,
+            root,
         });
     }
 
-    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute) {
+    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {
         let name = attribute.name;
-        self.edits.push(RemoveAttribute { name });
+        self.edits.push(RemoveAttribute { name, root });
     }
 }
 
@@ -184,7 +185,6 @@ pub enum DomEdit<'bump> {
     Remove {
         root: u64,
     },
-
     CreateTextNode {
         text: &'bump str,
         root: u64,
@@ -207,17 +207,21 @@ pub enum DomEdit<'bump> {
         root: u64,
     },
     RemoveEventListener {
+        root: u64,
         event: &'static str,
     },
     SetText {
+        root: u64,
         text: &'bump str,
     },
     SetAttribute {
+        root: u64,
         field: &'static str,
         value: &'bump str,
         ns: Option<&'bump str>,
     },
     RemoveAttribute {
+        root: u64,
         name: &'static str,
     },
 }

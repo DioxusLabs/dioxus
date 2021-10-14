@@ -4,8 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::innerlude::{
-    empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, SuspendedContext,
-    SyntheticEvent, FC,
+    empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, SuspendedContext, FC,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -271,7 +270,8 @@ pub struct Listener<'bump> {
     pub event: &'static str,
 
     /// The actual callback that the user specified
-    pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(SyntheticEvent) + 'bump>>>,
+    pub(crate) callback:
+        RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn std::any::Any + Send>) + 'bump>>>,
 }
 
 /// Virtual Components for custom user-defined components
