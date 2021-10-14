@@ -1,5 +1,4 @@
 use dioxus::events::on::MouseEvent;
-use dioxus::events::DioxusEvent;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;

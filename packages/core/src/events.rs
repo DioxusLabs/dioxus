@@ -31,27 +31,33 @@ pub struct UserEvent {
     pub name: &'static str,
 
     /// The type of event
-    pub event: SyntheticEvent,
+    pub event: Box<dyn Any + Send>,
 }
 
-#[derive(Debug)]
-pub enum SyntheticEvent {
-    AnimationEvent(on::AnimationEvent),
-    ClipboardEvent(on::ClipboardEvent),
-    CompositionEvent(on::CompositionEvent),
-    FocusEvent(on::FocusEvent),
-    FormEvent(on::FormEvent),
-    KeyboardEvent(on::KeyboardEvent),
-    GenericEvent(DioxusEvent<()>),
-    TouchEvent(on::TouchEvent),
-    ToggleEvent(on::ToggleEvent),
-    MediaEvent(on::MediaEvent),
-    MouseEvent(on::MouseEvent),
-    WheelEvent(on::WheelEvent),
-    SelectionEvent(on::SelectionEvent),
-    TransitionEvent(on::TransitionEvent),
-    PointerEvent(on::PointerEvent),
-}
+struct EventInner {}
+
+// trait SyntheticEvent: Send + Debug {
+//     fn downcast(self: Box<Self>) -> Option<Box<dyn Any>>;
+// }
+
+// #[derive(Debug)]
+// pub enum SyntheticEvent {
+//     AnimationEvent(on::AnimationEvent),
+//     ClipboardEvent(on::ClipboardEvent),
+//     CompositionEvent(on::CompositionEvent),
+//     FocusEvent(on::FocusEvent),
+//     FormEvent(on::FormEvent),
+//     KeyboardEvent(on::KeyboardEvent),
+//     GenericEvent(DioxusEvent<()>),
+//     TouchEvent(on::TouchEvent),
+//     ToggleEvent(on::ToggleEvent),
+//     MediaEvent(on::MediaEvent),
+//     MouseEvent(on::MouseEvent),
+//     WheelEvent(on::WheelEvent),
+//     SelectionEvent(on::SelectionEvent),
+//     TransitionEvent(on::TransitionEvent),
+//     PointerEvent(on::PointerEvent),
+// }
 
 /// Priority of Event Triggers.
 ///
@@ -105,23 +111,7 @@ pub enum EventPriority {
     Low = 0,
 }
 
-#[derive(Debug)]
-pub struct DioxusEvent<T: Send + Sync> {
-    inner: T,
-    raw: Box<dyn Any + Send>,
-}
-
-impl<T: Send + Sync> DioxusEvent<T> {
-    pub fn new<F: Send + 'static>(inner: T, raw: F) -> Self {
-        let raw = Box::new(raw);
-        Self { inner, raw }
-    }
-
-    /// Return a reference to the raw event. User will need to downcast the event to the right platform-specific type.
-    pub fn native<E: 'static>(&self) -> Option<&E> {
-        self.raw.downcast_ref()
-    }
-
+impl EventInner {
     /*
     Not implemented!
 
@@ -200,20 +190,13 @@ impl<T: Send + Sync> DioxusEvent<T> {
     }
 }
 
-impl<T: Send + Sync> std::ops::Deref for DioxusEvent<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
 pub mod on {
     use super::*;
     macro_rules! event_directory {
         ( $(
             $( #[$attr:meta] )*
-            $eventdata:ident($wrapper:ident): [
+            $wrapper:ident: [
+            // $eventdata:ident($wrapper:ident): [
                 $(
                     $( #[$method_attr:meta] )*
                     $name:ident
@@ -221,20 +204,6 @@ pub mod on {
             ];
         )* ) => {
             $(
-                $(#[$attr])*
-                #[derive(Debug)]
-                pub struct $wrapper(pub DioxusEvent<$eventdata>);
-
-                // todo: derefing to the event is fine (and easy) but breaks some IDE stuff like (go to source)
-                // going to source in fact takes you to the source of Rc which is... less than useful
-                // Either we ask for this to be changed in Rust-analyzer or manually implement the trait
-                impl Deref for $wrapper {
-                    type Target = DioxusEvent<$eventdata>;
-                    fn deref(&self) -> &Self::Target {
-                        &self.0
-                    }
-                }
-
                 $(
                     $(#[$method_attr])*
                     pub fn $name<'a, F>(
@@ -248,12 +217,12 @@ pub mod on {
                         // we can't allocate unsized in bumpalo's box, so we need to craft the box manually
                         // safety: this is essentially the same as calling Box::new() but manually
                         // The box is attached to the lifetime of the bumpalo allocator
-                        let cb: &mut dyn FnMut(SyntheticEvent) = bump.alloc(move |evt: SyntheticEvent| match evt {
-                            SyntheticEvent::$wrapper(event) => callback(event),
-                            _ => unreachable!("Downcasted SyntheticEvent to wrong spcific event type - this is an internal bug!")
+                        let cb: &mut dyn FnMut(Box<dyn Any + Send>) = bump.alloc(move |evt: Box<dyn Any + Send>| {
+                            let event = evt.downcast::<$wrapper>().unwrap();
+                            callback(*event)
                         });
 
-                        let callback: BumpBox<dyn FnMut(SyntheticEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
+                        let callback: BumpBox<dyn FnMut(Box<dyn Any + Send>) + 'a> = unsafe { BumpBox::from_raw(cb) };
 
                         // ie oncopy
                         let event_name = stringify!($name);
@@ -274,7 +243,7 @@ pub mod on {
 
     // The Dioxus Synthetic event system
     event_directory! {
-        ClipboardEventInner(ClipboardEvent): [
+        ClipboardEvent: [
             /// Called when "copy"
             oncopy
 
@@ -285,7 +254,7 @@ pub mod on {
             onpaste
         ];
 
-        CompositionEventInner(CompositionEvent): [
+        CompositionEvent: [
             /// oncompositionend
             oncompositionend
 
@@ -296,7 +265,7 @@ pub mod on {
             oncompositionupdate
         ];
 
-        KeyboardEventInner(KeyboardEvent): [
+        KeyboardEvent: [
             /// onkeydown
             onkeydown
 
@@ -307,7 +276,7 @@ pub mod on {
             onkeyup
         ];
 
-        FocusEventInner(FocusEvent): [
+        FocusEvent: [
             /// onfocus
             onfocus
 
@@ -315,7 +284,7 @@ pub mod on {
             onblur
         ];
 
-        FormEventInner(FormEvent): [
+        FormEvent: [
             /// onchange
             onchange
 
@@ -373,7 +342,7 @@ pub mod on {
         /// - [`onmouseout`]
         /// - [`onmouseover`]
         /// - [`onmouseup`]
-        MouseEventInner(MouseEvent): [
+        MouseEvent: [
             /// Execute a callback when a button is clicked.
             ///
             /// ## Description
@@ -456,7 +425,7 @@ pub mod on {
             onmouseup
         ];
 
-        PointerEventInner(PointerEvent): [
+        PointerEvent: [
             /// pointerdown
             onpointerdown
 
@@ -488,12 +457,12 @@ pub mod on {
             onpointerout
         ];
 
-        SelectionEventInner(SelectionEvent): [
+        SelectionEvent: [
             /// onselect
             onselect
         ];
 
-        TouchEventInner(TouchEvent): [
+        TouchEvent: [
             /// ontouchcancel
             ontouchcancel
 
@@ -507,12 +476,12 @@ pub mod on {
             ontouchstart
         ];
 
-        WheelEventInner(WheelEvent): [
+        WheelEvent: [
             ///
             onwheel
         ];
 
-        MediaEventInner(MediaEvent): [
+        MediaEvent: [
             ///abort
             onabort
 
@@ -583,7 +552,7 @@ pub mod on {
             onwaiting
         ];
 
-        AnimationEventInner(AnimationEvent): [
+        AnimationEvent: [
             /// onanimationstart
             onanimationstart
 
@@ -594,12 +563,12 @@ pub mod on {
             onanimationiteration
         ];
 
-        TransitionEventInner(TransitionEvent): [
+        TransitionEvent: [
             ///
             ontransitionend
         ];
 
-        ToggleEventInner(ToggleEvent): [
+        ToggleEvent: [
             ///
             ontoggle
         ];
@@ -607,19 +576,19 @@ pub mod on {
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct ClipboardEventInner(
+    pub struct ClipboardEvent(
         // DOMDataTransfer clipboardData
     );
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct CompositionEventInner {
+    pub struct CompositionEvent {
         pub data: String,
     }
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct KeyboardEventInner {
+    pub struct KeyboardEvent {
         pub char_code: u32,
 
         /// Identify which "key" was entered.
@@ -687,18 +656,18 @@ pub mod on {
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct FocusEventInner {/* DOMEventInner:  Send + SyncTarget relatedTarget */}
+    pub struct FocusEvent {/* DOMEventInner:  Send + SyncTarget relatedTarget */}
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct FormEventInner {
+    pub struct FormEvent {
         pub value: String,
-        /* DOMEventInner:  Send + SyncTarget relatedTarget */
+        /* DOMEvent:  Send + SyncTarget relatedTarget */
     }
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct MouseEventInner {
+    pub struct MouseEvent {
         pub alt_key: bool,
         pub button: i16,
         pub buttons: u16,
@@ -716,7 +685,7 @@ pub mod on {
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct PointerEventInner {
+    pub struct PointerEvent {
         // Mouse only
         pub alt_key: bool,
         pub button: i16,
@@ -745,11 +714,11 @@ pub mod on {
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct SelectionEventInner {}
+    pub struct SelectionEvent {}
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct TouchEventInner {
+    pub struct TouchEvent {
         pub alt_key: bool,
         pub ctrl_key: bool,
         pub meta_key: bool,
@@ -762,7 +731,7 @@ pub mod on {
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct WheelEventInner {
+    pub struct WheelEvent {
         pub delta_mode: u32,
         pub delta_x: f64,
         pub delta_y: f64,
@@ -771,17 +740,17 @@ pub mod on {
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct MediaEventInner {}
+    pub struct MediaEvent {}
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct ImageEventInner {
+    pub struct ImageEvent {
         pub load_error: bool,
     }
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct AnimationEventInner {
+    pub struct AnimationEvent {
         pub animation_name: String,
         pub pseudo_element: String,
         pub elapsed_time: f32,
@@ -789,7 +758,7 @@ pub mod on {
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct TransitionEventInner {
+    pub struct TransitionEvent {
         pub property_name: String,
         pub pseudo_element: String,
         pub elapsed_time: f32,
@@ -797,7 +766,7 @@ pub mod on {
 
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug)]
-    pub struct ToggleEventInner {}
+    pub struct ToggleEvent {}
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]

@@ -55,9 +55,6 @@ env_logger = "0.9.0"
 tokio = { version = "1.12.0", features = ["full"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
 gloo-timers = "0.2.1"
-# surf = { version = "2.3.1", default-features = false, features = [
-#     "wasm-client",
-# ] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 gloo-timers = "0.2.1"
@@ -66,6 +63,9 @@ console_error_panic_hook = "0.1.6"
 rand = { version = "0.8.4", features = ["small_rng"] }
 wasm-bindgen = { version = "0.2.71", features = ["enable-interning"] }
 
+# surf = { version = "2.3.1", default-features = false, features = [
+#     "wasm-client",
+# ] }
 # surf = { version = "2.2.0", default-features = false, features = [
 #     "wasm-client",
 # ], git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm" }
@@ -86,7 +86,7 @@ members = [
     "packages/ssr",
     "packages/desktop",
     "packages/mobile",
-    "packages/webview-client"
+    "packages/webview-client",
 ]
 
 

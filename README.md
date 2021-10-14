@@ -89,19 +89,13 @@ If you know React, then you already know Dioxus.
 
 ## Examples:
 
-| File Navigator (Desktop)                                                         | Bluetooth scanner (Desktop)                                      | TodoMVC (All platforms)                                               | Widget Gallery                                                   |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| ![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://github.com/DioxusLabs/todomvc/blob/master/example.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
+| File Navigator (Desktop)                                                         | Bluetooth scanner (Desktop)                                      | TodoMVC (All platforms)                                                                                         | Widget Gallery                                                   |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| ![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | [![asd](https://github.com/DioxusLabs/todomvc/blob/master/example.png)](https://github.com/dioxusLabs/todomvc/) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
 
 
 
 | E-Commerce Site                                                  | Doxie Documentation Generator                                    | Chatroom                                                         | Widget Gallery                                                   |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
-
-
-
-| Printer Demo                                                     | Slide Puzzle                                                     | Todo                                                             | Widget Gallery                                                   |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
 | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
 

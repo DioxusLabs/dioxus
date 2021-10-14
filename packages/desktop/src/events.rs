@@ -1,16 +1,10 @@
 //! Convert a serialized event to an event Trigger
 //!
 
-use std::rc::Rc;
 use std::sync::Arc;
+use std::{any::Any, rc::Rc};
 
-use dioxus_core::{
-    events::{
-        on::{MouseEvent, MouseEventInner},
-        SyntheticEvent,
-    },
-    ElementId, EventPriority, ScopeId, UserEvent,
-};
+use dioxus_core::{events::on::MouseEvent, ElementId, EventPriority, ScopeId, UserEvent};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImEvent {
@@ -43,85 +37,70 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
     }
 }
 
-fn make_synthetic_event(name: &str, val: serde_json::Value) -> SyntheticEvent {
+fn make_synthetic_event(name: &str, val: serde_json::Value) -> Box<dyn Any + Send> {
     use dioxus_core::events::on::*;
-    use dioxus_core::events::DioxusEvent;
 
     match name {
-        "copy" | "cut" | "paste" => SyntheticEvent::ClipboardEvent(ClipboardEvent(
-            DioxusEvent::new(ClipboardEventInner(), ()),
-        )),
+        "copy" | "cut" | "paste" => {
+            //
+            Box::new(ClipboardEvent {})
+        }
         "compositionend" | "compositionstart" | "compositionupdate" => {
-            SyntheticEvent::CompositionEvent(CompositionEvent(DioxusEvent::new(
-                serde_json::from_value(val).unwrap(),
-                (),
-            )))
+            Box::new(serde_json::from_value::<CompositionEvent>(val).unwrap())
         }
-        "keydown" | "keypress" | "keyup" => SyntheticEvent::KeyboardEvent(KeyboardEvent(
-            DioxusEvent::new(serde_json::from_value(val).unwrap(), ()),
-        )),
+        "keydown" | "keypress" | "keyup" => {
+            Box::new(serde_json::from_value::<KeyboardEvent>(val).unwrap())
+        }
         "focus" | "blur" => {
-            SyntheticEvent::FocusEvent(FocusEvent(DioxusEvent::new(FocusEventInner {}, ())))
+            //
+            Box::new(FocusEvent {})
         }
-        "change" => SyntheticEvent::GenericEvent(DioxusEvent::new((), ())),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
-        "input" | "invalid" | "reset" | "submit" => SyntheticEvent::FormEvent(FormEvent(
-            DioxusEvent::new(serde_json::from_value(val).unwrap(), ()),
-        )),
+        "change" | "input" | "invalid" | "reset" | "submit" => {
+            Box::new(serde_json::from_value::<FormEvent>(val).unwrap())
+        }
+
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            SyntheticEvent::MouseEvent(MouseEvent(DioxusEvent::new(
-                serde_json::from_value(val).unwrap(),
-                (),
-            )))
+            Box::new(serde_json::from_value::<MouseEvent>(val).unwrap())
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            SyntheticEvent::PointerEvent(PointerEvent(DioxusEvent::new(
-                serde_json::from_value(val).unwrap(),
-                (),
-            )))
+            Box::new(serde_json::from_value::<PointerEvent>(val).unwrap())
         }
-        "select" => SyntheticEvent::SelectionEvent(SelectionEvent(DioxusEvent::new(
-            SelectionEventInner {},
-            (),
-        ))),
+        "select" => {
+            //
+            Box::new(serde_json::from_value::<SelectionEvent>(val).unwrap())
+        }
 
-        "touchcancel" | "touchend" | "touchmove" | "touchstart" => SyntheticEvent::TouchEvent(
-            TouchEvent(DioxusEvent::new(serde_json::from_value(val).unwrap(), ())),
-        ),
+        "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
+            Box::new(serde_json::from_value::<TouchEvent>(val).unwrap())
+        }
 
-        "scroll" => SyntheticEvent::GenericEvent(DioxusEvent::new((), ())),
+        "scroll" => Box::new(()),
 
-        "wheel" => SyntheticEvent::WheelEvent(WheelEvent(DioxusEvent::new(
-            serde_json::from_value(val).unwrap(),
-            (),
-        ))),
+        "wheel" => Box::new(serde_json::from_value::<WheelEvent>(val).unwrap()),
 
-        "animationstart" | "animationend" | "animationiteration" => SyntheticEvent::AnimationEvent(
-            AnimationEvent(DioxusEvent::new(serde_json::from_value(val).unwrap(), ())),
-        ),
+        "animationstart" | "animationend" | "animationiteration" => {
+            Box::new(serde_json::from_value::<AnimationEvent>(val).unwrap())
+        }
 
-        "transitionend" => SyntheticEvent::TransitionEvent(TransitionEvent(DioxusEvent::new(
-            serde_json::from_value(val).unwrap(),
-            (),
-        ))),
+        "transitionend" => Box::new(serde_json::from_value::<TransitionEvent>(val).unwrap()),
 
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
-            SyntheticEvent::MediaEvent(MediaEvent(DioxusEvent::new(MediaEventInner {}, ())))
+            //
+            Box::new(MediaEvent {})
         }
 
-        "toggle" => {
-            SyntheticEvent::ToggleEvent(ToggleEvent(DioxusEvent::new(ToggleEventInner {}, ())))
-        }
+        "toggle" => Box::new(ToggleEvent {}),
 
-        _ => SyntheticEvent::GenericEvent(DioxusEvent::new((), ())),
+        _ => Box::new(()),
     }
 }
 
