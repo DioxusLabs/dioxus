@@ -21,7 +21,7 @@ pub struct Client {
     pub description: String,
 }
 
-static App: FC<()> = |cx, _| {
+static App: FC<()> = |(cx, _)| {
     let scene = use_state(cx, || Scene::ClientsList);
     let clients = use_ref(cx, || vec![] as Vec<Client>);
 

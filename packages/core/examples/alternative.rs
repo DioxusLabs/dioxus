@@ -6,7 +6,7 @@ fn main() {
     println!("{}", dom);
 }
 
-pub static EXAMPLE: FC<()> = |cx, _| {
+pub static EXAMPLE: FC<()> = |(cx, _)| {
     let list = (0..10).map(|_f| LazyNodes::new(move |_f| todo!()));
 
     cx.render(LazyNodes::new(move |cx| {

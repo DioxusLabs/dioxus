@@ -21,9 +21,9 @@ fn test() -> DomTree {
     }
 }
 
-static TestComponent: FC<()> = |cx, props|html!{<div>"Hello world"</div>};
+static TestComponent: FC<()> = |(cx, props)|html!{<div>"Hello world"</div>};
 
-static TestComponent: FC<()> = |cx, props|{
+static TestComponent: FC<()> = |(cx, props)|{
     let g = "BLAH";
     html! {
         <div> "Hello world" </div>
@@ -31,7 +31,7 @@ static TestComponent: FC<()> = |cx, props|{
 };
 
 #[functional_component]
-static TestComponent: FC<{ name: String }> = |cx, props|html! { <div> "Hello {name}" </div> };
+static TestComponent: FC<{ name: String }> = |(cx, props)|html! { <div> "Hello {name}" </div> };
 ```
 
 ## Why this behavior?

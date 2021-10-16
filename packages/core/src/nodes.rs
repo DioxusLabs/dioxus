@@ -526,7 +526,7 @@ impl<'a> NodeFactory<'a> {
         let caller: &'a mut dyn for<'b> Fn(&'b Scope) -> DomTree<'b> =
             bump.alloc(move |scope: &Scope| -> DomTree {
                 let props: &'_ P = unsafe { &*(raw_props as *const P) };
-                let res = component(Context { scope }, props);
+                let res = component((Context { scope }, props));
                 unsafe { std::mem::transmute(res) }
             });
 

@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 
+use dioxus::prelude::Component;
 use dioxus_core as dioxus;
 use dioxus_core::{Context, DomTree, LazyNodes, NodeFactory, Properties};
 use dioxus_core_macro::Props;
@@ -53,7 +54,7 @@ pub struct WebviewWindowProps<'a> {
 ///
 ///
 ///
-pub fn WebviewWindow<'a>(cx: Context<'a>, props: &'a WebviewWindowProps) -> DomTree<'a> {
+pub fn WebviewWindow<'a>((cx, props): Component<'a, WebviewWindowProps>) -> DomTree<'a> {
     let dtcx = cx.consume_state::<RefCell<DesktopContext>>()?;
 
     cx.use_hook(
@@ -89,7 +90,7 @@ fn syntax_works() {
     use dioxus_hooks::*;
     use dioxus_html as dioxus_elements;
 
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             // left window
             WebviewWindow {

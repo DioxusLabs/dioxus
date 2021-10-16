@@ -9,7 +9,7 @@ fn main() {
     println!("{}", ssr::render_vdom(&vdom, |c| c));
 }
 
-static App: FC<()> = |cx, props| {
+static App: FC<()> = |(cx, props)| {
     cx.render(rsx!(
         div {
             h1 { "Title" }

@@ -9,7 +9,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |cx, props| {
+pub static Example: FC<()> = |(cx, props)| {
     let props = MyProps {
         count: 0,
         live: true,

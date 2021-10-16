@@ -85,7 +85,7 @@ fn main() {
     dioxus::desktop::start(App, |c| c);
 }
 
-static App: FC<()> = |cx, props| {
+static App: FC<()> = |(cx, props)| {
     cx.render(rsx! (
         div { "Hello, world!" }
     ))
@@ -111,7 +111,7 @@ fn main() {
 Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Option<VNode>`.
 
 ```rust
-static App: FC<()> = |cx, props| {
+static App: FC<()> = |(cx, props)| {
     cx.render(rsx! {
         div { "Hello, world!" }
     })
@@ -149,7 +149,7 @@ If we wanted to golf a bit, we can shrink our hello-world even smaller:
 
 ```rust
 fn main() {
-    static App: FC<()> = |cx, props| rsx!(cx, div {"hello world!"});
+    static App: FC<()> = |(cx, props)| rsx!(cx, div {"hello world!"});
     dioxus::web::start(App, |c| c);
 }
 ```

@@ -19,7 +19,7 @@ fn new_dom<P: 'static + Send>(app: FC<P>, props: P) -> VirtualDom {
 
 #[test]
 fn test_original_diff() {
-    static APP: FC<()> = |cx, props| {
+    static APP: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             div {
                 div {
@@ -55,7 +55,7 @@ fn test_original_diff() {
 
 #[test]
 fn create() {
-    static APP: FC<()> = |cx, props| {
+    static APP: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             div {
                 div {
@@ -118,7 +118,7 @@ fn create() {
 
 #[test]
 fn create_list() {
-    static APP: FC<()> = |cx, props| {
+    static APP: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             {(0..3).map(|f| rsx!{ div {
                 "hello"
@@ -167,7 +167,7 @@ fn create_list() {
 
 #[test]
 fn create_simple() {
-    static APP: FC<()> = |cx, props| {
+    static APP: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             div {}
             div {}
@@ -205,7 +205,7 @@ fn create_simple() {
 }
 #[test]
 fn create_components() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             Child { "abc1" }
             Child { "abc2" }
@@ -213,7 +213,7 @@ fn create_components() {
         })
     };
 
-    static Child: FC<()> = |cx, props| {
+    static Child: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             h1 {}
             div { {cx.children()} }
@@ -266,7 +266,7 @@ fn create_components() {
 }
 #[test]
 fn anchors() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             {true.then(|| rsx!{ div { "hello" } })}
             {false.then(|| rsx!{ div { "goodbye" } })}
@@ -295,13 +295,13 @@ fn anchors() {
 
 #[test]
 fn suspended() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         let val = use_suspense(
             cx,
             || async {
                 //
             },
-            |cx, _| cx.render(rsx! { "hi "}),
+            |cx, p| cx.render(rsx! { "hi "}),
         );
         cx.render(rsx! { {val} })
     };

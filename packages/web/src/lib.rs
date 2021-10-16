@@ -86,7 +86,7 @@ mod ric_raf;
 ///     dioxus_web::launch(App, |c| c);
 /// }
 ///
-/// static App: FC<()> = |cx, props| {
+/// static App: FC<()> = |(cx, props)| {
 ///     rsx!(cx, div {"hello world"})
 /// }
 /// ```
@@ -110,7 +110,7 @@ pub fn launch(root_component: FC<()>, configuration: impl FnOnce(WebConfig) -> W
 ///     name: String
 /// }
 ///
-/// static App: FC<RootProps> = |cx, props| {
+/// static App: FC<RootProps> = |(cx, props)| {
 ///     rsx!(cx, div {"hello {props.name}"})
 /// }
 /// ```

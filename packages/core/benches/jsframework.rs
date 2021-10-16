@@ -23,7 +23,7 @@ criterion_group!(mbenches, create_rows);
 criterion_main!(mbenches);
 
 fn create_rows(c: &mut Criterion) {
-    static App: FC<()> = |cx, _| {
+    static App: FC<()> = |(cx, _)| {
         let mut rng = SmallRng::from_entropy();
         let rows = (0..10_000_usize).map(|f| {
             let label = Label::new(&mut rng);
@@ -57,7 +57,7 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row<'a>(cx: Context<'a>, props: &RowProps) -> DomTree<'a> {
+fn Row((cx, props): Component<RowProps>) -> DomTree {
     let [adj, col, noun] = props.label.0;
     cx.render(rsx! {
         tr {

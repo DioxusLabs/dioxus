@@ -32,7 +32,7 @@ use dioxus::prelude::*;
 struct NoKeysProps {
     data: std::collections::HashMap<u32, String>,
 }
-static AntipatternNoKeys: FC<NoKeysProps> = |cx, props| {
+static AntipatternNoKeys: FC<NoKeysProps> = |(cx, props)| {
     // WRONG: Make sure to add keys!
     rsx!(cx, ul {
         {props.data.iter().map(|(k, v)| rsx!(li { "List item: {v}" }))}
@@ -54,7 +54,7 @@ static AntipatternNoKeys: FC<NoKeysProps> = |cx, props| {
 ///
 /// Only Component and Fragment nodes are susceptible to this issue. Dioxus mitigates this with components by providing
 /// an API for registering shared state without the ContextProvider pattern.
-static AntipatternNestedFragments: FC<()> = |cx, props| {
+static AntipatternNestedFragments: FC<()> = |(cx, props)| {
     // Try to avoid heavily nesting fragments
     rsx!(cx,
         Fragment {
@@ -82,7 +82,7 @@ static AntipatternNestedFragments: FC<()> = |cx, props| {
 /// However, calling set_state will *not* update the current version of state in the component. This should be easy to
 /// recognize from the function signature, but Dioxus will not update the "live" version of state. Calling `set_state`
 /// merely places a new value in the queue and schedules the component for a future update.
-static AntipaternRelyingOnSetState: FC<()> = |cx, props| {
+static AntipaternRelyingOnSetState: FC<()> = |(cx, props)| {
     let (state, set_state) = use_state(cx, || "Hello world").classic();
     set_state("New state");
     // This will return false! `state` will *still* be "Hello world"
@@ -99,7 +99,7 @@ static AntipaternRelyingOnSetState: FC<()> = |cx, props| {
 /// - All components must start with an uppercase character
 ///
 /// IE: the following component will be rejected when attempted to be used in the rsx! macro
-static antipattern_component: FC<()> = |cx, props| todo!();
+static antipattern_component: FC<()> = |(cx, props)| todo!();
 
 /// Antipattern: Misusing hooks
 /// ---------------------------
@@ -120,7 +120,7 @@ static antipattern_component: FC<()> = |cx, props| todo!();
 struct MisuedHooksProps {
     should_render_state: bool,
 }
-static AntipatternMisusedHooks: FC<MisuedHooksProps> = |cx, props| {
+static AntipatternMisusedHooks: FC<MisuedHooksProps> = |(cx, props)| {
     if props.should_render_state {
         // do not place a hook in the conditional!
         // prefer to move it out of the conditional
@@ -153,7 +153,7 @@ static AntipatternMisusedHooks: FC<MisuedHooksProps> = |cx, props| {
 ///         }
 ///     }
 /// })
-static _example: FC<()> = |cx, props| todo!();
+static _example: FC<()> = |(cx, props)| todo!();
 
 /// Antipattern: publishing components and hooks with all features enabled
 /// ----------------------------------------------------------------------
@@ -171,9 +171,9 @@ static _example: FC<()> = |cx, props| todo!();
 ///
 /// This will only include the `core` dioxus crate which is relatively slim and fast to compile and avoids target-specific
 /// libraries.
-static __example: FC<()> = |cx, props| todo!();
+static __example: FC<()> = |(cx, props)| todo!();
 
-pub static Example: FC<()> = |cx, props| {
+pub static Example: FC<()> = |(cx, props)| {
     cx.render(rsx! {
         AntipatternNoKeys { data: std::collections::HashMap::new() }
         AntipatternNestedFragments {}

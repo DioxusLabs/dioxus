@@ -10,7 +10,7 @@ fn main() {
     dioxus::desktop::launch(APP, |cfg| cfg);
 }
 
-const APP: FC<()> = |cx, _| {
+const APP: FC<()> = |(cx, _)| {
     let cur_val = use_state(cx, || 0.0_f64);
     let operator = use_state(cx, || None as Option<&'static str>);
     let display_value = use_state(cx, || String::from(""));
@@ -116,7 +116,7 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a>(cx: Context<'a>, props: &'a CalculatorKeyProps) -> DomTree<'a> {
+fn CalculatorKey<'a>((cx, props): Component<'a, CalculatorKeyProps>) -> DomTree<'a> {
     rsx!(cx, button {
         class: "calculator-key {props.name}"
         onclick: {props.onclick}

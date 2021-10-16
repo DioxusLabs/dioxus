@@ -7,6 +7,40 @@
 
 use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 
+/// A component is a wrapper around a Context and some Props that share a lifetime
+///
+///
+/// # Example
+///
+/// With memoized state:
+/// ```rust
+/// struct State {}
+///
+/// fn Example((cx, props): Component<State>) -> DomTree {
+///     // ...
+/// }
+/// ```
+///
+/// With borrowed state:
+/// ```rust
+/// struct State<'a> {
+///     name: &'a str
+/// }
+///
+/// fn Example<'a>((cx, props): Component<'a, State>) -> DomTree<'a> {
+///     // ...
+/// }
+/// ```
+///
+/// With owned state as a closure:
+/// ```rust
+/// static Example: FC<()> = |(cx, props)| {
+///     // ...
+/// };
+/// ```
+///
+pub type Component<'a, T> = (Context<'a>, &'a T);
+
 /// Create inline fragments using Component syntax.
 ///
 /// Fragments capture a series of children without rendering extra nodes.
@@ -29,7 +63,7 @@ use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 ///
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>(cx: Context<'a>, _: &'a ()) -> DomTree<'a> {
+pub fn Fragment((cx, _): Component<()>) -> DomTree {
     cx.render(LazyNodes::new(|f| f.fragment_from_iter(cx.children())))
 }
 

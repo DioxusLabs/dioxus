@@ -33,7 +33,7 @@ use std::{any::Any, rc::Rc};
 ///
 /// Example
 /// ```rust
-/// static App: FC<()> = |cx, props|{
+/// static App: FC<()> = |(cx, props)|{
 ///     cx.render(rsx!{
 ///         div {
 ///             "Hello World"
@@ -145,7 +145,7 @@ impl VirtualDom {
         // Safety: this callback is only valid for the lifetime of the root props
         let root_caller: Rc<dyn Fn(&Scope) -> DomTree> = Rc::new(move |scope: &Scope| unsafe {
             let props = _p.downcast_ref::<P>().unwrap();
-            std::mem::transmute(root(Context { scope }, props))
+            std::mem::transmute(root((Context { scope }, props)))
         });
 
         let scheduler = Scheduler::new(sender, receiver);
@@ -196,7 +196,7 @@ impl VirtualDom {
     /// struct AppProps {
     ///     route: &'static str
     /// }
-    /// static App: FC<AppProps> = |cx, props|cx.render(rsx!{ "route is {cx.route}" });
+    /// static App: FC<AppProps> = |(cx, props)|cx.render(rsx!{ "route is {cx.route}" });
     ///
     /// let mut dom = VirtualDom::new_with_props(App, AppProps { route: "start" });
     ///
@@ -222,7 +222,7 @@ impl VirtualDom {
             let root_caller: Box<dyn Fn(&Scope) -> DomTree> =
                 Box::new(move |scope: &Scope| unsafe {
                     let props: &'_ P = &*(props_ptr as *const P);
-                    std::mem::transmute(root(Context { scope }, props))
+                    std::mem::transmute(root((Context { scope }, props)))
                 });
 
             root_scope.update_scope_dependencies(&root_caller, ScopeChildren(&[]));
@@ -246,7 +246,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```
-    /// static App: FC<()> = |cx, props|cx.render(rsx!{ "hello world" });
+    /// static App: FC<()> = |(cx, props)|cx.render(rsx!{ "hello world" });
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();
     ///
@@ -271,7 +271,7 @@ impl VirtualDom {
     ///     value: Shared<&'static str>,
     /// }
     ///
-    /// static App: FC<AppProps> = |cx, props|{
+    /// static App: FC<AppProps> = |(cx, props)|{
     ///     let val = cx.value.borrow();
     ///     cx.render(rsx! { div { "{val}" } })
     /// };
@@ -333,7 +333,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```no_run
-    /// static App: FC<()> = |cx, props|rsx!(cx, div {"hello"} );
+    /// static App: FC<()> = |(cx, props)|rsx!(cx, div {"hello"} );
     /// let mut dom = VirtualDom::new(App);
     /// loop {
     ///     let deadline = TimeoutFuture::from_ms(16);

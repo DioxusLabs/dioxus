@@ -5,7 +5,7 @@ fn main() {
     dom.rebuild();
 }
 
-const App: FC<()> = |cx, props| {
+const App: FC<()> = |(cx, props)| {
     let id = cx.scope_id();
     cx.submit_task(Box::pin(async move { id }));
 
