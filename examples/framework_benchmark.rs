@@ -3,7 +3,7 @@ use fxhash::FxBuildHasher;
 use std::rc::Rc;
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c).unwrap();
+    dioxus::desktop::launch(App, |c| c);
 }
 
 // We use a special immutable hashmap to make hashmap operations efficient

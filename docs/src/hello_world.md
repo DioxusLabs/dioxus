@@ -2,6 +2,8 @@
 
 Let's put together a simple "hello world" to get acquainted with Dioxus. The Dioxus-CLI has an equivalent to "create-react-app" built-in, but setting up Dioxus apps is simple enough to not need additional tooling.
 
+This demo will build a simple desktop app. Check out the platform-specific setup guides on how to port your app to different targets.
+
 First, let's start a new project. Rust has the concept of executables and libraries. Executables have a `main.rs` and libraries have `lib.rs`. A project may have both. Our `hello world` will be an executable - we expect our app to launch when we run it! Cargo provides this for us:
 
 ```shell
@@ -66,12 +68,12 @@ edition = "2018"
 To use the Dioxus library, we'll want to add the most recent version of `Dioxus` to our crate. If you have `cargo edit` installed, simply call:
 
 ```shell
-$ cargo add dioxus --features web
+$ cargo add dioxus --features desktop
 ```
 
-It's very important to add `dioxus` with the `web` feature for this example. The `dioxus` crate is a batteries-include crate that combines a bunch of utility crates together, ensuring compatibility of the most important parts of the ecosystem. Under the hood, the `dioxus` crate configures various renderers, hooks, debug tooling, and more. The `web` feature ensures the we only depend on the smallest set of required crates to compile.
+It's very important to add `dioxus` with the `desktop` feature for this example. The `dioxus` crate is a batteries-include crate that combines a bunch of utility crates together, ensuring compatibility of the most important parts of the ecosystem. Under the hood, the `dioxus` crate configures various renderers, hooks, debug tooling, and more. The `desktop` feature ensures the we only depend on the smallest set of required crates to compile and render.
 
-If you plan to develop extensions for the `Dioxus` ecosystem, please use `dioxus-core` crate. The `dioxus` crate re-exports `dioxus-core` alongside other utilties. As a result, `dioxus-core` is much more stable than the batteries-included `dioxus` crate.
+If you plan to develop extensions for the `Dioxus` ecosystem, please use the `dioxus` crate with the `core` feature to limit the amount of dependencies your project brings in.
 
 Now, let's edit our `main.rs` file:
 
@@ -80,13 +82,13 @@ use diouxs::prelude::*;
 
 
 fn main() {
-    dioxus::web::start(App, |c| c).unwrap();
+    dioxus::desktop::start(App, |c| c);
 }
 
 static App: FC<()> = |cx, props| {
-    cx.render(rsx! {
+    cx.render(rsx! (
         div { "Hello, world!" }
-    })
+    ))
 };
 ```
 
@@ -98,13 +100,11 @@ This bit of code imports everything from the the `prelude` module. This brings i
 use diouxs::prelude::*;
 ```
 
-This bit of code starts the WASM renderer as a future (JS Promise) and then awaits it. This is very similar to the `ReactDOM.render()` method you use for a React app. We pass in the `App` function as a our app. The `|c| c` closure provides a way to configure the WebSys app, enabling things like hydration, pre-rendering, and other tweaks. The simplest configuration is just the defaults.
-
-Calling "start" will launch Dioxus on the web's main thread, running `wasm_bindgen_futures::block_on`. It's possible to "launch" the WebSys renderer as an async function - check the documentation for more details.
+This initialization code launches a Tokio runtime on a helper thread - where your code will run, and then the WebView on the main-thread. Due to platform requirements, the main thread is blocked by this call.
 
 ```rust
 fn main() {
-    dioxus::web::start(App, |c| c).unwrap();
+    dioxus::desktop::start(App, |c| c);
 }
 ```
 
@@ -121,12 +121,13 @@ static App: FC<()> = |cx, props| {
 The closure `FC<()>` syntax is identical to the function syntax, but with lifetimes managed for you. In cases where props need to borrow from their parent, you will need to specify lifetimes using the function syntax:
 
 ```rust
-fn App<'a>(cx: Context<'a>, props: &()) -> DomTree<'a> {
+fn App<'a>(cx: Context<'a>, props: &'a ()) -> DomTree<'a> {
     cx.render(rsx! {
         div { "Hello, world!" }
     })    
 }
 ```
+
 
 In React, you'll save data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data.
 
@@ -134,22 +135,21 @@ Next, we're greeted with the `rsx!` macro. This lets us add a custom DSL for dec
 
 The `rsx!` macro is lazy: it does not immediately produce elements or allocates, but rather builds a closure which can be rendered with `cx.render`.
 
-Now, let's launch our app in a development server:
+Now, let's launch our app:
 
 ```shell
-$ dioxus develop
+$ cargo run
 ```
 
 Huzzah! We have a simple app.
 
-![Hello world](../assets/01-setup-helloworld.png)
+![Hello world](images/01-setup-helloworld.png)
 
 If we wanted to golf a bit, we can shrink our hello-world even smaller:
 
 ```rust
 fn main() {
-    dioxus::web::start(|cx, _| cx.render(diouxs::rsx!( div { "Hello, World!" } ))
+    static App: FC<()> = |cx, props| rsx!(cx, div {"hello world!"});
+    dioxus::web::start(App, |c| c);
 }
 ```
-
-Anyways, let's move on to something a bit more complex.

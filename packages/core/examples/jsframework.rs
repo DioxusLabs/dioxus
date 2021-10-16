@@ -14,7 +14,7 @@ fn main() {
 
 static App: FC<()> = |cx, props| {
     let mut rng = SmallRng::from_entropy();
-    let rows = (0..10_000).map(|f| {
+    let rows = (0..10_000_usize).map(|f| {
         let label = Label::new(&mut rng);
         rsx! {
             Row {

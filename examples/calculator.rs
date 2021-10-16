@@ -7,7 +7,7 @@ use dioxus::events::*;
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(APP, |cfg| cfg).unwrap();
+    dioxus::desktop::launch(APP, |cfg| cfg);
 }
 
 const APP: FC<()> = |cx, _| {

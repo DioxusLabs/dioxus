@@ -16,7 +16,7 @@ fn main() {
     let vdom = VirtualDom::new(App);
     let content = ssr::render_vdom(&vdom, |f| f.pre_render(true));
 
-    dioxus::desktop::launch(App, |c| c.with_prerendered(content)).unwrap();
+    dioxus::desktop::launch(App, |c| c.with_prerendered(content));
 }
 
 static App: FC<()> = |cx, props| {

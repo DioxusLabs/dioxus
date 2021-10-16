@@ -5,7 +5,7 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
 fn main() {
-    dioxus_desktop::launch(App, |c| c).unwrap();
+    dioxus_desktop::launch(App, |c| c);
 }
 
 static App: FC<()> = |cx, props| {

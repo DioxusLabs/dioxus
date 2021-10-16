@@ -8,7 +8,7 @@ use gloo_timers::future::TimeoutFuture;
 
 #[tokio::main]
 async fn main() {
-    dioxus::desktop::launch(App, |c| c).await;
+    dioxus::desktop::launch(App, |c| c);
 }
 
 pub static App: FC<()> = |cx, _| {

@@ -21,7 +21,7 @@ pub struct TodoItem {
     pub contents: String,
 }
 
-const STYLE: &str = include_str!("./_examples/todomvc/style.css");
+const STYLE: &str = include_str!("./assets/todomvc.css");
 const App: FC<()> = |cx, props| {
     let draft = use_state(cx, || "".to_string());
     let todos = use_state(cx, || HashMap::<u32, Rc<TodoItem>>::new());

@@ -25,7 +25,7 @@ criterion_main!(mbenches);
 fn create_rows(c: &mut Criterion) {
     static App: FC<()> = |cx, _| {
         let mut rng = SmallRng::from_entropy();
-        let rows = (0..10_000).map(|f| {
+        let rows = (0..10_000_usize).map(|f| {
             let label = Label::new(&mut rng);
             rsx! {
                 Row {

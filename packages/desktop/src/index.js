@@ -244,7 +244,8 @@ const SerializeMap = {
   "focus": serialize_focus,
   "blur": serialize_focus,
 
-  "change": serialize_change,
+  "change": serialize_form,
+  // "change": serialize_change,
 
   "input": serialize_form,
   "invalid": serialize_form,
@@ -335,16 +336,17 @@ function serialize_composition(event) {
 }
 function serialize_keyboard(event) {
   return {
-    alt_key: event.altKey,
     char_code: event.charCode,
     key: event.key,
-    key_code: event.keyCode,
+    alt_key: event.altKey,
     ctrl_key: event.ctrlKey,
-    locale: event.locale,
-    location: event.location,
     meta_key: event.metaKey,
-    repeat: event.repeat,
+    key_code: event.keyCode,
     shift_key: event.shiftKey,
+    locale: "locale",
+    // locale: event.locale,
+    location: event.location,
+    repeat: event.repeat,
     which: event.which,
   }
 }

@@ -28,8 +28,7 @@ fn main() {
                 .with_resizable(false)
                 .with_inner_size(LogicalSize::new(320.0, 530.0))
         })
-    })
-    .expect("failed to launch dioxus app");
+    });
 }
 
 static App: FC<()> = |cx, props| {

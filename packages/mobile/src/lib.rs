@@ -185,7 +185,6 @@ impl<T: 'static + Send> WebviewRenderer<T> {
         });
     }
 }
-// brad johnson go chat
 
 fn main() {
     init_logging();

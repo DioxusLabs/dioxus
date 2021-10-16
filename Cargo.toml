@@ -8,7 +8,7 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "./packages/core" }
+dioxus-core = { path = "./packages/core", version = "0.1.3" }
 dioxus-core-macro = { path = "./packages/core-macro", optional = true }
 dioxus-html = { path = "./packages/html", optional = true }
 dioxus-web = { path = "./packages/web", optional = true }
@@ -62,14 +62,6 @@ wasm-logger = "0.2.0"
 console_error_panic_hook = "0.1.6"
 rand = { version = "0.8.4", features = ["small_rng"] }
 wasm-bindgen = { version = "0.2.71", features = ["enable-interning"] }
-
-# surf = { version = "2.3.1", default-features = false, features = [
-#     "wasm-client",
-# ] }
-# surf = { version = "2.2.0", default-features = false, features = [
-#     "wasm-client",
-# ], git = "https://github.com/jkelleyrtp/surf/", branch = "jk/fix-the-wasm" }
-
 
 [dev-dependencies.getrandom]
 version = "0.2"
