@@ -16,7 +16,7 @@ use dioxus::prelude::*;
 pub struct MyProps {
     should_show: bool,
 }
-pub static Example0: FC<MyProps> = |cx, props| {
+pub static Example0: FC<MyProps> = |(cx, props)| {
     cx.render(rsx! {
         div {
             {props.should_show.then(|| rsx!{
@@ -39,7 +39,7 @@ pub static Example0: FC<MyProps> = |cx, props| {
 pub struct MyProps1 {
     should_show: bool,
 }
-pub static Example1: FC<MyProps1> = |cx, props| {
+pub static Example1: FC<MyProps1> = |(cx, props)| {
     cx.render(rsx! {
         div {
             // With matching
@@ -77,7 +77,7 @@ pub enum Color {
 pub struct MyProps2 {
     color: Color,
 }
-pub static Example2: FC<MyProps2> = |cx, props| {
+pub static Example2: FC<MyProps2> = |(cx, props)| {
     cx.render(rsx! {
         div {
             {match props.color {
@@ -89,7 +89,7 @@ pub static Example2: FC<MyProps2> = |cx, props| {
     })
 };
 
-pub static Example: FC<()> = |cx, props| {
+pub static Example: FC<()> = |(cx, props)| {
     let should_show = use_state(cx, || false);
     let mut color_index = use_state(cx, || 0);
     let color = match *color_index % 2 {

@@ -9,7 +9,7 @@ fn main() {
 // We use a special immutable hashmap to make hashmap operations efficient
 type RowList = im_rc::HashMap<usize, Rc<str>, FxBuildHasher>;
 
-static App: FC<()> = |cx, _props| {
+static App: FC<()> = |(cx, _props)| {
     let items = use_state(cx, || RowList::default());
 
     let create_rendered_rows = move |from, num| move |_| items.set(create_row_list(from, num));
@@ -80,7 +80,7 @@ struct ActionButtonProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn ActionButton<'a>(cx: Context<'a>, props: &'a ActionButtonProps) -> DomTree<'a> {
+fn ActionButton<'a>((cx, props): Component<'a, ActionButtonProps>) -> DomTree<'a> {
     rsx!(cx, div { class: "col-sm-6 smallpad"
         button { class:"btn btn-primary btn-block", r#type: "button", id: "{props.id}",  onclick: {props.onclick},
             "{props.name}"
@@ -93,7 +93,7 @@ struct RowProps {
     row_id: usize,
     label: Rc<str>,
 }
-fn Row<'a>(cx: Context<'a>, props: &'a RowProps) -> DomTree<'a> {
+fn Row((cx, props): Component<RowProps>) -> DomTree {
     rsx!(cx, tr {
         td { class:"col-md-1", "{props.row_id}" }
         td { class:"col-md-1", onclick: move |_| { /* run onselect */ }

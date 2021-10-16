@@ -15,7 +15,7 @@ use dioxus_html as dioxus_elements;
 
 #[test]
 fn app_runs() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         //
         cx.render(rsx!( div{"hello"} ))
     };
@@ -26,7 +26,7 @@ fn app_runs() {
 
 #[test]
 fn fragments_work() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         cx.render(rsx!(
             div{"hello"}
             div{"goodbye"}
@@ -40,7 +40,7 @@ fn fragments_work() {
 
 #[test]
 fn lists_work() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         cx.render(rsx!(
             h1 {"hello"}
             {(0..6).map(|f| rsx!(span{ "{f}" }))}
@@ -53,7 +53,7 @@ fn lists_work() {
 
 #[test]
 fn conditional_rendering() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         cx.render(rsx!(
             h1 {"hello"}
             {true.then(|| rsx!(span{ "a" }))}
@@ -70,13 +70,13 @@ fn conditional_rendering() {
 
 #[test]
 fn child_components() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         cx.render(rsx!(
             {true.then(|| rsx!(Child { }))}
             {false.then(|| rsx!(Child { }))}
         ))
     };
-    static Child: FC<()> = |cx, props| {
+    static Child: FC<()> = |(cx, props)| {
         cx.render(rsx!(
             h1 {"hello"}
             h1 {"goodbye"}
@@ -89,7 +89,7 @@ fn child_components() {
 
 #[test]
 fn suspended_works() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         let title = use_suspense(cx, || async { "bob" }, |cx, f| cx.render(rsx! { "{f}"}));
         cx.render(rsx!("hello" { title }))
     };

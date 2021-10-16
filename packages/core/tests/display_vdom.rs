@@ -16,7 +16,7 @@ const IS_LOGGING_ENABLED: bool = true;
 
 #[test]
 fn please_work() {
-    static App: FC<()> = |cx, props| {
+    static App: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             div {
                 hidden: "true"
@@ -30,7 +30,7 @@ fn please_work() {
         })
     };
 
-    static Child: FC<()> = |cx, props| {
+    static Child: FC<()> = |(cx, props)| {
         cx.render(rsx! {
             div { "child" }
         })

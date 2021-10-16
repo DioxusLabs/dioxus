@@ -6,7 +6,7 @@
 
 ```rust, ignore
 // An example Dioxus app - closely resembles React
-static App: FC<()> = |cx, props| {
+static App: FC<()> = |(cx, props)| {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(

@@ -60,7 +60,7 @@ impl Scope {
     ///
     /// # Example
     /// ```rust
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -82,7 +82,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -110,7 +110,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -130,7 +130,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -148,7 +148,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     /// let base = dom.base_scope();
     ///

@@ -31,7 +31,7 @@ fn main() {
     });
 }
 
-static App: FC<()> = |cx, props| {
+static App: FC<()> = |(cx, props)| {
     let state = use_ref(cx, || Calculator::new());
 
     let clear_display = state.read().display_value.eq("0");
@@ -76,7 +76,7 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a, 'r>(cx: Context<'a>, props: &'a CalculatorKeyProps) -> DomTree<'a> {
+fn CalculatorKey<'a>((cx, props): Component<'a, CalculatorKeyProps>) -> DomTree<'a> {
     cx.render(rsx! {
         button {
             class: "calculator-key {props.name}"

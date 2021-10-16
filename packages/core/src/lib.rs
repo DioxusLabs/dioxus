@@ -57,7 +57,7 @@ pub(crate) mod innerlude {
     pub use crate::virtual_dom::*;
 
     pub type DomTree<'a> = Option<VNode<'a>>;
-    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> DomTree<'a>;
+    pub type FC<P> = for<'a> fn(Component<'a, P>) -> DomTree<'a>;
 }
 
 pub use crate::innerlude::{
@@ -67,7 +67,7 @@ pub use crate::innerlude::{
 };
 
 pub mod prelude {
-    pub use crate::component::{fc_to_builder, Fragment, Properties};
+    pub use crate::component::{fc_to_builder, Component, Fragment, Properties};
     pub use crate::context::Context;
     pub use crate::hooks::*;
     pub use crate::innerlude::{DioxusElement, DomTree, LazyNodes, Mutations, NodeFactory, FC};

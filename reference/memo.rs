@@ -21,7 +21,7 @@ use dioxus::prelude::*;
 
 // By default, components with no props are always memoized.
 // A props of () is considered empty.
-pub static Example: FC<()> = |cx, props| {
+pub static Example: FC<()> = |(cx, props)| {
     cx.render(rsx! {
         div { "100% memoized!" }
     })
@@ -35,7 +35,7 @@ pub struct MyProps1 {
     name: String,
 }
 
-pub static Example1: FC<MyProps1> = |cx, props| {
+pub static Example1: FC<MyProps1> = |(cx, props)| {
     cx.render(rsx! {
         div { "100% memoized! {props.name}" }
     })
@@ -49,7 +49,7 @@ pub struct MyProps2 {
     name: std::rc::Rc<str>,
 }
 
-pub static Example2: FC<MyProps2> = |cx, props| {
+pub static Example2: FC<MyProps2> = |(cx, props)| {
     cx.render(rsx! {
         div { "100% memoized! {props.name}" }
     })

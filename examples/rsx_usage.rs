@@ -49,7 +49,7 @@ const NONE_ELEMENT: Option<()> = None;
 use baller::Baller;
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |cx, props| {
+pub static Example: FC<()> = |(cx, props)| {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
@@ -184,7 +184,7 @@ mod baller {
     pub struct BallerProps {}
 
     /// This component totally balls
-    pub fn Baller<'a>(cx: Context<'a>, props: &BallerProps) -> DomTree<'a> {
+    pub fn Baller(_: Component<BallerProps>) -> DomTree {
         todo!()
     }
 }
@@ -195,7 +195,7 @@ pub struct TallerProps {
 }
 
 /// This component is taller than most :)
-pub fn Taller<'a>(cx: Context<'a>, props: &'a TallerProps) -> DomTree<'a> {
+pub fn Taller(_: Component<TallerProps>) -> DomTree {
     let b = true;
     todo!()
 }

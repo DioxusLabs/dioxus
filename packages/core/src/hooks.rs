@@ -18,7 +18,7 @@ use std::{any::Any, cell::RefCell, future::Future, ops::Deref, rc::Rc};
 /// Returns the handle to the task and the value (if it is ready, else None).
 ///
 /// ```
-/// static Example: FC<()> = |cx, props| {
+/// static Example: FC<()> = |(cx, props)| {
 ///     let (task, value) = use_task(|| async {
 ///         timer::sleep(Duration::from_secs(1)).await;
 ///         "Hello World"

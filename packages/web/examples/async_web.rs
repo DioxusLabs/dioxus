@@ -16,7 +16,7 @@ struct DogApi {
     message: String,
 }
 
-static APP: FC<()> = |cx, _props| {
+static APP: FC<()> = |(cx, _props)| {
     let state = use_state(cx, || 0);
 
     const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random/";

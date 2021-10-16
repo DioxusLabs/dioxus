@@ -49,7 +49,7 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-static App: FC<()> = |cx, props| {
+static App: FC<()> = |(cx, props)| {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(
@@ -96,28 +96,6 @@ If you know React, then you already know Dioxus.
 
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
 
-<!-- 
-currently commented out until we have more content on the website
-## Explore
-- [**Fine-grained reactivity**: Skip the diff overhead with signals ](docs/guides/00-index.md)
-- [**HTML Templates**: Drop in existing HTML5 templates with html! macro](docs/guides/00-index.md)
-- [**RSX Templates**: Clean component design with rsx! macro](docs/guides/00-index.md)
-- [**Running the examples**: Explore the vast collection of samples, tutorials, and demos](docs/guides/00-index.md)
-- [**Building applications**: Use the Dioxus CLI to build and bundle apps for various platforms](docs/guides/01-ssr.md)
-- [**Liveview**: Build custom liveview components that simplify datafetching on all platforms](docs/guides/01-ssr.md)
-- [**State management**: Easily add powerful state management that comes integrated with Dioxus Core](docs/guides/01-ssr.md)
-- [**Concurrency**: Drop in async where it fits and suspend components until new data is ready](docs/guides/01-ssr.md)
-- [**1st party hooks**: Cross-platform router hook](docs/guides/01-ssr.md)
-- [**Community hooks**: 3D renderers](docs/guides/01-ssr.md)
-## Blog Posts
-- [Why we need a stronger typed web]()
-- [Isomorphic webapps in 10 minutes]()
-- [Rust is high level too]()
-- [Eliminating crashes with Rust webapps]()
-- [Tailwind for Dioxus]()
-- [The monoglot startup]() 
--->
-
 ## Why?
 
 TypeScript is a great addition to JavaScript, but comes with a lot of tweaking flags, a slight performance hit, and an uneven ecosystem where some of the most important packages are not properly typed. TypeScript provides a lot of great benefits to JS projects, but comes with its own "tax" that can slow down dev teams. Rust can be seen as a step up from TypeScript, supporting:
@@ -130,7 +108,7 @@ TypeScript is a great addition to JavaScript, but comes with a lot of tweaking f
 - integrated documentation
 - inline built-in unit/integration testing
 - best-in-class error handling
-- simple and fast build system (compared to webpack!)
+- simple and fast build system (compared to WebPack!)
 - powerful standard library (no need for lodash or underscore)
 - include_str! for integrating html/css/svg templates directly
 - various macros (`html!`, `rsx!`) for fast template iteration

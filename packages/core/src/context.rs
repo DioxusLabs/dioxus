@@ -69,7 +69,7 @@ impl<'src> Context<'src> {
     /// ## Example
     ///
     /// ```rust
-    /// const App: FC<()> = |cx, props|{
+    /// const App: FC<()> = |(cx, props)|{
     ///     cx.render(rsx!{
     ///         CustomCard {
     ///             h1 {}
@@ -78,7 +78,7 @@ impl<'src> Context<'src> {
     ///     })
     /// }
     ///
-    /// const CustomCard: FC<()> = |cx, props|{
+    /// const CustomCard: FC<()> = |(cx, props)|{
     ///     cx.render(rsx!{
     ///         div {
     ///             h1 {"Title card"}
@@ -181,12 +181,12 @@ impl<'src> Context<'src> {
     /// ```
     /// struct SharedState(&'static str);
     ///
-    /// static App: FC<()> = |cx, props|{
+    /// static App: FC<()> = |(cx, props)|{
     ///     cx.provide_state(SharedState("world"));
     ///     rsx!(cx, Child {})
     /// }
     ///
-    /// static Child: FC<()> = |cx, props|{
+    /// static Child: FC<()> = |(cx, props)|{
     ///     let state = cx.consume_state::<SharedState>();
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
@@ -221,7 +221,7 @@ impl<'src> Context<'src> {
     /// # Example
     ///
     /// ```rust
-    /// static App: FC<()> = |cx, props| {
+    /// static App: FC<()> = |(cx, props)| {
     ///     todo!();
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
@@ -238,7 +238,7 @@ impl<'src> Context<'src> {
     /// # Example
     ///
     /// ```rust
-    /// static App: FC<()> = |cx, props| {
+    /// static App: FC<()> = |(cx, props)| {
     ///     let id = cx.get_current_subtree();
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
