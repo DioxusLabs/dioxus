@@ -12,7 +12,48 @@
 
 use std::fmt::{Display, Formatter};
 
+use dioxus_core::exports::bumpalo;
+use dioxus_core::nodes::IntoVNode;
 use dioxus_core::*;
+
+macro_rules! render_lazy {
+    ($f:expr) => {
+        $crate::SsrRenderer::new().render_lazy($f)
+    };
+}
+
+pub struct SsrRenderer {
+    inner: bumpalo::Bump,
+}
+impl Default for SsrRenderer {
+    fn default() -> Self {
+        Self {
+            inner: bumpalo::Bump::new(),
+        }
+    }
+}
+
+impl SsrRenderer {
+    pub fn new() -> Self {
+        SsrRenderer::default()
+    }
+
+    pub fn render_lazy<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>>(
+        &'a self,
+        f: LazyNodes<'a, F>,
+    ) -> String {
+        let factory = NodeFactory::new(&self.inner);
+        let root = f.into_vnode(factory);
+        format!(
+            "{:}",
+            TextRenderer {
+                cfg: SsrConfig::default(),
+                root: &root,
+                vdom: None
+            }
+        )
+    }
+}
 
 pub fn render_vnode(vnode: &VNode, string: &mut String) {}
 
@@ -52,19 +93,19 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
 /// let output = format!("{}", renderer);
 /// assert_eq!(output, "<div>hello world</div>");
 /// ```
-pub struct TextRenderer<'a> {
+pub struct TextRenderer<'a, 'b> {
     vdom: Option<&'a VirtualDom>,
-    root: &'a VNode<'a>,
+    root: &'b VNode<'a>,
     cfg: SsrConfig,
 }
 
-impl Display for TextRenderer<'_> {
+impl Display for TextRenderer<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.html_render(self.root, f, 0)
     }
 }
 
-impl<'a> TextRenderer<'a> {
+impl<'a> TextRenderer<'a, '_> {
     pub fn from_vdom(vdom: &'a VirtualDom, cfg: SsrConfig) -> Self {
         Self {
             cfg,
@@ -340,5 +381,21 @@ mod tests {
         let mut dom = VirtualDom::new(STLYE_APP);
         dom.rebuild();
         dbg!(render_vdom(&dom, |c| c));
+    }
+
+    #[test]
+    fn lazy() {
+        let p1 = SsrRenderer::new().render_lazy(rsx! {
+            div {
+                "ello"
+            }
+        });
+
+        let p2 = render_lazy!(rsx! {
+            div {
+                "ello"
+            }
+        });
+        assert_eq!(p1, p2);
     }
 }
