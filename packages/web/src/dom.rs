@@ -332,6 +332,11 @@ impl WebsysDom {
                 el.set_attribute(name, value).unwrap()
             };
             match name {
+                "dangerous_inner_html" => {
+                    if let Some(el) = node.dyn_ref::<Element>() {
+                        el.set_inner_html(value);
+                    }
+                }
                 "value" => {
                     if let Some(input) = node.dyn_ref::<HtmlInputElement>() {
                         /*

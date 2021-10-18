@@ -172,11 +172,16 @@ impl<'a> TextRenderer<'a, '_> {
                 }
 
                 write!(f, "<{}", el.tag_name)?;
+
+                let mut inner_html = None;
                 let mut attr_iter = el.attributes.iter().peekable();
 
                 while let Some(attr) = attr_iter.next() {
                     match attr.namespace {
-                        None => write!(f, " {}=\"{}\"", attr.name, attr.value)?,
+                        None => match attr.name {
+                            "dangerous_inner_html" => inner_html = Some(attr.value),
+                            _ => write!(f, " {}=\"{}\"", attr.name, attr.value)?,
+                        },
 
                         Some(ns) => {
                             // write the opening tag
@@ -214,8 +219,12 @@ impl<'a> TextRenderer<'a, '_> {
                     false => write!(f, ">")?,
                 }
 
-                for child in el.children {
-                    self.html_render(child, f, il + 1)?;
+                if let Some(inner_html) = inner_html {
+                    write!(f, "{}", inner_html)?;
+                } else {
+                    for child in el.children {
+                        self.html_render(child, f, il + 1)?;
+                    }
                 }
 
                 if self.cfg.newline {
@@ -425,6 +434,17 @@ mod tests {
                         h1 { "ello world" }
                     }
                 }
+            }
+        });
+
+        dbg!(s);
+    }
+
+    #[test]
+    fn inner_html() {
+        let s = render_lazy(rsx! {
+            div {
+                dangerous_inner_html: "<div> ack </div>"
             }
         });
 
