@@ -269,6 +269,7 @@ pub struct Listener<'bump> {
     /// IE "click" - whatever the renderer needs to attach the listener by name.
     pub event: &'static str,
 
+    #[allow(clippy::type_complexity)]
     /// The actual callback that the user specified
     pub(crate) callback:
         RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn std::any::Any + Send>) + 'bump>>>,
@@ -303,6 +304,8 @@ pub struct VComponent<'src> {
 pub struct VSuspended<'a> {
     pub task_id: u64,
     pub dom_id: Cell<Option<ElementId>>,
+
+    #[allow(clippy::type_complexity)]
     pub callback: RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> DomTree<'a>>>>,
 }
 
@@ -486,10 +489,7 @@ impl<'a> NodeFactory<'a> {
 
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
-                    match (props_memoized, children.is_empty()) {
-                        (true, true) => true,
-                        _ => false,
-                    }
+                    matches!((props_memoized, children.is_empty()), (true, true))
                 } else {
                     false
                 }

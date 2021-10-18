@@ -399,7 +399,7 @@ impl<'a> ScopeRenderer<'a> {
             }
             VNode::Element(el) => {
                 write_indent(f, il);
-                write!(f, "{} {{\n", el.tag_name)?;
+                writeln!(f, "{} {{", el.tag_name)?;
                 // write!(f, "element: {}", el.tag_name)?;
                 let mut attr_iter = el.attributes.iter().peekable();
 

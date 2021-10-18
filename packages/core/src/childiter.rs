@@ -46,9 +46,9 @@ impl<'a> Iterator for RealChildIterator<'a> {
                     VNode::Fragment(frag) => {
                         let subcount = *count as usize;
 
-                        if frag.children.len() == 0 {
+                        if frag.children.is_empty() {
                             should_pop = true;
-                            returned_node = Some(&*node);
+                            returned_node = Some(node);
                         }
 
                         if subcount >= frag.children.len() {

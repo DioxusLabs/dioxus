@@ -105,6 +105,8 @@ pub trait Properties: Sized {
     fn builder() -> Self::Builder;
 
     /// Memoization can only happen if the props are valid for the 'static lifetime
+    ///
+    /// # Safety
     /// The user must know if their props are static, but if they make a mistake, UB happens
     /// Therefore it's unsafe to memeoize.
     unsafe fn memoize(&self, other: &Self) -> bool;

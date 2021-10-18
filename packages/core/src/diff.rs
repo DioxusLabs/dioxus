@@ -312,8 +312,7 @@ impl<'bump> DiffMachine<'bump> {
             listeners.iter().for_each(|listener| {
                 self.attach_listener_to_scope(listener, scope);
                 listener.mounted_node.set(Some(real_id));
-                self.mutations
-                    .new_event_listener(listener, cur_scope_id.clone());
+                self.mutations.new_event_listener(listener, cur_scope_id);
             });
         } else {
             log::warn!("create element called with no scope on the stack - this is an error for a live dom");
@@ -470,9 +469,7 @@ impl<'bump> DiffMachine<'bump> {
         // TODO: take a more efficient path than this
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
-                if old_attr.value != new_attr.value {
-                    self.mutations.set_attribute(new_attr, root.as_u64());
-                } else if new_attr.is_volatile {
+                if old_attr.value != new_attr.value || new_attr.is_volatile {
                     self.mutations.set_attribute(new_attr, root.as_u64());
                 }
             }
@@ -519,7 +516,7 @@ impl<'bump> DiffMachine<'bump> {
             }
         }
 
-        if old.children.len() == 0 && new.children.len() != 0 {
+        if old.children.is_empty() && !new.children.is_empty() {
             self.mutations.edits.push(PushRoot {
                 root: root.as_u64(),
             });
@@ -578,8 +575,8 @@ impl<'bump> DiffMachine<'bump> {
             return;
         }
 
-        debug_assert!(old.children.len() != 0);
-        debug_assert!(new.children.len() != 0);
+        debug_assert!(!old.children.is_empty());
+        debug_assert!(!new.children.is_empty());
 
         self.diff_children(old.children, new.children);
     }
@@ -748,13 +745,13 @@ impl<'bump> DiffMachine<'bump> {
         let new_middle = &new[left_offset..(new.len() - right_offset)];
 
         debug_assert!(
-            !((old_middle.len() == new_middle.len()) && old_middle.len() == 0),
+            !((old_middle.len() == new_middle.len()) && old_middle.is_empty()),
             "keyed children must have the same number of children"
         );
-        if new_middle.len() == 0 {
+        if new_middle.is_empty() {
             // remove the old elements
             self.remove_nodes(old_middle);
-        } else if old_middle.len() == 0 {
+        } else if old_middle.is_empty() {
             // there were no old elements, so just create the new elements
             // we need to find the right "foothold" though - we shouldnt use the "append" at all
             if left_offset == 0 {

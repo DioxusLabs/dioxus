@@ -26,10 +26,6 @@ impl<'a> Mutations<'a> {
         self.edits.push(PushRoot { root: id });
     }
 
-    pub(crate) fn pop(&mut self) {
-        self.edits.push(PopRoot {});
-    }
-
     pub(crate) fn replace_with(&mut self, root: ElementId, m: u32) {
         let root = root.as_u64();
         self.edits.push(ReplaceWith { m, root });

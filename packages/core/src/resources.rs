@@ -74,6 +74,4 @@ impl ResourcePool {
         entry.insert(f(id));
         id
     }
-
-    pub fn borrow_bumpframe(&self) {}
 }

@@ -3,6 +3,9 @@ use std::{
     cell::{Cell, RefCell, UnsafeCell},
 };
 
+type UnsafeInnerHookState = UnsafeCell<Box<dyn Any>>;
+type HookCleanup = Box<dyn FnOnce(Box<dyn Any>)>;
+
 /// An abstraction over internally stored data using a hook-based memory layout.
 ///
 /// Hooks are allocated using Boxes and then our stored references are given out.
@@ -12,7 +15,7 @@ use std::{
 /// Todo: this could use its very own bump arena, but that might be a tad overkill
 #[derive(Default)]
 pub(crate) struct HookList {
-    vals: RefCell<Vec<(UnsafeCell<Box<dyn Any>>, Box<dyn FnOnce(Box<dyn Any>)>)>>,
+    vals: RefCell<Vec<(UnsafeInnerHookState, HookCleanup)>>,
     idx: Cell<usize>,
 }
 
@@ -35,7 +38,7 @@ impl HookList {
         self.idx.set(0);
     }
 
-    pub(crate) fn push_hook<T: 'static>(&self, new: T, cleanup: Box<dyn FnOnce(Box<dyn Any>)>) {
+    pub(crate) fn push_hook<T: 'static>(&self, new: T, cleanup: HookCleanup) {
         self.vals
             .borrow_mut()
             .push((UnsafeCell::new(Box::new(new)), cleanup))
@@ -57,11 +60,6 @@ impl HookList {
         self.vals
             .borrow_mut()
             .drain(..)
-            .for_each(|(mut state, cleanup)| {
-                //
-                let s: Box<dyn Any> = state.into_inner();
-                cleanup(s)
-                //
-            });
+            .for_each(|(state, cleanup)| cleanup(state.into_inner()));
     }
 }

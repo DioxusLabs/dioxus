@@ -12,7 +12,6 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     fmt::Debug,
-    ops::Deref,
 };
 
 pub use on::*;
@@ -33,31 +32,6 @@ pub struct UserEvent {
     /// The type of event
     pub event: Box<dyn Any + Send>,
 }
-
-struct EventInner {}
-
-// trait SyntheticEvent: Send + Debug {
-//     fn downcast(self: Box<Self>) -> Option<Box<dyn Any>>;
-// }
-
-// #[derive(Debug)]
-// pub enum SyntheticEvent {
-//     AnimationEvent(on::AnimationEvent),
-//     ClipboardEvent(on::ClipboardEvent),
-//     CompositionEvent(on::CompositionEvent),
-//     FocusEvent(on::FocusEvent),
-//     FormEvent(on::FormEvent),
-//     KeyboardEvent(on::KeyboardEvent),
-//     GenericEvent(DioxusEvent<()>),
-//     TouchEvent(on::TouchEvent),
-//     ToggleEvent(on::ToggleEvent),
-//     MediaEvent(on::MediaEvent),
-//     MouseEvent(on::MouseEvent),
-//     WheelEvent(on::WheelEvent),
-//     SelectionEvent(on::SelectionEvent),
-//     TransitionEvent(on::TransitionEvent),
-//     PointerEvent(on::PointerEvent),
-// }
 
 /// Priority of Event Triggers.
 ///
@@ -109,85 +83,6 @@ pub enum EventPriority {
     ///
     /// This is considered "idle" work or "background" work.
     Low = 0,
-}
-
-impl EventInner {
-    /*
-    Not implemented!
-
-    These methods come from the original web-based event system but are not implemented in Dioxus.
-
-    Currently, event bubbling doesn't exactly match dom-based event bubbling - IE there is no bubbling at all.
-
-    When bubbling is implemented, we'll make these methods public and possible to do things like cancel bubbling.
-    */
-
-    /// Returns whether or not a specific event is a bubbling event
-    fn _bubbles(&self) -> bool {
-        todo!()
-    }
-    /// Sets or returns whether the event should propagate up the hierarchy or not
-    fn _cancel_bubble(&self) {
-        todo!()
-    }
-    /// Returns whether or not an event can have its default action prevented
-    fn _cancelable(&self) -> bool {
-        todo!()
-    }
-    /// Returns whether the event is composed or not
-    fn _composed(&self) -> bool {
-        todo!()
-    }
-
-    // Currently not supported because those no way we could possibly support it
-    // just cast the event to the right platform-specific type and return it
-    /// Returns the event's path
-    fn _composed_path(&self) -> String {
-        todo!()
-    }
-
-    /// Returns the element whose event listeners triggered the event
-    fn _current_target(&self) {
-        todo!()
-    }
-    /// Returns whether or not the preventDefault method was called for the event
-    fn _default_prevented(&self) -> bool {
-        todo!()
-    }
-    /// Returns which phase of the event flow is currently being evaluated
-    fn _event_phase(&self) -> u16 {
-        todo!()
-    }
-
-    /// Returns whether or not an event is trusted
-    fn _is_trusted(&self) -> bool {
-        todo!()
-    }
-
-    /// Cancels the event if it is cancelable, meaning that the default action that belongs to the event will
-    fn _prevent_default(&self) {
-        todo!()
-    }
-
-    /// Prevents other listeners of the same event from being called
-    fn _stop_immediate_propagation(&self) {
-        todo!()
-    }
-
-    /// Prevents further propagation of an event during event flow
-    fn _stop_propagation(&self) {
-        todo!()
-    }
-
-    /// Returns the element that triggered the event
-    fn _target(&self) -> Option<Box<dyn Any>> {
-        todo!()
-    }
-
-    /// Returns the time (in milliseconds relative to the epoch) at which the event was created
-    fn _time_stamp(&self) -> f64 {
-        todo!()
-    }
 }
 
 pub mod on {
