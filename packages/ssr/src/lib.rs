@@ -13,32 +13,36 @@
 use std::fmt::{Display, Formatter};
 
 use dioxus_core::exports::bumpalo;
+use dioxus_core::exports::bumpalo::Bump;
 use dioxus_core::nodes::IntoVNode;
 use dioxus_core::*;
 
-macro_rules! render_lazy {
-    ($f:expr) => {
-        $crate::SsrRenderer::new().render_lazy($f)
-    };
-}
-
+/// A memory pool for rendering
 pub struct SsrRenderer {
     inner: bumpalo::Bump,
-}
-impl Default for SsrRenderer {
-    fn default() -> Self {
-        Self {
-            inner: bumpalo::Bump::new(),
-        }
-    }
+    cfg: SsrConfig,
 }
 
 impl SsrRenderer {
-    pub fn new() -> Self {
-        SsrRenderer::default()
+    pub fn new(cfg: impl FnOnce(SsrConfig) -> SsrConfig) -> Self {
+        Self {
+            cfg: cfg(SsrConfig::default()),
+            inner: bumpalo::Bump::new(),
+        }
     }
 
     pub fn render_lazy<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>>(
+        &'a mut self,
+        f: LazyNodes<'a, F>,
+    ) -> String {
+        let bump = &mut self.inner as *mut _;
+        let s = self.render_inner(f);
+        // reuse the bump's memory
+        unsafe { (&mut *bump as &mut bumpalo::Bump).reset() };
+        s
+    }
+
+    fn render_inner<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>>(
         &'a self,
         f: LazyNodes<'a, F>,
     ) -> String {
@@ -47,7 +51,7 @@ impl SsrRenderer {
         format!(
             "{:}",
             TextRenderer {
-                cfg: SsrConfig::default(),
+                cfg: self.cfg.clone(),
                 root: &root,
                 vdom: None
             }
@@ -55,7 +59,34 @@ impl SsrRenderer {
     }
 }
 
-pub fn render_vnode(vnode: &VNode, string: &mut String) {}
+pub fn render_lazy<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>>(f: LazyNodes<'a, F>) -> String {
+    let bump = bumpalo::Bump::new();
+    let borrowed = &bump;
+
+    // Safety
+    //
+    // The lifetimes bounds on LazyNodes are really complicated - they need to support the nesting restrictions in
+    // regular component usage. The <'a> lifetime is used to enforce that all calls of IntoVnode use the same allocator.
+    //
+    // When LazyNodes are provided, they are FnOnce, but do not come with a allocator selected to borrow from. The <'a>
+    // lifetime is therefore longer than the lifetime of the allocator which doesn't exist yet.
+    //
+    // Therefore, we cast our local bump alloactor into right lifetime. This is okay because our usage of the bump arena
+    // is *definitely* shorter than the <'a> lifetime, and we return owned data - not borrowed data.
+    // Therefore, we know that no references are leaking.
+    let _b: &'a Bump = unsafe { std::mem::transmute(borrowed) };
+
+    let root = f.into_vnode(NodeFactory::new(_b));
+
+    format!(
+        "{:}",
+        TextRenderer {
+            cfg: SsrConfig::default(),
+            root: &root,
+            vdom: None
+        }
+    )
+}
 
 pub fn render_vdom(dom: &VirtualDom, cfg: impl FnOnce(SsrConfig) -> SsrConfig) -> String {
     format!(
@@ -124,7 +155,7 @@ impl<'a> TextRenderer<'a, '_> {
                 }
                 write!(f, "{}", text.text)?
             }
-            VNode::Anchor(anchor) => {
+            VNode::Anchor(_anchor) => {
                 //
                 if self.cfg.indent {
                     for _ in 0..il {
@@ -170,19 +201,16 @@ impl<'a> TextRenderer<'a, '_> {
                 //
                 // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
                 // them interpreter's stack
-                match (self.cfg.pre_render, node.try_mounted_id()) {
-                    (true, Some(id)) => {
-                        write!(f, " dio_el=\"{}\"", id)?;
-                        //
-                        for listener in el.listeners {
-                            // write the listeners
-                        }
+                if let (true, Some(id)) = (self.cfg.pre_render, node.try_mounted_id()) {
+                    write!(f, " dio_el=\"{}\"", id)?;
+
+                    for _listener in el.listeners {
+                        // todo: write the listeners
                     }
-                    _ => {}
                 }
 
                 match self.cfg.newline {
-                    true => write!(f, ">\n")?,
+                    true => writeln!(f, ">")?,
                     false => write!(f, ">")?,
                 }
 
@@ -191,7 +219,7 @@ impl<'a> TextRenderer<'a, '_> {
                 }
 
                 if self.cfg.newline {
-                    write!(f, "\n")?;
+                    writeln!(f)?;
                 }
                 if self.cfg.indent {
                     for _ in 0..il {
@@ -201,7 +229,7 @@ impl<'a> TextRenderer<'a, '_> {
 
                 write!(f, "</{}>", el.tag_name)?;
                 if self.cfg.newline {
-                    write!(f, "\n")?;
+                    writeln!(f)?;
                 }
             }
             VNode::Fragment(frag) => {
@@ -211,14 +239,11 @@ impl<'a> TextRenderer<'a, '_> {
             }
             VNode::Component(vcomp) => {
                 let idx = vcomp.associated_scope.get().unwrap();
-                match (self.vdom, self.cfg.skip_components) {
-                    (Some(vdom), false) => {
-                        let new_node = vdom.get_scope(idx).unwrap().root_node();
-                        self.html_render(new_node, f, il + 1)?;
-                    }
-                    _ => {
-                        // render the component by name
-                    }
+
+                if let (Some(vdom), false) = (self.vdom, self.cfg.skip_components) {
+                    let new_node = vdom.get_scope(idx).unwrap().root_node();
+                    self.html_render(new_node, f, il + 1)?;
+                } else {
                 }
             }
             VNode::Suspended { .. } => {
@@ -229,6 +254,7 @@ impl<'a> TextRenderer<'a, '_> {
     }
 }
 
+#[derive(Clone, Debug, Default)]
 pub struct SsrConfig {
     /// currently not supported - control if we indent the HTML output
     indent: bool,
@@ -243,17 +269,6 @@ pub struct SsrConfig {
     // Don't proceed onto new components. Instead, put the name of the component.
     // TODO: components don't have names :(
     skip_components: bool,
-}
-
-impl Default for SsrConfig {
-    fn default() -> Self {
-        Self {
-            indent: false,
-            pre_render: false,
-            newline: false,
-            skip_components: false,
-        }
-    }
 }
 
 impl SsrConfig {
@@ -284,13 +299,13 @@ mod tests {
     use dioxus_core_macro::*;
     use dioxus_html as dioxus_elements;
 
-    static SIMPLE_APP: FC<()> = |(cx, props)| {
+    static SIMPLE_APP: FC<()> = |(cx, _)| {
         cx.render(rsx!(div {
             "hello world!"
         }))
     };
 
-    static SLIGHTLY_MORE_COMPLEX: FC<()> = |(cx, props)| {
+    static SLIGHTLY_MORE_COMPLEX: FC<()> = |(cx, _)| {
         cx.render(rsx! {
             div {
                 title: "About W3Schools"
@@ -309,14 +324,14 @@ mod tests {
         })
     };
 
-    static NESTED_APP: FC<()> = |(cx, props)| {
+    static NESTED_APP: FC<()> = |(cx, _)| {
         cx.render(rsx!(
             div {
                 SIMPLE_APP {}
             }
         ))
     };
-    static FRAGMENT_APP: FC<()> = |(cx, props)| {
+    static FRAGMENT_APP: FC<()> = |(cx, _)| {
         cx.render(rsx!(
             div { "f1" }
             div { "f2" }
@@ -372,7 +387,7 @@ mod tests {
 
     #[test]
     fn styles() {
-        static STLYE_APP: FC<()> = |(cx, props)| {
+        static STLYE_APP: FC<()> = |(cx, _)| {
             cx.render(rsx! {
                 div { style: { color: "blue", font_size: "46px" } }
             })
@@ -385,17 +400,34 @@ mod tests {
 
     #[test]
     fn lazy() {
-        let p1 = SsrRenderer::new().render_lazy(rsx! {
-            div {
-                "ello"
-            }
+        let p1 = SsrRenderer::new(|c| c).render_lazy(rsx! {
+            div { "ello"  }
         });
 
-        let p2 = render_lazy!(rsx! {
+        let p2 = render_lazy(rsx! {
             div {
                 "ello"
             }
         });
         assert_eq!(p1, p2);
+    }
+
+    #[test]
+    fn big_lazy() {
+        let s = render_lazy(rsx! {
+            div {
+                div {
+                    div {
+                        h1 { "ello world" }
+                        h1 { "ello world" }
+                        h1 { "ello world" }
+                        h1 { "ello world" }
+                        h1 { "ello world" }
+                    }
+                }
+            }
+        });
+
+        dbg!(s);
     }
 }
