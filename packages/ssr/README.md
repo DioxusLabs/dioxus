@@ -14,7 +14,7 @@ let mut vdom = VirtualDOM::new(App);
 let _ = vdom.rebuild();
 
 // Render the entire virtualdom from the root
-let text = dioxus_ssr::render_vdom(&vdom, |c| c);
+let text = dioxus::ssr::render_vdom(&vdom, |c| c);
 assert_eq!(text, "<div>hello world!</div>")
 ```
 
@@ -40,11 +40,28 @@ let text = dioxus::ssr::render_vdom(App, |cfg| cfg.pre_render(true));
 Dioxus SSR can also be to render on the server. Obviously, you can just render the VirtualDOM to a string and send that down.
 
 ```rust
-let text = dioxus_ssr::render_vdom(&vdom, |c| c);
+let text = dioxus::ssr::render_vdom(&vdom, |c| c);
 assert_eq!(text, "<div>hello world!</div>")
 ```
 
 The rest of the space - IE doing this more efficiently, caching the virtualdom, etc, will all need to be a custom implementation for now.
+
+## Usage without a VirtualDom
+
+Dioxus SSR needs an arena to allocate from - whether it be the VirtualDom or a dedicated Bump allocator. To render `rsx!` directly to a string, you'll want to create an `SsrRenderer` and call `render_lazy`.
+
+```rust
+let text = dioxus::ssr::SsrRenderer::new().render_lazy(rsx!{
+    div { "hello world" }
+});
+assert_eq!(text, "<div>hello world!</div>")
+```
+
+This can be automated with the `render_lazy!` macro:
+
+```rust
+let text = render_lazy!(rsx!( div { "hello world" } ));
+```
 
 ## Usage in static site generation
 
