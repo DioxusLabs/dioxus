@@ -22,7 +22,7 @@ longest-increasing-subsequence = "0.1.0"
 # internall used
 log = { version = "0.4", features = ["release_max_level_off"] }
 
-futures-util = "0.3.15"
+futures-util = { version = "0.3.15", no_default_features = true }
 
 smallvec = "1.6.1"
 
@@ -51,7 +51,7 @@ simple_logger = "1.13.0"
 dioxus-core-macro = { path = "../core-macro", version = "0.1.2" }
 
 [features]
-default = ["serialize"]
+default = []
 serialize = ["serde", "serde_repr"]
 
 [[bench]]

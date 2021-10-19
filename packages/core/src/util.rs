@@ -68,7 +68,8 @@ impl Future for YieldNow {
 ///
 /// `ScopeId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
 /// unmounted, then the `ScopeId` will be reused for a new component.
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ScopeId(pub usize);
 
 /// An Element's unique identifier.

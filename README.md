@@ -65,12 +65,11 @@ Dioxus can be used to deliver webapps, desktop apps, static sites, liveview apps
 If you know React, then you already know Dioxus.
 
 ### Unique features:
-- Incredible inline documentation. Supports hover and guides for all HTML elements, listeners, and events.
-- Templates are "constified" at compile time. Nodes that don't change will won't be diffed.
-- Custom bump-allocator backing for all components. Nearly 0 allocations for steady-state components.
-- Starting a new app takes zero templates or special tools - get a new app running in just seconds.
-- Desktop apps running natively (no Electron!) in less than 10 lines of code.
 - The most ergonomic and powerful state management of any Rust UI toolkit.
+- Desktop apps running natively (no Electron!) in less than 10 lines of code.
+- Starting a new app takes zero templates or special tools - get a new app running in just seconds.
+- Incredible inline documentation. Supports hover and guides for all HTML elements, listeners, and events.
+- Custom bump-allocator backing for all components. Nearly 0 allocations for steady-state components.
 - Multithreaded asynchronous coroutine scheduler for powerful async code.
 - And more! Read the full release post here.
 
