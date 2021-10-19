@@ -18,7 +18,11 @@ log = "0.4.13"
 html-escape = "0.2.9"
 wry = "0.12.2"
 futures-channel = "0.3.16"
-tokio = { version = "1.12.0", features = ["full"], optional = true }
+tokio = { version = "1.12.0", features = [
+    "sync",
+    "rt-multi-thread",
+    "rt",
+], optional = true, default-features = false }
 dioxus-core-macro = { path = "../core-macro" }
 
 [features]
