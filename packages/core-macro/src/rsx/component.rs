@@ -91,7 +91,7 @@ impl Parse for Component<AS_HTML> {
         stream.parse::<Token![>]>()?;
 
         'parsing: loop {
-            if stream.peek(Token![<]) {
+            if stream.peek(Token![<]) && stream.peek2(Token![/]) {
                 break 'parsing;
             }
 
@@ -114,18 +114,6 @@ impl Parse for Component<AS_HTML> {
             ));
         }
         stream.parse::<Token![>]>()?;
-
-        // // parse the guts
-        // let content: ParseBuffer;
-        // syn::braced!(content in stream);
-
-        // let cfg: BodyConfig<AS_HTML> = BodyConfig {
-        //     allow_children: true,
-        //     allow_fields: true,
-        //     allow_manual_props: true,
-        // };
-
-        // let (body, children, manual_props) = cfg.parse_component_body(&content)?;
 
         Ok(Self {
             name,
@@ -281,7 +269,7 @@ impl<const AS: HtmlOrRsx> ToTokens for Component<AS> {
                     let mut __manual_props = #manual_props;
                 };
                 for field in &self.body {
-                    if field.name.to_string() == "key" {
+                    if field.name == "key" {
                         has_key = Some(field);
                     } else {
                         let name = &field.name;
@@ -301,7 +289,7 @@ impl<const AS: HtmlOrRsx> ToTokens for Component<AS> {
             None => {
                 let mut toks = quote! { fc_to_builder(#name) };
                 for field in &self.body {
-                    if field.name.to_string() == "key" {
+                    if field.name == "key" {
                         has_key = Some(field);
                     } else {
                         toks.append_all(quote! {#field})

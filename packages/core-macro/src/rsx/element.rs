@@ -137,10 +137,11 @@ impl Parse for Element<AS_HTML> {
                 }
             };
         }
+
         stream.parse::<Token![>]>()?;
 
         'parsing: loop {
-            if stream.peek(Token![<]) {
+            if stream.peek(Token![<]) && stream.peek2(Token![/]) {
                 break 'parsing;
             }
 
@@ -155,6 +156,7 @@ impl Parse for Element<AS_HTML> {
         // closing element
         stream.parse::<Token![<]>()?;
         stream.parse::<Token![/]>()?;
+
         let close = Ident::parse_any(stream)?;
         if close != el_name {
             return Err(Error::new_spanned(
@@ -233,8 +235,6 @@ fn parse_rsx_element_field(
     // Return early if the field is a listener
     if name_str.starts_with("on") {
         // remove the "on" bit
-        // name = Ident::new(&name_str.trim_start_matches("on"), name.span());
-
         let ty = if stream.peek(token::Brace) {
             let content;
             syn::braced!(content in stream);
@@ -293,7 +293,7 @@ fn parse_rsx_element_field(
             return Ok(());
         }
         "classes" => {
-            todo!("custom class lsit not supported")
+            todo!("custom class list not supported")
         }
         "namespace" => {
             todo!("custom namespace not supported")
@@ -346,11 +346,11 @@ impl<const AS: HtmlOrRsx> ToTokens for ElementAttr<AS> {
             AttrType::BumpText(value) => tokens.append_all(quote! {
                 dioxus_elements::#el_name.#nameident(__cx, format_args_f!(#value))
             }),
+
             AttrType::FieldTokens(exp) => tokens.append_all(quote! {
                 dioxus_elements::#el_name.#nameident(__cx, #exp)
             }),
 
-            // todo: move event handlers on to the elements or onto the nodefactory
             AttrType::Event(event) => tokens.append_all(quote! {
                 dioxus::events::on::#nameident(__cx, #event)
             }),

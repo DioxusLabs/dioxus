@@ -17,7 +17,6 @@ mod component;
 mod element;
 mod fragment;
 mod node;
-mod parse_rsx;
 
 // Re-export the namespaces into each other
 pub use ambiguous::*;
