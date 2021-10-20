@@ -78,7 +78,7 @@ impl Parse for Element<AS_HTML> {
 
         let mut attributes: Vec<ElementAttr<AS_HTML>> = vec![];
         let mut listeners: Vec<ElementAttr<AS_HTML>> = vec![];
-        let children: Vec<BodyNode<AS_HTML>> = vec![];
+        let mut children: Vec<BodyNode<AS_HTML>> = vec![];
         let key = None;
 
         while !stream.peek(Token![>]) {
@@ -115,7 +115,8 @@ impl Parse for Element<AS_HTML> {
                 match name_str.as_str() {
                     "style" => {}
                     "key" => {}
-                    "classes" | "namespace" | "ref" | _ => {
+                    _ => {
+                        // "classes" | "namespace" | "ref" | _ => {
                         let ty = if stream.peek(LitStr) {
                             let rawtext = stream.parse::<LitStr>().unwrap();
                             AttrType::BumpText(rawtext)
@@ -138,37 +139,30 @@ impl Parse for Element<AS_HTML> {
         }
         stream.parse::<Token![>]>()?;
 
+        'parsing: loop {
+            if stream.peek(Token![<]) {
+                break 'parsing;
+            }
+
+            // [1] Break if empty
+            if stream.is_empty() {
+                break 'parsing;
+            }
+
+            children.push(stream.parse::<BodyNode<AS_HTML>>()?);
+        }
+
         // closing element
         stream.parse::<Token![<]>()?;
         stream.parse::<Token![/]>()?;
         let close = Ident::parse_any(stream)?;
-        if close.to_string() != el_name.to_string() {
+        if close != el_name {
             return Err(Error::new_spanned(
                 close,
                 "closing element does not match opening",
             ));
         }
         stream.parse::<Token![>]>()?;
-        // 'parsing: loop {
-        //     // if stream.peek(Token![>]) {}
-
-        //     // // [1] Break if empty
-        //     // if content.is_empty() {
-        //     //     break 'parsing;
-        //     // }
-
-        //     if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-        //         parse_element_body(
-        //             &content,
-        //             &mut attributes,
-        //             &mut listeners,
-        //             &mut key,
-        //             name.clone(),
-        //         )?;
-        //     } else {
-        //         children.push(stream.parse::<BodyNode<AS_HTML>>()?);
-        //     }
-        // }
 
         Ok(Self {
             key,

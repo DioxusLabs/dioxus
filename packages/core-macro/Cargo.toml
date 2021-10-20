@@ -12,6 +12,7 @@ description = "Core macro for Dioxus Virtual DOM"
 proc-macro = true
 
 [dependencies]
+bumpalo = { version = "3.7.1", features = ["collections"] }
 once_cell = "1.8"
 proc-macro2 = { version = "1.0.6" }
 quote = "1.0"
