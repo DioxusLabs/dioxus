@@ -41,7 +41,7 @@ impl Parse for Component<AS_RSX> {
         let content: ParseBuffer;
         syn::braced!(content in stream);
 
-        let cfg: BodyParseConfig<AS_RSX> = BodyParseConfig {
+        let cfg: BodyConfig<AS_RSX> = BodyConfig {
             allow_children: true,
             allow_fields: true,
             allow_manual_props: true,
@@ -59,19 +59,73 @@ impl Parse for Component<AS_RSX> {
 }
 impl Parse for Component<AS_HTML> {
     fn parse(stream: ParseStream) -> Result<Self> {
+        let _l_tok = stream.parse::<Token![<]>()?;
         let name = syn::Path::parse_mod_style(stream)?;
 
-        // parse the guts
-        let content: ParseBuffer;
-        syn::braced!(content in stream);
+        let mut manual_props = None;
 
-        let cfg: BodyParseConfig<AS_HTML> = BodyParseConfig {
-            allow_children: true,
-            allow_fields: true,
-            allow_manual_props: true,
-        };
+        let mut body: Vec<ComponentField<AS_HTML>> = vec![];
+        let mut children: Vec<BodyNode<AS_HTML>> = vec![];
 
-        let (body, children, manual_props) = cfg.parse_component_body(&content)?;
+        if stream.peek(Token![..]) {
+            stream.parse::<Token![..]>()?;
+            manual_props = Some(stream.parse::<Expr>()?);
+        }
+
+        while !stream.peek(Token![>]) {
+            // self-closing
+            if stream.peek(Token![/]) {
+                stream.parse::<Token![/]>()?;
+                stream.parse::<Token![>]>()?;
+
+                return Ok(Self {
+                    name,
+                    manual_props,
+                    body,
+                    children,
+                });
+            }
+            body.push(stream.parse::<ComponentField<AS_HTML>>()?);
+        }
+
+        stream.parse::<Token![>]>()?;
+
+        'parsing: loop {
+            if stream.peek(Token![<]) {
+                break 'parsing;
+            }
+
+            // [1] Break if empty
+            if stream.is_empty() {
+                break 'parsing;
+            }
+
+            children.push(stream.parse::<BodyNode<AS_HTML>>()?);
+        }
+
+        // closing element
+        stream.parse::<Token![<]>()?;
+        stream.parse::<Token![/]>()?;
+        let close = syn::Path::parse_mod_style(stream)?;
+        if close != name {
+            return Err(Error::new_spanned(
+                close,
+                "closing element does not match opening",
+            ));
+        }
+        stream.parse::<Token![>]>()?;
+
+        // // parse the guts
+        // let content: ParseBuffer;
+        // syn::braced!(content in stream);
+
+        // let cfg: BodyConfig<AS_HTML> = BodyConfig {
+        //     allow_children: true,
+        //     allow_fields: true,
+        //     allow_manual_props: true,
+        // };
+
+        // let (body, children, manual_props) = cfg.parse_component_body(&content)?;
 
         Ok(Self {
             name,
@@ -82,15 +136,15 @@ impl Parse for Component<AS_HTML> {
     }
 }
 
-pub struct BodyParseConfig<const AS: HtmlOrRsx> {
+pub struct BodyConfig<const AS: HtmlOrRsx> {
     pub allow_fields: bool,
     pub allow_children: bool,
     pub allow_manual_props: bool,
 }
 
-impl<const AS: HtmlOrRsx> BodyParseConfig<AS> {
+impl<const AS: HtmlOrRsx> BodyConfig<AS> {
     /// The configuration to parse the root
-    pub fn new_as_body() -> Self {
+    pub fn new_call_body() -> Self {
         Self {
             allow_children: true,
             allow_fields: false,
@@ -99,7 +153,7 @@ impl<const AS: HtmlOrRsx> BodyParseConfig<AS> {
     }
 }
 
-impl BodyParseConfig<AS_RSX> {
+impl BodyConfig<AS_RSX> {
     // todo: unify this body parsing for both elements and components
     // both are style rather ad-hoc, though components are currently more configured
     pub fn parse_component_body(
@@ -156,7 +210,7 @@ impl BodyParseConfig<AS_RSX> {
         Ok((body, children, manual_props))
     }
 }
-impl BodyParseConfig<AS_HTML> {
+impl BodyConfig<AS_HTML> {
     // todo: unify this body parsing for both elements and components
     // both are style rather ad-hoc, though components are currently more configured
     pub fn parse_component_body(
@@ -201,6 +255,7 @@ impl BodyParseConfig<AS_HTML> {
                         "This item is not allowed to accept children.",
                     ));
                 }
+
                 children.push(content.parse::<BodyNode<AS_HTML>>()?);
             }
 
