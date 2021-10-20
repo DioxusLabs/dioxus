@@ -11,20 +11,28 @@ fn html_usage() {
     let r = html! {
         <div>
             "hello world"
+            <div>
+            </div>
+            <div />
             "hello world"
-            "hello world"
-            "hello world"
+            <Fragment>
+            </Fragment>
         </div>
+    };
+    let r = rsx! {
+        div {
+            "hello world"
+        }
     };
 }
 
 fn rsx_uage() {
-    let r = html! {
-        <Fragment>
-            "hello world"
-            "hello world"
-            "hello world"
-            "hello world"
-        </Fragment>
-    };
+    // let r = html! {
+    //     <Fragment>
+    //         "hello world"
+    //         "hello world"
+    //         "hello world"
+    //         "hello world"
+    //     </Fragment>
+    // };
 }

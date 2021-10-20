@@ -175,7 +175,7 @@ impl ToTokens for ToToksCtx<&Element> {
                 if let Some(child) = children.next() {
                     let mut inner_toks = TokenStream2::new();
                     self.recurse(child).to_tokens(&mut inner_toks);
-                    while let Some(child) = children.next() {
+                    for child in children {
                         quote!(,).to_tokens(&mut inner_toks);
                         self.recurse(child).to_tokens(&mut inner_toks);
                     }
@@ -234,7 +234,7 @@ impl Parse for Element {
         s.parse::<Token![<]>()?;
         s.parse::<Token![/]>()?;
         let close = Ident::parse_any(s)?;
-        if close.to_string() != name.to_string() {
+        if close != name {
             return Err(Error::new_spanned(
                 close,
                 "closing element does not match opening",
@@ -271,7 +271,7 @@ impl Parse for Attr {
         // If so, parse into literal tokens
         let ty = if name_str.starts_with("on") {
             // remove the "on" bit
-            name = Ident::new(&name_str.trim_start_matches("on"), name.span());
+            name = Ident::new(name_str.trim_start_matches("on"), name.span());
             let content;
             syn::braced!(content in s);
             // AttrType::Value(content.parse()?)
@@ -359,6 +359,7 @@ impl ToTokens for ToToksCtx<&TextNode> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum MaybeExpr<T> {
     Literal(T),
     Expr(Expr),

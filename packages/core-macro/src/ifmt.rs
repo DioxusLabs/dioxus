@@ -7,12 +7,6 @@ use ::syn::{
 };
 use proc_macro2::TokenStream;
 
-macro_rules! debug_output {
-    ($expr:expr) => {
-        $expr
-    };
-}
-
 pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     let IfmtInput {
         mut format_literal,
@@ -21,7 +15,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     } = input;
 
     let s = format_literal.value();
-    let ref mut out_format_literal = String::with_capacity(s.len());
+    let out_format_literal = &mut String::with_capacity(s.len());
 
     let mut iterator = s.char_indices().peekable();
     while let Some((i, c)) = iterator.next() {
@@ -135,13 +129,13 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     });
     format_literal = LitStr::new(out_format_literal, format_literal.span());
 
-    Ok(TokenStream::from(debug_output!(quote! {
+    Ok(quote! {
         format_args!(
             #format_literal
             #(, #positional_args)*
             #(, #named_args)*
         )
-    })))
+    })
 }
 
 #[allow(dead_code)] // dumb compiler does not see the struct being used...
@@ -199,7 +193,7 @@ where
     where
         Drop: FnOnce(T),
     {
-        fn drop(self: &'_ mut Self) {
+        fn drop(&'_ mut self) {
             use ::core::ptr;
             unsafe {
                 // # Safety
@@ -217,7 +211,7 @@ where
     {
         type Target = T;
         #[inline]
-        fn deref(self: &'_ Self) -> &'_ Self::Target {
+        fn deref(&'_ self) -> &'_ Self::Target {
             &self.0
         }
     }
@@ -226,7 +220,7 @@ where
         Drop: FnOnce(T),
     {
         #[inline]
-        fn deref_mut(self: &'_ mut Self) -> &'_ mut Self::Target {
+        fn deref_mut(&'_ mut self) -> &'_ mut Self::Target {
             &mut self.0
         }
     }
