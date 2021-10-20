@@ -1,4 +1,3 @@
-use bumpalo::Bump;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
@@ -17,7 +16,6 @@ pub struct CallBody<const AS: HtmlOrRsx> {
 impl Parse for CallBody<AS_RSX> {
     fn parse(input: ParseStream) -> Result<Self> {
         let custom_context = try_parse_custom_context(input)?;
-        let arena = Bump::new();
         let (_, roots, _) = BodyConfig::<AS_RSX>::new_call_body().parse_component_body(input)?;
         Ok(Self {
             custom_context,
