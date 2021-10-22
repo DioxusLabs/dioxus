@@ -1,6 +1,6 @@
-//! Tests for the lifecycle of components.
+#![allow(unused, non_upper_case_globals)]
 
-use anyhow::{Context, Result};
+//! Tests for the lifecycle of components.
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;

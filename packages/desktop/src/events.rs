@@ -49,7 +49,6 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Box<dyn Any + Sen
             Box::new(serde_json::from_value::<CompositionEvent>(val).unwrap())
         }
         "keydown" | "keypress" | "keyup" => {
-            dbg!(&val);
             let evt = serde_json::from_value::<KeyboardEvent>(val).unwrap();
             Box::new(evt)
         }

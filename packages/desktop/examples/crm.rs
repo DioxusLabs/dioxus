@@ -22,14 +22,14 @@ pub struct Client {
 }
 
 static App: FC<()> = |(cx, _)| {
-    let scene = use_state(cx, || Scene::ClientsList);
+    let mut scene = use_state(cx, || Scene::ClientsList);
     let clients = use_ref(cx, || vec![] as Vec<Client>);
 
-    let firstname = use_state(cx, || String::new());
-    let lastname = use_state(cx, || String::new());
-    let description = use_state(cx, || String::new());
+    let mut firstname = use_state(cx, String::new);
+    let mut lastname = use_state(cx, String::new);
+    let mut description = use_state(cx, String::new);
 
-    let scene = match *scene {
+    let scene = match scene.get() {
         Scene::ClientsList => {
             rsx!(cx, div { class: "crm"
                 h2 { "List of clients" margin_bottom: "10px" }
@@ -61,13 +61,13 @@ static App: FC<()> = |(cx, _)| {
                 h2 {"Add new client" margin_bottom: "10px" }
                 form { class: "pure-form"
                     input { class: "new-client firstname" placeholder: "First name" value: "{firstname}"
-                        oninput: move |evt| firstname.set(evt.value.clone())
+                        oninput: move |evt| firstname.set(evt.value)
                     }
                     input { class: "new-client lastname" placeholder: "Last name" value: "{lastname}"
-                        oninput: move |evt| lastname.set(evt.value.clone())
+                        oninput: move |evt| lastname.set(evt.value)
                     }
                     textarea { class: "new-client description" placeholder: "Description" value: "{description}"
-                        oninput: move |evt| description.set(evt.value.clone())
+                        oninput: move |evt| description.set(evt.value)
                     }
                 }
                 button { class: "pure-button pure-button-primary", onclick: {add_new}, "Add New" }

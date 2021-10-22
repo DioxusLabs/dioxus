@@ -1,9 +1,16 @@
-use dioxus::{nodes::VSuspended, prelude::*, DomEdit, TestDom};
+#![allow(non_snake_case)]
+
+use dioxus::prelude::*;
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
-static Parent: FC<()> = |(cx, props)| {
+#[test]
+fn test_borrowed_state() {
+    let _ = VirtualDom::new(Parent);
+}
+
+fn Parent((cx, _): Component<()>) -> DomTree {
     let value = cx.use_hook(|_| String::new(), |f| &*f, |_| {});
 
     cx.render(rsx! {
@@ -14,11 +21,11 @@ static Parent: FC<()> = |(cx, props)| {
             Child { name: value }
         }
     })
-};
+}
 
 #[derive(Props)]
 struct ChildProps<'a> {
-    name: &'a String,
+    name: &'a str,
 }
 
 fn Child<'a>((cx, props): Component<'a, ChildProps>) -> DomTree<'a> {
@@ -32,7 +39,7 @@ fn Child<'a>((cx, props): Component<'a, ChildProps>) -> DomTree<'a> {
 
 #[derive(Props)]
 struct Grandchild<'a> {
-    name: &'a String,
+    name: &'a str,
 }
 
 fn Child2<'a>((cx, props): Component<'a, Grandchild>) -> DomTree<'a> {
@@ -40,6 +47,3 @@ fn Child2<'a>((cx, props): Component<'a, Grandchild>) -> DomTree<'a> {
         div { "Hello {props.name}!" }
     })
 }
-
-#[test]
-fn test_borrowed_state() {}

@@ -1,4 +1,6 @@
-use dioxus::{nodes::VSuspended, prelude::*, DomEdit, TestDom};
+#![allow(unused, non_upper_case_globals)]
+
+use dioxus::{prelude::*, DomEdit, TestDom};
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
@@ -6,12 +8,6 @@ use dioxus_html as dioxus_elements;
 use DomEdit::*;
 
 mod test_logging;
-
-fn new_dom() -> TestDom {
-    const IS_LOGGING_ENABLED: bool = false;
-    test_logging::set_up_logging(IS_LOGGING_ENABLED);
-    TestDom::new()
-}
 
 #[test]
 fn shared_state_test() {

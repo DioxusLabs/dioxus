@@ -39,12 +39,12 @@ class Interpreter {
   }
 
   ReplaceWith(edit) {
-    console.log(edit);
+    // console.log(edit);
     let root = this.nodes[edit.root];
     let els = this.stack.splice(this.stack.length - edit.m);
 
-    console.log(root);
-    console.log(els);
+    // console.log(root);
+    // console.log(els);
 
 
     root.replaceWith(...els);
@@ -108,7 +108,7 @@ class Interpreter {
       this.listeners[event_name] = "bla";
 
       this.root.addEventListener(event_name, (event) => {
-        console.log("CLICKED");
+        // console.log("CLICKED");
         const target = event.target;
         const val = target.getAttribute(`dioxus-event-${event_name}`);
         if (val == null) {
@@ -119,30 +119,31 @@ class Interpreter {
         const scope_id = parseInt(fields[0]);
         const real_id = parseInt(fields[1]);
 
-        // console.log(`parsed event with scope_id ${scope_id} and real_id ${real_id}`);
+        // // console.log(`parsed event with scope_id ${scope_id} and real_id ${real_id}`);
 
-        console.log("message fired");
+        // console.log("message fired");
         let contents = serialize_event(event);
-        rpc.call('user_event', {
+        let evt = {
           event: event_name,
           scope: scope_id,
           mounted_dom_id: real_id,
           contents: contents,
-        }).then((reply) => {
-          console.log("reply received");
+        };
+        // console.log(evt);
+        rpc.call('user_event', evt).then((reply) => {
+          // console.log("reply received", reply);
 
-          // console.log(reply);
           this.stack.push(this.root);
 
-          let edits = reply.edits;
+          reply.map((reply) => {
+            let edits = reply.edits;
+            for (let x = 0; x < edits.length; x++) {
+              let edit = edits[x];
+              let f = this[edit.type];
+              f.call(this, edit);
+            }
+          });
 
-          for (let x = 0; x < edits.length; x++) {
-            let edit = edits[x];
-            let f = this[edit.type];
-            f.call(this, edit);
-          }
-
-          // console.log("initiated");
         })
       });
     }
@@ -153,25 +154,35 @@ class Interpreter {
   }
 
   SetAttribute(edit) {
+    // console.log("setting attr", edit);
     const name = edit.field;
     const value = edit.value;
     const ns = edit.ns;
     const node = this.nodes[edit.root]
+
     if (ns == "style") {
       node.style[name] = value;
-    } else if (ns !== undefined) {
+    } else if ((ns != null) || (ns != undefined)) {
       node.setAttributeNS(ns, name, value);
     } else {
-      node.setAttribute(name, value);
-    }
-    if (name === "value") {
-      node.value = value;
-    }
-    if (name === "checked") {
-      node.checked = true;
-    }
-    if (name === "selected") {
-      node.selected = true;
+      switch (name) {
+        case "value":
+          node.value = value;
+          break;
+        case "checked":
+          // console.log("setting checked");
+          node.checked = (value === "true");
+          break;
+        case "selected":
+          node.selected = (value === "true");
+          break;
+        case "dangerous_inner_html":
+          node.innerHTML = value;
+          break;
+        default:
+          // console.log("setting attr directly ", name, value);
+          node.setAttribute(name, value);
+      }
     }
   }
   RemoveAttribute(edit) {
@@ -209,14 +220,14 @@ async function initialize() {
 }
 
 function apply_edits(edits, interpreter) {
-  console.log(edits);
+  // console.log(edits);
   for (let x = 0; x < edits.length; x++) {
     let edit = edits[x];
     let f = interpreter[edit.type];
     f.call(interpreter, edit);
   }
 
-  // console.log("stack completed: ", interpreter.stack);
+  // // console.log("stack completed: ", interpreter.stack);
 }
 
 function serialize_event(event) {
@@ -244,8 +255,8 @@ const SerializeMap = {
   "focus": serialize_focus,
   "blur": serialize_focus,
 
-  "change": serialize_form,
-  // "change": serialize_change,
+  // "change": serialize_form,
+  "change": serialize_change,
 
   "input": serialize_form,
   "invalid": serialize_form,
@@ -353,8 +364,19 @@ function serialize_keyboard(event) {
 function serialize_focus(_event) {
   return {}
 }
-function serialize_change(_event) {
-  return {}
+
+function serialize_change(event) {
+  let target = event.target;
+  let value;
+  if (target.type === "checkbox" || target.type === "radio") {
+    value = target.checked ? "true" : "false";
+  } else {
+    value = target.value ?? target.textContent;
+  }
+
+  return {
+    value: value
+  }
 }
 function serialize_form(event) {
   let target = event.target;

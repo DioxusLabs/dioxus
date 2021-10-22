@@ -1076,7 +1076,9 @@ builder_constructors! {
     /// Build a
     /// [`<code>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/code)
     /// element.
-    code {};
+    code {
+        language: String,
+    };
 
     /// Build a
     /// [`<data>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data)
@@ -1973,8 +1975,8 @@ pub trait SvgAttributes {
         vert_adv_y: "vert-adv-y",
         vert_origin_x: "vert-origin-x",
         vert_origin_y: "vert-origin-y",
-        viewBox: "viewBox",
-        viewTarget: "viewTarget",
+        view_box: "viewBox",
+        view_target: "viewTarget",
         visibility: "visibility",
         width: "width",
         widths: "widths",
@@ -1985,11 +1987,11 @@ pub trait SvgAttributes {
         x1: "x1",
         x2: "x2",
         xmlns: "xmlns",
-        xChannelSelector: "xChannelSelector",
+        x_channel_selector: "xChannelSelector",
         y: "y",
         y1: "y1",
         y2: "y2",
-        yChannelSelector: "yChannelSelector",
+        y_channel_selector: "yChannelSelector",
         z: "z",
         zoomAndPan: "zoomAndPan",
     }
