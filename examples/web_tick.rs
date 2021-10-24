@@ -4,7 +4,7 @@
 //!
 //! This example shows how to use the dioxus_desktop crate to build a basic desktop application.
 //!
-//! Under the hood, the dioxus_desktop crate bridges a native Dioxus VirtualDom with a custom prebuit application running
+//! Under the hood, the dioxus_desktop crate bridges a native Dioxus VirtualDom with a custom prebuilt application running
 //! in the webview runtime. Custom handlers are provided for the webview instance to consume patches and emit user events
 //! into the native VDom instance.
 //!

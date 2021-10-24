@@ -132,7 +132,7 @@ impl<'src> Context<'src> {
     /// fn Component(cx: Context<()>) -> VNode {
     ///     // Lazy assemble the VNode tree
     ///     let lazy_tree = html! {<div> "Hello World" </div>};
-    ///     
+    ///
     ///     // Actually build the tree and allocate it
     ///     cx.render(lazy_tree)
     /// }
@@ -203,7 +203,7 @@ impl<'src> Context<'src> {
             .flatten();
     }
 
-    /// Try to retrive a SharedState with type T from the any parent Scope.
+    /// Try to retrieve a SharedState with type T from the any parent Scope.
     pub fn consume_state<T: 'static>(self) -> Option<Rc<T>> {
         let getter = &self.scope.shared.get_shared_context;
         let ty = TypeId::of::<T>();
@@ -225,7 +225,7 @@ impl<'src> Context<'src> {
     ///     todo!();
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
-    /// ```        
+    /// ```
     pub fn create_subtree(self) -> Option<u32> {
         self.scope.new_subtree()
     }
@@ -298,9 +298,9 @@ impl<'src> Context<'src> {
 }
 
 const HOOK_ERR_MSG: &str = r###"
-Unable to retrive the hook that was initialized in this index.
+Unable to retrieve the hook that was initialized at this index.
 Consult the `rules of hooks` to understand how to use hooks properly.
 
 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
-Any function prefixed with "use" should not be called conditionally.
+Functions prefixed with "use" should never be called conditionally.
 "###;

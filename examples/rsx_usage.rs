@@ -43,7 +43,7 @@ fn main() {
 }
 
 /// When trying to return "nothing" to Dioxus, you'll need to specify the type parameter or Rust will be sad.
-/// This type alias specifices the type for you so you don't need to write "None as Option<()>"
+/// This type alias specifies the type for you so you don't need to write "None as Option<()>"
 const NONE_ELEMENT: Option<()> = None;
 
 use baller::Baller;
@@ -104,7 +104,7 @@ pub static Example: FC<()> = |(cx, props)| {
             // Matching
             // Matching will throw a Rust error about "no two closures are the same type"
             // To fix this, call "render" method or use the "in" syntax to produce VNodes.
-            // There's nothing we can do about it, sorry :/ (unless you want *really* unhygenic macros)
+            // There's nothing we can do about it, sorry :/ (unless you want *really* unhygienic macros)
             {match true {
                 true => rsx!(cx, h1 {"Top text"}),
                 false => cx.render(rsx!( h1 {"Bottom text"}))

@@ -78,7 +78,7 @@ If you plan to develop extensions for the `Dioxus` ecosystem, please use the `di
 Now, let's edit our `main.rs` file:
 
 ```rust
-use diouxs::prelude::*;
+use dioxus::prelude::*;
 
 
 fn main() {
@@ -97,7 +97,7 @@ Let's dissect our example a bit.
 This bit of code imports everything from the the `prelude` module. This brings into scope the right traits, types, and macros needed for working with Dioxus.
 
 ```rust
-use diouxs::prelude::*;
+use dioxus::prelude::*;
 ```
 
 This initialization code launches a Tokio runtime on a helper thread - where your code will run, and then the WebView on the main-thread. Due to platform requirements, the main thread is blocked by this call.
@@ -124,7 +124,7 @@ The closure `FC<()>` syntax is identical to the function syntax, but with lifeti
 fn App<'a>(cx: Context<'a>, props: &'a ()) -> DomTree<'a> {
     cx.render(rsx! {
         div { "Hello, world!" }
-    })    
+    })
 }
 ```
 

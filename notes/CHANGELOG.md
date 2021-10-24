@@ -2,7 +2,7 @@
 
 Welcome to the first iteration of the Dioxus Virtual DOM! This release brings support for:
 
-- Web via WASM
+- Web via Wasm
 - Desktop via webview integration
 - Server-rendering with custom ToString implementation
 - State management

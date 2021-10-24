@@ -2,7 +2,7 @@
 //! for components to be used within Nodes.
 //!
 //! Note - using the builder pattern does not required the Properties trait to be implemented - the only thing that matters is
-//! if the type suppports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
+//! if the type supports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
 use crate::innerlude::{Context, DomTree, LazyNodes, FC};
@@ -108,7 +108,7 @@ pub trait Properties: Sized {
     ///
     /// # Safety
     /// The user must know if their props are static, but if they make a mistake, UB happens
-    /// Therefore it's unsafe to memeoize.
+    /// Therefore it's unsafe to memoize.
     unsafe fn memoize(&self, other: &Self) -> bool;
 }
 

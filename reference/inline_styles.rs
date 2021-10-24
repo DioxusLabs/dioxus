@@ -3,7 +3,7 @@
 //!
 //! This example shows how to use inline styles in Dioxus components.
 //!
-//! Inline styles function very similar to regular attributes, just grouped together in "style".
+//! Inline styles function very similarly to regular attributes, just grouped together in "style".
 //!
 //! Inline styles in Dioxus are more performant than React since we're able to cache attributes and compare by pointers.
 //! However, it's still not as performant as cascaded styles. Use with care.
@@ -26,7 +26,7 @@ pub static Example: FC<()> = |(cx, props)| {
     })
 };
 
-// .... technically the rsx! macro is slightly broken at the moment and alows styles not wrapped in style {}
+// .... technically the rsx! macro is slightly broken at the moment and allows styles not wrapped in style {}
 // I haven't noticed any name collisions yet, and am tentatively leaving this behavior in..
 // Don't rely on it.
 static Example2: FC<()> = |(cx, props)| {

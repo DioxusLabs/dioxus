@@ -15,10 +15,10 @@
 //! For now, this example shows how to use coroutines used with use_state.
 //!
 //!
-//! ## What is a Couroutine?
+//! ## What is a Coroutine?
 //!
 //! A coroutine is a function that can be paused and resumed. It can be paused internally through "await" or externally
-//! using the `TaskHandle` API. Within a coroutine, you may execute asynchonous code, that modifies values captured when
+//! using the `TaskHandle` API. Within a coroutine, you may execute asynchronous code, that modifies values captured when
 //! the coroutine was initiated. `use_state` always returns the same setter, so you don't need to worry about
 
 fn main() {

@@ -1,6 +1,6 @@
 //! Built-in hooks
 //!
-//! This module contains all the low-level built-in hooks that require 1st party support to work.
+//! This module contains all the low-level built-in hooks that require first party support to work.
 //!
 //! Hooks:
 //! - [`use_hook`]
