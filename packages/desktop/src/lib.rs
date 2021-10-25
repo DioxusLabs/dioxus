@@ -19,11 +19,15 @@ use serde::{Deserialize, Serialize};
 
 pub use wry;
 
+use wry::application::accelerator::{Accelerator, SysMods};
 use wry::application::event::{Event, StartCause, WindowEvent};
 use wry::application::event_loop::{self, ControlFlow, EventLoop};
+use wry::application::keyboard::KeyCode;
+use wry::application::menu::{MenuBar, MenuItem, MenuItemAttributes};
 use wry::application::window::Fullscreen;
 use wry::webview::{WebView, WebViewBuilder};
 use wry::{
+    application::menu,
     application::window::{Window, WindowBuilder},
     webview::{RpcRequest, RpcResponse},
 };
@@ -95,7 +99,39 @@ pub fn run<T: 'static + Send + Sync>(
 
         match event {
             Event::NewEvents(StartCause::Init) => {
-                let window = WindowBuilder::new().build(event_loop).unwrap();
+                // create main menubar menu
+                let mut menu_bar_menu = MenuBar::new();
+
+                // create `first_menu`
+                let mut first_menu = MenuBar::new();
+
+                first_menu.add_native_item(MenuItem::About("Todos".to_string()));
+                first_menu.add_native_item(MenuItem::Services);
+                first_menu.add_native_item(MenuItem::Separator);
+                first_menu.add_native_item(MenuItem::Hide);
+                first_menu.add_native_item(MenuItem::HideOthers);
+                first_menu.add_native_item(MenuItem::ShowAll);
+
+                let quit_item = first_menu.add_item(
+                    MenuItemAttributes::new("Quit")
+                        .with_accelerators(&Accelerator::new(SysMods::Cmd, KeyCode::KeyQ)),
+                );
+
+                // create second menu
+                let mut second_menu = MenuBar::new();
+
+                // second_menu.add_submenu("Sub menu", true, my_sub_menu);
+                second_menu.add_native_item(MenuItem::Copy);
+                second_menu.add_native_item(MenuItem::Paste);
+                second_menu.add_native_item(MenuItem::SelectAll);
+
+                menu_bar_menu.add_submenu("First menu", true, first_menu);
+                menu_bar_menu.add_submenu("Second menu", true, second_menu);
+
+                let window = WindowBuilder::new()
+                    .with_menu(menu_bar_menu)
+                    .build(event_loop)
+                    .unwrap();
                 let window_id = window.id();
 
                 let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();

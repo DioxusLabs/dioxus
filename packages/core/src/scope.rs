@@ -43,6 +43,8 @@ pub struct Scope {
 
     // State
     pub(crate) hooks: HookList,
+
+    // todo: move this into a centralized place - is more memory efficient
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
     // whenever set_state is called, we fire off a message to the scheduler
@@ -345,11 +347,15 @@ impl Scope {
         debug_assert!(self.suspended_nodes.borrow().is_empty());
         debug_assert!(self.borrowed_props.borrow().is_empty());
 
+        log::debug!("Borrowed stuff is successfully cleared");
+
         // Cast the caller ptr from static to one with our own reference
         let render: &dyn for<'b> Fn(&'b Scope) -> DomTree<'b> = unsafe { &*self.caller };
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
         if let Some(new_head) = render(self) {
+            log::debug!("Render is successful");
+
             // the user's component succeeded. We can safely cycle to the next frame
             self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
             self.frames.cycle_frame();

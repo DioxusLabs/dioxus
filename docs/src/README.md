@@ -4,9 +4,9 @@
 
 **Dioxus** is a framework and ecosystem for building fast, scalable, and robust user interfaces with the Rust programming language. This guide will help you get up-and-running with Dioxus running on the Web, Desktop, Mobile, and more. 
 
-```rust, ignore
+```rust
 // An example Dioxus app - closely resembles React
-static App: FC<()> = |(cx, props)| {
+fn App(cx: Component<()>) -> Element {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(
@@ -94,8 +94,8 @@ The internal architecture of Dioxus was designed from day one to support the `Li
 
 ### Multithreaded Support
 ---
-The Dioxus VirtualDom, sadly, is not `Send.` This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc. Currently, your two options include:
-- Actix: Actix supports `!Send` handlers
-- VirtualDomPool: A thread-per-core VirtualDom pool that uses message passing and serialization
+The Dioxus VirtualDom, sadly, is not currently `Send.` Internally, we use quite a bit of interior mutability which is not thread-safe. This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc. 
+
+To solve this, you'll want to spawn a VirtualDom on its own thread and communicate with it via channels.
 
 When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String - but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a VirtualDomPool which solves the `Send` problem.
