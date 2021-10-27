@@ -25,7 +25,3 @@ pub use component::*;
 pub use element::*;
 pub use fragment::*;
 pub use node::*;
-
-pub(crate) type HtmlOrRsx = bool;
-pub const AS_HTML: bool = true;
-pub const AS_RSX: bool = false;

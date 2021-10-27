@@ -8,7 +8,7 @@
 //! - [ ] Children
 //! - [ ] Keys
 
-use super::{AmbiguousElement, HtmlOrRsx, AS_HTML, AS_RSX};
+use super::AmbiguousElement;
 use syn::parse::ParseBuffer;
 use {
     proc_macro2::TokenStream as TokenStream2,

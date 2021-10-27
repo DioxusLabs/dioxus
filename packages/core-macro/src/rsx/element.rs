@@ -3,9 +3,8 @@ use super::*;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
-    ext::IdentExt,
-    parse::{discouraged::Speculative, Parse, ParseBuffer, ParseStream},
-    token, Error, Expr, ExprClosure, Ident, LitStr, Result, Token,
+    parse::{Parse, ParseBuffer, ParseStream},
+    token, Expr, ExprClosure, Ident, LitStr, Result, Token,
 };
 
 // =======================================
@@ -32,8 +31,9 @@ impl Parse for Element {
         let mut listeners: Vec<ElementAttrNamed> = vec![];
         let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
-        let mut el_ref = None;
+        let mut _el_ref = None;
 
+        // todo: more descriptive error handling
         while !content.is_empty() {
             if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 let name = content.parse::<Ident>()?;
@@ -73,7 +73,7 @@ impl Parse for Element {
                             todo!("custom namespace not supported")
                         }
                         "node_ref" => {
-                            el_ref = Some(content.parse::<Expr>()?);
+                            _el_ref = Some(content.parse::<Expr>()?);
                         }
                         _ => {
                             if content.peek(LitStr) {

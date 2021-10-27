@@ -17,7 +17,7 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
         syn::Data::Struct(data) => match &data.fields {
             syn::Fields::Named(fields) => {
-                let struct_info = struct_info::StructInfo::new(&ast, fields.named.iter())?;
+                let struct_info = struct_info::StructInfo::new(ast, fields.named.iter())?;
                 let builder_creation = struct_info.builder_creation_impl()?;
                 let conversion_helper = struct_info.conversion_helper_impl()?;
                 let fields = struct_info
@@ -196,7 +196,7 @@ mod field_info {
             if let Some(ref name) = field.ident {
                 Ok(FieldInfo {
                     ordinal,
-                    name: &name,
+                    name,
                     generic_ident: syn::Ident::new(
                         &format!("__{}", strip_raw_ident_prefix(name.to_string())),
                         proc_macro2::Span::call_site(),
@@ -585,7 +585,7 @@ mod struct_info {
             // we use the heuristic: are there *any* generic parameters?
             // If so, then they might have non-static lifetimes and we can't compare two generic things that *might borrow*
             // Therefore, we will generate code that shortcircuits the "comparison" in memoization
-            let are_there_generics = self.generics.params.len() > 0;
+            let are_there_generics = !self.generics.params.is_empty();
 
             let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
             let all_fields_param = syn::GenericParam::Type(

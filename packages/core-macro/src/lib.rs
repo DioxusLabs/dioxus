@@ -1,6 +1,5 @@
 use proc_macro::TokenStream;
 use quote::ToTokens;
-use rsx::{AS_HTML, AS_RSX};
 use syn::parse_macro_input;
 
 pub(crate) mod htm;
