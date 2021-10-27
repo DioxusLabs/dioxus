@@ -14,51 +14,57 @@ use syn::{
 pub struct Element {
     name: Ident,
     key: Option<LitStr>,
-    attributes: Vec<ElementAttr>,
-    listeners: Vec<ElementAttr>,
+    attributes: Vec<ElementAttrNamed>,
+    listeners: Vec<ElementAttrNamed>,
     children: Vec<BodyNode>,
     _is_static: bool,
 }
 
 impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
-        let name = Ident::parse(stream)?;
+        let el_name = Ident::parse(stream)?;
 
         // parse the guts
         let content: ParseBuffer;
         syn::braced!(content in stream);
 
-        let mut attributes: Vec<ElementAttr> = vec![];
-        let mut listeners: Vec<ElementAttr> = vec![];
+        let mut attributes: Vec<ElementAttrNamed> = vec![];
+        let mut listeners: Vec<ElementAttrNamed> = vec![];
         let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
         let mut el_ref = None;
 
         while !content.is_empty() {
             if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                let name = Ident::parse_any(stream)?;
+                let name = content.parse::<Ident>()?;
                 let name_str = name.to_string();
-                stream.parse::<Token![:]>()?;
+                content.parse::<Token![:]>()?;
 
                 if name_str.starts_with("on") {
-                    if stream.peek(token::Brace) {
-                        let content;
-                        syn::braced!(content in stream);
+                    if content.peek(token::Brace) {
+                        let mycontent;
+                        syn::braced!(mycontent in content);
 
-                        listeners.push(ElementAttr::EventTokens {
-                            name,
-                            tokens: content.parse()?,
+                        listeners.push(ElementAttrNamed {
+                            el_name: el_name.clone(),
+                            attr: ElementAttr::EventTokens {
+                                name,
+                                tokens: mycontent.parse()?,
+                            },
                         });
                     } else {
-                        listeners.push(ElementAttr::EventClosure {
-                            name,
-                            closure: content.parse()?,
+                        listeners.push(ElementAttrNamed {
+                            el_name: el_name.clone(),
+                            attr: ElementAttr::EventClosure {
+                                name,
+                                closure: content.parse()?,
+                            },
                         });
                     };
                 } else {
                     match name_str.as_str() {
                         "key" => {
-                            key = Some(stream.parse()?);
+                            key = Some(content.parse()?);
                         }
                         "classes" => {
                             todo!("custom class list not supported")
@@ -67,18 +73,24 @@ impl Parse for Element {
                             todo!("custom namespace not supported")
                         }
                         "node_ref" => {
-                            el_ref = Some(stream.parse::<Expr>()?);
+                            el_ref = Some(content.parse::<Expr>()?);
                         }
                         _ => {
-                            if stream.peek(LitStr) {
-                                listeners.push(ElementAttr::AttrText {
-                                    name,
-                                    value: content.parse()?,
+                            if content.peek(LitStr) {
+                                attributes.push(ElementAttrNamed {
+                                    el_name: el_name.clone(),
+                                    attr: ElementAttr::AttrText {
+                                        name,
+                                        value: content.parse()?,
+                                    },
                                 });
                             } else {
-                                listeners.push(ElementAttr::AttrExpression {
-                                    name,
-                                    value: content.parse()?,
+                                attributes.push(ElementAttrNamed {
+                                    el_name: el_name.clone(),
+                                    attr: ElementAttr::AttrExpression {
+                                        name,
+                                        value: content.parse()?,
+                                    },
                                 });
                             }
                         }
@@ -90,10 +102,16 @@ impl Parse for Element {
 
                 if content.peek(LitStr) {
                     let value = content.parse::<LitStr>()?;
-                    attributes.push(ElementAttr::CustomAttrText { name, value });
+                    attributes.push(ElementAttrNamed {
+                        el_name: el_name.clone(),
+                        attr: ElementAttr::CustomAttrText { name, value },
+                    });
                 } else {
                     let value = content.parse::<Expr>()?;
-                    attributes.push(ElementAttr::CustomAttrExpression { name, value });
+                    attributes.push(ElementAttrNamed {
+                        el_name: el_name.clone(),
+                        attr: ElementAttr::CustomAttrExpression { name, value },
+                    });
                 }
             } else {
                 children.push(content.parse::<BodyNode>()?);
@@ -108,7 +126,7 @@ impl Parse for Element {
 
         Ok(Self {
             key,
-            name,
+            name: el_name,
             attributes,
             children,
             listeners,
@@ -121,12 +139,9 @@ impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
         let childs = &self.children;
-        let listeners = &self.listeners;
 
-        let attr = self.attributes.iter().map(|x| ElementAttrNamed {
-            attr: x,
-            el_name: name,
-        });
+        let listeners = &self.listeners;
+        let attr = &self.attributes;
 
         let key = match &self.key {
             Some(ty) => quote! { Some(format_args_f!(#ty)) },
@@ -165,21 +180,14 @@ enum ElementAttr {
     EventTokens { name: Ident, tokens: Expr },
 }
 
-impl ToTokens for ElementAttr {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // weird requirment
-        todo!()
-    }
+struct ElementAttrNamed {
+    el_name: Ident,
+    attr: ElementAttr,
 }
 
-struct ElementAttrNamed<'a> {
-    el_name: &'a Ident,
-    attr: &'a ElementAttr,
-}
-
-impl ToTokens for ElementAttrNamed<'_> {
+impl ToTokens for ElementAttrNamed {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ElementAttrNamed { el_name, attr } = *self;
+        let ElementAttrNamed { el_name, attr } = self;
 
         let toks = match attr {
             ElementAttr::AttrText { name, value } => {

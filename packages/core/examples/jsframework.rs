@@ -48,11 +48,11 @@ fn Row((cx, props): Component<RowProps>) -> DomTree {
     cx.render(rsx! {
         tr {
             td { class:"col-md-1", "{props.row_id}" }
-            td { class:"col-md-1", on_click: move |_| { /* run onselect */ }
+            td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
                 a { class: "lbl", "{props.label}" }
             }
             td { class: "col-md-1"
-                a { class: "remove", on_click: {handler}
+                a { class: "remove", onclick: {handler}
                     span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
                 }
             }
