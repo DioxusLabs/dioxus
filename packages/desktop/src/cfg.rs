@@ -22,9 +22,10 @@ impl<'a> DesktopConfig<'a> {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
+        let mut window = WindowBuilder::new().with_title("Dioxus app");
         Self {
             event_handler: None,
-            window: Default::default(),
+            window,
             pre_rendered: None,
             manual_edits: None,
         }
@@ -43,7 +44,7 @@ impl<'a> DesktopConfig<'a> {
     pub fn with_window(&mut self, f: impl FnOnce(WindowBuilder) -> WindowBuilder) -> &mut Self {
         // gots to do a swap because the window builder only takes itself as muy self
         // I wish more people knew about returning &mut Self
-        let mut builder = WindowBuilder::default();
+        let mut builder = WindowBuilder::default().with_title("Dioxus App");
         std::mem::swap(&mut self.window, &mut builder);
         builder = f(builder);
         std::mem::swap(&mut self.window, &mut builder);

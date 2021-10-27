@@ -130,6 +130,7 @@ pub fn run<T: 'static + Send + Sync>(
 
                 let window = WindowBuilder::new()
                     .with_menu(menu_bar_menu)
+                    .with_title("Dioxus App")
                     .build(event_loop)
                     .unwrap();
                 let window_id = window.id();
