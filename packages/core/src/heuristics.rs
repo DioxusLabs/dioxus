@@ -6,9 +6,9 @@ use crate::FC;
 
 /// Provides heuristics to the "SharedResources" object for improving allocation performance.
 ///
-/// This heueristic engine records the memory footprint of bump arenas and hook lists for each component. These records are
+/// This heuristics engine records the memory footprint of bump arenas and hook lists for each component. These records are
 /// then used later on to optimize the initial allocation for future components. This helps save large allocations later on
-/// that would slow down the diffing and initializion process.
+/// that would slow down the diffing and initialization process.
 ///
 ///
 pub struct HeuristicsEngine {

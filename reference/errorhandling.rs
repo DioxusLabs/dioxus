@@ -1,21 +1,21 @@
-//! Example: Errror Handling
+//! Example: Error Handling
 //! ------------------------
 //!
 //! Error handling in Dioxus comes in a few flavors. Because Dioxus is a Rust project, Options and Results are obviously
-//! the go-to way of wrapping possibly-errored data. However, if a component fails to "unwrapping," everything will crash,
+//! the go-to way of wrapping possibly-errored data. However, if a component fails when "unwrapping," everything will crash,
 //! the page will deadlock, and your users will be sad.
 //!
 //! So, obviously, you need to handle your errors.
 //!
 //! Fortunately, it's easy to avoid panics, even during quick prototyping.
 //!
-//! Here's a few strategies:
-//! - Leverage the ability to return "None" and propogate None directly
-//! - Instead of propogating "None" manually, use the "?" syntax sugar
-//! - Covert Results into Options with .ok()
+//! Here are a few strategies:
+//! - Leverage the ability to return "None" and propagate None directly
+//! - Instead of propagating "None" manually, use the "?" syntax sugar
+//! - Convert Results into Options with .ok()
 //! - Manually display a separate screen by matching on Options/Results
 //!
-//! There *are* plans to add helpful screens for when apps completely panic in WASM. However, you should really try to
+//! There *are* plans to add helpful screens for when apps completely panic in Wasm. However, you should really try to
 //! avoid panicking.
 use dioxus::prelude::*;
 fn main() {}
@@ -42,7 +42,7 @@ static App1: FC<()> = |(cx, props)| {
 /// However, it _does_ make the component go blank, which might not be desirable.
 ///
 /// This type of error handling is good when you have "selectors" that produce Some/None based on some state that's
-/// already controlled for higher in the tree. IE displaying a "Username" in a component that should only be shown if
+/// already controlled higher in the tree. i.e. displaying a "Username" in a component that should only be shown if
 /// a user is logged in.
 ///
 /// Dioxus will throw an error in the console if the None-path is ever taken.
@@ -59,8 +59,8 @@ static App3: FC<()> = |(cx, props)| match get_data() {
     None => cx.render(rsx!( div { "Failed to load data :(" } )),
 };
 
-/// For errors that return results, it's possible short-circuit the match-based error handling with `.ok()` which converts
-/// a Result<T, V> into an Option<T> and lets you
+/// For errors that return results, it's possible to short-circuit the match-based error handling with `.ok()` which converts
+/// a Result<T, V> into an Option<T> and lets you abort rendering by early-returning `None`
 static App4: FC<()> = |(cx, props)| {
     let data = get_data_err().ok()?;
     cx.render(rsx!( div { "{data}" } ))
@@ -68,7 +68,7 @@ static App4: FC<()> = |(cx, props)| {
 
 /// This is great error handling since it displays a failure state... with context!
 ///
-/// Hopefully you never need to disply a screen like this. It's rather bad taste
+/// Hopefully you'll never need to display a screen like this. It's rather bad taste
 static App5: FC<()> = |(cx, props)| match get_data_err() {
     Ok(data) => cx.render(rsx!( div { "{data}" } )),
     Err(c) => cx.render(rsx!( div { "Failed to load data: {c}" } )),

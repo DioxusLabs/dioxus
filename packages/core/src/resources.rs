@@ -8,7 +8,7 @@ pub(crate) struct ResourcePool {
     This *has* to be an UnsafeCell.
 
     Each BumpFrame and Scope is located in this Slab - and we'll need mutable access to a scope while holding on to
-    its bumpframe conents immutably.
+    its bumpframe contents immutably.
 
     However, all of the interaction with this Slab is done in this module and the Diff module, so it should be fairly
     simple to audit.

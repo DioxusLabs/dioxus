@@ -2,14 +2,14 @@
 //! ---------------------
 //!
 //! This example shows what *not* to do and provides a reason why a given pattern is considered an "AntiPattern". Most
-//! anti-patterns are considered wrong to due performance reasons or violate the "rules" of Dioxus. These rules are
+//! anti-patterns are considered wrong due performance reasons or violate the "rules" of Dioxus. These rules are
 //! borrowed from other successful UI frameworks, and Dioxus is more focused on providing a familiar, ergonomic interface
 //! rather than building new harder-to-misuse patterns.
 //!
 //! In this list we showcase:
 //! - Not adding keys for iterators
 //! - Heavily nested fragments
-//! - Understadning ordering of set_state
+//! - Understanding ordering of set_state
 //! - Naming conventions
 //! - Rules of hooks
 //!
@@ -21,7 +21,7 @@ use dioxus::prelude::*;
 ///
 /// This is considered an anti-pattern for performance reasons. Dioxus will diff your current and old layout and must
 /// take a slower path if it can't correlate old elements with new elements. Lists are particularly susceptible to the
-/// "slow" path, so you're strongly encouraged to provide a unique ID stable between renders. Additionally, providing
+/// "slow" path, so you're strongly encouraged to provide a unique, stable ID between renders. Additionally, providing
 /// the *wrong* keys is even worse - props might be assigned to the wrong components! Keys should be:
 /// - Unique
 /// - Stable
@@ -47,10 +47,10 @@ static AntipatternNoKeys: FC<NoKeysProps> = |(cx, props)| {
 /// ------------------------------------
 ///
 /// This particular antipattern is not necessarily an antipattern in other frameworks but does has a performance impact
-/// in Dioxus apps. Fragments don't mount a physical element to the dom immediately, so Dioxus must recurse into its
-/// children to find a physical dom node. This process is called "normalization". Other frameworks perform an agressive
-/// mutative normalization while Dioxus keeps your VNodes immutable. This means that deepely nested fragments make Dioxus
-/// perform unnecessary work. Prefer one or two levels of fragments / nested components until presenting a true dom element.
+/// in Dioxus apps. Fragments don't mount a physical element to the DOM immediately, so Dioxus must recurse into its
+/// children to find a physical DOM node. This process is called "normalization". Other frameworks perform an agressive
+/// mutative normalization while Dioxus keeps your VNodes immutable. This means that deeply nested fragments make Dioxus
+/// perform unnecessary work. Prefer one or two levels of fragments / nested components until presenting a true DOM element.
 ///
 /// Only Component and Fragment nodes are susceptible to this issue. Dioxus mitigates this with components by providing
 /// an API for registering shared state without the ContextProvider pattern.
@@ -71,7 +71,7 @@ static AntipatternNestedFragments: FC<()> = |(cx, props)| {
     )
 };
 
-/// Antipattern: Using state after its been updated
+/// Antipattern: Using state after it's been updated
 /// -----------------------------------------------
 ///
 /// This is an antipattern in other frameworks, but less so in Dioxus. However, it's important to highlight that use_state
@@ -82,7 +82,7 @@ static AntipatternNestedFragments: FC<()> = |(cx, props)| {
 /// However, calling set_state will *not* update the current version of state in the component. This should be easy to
 /// recognize from the function signature, but Dioxus will not update the "live" version of state. Calling `set_state`
 /// merely places a new value in the queue and schedules the component for a future update.
-static AntipaternRelyingOnSetState: FC<()> = |(cx, props)| {
+static AntipatternRelyingOnSetState: FC<()> = |(cx, props)| {
     let (state, set_state) = use_state(cx, || "Hello world").classic();
     set_state("New state");
     // This will return false! `state` will *still* be "Hello world"
@@ -94,28 +94,28 @@ static AntipaternRelyingOnSetState: FC<()> = |(cx, props)| {
 /// ---------------------------
 ///
 /// This antipattern is enforced to retain parity with other frameworks and provide useful IDE feedback, but is less
-/// critical than other potential misues. In short:
+/// critical than other potential misuses. In short:
 /// - Only raw elements may start with a lowercase character
 /// - All components must start with an uppercase character
 ///
-/// IE: the following component will be rejected when attempted to be used in the rsx! macro
+/// i.e.: the following component will be rejected when attempted to be used in the rsx! macro
 static antipattern_component: FC<()> = |(cx, props)| todo!();
 
 /// Antipattern: Misusing hooks
 /// ---------------------------
 ///
-/// This pattern is an unfortunate one where Dioxus supports the same behavior as in other frameworks. Dioxus supports
-/// "hooks" - IE "memory cells" that allow a value to be stored between renders. This allows other hooks to tap into
-/// a components "memory" without explicitly adding all of its data to a struct definition. In Dioxus, hooks are allocated
+/// This pattern is an unfortunate one where Dioxus replicates the same behavior as other frameworks. Dioxus supports
+/// "hooks" - i.e. "memory cells" that allow a value to be stored between renders. This allows other hooks to tap into
+/// a component's "memory" without explicitly adding all of its data to a struct definition. In Dioxus, hooks are allocated
 /// with a bump arena and then immediately sealed.
 ///
-/// This means that hooks may not be misued:
+/// This means that hooks may not be misused:
 /// - Called out of order
 /// - Called in a conditional
 /// - Called in loops or callbacks
 ///
 /// For the most part, Rust helps with rule #3 but does not save you from misusing rule #1 or #2. Dioxus will panic
-/// if hooks do not downcast the same data between renders. This is validated by TypeId - and eventually - a custom key.
+/// if hooks do not downcast to the same data between renders. This is validated by TypeId and, eventually, a custom key.
 #[derive(PartialEq, Props)]
 struct MisuedHooksProps {
     should_render_state: bool,
@@ -131,15 +131,15 @@ static AntipatternMisusedHooks: FC<MisuedHooksProps> = |(cx, props)| {
     }
 };
 
-/// Antipattern: Downcasting refs and panicing
+/// Antipattern: Downcasting refs and panicking
 /// ------------------------------------------
 ///
-/// Occassionally it's useful to get the ref of an element to handle it directly. Elements support downcasting to
-/// Dioxus's virtual element types as well as their true native counterparts. Downcasting to Dioxus' virtual elements
+/// Occasionally it's useful to get the ref of an element to handle it directly. Elements support downcasting to
+/// Dioxus' virtual element types as well as their true native counterparts. Downcasting to Dioxus' virtual elements
 /// will never panic, but downcasting to native elements will fail if on an unsupported platform. We recommend avoiding
-/// publishing hooks and components that deply rely on control over elements using their native `ref`, preferring to
+/// publishing hooks and components that deeply rely on controlling elements using their native `ref`, preferring to
 /// use their Dioxus Virtual Element counterpart instead.
-// This particular code *will panic* due to the unwrap. Try to avoid these types of patterns.
+/// This particular code *will panic* due to the unwrap. Try to avoid these types of patterns.
 /// ---------------------------------
 /// TODO: Get this to compile properly
 /// let div_ref = use_node_ref(&cx);

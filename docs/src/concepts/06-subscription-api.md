@@ -6,7 +6,7 @@ Yew subscriptions are used to schedule update for components into the future. Th
 fn Component(cx: Component<()>) -> DomTree {
     let update = cx.schedule();
 
-    // Now, when the subscription is called, the component will be re-evaluted
+    // Now, when the subscription is called, the component will be re-evaluated
     update.consume();
 }
 ```

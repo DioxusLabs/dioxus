@@ -111,7 +111,7 @@ impl<'bump> DiffStack<'bump> {
         self.instructions.push(DiffInstruction::PopScope);
 
         // Run the creation algorithm with this scope on the stack
-        // ?? I think we treat components as framgnets??
+        // ?? I think we treat components as fragments??
         self.instructions.push(DiffInstruction::Create { node });
     }
 }
