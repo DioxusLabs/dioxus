@@ -22,15 +22,15 @@ use syn::{
     token, Error, Expr, ExprClosure, Ident, Result, Token,
 };
 
-pub struct Component<const AS: HtmlOrRsx> {
+pub struct Component {
     // accept any path-like argument
     name: syn::Path,
-    body: Vec<ComponentField<AS>>,
-    children: Vec<BodyNode<AS>>,
+    body: Vec<ComponentField>,
+    children: Vec<BodyNode>,
     manual_props: Option<Expr>,
 }
 
-impl Parse for Component<AS_RSX> {
+impl Parse for Component {
     fn parse(stream: ParseStream) -> Result<Self> {
         // let name = s.parse::<syn::ExprPath>()?;
         // todo: look into somehow getting the crate/super/etc
@@ -41,7 +41,7 @@ impl Parse for Component<AS_RSX> {
         let content: ParseBuffer;
         syn::braced!(content in stream);
 
-        let cfg: BodyConfig<AS_RSX> = BodyConfig {
+        let cfg: BodyConfig = BodyConfig {
             allow_children: true,
             allow_fields: true,
             allow_manual_props: true,
@@ -57,80 +57,14 @@ impl Parse for Component<AS_RSX> {
         })
     }
 }
-impl Parse for Component<AS_HTML> {
-    fn parse(stream: ParseStream) -> Result<Self> {
-        let _l_tok = stream.parse::<Token![<]>()?;
-        let name = syn::Path::parse_mod_style(stream)?;
 
-        let mut manual_props = None;
-
-        let mut body: Vec<ComponentField<AS_HTML>> = vec![];
-        let mut children: Vec<BodyNode<AS_HTML>> = vec![];
-
-        if stream.peek(Token![..]) {
-            stream.parse::<Token![..]>()?;
-            manual_props = Some(stream.parse::<Expr>()?);
-        }
-
-        while !stream.peek(Token![>]) {
-            // self-closing
-            if stream.peek(Token![/]) {
-                stream.parse::<Token![/]>()?;
-                stream.parse::<Token![>]>()?;
-
-                return Ok(Self {
-                    name,
-                    manual_props,
-                    body,
-                    children,
-                });
-            }
-            body.push(stream.parse::<ComponentField<AS_HTML>>()?);
-        }
-
-        stream.parse::<Token![>]>()?;
-
-        'parsing: loop {
-            if stream.peek(Token![<]) && stream.peek2(Token![/]) {
-                break 'parsing;
-            }
-
-            // [1] Break if empty
-            if stream.is_empty() {
-                break 'parsing;
-            }
-
-            children.push(stream.parse::<BodyNode<AS_HTML>>()?);
-        }
-
-        // closing element
-        stream.parse::<Token![<]>()?;
-        stream.parse::<Token![/]>()?;
-        let close = syn::Path::parse_mod_style(stream)?;
-        if close != name {
-            return Err(Error::new_spanned(
-                close,
-                "closing element does not match opening",
-            ));
-        }
-        stream.parse::<Token![>]>()?;
-
-        Ok(Self {
-            name,
-            body,
-            children,
-            manual_props,
-        })
-    }
-}
-
-pub struct BodyConfig<const AS: HtmlOrRsx> {
+pub struct BodyConfig {
     pub allow_fields: bool,
     pub allow_children: bool,
     pub allow_manual_props: bool,
 }
 
-impl<const AS: HtmlOrRsx> BodyConfig<AS> {
+impl BodyConfig {
     /// The configuration to parse the root
     pub fn new_call_body() -> Self {
         Self {
@@ -141,17 +75,13 @@ impl<const AS: HtmlOrRsx> BodyConfig<AS> {
     }
 }
 
-impl BodyConfig<AS_RSX> {
+impl BodyConfig {
     // todo: unify this body parsing for both elements and components
     // both are style rather ad-hoc, though components are currently more configured
     pub fn parse_component_body(
         &self,
         content: &ParseBuffer,
-    ) -> Result<(
-        Vec<ComponentField<AS_RSX>>,
-        Vec<BodyNode<AS_RSX>>,
-        Option<Expr>,
-    )> {
+    ) -> Result<(Vec<ComponentField>, Vec<BodyNode>, Option<Expr>)> {
         let mut body = Vec::new();
         let mut children = Vec::new();
         let mut manual_props = None;
@@ -178,7 +108,7 @@ impl BodyConfig<AS_RSX> {
                         "Property fields is not allowed in this context. \nMake to only use fields in Components or Elements.",
                     ));
                 }
-                body.push(content.parse::<ComponentField<AS_RSX>>()?);
+                body.push(content.parse::<ComponentField>()?);
             } else {
                 if !self.allow_children {
                     return Err(Error::new(
@@ -186,65 +116,7 @@ impl BodyConfig<AS_RSX> {
                         "This item is not allowed to accept children.",
                     ));
                 }
-                children.push(content.parse::<BodyNode<AS_RSX>>()?);
-            }
-
-            // consume comma if it exists
-            // we don't actually care if there *are* commas between attrs
-            if content.peek(Token![,]) {
-                let _ = content.parse::<Token![,]>();
-            }
-        }
-        Ok((body, children, manual_props))
-    }
-}
-impl BodyConfig<AS_HTML> {
-    // todo: unify this body parsing for both elements and components
-    // both are style rather ad-hoc, though components are currently more configured
-    pub fn parse_component_body(
-        &self,
-        content: &ParseBuffer,
-    ) -> Result<(
-        Vec<ComponentField<AS_HTML>>,
-        Vec<BodyNode<AS_HTML>>,
-        Option<Expr>,
-    )> {
-        let mut body = Vec::new();
-        let mut children = Vec::new();
-        let mut manual_props = None;
-
-        'parsing: loop {
-            // [1] Break if empty
-            if content.is_empty() {
-                break 'parsing;
-            }
-
-            if content.peek(Token![..]) {
-                if !self.allow_manual_props {
-                    return Err(Error::new(
-                        content.span(),
-                        "Props spread syntax is not allowed in this context. \nMake to only use the elipsis `..` in Components.",
-                    ));
-                }
-                content.parse::<Token![..]>()?;
-                manual_props = Some(content.parse::<Expr>()?);
-            } else if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                if !self.allow_fields {
-                    return Err(Error::new(
-                        content.span(),
-                        "Property fields is not allowed in this context. \nMake to only use fields in Components or Elements.",
-                    ));
-                }
-                body.push(content.parse::<ComponentField<AS_HTML>>()?);
-            } else {
-                if !self.allow_children {
-                    return Err(Error::new(
-                        content.span(),
-                        "This item is not allowed to accept children.",
-                    ));
-                }
-
-                children.push(content.parse::<BodyNode<AS_HTML>>()?);
+                children.push(content.parse::<BodyNode>()?);
             }
 
             // consume comma if it exists
@@ -257,7 +129,7 @@ impl BodyConfig<AS_HTML> {
     }
 }
 
-impl<const AS: HtmlOrRsx> ToTokens for Component<AS> {
+impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
 
@@ -327,7 +199,7 @@ impl<const AS: HtmlOrRsx> ToTokens for Component<AS> {
 }
 
 // the struct's fields info
-pub struct ComponentField<const AS: HtmlOrRsx> {
+pub struct ComponentField {
     name: Ident,
     content: ContentField,
 }
@@ -354,28 +226,7 @@ impl ToTokens for ContentField {
     }
 }
 
-impl Parse for ComponentField<AS_RSX> {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let name = Ident::parse_any(input)?;
-        input.parse::<Token![:]>()?;
-
-        let name_str = name.to_string();
-        let content = if name_str.starts_with("on") {
-            if input.peek(token::Brace) {
-                let content;
-                syn::braced!(content in input);
-                ContentField::OnHandlerRaw(content.parse()?)
-            } else {
-                ContentField::OnHandler(input.parse()?)
-            }
-        } else {
-            ContentField::ManExpr(input.parse::<Expr>()?)
-        };
-
-        Ok(Self { name, content })
-    }
-}
-impl Parse for ComponentField<AS_HTML> {
+impl Parse for ComponentField {
     fn parse(input: ParseStream) -> Result<Self> {
         let name = Ident::parse_any(input)?;
         input.parse::<Token![:]>()?;
@@ -397,7 +248,7 @@ impl Parse for ComponentField<AS_HTML> {
     }
 }
 
-impl<const AS: HtmlOrRsx> ToTokens for ComponentField<AS> {
+impl ToTokens for ComponentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ComponentField { name, content, .. } = self;
         tokens.append_all(quote! {

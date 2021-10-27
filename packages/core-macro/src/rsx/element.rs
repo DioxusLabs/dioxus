@@ -11,16 +11,16 @@ use syn::{
 // =======================================
 // Parse the VNode::Element type
 // =======================================
-pub struct Element<const AS: HtmlOrRsx> {
+pub struct Element {
     name: Ident,
     key: Option<LitStr>,
-    attributes: Vec<ElementAttr<AS>>,
-    listeners: Vec<ElementAttr<AS>>,
-    children: Vec<BodyNode<AS>>,
+    attributes: Vec<ElementAttr>,
+    listeners: Vec<ElementAttr>,
+    children: Vec<BodyNode>,
     _is_static: bool,
 }
 
-impl Parse for Element<AS_RSX> {
+impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
         let name = Ident::parse(stream)?;
 
@@ -28,29 +28,75 @@ impl Parse for Element<AS_RSX> {
         let content: ParseBuffer;
         syn::braced!(content in stream);
 
-        let mut attributes: Vec<ElementAttr<AS_RSX>> = vec![];
-        let mut listeners: Vec<ElementAttr<AS_RSX>> = vec![];
-        let mut children: Vec<BodyNode<AS_RSX>> = vec![];
+        let mut attributes: Vec<ElementAttr> = vec![];
+        let mut listeners: Vec<ElementAttr> = vec![];
+        let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
         let mut el_ref = None;
 
-        'parsing: loop {
-            // [1] Break if empty
-            if content.is_empty() {
-                break 'parsing;
-            }
-
+        while !content.is_empty() {
             if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                parse_rsx_element_field(
-                    &content,
-                    &mut attributes,
-                    &mut listeners,
-                    &mut key,
-                    &mut el_ref,
-                    name.clone(),
-                )?;
+                let name = Ident::parse_any(stream)?;
+                let name_str = name.to_string();
+                stream.parse::<Token![:]>()?;
+
+                if name_str.starts_with("on") {
+                    if stream.peek(token::Brace) {
+                        let content;
+                        syn::braced!(content in stream);
+
+                        listeners.push(ElementAttr::EventTokens {
+                            name,
+                            tokens: content.parse()?,
+                        });
+                    } else {
+                        listeners.push(ElementAttr::EventClosure {
+                            name,
+                            closure: content.parse()?,
+                        });
+                    };
+                } else {
+                    match name_str.as_str() {
+                        "key" => {
+                            key = Some(stream.parse()?);
+                        }
+                        "classes" => {
+                            todo!("custom class list not supported")
+                        }
+                        "namespace" => {
+                            todo!("custom namespace not supported")
+                        }
+                        "node_ref" => {
+                            el_ref = Some(stream.parse::<Expr>()?);
+                        }
+                        _ => {
+                            if stream.peek(LitStr) {
+                                listeners.push(ElementAttr::AttrText {
+                                    name,
+                                    value: content.parse()?,
+                                });
+                            } else {
+                                listeners.push(ElementAttr::AttrExpression {
+                                    name,
+                                    value: content.parse()?,
+                                });
+                            }
+                        }
+                    }
+                }
+            } else if content.peek(LitStr) && content.peek2(Token![:]) {
+                let name = content.parse::<LitStr>()?;
+                content.parse::<Token![:]>()?;
+
+                if content.peek(LitStr) {
+                    let value = content.parse::<LitStr>()?;
+                    attributes.push(ElementAttr::CustomAttrText { name, value });
+                } else {
+                    let value = content.parse::<Expr>()?;
+                    attributes.push(ElementAttr::CustomAttrExpression { name, value });
+                }
             } else {
-                children.push(content.parse::<BodyNode<AS_RSX>>()?);
+                children.push(content.parse::<BodyNode>()?);
             }
 
             // consume comma if it exists
@@ -71,118 +117,17 @@ impl Parse for Element<AS_RSX> {
     }
 }
 
-impl Parse for Element<AS_HTML> {
-    fn parse(stream: ParseStream) -> Result<Self> {
-        let _l_tok = stream.parse::<Token![<]>()?;
-        let el_name = Ident::parse(stream)?;
-
-        let mut attributes: Vec<ElementAttr<AS_HTML>> = vec![];
-        let mut listeners: Vec<ElementAttr<AS_HTML>> = vec![];
-        let mut children: Vec<BodyNode<AS_HTML>> = vec![];
-        let key = None;
-
-        while !stream.peek(Token![>]) {
-            // self-closing
-            if stream.peek(Token![/]) {
-                stream.parse::<Token![/]>()?;
-                stream.parse::<Token![>]>()?;
-
-                return Ok(Self {
-                    name: el_name,
-                    key: None,
-                    attributes,
-                    _is_static: false,
-                    listeners,
-                    children,
-                });
-            }
-
-            let name = Ident::parse_any(stream)?;
-            let name_str = name.to_string();
-            stream.parse::<Token![=]>()?;
-            if name_str.starts_with("on") {
-                let inner;
-                syn::braced!(inner in stream);
-                let toks = inner.parse::<Expr>()?;
-                let ty = AttrType::EventTokens(toks);
-                listeners.push(ElementAttr {
-                    element_name: el_name.clone(),
-                    name,
-                    value: ty,
-                    namespace: None,
-                })
-            } else {
-                match name_str.as_str() {
-                    "style" => {}
-                    "key" => {}
-                    _ => {
-                        // "classes" | "namespace" | "ref" | _ => {
-                        let ty = if stream.peek(LitStr) {
-                            let rawtext = stream.parse::<LitStr>().unwrap();
-                            AttrType::BumpText(rawtext)
-                        } else {
-                            // like JSX, we expect raw expressions
-                            let inner;
-                            syn::braced!(inner in stream);
-                            let toks = inner.parse::<Expr>()?;
-                            AttrType::FieldTokens(toks)
-                        };
-                        attributes.push(ElementAttr {
-                            element_name: el_name.clone(),
-                            name,
-                            value: ty,
-                            namespace: None,
-                        })
-                    }
-                }
-            };
-        }
-
-        stream.parse::<Token![>]>()?;
-
-        'parsing: loop {
-            if stream.peek(Token![<]) && stream.peek2(Token![/]) {
-                break 'parsing;
-            }
-
-            // [1] Break if empty
-            if stream.is_empty() {
-                break 'parsing;
-            }
-
-            children.push(stream.parse::<BodyNode<AS_HTML>>()?);
-        }
-
-        // closing element
-        stream.parse::<Token![<]>()?;
-        stream.parse::<Token![/]>()?;
-
-        let close = Ident::parse_any(stream)?;
-        if close != el_name {
-            return Err(Error::new_spanned(
-                close,
-                "closing element does not match opening",
-            ));
-        }
-        stream.parse::<Token![>]>()?;
-
-        Ok(Self {
-            key,
-            name: el_name,
-            attributes,
-            children,
-            listeners,
-            _is_static: false,
-        })
-    }
-}
-
-impl<const AS: HtmlOrRsx> ToTokens for Element<AS> {
+impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
-        let attr = &self.attributes;
         let childs = &self.children;
         let listeners = &self.listeners;
+
+        let attr = self.attributes.iter().map(|x| ElementAttrNamed {
+            attr: x,
+            el_name: name,
+        });
+
         let key = match &self.key {
             Some(ty) => quote! { Some(format_args_f!(#ty)) },
             None => quote! { None },
@@ -200,164 +145,73 @@ impl<const AS: HtmlOrRsx> ToTokens for Element<AS> {
     }
 }
 
-/// =======================================
-/// Parse a VElement's Attributes
-/// =======================================
-struct ElementAttr<const AS: HtmlOrRsx> {
-    element_name: Ident,
-    name: Ident,
-    value: AttrType,
-    namespace: Option<String>,
+enum ElementAttr {
+    // attribute: "valuee {}"
+    AttrText { name: Ident, value: LitStr },
+
+    // attribute: true,
+    AttrExpression { name: Ident, value: Expr },
+
+    // "attribute": "value {}"
+    CustomAttrText { name: LitStr, value: LitStr },
+
+    // "attribute": true,
+    CustomAttrExpression { name: LitStr, value: Expr },
+
+    // onclick: move |_| {}
+    EventClosure { name: Ident, closure: ExprClosure },
+
+    // onclick: {}
+    EventTokens { name: Ident, tokens: Expr },
 }
 
-enum AttrType {
-    BumpText(LitStr),
-    FieldTokens(Expr),
-    EventTokens(Expr),
-    Event(ExprClosure),
-}
-
-// We parse attributes and dump them into the attribute vec
-// This is because some tags might be namespaced (IE style)
-// These dedicated tags produce multiple name-spaced attributes
-fn parse_rsx_element_field(
-    stream: ParseStream,
-    attrs: &mut Vec<ElementAttr<AS_RSX>>,
-    listeners: &mut Vec<ElementAttr<AS_RSX>>,
-    key: &mut Option<LitStr>,
-    el_ref: &mut Option<Expr>,
-    element_name: Ident,
-) -> Result<()> {
-    let name = Ident::parse_any(stream)?;
-    let name_str = name.to_string();
-    stream.parse::<Token![:]>()?;
-
-    // Return early if the field is a listener
-    if name_str.starts_with("on") {
-        // remove the "on" bit
-        let ty = if stream.peek(token::Brace) {
-            let content;
-            syn::braced!(content in stream);
-
-            // Try to parse directly as a closure
-            let fork = content.fork();
-            if let Ok(event) = fork.parse::<ExprClosure>() {
-                content.advance_to(&fork);
-                AttrType::Event(event)
-            } else {
-                AttrType::EventTokens(content.parse()?)
-            }
-        } else {
-            AttrType::Event(stream.parse()?)
-        };
-        listeners.push(ElementAttr {
-            name,
-            value: ty,
-            namespace: None,
-            element_name,
-        });
-        return Ok(());
-    }
-
-    let ty: AttrType = match name_str.as_str() {
-        // short circuit early if style is using the special syntax
-        "style" if stream.peek(token::Brace) => {
-            let inner;
-            syn::braced!(inner in stream);
-
-            while !inner.is_empty() {
-                let name = Ident::parse_any(&inner)?;
-                inner.parse::<Token![:]>()?;
-                let ty = if inner.peek(LitStr) {
-                    let rawtext = inner.parse::<LitStr>().unwrap();
-                    AttrType::BumpText(rawtext)
-                } else {
-                    let toks = inner.parse::<Expr>()?;
-                    AttrType::FieldTokens(toks)
-                };
-                if inner.peek(Token![,]) {
-                    let _ = inner.parse::<Token![,]>();
-                }
-                attrs.push(ElementAttr {
-                    name,
-                    value: ty,
-                    namespace: Some("style".to_string()),
-                    element_name: element_name.clone(),
-                });
-            }
-
-            return Ok(());
-        }
-        "key" => {
-            *key = Some(stream.parse::<LitStr>()?);
-            return Ok(());
-        }
-        "classes" => {
-            todo!("custom class list not supported")
-        }
-        "namespace" => {
-            todo!("custom namespace not supported")
-        }
-        "node_ref" => {
-            *el_ref = Some(stream.parse::<Expr>()?);
-            return Ok(());
-        }
-
-        // Fall through
-        _ => {
-            if stream.peek(LitStr) {
-                let rawtext = stream.parse::<LitStr>().unwrap();
-                AttrType::BumpText(rawtext)
-            } else {
-                let toks = stream.parse::<Expr>()?;
-                AttrType::FieldTokens(toks)
-            }
-        }
-    };
-
-    // consume comma if it exists
-    // we don't actually care if there *are* commas between attrs
-    if stream.peek(Token![,]) {
-        let _ = stream.parse::<Token![,]>();
-    }
-
-    attrs.push(ElementAttr {
-        name,
-        value: ty,
-        namespace: None,
-        element_name,
-    });
-    Ok(())
-}
-
-impl<const AS: HtmlOrRsx> ToTokens for ElementAttr<AS> {
+impl ToTokens for ElementAttr {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let el_name = &self.element_name;
-        let nameident = &self.name;
+        // weird requirment
+        todo!()
+    }
+}
 
-        // TODO: wire up namespace
-        let _name_str = self.name.to_string();
-        let _namespace = match &self.namespace {
-            Some(t) => quote! { Some(#t) },
-            None => quote! { None },
+struct ElementAttrNamed<'a> {
+    el_name: &'a Ident,
+    attr: &'a ElementAttr,
+}
+
+impl ToTokens for ElementAttrNamed<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let ElementAttrNamed { el_name, attr } = *self;
+
+        let toks = match attr {
+            ElementAttr::AttrText { name, value } => {
+                quote! {
+                    dioxus_elements::#el_name.#name(__cx, format_args_f!(#value))
+                }
+            }
+            ElementAttr::AttrExpression { name, value } => {
+                quote! {
+                    dioxus_elements::#el_name.#name(__cx, #value)
+                }
+            }
+
+            ElementAttr::CustomAttrText { name, value } => {
+                quote! { __cx.attr( #name, format_args_f!(#value), None, false ) }
+            }
+            ElementAttr::CustomAttrExpression { name, value } => {
+                quote! { __cx.attr( #name, format_args_f!(#value), None, false ) }
+            }
+
+            ElementAttr::EventClosure { name, closure } => {
+                quote! {
+                    dioxus::events::on::#name(__cx, #closure)
+                }
+            }
+            ElementAttr::EventTokens { name, tokens } => {
+                quote! {
+                    dioxus::events::on::#name(__cx, #tokens)
+                }
+            }
         };
 
-        match &self.value {
-            AttrType::BumpText(value) => tokens.append_all(quote! {
-                dioxus_elements::#el_name.#nameident(__cx, format_args_f!(#value))
-            }),
-
-            AttrType::FieldTokens(exp) => tokens.append_all(quote! {
-                dioxus_elements::#el_name.#nameident(__cx, #exp)
-            }),
-
-            AttrType::Event(event) => tokens.append_all(quote! {
-                dioxus::events::on::#nameident(__cx, #event)
-            }),
-
-            AttrType::EventTokens(event) => tokens.append_all(quote! {
-                dioxus::events::on::#nameident(__cx, #event)
-            }),
-        }
+        tokens.append_all(toks);
     }
 }

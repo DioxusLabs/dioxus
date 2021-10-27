@@ -19,11 +19,11 @@ use {
     },
 };
 
-pub struct Fragment<const AS: HtmlOrRsx> {
-    children: Vec<AmbiguousElement<AS>>,
+pub struct Fragment {
+    children: Vec<AmbiguousElement>,
 }
 
-impl Parse for Fragment<AS_RSX> {
+impl Parse for Fragment {
     fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Ident>()?;
 
@@ -33,7 +33,7 @@ impl Parse for Fragment<AS_RSX> {
         let content: ParseBuffer;
         syn::braced!(content in input);
         while !content.is_empty() {
-            content.parse::<AmbiguousElement<AS_RSX>>()?;
+            content.parse::<AmbiguousElement>()?;
 
             if content.peek(Token![,]) {
                 let _ = content.parse::<Token![,]>();
@@ -43,27 +43,7 @@ impl Parse for Fragment<AS_RSX> {
     }
 }
 
-impl Parse for Fragment<AS_HTML> {
-    fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<Ident>()?;
-
-        let children = Vec::new();
-
-        // parse the guts
-        let content: ParseBuffer;
-        syn::braced!(content in input);
-        while !content.is_empty() {
-            content.parse::<AmbiguousElement<AS_HTML>>()?;
-
-            if content.peek(Token![,]) {
-                let _ = content.parse::<Token![,]>();
-            }
-        }
-        Ok(Self { children })
-    }
-}
-
-impl<const AS: HtmlOrRsx> ToTokens for Fragment<AS> {
+impl ToTokens for Fragment {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let childs = &self.children;
         let children = quote! {
