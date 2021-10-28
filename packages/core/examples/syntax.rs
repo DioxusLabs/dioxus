@@ -8,9 +8,12 @@ use dioxus_html as dioxus_elements;
 fn main() {}
 
 fn html_usage() {
+    let mo = move |_| {};
     let r = rsx! {
         div {
             onclick: move |_| {}
+            onmouseover: {mo}
+            "type": "bar",
             "hello world"
         }
     };
