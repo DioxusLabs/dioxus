@@ -18,14 +18,16 @@ dioxus::ssr::render_lazy(rsx!(
     div {}
 ))
 ```
+
 Produces:
 ```html
 <div></div>
 ```
 
+We can construct any valid HTML tag with the `tag {}` pattern and expect the resulting HTML structure to resemble our declaration.
 ## Composing Elements
 
-Every element has a set of properties that can be rendered in different ways. In particular, each Element may contain other Elements. To achieve this, we can simply declare new Elements contained within the parent's curly braces:
+Of course, we need more complex structures to make our apps actually useful! Just like HTML, the `rsx!` macro lets us nest Elements inside of each other.
 
 ```rust
 #use dioxus::prelude::*;
@@ -75,11 +77,26 @@ let name = "Bob";
 rsx! ( "hello {name}" )
 ```
 
+Unfortunately, you cannot drop in arbitrary expressions directly into the string literal. In the cases where we need to compute a complex value, we'll want to use `format_args!` directly. Due to specifics of how the `rsx!` macro (we'll cover later), our call to `format_args` must be contained within curly braces *and* square braces.
+
+```rust
+rsx!( {[format_args!("Hello {}", if enabled { "Jack" } else { "Bob" } )]} )
+```
+
+This is different from React's way of generating arbitrary markup but fits within idiomatic Rust. 
+
+Typically, with Dioxus, you'll just want to compute your substrings outside of the `rsx!` call:
+
+```rust
+let name = if enabled { "Jack" } else { "Bob" };
+rsx! ( "hello {name}" )
+```
+
 ## Attributes
 
 Every Element in your User Interface will have some sort of properties that the renderer will use when drawing to the screen. These might inform the renderer if the component should be hidden, what its background color should be, or to give it a specific name or ID.
 
-To do this, we simply use the familiar struct-style syntax that Rust provides us. Commas are optional:
+To do this, we use the familiar struct-style syntax that Rust provides. Commas are optional:
 
 ```rust
 rsx!(

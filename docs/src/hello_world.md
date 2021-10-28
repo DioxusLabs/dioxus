@@ -91,7 +91,7 @@ fn main() {
     dioxus::desktop::start(App, |c| c);
 }
 
-fn App(cx: Component<()>) -> Element {
+fn App((cx, props): Component<()>) -> Element {
     cx.render(rsx! (
         div { "Hello, world!" }
     ))
@@ -110,7 +110,7 @@ This bit of code imports everything from the the `prelude` module. This brings i
 use diouxs::prelude::*;
 ```
 
-This initialization code launches a Tokio runtime on a helper thread - where your code will run, and then the WebView on the main-thread. Due to platform requirements, the main thread is blocked by this call.
+This initialization code launches a Tokio runtime on a helper thread where your code will run. Then, the WebView renderer will be launched on the main-thread. Due to platform requirements, the main thread is blocked by your app's event loop.
 
 ```rust
 fn main() {
@@ -118,29 +118,37 @@ fn main() {
 }
 ```
 
-Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Option<VNode>`.
+Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Element`.
 
 ```rust
-fn App(cx: Component<()>) -> DomTree {
+fn App((cx, props): Component<()>) -> Element {
+    cx.render(rsx! {
+        div { "Hello, world!" }
+    })    
+}
+```
+In cases where props need to borrow from their parent, you will need to specify lifetimes using the function syntax:
+
+```rust
+fn App<'a>(cx: Component<'a, ()>) -> Element<'a> {
     cx.render(rsx! {
         div { "Hello, world!" }
     })    
 }
 ```
 
-The closure `FC<()>` syntax is identical to the function syntax, but with lifetimes managed for you. In cases where props need to borrow from their parent, you will need to specify lifetimes using the function syntax:
-
+Writing `fn App((cx, props): Component<()>) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
 ```rust
-fn App<'a>(cx: Component<'a, ()>) -> DomTree<'a> {
+static App: Fc<()> = |(cx, props)| {
     cx.render(rsx! {
         div { "Hello, world!" }
-    })    
-}
+    })
+};
 ```
 
 ### The `Context` object
 
-In React, you'll save data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data.
+In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data.
 
 ### The `rsx!` macro
 

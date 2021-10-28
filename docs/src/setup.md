@@ -2,7 +2,7 @@
 
 Dioxus aims to provide a fast, friendly, and portable toolkit for building user interfaces with Rust.
 
-This Getting Setup guide assumes you'll be building a small desktop application. The process for building web-apps, desktop apps, server-rendered apps, static sites, and mobile apps, is more-or-less the same. You can check out the [Platform Specific Guides](../platforms/00-index.md) for more information on setting up Dioxus for any of the various targets you are building for.
+This Getting Setup guide assumes you'll be building a small desktop application. You can check out the [Platform Specific Guides](../platforms/00-index.md) for more information on setting up Dioxus for any of the various supported platforms.
 
 # Setting up Dioxus
 
@@ -16,7 +16,7 @@ Dioxus integrates very well with the Rust-Analyzer IDE plugin which will provide
 
 ### Dioxus-CLI for dev server, bundling, etc.
 
-We also recommend installing the Dioxus CLI. The Dioxus CLI automates building and packaging for various targets and integrates with simulators, development servers, and app deployment. It'll be our one-stop-shop for anything related to building and sharing our Dioxus Apps. To install the CLI, you'll need cargo (should be automatically installed with Rust):
+We also recommend installing the Dioxus CLI. The Dioxus CLI automates building and packaging for various targets and integrates with simulators, development servers, and app deployment. To install the CLI, you'll need cargo (should be automatically installed with Rust):
 
 ```
 $ cargo install dioxus-cli

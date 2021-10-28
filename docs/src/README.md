@@ -5,8 +5,7 @@
 **Dioxus** is a framework and ecosystem for building fast, scalable, and robust user interfaces with the Rust programming language. This guide will help you get up-and-running with Dioxus running on the Web, Desktop, Mobile, and more. 
 
 ```rust
-// An example Dioxus app - closely resembles React
-fn App(cx: Component<()>) -> Element {
+fn App((cx, props): Component<()>) -> Element {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(
@@ -18,7 +17,6 @@ fn App(cx: Component<()>) -> Element {
 ```
 
 The Dioxus API and patterns closely resemble React - if this guide is lacking in any general concept or an error message is confusing, we recommend substituting "React" for "Dioxus" in your web search terms. A major goal of Dioxus is to provide a familiar toolkit for UI in Rust, so we've chosen to follow in the footsteps of popular UI frameworks (React, Redux, etc) - if you know React, then you already know Dioxus. If you don't know either, this guide will still help you!
-
 
 
 ### Web Support
@@ -79,23 +77,27 @@ Examples:
 ---
 Mobile is currently the least-supported renderer target for Dioxus. Mobile apps are rendered with the platform's WebView, meaning that animations, transparency, and native widgets are not currently achievable. In addition, iOS is the only supported Mobile Platform. It is possible to get Dioxus running on Android and rendered with WebView, but the Rust windowing library that Dioxus uses - tao - does not currently supported Android.
 
+Mobile support is currently best suited for CRUD-style apps, ideally for internal teams who need to develop quickly but don't care much about animations or native widgets.
+
 [Jump to the getting started guide for Mobile.]()
 
 Examples:
 - [Todo App]()
 - [Chat App]()
 
-### LiveView Support
+### LiveView / Server Component Support
 ---
 
-The internal architecture of Dioxus was designed from day one to support the `LiveView` use-case, where a web server hosts a running app for each connected user. As of today, there is no out-of-the-box LiveView support - you'll need to wire this up yourself. While not currently fully implemented, the expectation is that LiveView apps can be a hybrid between WASM and server-rendered where only portions of a page are "live" and the rest of the page is either server-rendered, statically generated, or handled by the host SPA.
+The internal architecture of Dioxus was designed from day one to support the `LiveView` use-case, where a web server hosts a running app for each connected user. As of today, there is no first-class LiveView support - you'll need to wire this up yourself. 
 
-
+While not currently fully implemented, the expectation is that LiveView apps can be a hybrid between Wasm and server-rendered where only portions of a page are "live" and the rest of the page is either server-rendered, statically generated, or handled by the host SPA.
 
 ### Multithreaded Support
 ---
-The Dioxus VirtualDom, sadly, is not currently `Send.` Internally, we use quite a bit of interior mutability which is not thread-safe. This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc. 
+The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite a bit of interior mutability which is not thread-safe. This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc. 
 
 To solve this, you'll want to spawn a VirtualDom on its own thread and communicate with it via channels.
 
-When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String - but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a VirtualDomPool which solves the `Send` problem.
+When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String - but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a pool of VirtualDoms.
+
+Ultimately, you can always wrap the VirtualDom with a `Send` type and manually uphold the `Send` guarantees yourself.
