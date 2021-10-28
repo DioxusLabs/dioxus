@@ -33,6 +33,7 @@ tokio_runtime = ["tokio"]
 [dev-dependencies]
 dioxus-html = { path = "../html" }
 dioxus-hooks = { path = "../hooks" }
+simple_logger = "1.13.0"
 
 
 [build-dependencies]

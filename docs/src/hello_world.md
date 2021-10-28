@@ -4,6 +4,8 @@ Let's put together a simple "hello world" to get acquainted with Dioxus. The Dio
 
 This demo will build a simple desktop app. Check out the platform-specific setup guides on how to port your app to different targets.
 
+### A new project with Cargo
+
 First, let's start a new project. Rust has the concept of executables and libraries. Executables have a `main.rs` and libraries have `lib.rs`. A project may have both. Our `hello world` will be an executable - we expect our app to launch when we run it! Cargo provides this for us:
 
 ```shell
@@ -65,6 +67,8 @@ edition = "2018"
 
 ```
 
+### Adding Dioxus as a dependency
+
 To use the Dioxus library, we'll want to add the most recent version of `Dioxus` to our crate. If you have `cargo edit` installed, simply call:
 
 ```shell
@@ -74,6 +78,8 @@ $ cargo add dioxus --features desktop
 It's very important to add `dioxus` with the `desktop` feature for this example. The `dioxus` crate is a batteries-include crate that combines a bunch of utility crates together, ensuring compatibility of the most important parts of the ecosystem. Under the hood, the `dioxus` crate configures various renderers, hooks, debug tooling, and more. The `desktop` feature ensures the we only depend on the smallest set of required crates to compile and render.
 
 If you plan to develop extensions for the `Dioxus` ecosystem, please use the `dioxus` crate with the `core` feature to limit the amount of dependencies your project brings in.
+
+### Our first app
 
 Now, let's edit our `main.rs` file:
 
@@ -85,14 +91,18 @@ fn main() {
     dioxus::desktop::start(App, |c| c);
 }
 
-static App: FC<()> = |(cx, props)| {
+fn App((cx, props): Component<()>) -> Element {
     cx.render(rsx! (
         div { "Hello, world!" }
     ))
-};
+}
 ```
 
-Let's dissect our example a bit.
+At this point, you could call `cargo run` and be greeted with a simple `Hello, World!` screen:
+
+![hello world](images/helloworld.png)
+
+### Dissecting our example
 
 This bit of code imports everything from the the `prelude` module. This brings into scope the right traits, types, and macros needed for working with Dioxus.
 
@@ -100,7 +110,7 @@ This bit of code imports everything from the the `prelude` module. This brings i
 use dioxus::prelude::*;
 ```
 
-This initialization code launches a Tokio runtime on a helper thread - where your code will run, and then the WebView on the main-thread. Due to platform requirements, the main thread is blocked by this call.
+This initialization code launches a Tokio runtime on a helper thread where your code will run. Then, the WebView renderer will be launched on the main-thread. Due to platform requirements, the main thread is blocked by your app's event loop.
 
 ```rust
 fn main() {
@@ -108,48 +118,40 @@ fn main() {
 }
 ```
 
-Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Option<VNode>`.
+Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Element`.
 
 ```rust
-static App: FC<()> = |(cx, props)| {
+fn App((cx, props): Component<()>) -> Element {
+    cx.render(rsx! {
+        div { "Hello, world!" }
+    })    
+}
+```
+In cases where props need to borrow from their parent, you will need to specify lifetimes using the function syntax:
+
+```rust
+fn App<'a>(cx: Component<'a, ()>) -> Element<'a> {
+    cx.render(rsx! {
+        div { "Hello, world!" }
+    })
+}
+```
+
+Writing `fn App((cx, props): Component<()>) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
+```rust
+static App: Fc<()> = |(cx, props)| {
     cx.render(rsx! {
         div { "Hello, world!" }
     })
 };
 ```
 
-The closure `FC<()>` syntax is identical to the function syntax, but with lifetimes managed for you. In cases where props need to borrow from their parent, you will need to specify lifetimes using the function syntax:
+### The `Context` object
 
-```rust
-fn App<'a>(cx: Context<'a>, props: &'a ()) -> DomTree<'a> {
-    cx.render(rsx! {
-        div { "Hello, world!" }
-    })
-}
-```
+In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data.
 
-
-In React, you'll save data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data.
+### The `rsx!` macro
 
 Next, we're greeted with the `rsx!` macro. This lets us add a custom DSL for declaratively building the structure of our app. The semantics of this macro are similar to that of JSX and HTML, though with a familiar Rust-y interface. The `html!` macro is also available for writing components with a JSX/HTML syntax.
 
 The `rsx!` macro is lazy: it does not immediately produce elements or allocates, but rather builds a closure which can be rendered with `cx.render`.
-
-Now, let's launch our app:
-
-```shell
-$ cargo run
-```
-
-Huzzah! We have a simple app.
-
-![Hello world](images/01-setup-helloworld.png)
-
-If we wanted to golf a bit, we can shrink our hello-world even smaller:
-
-```rust
-fn main() {
-    static App: FC<()> = |(cx, props)| rsx!(cx, div {"hello world!"});
-    dioxus::web::start(App, |c| c);
-}
-```

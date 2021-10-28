@@ -102,7 +102,7 @@ impl<'a, T: 'static> UseState<'a, T> {
         }
     }
 
-    pub fn set(&self, new_val: T) {
+    pub fn set(&mut self, new_val: T) {
         *self.inner.wip.borrow_mut() = Some(new_val);
         self.needs_update();
     }

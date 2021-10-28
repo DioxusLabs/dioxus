@@ -487,6 +487,8 @@ impl<'a> NodeFactory<'a> {
                         props.memoize(real_other)
                     };
 
+                    log::debug!("comparing props...");
+
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
                     matches!((props_memoized, children.is_empty()), (true, true))
@@ -502,6 +504,7 @@ impl<'a> NodeFactory<'a> {
 
             let drop_props: &mut dyn FnMut() = bump.alloc_with(|| {
                 move || unsafe {
+                    log::debug!("dropping props!");
                     if !has_dropped {
                         let real_other = raw_props as *mut _ as *mut P;
                         let b = BumpBox::from_raw(real_other);
@@ -525,6 +528,7 @@ impl<'a> NodeFactory<'a> {
 
         let caller: &'a mut dyn for<'b> Fn(&'b Scope) -> DomTree<'b> =
             bump.alloc(move |scope: &Scope| -> DomTree {
+                log::debug!("calling component renderr {:?}", scope.our_arena_idx);
                 let props: &'_ P = unsafe { &*(raw_props as *const P) };
                 let res = component((Context { scope }, props));
                 unsafe { std::mem::transmute(res) }

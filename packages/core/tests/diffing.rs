@@ -1,3 +1,4 @@
+#![allow(unused, non_upper_case_globals)]
 //! Diffing Tests
 //!
 //! These tests only verify that the diffing algorithm works properly for single components.

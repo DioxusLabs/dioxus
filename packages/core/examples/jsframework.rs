@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use dioxus::component::Component;
 use dioxus::events::on::MouseEvent;
 use dioxus_core as dioxus;
@@ -13,7 +15,7 @@ fn main() {
     assert!(g.edits.len() > 1);
 }
 
-static App: FC<()> = |(cx, props)| {
+fn App((cx, props): Component<()>) -> DomTree {
     let mut rng = SmallRng::from_entropy();
     let rows = (0..10_000_usize).map(|f| {
         let label = Label::new(&mut rng);
@@ -31,13 +33,14 @@ static App: FC<()> = |(cx, props)| {
             }
         }
     })
-};
+}
 
 #[derive(PartialEq, Props)]
 struct RowProps {
     row_id: usize,
     label: Label,
 }
+
 fn Row((cx, props): Component<RowProps>) -> DomTree {
     let handler = move |evt: MouseEvent| {
         let g = evt.button;

@@ -407,8 +407,6 @@ impl Scheduler {
 
         let work_completed = machine.work(deadline_reached);
 
-        log::debug!("Working finished? {:?}", work_completed);
-
         // log::debug!("raw edits {:?}", machine.mutations.edits);
 
         let mut machine: DiffMachine<'static> = unsafe { std::mem::transmute(machine) };

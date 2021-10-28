@@ -7,30 +7,16 @@ use syn::{
 
 use super::*;
 
-pub struct CallBody<const AS: HtmlOrRsx> {
+pub struct CallBody {
     custom_context: Option<Ident>,
-    roots: Vec<BodyNode<AS>>,
+    roots: Vec<BodyNode>,
 }
 
 /// The custom rusty variant of parsing rsx!
-impl Parse for CallBody<AS_RSX> {
+impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let custom_context = try_parse_custom_context(input)?;
-        let (_, roots, _) = BodyConfig::<AS_RSX>::new_call_body().parse_component_body(input)?;
-        Ok(Self {
-            custom_context,
-            roots,
-        })
-    }
-}
-
-/// The HTML variant of parsing rsx!
-impl Parse for CallBody<AS_HTML> {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let custom_context = try_parse_custom_context(input)?;
-
-        // parsing the contents is almost like parsing the inner of any element, but with no props
-        let (_, roots, _) = BodyConfig::<AS_HTML>::new_call_body().parse_component_body(input)?;
+        let (_, roots, _) = BodyConfig::new_call_body().parse_component_body(input)?;
         Ok(Self {
             custom_context,
             roots,
@@ -50,7 +36,7 @@ fn try_parse_custom_context(input: ParseStream) -> Result<Option<Ident>> {
 }
 
 /// Serialize the same way, regardless of flavor
-impl<const A: HtmlOrRsx> ToTokens for CallBody<A> {
+impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let inner = if self.roots.len() == 1 {
             let inner = &self.roots[0];

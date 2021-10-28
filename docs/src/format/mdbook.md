@@ -1,1 +1,0 @@
-# mdBook-specific features

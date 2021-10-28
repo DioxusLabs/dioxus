@@ -1,64 +1,153 @@
-# VNodes and Elements
+# Declaring your first UI with Elements
 
-At the heart of Dioxus is the concept of an "element" - a container that can have children, properties, event handlers, and other important attributes. Dioxus only knows how to render the `VNode` data structure - an Enum variant of an Element, Text, Components, Fragments, and Anchors.
+Every user interface you've ever used is just a symphony of tiny widgets working together to abstract over larger complex functions. In Dioxus, we call these tiny widgets "Elements." Using Components, you can easily compose Elements into larger groups to form even larger structures: Apps.
 
-Because Dioxus is meant for the Web and uses WebView as a desktop and mobile renderer, almost all elements in Dioxus share properties with their HTML counterpart. When we declare our elements, we'll do so using HTML semantics:
+Because Dioxus is mostly used with HTML/CSS renderers, the default Element "collection" is HTML. Provided the `html` feature is not disabled, we can declare Elements using the `rsx!` macro:
 
 ```rust
+#use dioxus::prelude::*;
+rsx!(
+    div {}
+)
+```
+As you might expect, we can render this call using Dioxus-SSR to produce valid HTML:
+
+```rust
+#use dioxus::prelude::*;
+dioxus::ssr::render_lazy(rsx!(
+    div {}
+))
+```
+
+Produces:
+```html
+<div></div>
+```
+
+We can construct any valid HTML tag with the `tag {}` pattern and expect the resulting HTML structure to resemble our declaration.
+## Composing Elements
+
+Of course, we need more complex structures to make our apps actually useful! Just like HTML, the `rsx!` macro lets us nest Elements inside of each other.
+
+```rust
+#use dioxus::prelude::*;
 rsx!(
     div {
-        "hello world"
+        h1 {}
+        h2 {}
+        p {}
+    }
+)
+```
+As you might expect, the generated HTML for this structure would look like:
+```html
+<div>
+    <h1></h1>
+    <h2></h2>
+    <p></p>
+</div>
+```
+
+With the default configuration, any Element defined within the `dioxus-html` crate can be declared in this way. To create your own new elements, see the `Custom Elements` Advanced Guide.
+
+## Text Elements
+
+Dioxus also supports a special type of Element: Text. Text Elements do not accept children, but rather just string literals denoted with double quotes.
+
+```rust
+rsx! (
+    "hello world"
+)
+```
+
+Text Elements can be composed within other Elements:
+```rust
+rsx! (
+    div {
+        h1 { "hello world" }
+        p { "Some body content" }
     }
 )
 ```
 
-As you would expect, this snippet would generate a simple hello-world div. In fact, we can render these nodes directly with the SSR crate:
+Text can also be formatted with any value that implements `Display`. We use [f-string formatting](https://docs.rs/fstrings/0.2.3/fstrings/) - a "coming soon" feature for stable Rust that is familiar for Python and JavaScript users:
 
 ```rust
-dioxus::ssr::render_lazy(rsx!(
+let name = "Bob";
+rsx! ( "hello {name}" )
+```
+
+Unfortunately, you cannot drop in arbitrary expressions directly into the string literal. In the cases where we need to compute a complex value, we'll want to use `format_args!` directly. Due to specifics of how the `rsx!` macro (we'll cover later), our call to `format_args` must be contained within curly braces *and* square braces.
+
+```rust
+rsx!( {[format_args!("Hello {}", if enabled { "Jack" } else { "Bob" } )]} )
+```
+
+This is different from React's way of generating arbitrary markup but fits within idiomatic Rust. 
+
+Typically, with Dioxus, you'll just want to compute your substrings outside of the `rsx!` call:
+
+```rust
+let name = if enabled { "Jack" } else { "Bob" };
+rsx! ( "hello {name}" )
+```
+
+## Attributes
+
+Every Element in your User Interface will have some sort of properties that the renderer will use when drawing to the screen. These might inform the renderer if the component should be hidden, what its background color should be, or to give it a specific name or ID.
+
+To do this, we use the familiar struct-style syntax that Rust provides. Commas are optional:
+
+```rust
+rsx!(
     div {
-        "hello world"
+        hidden: true,
+        background_color: "blue",
+        class: "card color-{mycolor}"
     }
-))
+)
 ```
 
-And produce the corresponding html structure:
-```html
-<div>hello world</div>
+Each field is defined as a method on the element in the `dioxus-html` crate. This prevents you from misspelling a field name and lets us provide inline documentation. When you need to use a field not defined as a method, you have two options:
+
+1) file an issue if the attribute _should_ be enabled
+2) add a custom attribute on-the-fly
+
+To use custom attributes, simply put the attribute name in quotes followed by a colon:
+
+```rust
+rsx!(
+    div {
+        "customAttr": "important data here"
+    }
+)
 ```
 
-Our structure declared above is made of two variants of the `VNode` data structure:
-- A VElement with a tag name of `div`
-- A VText with contents of `"hello world"`
+Note: the name of the custom attribute must match exactly what you want the renderer to output. All attributes defined as methods in `dioxus-html` follow the snake_case naming convention. However, they internally translate their snake_case convention to HTML's camelCase convention.
 
-## All the VNode types
+## Listeners
 
-VNodes can be any of:
-- **Element**: a container with a tag name, namespace, attributes, children, and event listeners
-- **Text**: bump allocated text derived from string formatting
-- **Fragments**: a container of elements with no parent
-- **Suspended**: a container for nodes that aren't yet ready to be rendered
-- **Anchor**: a special type of node that is only available when fragments have no children
+Listeners are a special type of Attribute that only accept functions. Listeners let us attach functionality to our Elements by running a provided closure whenever the specified Listener is triggered.
 
-In practice, only elements and text can be initialized directly while other node types can only be created through hooks or NodeFactory methods.
+We'll cover listeners in more depth in the Listeners chapter, but for now, just know that every listener must start with the `on` keyword and can accept either a closure or an expression wrapped in curly braces.
 
-## Bump Arena Allocation
-
-To speed up the process of building our elements and text, Dioxus uses a special type of memory allocator tuned for large batches of small allocations called a Bump Arena. We use the `bumpalo` allocator which was initially developed for Dioxus' spiritual predecessor: `Dodrio.`
-
-- Bumpalo: [https://github.com/fitzgen/bumpalo](https://github.com/fitzgen/bumpalo)
-- Dodrio: [https://github.com/fitzgen/dodrio](https://github.com/fitzgen/dodrio)
-
-In other frontend frameworks for Rust, nearly every string is allocated using the global allocator. This means that strings in Rust do not benefit from the immutable string interning optimizations that JavaScript engines employ. By using a smaller, faster, more limited allocator, we can increase framework performance, bypassing even the naive wasm-bindgen benchmarks for very quick renders.
-
-It's important to note that VNodes are not `'static` - the VNode definition has a lifetime attached to it:
-
-```rust, ignore
-enum VNode<'bump> {
-    VElement { tag: &'static str, children: &'bump [VNode<'bump>] },
-    VText { content: &'bump str },
-    // other VNodes ....
-}
+```rust
+rsx!(
+    div {
+        onclick: move |_| {}
+        onmouseover: {handler},
+    }
+)
 ```
 
-Because VNodes use a bump allocator as their memory backing, they can only be created through the `NodeFactory` API - which we'll cover in the next chapter. This particular detail is important to understand because "rendering" VNodes produces a lifetime attached to the bump arena - which must be explicitly declared when dealing with components that borrow data from their parents.
+## Moving On
+
+This chapter just scratches the surface on how Elements can be defined.
+
+We learned:
+- Elements are the basic building blocks of User Interfaces
+- Elements can contain other elements 
+- Elements can either be a named container or text
+- Some Elements have properties that the renderer can use to draw the UI to the screen
+
+Next, we'll compose Elements together to form components.

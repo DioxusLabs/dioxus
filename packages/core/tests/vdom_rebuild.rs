@@ -1,3 +1,5 @@
+#![allow(unused, non_upper_case_globals)]
+
 //! Rebuilding tests
 //! ----------------
 //!

@@ -57,6 +57,7 @@ impl HookList {
     }
 
     pub fn clear_hooks(&mut self) {
+        log::debug!("clearing hooks...");
         self.vals
             .borrow_mut()
             .drain(..)

@@ -221,12 +221,12 @@ impl<'bump> DiffMachine<'bump> {
             MountType::Replace { old } => {
                 if let Some(old_id) = old.try_mounted_id() {
                     self.mutations.replace_with(old_id, nodes_created as u32);
-                    self.remove_nodes(Some(old));
+                    self.remove_nodes(Some(old), true);
                 } else {
                     if let Some(id) = self.find_first_element_id(old) {
                         self.mutations.replace_with(id, nodes_created as u32);
                     }
-                    self.remove_nodes(Some(old));
+                    self.remove_nodes(Some(old), true);
                 }
             }
 
@@ -369,7 +369,11 @@ impl<'bump> DiffMachine<'bump> {
 
         let new_component = self.vdom.get_scope_mut(new_idx).unwrap();
 
-        log::debug!("initializing component {:?}", new_idx);
+        log::debug!(
+            "initializing component {:?} with height {:?}",
+            new_idx,
+            parent_scope.height + 1
+        );
 
         // Run the scope for one iteration to initialize it
         if new_component.run_scope(self.vdom) {
@@ -614,7 +618,7 @@ impl<'bump> DiffMachine<'bump> {
                 self.stack.create_children(new, MountType::Append);
             }
             (_, []) => {
-                self.remove_nodes(old);
+                self.remove_nodes(old, true);
             }
             ([VNode::Anchor(old_anchor)], [VNode::Anchor(new_anchor)]) => {
                 old_anchor.dom_id.set(new_anchor.dom_id.get());
@@ -667,7 +671,7 @@ impl<'bump> DiffMachine<'bump> {
 
         use std::cmp::Ordering;
         match old.len().cmp(&new.len()) {
-            Ordering::Greater => self.remove_nodes(&old[new.len()..]),
+            Ordering::Greater => self.remove_nodes(&old[new.len()..], true),
             Ordering::Less => {
                 self.stack.create_children(
                     &new[old.len()..],
@@ -750,7 +754,7 @@ impl<'bump> DiffMachine<'bump> {
         );
         if new_middle.is_empty() {
             // remove the old elements
-            self.remove_nodes(old_middle);
+            self.remove_nodes(old_middle, true);
         } else if old_middle.is_empty() {
             // there were no old elements, so just create the new elements
             // we need to find the right "foothold" though - we shouldn't use the "append" at all
@@ -825,7 +829,7 @@ impl<'bump> DiffMachine<'bump> {
         // And if that was all of the new children, then remove all of the remaining
         // old children and we're finished.
         if left_offset == new.len() {
-            self.remove_nodes(&old[left_offset..]);
+            self.remove_nodes(&old[left_offset..], true);
             return None;
         }
 
@@ -1070,7 +1074,7 @@ impl<'bump> DiffMachine<'bump> {
         new: &'bump VNode<'bump>,
     ) {
         if let Some(first_old) = old.get(0) {
-            self.remove_nodes(&old[1..]);
+            self.remove_nodes(&old[1..], true);
             self.stack
                 .create_node(new, MountType::Replace { old: first_old });
         } else {
@@ -1080,42 +1084,58 @@ impl<'bump> DiffMachine<'bump> {
 
     /// schedules nodes for garbage collection and pushes "remove" to the mutation stack
     /// remove can happen whenever
-    fn remove_nodes(&mut self, nodes: impl IntoIterator<Item = &'bump VNode<'bump>>) {
+    fn remove_nodes(
+        &mut self,
+        nodes: impl IntoIterator<Item = &'bump VNode<'bump>>,
+        gen_muts: bool,
+    ) {
         // or cache the vec on the diff machine
         for node in nodes {
             match node {
                 VNode::Text(t) => {
-                    if let Some(id) = t.dom_id.get() {
+                    let id = t.dom_id.get().unwrap();
+                    self.vdom.collect_garbage(id);
+
+                    if gen_muts {
                         self.mutations.remove(id.as_u64());
-                        self.vdom.collect_garbage(id);
                     }
                 }
                 VNode::Suspended(s) => {
-                    if let Some(id) = s.dom_id.get() {
+                    let id = s.dom_id.get().unwrap();
+                    self.vdom.collect_garbage(id);
+
+                    if gen_muts {
                         self.mutations.remove(id.as_u64());
-                        self.vdom.collect_garbage(id);
                     }
                 }
                 VNode::Anchor(a) => {
-                    if let Some(id) = a.dom_id.get() {
+                    let id = a.dom_id.get().unwrap();
+                    self.vdom.collect_garbage(id);
+
+                    if gen_muts {
                         self.mutations.remove(id.as_u64());
-                        self.vdom.collect_garbage(id);
                     }
                 }
                 VNode::Element(e) => {
-                    if let Some(id) = e.dom_id.get() {
+                    let id = e.dom_id.get().unwrap();
+
+                    if gen_muts {
                         self.mutations.remove(id.as_u64());
                     }
+
+                    self.remove_nodes(e.children, false);
                 }
                 VNode::Fragment(f) => {
-                    self.remove_nodes(f.children);
+                    self.remove_nodes(f.children, gen_muts);
                 }
 
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
                     let scope = self.vdom.get_scope_mut(scope_id).unwrap();
                     let root = scope.root_node();
-                    self.remove_nodes(Some(root));
+                    self.remove_nodes(Some(root), gen_muts);
+
+                    log::debug!("Destroying scope {:?}", scope_id);
                     let mut s = self.vdom.try_remove(scope_id).unwrap();
                     s.hooks.clear_hooks();
                 }
@@ -1132,7 +1152,7 @@ impl<'bump> DiffMachine<'bump> {
         new: &'bump [VNode<'bump>],
     ) {
         if let Some(first_old) = old.get(0) {
-            self.remove_nodes(&old[1..]);
+            self.remove_nodes(&old[1..], true);
             self.stack
                 .create_children(new, MountType::Replace { old: first_old })
         } else {

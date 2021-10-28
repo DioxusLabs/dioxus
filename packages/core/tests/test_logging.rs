@@ -1,6 +1,5 @@
 pub fn set_up_logging(enabled: bool) {
     use fern::colors::{Color, ColoredLevelConfig};
-    
 
     if !enabled {
         return;
@@ -19,7 +18,7 @@ pub fn set_up_logging(enabled: bool) {
     // configure colors for the name of the level.
     // since almost all of them are the same as the color for the whole line, we
     // just clone `colors_line` and overwrite our changes
-    let colors_level = colors_line.clone().info(Color::Green);
+    let colors_level = colors_line.info(Color::Green);
     // here we set up our fern Dispatch
 
     // when running tests in batch, the logger is re-used, so ignore the logger error

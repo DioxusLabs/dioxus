@@ -1,3 +1,5 @@
+#![allow(unused, non_upper_case_globals)]
+
 //! Prove that the dom works normally through virtualdom methods.
 //!
 //! This methods all use "rebuild" which completely bypasses the scheduler.

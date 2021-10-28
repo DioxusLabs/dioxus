@@ -137,6 +137,7 @@ pub mod on {
     }
 
     // The Dioxus Synthetic event system
+    // todo: move these into the html event system. dioxus accepts *any* event, so having these here doesn't make sense.
     event_directory! {
         ClipboardEvent: [
             /// Called when "copy"
@@ -1031,6 +1032,7 @@ pub enum KeyCode {
     // kanji, = 244
     // unlock trackpad (Chrome/Edge), = 251
     // toggle touchpad, = 255
+    #[cfg_attr(feature = "serialize", serde(other))]
     Unknown,
 }
 
