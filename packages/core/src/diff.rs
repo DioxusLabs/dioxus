@@ -6,7 +6,7 @@
 //! ## Notice:
 //!
 //! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
-//! Components, Fragments, Suspense, SubTree memoization, incremental diffing, cancelation, NodeRefs, pausing, priority
+//! Components, Fragments, Suspense, SubTree memoization, incremental diffing, cancellation, NodeRefs, pausing, priority
 //! scheduling, and additional batching operations.
 //!
 //! ## Implementation Details:
@@ -15,8 +15,8 @@
 //! --------------------
 //! All nodes are addressed by their IDs. The RealDom provides an imperative interface for making changes to these nodes.
 //! We don't necessarily require that DOM changes happen instantly during the diffing process, so the implementor may choose
-//! to batch nodes if it is more performant for their application. The element IDs are indicies into the internal element
-//! array. The expectation is that implemenetors will use the ID as an index into a Vec of real nodes, allowing for passive
+//! to batch nodes if it is more performant for their application. The element IDs are indices into the internal element
+//! array. The expectation is that implementors will use the ID as an index into a Vec of real nodes, allowing for passive
 //! garbage collection as the VirtualDOM replaces old nodes.
 //!
 //! When new vnodes are created through `cx.render`, they won't know which real node they correspond to. During diffing,
@@ -30,34 +30,34 @@
 //! fragment to be replaced with when it is no longer empty. This is guaranteed by logic in the NodeFactory - it is
 //! impossible to craft a fragment with 0 elements - they must always have at least a single placeholder element. Adding
 //! "dummy" nodes _is_ inefficient, but it makes our diffing algorithm faster and the implementation is completely up to
-//!  the platform.
+//! the platform.
 //!
 //! Other implementations either don't support fragments or use a "child + sibling" pattern to represent them. Our code is
 //! vastly simpler and more performant when we can just create a placeholder element while the fragment has no children.
 //!
 //! ### Suspense
 //! ------------
-//! Dioxus implements suspense slightly differently than React. In React, each fiber is manually progressed until it runs
+//! Dioxus implements Suspense slightly differently than React. In React, each fiber is manually progressed until it runs
 //! into a promise-like value. React will then work on the next "ready" fiber, checking back on the previous fiber once
 //! it has finished its new work. In Dioxus, we use a similar approach, but try to completely render the tree before
 //! switching sub-fibers. Instead, each future is submitted into a futures-queue and the node is manually loaded later on.
-//! Due to the frequent calls to "yield_now" we can get the pure "fetch-as-you-render" behavior of React fiber.
+//! Due to the frequent calls to "yield_now" we can get the pure "fetch-as-you-render" behavior of React Fiber.
 //!
 //! We're able to use this approach because we use placeholder nodes - futures that aren't ready still get submitted to
 //! DOM, but as a placeholder.
 //!
-//! Right now, the "suspense" queue is intertwined the hooks. In the future, we should allow any future to drive attributes
-//! and contents, without the need for the "use_suspense" hook. In the interim, this is the quickest way to get suspense working.
+//! Right now, the "suspense" queue is intertwined with hooks. In the future, we should allow any future to drive attributes
+//! and contents, without the need for the "use_suspense" hook. In the interim, this is the quickest way to get Suspense working.
 //!
 //! ## Subtree Memoization
 //! -----------------------
-//! We also employ "subtree memoization" which saves us from having to check trees which take no dynamic content. We can
+//! We also employ "subtree memoization" which saves us from having to check trees which hold no dynamic content. We can
 //! detect if a subtree is "static" by checking if its children are "static". Since we dive into the tree depth-first, the
-//! calls to "create" propogate this information upwards. Structures like the one below are entirely static:
+//! calls to "create" propagate this information upwards. Structures like the one below are entirely static:
 //! ```rust
 //! rsx!( div { class: "hello world", "this node is entirely static" } )
 //! ```
-//! Because the subtrees won't be diffed, their "real node" data will be stale (invalid), so its up to the reconciler to
+//! Because the subtrees won't be diffed, their "real node" data will be stale (invalid), so it's up to the reconciler to
 //! track nodes created in a scope and clean up all relevant data. Support for this is currently WIP and depends on comp-time
 //! hashing of the subtree from the rsx! macro. We do a very limited form of static analysis via static string pointers as
 //! a way of short-circuiting the most expensive checks.
@@ -70,11 +70,11 @@
 //!
 //! ## Garbage Collection
 //! ---------------------
-//! Dioxus uses a passive garbage collection system to clean up old nodes once the work has been completed. This garabge
+//! Dioxus uses a passive garbage collection system to clean up old nodes once the work has been completed. This garbage
 //! collection is done internally once the main diffing work is complete. After the "garbage" is collected, Dioxus will then
 //! start to re-use old keys for new nodes. This results in a passive memory management system that is very efficient.
 //!
-//! The IDs used by the key/map are just an index into a vec. This means that Dioxus will drive the key allocation strategy
+//! The IDs used by the key/map are just an index into a Vec. This means that Dioxus will drive the key allocation strategy
 //! so the client only needs to maintain a simple list of nodes. By default, Dioxus will not manually clean up old nodes
 //! for the client. As new nodes are created, old nodes will be over-written.
 //!
@@ -95,7 +95,7 @@ use DomEdit::*;
 /// Our DiffMachine is an iterative tree differ.
 ///
 /// It uses techniques of a stack machine to allow pausing and restarting of the diff algorithm. This
-/// was origially implemented using recursive techniques, but Rust lacks the abilty to call async functions recursively,
+/// was originally implemented using recursive techniques, but Rust lacks the ability to call async functions recursively,
 /// meaning we could not "pause" the original diffing algorithm.
 ///
 /// Instead, we use a traditional stack machine approach to diff and create new nodes. The diff algorithm periodically
@@ -194,7 +194,7 @@ impl<'bump> DiffMachine<'bump> {
             };
 
             if deadline_expired() {
-                log::debug!("Deadling expired before we could finished!");
+                log::debug!("Deadline expired before we could finished!");
                 return false;
             }
         }
@@ -591,7 +591,7 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     // =============================================
-    //  Utilites for creating new diff instructions
+    //  Utilities for creating new diff instructions
     // =============================================
 
     // Diff the given set of old and new children.
@@ -607,7 +607,7 @@ impl<'bump> DiffMachine<'bump> {
     //
     // Remember, non-empty lists does not mean that there are real elements, just that there are virtual elements.
     //
-    // Frament nodes cannot generate empty children lists, so we can assume that when a list is empty, it belongs only
+    // Fragment nodes cannot generate empty children lists, so we can assume that when a list is empty, it belongs only
     // to an element, and appending makes sense.
     fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Remember, fragments can never be empty (they always have a single child)
@@ -757,7 +757,7 @@ impl<'bump> DiffMachine<'bump> {
             self.remove_nodes(old_middle, true);
         } else if old_middle.is_empty() {
             // there were no old elements, so just create the new elements
-            // we need to find the right "foothold" though - we shouldnt use the "append" at all
+            // we need to find the right "foothold" though - we shouldn't use the "append" at all
             if left_offset == 0 {
                 // insert at the beginning of the old list
                 let foothold = &old[old.len() - right_offset];
@@ -862,7 +862,7 @@ impl<'bump> DiffMachine<'bump> {
     // Upon exit from this function, it will be restored to that same state.
     fn diff_keyed_middle(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         /*
-        1. Map the old keys into a numerical ordering based on indicies.
+        1. Map the old keys into a numerical ordering based on indices.
         2. Create a map of old key to its index
         3. Map each new key to the old key, carrying over the old index.
             - IE if we have ABCD becomes BACD, our sequence would be 1,0,2,3
@@ -888,7 +888,7 @@ impl<'bump> DiffMachine<'bump> {
         debug_assert_ne!(new.first().map(|n| n.key()), old.first().map(|o| o.key()));
         debug_assert_ne!(new.last().map(|n| n.key()), old.last().map(|o| o.key()));
 
-        // 1. Map the old keys into a numerical ordering based on indicies.
+        // 1. Map the old keys into a numerical ordering based on indices.
         // 2. Create a map of old key to its index
         // IE if the keys were A B C, then we would have (A, 1) (B, 2) (C, 3).
         let old_key_to_old_index = old
@@ -956,7 +956,7 @@ impl<'bump> DiffMachine<'bump> {
             if old_index == u32::MAX as usize {
                 stack.create_node(new_node, MountType::Absorb);
             } else {
-                // this funciton should never take LIS indicies
+                // this function should never take LIS indices
                 stack.push(DiffInstruction::PrepareMove { node: new_node });
                 stack.push(DiffInstruction::Diff {
                     new: new_node,

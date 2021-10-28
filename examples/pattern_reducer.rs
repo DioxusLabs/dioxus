@@ -1,7 +1,7 @@
 //! Example: Reducer Pattern
 //! -----------------
 //!
-//! This example shows how to encapsulate sate in dioxus components with the reducer pattern.
+//! This example shows how to encapsulate state in dioxus components with the reducer pattern.
 //! This pattern is very useful when a single component can handle many types of input that can
 //! be represented by an enum.
 

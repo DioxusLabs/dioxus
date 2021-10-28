@@ -8,7 +8,7 @@
 //!
 //! This also makes it easy to write "pull"-style iterators that don't have a known size.
 //!
-//! However, when the size of an iterator needs to be know for display purposes, collecting is fine.
+//! However, when the size of an iterator needs to be known for display purposes, collecting is fine.
 
 use dioxus::prelude::*;
 

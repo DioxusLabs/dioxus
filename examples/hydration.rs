@@ -1,4 +1,4 @@
-//! Example: realworld usage of hydration
+//! Example: real-world usage of hydration
 //! ------------------------------------
 //!
 //! This example shows how to pre-render a page using dioxus SSR and then how to rehydrate it on the client side.

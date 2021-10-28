@@ -107,7 +107,7 @@ At this point, you could call `cargo run` and be greeted with a simple `Hello, W
 This bit of code imports everything from the the `prelude` module. This brings into scope the right traits, types, and macros needed for working with Dioxus.
 
 ```rust
-use diouxs::prelude::*;
+use dioxus::prelude::*;
 ```
 
 This initialization code launches a Tokio runtime on a helper thread where your code will run. Then, the WebView renderer will be launched on the main-thread. Due to platform requirements, the main thread is blocked by your app's event loop.
@@ -133,7 +133,7 @@ In cases where props need to borrow from their parent, you will need to specify 
 fn App<'a>(cx: Component<'a, ()>) -> Element<'a> {
     cx.render(rsx! {
         div { "Hello, world!" }
-    })    
+    })
 }
 ```
 

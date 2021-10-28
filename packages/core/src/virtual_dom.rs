@@ -3,7 +3,7 @@
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 //!
 //! In this file, multiple items are defined. This file is big, but should be documented well to
-//! navigate the innerworkings of the Dom. We try to keep these main mechanics in this file to limit
+//! navigate the inner workings of the Dom. We try to keep these main mechanics in this file to limit
 //! the possible exposed API surface (keep fields private). This particular implementation of VDOM
 //! is extremely efficient, but relies on some unsafety under the hood to do things like manage
 //! micro-heaps for components. We are currently working on refactoring the safety out into safe(r)
@@ -11,10 +11,10 @@
 //!
 //! Included is:
 //! - The [`VirtualDom`] itself
-//! - The [`Scope`] object for mangning component lifecycle
+//! - The [`Scope`] object for managing component lifecycle
 //! - The [`ActiveFrame`] object for managing the Scope`s microheap
 //! - The [`Context`] object for exposing VirtualDOM API to components
-//! - The [`NodeFactory`] object for lazyily exposing the `Context` API to the nodebuilder API
+//! - The [`NodeFactory`] object for lazily exposing the `Context` API to the nodebuilder API
 //!
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
@@ -130,7 +130,7 @@ impl VirtualDom {
     /// Launch the VirtualDom, but provide your own channel for receiving and sending messages into the scheduler.
     ///
     /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
-    /// VirtualDom to be created just to retrive its channel receiver.
+    /// VirtualDom to be created just to retrieve its channel receiver.
     pub fn new_with_props_and_scheduler<P: 'static + Send>(
         root: FC<P>,
         root_props: P,
@@ -173,7 +173,7 @@ impl VirtualDom {
 
     /// Get the [`Scope`] for the root component.
     ///
-    /// This is useful for traversing the tree from the root for heuristics or altnerative renderers that use Dioxus
+    /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
     /// directly.
     pub fn base_scope(&self) -> &Scope {
         self.scheduler.pool.get_scope(self.base_scope).unwrap()
@@ -186,7 +186,7 @@ impl VirtualDom {
 
     /// Update the root props of this VirtualDOM.
     ///
-    /// This method retuns None if the old props could not be removed. The entire VirtualDOM will be rebuilt immediately,
+    /// This method returns None if the old props could not be removed. The entire VirtualDOM will be rebuilt immediately,
     /// so calling this method will block the main thread until computation is done.
     ///
     /// ## Example
@@ -258,7 +258,7 @@ impl VirtualDom {
 
     /// Compute a manual diff of the VirtualDOM between states.
     ///
-    /// This can be useful when state inside the DOM is remotely changed from the outside, but not propogated as an event.
+    /// This can be useful when state inside the DOM is remotely changed from the outside, but not propagated as an event.
     ///
     /// In this case, every component will be diffed, even if their props are memoized. This method is intended to be used
     /// to force an update of the DOM when the state of the app is changed outside of the app.

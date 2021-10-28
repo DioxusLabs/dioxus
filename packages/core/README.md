@@ -26,13 +26,13 @@ Dioxus-core leverages some really cool techniques and hits a very high level of 
 
 There's certainly more to the story, but these optimizations make Dioxus memory use and allocation count extremely minimal. For an average application, it is possible that zero allocations will need to be performed once the app has been mounted. Only when new components are added to the dom will allocations occur - and only en mass. The space of old VNodes is dynamically recycled as new nodes are added. Additionally, Dioxus tracks the average memory footprint of previous components to estimate how much memory allocate for future components.
 
-All in all, Dioxus treats memory as an incredibly valuable resource. Combined with the memory-efficient footprint of WASM compilation, Dioxus apps can scale to thousands of components and still stay snappy and respect your RAM usage.
+All in all, Dioxus treats memory as an incredibly valuable resource. Combined with the memory-efficient footprint of Wasm compilation, Dioxus apps can scale to thousands of components and still stay snappy and respect your RAM usage.
 
 ## Goals
 
 We have big goals for Dioxus. The final implementation must:
 
-- Be **fast**. Allocators are typically slow in WASM/Rust, so we should have a smart way of allocating.
+- Be **fast**. Allocators are typically slow in Wasm/Rust, so we should have a smart way of allocating.
 - Be extremely memory efficient. Servers should handle tens of thousands of simultaneous VDoms with no problem.
 - Be concurrent. Components should be able to pause rendering using a threading mechanism.
 - Be "remote". Edit lists should be separate from the Renderer implementation.

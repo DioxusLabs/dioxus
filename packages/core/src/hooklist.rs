@@ -30,10 +30,10 @@ impl HookList {
 
     /// This resets the internal iterator count
     /// It's okay that we've given out each hook, but now we have the opportunity to give it out again
-    /// Therefore, resetting is cosudered unsafe
+    /// Therefore, resetting is considered unsafe
     ///
     /// This should only be ran by Dioxus itself before "running scope".
-    /// Dioxus knows how to descened through the tree to prevent mutable aliasing.
+    /// Dioxus knows how to descend through the tree to prevent mutable aliasing.
     pub(crate) unsafe fn reset(&mut self) {
         self.idx.set(0);
     }

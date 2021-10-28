@@ -15,7 +15,7 @@ use std::{
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
 ///
-/// VNodes are designed to be lightweight and used with with a bump alloactor. To create a VNode, you can use either of:
+/// VNodes are designed to be lightweight and used with with a bump allocator. To create a VNode, you can use either of:
 /// - the [`rsx`] macro
 /// - the [`html`] macro
 /// - the [`NodeFactory`] API
@@ -110,7 +110,7 @@ pub enum VNode<'src> {
     /// # Example
     ///
     /// ```rust
-    /// let node = cx.render(rsx! ( Fragment {} )).unwrap();    
+    /// let node = cx.render(rsx! ( Fragment {} )).unwrap();
     /// if let VNode::Fragment(frag) = node {
     ///     let root = &frag.children[0];
     ///     assert_eq!(root, VNode::Anchor);
@@ -159,7 +159,7 @@ pub struct VAnchor {
     pub dom_id: Cell<Option<ElementId>>,
 }
 
-/// A bump-alloacted string slice and metadata.
+/// A bump-allocated string slice and metadata.
 pub struct VText<'src> {
     pub text: &'src str,
 
@@ -593,7 +593,7 @@ impl<'a> NodeFactory<'a> {
 /// impl IntoIterator<Item = impl IntoVNode<'a>>
 /// ```
 ///
-/// As such, all node creation must go through the factory, which is only availble in the component context.
+/// As such, all node creation must go through the factory, which is only available in the component context.
 /// These strict requirements make it possible to manage lifetimes and state.
 pub trait IntoVNode<'a> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;

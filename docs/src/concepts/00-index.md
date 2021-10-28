@@ -2,7 +2,7 @@
 
 In this chapter of the book, we'll cover some core topics on how Dioxus works and how to best leverage the features to build a beautiful, reactive app.
 
-At a very high level, Dioxus is simply a Rust framework for _declaring_ user interfaces and _reacting_ to changes. 
+At a very high level, Dioxus is simply a Rust framework for _declaring_ user interfaces and _reacting_ to changes.
 
 1) We declare what we want our user interface to look like given a state using Rust-based logic and control flow.
 2) We declare how we want our state to change when the user triggers an event.
@@ -12,7 +12,7 @@ At a very high level, Dioxus is simply a Rust framework for _declaring_ user int
 
 Dioxus is a *declarative* framework. This means that instead of manually writing calls to "create element" and "set element background to red," we simply *declare* what we want the element to look like and let Dioxus handle the differences.
 
-Let's pretend that we have a stoplight we need to control - it has a color state with red, yellow, and green as options. 
+Let's pretend that we have a stoplight we need to control - it has a color state with red, yellow, and green as options.
 
 
 Using an imperative approach, we would have to manually declare each element and then handlers for advancing the stoplight.

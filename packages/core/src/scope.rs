@@ -17,7 +17,7 @@ use std::{
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
 ///
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
-/// usecase they might have.
+/// use case they might have.
 pub struct Scope {
     // Book-keeping about our spot in the arena
     pub(crate) parent_idx: Option<ScopeId>,
@@ -233,20 +233,20 @@ impl Scope {
     }
 
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
-    /// causuing UB in our tree.
+    /// causing UB in our tree.
     ///
     /// This works by cleaning up our references from the bottom of the tree to the top. The directed graph of components
     /// essentially forms a dependency tree that we can traverse from the bottom to the top. As we traverse, we remove
     /// any possible references to the data in the hook list.
     ///
-    /// Refrences to hook data can only be stored in listeners and component props. During diffing, we make sure to log
+    /// References to hook data can only be stored in listeners and component props. During diffing, we make sure to log
     /// all listeners and borrowed props so we can clear them here.
     ///
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
     pub(crate) fn ensure_drop_safety(&mut self, pool: &ResourcePool) {
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
-        // run the hooks (which hold an &mut Referrence)
+        // run the hooks (which hold an &mut Reference)
         // right now, we don't drop
         self.borrowed_props
             .get_mut()

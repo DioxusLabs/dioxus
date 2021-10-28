@@ -7,7 +7,7 @@ use crate::innerlude::*;
 pub(crate) struct RealChildIterator<'a> {
     scopes: &'a ResourcePool,
 
-    // Heuristcally we should never bleed into 4 completely nested fragments/components
+    // Heuristically we should never bleed into 4 completely nested fragments/components
     // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
     // TODO: use const generics instead of the 4 estimation
     stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 4]>,

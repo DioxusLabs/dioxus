@@ -2,7 +2,7 @@
 
 ![dioxuslogo](./images/dioxuslogo_full.png)
 
-**Dioxus** is a framework and ecosystem for building fast, scalable, and robust user interfaces with the Rust programming language. This guide will help you get up-and-running with Dioxus running on the Web, Desktop, Mobile, and more. 
+**Dioxus** is a framework and ecosystem for building fast, scalable, and robust user interfaces with the Rust programming language. This guide will help you get up-and-running with Dioxus running on the Web, Desktop, Mobile, and more.
 
 ```rust
 fn App((cx, props): Component<()>) -> Element {
@@ -22,7 +22,7 @@ The Dioxus API and patterns closely resemble React - if this guide is lacking in
 ### Web Support
 ---
 
-The Web is the most-supported target platform for Dioxus. To run on the Web, your app must be compiled to WebAssembly and depend on the `dioxus` crate with the `web` feature enabled. Because of the WASM limitation, not every crate will work with your web-apps, so you'll need to make sure that your crates work without native system calls (timers, IO, etc).
+The Web is the most-supported target platform for Dioxus. To run on the Web, your app must be compiled to WebAssembly and depend on the `dioxus` crate with the `web` feature enabled. Because of the Wasm limitation, not every crate will work with your web-apps, so you'll need to make sure that your crates work without native system calls (timers, IO, etc).
 
 Because the web is a fairly mature platform, we expect there to be very little API churn for web-based features.
 

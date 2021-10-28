@@ -1,12 +1,12 @@
 # Dioxus Liveview
-Liveview is a configuration where a server and a client work together to render a Dioxus app. Liveview monomorphizes a web application, eliminating the need for frontend-specific APIs. 
+Liveview is a configuration where a server and a client work together to render a Dioxus app. Liveview monomorphizes a web application, eliminating the need for frontend-specific APIs.
 
-This is a developer-friendly alternative to the JAM-stack (Javascript + API + Markdown), combining the WASM-compatibility and async performance of Rust.
+This is a developer-friendly alternative to the JAM-stack (Javascript + API + Markdown), combining the Wasm-compatibility and async performance of Rust.
 
 ## Why liveview?
 
-### No APIs necessary! 
-Because Liveview combines the server and the client, you'll find dedicated APIs unnecessary. You'll still want to implement a datafetching service for Live-apps, but this can be implemented as a crate and shared between apps. This approach was designed to let you model out your data requirements without needing to maintain a public versioned API.
+### No APIs necessary!
+Because Liveview combines the server and the client, you'll find dedicated APIs unnecessary. You'll still want to implement a data-fetching service for Live-apps, but this can be implemented as a crate and shared between apps. This approach was designed to let you model out your data requirements without needing to maintain a public versioned API.
 
 You can find more information to data modeling and fetching for LiveApps in the "Book of Dioxus Patterns".
 
