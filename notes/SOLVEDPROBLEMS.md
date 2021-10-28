@@ -422,7 +422,7 @@ refs only work when you're native to the platform. it doesn't make sense to gain
 
 React makes refs - and protection against dom manipulation - work by modifying the real dom while diffing the virtual dom. This lets it bind real dom elements to the virtual dom elements. Dioxus currently does not do this, instead creating a list of changes for an interpreter to apply once diffing has completed.
 
-This behavior fit dodrio well as all dom manipulations would occur batched. The original intention for this approach was to make it faster to read out of wasm and into JS. Dodrio is essentially performing the wasm job that wasm<->js for strings does. In theory, this particular optimization is not necessary.
+This behavior fit dodrio well as all dom manipulations would occur batched. The original intention for this approach was to make it faster to read out of Wasm and into JS. Dodrio is essentially performing the Wasm job that Wasm<->JS for strings does. In theory, this particular optimization is not necessary.
 
 https://github.com/fitzgen/dodrio/issues/77
 

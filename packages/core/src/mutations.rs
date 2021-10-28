@@ -41,7 +41,7 @@ impl<'a> Mutations<'a> {
         self.edits.push(InsertBefore { n, root });
     }
 
-    // Remove Nodesfrom the dom
+    // Remove Nodes from the dom
     pub(crate) fn remove(&mut self, id: u64) {
         self.edits.push(Remove { root: id });
     }
@@ -146,7 +146,7 @@ impl<'a> NodeRefMutation<'a> {
     }
 }
 
-/// A `DomEdit` represents a serialzied form of the VirtualDom's trait-based API. This allows streaming edits across the
+/// A `DomEdit` represents a serialized form of the VirtualDom's trait-based API. This allows streaming edits across the
 /// network or through FFI boundaries.
 #[derive(Debug, PartialEq)]
 #[cfg_attr(
@@ -164,7 +164,7 @@ pub enum DomEdit<'bump> {
         many: u32,
     },
 
-    // "Root" refers to the item direclty
+    // "Root" refers to the item directly
     // it's a waste of an instruction to push the root directly
     ReplaceWith {
         root: u64,

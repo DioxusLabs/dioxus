@@ -3,10 +3,10 @@
 //!
 //! This example shows how to hide or show elements using conditional rendering.
 //!
-//! Often times you might want to display a different UI given some sort of condition. This is called "conditonal rendering".
+//! Oftentimes you might want to display a different UI given some sort of condition. This is called "conditional rendering".
 //! In Dioxus, you can perform conditional rendering with optionals or matching.
 //!
-//! The rsx! and html! macro accepts anything that is `IntoIter<Item = impl IntoVnode>`. Options and Results both implement
+//! The rsx! and html! macros accepts anything that is `IntoIter<Item = impl IntoVnode>`. Options and Results both implement
 //! IntoIter for impl VNode, so you can use option/result for conditional rendering.
 
 use dioxus::prelude::*;
@@ -58,7 +58,7 @@ pub static Example1: FC<MyProps1> = |(cx, props)| {
             // or with optional chaining
             {
                 props.should_show
-                .then(|| rsx!(cx, div {"it is false!"}))
+                .then(|| rsx!(cx, div {"it is true!"}))
                 .unwrap_or_else(|| rsx!(cx, div {"it is false!"}))
             }
         }

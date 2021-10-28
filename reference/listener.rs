@@ -11,7 +11,7 @@ pub static Example: FC<()> = |(cx, props)| {
     cx.render(rsx! {
         ButtonList {}
         NonUpdatingEvents {}
-        DisablePropogation {}
+        DisablePropagation {}
     })
 };
 
@@ -42,13 +42,13 @@ static NonUpdatingEvents: FC<()> = |(cx, props)| {
     })
 };
 
-static DisablePropogation: FC<()> = |(cx, props)| {
+static DisablePropagation: FC<()> = |(cx, props)| {
     rsx!(cx,
         div {
-            onclick: move |_| log::info!("event propogated to the div!")
+            onclick: move |_| log::info!("event propagated to the div!")
             button {
                 onclick: move |evt| {
-                    log::info!("Button will allow propogation");
+                    log::info!("Button will allow propagation");
                 }
             }
         }

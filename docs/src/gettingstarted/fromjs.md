@@ -18,7 +18,7 @@ let val = 10;    // rust
 const val = 10;  // js
 ```
 
-However, `const` in JS does not prohibit you from modify the value itself only disallowing assignment. In Rust, immutable **is immutable**. You _never_ have to work about accidentally mutating data; mutating immutable data in Rust requires deliberate advanced datastructures that you won't find in your typical frontend code.
+However, `const` in JS does not prohibit you from modify the value itself only disallowing assignment. In Rust, immutable **is immutable**. You _never_ have to work about accidentally mutating data; mutating immutable data in Rust requires deliberate advanced data structures that you won't find in your typical frontend code.
 
 ## How do strings work?
 

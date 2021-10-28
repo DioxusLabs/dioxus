@@ -109,7 +109,7 @@
 //!     cx.use_hook(
 //!         // Initializer stores a value
 //!         |hook_idx| String::new("stored_data"),
-//!           
+//!
 //!         // Runner returns the hook value every time the component is rendered
 //!         |hook| &*hook,
 //!
@@ -153,7 +153,7 @@
 //! ```
 //! use dioxus::prelude::*;
 //! fn main() {
-//!     diouxs::web::launch(Example);
+//!     dioxus::web::launch(Example);
 //! }
 //!
 //! pub pub static Example: FC<()> = |(cx, props)|{

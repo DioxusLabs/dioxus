@@ -49,7 +49,7 @@ enum DomEdit {
 }
 ```
 
-The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.org/wiki/Stack_machine) where the "push_root" method pushes a new "real" DOM node onto the stack and "append_child" and "replace_with" both remove nodes from the stack. 
+The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.org/wiki/Stack_machine) where the "push_root" method pushes a new "real" DOM node onto the stack and "append_child" and "replace_with" both remove nodes from the stack.
 
 
 ### An example
@@ -60,7 +60,7 @@ For the sake of understanding, lets consider this example - a very simple UI dec
 rsx!( h1 {"hello world"} )
 ```
 
-To get things started, Dioxus must first navigate to the container of this h1 tag. To "navigate" here, the internal diffing algorithm generates the DomEdit `PushRoot` where the ID of the root is the container. 
+To get things started, Dioxus must first navigate to the container of this h1 tag. To "navigate" here, the internal diffing algorithm generates the DomEdit `PushRoot` where the ID of the root is the container.
 
 When the renderer receives this instruction, it pushes the actual Node onto its own stack. The real renderer's stack will look like this:
 
@@ -228,7 +228,7 @@ For example, the `div` element is (approximately!) defined as such:
 ```rust
 struct div;
 impl div {
-    /// Some glorious documentaiton about the class proeprty.
+    /// Some glorious documentation about the class property.
     #[inline]
     fn class<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("class", val, None, false)
@@ -251,7 +251,7 @@ There are three opportunities for platform incompatibilities to break your progr
 
 The best hooks will properly detect the target platform and still provide functionality, failing gracefully when a platform is not supported. We encourage - and provide - an indication to the user on what platforms a hook supports. For issues 1 and 2, these return a result as to not cause panics on unsupported platforms. When designing your hooks, we recommend propagating this error upwards into user facing code, making it obvious that this particular service is not supported.
 
-This particular code _will panic_ due to the unwrap on downcast_ref. Try to avoid these types of patterns. 
+This particular code _will panic_ due to the unwrap on downcast_ref. Try to avoid these types of patterns.
 
 ```rust
 let div_ref = use_node_ref(cx);

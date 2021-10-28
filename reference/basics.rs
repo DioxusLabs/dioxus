@@ -29,7 +29,7 @@ static Greeting: FC<GreetingProps> = |(cx, props)| {
     cx.render(rsx! {
         div {
             h1 { "Hello, {props.name}!" }
-            p { "Welcome to the Diouxs framework" }
+            p { "Welcome to the Dioxus framework" }
             br {}
             {cx.children()}
         }

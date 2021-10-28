@@ -56,7 +56,7 @@ async fn ExampleLoader(cx: Context<()>) -> Vnode {
 
     match name {
         Ok(name) => rsx! { <div> "Hello {something}" </div> },
-        Err(e) => rsx! { <div> "An error occured :(" </div>}
+        Err(e) => rsx! { <div> "An error occurred :(" </div>}
     }
 }
 ```

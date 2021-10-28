@@ -2,7 +2,7 @@
 //! -----------------
 //! This example demonstrates how the use_suspense hook can be used to load and render asynchronous data.  Suspense enables
 //! components to wait on futures to complete before rendering the result into VNodes. These VNodes are immediately
-//! available in a suspended" fashion and will automatically propogate to the UI when the future completes.
+//! available in a suspended" fashion and will automatically propagate to the UI when the future completes.
 //!
 //! Currently, suspense futures are non-restartable. In the future, we'll provide more granular control of how to start,
 //! stop, and reset these futures.

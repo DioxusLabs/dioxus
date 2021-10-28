@@ -1,6 +1,6 @@
 # VNodes and Elements
 
-At the heart of Dioxus is the concept of an "element" - a container that can have children, properties, event handlers, and other important attributes. Dioxus only knows how to render the `VNode` datastructure - an Enum variant of an Element, Text, Components, Fragments, and Anchors.
+At the heart of Dioxus is the concept of an "element" - a container that can have children, properties, event handlers, and other important attributes. Dioxus only knows how to render the `VNode` data structure - an Enum variant of an Element, Text, Components, Fragments, and Anchors.
 
 Because Dioxus is meant for the Web and uses WebView as a desktop and mobile renderer, almost all elements in Dioxus share properties with their HTML counterpart. When we declare our elements, we'll do so using HTML semantics:
 
@@ -27,8 +27,8 @@ And produce the corresponding html structure:
 <div>hello world</div>
 ```
 
-Our structure declared above is made of two variants of the `VNode` datastructure:
-- A VElement with a tagname of `div`
+Our structure declared above is made of two variants of the `VNode` data structure:
+- A VElement with a tag name of `div`
 - A VText with contents of `"hello world"`
 
 ## All the VNode types
@@ -49,7 +49,7 @@ To speed up the process of building our elements and text, Dioxus uses a special
 - Bumpalo: [https://github.com/fitzgen/bumpalo](https://github.com/fitzgen/bumpalo)
 - Dodrio: [https://github.com/fitzgen/dodrio](https://github.com/fitzgen/dodrio)
 
-In other frontend frameworks for Rust, nearly every string is allocated using the global allocator. This means that strings in Rust do not benefit from the immutable string interning optimizations that JavaScript engines employ. By using a smaller, faster, more limited allocator, we can increase framework performance, bypassing even the naive WasmBindgen benchmarks for very quick renders.
+In other frontend frameworks for Rust, nearly every string is allocated using the global allocator. This means that strings in Rust do not benefit from the immutable string interning optimizations that JavaScript engines employ. By using a smaller, faster, more limited allocator, we can increase framework performance, bypassing even the naive wasm-bindgen benchmarks for very quick renders.
 
 It's important to note that VNodes are not `'static` - the VNode definition has a lifetime attached to it:
 

@@ -12,7 +12,7 @@ fn live_component(cx: &Context<()>) -> DomTree {
         #[cfg(target_arch = "wasm32")]
         || html! { <div> {"Loading data from server..."} </div> },
 
-        // Renderered on the server
+        // Rendered on the server
         #[cfg(not(target_arch = "wasm32"))]
         || html! { <div> {"Server Data Loaded!"} </div> },
     )

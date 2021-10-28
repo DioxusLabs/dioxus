@@ -43,19 +43,19 @@ before the timeout, then Dioxus will work on any pending work in the interim. If
 are committed, and coroutines are polled during the idle period. However, if the timeout expires, then the DiffMachine
 future is paused and saved (self-referentially).
 
-# Priorty System
+# Priority System
 
 So far, we've been able to thread our Dioxus work between animation frames - the main thread is not blocked! But that
 doesn't help us _under load_. How do we still stay snappy... even if we're doing a lot of work? Well, that's where
 priorities come into play. The goal with priorities is to schedule shorter work as a "high" priority and longer work as
-a "lower" priority. That way, we can interrupt long-running low-prioty work with short-running high-priority work.
+a "lower" priority. That way, we can interrupt long-running low-priority work with short-running high-priority work.
 
 React's priority system is quite complex.
 
 There are 5 levels of priority and 2 distinctions between UI events (discrete, continuous). I believe React really only
 uses 3 priority levels and "idle" priority isn't used... Regardless, there's some batching going on.
 
-For Dioxus, we're going with a 4 tier priorty system:
+For Dioxus, we're going with a 4 tier priority system:
 - Sync: Things that need to be done by the next frame, like TextInput on controlled elements
 - High: for events that block all others - clicks, keyboard, and hovers
 - Medium: for UI events caused by the user but not directly - scrolls/forms/focus (all other events)
@@ -132,7 +132,7 @@ pub(crate) struct Scheduler {
     /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
     ///
     /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
-    /// and rusts's guartnees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
+    /// and rusts's guarantees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
     pub pool: ResourcePool,
 
     pub heuristics: HeuristicsEngine,
@@ -187,7 +187,7 @@ impl Scheduler {
                 let sender = sender.clone();
                 Rc::new(move |id| {
                     //
-                    log::debug!("scheduling immedate! {:?}", id);
+                    log::debug!("scheduling immediate! {:?}", id);
                     sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap()
                 })
             },
@@ -387,7 +387,7 @@ impl Scheduler {
             });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                log::info!("handlng dirty scope {:?}", scopeid);
+                log::info!("handling dirty scope {:?}", scopeid);
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
                     log::debug!("about to run scope {:?}", scopeid);
@@ -463,7 +463,7 @@ impl Scheduler {
         - When called, check for any UI events that might've been received since the last frame.
         - Dump all UI events into a "pending discrete" queue and a "pending continuous" queue.
 
-        - If there are any pending discrete events, then elevate our priorty level. If our priority level is already "high,"
+        - If there are any pending discrete events, then elevate our priority level. If our priority level is already "high,"
             then we need to finish the high priority work first. If the current work is "low" then analyze what scopes
             will be invalidated by this new work. If this interferes with any in-flight medium or low work, then we need
             to bump the other work out of the way, or choose to process it so we don't have any conflicts.
@@ -583,7 +583,7 @@ impl Scheduler {
         } else {
             // todo: should this be a hard error?
             log::warn!(
-                "Component failed to run succesfully during rebuild.
+                "Component failed to run successfully during rebuild.
                 This does not result in a failed rebuild, but indicates a logic failure within your app."
             );
         }

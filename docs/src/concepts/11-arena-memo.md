@@ -53,4 +53,4 @@ fn test(cx: Context<()>) -> DomTree {
 }
 ```
 
-While the contents of the destructued bundle might change, not every child component will need to be re-rendered.
+While the contents of the destructured bundle might change, not every child component will need to be re-rendered.
