@@ -1,8 +1,12 @@
 # Hello World
 
-Let's put together a simple "hello world" to get acquainted with Dioxus. The Dioxus-CLI has an equivalent to "create-react-app" built-in, but setting up Dioxus apps is simple enough to not need additional tooling.
+Let's put together a simple "hello world" desktop application to get acquainted with Dioxus. 
 
-This demo will build a simple desktop app. Check out the platform-specific setup guides on how to port your app to different targets.
+In this chapter, we'll cover:
+
+- Starting a new Dioxus project with Cargo
+- Adding Dioxus as a dependency
+- Launching our first component as the app root
 
 ### A new project with Cargo
 

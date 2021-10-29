@@ -2,6 +2,12 @@
 
 Every user interface you've ever used is just a symphony of tiny widgets working together to abstract over larger complex functions. In Dioxus, we call these tiny widgets "Elements." Using Components, you can easily compose Elements into larger groups to form even larger structures: Apps.
 
+In this chapter, we'll cover:
+- Declaring our first Element
+- Composing Elements together
+- Element properties
+
+## Declaring our first Element
 Because Dioxus is mostly used with HTML/CSS renderers, the default Element "collection" is HTML. Provided the `html` feature is not disabled, we can declare Elements using the `rsx!` macro:
 
 ```rust

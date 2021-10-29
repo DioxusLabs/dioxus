@@ -2,9 +2,14 @@
 
 In the previous chapter, we learned about Elements and how they can be composed to create a basic User Interface. In this chapter, we'll learn how to group Elements together to form Components.
 
+In this chapter, we'll learn:
+- What makes a Component 
+- How to model a component and its properties in Dioxus 
+- How to "think declaratively"
+
 ## What is a component?
 
-In short, a component is a special function that takes an input and outputs a group of Elements. Typically, Components serve a single purpose: group functionality of a User Interface. Much like a function encapsulates some specific computation task, a Component encapsulates some specific rendering task.
+In short, a component is a special function that takes input properties and outputs an Element. Typically, Components serve a single purpose: group functionality of a User Interface. Much like a function encapsulates some specific computation task, a Component encapsulates some specific rendering task.
 
 ### Learning through prior art
 
@@ -24,7 +29,7 @@ This component has a bunch of important information:
 If we wanted to sketch out these requirements in Rust, we would start with a struct:
 
 ```rust
-struct Post {
+struct PostData {
     score: i32,
     comment_count: u32,
     post_time: Instant,
@@ -52,20 +57,20 @@ If we included all this functionality in one `rsx!` call, it would be huge! Inst
 
 ![Post as Component](../images/reddit_post_components.png)
 
-- **VoteButtons**: Upvote/Downvote
+- **VoteButton**: Upvote/Downvote
 - **TitleCard**: Title, Filter-By-Url
 - **MetaCard**: Original Poster, Time Submitted
 - **ActionCard**: View comments, Share, Save, Hide, Give award, Report, Crosspost
 
 ### Modeling with Dioxus
 
-When designing these components, we can start by sketching out the hierarchy using Dioxus. In general, our "Post" component will simply be comprised of our four sub-components. We would start the process by defining our "Post" component. Our component will take in all of the important data we listed above as part of its input.
+We can start by sketching out the Element hierarchy using Dioxus. In general, our "Post" component will be comprised of the four sub-components listed above. First, let's define our `Post` component.
 
 Unlike normal functions, Dioxus components must explicitly define a single struct to contain all the inputs. These are commonly called "Properties" (props). Our component will be a combination of these properties and a function to render them.
 
-Our props must implement the `Properties` trait and - if the component does not borrow any data - `PartialEq`. Both of these can be done automatically through derive macros:
+Our props must implement the `Props` trait and - if the component does not borrow any data - `PartialEq`. Both of these can be done automatically through derive macros:
 ```rust
-#[derive(Properties, PartialEq)]
+#[derive(Props, PartialEq)]
 struct PostProps {
     id: Uuid,
     score: i32,
@@ -82,7 +87,7 @@ And our render function:
 fn Post((cx, props): Component<PostProps>) -> Element {
     cx.render(rsx!{
         div { class: "post-container"
-            VoteButtons {
+            VoteButton {
                 score: props.score,
             }
             TitleCard {
@@ -101,21 +106,23 @@ fn Post((cx, props): Component<PostProps>) -> Element {
 }
 ```
 
-When we render components, we use the traditional Rust struct syntax to declare their properties. Dioxus will automatically call "into" on the property fields, cloning when necessary. Notice how our `Post` component is simply a collection of important smaller components wrapped together in a single container.
+When declaring a component in `rsx!`, we can pass in properties using the traditional Rust struct syntax. Dioxus will automatically call "into" on the property fields, cloning when necessary. Our `Post` component is simply a collection of smaller components wrapped together in a single container.
 
-Let's take a look at the `VoteButtons` component. For now, we won't include any interactivity - just the rendering the vote buttons and score to the screen.
+Let's take a look at the `VoteButton` component. For now, we won't include any interactivity - just the rendering the score and buttons to the screen.
 
-Most of your Components will look exactly like this: a Props struct and a render function. As covered before, we'll build our User Interface with the `rsx!` macro and HTML tags. However, with components, we must actually "render" our HTML markup. Calling `cx.render` converts our "lazy" `rsx!` structure into an `Element`. Every component must take a tuple of `Context` and `&Props` and return an `Element`.
+Most of your Components will look exactly like this: a Props struct and a render function. Every component must take a tuple of `Context` and `&Props` and return an `Element`.
+
+As covered before, we'll build our User Interface with the `rsx!` macro and HTML tags. However, with components, we must actually "render" our HTML markup. Calling `cx.render` converts our "lazy" `rsx!` structure into an `Element`. 
+
 ```rust
-
 #[derive(PartialEq, Props)]
-struct VoteButtonsProps {
+struct VoteButtonProps {
     score: i32
 }
 
-fn VoteButtons((cx, props): Component<VoteButtonsProps>) -> Element {
+fn VoteButton((cx, props): Component<VoteButtonProps>) -> Element {
     cx.render(rsx!{
-        div { class: "votebuttons"
+        div { class: "votebutton"
             div { class: "arrow up" }
             div { class: "score", "{props.score}"}
             div { class: "arrow down" }
@@ -126,14 +133,14 @@ fn VoteButtons((cx, props): Component<VoteButtonsProps>) -> Element {
 
 ## Borrowing
 
-You can avoid clones using borrowed component syntax. For example, let's say we passed the TitleCard title as an `&str` instead of `String`. In JavaScript, the string would simply be copied by reference - none of the contents would be copied, but rather the reference to the string's contents are copied. In Rust, this would be similar to calling `clone` on `Rc<str>`.
+You can avoid clones using borrowed component syntax. For example, let's say we passed the `TitleCard` title as an `&str` instead of `String`. In JavaScript, the string would be copied by reference - none of the contents would be copied, but rather the reference to the string's contents are copied. In Rust, this would be similar to calling `clone` on `Rc<str>`.
 
 Because we're working in Rust, we can choose to either use `Rc<str>`, clone `Title` on every re-render of `Post`, or simply borrow it. In most cases, you'll just want to let `Title` be cloned. 
 
 To enable borrowed values for your component, we need to add a lifetime to let the Rust compiler know that the output `Element` borrows from the component's props.
 
 ```rust
-#[derive(Properties)]
+#[derive(Props)]
 struct TitleCardProps<'a> {
     title: &'a str,
 }
@@ -145,29 +152,32 @@ fn TitleCard<'a>((cx, props): Component<'a, TitleCardProps>) -> Element<'a> {
 }   
 ```
 
+For users of React: Dioxus knows *not* to memoize components that borrow property fields. By default, every component in Dioxus is memoized. This can be disabled by the presence of a non-`'static` borrow.
+
+This means that during the render process, a newer version of `TitleCardProps` will never be compared with a previous version, saving some clock cycles.
+
 ## The `Context` object
 
-Though very similar with React, Dioxus is different in a few ways. Most notably, React components will not have a `Context` parameter in the component declaration. 
+Though very similar to React, Dioxus is different in a few ways. Most notably, React components will not have a `Context` parameter in the component declaration. 
 
 Have you ever wondered how the `useState()` call works in React without a `this` object to actually store the state? 
 
-React uses global variables to store this information which must be carefully managed, especially in environments with multiple React roots - like the server.
+React uses global variables to store this information. Global mutable variables must be carefully managed and are broadly discouraged in Rust programs.
 
 ```javascript
-function Component({}) {
+function Component(props) {
     let [state, set_state] = useState(10);
 }
 ```
 
 
-Because Dioxus needs to work with the rules of Rust, we need to provide a way for the component to do some internal bookkeeping. That's what the `Context` object is: a place for the component to store state, manage listeners, and allocate elements. Advanced users of Dioxus will want to learn how to properly leverage the `Context` object to build robust, performant extensions for Dioxus.
+Because Dioxus needs to work with the rules of Rust it uses the `Context` object to maintain some internal bookkeeping. That's what the `Context` object is: a place for the component to store state, manage listeners, and allocate elements. Advanced users of Dioxus will want to learn how to properly leverage the `Context` object to build robust and performant extensions for Dioxus.
 
 ```rust
 fn Post((cx /* <-- our Context object*/, props): Component<PostProps>) -> Element {
     cx.render(rsx!{ })
 }
 ```
-
 ## Moving forward
 
 Next chapter, we'll talk about composing Elements and Components across files to build a larger Dioxus App.

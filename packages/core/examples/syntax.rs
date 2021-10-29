@@ -17,4 +17,18 @@ fn html_usage() {
             "hello world"
         }
     };
+
+    let items = ["bob", "bill", "jack"];
+
+    let f = items.iter().filter(|f| f.starts_with("b")).map(|f| {
+        rsx! {
+            "hello {f}"
+        }
+    });
+
+    let p = rsx! {
+        div {
+            {f}
+        }
+    };
 }

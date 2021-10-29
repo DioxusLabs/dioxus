@@ -3,6 +3,12 @@
 
 As your application grows in size, you'll want to start breaking your UI into components and, eventually, different files. This is a great idea to encapsulate functionality of your UI and scale your team.
 
+In this chapter we'll cover:
+- Rust's modules
+- Pub/Private components
+- Structure for large components
+
+## Breaking it down
 Let's say our app looks something like this:
 
 ```shell
@@ -125,7 +131,7 @@ mod title;
 mod meta;
 mod action;
 
-#[derive(Properties, PartialEq)]
+#[derive(Props, PartialEq)]
 pub struct PostProps {
     id: uuid::Uuid,
     score: i32,
@@ -210,7 +216,7 @@ mod title;
 mod meta;
 mod action;
 
-#[derive(Properties, PartialEq)]
+#[derive(Props, PartialEq)]
 pub struct PostProps {
     id: uuid::Uuid,
     score: i32,

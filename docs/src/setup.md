@@ -1,8 +1,14 @@
 # Overview
 
-Dioxus aims to provide a fast, friendly, and portable toolkit for building user interfaces with Rust.
+In this chapter, we're going to get "set up" with a small desktop application.
 
-This Getting Setup guide assumes you'll be building a small desktop application. You can check out the [Platform Specific Guides](../platforms/00-index.md) for more information on setting up Dioxus for any of the various supported platforms.
+We'll learn about:
+- Installing the Rust programming language
+- Installing the Dioxus CLI for bundling and developing
+- Suggested cargo extensions
+
+
+For platform-specific guides, check out the [Platform Specific Guides](../platforms/00-index.md).
 
 # Setting up Dioxus
 
