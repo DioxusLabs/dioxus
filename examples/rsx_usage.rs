@@ -184,7 +184,7 @@ mod baller {
     pub struct BallerProps {}
 
     /// This component totally balls
-    pub fn Baller(_: Component<BallerProps>) -> DomTree {
+    pub fn Baller(_: Component<BallerProps>) -> Element {
         todo!()
     }
 }
@@ -195,7 +195,7 @@ pub struct TallerProps {
 }
 
 /// This component is taller than most :)
-pub fn Taller(_: Component<TallerProps>) -> DomTree {
+pub fn Taller(_: Component<TallerProps>) -> Element {
     let b = true;
     todo!()
 }

@@ -93,11 +93,11 @@ pub fn use_suspense<'src, Out, Fut, Cb>(
     cx: Context<'src>,
     task_initializer: impl FnOnce() -> Fut,
     user_callback: Cb,
-) -> DomTree<'src>
+) -> Element<'src>
 where
     Fut: Future<Output = Out> + 'static,
     Out: 'static,
-    Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> DomTree<'a> + 'static,
+    Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> Element<'a> + 'static,
 {
     /*
     General strategy:
@@ -135,12 +135,12 @@ where
             None => {
                 let value = hook.value.clone();
 
-                cx.render(LazyNodes::new(|f| {
+                Some(LazyNodes::new(|f| {
                     let bump = f.bump();
 
                     use bumpalo::boxed::Box as BumpBox;
 
-                    let f: &mut dyn FnMut(SuspendedContext<'src>) -> DomTree<'src> =
+                    let f: &mut dyn FnMut(SuspendedContext<'src>) -> Element<'src> =
                         bump.alloc(move |sus| {
                             let val = value.borrow();
 
@@ -177,12 +177,14 @@ pub struct SuspendedContext<'a> {
 }
 
 impl<'src> SuspendedContext<'src> {
-    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+    pub fn render(
+        // pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
         self,
-        lazy_nodes: LazyNodes<'src, F>,
-    ) -> DomTree<'src> {
+        lazy_nodes: LazyNodes<'src>,
+    ) -> Element<'src> {
         let bump = &self.inner.scope.frames.wip_frame().bump;
-        Some(lazy_nodes.into_vnode(NodeFactory { bump }))
+        todo!("suspense")
+        // Some(lazy_nodes.into_vnode(NodeFactory { bump }))
     }
 }
 

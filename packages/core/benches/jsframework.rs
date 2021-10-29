@@ -34,13 +34,13 @@ fn create_rows(c: &mut Criterion) {
                 }
             }
         });
-        cx.render(rsx! {
+        rsx! {
             table {
                 tbody {
                     {rows}
                 }
             }
-        })
+        }
     };
 
     c.bench_function("create rows", |b| {
@@ -57,9 +57,9 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row((cx, props): Component<RowProps>) -> DomTree {
+fn Row((cx, props): Component<RowProps>) -> Element {
     let [adj, col, noun] = props.label.0;
-    cx.render(rsx! {
+    rsx! {
         tr {
             td { class:"col-md-1", "{props.row_id}" }
             td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
@@ -72,7 +72,7 @@ fn Row((cx, props): Component<RowProps>) -> DomTree {
             }
             td { class: "col-md-6" }
         }
-    })
+    }
 }
 
 #[derive(PartialEq)]

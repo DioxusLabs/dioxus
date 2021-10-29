@@ -20,10 +20,10 @@ struct ListItem {
     age: u32,
 }
 
-fn app<'a>(cx: Context<'a>, props: &AppProps) -> DomTree<'a> {
+fn app<'a>(cx: Context<'a>, props: &AppProps) -> Element<'a> {
     // let (val, set_val) = use_state_classic(cx, || 0);
 
-    cx.render(LazyNodes::new(move |_nodecx| {
+    Some(LazyNodes::new(move |_nodecx| {
         todo!()
         // builder::ElementBuilder::new(_nodecx, "div")
         //     .iter_child({
@@ -56,8 +56,8 @@ struct ChildProps {
     item_handler: Rc<dyn Fn(i32)>,
 }
 
-fn ChildItem<'a>(cx: Context<'a>, props: &'a ChildProps) -> DomTree<'a> {
-    cx.render(LazyNodes::new(move |__cx| todo!()))
+fn ChildItem<'a>(cx: Context<'a>, props: &'a ChildProps) -> Element<'a> {
+    Some(LazyNodes::new(move |__cx| todo!()))
 }
 
 impl PartialEq for ChildProps {

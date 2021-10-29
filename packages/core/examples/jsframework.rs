@@ -15,7 +15,7 @@ fn main() {
     assert!(g.edits.len() > 1);
 }
 
-fn App((cx, props): Component<()>) -> DomTree {
+fn App((cx, props): Component<()>) -> Element {
     let mut rng = SmallRng::from_entropy();
     let rows = (0..10_000_usize).map(|f| {
         let label = Label::new(&mut rng);
@@ -26,13 +26,13 @@ fn App((cx, props): Component<()>) -> DomTree {
             }
         }
     });
-    cx.render(rsx! {
+    rsx! {
         table {
             tbody {
                 {rows}
             }
         }
-    })
+    }
 }
 
 #[derive(PartialEq, Props)]
@@ -41,11 +41,11 @@ struct RowProps {
     label: Label,
 }
 
-fn Row((cx, props): Component<RowProps>) -> DomTree {
+fn Row((cx, props): Component<RowProps>) -> Element {
     let handler = move |evt: MouseEvent| {
         let g = evt.button;
     };
-    cx.render(rsx! {
+    rsx! {
         tr {
             td { class:"col-md-1", "{props.row_id}" }
             td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
@@ -58,7 +58,7 @@ fn Row((cx, props): Component<RowProps>) -> DomTree {
             }
             td { class: "col-md-6" }
         }
-    })
+    }
 }
 
 #[derive(PartialEq)]

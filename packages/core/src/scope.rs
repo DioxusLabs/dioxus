@@ -28,7 +28,7 @@ pub struct Scope {
 
     // Nodes
     pub(crate) frames: ActiveFrame,
-    pub(crate) caller: *const dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
+    pub(crate) caller: *const dyn for<'b> Fn(&'b Scope) -> Element<'b>,
     pub(crate) child_nodes: ScopeChildren<'static>,
 
     /*
@@ -176,7 +176,7 @@ impl Scope {
     // Scopes cannot be made anywhere else except for this file
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub(crate) fn new(
-        caller: &dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
+        caller: &dyn for<'b> Fn(&'b Scope) -> Element<'b>,
         our_arena_idx: ScopeId,
         parent_idx: Option<ScopeId>,
         height: u32,
@@ -217,7 +217,7 @@ impl Scope {
 
     pub(crate) fn update_scope_dependencies<'creator_node>(
         &mut self,
-        caller: &'creator_node dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
+        caller: &'creator_node dyn for<'b> Fn(&'b Scope) -> Element<'b>,
         child_nodes: ScopeChildren,
     ) {
         log::debug!("Updating scope dependencies {:?}", self.our_arena_idx);
@@ -317,7 +317,7 @@ impl Scope {
 
             let mut cb = sus.callback.borrow_mut().take().unwrap();
 
-            let new_node: DomTree<'a> = (cb)(cx);
+            let new_node: Element<'a> = (cb)(cx);
         }
     }
 
@@ -350,20 +350,25 @@ impl Scope {
         log::debug!("Borrowed stuff is successfully cleared");
 
         // Cast the caller ptr from static to one with our own reference
-        let render: &dyn for<'b> Fn(&'b Scope) -> DomTree<'b> = unsafe { &*self.caller };
+        let render: &dyn for<'b> Fn(&'b Scope) -> Element<'b> = unsafe { &*self.caller };
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
-        if let Some(new_head) = render(self) {
-            log::debug!("Render is successful");
+        //
+        todo!()
+        // if let Some(builder) = render(self) {
+        //     let new_head = builder.into_vnode(NodeFactory {
+        //         bump: &self.frames.wip_frame().bump,
+        //     });
+        //     log::debug!("Render is successful");
 
-            // the user's component succeeded. We can safely cycle to the next frame
-            self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
-            self.frames.cycle_frame();
+        //     // the user's component succeeded. We can safely cycle to the next frame
+        //     self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
+        //     self.frames.cycle_frame();
 
-            true
-        } else {
-            false
-        }
+        //     true
+        // } else {
+        //     false
+        // }
     }
 }
 

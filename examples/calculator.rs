@@ -116,7 +116,7 @@ struct CalculatorKeyProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn CalculatorKey<'a>((cx, props): Component<'a, CalculatorKeyProps>) -> DomTree<'a> {
+fn CalculatorKey<'a>((cx, props): Component<'a, CalculatorKeyProps>) -> Element<'a> {
     rsx!(cx, button {
         class: "calculator-key {props.name}"
         onclick: {props.onclick}

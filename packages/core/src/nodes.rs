@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::innerlude::{
-    empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, SuspendedContext, FC,
+    empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, SuspendedContext, FC,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -12,6 +12,10 @@ use std::{
     fmt::{Arguments, Debug, Formatter},
     marker::PhantomData,
 };
+
+use stack_dst::Value as StackDST;
+
+pub type LazyNodeFactory<'a> = StackDST<dyn FnOnce(NodeFactory<'a>) -> VNode<'a>>;
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
 ///
@@ -287,7 +291,7 @@ pub struct VComponent<'src> {
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
 
-    pub(crate) caller: &'src dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
+    pub(crate) caller: &'src dyn for<'b> Fn(&'b Scope) -> Element<'b>,
 
     pub(crate) children: &'src [VNode<'src>],
 
@@ -306,7 +310,7 @@ pub struct VSuspended<'a> {
     pub dom_id: Cell<Option<ElementId>>,
 
     #[allow(clippy::type_complexity)]
-    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> DomTree<'a>>>>,
+    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> Element<'a>>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -328,9 +332,10 @@ impl<'a> NodeFactory<'a> {
         self.bump
     }
 
-    pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> DomTree<'a>
-    where
-        F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+    pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a>) -> Option<VNode<'a>>
+// pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> Element<'a>
+    // where
+    //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
     {
         Some(lazy_nodes.into_vnode(NodeFactory { bump: self.bump }))
     }
@@ -526,11 +531,11 @@ impl<'a> NodeFactory<'a> {
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller: &'a mut dyn for<'b> Fn(&'b Scope) -> DomTree<'b> =
-            bump.alloc(move |scope: &Scope| -> DomTree {
+        let caller: &'a mut dyn for<'b> Fn(&'b Scope) -> Element<'b> =
+            bump.alloc(move |scope: &Scope| -> Element {
                 log::debug!("calling component renderr {:?}", scope.our_arena_idx);
                 let props: &'_ P = unsafe { &*(raw_props as *const P) };
-                let res = component((Context { scope }, props));
+                let res: Element = component((Context { scope }, props));
                 unsafe { std::mem::transmute(res) }
             });
 
@@ -691,40 +696,43 @@ impl<'a> IntoVNode<'a> for VNode<'a> {
 /// ```rust
 /// LazyNodes::new(|f| f.element("div", [], [], [] None))
 /// ```
-pub struct LazyNodes<'a, G>
-where
-    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-{
-    inner: G,
-    _p: PhantomData<&'a ()>,
+pub struct LazyNodes<'a> {
+    inner: LazyNodeFactory<'a>,
 }
+// where
+//     G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
 
-impl<'a, G> LazyNodes<'a, G>
-where
-    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+impl<'a> LazyNodes<'a>
+// where
+//     G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
 {
-    pub fn new(f: G) -> Self {
-        Self {
-            inner: f,
-            _p: PhantomData {},
-        }
+    pub fn new(f: impl FnOnce(NodeFactory<'a>) -> VNode<'a>) -> Self {
+        todo!()
+        // pub fn new<G: FnOnce(NodeFactory<'a>) -> VNode<'a>>(f: G) -> Self {
+        // let inner = LazyNodeFactory::new(f);
+        // Self { inner: f }
     }
 }
 
 // Our blanket impl
-impl<'a, G> IntoVNode<'a> for LazyNodes<'a, G>
-where
-    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+impl<'a> IntoVNode<'a> for LazyNodes<'a>
+// where
+//     G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
 {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        (self.inner)(cx)
+        // let f = self.inner;
+        todo!("manually drop here")
+        // (self.inner)(cx)
     }
 }
 
 // Our blanket impl
-impl<'a, G> IntoIterator for LazyNodes<'a, G>
-where
-    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+impl<'a> IntoIterator for LazyNodes<'a>
+// where
+//     G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+// impl<'a, G> IntoIterator for LazyNodes<'a, G>
+// where
+//     G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
 {
     type Item = Self;
     type IntoIter = std::iter::Once<Self::Item>;
@@ -751,6 +759,15 @@ impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
             Some(n) => n,
+            None => cx.fragment_from_iter(None as Option<VNode>),
+        }
+    }
+}
+
+impl<'a> IntoVNode<'a> for Option<LazyNodes<'a>> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        match self {
+            Some(n) => n.into_vnode(cx),
             None => cx.fragment_from_iter(None as Option<VNode>),
         }
     }

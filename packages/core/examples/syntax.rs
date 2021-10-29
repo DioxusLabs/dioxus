@@ -32,3 +32,8 @@ fn html_usage() {
         }
     };
 }
+
+static App: FC<()> = |(cx, props)| {
+    //
+    rsx!(div {})
+};

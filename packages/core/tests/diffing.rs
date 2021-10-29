@@ -807,14 +807,14 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
 fn suspense() {
     let dom = new_dom();
 
-    let edits = dom.create(LazyNodes::new(|f| {
+    let edits = dom.create(Some(LazyNodes::new(|f| {
         use std::cell::{Cell, RefCell};
         VNode::Suspended(f.bump().alloc(VSuspended {
             task_id: 0,
             callback: RefCell::new(None),
             dom_id: Cell::new(None),
         }))
-    }));
+    })));
     assert_eq!(
         edits.edits,
         [CreatePlaceholder { root: 0 }, AppendChildren { many: 1 }]

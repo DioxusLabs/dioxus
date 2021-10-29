@@ -85,7 +85,7 @@ pub struct TodoEntryProps {
     todo: Rc<TodoItem>,
 }
 
-pub fn TodoEntry((cx, props): Component<TodoEntryProps>) -> DomTree {
+pub fn TodoEntry((cx, props): Component<TodoEntryProps>) -> Element {
     let is_editing = use_state(cx, || false);
     let contents = use_state(cx, || String::from(""));
     let todo = &props.todo;

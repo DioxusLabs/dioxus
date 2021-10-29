@@ -56,12 +56,13 @@ pub(crate) mod innerlude {
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
-    pub type DomTree<'a> = Option<VNode<'a>>;
-    pub type FC<P> = for<'a> fn(Component<'a, P>) -> DomTree<'a>;
+    // pub type Element<'a> = Option<VNode<'a>>;
+    pub type Element<'a> = Option<LazyNodes<'a>>;
+    pub type FC<P> = for<'a> fn(Component<'a, P>) -> Element<'a>;
 }
 
 pub use crate::innerlude::{
-    Context, DioxusElement, DomEdit, DomTree, ElementId, EventPriority, LazyNodes, MountType,
+    Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes, MountType,
     Mutations, NodeFactory, Properties, SchedulerMsg, ScopeId, SuspendedContext, TaskHandle,
     TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
 };
@@ -70,7 +71,7 @@ pub mod prelude {
     pub use crate::component::{fc_to_builder, Component, Fragment, Properties};
     pub use crate::context::Context;
     pub use crate::hooks::*;
-    pub use crate::innerlude::{DioxusElement, DomTree, LazyNodes, Mutations, NodeFactory, FC};
+    pub use crate::innerlude::{DioxusElement, Element, LazyNodes, Mutations, NodeFactory, FC};
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
 }

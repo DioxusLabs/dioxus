@@ -137,10 +137,7 @@ impl<'src> Context<'src> {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
-        self,
-        lazy_nodes: LazyNodes<'src, F>,
-    ) -> DomTree<'src> {
+    pub fn render(self, lazy_nodes: LazyNodes<'src>) -> Option<VNode<'src>> {
         let bump = &self.scope.frames.wip_frame().bump;
         Some(lazy_nodes.into_vnode(NodeFactory { bump }))
     }

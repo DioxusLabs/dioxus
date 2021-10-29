@@ -2,7 +2,7 @@ use dioxus_core::prelude::*;
 
 fn main() {}
 
-fn app<'a>(cx: Context<'a>, props: &()) -> DomTree<'a> {
+fn app<'a>(cx: Context<'a>, props: &()) -> Element<'a> {
     let vak = use_suspense(
         cx,
         || async {},
@@ -26,7 +26,7 @@ fn app<'a>(cx: Context<'a>, props: &()) -> DomTree<'a> {
         )
     }));
 
-    cx.render(LazyNodes::new(move |f| {
+    Some(LazyNodes::new(move |f| {
         f.raw_element(
             "div",
             None,

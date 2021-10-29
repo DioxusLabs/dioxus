@@ -143,7 +143,7 @@ impl VirtualDom {
 
         let _p = root_props.clone();
         // Safety: this callback is only valid for the lifetime of the root props
-        let root_caller: Rc<dyn Fn(&Scope) -> DomTree> = Rc::new(move |scope: &Scope| unsafe {
+        let root_caller: Rc<dyn Fn(&Scope) -> Element> = Rc::new(move |scope: &Scope| unsafe {
             let props = _p.downcast_ref::<P>().unwrap();
             std::mem::transmute(root((Context { scope }, props)))
         });
@@ -219,7 +219,7 @@ impl VirtualDom {
 
             let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
 
-            let root_caller: Box<dyn Fn(&Scope) -> DomTree> =
+            let root_caller: Box<dyn Fn(&Scope) -> Element> =
                 Box::new(move |scope: &Scope| unsafe {
                     let props: &'_ P = &*(props_ptr as *const P);
                     std::mem::transmute(root((Context { scope }, props)))
@@ -368,22 +368,24 @@ impl VirtualDom {
         use futures_util::StreamExt;
 
         // Wait for any new events if we have nothing to do
-        futures_util::select! {
-            _ = self.scheduler.async_tasks.next() => {}
-            msg = self.scheduler.receiver.next() => {
-                match msg.unwrap() {
-                    SchedulerMsg::Task(t) => {
-                        self.scheduler.handle_task(t);
-                    },
-                    SchedulerMsg::Immediate(im) => {
-                        self.scheduler.dirty_scopes.insert(im);
-                    }
-                    SchedulerMsg::UiEvent(evt) => {
-                        self.scheduler.ui_events.push_back(evt);
-                    }
-                }
-            },
-        }
+        todo!("wait for work without select macro")
+
+        // futures_util::select! {
+        //     _ = self.scheduler.async_tasks.next() => {}
+        //     msg = self.scheduler.receiver.next() => {
+        //         match msg.unwrap() {
+        //             SchedulerMsg::Task(t) => {
+        //                 self.scheduler.handle_task(t);
+        //             },
+        //             SchedulerMsg::Immediate(im) => {
+        //                 self.scheduler.dirty_scopes.insert(im);
+        //             }
+        //             SchedulerMsg::UiEvent(evt) => {
+        //                 self.scheduler.ui_events.push_back(evt);
+        //             }
+        //         }
+        //     },
+        // }
     }
 }
 
@@ -408,4 +410,4 @@ impl std::fmt::Display for VirtualDom {
 }
 
 // we never actually use the contents of this root caller
-struct RootCaller(Rc<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>);
+struct RootCaller(Rc<dyn for<'b> Fn(&'b Scope) -> Element<'b> + 'static>);

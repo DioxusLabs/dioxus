@@ -68,13 +68,13 @@ static APP: FC<()> = |(cx, _)| {
     })
 };
 
-fn render_bullets(cx: Context) -> DomTree {
+fn render_bullets(cx: Context) -> Element {
     rsx!(cx, div {
         "bite me"
     })
 }
 
-fn render_list(cx: Context, count: usize) -> DomTree {
+fn render_list(cx: Context, count: usize) -> Element {
     let items = (0..count).map(|f| {
         rsx! {
             li { "a - {f}" }

@@ -22,7 +22,9 @@ longest-increasing-subsequence = "0.1.0"
 # internall used
 log = { version = "0.4", features = ["release_max_level_off"] }
 
-futures-util = { version = "0.3.15", no_default_features = true }
+futures-util = { version = "0.3.15", default-features = false, features = [
+    "std",
+] }
 
 smallvec = "1.6.1"
 
@@ -39,6 +41,8 @@ indexmap = "1.7.0"
 serde = { version = "1", features = ["derive"], optional = true }
 
 serde_repr = { version = "0.1.7", optional = true }
+
+stack_dst = "0.6.1"
 
 [dev-dependencies]
 anyhow = "1.0.42"

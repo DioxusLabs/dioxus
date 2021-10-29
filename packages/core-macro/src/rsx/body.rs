@@ -57,11 +57,11 @@ impl ToTokens for CallBody {
             }),
             // Otherwise we just build the LazyNode wrapper
             None => out_tokens.append_all(quote! {
-                dioxus::prelude::LazyNodes::new(move |__cx: NodeFactory|{
+                Some(dioxus::prelude::LazyNodes::new(move |__cx: NodeFactory|{
                     use dioxus_elements::{GlobalAttributes, SvgAttributes};
 
                     #inner
-                 })
+                 }))
             }),
         };
     }
