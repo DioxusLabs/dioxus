@@ -19,6 +19,8 @@ fn App((cx, props): Component<()>) -> Element {
 The Dioxus API and patterns closely resemble React - if this guide is lacking in any general concept or an error message is confusing, we recommend substituting "React" for "Dioxus" in your web search terms. A major goal of Dioxus is to provide a familiar toolkit for UI in Rust, so we've chosen to follow in the footsteps of popular UI frameworks (React, Redux, etc) - if you know React, then you already know Dioxus. If you don't know either, this guide will still help you!
 
 
+> This is introduction book! For advanced topics, check out the [Reference Guide]() instead.
+
 ### Web Support
 ---
 
