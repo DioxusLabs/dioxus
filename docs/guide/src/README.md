@@ -33,7 +33,7 @@ Examples:
 - [ECommerce]()
 - [Photo Editor]()
 
-[![todomvc](https://github.com/DioxusLabs/todomvc/raw/master/example.png)](https://github.com/dioxusLabs/todomvc/)
+[![TODOMVC](https://github.com/DioxusLabs/todomvc/raw/master/example.png)](https://github.com/dioxusLabs/todomvc/)
 
 ### SSR Support
 ---

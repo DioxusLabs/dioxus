@@ -34,7 +34,7 @@ You can update the dioxus-cli at any time with:
 $ cargo install --force dioxus-cli
 ```
 
-If your version of the CLI is out of date, it'll remind you to update whenever a new version is uploaded to Rust's package manager [crates.io](https://crates.io). We use a dedicated 1st-party CLI to save you from having to run potentially untrusted code every time you add a crate to your project - as is standard in the NPM ecosystem. You can vet the source of the Dioxus-CLI yourself at its [GitHub repo](https://github.com/jkelleyrtp/dioxus/tree/master/packages/cli).
+We provide this 1st-party tool to save you from having to run potentially untrusted code every time you add a crate to your project - as is standard in the NPM ecosystem.
 
 ### Suggested extensions
 

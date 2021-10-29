@@ -29,7 +29,8 @@
   - [Defining Components](tutorial/components.md)
   - [Styling](tutorial/styling.md)
   - [Publishing](tutorial/publishing.md)
-- [Topics in Depth](depth/topics.md)
+- [Next Steps and Advanced Topics](final/index.md)
+<!-- - [Topics in Depth](depth/topics.md)
   - [RSX](depth/rsx.md)
   - [Components](depth/components.md)
   - [Props](depth/props.md)
@@ -73,7 +74,7 @@
   - [State Management]()
   - [Suspense]()
   - [task]()
-  - [Testing]()
+  - [Testing]() -->
 
 -----------
 

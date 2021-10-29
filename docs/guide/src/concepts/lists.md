@@ -135,7 +135,7 @@ rsx!( li { key: "a" } )
 Keys tell Dioxus which array item each component corresponds to, so that it can match them up later. This becomes important if your array items can move (e.g. due to sorting), get inserted, or get deleted. A well-chosen key helps Dioxus infer what exactly has happened, and make the correct updates to the screen
 
 
-nb: the language from this section is strongly borrowed from [React's guide on keys](https://reactjs.org/docs/lists-and-keys.html).
+NB: the language from this section is strongly borrowed from [React's guide on keys](https://reactjs.org/docs/lists-and-keys.html).
 ### Where to get your key
 
 Different sources of data provide different sources of keys:
@@ -155,7 +155,7 @@ Imagine that files on your desktop didn’t have names. Instead, you’d refer t
 File names in a folder and Element keys in an array serve a similar purpose. They let us uniquely identify an item between its siblings. A well-chosen key provides more information than the position within the array. Even if the position changes due to reordering, the key lets Dioxus identify the item throughout its lifetime.
 
 ### Gotcha
-You might be tempted to use an item’s index in the array as its key. In fact, that’s what React will use if you don’t specify a key at all. But the order in which you render items will change over time if an item is inserted, deleted, or if the array gets reordered. Index as a key often leads to subtle and confusing bugs.
+You might be tempted to use an item’s index in the array as its key. In fact, that’s what Dioxus will use if you don’t specify a key at all. But the order in which you render items will change over time if an item is inserted, deleted, or if the array gets reordered. Index as a key often leads to subtle and confusing bugs.
 
 Similarly, do not generate keys on the fly, `gen_random`. This will cause keys to never match up between renders, leading to all your components and DOM being recreated every time. Not only is this slow, but it will also lose any user input inside the list items. Instead, use a stable ID based on the data.
 
@@ -164,4 +164,11 @@ Note that your components won’t receive key as a prop. It’s only used as a h
 Post { key: "{key}", id: "{id}" }
 ```
 
+## Moving on
 
+In this section, we learned:
+- How to render lists of data
+- How to use iterator tools to filter and transform data
+- How to use keys to render lists efficiently
+
+Moving forward, we'll finally cover user input and interactivity.
