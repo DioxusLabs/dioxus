@@ -143,15 +143,16 @@ impl VirtualDom {
 
         let _p = root_props.clone();
         // Safety: this callback is only valid for the lifetime of the root props
-        let root_caller: Rc<dyn Fn(&Scope) -> Element> = Rc::new(move |scope: &Scope| unsafe {
-            let props = _p.downcast_ref::<P>().unwrap();
-            std::mem::transmute(root((Context { scope }, props)))
-        });
+        let root_caller: Rc<dyn Fn(&ScopeInner) -> Element> =
+            Rc::new(move |scope: &ScopeInner| unsafe {
+                let props = _p.downcast_ref::<P>().unwrap();
+                std::mem::transmute(root((Context { scope }, props)))
+            });
 
         let scheduler = Scheduler::new(sender, receiver);
 
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
-            Scope::new(
+            ScopeInner::new(
                 root_caller.as_ref(),
                 myidx,
                 None,
@@ -175,12 +176,12 @@ impl VirtualDom {
     ///
     /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
     /// directly.
-    pub fn base_scope(&self) -> &Scope {
+    pub fn base_scope(&self) -> &ScopeInner {
         self.scheduler.pool.get_scope(self.base_scope).unwrap()
     }
 
     /// Get the [`Scope`] for a component given its [`ScopeId`]
-    pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
+    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeInner> {
         self.scheduler.pool.get_scope(id)
     }
 
@@ -219,8 +220,8 @@ impl VirtualDom {
 
             let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
 
-            let root_caller: Box<dyn Fn(&Scope) -> Element> =
-                Box::new(move |scope: &Scope| unsafe {
+            let root_caller: Box<dyn Fn(&ScopeInner) -> Element> =
+                Box::new(move |scope: &ScopeInner| unsafe {
                     let props: &'_ P = &*(props_ptr as *const P);
                     std::mem::transmute(root((Context { scope }, props)))
                 });
@@ -410,4 +411,4 @@ impl std::fmt::Display for VirtualDom {
 }
 
 // we never actually use the contents of this root caller
-struct RootCaller(Rc<dyn for<'b> Fn(&'b Scope) -> Element<'b> + 'static>);
+struct RootCaller(Rc<dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> + 'static>);

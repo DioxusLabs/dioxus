@@ -342,7 +342,7 @@ impl<'bump> DiffMachine<'bump> {
         let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
 
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
-            Scope::new(
+            ScopeInner::new(
                 caller,
                 new_idx,
                 Some(parent_idx),
@@ -1161,7 +1161,7 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope<'a>(&mut self, listener: &'a Listener<'a>, scope: &Scope) {
+    fn attach_listener_to_scope<'a>(&mut self, listener: &'a Listener<'a>, scope: &ScopeInner) {
         let mut queue = scope.listeners.borrow_mut();
         let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
         queue.push(long_listener as *const _)

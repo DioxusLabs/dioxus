@@ -23,7 +23,7 @@ struct ListItem {
 fn app<'a>(cx: Context<'a>, props: &AppProps) -> Element<'a> {
     // let (val, set_val) = use_state_classic(cx, || 0);
 
-    Some(LazyNodes::new(move |_nodecx| {
+    cx.render(LazyNodes::new(move |_nodecx| {
         todo!()
         // builder::ElementBuilder::new(_nodecx, "div")
         //     .iter_child({
@@ -57,7 +57,7 @@ struct ChildProps {
 }
 
 fn ChildItem<'a>(cx: Context<'a>, props: &'a ChildProps) -> Element<'a> {
-    Some(LazyNodes::new(move |__cx| todo!()))
+    cx.render(LazyNodes::new(move |__cx| todo!()))
 }
 
 impl PartialEq for ChildProps {

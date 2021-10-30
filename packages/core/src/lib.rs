@@ -23,6 +23,7 @@ pub mod events;
 pub mod heuristics;
 pub mod hooklist;
 pub mod hooks;
+pub mod lazynodes;
 pub mod mutations;
 pub mod nodes;
 pub mod resources;
@@ -45,6 +46,7 @@ pub(crate) mod innerlude {
     pub use crate::heuristics::*;
     pub(crate) use crate::hooklist::*;
     pub use crate::hooks::*;
+    pub use crate::lazynodes::LazyNodes;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub(crate) use crate::resources::*;
@@ -55,10 +57,9 @@ pub(crate) mod innerlude {
     pub use crate::threadsafe::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
-
     // pub type Element<'a> = Option<VNode<'a>>;
-    pub type Element<'a> = Option<LazyNodes<'a>>;
-    pub type FC<P> = for<'a> fn(Component<'a, P>) -> Element<'a>;
+    pub type Element<'a> = Option<VNode<'a>>;
+    pub type FC<P> = for<'a> fn(Scope<'a, P>) -> Element<'a>;
 }
 
 pub use crate::innerlude::{
@@ -68,7 +69,7 @@ pub use crate::innerlude::{
 };
 
 pub mod prelude {
-    pub use crate::component::{fc_to_builder, Component, Fragment, Properties};
+    pub use crate::component::{fc_to_builder, Fragment, Properties, Scope};
     pub use crate::context::Context;
     pub use crate::hooks::*;
     pub use crate::innerlude::{DioxusElement, Element, LazyNodes, Mutations, NodeFactory, FC};

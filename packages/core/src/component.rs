@@ -42,7 +42,7 @@ use crate::{
 /// };
 /// ```
 ///
-pub type Component<'a, T> = (Context<'a>, &'a T);
+pub type Scope<'a, T> = (Context<'a>, &'a T);
 
 /// Create inline fragments using Component syntax.
 ///
@@ -66,8 +66,8 @@ pub type Component<'a, T> = (Context<'a>, &'a T);
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 ///
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment((cx, _): Component<()>) -> Element {
-    Some(LazyNodes::new(|f| f.fragment_from_iter(cx.children())))
+pub fn Fragment((cx, _): Scope<()>) -> Element {
+    cx.render(LazyNodes::new(move |f| f.fragment_from_iter(cx.children())))
 }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus

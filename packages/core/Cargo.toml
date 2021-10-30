@@ -42,8 +42,6 @@ serde = { version = "1", features = ["derive"], optional = true }
 
 serde_repr = { version = "0.1.7", optional = true }
 
-stack_dst = "0.6.1"
-
 [dev-dependencies]
 anyhow = "1.0.42"
 dioxus-html = { path = "../html" }

@@ -135,32 +135,35 @@ where
             None => {
                 let value = hook.value.clone();
 
-                Some(LazyNodes::new(|f| {
-                    let bump = f.bump();
+                let id = hook.handle.our_id;
 
-                    use bumpalo::boxed::Box as BumpBox;
+                todo!()
+                // Some(LazyNodes::new(move |f| {
+                //     let bump = f.bump();
 
-                    let f: &mut dyn FnMut(SuspendedContext<'src>) -> Element<'src> =
-                        bump.alloc(move |sus| {
-                            let val = value.borrow();
+                //     use bumpalo::boxed::Box as BumpBox;
 
-                            let out = val
-                                .as_ref()
-                                .unwrap()
-                                .as_ref()
-                                .downcast_ref::<Out>()
-                                .unwrap();
+                //     let f: &mut dyn FnMut(SuspendedContext<'src>) -> Element<'src> =
+                //         bump.alloc(move |sus| {
+                //             let val = value.borrow();
 
-                            user_callback(sus, out)
-                        });
-                    let callback = unsafe { BumpBox::from_raw(f) };
+                //             let out = val
+                //                 .as_ref()
+                //                 .unwrap()
+                //                 .as_ref()
+                //                 .downcast_ref::<Out>()
+                //                 .unwrap();
 
-                    VNode::Suspended(bump.alloc(VSuspended {
-                        dom_id: empty_cell(),
-                        task_id: hook.handle.our_id,
-                        callback: RefCell::new(Some(callback)),
-                    }))
-                }))
+                //             user_callback(sus, out)
+                //         });
+                //     let callback = unsafe { BumpBox::from_raw(f) };
+
+                //     VNode::Suspended(bump.alloc(VSuspended {
+                //         dom_id: empty_cell(),
+                //         task_id: id,
+                //         callback: RefCell::new(Some(callback)),
+                //     }))
+                // }))
             }
         },
         |_| {},
@@ -177,10 +180,10 @@ pub struct SuspendedContext<'a> {
 }
 
 impl<'src> SuspendedContext<'src> {
-    pub fn render(
-        // pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+    // pub fn render(
+    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
         self,
-        lazy_nodes: LazyNodes<'src>,
+        lazy_nodes: LazyNodes<'src, F>,
     ) -> Element<'src> {
         let bump = &self.inner.scope.frames.wip_frame().bump;
         todo!("suspense")

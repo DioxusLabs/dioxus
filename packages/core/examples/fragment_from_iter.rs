@@ -26,7 +26,7 @@ fn app<'a>(cx: Context<'a>, props: &()) -> Element<'a> {
         )
     }));
 
-    Some(LazyNodes::new(move |f| {
+    cx.render(LazyNodes::new(move |f| {
         f.raw_element(
             "div",
             None,

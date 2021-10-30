@@ -80,7 +80,7 @@ struct ActionButtonProps<'a> {
     onclick: &'a dyn Fn(MouseEvent),
 }
 
-fn ActionButton<'a>((cx, props): Component<'a, ActionButtonProps>) -> Element<'a> {
+fn ActionButton<'a>((cx, props): Scope<'a, ActionButtonProps>) -> Element<'a> {
     rsx!(cx, div { class: "col-sm-6 smallpad"
         button { class:"btn btn-primary btn-block", r#type: "button", id: "{props.id}",  onclick: {props.onclick},
             "{props.name}"
@@ -93,7 +93,7 @@ struct RowProps {
     row_id: usize,
     label: Rc<str>,
 }
-fn Row((cx, props): Component<RowProps>) -> Element {
+fn Row((cx, props): Scope<RowProps>) -> Element {
     rsx!(cx, tr {
         td { class:"col-md-1", "{props.row_id}" }
         td { class:"col-md-1", onclick: move |_| { /* run onselect */ }

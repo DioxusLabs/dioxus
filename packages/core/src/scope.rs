@@ -18,7 +18,7 @@ use std::{
 ///
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// use case they might have.
-pub struct Scope {
+pub struct ScopeInner {
     // Book-keeping about our spot in the arena
     pub(crate) parent_idx: Option<ScopeId>,
     pub(crate) our_arena_idx: ScopeId,
@@ -28,7 +28,7 @@ pub struct Scope {
 
     // Nodes
     pub(crate) frames: ActiveFrame,
-    pub(crate) caller: *const dyn for<'b> Fn(&'b Scope) -> Element<'b>,
+    pub(crate) caller: *const dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
     pub(crate) child_nodes: ScopeChildren<'static>,
 
     /*
@@ -55,7 +55,7 @@ pub struct Scope {
 }
 
 /// Public interface for Scopes.
-impl Scope {
+impl ScopeInner {
     /// Get the root VNode for this Scope.
     ///
     /// This VNode is the "entrypoint" VNode. If the component renders multiple nodes, then this VNode will be a fragment.
@@ -167,7 +167,7 @@ impl Scope {
 pub type FiberTask = Pin<Box<dyn Future<Output = ScopeId>>>;
 
 /// Private interface for Scopes.
-impl Scope {
+impl ScopeInner {
     // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
     // we are going to break this lifetime by force in order to save it on ourselves.
     // To make sure that the lifetime isn't truly broken, we receive a Weak RC so we can't keep it around after the parent dies.
@@ -176,7 +176,7 @@ impl Scope {
     // Scopes cannot be made anywhere else except for this file
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub(crate) fn new(
-        caller: &dyn for<'b> Fn(&'b Scope) -> Element<'b>,
+        caller: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
         our_arena_idx: ScopeId,
         parent_idx: Option<ScopeId>,
         height: u32,
@@ -217,7 +217,7 @@ impl Scope {
 
     pub(crate) fn update_scope_dependencies<'creator_node>(
         &mut self,
-        caller: &'creator_node dyn for<'b> Fn(&'b Scope) -> Element<'b>,
+        caller: &'creator_node dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
         child_nodes: ScopeChildren,
     ) {
         log::debug!("Updating scope dependencies {:?}", self.our_arena_idx);
@@ -350,7 +350,7 @@ impl Scope {
         log::debug!("Borrowed stuff is successfully cleared");
 
         // Cast the caller ptr from static to one with our own reference
-        let render: &dyn for<'b> Fn(&'b Scope) -> Element<'b> = unsafe { &*self.caller };
+        let render: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> = unsafe { &*self.caller };
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
         //
@@ -376,7 +376,7 @@ impl Scope {
 pub(crate) struct ScopeRenderer<'a> {
     pub skip_components: bool,
     pub show_fragments: bool,
-    pub _scope: &'a Scope,
+    pub _scope: &'a ScopeInner,
     pub _pre_render: bool,
     pub _newline: bool,
     pub _indent: bool,

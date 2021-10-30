@@ -136,7 +136,7 @@ pub struct TodoEntryProps {
     id: u32,
 }
 
-pub fn TodoEntry((cx, props): Component<TodoEntryProps>) -> Element {
+pub fn TodoEntry((cx, props): Scope<TodoEntryProps>) -> Element {
     let todos = use_shared_state::<Todos>(cx)?;
 
     let _todos = todos.read();

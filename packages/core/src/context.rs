@@ -32,7 +32,7 @@ use std::{any::TypeId, ops::Deref, rc::Rc};
 /// }
 /// ```
 pub struct Context<'src> {
-    pub scope: &'src Scope,
+    pub scope: &'src ScopeInner,
 }
 
 impl<'src> Copy for Context<'src> {}
@@ -45,7 +45,7 @@ impl<'src> Clone for Context<'src> {
 // We currently deref to props, but it might make more sense to deref to Scope?
 // This allows for code that takes cx.xyz instead of cx.props.xyz
 impl<'a> Deref for Context<'a> {
-    type Target = &'a Scope;
+    type Target = &'a ScopeInner;
     fn deref(&self) -> &Self::Target {
         &self.scope
     }
@@ -137,7 +137,10 @@ impl<'src> Context<'src> {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(self, lazy_nodes: LazyNodes<'src>) -> Option<VNode<'src>> {
+    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+        self,
+        lazy_nodes: LazyNodes<'src, F>,
+    ) -> Option<VNode<'src>> {
         let bump = &self.scope.frames.wip_frame().bump;
         Some(lazy_nodes.into_vnode(NodeFactory { bump }))
     }
