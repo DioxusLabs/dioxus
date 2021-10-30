@@ -14,23 +14,23 @@ mod test_logging;
 #[test]
 fn please_work() {
     static App: FC<()> = |(cx, props)| {
-        rsx! {
+        cx.render(rsx! {
             div {
                 hidden: "true"
                 "hello"
                 div { "hello" }
-                Child {}
-                Child {}
-                Child {}
+                // Child {}
+                // Child {}
+                // Child {}
             }
-            div { "hello" }
-        }
+            // div { "hello" }
+        })
     };
 
     static Child: FC<()> = |(cx, props)| {
-        rsx! {
+        cx.render(rsx! {
             div { "child" }
-        }
+        })
     };
 
     let mut dom = VirtualDom::new(App);

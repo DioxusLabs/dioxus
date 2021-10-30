@@ -4,8 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::innerlude::{
-    empty_cell, Context, Element, ElementId, LazyNodes, Properties, ScopeId, ScopeInner,
-    SuspendedContext, FC,
+    empty_cell, Context, Element, ElementId, Properties, ScopeId, ScopeInner, SuspendedContext, FC,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -329,21 +328,6 @@ impl<'a> NodeFactory<'a> {
         self.bump
     }
 
-    pub fn render_directly(&self, lazy_nodes: LazyNodes<'_>) -> Element<'a>
-// pub fn render_directly(&self, lazy_nodes: LazyNodes<'a, '_>) -> Element<'a>
-// where
-    //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
-        // pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> Element<'a>
-        // where
-        //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-        // {
-        // pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a>) -> Option<VNode<'a>> {
-        // Some(lazy_nodes.into_vnode(NodeFactory { bump: self.bump }))
-
-        todo!()
-    }
-
     pub fn unstable_place_holder() -> VNode<'static> {
         VNode::Text(VText {
             text: "",
@@ -474,7 +458,8 @@ impl<'a> NodeFactory<'a> {
     ) -> VNode<'a>
     where
         P: Properties + 'a,
-        V: 'a + AsRef<[VNode<'a>]>,
+        V: AsRef<[VNode<'a>]> + 'a,
+        // V: 'a + AsRef<[VNode<'a>]>,
     {
         let bump = self.bump();
         let children: &'a V = bump.alloc(children);
@@ -559,8 +544,24 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList) -> VNode<'a> {
-        let children = node_iter.into_vnode_list(self);
+    pub fn fragment_from_iter(
+        self,
+        node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
+    ) -> VNode<'a> {
+        let bump = self.bump();
+        let mut nodes = bumpalo::collections::Vec::new_in(bump);
+
+        for node in node_iter {
+            nodes.push(node.into_vnode(self));
+        }
+
+        if nodes.is_empty() {
+            nodes.push(VNode::Anchor(VAnchor {
+                dom_id: empty_cell(),
+            }));
+        }
+
+        let children = nodes.into_bump_slice();
 
         // TODO
         // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
@@ -587,6 +588,15 @@ impl<'a> NodeFactory<'a> {
             is_static: false,
         })
     }
+
+    pub fn annotate_lazy<'z, 'b, F>(
+        f: F,
+    ) -> Option<Box<dyn FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b>>
+    where
+        F: FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b,
+    {
+        Some(Box::new(f))
+    }
 }
 
 /// Trait implementations for use in the rsx! and html! macros.
@@ -604,34 +614,8 @@ impl<'a> NodeFactory<'a> {
 ///
 /// As such, all node creation must go through the factory, which is only available in the component context.
 /// These strict requirements make it possible to manage lifetimes and state.
-pub trait IntoVNode {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a>;
-}
-
-pub trait IntoVNodeList {
-    fn into_vnode_list<'a>(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>];
-}
-
-impl<T, V> IntoVNodeList for T
-where
-    T: IntoIterator<Item = V>,
-    V: IntoVNode,
-{
-    fn into_vnode_list<'a>(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
-        let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
-
-        for node in self.into_iter() {
-            nodes.push(node.into_vnode(cx));
-        }
-
-        if nodes.is_empty() {
-            nodes.push(VNode::Anchor(VAnchor {
-                dom_id: empty_cell(),
-            }));
-        }
-
-        nodes.into_bump_slice()
-    }
+pub trait IntoVNode<'a> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 
 /// Child nodes of the parent component.
@@ -684,6 +668,7 @@ impl<'a> IntoIterator for VNode<'a> {
     }
 }
 
+// TODO: do we even need this? It almost seems better not to
 // // For the case where a rendered VNode is passed into the rsx! macro through curly braces
 // impl IntoVNode for VNode<'_> {
 //     fn into_vnode<'a>(self, _: NodeFactory<'a>) -> VNode<'a> {
@@ -714,8 +699,15 @@ impl<'a> IntoIterator for VNode<'a> {
 //     }
 // }
 
-impl IntoVNode for Option<Box<dyn for<'r> FnOnce(NodeFactory<'r>) -> VNode<'_> + '_>> {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+pub fn annotate_lazy<'a, 'b, F>(f: F) -> Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b>>
+where
+    F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
+{
+    Some(Box::new(f))
+}
+
+impl<'a> IntoVNode<'a> for Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
             Some(n) => {
                 //
@@ -731,8 +723,8 @@ impl IntoVNode for Option<Box<dyn for<'r> FnOnce(NodeFactory<'r>) -> VNode<'_> +
     }
 }
 
-impl IntoVNode for Box<dyn for<'r> FnOnce(NodeFactory<'r>) -> VNode<'_> + '_> {
-    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+impl<'a> IntoVNode<'a> for Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self(cx)
     }
 }
@@ -746,12 +738,12 @@ impl IntoVNode for Box<dyn for<'r> FnOnce(NodeFactory<'r>) -> VNode<'_> + '_> {
 //     }
 // }
 
-impl IntoVNode for &'static str {
+impl IntoVNode<'_> for &'static str {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.static_text(self)
     }
 }
-impl IntoVNode for Arguments<'_> {
+impl IntoVNode<'_> for Arguments<'_> {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.text(self)
     }

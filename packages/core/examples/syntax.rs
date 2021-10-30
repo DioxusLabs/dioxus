@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use dioxus::component::Scope;
 use dioxus::events::on::MouseEvent;
-use dioxus::nodes::{IntoVNode, IntoVNodeList};
+use dioxus::nodes::IntoVNode;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
@@ -28,7 +28,7 @@ fn html_usage() {
         .filter(|f| f.starts_with('b'))
         .map(|f| rsx!("hello {f}"));
 
-    let p = rsx!(div { {f} });
+    // let p = rsx!(div { {f} });
 }
 
 static App2: FC<()> = |(cx, _)| cx.render(rsx!("hello world!"));
@@ -98,11 +98,6 @@ impl<'a> Children<'a> {
         }
     }
 }
-// impl<'a> IntoVNodeList<'a> for &Children<'a> {
-//     fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
-//         todo!()
-//     }
-// }
 
 static Bapp: FC<()> = |(cx, props)| {
     let name = cx.use_state(|| 0);

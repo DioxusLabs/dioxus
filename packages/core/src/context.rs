@@ -139,7 +139,8 @@ impl<'src> Context<'src> {
     ///```
     pub fn render(
         self,
-        lazy_nodes: Option<LazyNodes<'_>>,
+        lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'src>) -> VNode<'src> + '_>>,
+        // lazy_nodes: Option<Box<dyn FnOnce(NodeFactory) -> VNode + '_>>,
         // lazy_nodes: Box<dyn FnOnce(NodeFactory<'src>) -> VNode<'src> + '_>,
     ) -> Option<VNode<'src>> {
         // pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(

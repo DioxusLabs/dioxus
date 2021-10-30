@@ -13,14 +13,14 @@ fn test_borrowed_state() {
 fn Parent((cx, _): Scope<()>) -> Element {
     let value = cx.use_hook(|_| String::new(), |f| &*f, |_| {});
 
-    rsx! {
+    cx.render(rsx! {
         div {
             Child { name: value }
             Child { name: value }
             Child { name: value }
             Child { name: value }
         }
-    }
+    })
 }
 
 #[derive(Props)]
@@ -29,12 +29,12 @@ struct ChildProps<'a> {
 }
 
 fn Child<'a>((cx, props): Scope<'a, ChildProps>) -> Element<'a> {
-    rsx! {
+    cx.render(rsx! {
         div {
             h1 { "it's nested" }
             Child2 { name: props.name }
         }
-    }
+    })
 }
 
 #[derive(Props)]
@@ -43,7 +43,7 @@ struct Grandchild<'a> {
 }
 
 fn Child2<'a>((cx, props): Scope<'a, Grandchild>) -> Element<'a> {
-    rsx! {
+    cx.render(rsx! {
         div { "Hello {props.name}!" }
-    }
+    })
 }

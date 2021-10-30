@@ -6,7 +6,7 @@
 //! that ensures compile-time required and optional fields on cx.
 
 use crate::{
-    innerlude::{Context, Element, LazyNodes, FC},
+    innerlude::{Context, Element, FC},
     NodeFactory, VNode,
 };
 

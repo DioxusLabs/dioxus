@@ -32,7 +32,13 @@ use crate::innerlude::{IntoVNode, NodeFactory, VNode};
 //     // inner: StackNodeStorage<'a>,
 //     // inner: StackNodeStorage<'a>,
 // }
-pub type LazyNodes<'b> = Box<dyn for<'a> FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b>;
+// pub type LazyNodes<'b> = Box<dyn for<'a> FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b>;
+
+// pub fn to_lazy_nodes<'b>(
+//     f: impl for<'a> FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
+// ) -> Option<LazyNodes<'b>> {
+//     Some(Box::new(f))
+// }
 
 type StackHeapSize = [usize; 12];
 

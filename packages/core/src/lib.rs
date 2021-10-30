@@ -46,7 +46,6 @@ pub(crate) mod innerlude {
     pub use crate::heuristics::*;
     pub(crate) use crate::hooklist::*;
     pub use crate::hooks::*;
-    pub use crate::lazynodes::LazyNodes;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub(crate) use crate::resources::*;
@@ -63,16 +62,16 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes, MountType,
-    Mutations, NodeFactory, Properties, SchedulerMsg, ScopeId, SuspendedContext, TaskHandle,
-    TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
+    Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, MountType, Mutations,
+    NodeFactory, Properties, SchedulerMsg, ScopeId, SuspendedContext, TaskHandle, TestDom,
+    ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties, Scope};
     pub use crate::context::Context;
     pub use crate::hooks::*;
-    pub use crate::innerlude::{DioxusElement, Element, LazyNodes, Mutations, NodeFactory, FC};
+    pub use crate::innerlude::{DioxusElement, Element, Mutations, NodeFactory, FC};
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
 }
