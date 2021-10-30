@@ -26,12 +26,13 @@ use crate::innerlude::{IntoVNode, NodeFactory, VNode};
 /// ```rust
 /// LazyNodes::new(|f| f.element("div", [], [], [] None))
 /// ```
-pub struct LazyNodes<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> {
-    inner: Box<F>,
-    _p: PhantomData<&'a ()>,
-    // inner: StackNodeStorage<'a>,
-    // inner: StackNodeStorage<'a>,
-}
+// pub struct LazyNodes<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> {
+//     inner: Box<F>,
+//     _p: PhantomData<&'a ()>,
+//     // inner: StackNodeStorage<'a>,
+//     // inner: StackNodeStorage<'a>,
+// }
+pub type LazyNodes<'b> = Box<dyn for<'a> FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b>;
 
 type StackHeapSize = [usize; 12];
 
@@ -44,70 +45,74 @@ enum StackNodeStorage<'a> {
     Heap(Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a>>),
 }
 
-impl<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> LazyNodes<'a, F> {
-    pub fn new(f: F) -> Self {
-        // let width = std::mem?::size_of::<F>();
-        // let b: Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a>> = Box::new(f);
+// impl<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> LazyNodes<'a, F> {
+//     pub fn new(f: F) -> Self {
+//         // let width = std::mem?::size_of::<F>();
+//         // let b: Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a>> = Box::new(f);
 
-        todo!()
-        // Self { inner: b }
-        // todo!()
+//         todo!()
+//         // Self { inner: b }
+//         // todo!()
 
-        // if width > std::mem::size_of::<StackHeapSize>() {
-        //     let g: Box<dyn for<'b> FnOnce(NodeFactory<'b>) -> VNode<'b> + 'g> = Box::new(f);
-        //     LazyNodes {
-        //         inner: StackNodeStorage::Heap(g),
-        //     }
-        // } else {
-        //     let mut buf = [0; 12];
-        //     let mut next_ofs = 0;
-        //     next_ofs += 1;
-        //     LazyNodes {
-        //         inner: StackNodeStorage::Stack {
-        //             next_ofs,
-        //             buf,
-        //             width,
-        //         },
-        //     }
-        // }
-    }
-}
+//         // if width > std::mem::size_of::<StackHeapSize>() {
+//         //     let g: Box<dyn for<'b> FnOnce(NodeFactory<'b>) -> VNode<'b> + 'g> = Box::new(f);
+//         //     LazyNodes {
+//         //         inner: StackNodeStorage::Heap(g),
+//         //     }
+//         // } else {
+//         //     let mut buf = [0; 12];
+//         //     let mut next_ofs = 0;
+//         //     next_ofs += 1;
+//         //     LazyNodes {
+//         //         inner: StackNodeStorage::Stack {
+//         //             next_ofs,
+//         //             buf,
+//         //             width,
+//         //         },
+//         //     }
+//         // }
+//     }
+// }
 
-// Our blanket impl
-impl<'a, F> IntoIterator for LazyNodes<'a, F>
-where
-    F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-{
-    type Item = Self;
-    type IntoIter = std::iter::Once<Self::Item>;
-    fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(self)
-    }
-}
+// // Our blanket impl
+// impl<'a> IntoIterator for LazyNodes<'a>
+// // where
+// //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+// // impl<'a, F> IntoIterator for LazyNodes<'a, F>
+// // where
+// //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+// {
+//     type Item = Self;
+//     type IntoIter = std::iter::Once<Self::Item>;
+//     fn into_iter(self) -> Self::IntoIter {
+//         std::iter::once(self)
+//     }
+// }
 
-// Our blanket impl
-impl<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> IntoVNode<'a> for LazyNodes<'a, F> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        todo!()
-        // match self.inner {
-        //     StackNodeStorage::Stack {
-        //         buf,
-        //         next_ofs,
-        //         width,
-        //     } => {
-        //         // get the start of the allocation
-        //         let r = &buf[0];
+// // Our blanket impl
+// impl IntoVNode for LazyNodes<'_> {
+//     // impl<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> IntoVNode<'a> for LazyNodes<'a, F> {
+//     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+//         todo!()
+//         // match self.inner {
+//         //     StackNodeStorage::Stack {
+//         //         buf,
+//         //         next_ofs,
+//         //         width,
+//         //     } => {
+//         //         // get the start of the allocation
+//         //         let r = &buf[0];
 
-        //         // recast the allocation as dyn FnOnce
+//         //         // recast the allocation as dyn FnOnce
 
-        //         // pretend the FnOnce is box
-        //         let g: Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a>> = todo!();
-        //         // Box::from_raw(r as *const usize as *mut dyn FnOnce(NodeFactory<'a>));
+//         //         // pretend the FnOnce is box
+//         //         let g: Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a>> = todo!();
+//         //         // Box::from_raw(r as *const usize as *mut dyn FnOnce(NodeFactory<'a>));
 
-        //         // use Box's ability to act as FnOnce
-        //         g(cx)
-        //     }
-        //     StackNodeStorage::Heap(b) => b(cx),
-        // }
-    }
-}
+//         //         // use Box's ability to act as FnOnce
+//         //         g(cx)
+//         //     }
+//         //     StackNodeStorage::Heap(b) => b(cx),
+//         // }
+//     }
+// }

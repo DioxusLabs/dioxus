@@ -7,7 +7,7 @@
 
 use crate::{
     innerlude::{Context, Element, LazyNodes, FC},
-    VNode,
+    NodeFactory, VNode,
 };
 
 /// A component is a wrapper around a Context and some Props that share a lifetime
@@ -66,8 +66,11 @@ pub type Scope<'a, T> = (Context<'a>, &'a T);
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 ///
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment((cx, _): Scope<()>) -> Element {
-    cx.render(LazyNodes::new(move |f| f.fragment_from_iter(cx.children())))
+pub fn Fragment<'a>((cx, _): Scope<'a, ()>) -> Element<'a> {
+    todo!()
+    // let p: Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_> =
+    //     Box::new(|f: NodeFactory| f.fragment_from_iter(cx.children()));
+    // cx.render(p)
 }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus

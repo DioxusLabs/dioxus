@@ -57,10 +57,11 @@ fn App3((cx, props): Scope<()>) -> Element {
             bame: 10,
         }
     };
-    cx.render(rsx!(Child {
-        bame: 102,
-        ..ChildProps { bame: 10 }
-    }))
+    todo!()
+    // cx.render(rsx!(Child {
+    //     bame: 102,
+    //     ..ChildProps { bame: 10 }
+    // }))
 }
 
 #[derive(Props, PartialEq, Debug)]
@@ -97,11 +98,11 @@ impl<'a> Children<'a> {
         }
     }
 }
-impl<'a> IntoVNodeList<'a> for &Children<'a> {
-    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
-        todo!()
-    }
-}
+// impl<'a> IntoVNodeList<'a> for &Children<'a> {
+//     fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
+//         todo!()
+//     }
+// }
 
 static Bapp: FC<()> = |(cx, props)| {
     let name = cx.use_state(|| 0);
@@ -116,4 +117,37 @@ static Bapp: FC<()> = |(cx, props)| {
             }
         }
     ))
+};
+
+static Match: FC<()> = |(cx, props)| {
+    //
+    let b: Box<dyn Fn(NodeFactory) -> VNode> = Box::new(|f| todo!());
+
+    let b = match "ag" {
+        "a" => {
+            let __b: Box<dyn FnOnce(NodeFactory) -> VNode> = Box::new(|f: NodeFactory| todo!());
+            __b
+        }
+        _ => {
+            let __b: Box<dyn FnOnce(NodeFactory) -> VNode> = Box::new(|f: NodeFactory| todo!());
+            __b
+        }
+    };
+
+    // let b: Box<dyn Fn(NodeFactory) -> VNode> = match "alph" {
+    //     "beta" => Box::new(|f: NodeFactory| {
+    //         //
+    //         todo!()
+    //     }),
+    //     _ => Box::new(|f: NodeFactory| {
+    //         //
+    //         todo!()
+    //     }),
+    // };
+
+    cx.render(rsx! {
+        div {
+
+        }
+    })
 };

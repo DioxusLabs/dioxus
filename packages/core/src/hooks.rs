@@ -181,9 +181,11 @@ pub struct SuspendedContext<'a> {
 
 impl<'src> SuspendedContext<'src> {
     // pub fn render(
-    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+    pub fn render(
+        // pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
         self,
-        lazy_nodes: LazyNodes<'src, F>,
+        lazy_nodes: LazyNodes<'_>,
+        // lazy_nodes: LazyNodes<'src, '_>,
     ) -> Element<'src> {
         let bump = &self.inner.scope.frames.wip_frame().bump;
         todo!("suspense")

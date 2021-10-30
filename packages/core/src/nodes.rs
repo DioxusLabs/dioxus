@@ -329,12 +329,19 @@ impl<'a> NodeFactory<'a> {
         self.bump
     }
 
-    pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> Element<'a>
-    where
-        F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+    pub fn render_directly(&self, lazy_nodes: LazyNodes<'_>) -> Element<'a>
+// pub fn render_directly(&self, lazy_nodes: LazyNodes<'a, '_>) -> Element<'a>
+// where
+    //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
     {
+        // pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> Element<'a>
+        // where
+        //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
+        // {
         // pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a>) -> Option<VNode<'a>> {
-        Some(lazy_nodes.into_vnode(NodeFactory { bump: self.bump }))
+        // Some(lazy_nodes.into_vnode(NodeFactory { bump: self.bump }))
+
+        todo!()
     }
 
     pub fn unstable_place_holder() -> VNode<'static> {
@@ -552,7 +559,7 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a>) -> VNode<'a> {
+    pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList) -> VNode<'a> {
         let children = node_iter.into_vnode_list(self);
 
         // TODO
@@ -597,20 +604,20 @@ impl<'a> NodeFactory<'a> {
 ///
 /// As such, all node creation must go through the factory, which is only available in the component context.
 /// These strict requirements make it possible to manage lifetimes and state.
-pub trait IntoVNode<'a> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
+pub trait IntoVNode {
+    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 
-pub trait IntoVNodeList<'a> {
-    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>];
+pub trait IntoVNodeList {
+    fn into_vnode_list<'a>(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>];
 }
 
-impl<'a, T, V> IntoVNodeList<'a> for T
+impl<T, V> IntoVNodeList for T
 where
     T: IntoIterator<Item = V>,
-    V: IntoVNode<'a>,
+    V: IntoVNode,
 {
-    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
+    fn into_vnode_list<'a>(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
         let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
 
         for node in self.into_iter() {
@@ -662,11 +669,11 @@ impl ScopeChildren<'_> {
     }
 }
 
-impl<'a> IntoVNodeList<'a> for ScopeChildren<'a> {
-    fn into_vnode_list(self, _: NodeFactory<'a>) -> &'a [VNode<'a>] {
-        self.0
-    }
-}
+// impl IntoVNodeList for ScopeChildren<'_> {
+//     fn into_vnode_list<'a>(self, _: NodeFactory<'a>) -> &'a [VNode<'a>] {
+//         self.0
+//     }
+// }
 
 // For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoIterator for VNode<'a> {
@@ -677,51 +684,74 @@ impl<'a> IntoIterator for VNode<'a> {
     }
 }
 
-// For the case where a rendered VNode is passed into the rsx! macro through curly braces
-impl<'a> IntoVNode<'a> for VNode<'a> {
-    fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
-        self
-    }
-}
+// // For the case where a rendered VNode is passed into the rsx! macro through curly braces
+// impl IntoVNode for VNode<'_> {
+//     fn into_vnode<'a>(self, _: NodeFactory<'a>) -> VNode<'a> {
+//         self
+//     }
+// }
 
 // Conveniently, we also support "null" (nothing) passed in
-impl IntoVNode<'_> for () {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        cx.fragment_from_iter(None as Option<VNode>)
-    }
-}
+// impl IntoVNode for () {
+//     fn into_vnode(self, cx: NodeFactory) -> VNode {
+//         cx.fragment_from_iter(None as Option<VNode>)
+//     }
+// }
 
-// Conveniently, we also support "None"
-impl IntoVNode<'_> for Option<()> {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        cx.fragment_from_iter(None as Option<VNode>)
-    }
-}
+// // Conveniently, we also support "None"
+// impl IntoVNode for Option<()> {
+//     fn into_vnode(self, cx: NodeFactory) -> VNode {
+//         cx.fragment_from_iter(None as Option<VNode>)
+//     }
+// }
 
-impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+// impl IntoVNode for Option<VNode<'_>> {
+//     fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+//         match self {
+//             Some(n) => n,
+//             None => cx.fragment_from_iter(None as Option<VNode>),
+//         }
+//     }
+// }
+
+impl IntoVNode for Option<Box<dyn for<'r> FnOnce(NodeFactory<'r>) -> VNode<'_> + '_>> {
+    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
-            Some(n) => n,
-            None => cx.fragment_from_iter(None as Option<VNode>),
+            Some(n) => {
+                //
+                // n.into_vnode(cx)
+                n(cx)
+            }
+            None => VNode::Fragment(VFragment {
+                children: &[],
+                is_static: false,
+                key: None,
+            }),
         }
     }
 }
 
-impl<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> IntoVNode<'a> for Option<LazyNodes<'a, F>> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        match self {
-            Some(n) => n.into_vnode(cx),
-            None => cx.fragment_from_iter(None as Option<VNode>),
-        }
+impl IntoVNode for Box<dyn for<'r> FnOnce(NodeFactory<'r>) -> VNode<'_> + '_> {
+    fn into_vnode<'a>(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        self(cx)
     }
 }
 
-impl IntoVNode<'_> for &'static str {
+// impl<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> IntoVNode<'a> for Option<LazyNodes<'a, F>> {
+//     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+//         match self {
+//             Some(n) => n.into_vnode(cx),
+//             None => cx.fragment_from_iter(None as Option<VNode>),
+//         }
+//     }
+// }
+
+impl IntoVNode for &'static str {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.static_text(self)
     }
 }
-impl IntoVNode<'_> for Arguments<'_> {
+impl IntoVNode for Arguments<'_> {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.text(self)
     }

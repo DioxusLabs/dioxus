@@ -137,12 +137,30 @@ impl<'src> Context<'src> {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+    pub fn render(
         self,
-        lazy_nodes: LazyNodes<'src, F>,
+        lazy_nodes: Option<LazyNodes<'_>>,
+        // lazy_nodes: Box<dyn FnOnce(NodeFactory<'src>) -> VNode<'src> + '_>,
     ) -> Option<VNode<'src>> {
+        // pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+        //     self,
+        //     lazy_nodes: LazyNodes<'src, F>,
+        // ) -> Option<VNode<'src>> {
         let bump = &self.scope.frames.wip_frame().bump;
-        Some(lazy_nodes.into_vnode(NodeFactory { bump }))
+        // Some(lazy_nodes.into_vnode(NodeFactory { bump }))
+
+        let factory = NodeFactory { bump };
+        // let vnode = lazy_nodes(factory);
+
+        match lazy_nodes {
+            Some(f) => Some(f(factory)),
+            None => None,
+        }
+
+        // match lazy_nodes {
+        //     None => todo!(),
+        // }
+        // Some(lazy_nodes)
     }
 
     /// `submit_task` will submit the future to be polled.

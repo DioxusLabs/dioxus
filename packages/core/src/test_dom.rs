@@ -25,15 +25,17 @@ impl TestDom {
 // where
     //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
     {
-        lazy_nodes.into_vnode(NodeFactory::new(&self.bump))
+        todo!()
+        // lazy_nodes.into_vnode(NodeFactory::new(&self.bump))
     }
 
     pub fn render<'a>(&'a self, lazy_nodes: Element<'a>) -> &'a VNode<'a>
 // where
     //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
     {
-        self.bump
-            .alloc(lazy_nodes.into_vnode(NodeFactory::new(&self.bump)))
+        todo!()
+        // self.bump
+        // .alloc(lazy_nodes.into_vnode(NodeFactory::new(&self.bump)))
     }
 
     pub fn diff<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {

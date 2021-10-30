@@ -41,22 +41,22 @@ struct RowProps {
     label: Label,
 }
 
-fn Row((cx, props): Scope<RowProps>) -> Element {
+fn Row<'a>((cx, props): Scope<'a, RowProps>) -> Element<'a> {
     let handler = move |evt: MouseEvent| {
         let g = evt.button;
     };
     cx.render(rsx! {
         tr {
-            td { class:"col-md-1", "{props.row_id}" }
-            td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
-                a { class: "lbl", "{props.label}" }
-            }
-            td { class: "col-md-1"
-                a { class: "remove", onclick: {handler}
-                    span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
-                }
-            }
-            td { class: "col-md-6" }
+            // td { class:"col-md-1", "{props.row_id}" }
+            // td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
+            //     a { class: "lbl", "{props.label}" }
+            // }
+            // td { class: "col-md-1"
+            //     a { class: "remove", onclick: {handler}
+            //         span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
+            //     }
+            // }
+            // td { class: "col-md-6" }
         }
     })
 }
