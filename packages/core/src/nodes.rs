@@ -4,7 +4,8 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::innerlude::{
-    empty_cell, Context, Element, ElementId, Properties, ScopeId, ScopeInner, SuspendedContext, FC,
+    empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeInner,
+    SuspendedContext, FC,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -448,9 +449,26 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    pub fn component_v2_borrowed<P: 'a>(
+        self,
+        f: impl Fn(Context<'a>) -> Option<VNode<'a>> + 'a,
+        fc: fn(Scope<'a, P>) -> Element<'a>,
+        p: &'a P,
+    ) -> VNode<'a> {
+        //
+        todo!()
+    }
+    // pub fn component_v2_memoized(
+    //     self,
+    //     f: impl for<'b> Fn(Context<'b>) -> Option<VNode<'b>> + 'static,
+    // ) -> VNode<'a> {
+    //     //
+    //     todo!()
+    // }
+
     pub fn component<P, V>(
         &self,
-        component: FC<P>,
+        component: fn(Scope<'a, P>) -> Element<'a>,
         props: P,
         key: Option<Arguments>,
         children: V,
@@ -458,7 +476,6 @@ impl<'a> NodeFactory<'a> {
     where
         P: Properties + 'a,
         V: AsRef<[VNode<'a>]> + 'a,
-        // V: 'a + AsRef<[VNode<'a>]>,
     {
         let bump = self.bump();
         let children: &'a V = bump.alloc(children);
@@ -523,7 +540,11 @@ impl<'a> NodeFactory<'a> {
             bump.alloc(move |scope: &ScopeInner| -> Element {
                 log::debug!("calling component renderr {:?}", scope.our_arena_idx);
                 let props: &'_ P = unsafe { &*(raw_props as *const P) };
-                let res: Element = component((Context { scope }, props));
+
+                let scp: &'a ScopeInner = unsafe { std::mem::transmute(scope) };
+                let s: Scope<'a, P> = (Context { scope: scp }, props);
+
+                let res: Element = component(s);
                 unsafe { std::mem::transmute(res) }
             });
 

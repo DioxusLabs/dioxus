@@ -252,39 +252,49 @@ fn Child2<'a>((cx, props): Scope<'a, Child2Props>) -> Element<'a> {
     // - borrowed
     // - memoized
 
-    cx.render({
-        NodeFactory::annotate_lazy(move |__cx: NodeFactory| -> VNode {
-            use dioxus_elements::{GlobalAttributes, SvgAttributes};
-            __cx.element(
-                dioxus_elements::div,
-                [],
-                [],
-                [],
-                // [__cx.component(
-                //     ChildrenComp,
-                //     {
-                //         let mut __manual_props = ChildrenTest { node: children };
-                //         __manual_props
-                //     },
-                //     None,
-                //     [],
-                // )],
-                None,
-            )
-        })
-    })
-    // cx.render(rsx! {
-    //     div {
-    //         // div {}
-
-    //         ChildrenComp {
-    //             // node: children
-    //             ..ChildrenTest {
-    //                 node: children,
-    //             }
-    //         }
-    //     }
+    // cx.render({
+    //     NodeFactory::annotate_lazy(move |__cx: NodeFactory| -> VNode {
+    //         use dioxus_elements::{GlobalAttributes, SvgAttributes};
+    //         __cx.element(
+    //             dioxus_elements::div,
+    //             [],
+    //             [],
+    //             [
+    //                 __cx.component(ChildrenMemo, (), None, []),
+    //                 __cx.component(
+    //                     ChildrenComp,
+    //                     //
+    //                     ChildrenTest { node: children },
+    //                     None,
+    //                     [],
+    //                 ),
+    //                 // {
+    //                 //     let _props: &_ = __cx.bump().alloc(ChildrenTest { node: children });
+    //                 //     __cx.component_v2_borrowed(
+    //                 //         //
+    //                 //         move |c| ChildrenComp((c, _props)),
+    //                 //         ChildrenComp,
+    //                 //         _props,
+    //                 //     )
+    //                 // },
+    //                 // {
+    //                 //     let _props: &_ = __cx.bump().alloc(());
+    //                 //     __cx.component_v2_borrowed(move |c| ChildrenMemo((c, _props)))
+    //                 // },
+    //             ],
+    //             None,
+    //         )
+    //     })
     // })
+    cx.render(rsx! {
+        div {
+            ChildrenComp {
+                ..ChildrenTest {
+                    node: children,
+                }
+            }
+        }
+    })
 }
 
 #[derive(Props)]
@@ -332,4 +342,8 @@ fn ChildrenComp<'a>((cx, props): Scope<'a, ChildrenTest<'a>>) -> Element<'a> {
             }
         }
     })
+}
+
+fn ChildrenMemo((cx, props): Scope<()>) -> Element {
+    todo!()
 }
