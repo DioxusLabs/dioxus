@@ -10,7 +10,6 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
-    marker::PhantomData,
 };
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -33,7 +32,7 @@ pub enum VNode<'src> {
     ///     assert_eq!(vtext.is_static, true);
     /// }
     /// ```
-    Text(VText<'src>),
+    Text(&'src VText<'src>),
 
     /// Element VNodes are VNodes that may contain attributes, listeners, a key, a tag, and children.
     ///
@@ -116,7 +115,7 @@ pub enum VNode<'src> {
     ///     assert_eq!(root, VNode::Anchor);
     /// }
     /// ```
-    Anchor(VAnchor),
+    Anchor(&'src VAnchor),
 }
 
 impl<'src> VNode<'src> {
@@ -328,21 +327,21 @@ impl<'a> NodeFactory<'a> {
         self.bump
     }
 
-    pub fn unstable_place_holder() -> VNode<'static> {
-        VNode::Text(VText {
+    pub(crate) fn unstable_place_holder(&self) -> VNode {
+        VNode::Text(self.bump.alloc(VText {
             text: "",
             dom_id: empty_cell(),
             is_static: true,
-        })
+        }))
     }
 
     /// Directly pass in text blocks without the need to use the format_args macro.
     pub fn static_text(&self, text: &'static str) -> VNode<'a> {
-        VNode::Text(VText {
+        VNode::Text(self.bump.alloc(VText {
             dom_id: empty_cell(),
             text,
             is_static: true,
-        })
+        }))
     }
 
     /// Parses a lazy text Arguments and returns a string and a flag indicating if the text is 'static
@@ -365,11 +364,11 @@ impl<'a> NodeFactory<'a> {
     pub fn text(&self, args: Arguments) -> VNode<'a> {
         let (text, is_static) = self.raw_text(args);
 
-        VNode::Text(VText {
+        VNode::Text(self.bump.alloc(VText {
             text,
             is_static,
             dom_id: empty_cell(),
-        })
+        }))
     }
 
     pub fn element<L, A, V>(
@@ -556,9 +555,9 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Anchor(VAnchor {
+            nodes.push(VNode::Anchor(bump.alloc(VAnchor {
                 dom_id: empty_cell(),
-            }));
+            })));
         }
 
         let children = nodes.into_bump_slice();

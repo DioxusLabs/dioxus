@@ -4,6 +4,8 @@
 //!
 //! We unsafely implement `send` for the VirtualDom, but those guarantees can only be
 
+use bumpalo::Bump;
+
 use crate::innerlude::*;
 use std::{any::TypeId, ops::Deref, rc::Rc};
 
@@ -120,6 +122,11 @@ impl<'src> Context<'src> {
     /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
     pub fn scope_id(&self) -> ScopeId {
         self.scope.our_arena_idx
+    }
+
+    pub fn bump(&self) -> &'src Bump {
+        let bump = &self.scope.frames.wip_frame().bump;
+        bump
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.

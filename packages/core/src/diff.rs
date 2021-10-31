@@ -421,6 +421,10 @@ impl<'bump> DiffMachine<'bump> {
             ) => self
                 .stack
                 .create_node(new_node, MountType::Replace { old: old_node }),
+
+            (Placeholder, _) | (_, Placeholder) => {
+                unreachable!("placeholder should never be diffed");
+            }
         }
     }
 
@@ -1125,6 +1129,7 @@ impl<'bump> DiffMachine<'bump> {
 
                     self.remove_nodes(e.children, false);
                 }
+
                 VNode::Fragment(f) => {
                     self.remove_nodes(f.children, gen_muts);
                 }
