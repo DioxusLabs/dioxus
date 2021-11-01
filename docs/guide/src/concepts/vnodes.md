@@ -129,7 +129,7 @@ rsx!(
 )
 ```
 
-Note: the name of the custom attribute must match exactly what you want the renderer to output. All attributes defined as methods in `dioxus-html` follow the snake_case naming convention. However, they internally translate their snake_case convention to HTML's camelCase convention.
+Note: the name of the custom attribute must match exactly what you want the renderer to output. All attributes defined as methods in `dioxus-html` follow the snake_case naming convention. However, they internally translate their snake_case convention to HTML's camelCase convention. When using custom attributes, make sure the name of the attribute exactly matches what the renderer is expecting.
 
 ## Listeners
 

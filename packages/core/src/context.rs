@@ -65,6 +65,10 @@ impl<'src> Context<'src> {
         (self.scope.memoized_updater)()
     }
 
+    pub fn needs_update_any(&self, id: ScopeId) {
+        (self.scope.shared.schedule_any_immediate)(id)
+    }
+
     /// Schedule an update for any component given its ScopeId.
     ///
     /// A component's ScopeId can be obtained from `use_hook` or the [`Context::scope_id`] method.
@@ -101,11 +105,7 @@ impl<'src> Context<'src> {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(
-        self,
-        lazy_nodes: Option<LazyNodes<'src, '_>>,
-        // lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'src>) -> VNode<'src> + '_>>,
-    ) -> Option<VNode<'src>> {
+    pub fn render(self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<VNode<'src>> {
         let bump = &self.scope.frames.wip_frame().bump;
         let factory = NodeFactory { bump };
         lazy_nodes.map(|f| f.call(factory))
