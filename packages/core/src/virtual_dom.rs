@@ -368,44 +368,30 @@ impl VirtualDom {
         use futures_util::StreamExt;
 
         // Wait for any new events if we have nothing to do
-        todo!("wait for work without select macro")
 
-        // futures_util::select! {
-        //     _ = self.scheduler.async_tasks.next() => {}
-        //     msg = self.scheduler.receiver.next() => {
-        //         match msg.unwrap() {
-        //             SchedulerMsg::Task(t) => {
-        //                 self.scheduler.handle_task(t);
-        //             },
-        //             SchedulerMsg::Immediate(im) => {
-        //                 self.scheduler.dirty_scopes.insert(im);
-        //             }
-        //             SchedulerMsg::UiEvent(evt) => {
-        //                 self.scheduler.ui_events.push_back(evt);
-        //             }
-        //         }
-        //     },
-        // }
-    }
-}
+        let tasks_fut = self.scheduler.async_tasks.next();
+        let scheduler_fut = self.scheduler.receiver.next();
 
-impl std::fmt::Display for VirtualDom {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let base = self.base_scope();
-        let root = base.root_node();
+        use futures_util::future::{select, Either};
+        match select(tasks_fut, scheduler_fut).await {
+            // poll the internal futures
+            Either::Left((_id, _)) => {
+                //
+            }
 
-        let renderer = ScopeRenderer {
-            show_fragments: false,
-            skip_components: false,
-
-            _scope: base,
-            _pre_render: false,
-            _newline: true,
-            _indent: true,
-            _max_depth: usize::MAX,
-        };
-
-        renderer.render(self, root, f, 0)
+            // wait for an external event
+            Either::Right((msg, _)) => match msg.unwrap() {
+                SchedulerMsg::Task(t) => {
+                    self.scheduler.handle_task(t);
+                }
+                SchedulerMsg::Immediate(im) => {
+                    self.scheduler.dirty_scopes.insert(im);
+                }
+                SchedulerMsg::UiEvent(evt) => {
+                    self.scheduler.ui_events.push_back(evt);
+                }
+            },
+        }
     }
 }
 

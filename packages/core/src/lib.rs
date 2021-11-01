@@ -34,6 +34,9 @@ pub mod threadsafe;
 pub mod util;
 pub mod virtual_dom;
 
+#[cfg(feature = "debug_vdom")]
+pub mod debug_dom;
+
 pub(crate) mod innerlude {
     pub(crate) use crate::bumpframe::*;
     pub(crate) use crate::childiter::*;

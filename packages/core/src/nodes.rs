@@ -173,6 +173,29 @@ impl<'src> VNode<'src> {
     }
 }
 
+impl Debug for VNode<'_> {
+    fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match &self {
+            VNode::Element(el) => s
+                .debug_struct("VElement")
+                .field("name", &el.tag_name)
+                .field("key", &el.key)
+                .finish(),
+
+            VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
+            VNode::Anchor(_) => write!(s, "VAnchor"),
+
+            VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
+            VNode::Suspended { .. } => write!(s, "VSuspended"),
+            VNode::Component(comp) => write!(
+                s,
+                "VComponent {{ fc: {:?}, children: {:?} }}",
+                comp.user_fc, comp.children
+            ),
+        }
+    }
+}
+
 /// A placeholder node only generated when Fragments don't have any children.
 pub struct VAnchor {
     pub dom_id: Cell<Option<ElementId>>,
@@ -611,6 +634,12 @@ impl<'a> NodeFactory<'a> {
     }
 }
 
+impl Debug for NodeFactory<'_> {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+
 /// Trait implementations for use in the rsx! and html! macros.
 ///
 /// ## Details
@@ -668,7 +697,6 @@ impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
 }
 
 impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
-    // impl<'a> IntoVNode<'a> for Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
             Some(lazy) => lazy.call(cx),
@@ -682,7 +710,6 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
 }
 
 impl<'a> IntoVNode<'a> for LazyNodes<'a, '_> {
-    // impl<'a> IntoVNode<'a> for Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.call(cx)
     }
@@ -697,34 +724,5 @@ impl IntoVNode<'_> for &'static str {
 impl IntoVNode<'_> for Arguments<'_> {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.text(self)
-    }
-}
-
-impl Debug for NodeFactory<'_> {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
-    }
-}
-
-impl Debug for VNode<'_> {
-    fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        match &self {
-            VNode::Element(el) => s
-                .debug_struct("VElement")
-                .field("name", &el.tag_name)
-                .field("key", &el.key)
-                .finish(),
-
-            VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
-            VNode::Anchor(_) => write!(s, "VAnchor"),
-
-            VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
-            VNode::Suspended { .. } => write!(s, "VSuspended"),
-            VNode::Component(comp) => write!(
-                s,
-                "VComponent {{ fc: {:?}, children: {:?} }}",
-                comp.user_fc, comp.children
-            ),
-        }
     }
 }

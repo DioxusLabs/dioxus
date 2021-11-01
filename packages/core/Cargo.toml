@@ -55,6 +55,7 @@ dioxus-core-macro = { path = "../core-macro", version = "0.1.2" }
 [features]
 default = []
 serialize = ["serde", "serde_repr"]
+debug_vdom = []
 
 [[bench]]
 name = "create"
