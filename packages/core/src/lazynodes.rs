@@ -26,29 +26,37 @@ use crate::innerlude::{IntoVNode, NodeFactory, VNode};
 /// ```rust
 /// LazyNodes::new(|f| f.element("div", [], [], [] None))
 /// ```
-// pub struct LazyNodes<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> {
-//     inner: Box<F>,
-//     _p: PhantomData<&'a ()>,
-//     // inner: StackNodeStorage<'a>,
-//     // inner: StackNodeStorage<'a>,
-// }
-// pub type LazyNodes<'b> = Box<dyn for<'a> FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b>;
+pub struct LazyNodes<'a, 'b> {
+    inner: StackNodeStorage<'a, 'b>,
+}
 
-// pub fn to_lazy_nodes<'b>(
-//     f: impl for<'a> FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
-// ) -> Option<LazyNodes<'b>> {
-//     Some(Box::new(f))
-// }
+impl<'a, 'b> LazyNodes<'a, 'b> {
+    pub fn new<F>(f: F) -> Self
+    where
+        F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
+    {
+        Self {
+            inner: StackNodeStorage::Heap(Box::new(f)),
+        }
+    }
+
+    pub fn call(self, f: NodeFactory<'a>) -> VNode<'a> {
+        match self.inner {
+            StackNodeStorage::Heap(lazy) => lazy(f),
+            _ => todo!(),
+        }
+    }
+}
 
 type StackHeapSize = [usize; 12];
 
-enum StackNodeStorage<'a> {
+enum StackNodeStorage<'a, 'b> {
     Stack {
         next_ofs: usize,
         buf: StackHeapSize,
         width: usize,
     },
-    Heap(Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a>>),
+    Heap(Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b>),
 }
 
 // impl<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>> LazyNodes<'a, F> {

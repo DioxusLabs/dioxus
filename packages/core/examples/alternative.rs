@@ -17,7 +17,7 @@ pub static EXAMPLE: FC<()> = |(cx, _)| {
     });
     // let list = (0..10).map(|_f| Some(Box::new(move |_f| todo!())));
 
-    cx.render(Some(Box::new(move |cx| {
+    cx.render(Some(LazyNodes::new(move |cx| {
         cx.raw_element(
             "div",
             None,

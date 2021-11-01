@@ -3,9 +3,12 @@
 //! VNodes represent lazily-constructed VDom trees that support diffing and event handlers. These VNodes should be *very*
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
-use crate::innerlude::{
-    empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeInner,
-    SuspendedContext, FC,
+use crate::{
+    innerlude::{
+        empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeInner,
+        SuspendedContext,
+    },
+    lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -328,14 +331,6 @@ impl<'a> NodeFactory<'a> {
         self.bump
     }
 
-    pub(crate) fn unstable_place_holder(&self) -> VNode {
-        VNode::Text(self.bump.alloc(VText {
-            text: "",
-            dom_id: empty_cell(),
-            is_static: true,
-        }))
-    }
-
     /// Directly pass in text blocks without the need to use the format_args macro.
     pub fn static_text(&self, text: &'static str) -> VNode<'a> {
         VNode::Text(self.bump.alloc(VText {
@@ -448,23 +443,6 @@ impl<'a> NodeFactory<'a> {
             is_volatile,
         }
     }
-
-    pub fn component_v2_borrowed<P: 'a>(
-        self,
-        f: impl Fn(Context<'a>) -> Option<VNode<'a>> + 'a,
-        fc: fn(Scope<'a, P>) -> Element<'a>,
-        p: &'a P,
-    ) -> VNode<'a> {
-        //
-        todo!()
-    }
-    // pub fn component_v2_memoized(
-    //     self,
-    //     f: impl for<'b> Fn(Context<'b>) -> Option<VNode<'b>> + 'static,
-    // ) -> VNode<'a> {
-    //     //
-    //     todo!()
-    // }
 
     pub fn component<P, V>(
         &self,
@@ -609,13 +587,11 @@ impl<'a> NodeFactory<'a> {
         })
     }
 
-    pub fn annotate_lazy<'z, 'b, F>(
-        f: F,
-    ) -> Option<Box<dyn FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b>>
+    pub fn annotate_lazy<'z, 'b, F>(f: F) -> Option<LazyNodes<'z, 'b>>
     where
         F: FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b,
     {
-        Some(Box::new(f))
+        Some(LazyNodes::new(f))
     }
 }
 
@@ -675,17 +651,11 @@ impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
     }
 }
 
-pub fn annotate_lazy<'a, 'b, F>(f: F) -> Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b>>
-where
-    F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
-{
-    Some(Box::new(f))
-}
-
-impl<'a> IntoVNode<'a> for Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>> {
+impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
+    // impl<'a> IntoVNode<'a> for Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
-            Some(lazy) => lazy(cx),
+            Some(lazy) => lazy.call(cx),
             None => VNode::Fragment(VFragment {
                 children: &[],
                 is_static: false,
@@ -695,9 +665,10 @@ impl<'a> IntoVNode<'a> for Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> +
     }
 }
 
-impl<'a> IntoVNode<'a> for Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_> {
+impl<'a> IntoVNode<'a> for LazyNodes<'a, '_> {
+    // impl<'a> IntoVNode<'a> for Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        self(cx)
+        self.call(cx)
     }
 }
 

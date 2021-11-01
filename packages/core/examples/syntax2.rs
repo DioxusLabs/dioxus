@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use dioxus::component::Scope;
 use dioxus::events::on::MouseEvent;
-use dioxus::nodes::{annotate_lazy, IntoVNode, VComponent, VFragment, VText};
+use dioxus::nodes::{IntoVNode, VComponent, VFragment, VText};
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;

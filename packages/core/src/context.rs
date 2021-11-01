@@ -6,7 +6,7 @@
 
 use bumpalo::Bump;
 
-use crate::innerlude::*;
+use crate::{innerlude::*, lazynodes::LazyNodes};
 use std::{any::TypeId, ops::Deref, rc::Rc};
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
@@ -103,11 +103,12 @@ impl<'src> Context<'src> {
     ///```
     pub fn render(
         self,
-        lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'src>) -> VNode<'src> + '_>>,
+        lazy_nodes: Option<LazyNodes<'src, '_>>,
+        // lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'src>) -> VNode<'src> + '_>>,
     ) -> Option<VNode<'src>> {
         let bump = &self.scope.frames.wip_frame().bump;
         let factory = NodeFactory { bump };
-        lazy_nodes.map(|f| f(factory))
+        lazy_nodes.map(|f| f.call(factory))
     }
 
     /// `submit_task` will submit the future to be polled.
