@@ -67,7 +67,7 @@ fn App((cx, props): Component<()>) -> Element {
 }
 ```
 
-Do note: the `rsx!` macro returns a `Closure`, an anonymous function that has a unique type. Because every closure is unique, we cannot return *just* `rsx!` from a match statement. Every `rsx!` call must be rendered first when used in match statements.
+Do note: the `rsx!` macro returns a `Closure`, an anonymous function that has a unique type. 
 
 To make patterns like these less verbose, the `rsx!` macro accepts an optional first argument on which it will call `render`. Our previous component can be shortened with this alternative syntax:
 
@@ -84,6 +84,19 @@ fn App((cx, props): Component<()>) -> Element {
 This syntax even enables us to write a one-line component:
 ```rust
 static App: Fc<()> = |(cx, props)| rsx!(cx, "hello world!");
+```
+
+Alternatively, for match statements, we can just return the builder itself and pass it into a final, single call to `cx.render`:
+
+```rust
+fn App((cx, props): Component<()>) -> Element {
+    let greeting = match get_name() {
+        "jack" => rsx!("Hey Jack, how's Diane?" ),
+        "diane" => rsx!("Hey Diana, how's Jack?" ),
+        name => rsx!("Hello, {name}!" ),
+    };
+    cx.render(greeting)
+}
 ```
 
 ## Nesting RSX
@@ -117,8 +130,8 @@ In the case of a log-in screen, we might want to display the same NavBar and Foo
 
 ```rust
 let screen = match logged_in {
-    true => rsx!(cx, DashboardScreen {}),
-    false => rsx!(cx, LoginScreen {})
+    true => rsx!(DashboardScreen {}),
+    false => rsx!(LoginScreen {})
 };
 
 cx.render(rsx!{
