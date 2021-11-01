@@ -230,15 +230,10 @@ fn Child2<'a>((cx, props): Scope<'a, Child2Props>) -> Element<'a> {
         })
         .unwrap();
 
-    let b = cx.bump();
-    let node: &'a VNode<'a> = b.alloc(node);
-
-    let children = Children { pthru: node };
-
     cx.render(rsx! {
         div {
             ChildrenComp {
-                children: children
+                div {}
             }
         }
     })
@@ -246,46 +241,14 @@ fn Child2<'a>((cx, props): Scope<'a, Child2Props>) -> Element<'a> {
 
 #[derive(Props)]
 struct ChildrenTest<'a> {
-    children: Children<'a>,
-}
-
-struct Children<'a> {
-    pthru: &'a VNode<'a>,
-}
-
-impl<'a> Clone for Children<'a> {
-    fn clone(&self) -> Self {
-        Self { pthru: self.pthru }
-    }
-}
-impl<'a> Copy for Children<'a> {}
-
-impl<'a> IntoVNode<'a> for Children<'a> {
-    fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
-        match self.pthru {
-            VNode::Text(f) => VNode::Text(*f),
-            VNode::Element(e) => VNode::Element(*e),
-            VNode::Component(c) => VNode::Component(*c),
-            VNode::Suspended(s) => VNode::Suspended(*s),
-            VNode::Anchor(a) => VNode::Anchor(a),
-            VNode::Fragment(f) => VNode::Fragment(VFragment {
-                children: f.children,
-                is_static: f.is_static,
-                key: f.key,
-            }),
-        }
-    }
+    children: ScopeChildren<'a>,
 }
 
 fn ChildrenComp<'a>((cx, props): Scope<'a, ChildrenTest<'a>>) -> Element<'a> {
     cx.render(rsx! {
         div {
             div {
-
-                // if the node's id is already assigned, then it's being passed in as a child
-                // in these instances, we don't worry about re-checking the node?
-
-                {Some(props.children)}
+                {&props.children}
             }
         }
     })

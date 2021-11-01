@@ -208,12 +208,11 @@ fn create_simple() {
 #[test]
 fn create_components() {
     static App: FC<()> = |(cx, props)| {
-        todo!()
-        // cx.render(rsx! {
-        //     Child { "abc1" }
-        //     Child { "abc2" }
-        //     Child { "abc3" }
-        // })
+        cx.render(rsx! {
+            Child { "abc1" }
+            Child { "abc2" }
+            Child { "abc3" }
+        })
     };
 
     #[derive(Props)]

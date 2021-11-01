@@ -187,11 +187,7 @@ impl Debug for VNode<'_> {
 
             VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
             VNode::Suspended { .. } => write!(s, "VSuspended"),
-            VNode::Component(comp) => write!(
-                s,
-                "VComponent {{ fc: {:?}, children: {:?} }}",
-                comp.user_fc, comp.children
-            ),
+            VNode::Component(comp) => write!(s, "VComponent {{ fc: {:?}}}", comp.user_fc),
         }
     }
 }
@@ -330,8 +326,6 @@ pub struct VComponent<'src> {
     pub user_fc: *const (),
 
     pub(crate) caller: &'src dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
-
-    pub(crate) children: &'src [VNode<'src>],
 
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
@@ -483,20 +477,16 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn component<P, V>(
+    pub fn component<P>(
         &self,
         component: fn(Scope<'a, P>) -> Element<'a>,
         props: P,
         key: Option<Arguments>,
-        children: V,
     ) -> VNode<'a>
     where
         P: Properties + 'a,
-        V: AsRef<[VNode<'a>]> + 'a,
     {
         let bump = self.bump();
-        let children: &'a V = bump.alloc(children);
-        let children = children.as_ref();
         let props = bump.alloc(props);
         let raw_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
@@ -518,7 +508,7 @@ impl<'a> NodeFactory<'a> {
 
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
-                    matches!((props_memoized, children.is_empty()), (true, true))
+                    props_memoized
                 } else {
                     false
                 }
@@ -549,8 +539,6 @@ impl<'a> NodeFactory<'a> {
             RefCell::new(Some(drop_props))
         };
 
-        let is_static = children.is_empty() && P::IS_STATIC && key.is_none();
-
         let key = key.map(|f| self.raw_text(f).0);
 
         let caller: &'a mut dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> =
@@ -565,17 +553,14 @@ impl<'a> NodeFactory<'a> {
                 unsafe { std::mem::transmute(res) }
             });
 
-        let can_memoize = children.is_empty() && P::IS_STATIC;
-
         VNode::Component(bump.alloc(VComponent {
             user_fc,
             comparator,
             raw_props,
-            children,
             caller,
-            is_static,
+            is_static: P::IS_STATIC,
             key,
-            can_memoize,
+            can_memoize: P::IS_STATIC,
             drop_props,
             associated_scope: Cell::new(None),
         }))
@@ -768,6 +753,18 @@ impl IntoVNode<'_> for Arguments<'_> {
 /// This method returns a "ScopeChildren" object. This object is copy-able and preserve the correct lifetime.
 pub struct ScopeChildren<'a> {
     root: Option<VNode<'a>>,
+}
+
+impl Default for ScopeChildren<'_> {
+    fn default() -> Self {
+        Self { root: None }
+    }
+}
+
+impl<'a> ScopeChildren<'a> {
+    pub fn new(root: VNode<'a>) -> Self {
+        Self { root: Some(root) }
+    }
 }
 
 impl IntoIterator for &ScopeChildren<'_> {
