@@ -341,21 +341,21 @@ impl ScopeInner {
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
         //
-        todo!()
-        // if let Some(builder) = render(self) {
-        //     let new_head = builder.into_vnode(NodeFactory {
-        //         bump: &self.frames.wip_frame().bump,
-        //     });
-        //     log::debug!("Render is successful");
+        // todo!()
+        if let Some(builder) = render(self) {
+            let new_head = builder.into_vnode(NodeFactory {
+                bump: &self.frames.wip_frame().bump,
+            });
+            log::debug!("Render is successful");
 
-        //     // the user's component succeeded. We can safely cycle to the next frame
-        //     self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
-        //     self.frames.cycle_frame();
+            // the user's component succeeded. We can safely cycle to the next frame
+            self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
+            self.frames.cycle_frame();
 
-        //     true
-        // } else {
-        //     false
-        // }
+            true
+        } else {
+            false
+        }
     }
 }
 

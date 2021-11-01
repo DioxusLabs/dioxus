@@ -420,10 +420,6 @@ impl<'bump> DiffMachine<'bump> {
             ) => self
                 .stack
                 .create_node(new_node, MountType::Replace { old: old_node }),
-
-            (Placeholder, _) | (_, Placeholder) => {
-                unreachable!("placeholder should never be diffed");
-            }
         }
     }
 

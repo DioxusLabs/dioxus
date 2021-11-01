@@ -5,11 +5,7 @@
 //! if the type supports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
-use crate::{
-    innerlude::{Context, Element, FC},
-    NodeFactory, VNode,
-};
-
+use crate::innerlude::{Context, Element, VNode};
 /// A component is a wrapper around a Context and some Props that share a lifetime
 ///
 ///
@@ -44,6 +40,27 @@ use crate::{
 ///
 pub type Scope<'a, T> = (Context<'a>, &'a T);
 
+pub struct FragmentProps<'a> {
+    childen: &'a VNode<'a>,
+}
+pub struct FragmentPropsBuilder<'a> {
+    childen: Option<&'a VNode<'a>>,
+}
+
+impl<'a> Properties for FragmentProps<'a> {
+    type Builder = FragmentPropsBuilder<'a>;
+
+    const IS_STATIC: bool = false;
+
+    fn builder() -> Self::Builder {
+        todo!()
+    }
+
+    unsafe fn memoize(&self, other: &Self) -> bool {
+        todo!()
+    }
+}
+
 /// Create inline fragments using Component syntax.
 ///
 /// Fragments capture a series of children without rendering extra nodes.
@@ -66,11 +83,8 @@ pub type Scope<'a, T> = (Context<'a>, &'a T);
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 ///
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>((cx, _): Scope<'a, ()>) -> Element<'a> {
-    todo!()
-    // let p: Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_> =
-    //     Box::new(|f: NodeFactory| f.fragment_from_iter(cx.children()));
-    // cx.render(p)
+pub fn Fragment<'a>((_, props): Scope<'a, FragmentProps<'a>>) -> Element<'a> {
+    Some(props.childen.decouple())
 }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus

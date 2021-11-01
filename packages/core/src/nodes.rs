@@ -155,6 +155,22 @@ impl<'src> VNode<'src> {
             VNode::Component(_) => None,
         }
     }
+
+    // Create an "owned" version of the vnode.
+    pub fn decouple(&self) -> VNode<'src> {
+        match self {
+            VNode::Text(t) => VNode::Text(*t),
+            VNode::Element(e) => VNode::Element(*e),
+            VNode::Component(c) => VNode::Component(*c),
+            VNode::Suspended(s) => VNode::Suspended(*s),
+            VNode::Anchor(a) => VNode::Anchor(*a),
+            VNode::Fragment(f) => VNode::Fragment(VFragment {
+                children: f.children,
+                key: f.key,
+                is_static: f.is_static,
+            }),
+        }
+    }
 }
 
 /// A placeholder node only generated when Fragments don't have any children.

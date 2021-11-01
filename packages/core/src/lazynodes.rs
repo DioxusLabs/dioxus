@@ -1,21 +1,18 @@
-use std::mem;
+//! Support for storing lazy-nodes on the stack
+//!
+//! This module provides support for a type called `LazyNodes` which is a micro-heap located on the stack to make calls
+//! to `rsx!` more efficient.
+//!
+//! To support returning rsx! from branches in match statements, we need to use dynamic dispatch on NodeFactory closures.
+//!
+//! This can be done either through boxing directly, or by using dynamic-sized-types and a custom allocator. In our case,
+//! we build a tiny alloactor in the stack and allocate the closure into that.
+//!
+//! The logic for this was borrowed from https://docs.rs/stack_dst/0.6.1/stack_dst/. Unfortunately, this crate does not
+//! support non-static closures, so we've implemented the core logic of `ValueA` in this module.
 
-/*
-Remember: calls to rsx! are lazy - they are not evaluated immediately.
-
-They also using dynamic dispatch, so we can return multiple rsx!'s from match statements and such.
-
-If we allocated every rsx! call on the heap, it would be quite wasteful. Rsx! calls are FnOnce, so they can be stored in a stack.
-
-Solutions like stackdst are useful, but they only support 'static closures.
-
-All our closures are bound by the bump lifetime, so stack-dst will not work for us
-
-Our solution is to try and manually allocate the closure onto the stack.
-If it fails, then we default to Box.
-
-*/
 use crate::innerlude::{NodeFactory, VNode};
+use std::mem;
 
 /// A concrete type provider for closures that build VNode structures.
 ///
@@ -73,13 +70,13 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
             let size = mem::size_of::<F>();
 
             if info.len() * mem::size_of::<usize>() + size > mem::size_of::<StackHeapSize>() {
-                log::error!("lazy nodes was too large to fit into stack. falling back to heap");
+                log::debug!("lazy nodes was too large to fit into stack. falling back to heap");
 
                 Self {
                     inner: StackNodeStorage::Heap(Box::new(val)),
                 }
             } else {
-                log::error!("lazy nodes fits on stack!");
+                log::debug!("lazy nodes fits on stack!");
                 let mut buf: StackHeapSize = [0; 12];
 
                 assert!(info.len() + round_to_words(size) <= buf.as_ref().len());
@@ -172,4 +169,23 @@ unsafe fn make_fat_ptr<T: ?Sized>(data_ptr: usize, meta_vals: &[usize]) -> *mut 
 
 fn round_to_words(len: usize) -> usize {
     (len + mem::size_of::<usize>() - 1) / mem::size_of::<usize>()
+}
+
+#[test]
+fn it_works() {
+    let bump = bumpalo::Bump::new();
+
+    simple_logger::init();
+
+    let factory = NodeFactory { bump: &bump };
+
+    let caller = NodeFactory::annotate_lazy(|f| {
+        //
+        f.text(format_args!("hello world!"))
+    })
+    .unwrap();
+
+    let g = caller.call(factory);
+
+    dbg!(g);
 }

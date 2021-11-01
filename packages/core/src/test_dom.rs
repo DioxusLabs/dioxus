@@ -21,27 +21,13 @@ impl TestDom {
         NodeFactory::new(&self.bump)
     }
 
-    pub fn render_direct<'a>(
-        &'a self,
-        lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
-    ) -> VNode<'a>
-// where
-    //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
-        todo!()
-        // lazy_nodes.into_vnode(NodeFactory::new(&self.bump))
+    pub fn render_direct<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> VNode<'a> {
+        lazy_nodes.into_vnode(NodeFactory::new(&self.bump))
     }
 
-    pub fn render<'a>(
-        &'a self,
-        lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
-    ) -> &'a VNode<'a>
-// where
-    //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
-        todo!()
-        // self.bump
-        // .alloc(lazy_nodes.into_vnode(NodeFactory::new(&self.bump)))
+    pub fn render<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> &'a VNode<'a> {
+        self.bump
+            .alloc(lazy_nodes.into_vnode(NodeFactory::new(&self.bump)))
     }
 
     pub fn diff<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
@@ -51,14 +37,7 @@ impl TestDom {
         machine.mutations
     }
 
-    pub fn create<'a>(
-        &'a self,
-        left: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
-    ) -> Mutations<'a>
-// pub fn create<'a, F1>(&'a self, left: LazyNodes<'a, F1>) -> Mutations<'a>
-    // where
-    //     F1: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
+    pub fn create<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
         let old = self.bump.alloc(self.render_direct(left));
 
         let mut machine = DiffMachine::new(Mutations::new(), &self.scheduler.pool);
@@ -72,13 +51,9 @@ impl TestDom {
 
     pub fn lazy_diff<'a>(
         &'a self,
-        left: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
-        right: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
-    ) -> (Mutations<'a>, Mutations<'a>)
-// where
-    //     F1: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    //     F2: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
+        left: Option<LazyNodes<'a, '_>>,
+        right: Option<LazyNodes<'a, '_>>,
+    ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render(left), self.render(right));
 
         let mut machine = DiffMachine::new(Mutations::new(), &self.scheduler.pool);
@@ -103,11 +78,5 @@ impl TestDom {
 impl Default for TestDom {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl VirtualDom {
-    pub fn simulate(&mut self) {
-        //
     }
 }
