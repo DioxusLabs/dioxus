@@ -19,7 +19,7 @@ use dioxus_html as dioxus_elements;
 fn app_runs() {
     static App: FC<()> = |(cx, props)| {
         //
-        rsx!( div{"hello"} )
+        cx.render(rsx!( div{"hello"} ))
     };
     let mut vdom = VirtualDom::new(App);
     let edits = vdom.rebuild();
@@ -29,10 +29,10 @@ fn app_runs() {
 #[test]
 fn fragments_work() {
     static App: FC<()> = |(cx, props)| {
-        rsx!(
+        cx.render(rsx!(
             div{"hello"}
             div{"goodbye"}
-        )
+        ))
     };
     let mut vdom = VirtualDom::new(App);
     let edits = vdom.rebuild();
@@ -43,10 +43,10 @@ fn fragments_work() {
 #[test]
 fn lists_work() {
     static App: FC<()> = |(cx, props)| {
-        rsx!(
+        cx.render(rsx!(
             h1 {"hello"}
             {(0..6).map(|f| rsx!(span{ "{f}" }))}
-        )
+        ))
     };
     let mut vdom = VirtualDom::new(App);
     let edits = vdom.rebuild();
@@ -56,11 +56,11 @@ fn lists_work() {
 #[test]
 fn conditional_rendering() {
     static App: FC<()> = |(cx, props)| {
-        rsx!(
+        cx.render(rsx!(
             h1 {"hello"}
             {true.then(|| rsx!(span{ "a" }))}
             {false.then(|| rsx!(span{ "b" }))}
-        )
+        ))
     };
     let mut vdom = VirtualDom::new(App);
 
@@ -73,16 +73,16 @@ fn conditional_rendering() {
 #[test]
 fn child_components() {
     static App: FC<()> = |(cx, props)| {
-        rsx!(
+        cx.render(rsx!(
             {true.then(|| rsx!(Child { }))}
             {false.then(|| rsx!(Child { }))}
-        )
+        ))
     };
     static Child: FC<()> = |(cx, props)| {
-        rsx!(
+        cx.render(rsx!(
             h1 {"hello"}
             h1 {"goodbye"}
-        )
+        ))
     };
     let mut vdom = VirtualDom::new(App);
     let edits = vdom.rebuild();
@@ -92,8 +92,9 @@ fn child_components() {
 #[test]
 fn suspended_works() {
     static App: FC<()> = |(cx, props)| {
-        let title = use_suspense(cx, || async { "bob" }, move |cx, f| rsx! { "{f}"});
-        rsx!("hello" { title })
+        let title = use_suspense(cx, || async { "bob" }, move |cx, f| todo!());
+        // let title = use_suspense(cx, || async { "bob" }, move |cx, f| rsx! { "{f}"});
+        cx.render(rsx!("hello" { title }))
     };
 
     let mut vdom = VirtualDom::new(App);

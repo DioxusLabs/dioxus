@@ -21,7 +21,10 @@ impl TestDom {
         NodeFactory::new(&self.bump)
     }
 
-    pub fn render_direct<'a>(&'a self, lazy_nodes: Element<'a>) -> VNode<'a>
+    pub fn render_direct<'a>(
+        &'a self,
+        lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
+    ) -> VNode<'a>
 // where
     //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
     {
@@ -29,7 +32,10 @@ impl TestDom {
         // lazy_nodes.into_vnode(NodeFactory::new(&self.bump))
     }
 
-    pub fn render<'a>(&'a self, lazy_nodes: Element<'a>) -> &'a VNode<'a>
+    pub fn render<'a>(
+        &'a self,
+        lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
+    ) -> &'a VNode<'a>
 // where
     //     F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
     {
@@ -45,7 +51,10 @@ impl TestDom {
         machine.mutations
     }
 
-    pub fn create<'a>(&'a self, left: Element<'a>) -> Mutations<'a>
+    pub fn create<'a>(
+        &'a self,
+        left: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
+    ) -> Mutations<'a>
 // pub fn create<'a, F1>(&'a self, left: LazyNodes<'a, F1>) -> Mutations<'a>
     // where
     //     F1: FnOnce(NodeFactory<'a>) -> VNode<'a>,
@@ -63,10 +72,8 @@ impl TestDom {
 
     pub fn lazy_diff<'a>(
         &'a self,
-        left: Element<'a>,
-        right: Element<'a>,
-        // left: LazyNodes<'a, F1>,
-        // right: LazyNodes<'a, F2>,
+        left: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
+        right: Option<Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + '_>>,
     ) -> (Mutations<'a>, Mutations<'a>)
 // where
     //     F1: FnOnce(NodeFactory<'a>) -> VNode<'a>,

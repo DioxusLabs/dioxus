@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use dioxus_core::prelude::*;
 
-#[async_std::main]
-async fn main() {
+// #[async_std::main]
+fn main() {
     static App: FC<()> =
         |(cx, props)| cx.render(Some(Box::new(move |f| f.text(format_args!("hello")))));
 
@@ -11,7 +11,7 @@ async fn main() {
 
     dom.rebuild();
 
-    let deadline = async_std::task::sleep(Duration::from_millis(50));
+    // let deadline = async_std::task::sleep(Duration::from_millis(50));
 
     // let _fut = dom.run_with_deadline(|| deadline.);
 }

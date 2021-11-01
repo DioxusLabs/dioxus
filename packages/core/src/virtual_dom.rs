@@ -158,7 +158,6 @@ impl VirtualDom {
                 None,
                 0,
                 0,
-                ScopeChildren(&[]),
                 scheduler.pool.channel.clone(),
             )
         });
@@ -226,7 +225,7 @@ impl VirtualDom {
                     std::mem::transmute(root((Context { scope }, props)))
                 });
 
-            root_scope.update_scope_dependencies(&root_caller, ScopeChildren(&[]));
+            root_scope.update_scope_dependencies(&root_caller);
 
             drop(root_props);
 

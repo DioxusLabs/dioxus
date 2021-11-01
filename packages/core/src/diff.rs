@@ -348,7 +348,6 @@ impl<'bump> DiffMachine<'bump> {
                 Some(parent_idx),
                 parent_scope.height + 1,
                 parent_scope.subtree(),
-                ScopeChildren(vcomponent.children),
                 shared,
             )
         });
@@ -555,7 +554,7 @@ impl<'bump> DiffMachine<'bump> {
 
             // make sure the component's caller function is up to date
             let scope = self.vdom.get_scope_mut(scope_addr).unwrap();
-            scope.update_scope_dependencies(new.caller, ScopeChildren(new.children));
+            scope.update_scope_dependencies(new.caller);
 
             // React doesn't automatically memoize, but we do.
             let props_are_the_same = old.comparator.unwrap();

@@ -54,49 +54,6 @@ impl<'a> Deref for Context<'a> {
 }
 
 impl<'src> Context<'src> {
-    /// Access the children elements passed into the component
-    ///
-    /// This enables patterns where a component is passed children from its parent.
-    ///
-    /// ## Details
-    ///
-    /// Unlike React, Dioxus allows *only* lists of children to be passed from parent to child - not arbitrary functions
-    /// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
-    /// on the props that takes Context.
-    ///
-    /// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
-    /// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
-    /// props are valid for the static lifetime.
-    ///
-    /// ## Example
-    ///
-    /// ```rust
-    /// const App: FC<()> = |(cx, props)|{
-    ///     cx.render(rsx!{
-    ///         CustomCard {
-    ///             h1 {}
-    ///             p {}
-    ///         }
-    ///     })
-    /// }
-    ///
-    /// const CustomCard: FC<()> = |(cx, props)|{
-    ///     cx.render(rsx!{
-    ///         div {
-    ///             h1 {"Title card"}
-    ///             {cx.children()}
-    ///         }
-    ///     })
-    /// }
-    /// ```
-    ///
-    /// ## Notes:
-    ///
-    /// This method returns a "ScopeChildren" object. This object is copy-able and preserve the correct lifetime.
-    pub fn children(&self) -> ScopeChildren<'src> {
-        self.scope.child_nodes()
-    }
-
     /// Create a subscription that schedules a future render for the reference component
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
@@ -147,28 +104,10 @@ impl<'src> Context<'src> {
     pub fn render(
         self,
         lazy_nodes: Option<Box<dyn FnOnce(NodeFactory<'src>) -> VNode<'src> + '_>>,
-        // lazy_nodes: Option<Box<dyn FnOnce(NodeFactory) -> VNode + '_>>,
-        // lazy_nodes: Box<dyn FnOnce(NodeFactory<'src>) -> VNode<'src> + '_>,
     ) -> Option<VNode<'src>> {
-        // pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
-        //     self,
-        //     lazy_nodes: LazyNodes<'src, F>,
-        // ) -> Option<VNode<'src>> {
         let bump = &self.scope.frames.wip_frame().bump;
-        // Some(lazy_nodes.into_vnode(NodeFactory { bump }))
-
         let factory = NodeFactory { bump };
-        // let vnode = lazy_nodes(factory);
-
-        match lazy_nodes {
-            Some(f) => Some(f(factory)),
-            None => None,
-        }
-
-        // match lazy_nodes {
-        //     None => todo!(),
-        // }
-        // Some(lazy_nodes)
+        lazy_nodes.map(|f| f(factory))
     }
 
     /// `submit_task` will submit the future to be polled.

@@ -233,65 +233,12 @@ fn Child2<'a>((cx, props): Scope<'a, Child2Props>) -> Element<'a> {
     let b = cx.bump();
     let node: &'a VNode<'a> = b.alloc(node);
 
-    let children = ChildList { pthru: node };
+    let children = Children { pthru: node };
 
-    // let c = VComponent {
-    //     key: todo!(),
-    //     associated_scope: todo!(),
-    //     is_static: todo!(),
-    //     user_fc: todo!(),
-    //     caller: todo!(),
-    //     children: todo!(),
-    //     comparator: todo!(),
-    //     drop_props: todo!(),
-    //     can_memoize: todo!(),
-    //     raw_props: todo!(),
-    // };
-
-    // Vcomp
-    // - borrowed
-    // - memoized
-
-    // cx.render({
-    //     NodeFactory::annotate_lazy(move |__cx: NodeFactory| -> VNode {
-    //         use dioxus_elements::{GlobalAttributes, SvgAttributes};
-    //         __cx.element(
-    //             dioxus_elements::div,
-    //             [],
-    //             [],
-    //             [
-    //                 __cx.component(ChildrenMemo, (), None, []),
-    //                 __cx.component(
-    //                     ChildrenComp,
-    //                     //
-    //                     ChildrenTest { node: children },
-    //                     None,
-    //                     [],
-    //                 ),
-    //                 // {
-    //                 //     let _props: &_ = __cx.bump().alloc(ChildrenTest { node: children });
-    //                 //     __cx.component_v2_borrowed(
-    //                 //         //
-    //                 //         move |c| ChildrenComp((c, _props)),
-    //                 //         ChildrenComp,
-    //                 //         _props,
-    //                 //     )
-    //                 // },
-    //                 // {
-    //                 //     let _props: &_ = __cx.bump().alloc(());
-    //                 //     __cx.component_v2_borrowed(move |c| ChildrenMemo((c, _props)))
-    //                 // },
-    //             ],
-    //             None,
-    //         )
-    //     })
-    // })
     cx.render(rsx! {
         div {
             ChildrenComp {
-                ..ChildrenTest {
-                    node: children,
-                }
+                children: children
             }
         }
     })
@@ -299,21 +246,21 @@ fn Child2<'a>((cx, props): Scope<'a, Child2Props>) -> Element<'a> {
 
 #[derive(Props)]
 struct ChildrenTest<'a> {
-    node: ChildList<'a>,
+    children: Children<'a>,
 }
 
-struct ChildList<'a> {
+struct Children<'a> {
     pthru: &'a VNode<'a>,
 }
 
-impl<'a> Clone for ChildList<'a> {
+impl<'a> Clone for Children<'a> {
     fn clone(&self) -> Self {
         Self { pthru: self.pthru }
     }
 }
-impl<'a> Copy for ChildList<'a> {}
+impl<'a> Copy for Children<'a> {}
 
-impl<'a> IntoVNode<'a> for ChildList<'a> {
+impl<'a> IntoVNode<'a> for Children<'a> {
     fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
         match self.pthru {
             VNode::Text(f) => VNode::Text(*f),
@@ -338,7 +285,7 @@ fn ChildrenComp<'a>((cx, props): Scope<'a, ChildrenTest<'a>>) -> Element<'a> {
                 // if the node's id is already assigned, then it's being passed in as a child
                 // in these instances, we don't worry about re-checking the node?
 
-                {Some(props.node)}
+                {Some(props.children)}
             }
         }
     })

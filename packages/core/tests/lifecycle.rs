@@ -22,7 +22,7 @@ fn manual_diffing() {
 
     static App: FC<AppProps> = |(cx, props)| {
         let val = props.value.lock().unwrap();
-        rsx! { div { "{val}" } }
+        cx.render(rsx! { div { "{val}" } })
     };
 
     let value = Arc::new(Mutex::new("Hello"));

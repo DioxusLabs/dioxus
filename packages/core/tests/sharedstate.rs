@@ -15,12 +15,12 @@ fn shared_state_test() {
 
     static App: FC<()> = |(cx, props)| {
         cx.provide_state(MySharedState("world!"));
-        rsx!(Child {})
+        cx.render(rsx!(Child {}))
     };
 
     static Child: FC<()> = |(cx, props)| {
         let shared = cx.consume_state::<MySharedState>()?;
-        rsx!("Hello, {shared.0}")
+        cx.render(rsx!("Hello, {shared.0}"))
     };
 
     let mut dom = VirtualDom::new(App);

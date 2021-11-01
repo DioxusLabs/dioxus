@@ -29,7 +29,6 @@ pub struct ScopeInner {
     // Nodes
     pub(crate) frames: ActiveFrame,
     pub(crate) caller: *const dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
-    pub(crate) child_nodes: ScopeChildren<'static>,
 
     /*
     we care about:
@@ -181,11 +180,8 @@ impl ScopeInner {
         parent_idx: Option<ScopeId>,
         height: u32,
         subtree: u32,
-        child_nodes: ScopeChildren,
         shared: EventChannel,
     ) -> Self {
-        let child_nodes = unsafe { child_nodes.extend_lifetime() };
-
         let schedule_any_update = shared.schedule_any_immediate.clone();
 
         let memoized_updater = Rc::new(move || schedule_any_update(our_arena_idx));
@@ -198,7 +194,6 @@ impl ScopeInner {
         Self {
             memoized_updater,
             shared,
-            child_nodes,
             caller,
             parent_idx,
             our_arena_idx,
@@ -218,18 +213,10 @@ impl ScopeInner {
     pub(crate) fn update_scope_dependencies<'creator_node>(
         &mut self,
         caller: &'creator_node dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
-        child_nodes: ScopeChildren,
     ) {
         log::debug!("Updating scope dependencies {:?}", self.our_arena_idx);
         let caller = caller as *const _;
         self.caller = unsafe { std::mem::transmute(caller) };
-
-        let child_nodes = unsafe { child_nodes.extend_lifetime() };
-        self.child_nodes = child_nodes;
-    }
-
-    pub(crate) fn child_nodes(&self) -> ScopeChildren {
-        unsafe { self.child_nodes.shorten_lifetime() }
     }
 
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
