@@ -61,10 +61,10 @@ pub struct VirtualDom {
 
     root_fc: Box<dyn Any>,
 
-    root_props: Rc<dyn Any + Send>,
+    root_props: Rc<dyn Any>,
 
     // we need to keep the allocation around, but we don't necessarily use it
-    _root_caller: RootCaller,
+    _root_caller: Rc<dyn Any>,
 }
 
 impl VirtualDom {
@@ -131,7 +131,7 @@ impl VirtualDom {
     ///
     /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
     /// VirtualDom to be created just to retrieve its channel receiver.
-    pub fn new_with_props_and_scheduler<P: 'static + Send>(
+    pub fn new_with_props_and_scheduler<P: 'static>(
         root: FC<P>,
         root_props: P,
         sender: UnboundedSender<SchedulerMsg>,
@@ -139,15 +139,16 @@ impl VirtualDom {
     ) -> Self {
         let root_fc = Box::new(root);
 
-        let root_props: Rc<dyn Any + Send> = Rc::new(root_props);
+        let root_props: Rc<dyn Any> = Rc::new(root_props);
 
-        let _p = root_props.clone();
-        // Safety: this callback is only valid for the lifetime of the root props
-        let root_caller: Rc<dyn Fn(&ScopeInner) -> Element> =
-            Rc::new(move |scope: &ScopeInner| unsafe {
-                let props = _p.downcast_ref::<P>().unwrap();
-                std::mem::transmute(root((Context { scope }, props)))
-            });
+        let props = root_props.clone();
+
+        let root_caller: Rc<dyn Fn(&ScopeInner) -> Element> = Rc::new(move |scope: &ScopeInner| {
+            let props = props.downcast_ref::<P>().unwrap();
+            let node = root((Context { scope }, props));
+            // cast into the right lifetime
+            unsafe { std::mem::transmute(node) }
+        });
 
         let scheduler = Scheduler::new(sender, receiver);
 
@@ -163,7 +164,7 @@ impl VirtualDom {
         });
 
         Self {
-            _root_caller: RootCaller(root_caller),
+            _root_caller: Rc::new(root_caller),
             root_fc,
             base_scope,
             scheduler,
@@ -204,14 +205,14 @@ impl VirtualDom {
     /// ```
     pub fn update_root_props<P>(&mut self, root_props: P) -> Option<Mutations>
     where
-        P: 'static + Send,
+        P: 'static,
     {
         let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
 
         // Pre-emptively drop any downstream references of the old props
         root_scope.ensure_drop_safety(&self.scheduler.pool);
 
-        let mut root_props: Rc<dyn Any + Send> = Rc::new(root_props);
+        let mut root_props: Rc<dyn Any> = Rc::new(root_props);
 
         if let Some(props_ptr) = root_props.downcast_ref::<P>().map(|p| p as *const P) {
             // Swap the old props and new props
@@ -394,6 +395,3 @@ impl VirtualDom {
         }
     }
 }
-
-// we never actually use the contents of this root caller
-struct RootCaller(Rc<dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> + 'static>);

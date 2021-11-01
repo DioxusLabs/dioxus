@@ -49,7 +49,7 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn App((cx, props): Component<()>) -> Element {
+fn App((cx, props): Scope<()>) -> Element {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(
@@ -147,8 +147,11 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Subtree Memoization       | ✅      | ❓     | skip diffing static element subtrees                                 |
 | Compile-time correct      | ✅      | ❓     | Throw errors on invalid template layouts                             |
 | Heuristic Engine          | ✅      | ❓     | track component memory usage to minimize future allocations          |
-| Fine-grained reactivity   | 🛠      | ❓     | Skip diffing for fine-grain updates                                  |
 | Effects                   | 🛠      | ✅     | Run effects after a component has been committed to render           |
+| Server Components         | 🛠      | ✅     | Hybrid components for SPA and Server                                 |
+| Bundle Splitting          | 👀      | ✅     | Hybrid components for SPA and Server                                 |
+| Lazy Components           | 👀      | ✅     | Dynamically load the new components as the page is loaded            |
+| Fine-grained reactivity   | 👀      | ❓     | Skip diffing for fine-grain updates                                  |
 
 - ✅ = implemented and working
 - 🛠 = actively being worked on

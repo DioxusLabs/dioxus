@@ -210,9 +210,9 @@ impl ScopeInner {
         }
     }
 
-    pub(crate) fn update_scope_dependencies<'creator_node>(
+    pub(crate) fn update_scope_dependencies(
         &mut self,
-        caller: &'creator_node dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
+        caller: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
     ) {
         log::debug!("Updating scope dependencies {:?}", self.our_arena_idx);
         let caller = caller as *const _;
@@ -306,6 +306,23 @@ impl ScopeInner {
 
             let new_node: Element<'a> = (cb)(cx);
         }
+    }
+
+    // run the list of effects
+    pub(crate) fn run_effects(&mut self, pool: &ResourcePool) {
+        todo!()
+        // let mut effects = self.frames.effects.borrow_mut();
+        // let mut effects = effects.drain(..).collect::<Vec<_>>();
+
+        // for effect in effects {
+        //     let effect = unsafe { &*effect };
+        //     let effect = effect.as_ref();
+
+        //     let mut effect = effect.borrow_mut();
+        //     let mut effect = effect.as_mut();
+
+        //     effect.run(pool);
+        // }
     }
 
     /// Render this component.
