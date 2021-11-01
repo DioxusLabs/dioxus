@@ -340,8 +340,6 @@ impl ScopeInner {
         let render: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> = unsafe { &*self.caller };
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
-        //
-        // todo!()
         if let Some(builder) = render(self) {
             let new_head = builder.into_vnode(NodeFactory {
                 bump: &self.frames.wip_frame().bump,

@@ -64,10 +64,10 @@ fn create() {
                     "Hello, world!"
                     div {
                         div {
-                            Fragment {
-                                "hello"
-                                "world"
-                            }
+                            // Fragment {
+                            //     "hello"
+                            //     "world"
+                            // }
                         }
                     }
                 }
@@ -208,20 +208,26 @@ fn create_simple() {
 #[test]
 fn create_components() {
     static App: FC<()> = |(cx, props)| {
-        cx.render(rsx! {
-            Child { "abc1" }
-            Child { "abc2" }
-            Child { "abc3" }
-        })
+        todo!()
+        // cx.render(rsx! {
+        //     Child { "abc1" }
+        //     Child { "abc2" }
+        //     Child { "abc3" }
+        // })
     };
 
-    static Child: FC<()> = |(cx, props)| {
+    #[derive(Props)]
+    struct ChildProps<'a> {
+        children: ScopeChildren<'a>,
+    }
+
+    fn Child<'a>((cx, props): Scope<'a, ChildProps<'a>>) -> Element {
         cx.render(rsx! {
             h1 {}
-            div { {cx.children()} }
+            div { {&props.children} }
             p {}
         })
-    };
+    }
 
     let mut dom = new_dom(App, ());
     let mutations = dom.rebuild();

@@ -726,3 +726,65 @@ impl IntoVNode<'_> for Arguments<'_> {
         cx.text(self)
     }
 }
+
+/// Access the children elements passed into the component
+///
+/// This enables patterns where a component is passed children from its parent.
+///
+/// ## Details
+///
+/// Unlike React, Dioxus allows *only* lists of children to be passed from parent to child - not arbitrary functions
+/// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
+/// on the props that takes Context.
+///
+/// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
+/// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
+/// props are valid for the static lifetime.
+///
+/// ## Example
+///
+/// ```rust
+/// const App: FC<()> = |(cx, props)|{
+///     cx.render(rsx!{
+///         CustomCard {
+///             h1 {}
+///             p {}
+///         }
+///     })
+/// }
+///
+/// const CustomCard: FC<()> = |(cx, props)|{
+///     cx.render(rsx!{
+///         div {
+///             h1 {"Title card"}
+///             {props.children}
+///         }
+///     })
+/// }
+/// ```
+///
+/// ## Notes:
+///
+/// This method returns a "ScopeChildren" object. This object is copy-able and preserve the correct lifetime.
+pub struct ScopeChildren<'a> {
+    root: Option<VNode<'a>>,
+}
+
+impl IntoIterator for &ScopeChildren<'_> {
+    type Item = Self;
+
+    type IntoIter = std::iter::Once<Self>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        todo!()
+    }
+}
+
+impl<'a> IntoVNode<'a> for &ScopeChildren<'a> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        match &self.root {
+            Some(n) => n.decouple(),
+            None => cx.fragment_from_iter(None as Option<VNode>),
+        }
+    }
+}
