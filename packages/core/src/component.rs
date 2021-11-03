@@ -15,7 +15,7 @@ use crate::innerlude::{Context, Element, VNode};
 /// ```rust
 /// struct State {}
 ///
-/// fn Example((cx, props): Component<State>) -> DomTree {
+/// fn Example((cx, props): Scope<State>) -> DomTree {
 ///     // ...
 /// }
 /// ```
@@ -26,7 +26,7 @@ use crate::innerlude::{Context, Element, VNode};
 ///     name: &'a str
 /// }
 ///
-/// fn Example<'a>((cx, props): Component<'a, State>) -> DomTree<'a> {
+/// fn Example<'a>((cx, props): Scope<'a, State>) -> DomTree<'a> {
 ///     // ...
 /// }
 /// ```

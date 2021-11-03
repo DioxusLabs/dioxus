@@ -132,12 +132,11 @@ impl<'src> Context<'src> {
         (self.scope.shared.submit_task)(task)
     }
 
-    /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
+    /// This method enables the ability to expose state to children further down the VirtualDOM Tree.
     ///
-    /// This is a hook, so it should not be called conditionally!
+    /// This is a "fundamental" operation and should only be called during initialization of a hook.
     ///
-    /// The init method is ran *only* on first use, otherwise it is ignored. However, it uses hooks (ie `use`)
-    /// so don't put it in a conditional.
+    /// For a hook that provides the same functionality, use `use_provide_state` and `use_consume_state` instead.
     ///
     /// When the component is dropped, so is the context. Be aware of this behavior when consuming
     /// the context via Rc/Weak.
@@ -148,7 +147,7 @@ impl<'src> Context<'src> {
     /// struct SharedState(&'static str);
     ///
     /// static App: FC<()> = |(cx, props)|{
-    ///     cx.provide_state(SharedState("world"));
+    ///     cx.use_hook(|_| cx.provide_state(SharedState("world")), |_| {}, |_| {});
     ///     rsx!(cx, Child {})
     /// }
     ///

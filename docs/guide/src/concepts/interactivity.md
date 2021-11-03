@@ -173,8 +173,6 @@ In general, Dioxus should be plenty fast for most use cases. However, there are 
 
 Don't worry - Dioxus is fast. But, if your app needs *extreme performance*, then take a look at the `Performance Tuning` in the `Advanced Guides` book.
 
-
-
 ## Moving On
 
 This overview was a lot of information - but it doesn't tell you everything!
