@@ -1,9 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::{use_router, Link, Routable};
-
-fn main() {
-    dbg!(App as *const fn());
-}
+use dioxus::router::Router;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Route {
@@ -86,3 +82,5 @@ impl Routable for Route {
         todo!()
     }
 }
+
+fn main() {}

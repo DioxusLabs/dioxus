@@ -10,11 +10,11 @@ fn main() {
 type RowList = im_rc::HashMap<usize, Rc<str>, FxBuildHasher>;
 
 static App: FC<()> = |(cx, _props)| {
-    let items = use_state(cx, || RowList::default());
+    let mut items = use_state(cx, || RowList::default());
 
     let create_rendered_rows = move |from, num| move |_| items.set(create_row_list(from, num));
 
-    let append_1_000_rows =
+    let mut append_1_000_rows =
         move |_| items.set(create_row_list(items.len(), 1000).union((*items).clone()));
 
     let update_every_10th_row = move |_| {

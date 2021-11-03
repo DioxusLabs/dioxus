@@ -303,27 +303,8 @@ fn anchors() {
 #[test]
 fn suspended() {
     static App: FC<()> = |(cx, props)| {
-        let val = use_suspense(
-            cx,
-            || async {
-                //
-            },
-            |cx, p| todo!(),
-            // |cx, p| rsx! { "hi "},
-        );
+        let val = use_suspense(cx, || async {}, |cx, p| todo!());
 
-        // let prom = use_task(fetch());
-
-        // Value {
-        //     a: value.await,
-        //     b: value.await,
-        //     f: a.await
-        //     div {
-        //         div {
-        //             hidden: should_hide.await,
-        //         }
-        //     }
-        // }
         cx.render(rsx! { {val} })
     };
 

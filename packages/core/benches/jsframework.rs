@@ -19,6 +19,7 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use rand::prelude::*;
 
+fn main() {}
 criterion_group!(mbenches, create_rows);
 criterion_main!(mbenches);
 

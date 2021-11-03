@@ -34,11 +34,11 @@ pub type Todos = HashMap<u32, TodoItem>;
 
 pub static App: FC<()> = |(cx, _)| {
     // Share our TodoList to the todos themselves
-    use_provide_state(cx, || Todos::new());
+    use_provide_state(cx, Todos::new);
 
     // Save state for the draft, filter
-    let mut draft = use_state(cx, || "".to_string());
-    let mut filter = use_state(cx, || FilterState::All);
+    let draft = use_state(cx, || "".to_string());
+    let filter = use_state(cx, || FilterState::All);
     let mut todo_id = use_state(cx, || 0);
 
     // Consume the todos
@@ -95,7 +95,7 @@ pub static App: FC<()> = |(cx, _)| {
                         placeholder: "What needs to be done?"
                         value: "{draft}"
                         autofocus: "true"
-                        oninput: move |evt| draft.set(evt.value.clone())
+                        oninput: move |evt| draft.set(evt.value)
                         onkeydown: move |evt| {
                             if evt.key == "Enter" {
                                 submit_todo();
@@ -150,7 +150,9 @@ pub fn TodoEntry((cx, props): Scope<TodoEntryProps>) -> Element {
             div { class: "view"
                 input { class: "toggle" r#type: "checkbox" id: "cbg-{todo.id}" checked: "{todo.checked}"
                     onchange: move |evt| {
-                        todos.write().get_mut(&props.id).map(|todo| todo.checked = evt.value.parse().unwrap());
+                        if let Some(todo) = todos.write().get_mut(&props.id) { 
+                            todo.checked = evt.value.parse().unwrap()
+                        }
                     }
                 }
 
@@ -161,7 +163,9 @@ pub fn TodoEntry((cx, props): Scope<TodoEntryProps>) -> Element {
                {is_editing.then(|| rsx!{
                     input { value: "{todo.contents}"
                         oninput: move |evt| {
-                            todos.write().get_mut(&props.id).map(|todo| todo.contents = evt.value.clone());
+                            if let Some(todo) = todos.write().get_mut(&props.id) { 
+                                todo.contents = evt.value
+                            }
                         },
                     }
                 })}

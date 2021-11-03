@@ -765,6 +765,9 @@ impl<'a> ScopeChildren<'a> {
     pub fn new(root: VNode<'a>) -> Self {
         Self { root: Some(root) }
     }
+    pub fn new_option(root: Option<VNode<'a>>) -> Self {
+        Self { root }
+    }
 }
 
 impl IntoIterator for &ScopeChildren<'_> {
@@ -773,7 +776,7 @@ impl IntoIterator for &ScopeChildren<'_> {
     type IntoIter = std::iter::Once<Self>;
 
     fn into_iter(self) -> Self::IntoIter {
-        todo!()
+        std::iter::once(self)
     }
 }
 

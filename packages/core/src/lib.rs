@@ -65,9 +65,9 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, MountType, Mutations,
-    NodeFactory, Properties, SchedulerMsg, ScopeChildren, ScopeId, SuspendedContext, TaskHandle,
-    TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
+    Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes, MountType,
+    Mutations, NodeFactory, Properties, SchedulerMsg, ScopeChildren, ScopeId, SuspendedContext,
+    TaskHandle, TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {

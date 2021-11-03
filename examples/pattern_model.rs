@@ -74,14 +74,15 @@ static App: FC<()> = |(cx, props)| {
 struct CalculatorKeyProps<'a> {
     name: &'static str,
     onclick: &'a dyn Fn(MouseEvent),
+    children: ScopeChildren<'a>,
 }
 
-fn CalculatorKey<'a>((cx, props): Scope<'a, CalculatorKeyProps>) -> Element<'a> {
+fn CalculatorKey<'a>((cx, props): Scope<'a, CalculatorKeyProps<'a>>) -> Element<'a> {
     cx.render(rsx! {
         button {
             class: "calculator-key {props.name}"
             onclick: {props.onclick}
-            {cx.children()}
+            {&props.children}
         }
     })
 }

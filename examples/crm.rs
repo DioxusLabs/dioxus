@@ -20,12 +20,12 @@ pub struct Client {
 }
 
 static App: FC<()> = |(cx, _)| {
-    let clients = use_ref(cx, || vec![] as Vec<Client>);
-    let scene = use_state(cx, || Scene::ClientsList);
+    let mut clients = use_ref(cx, || vec![] as Vec<Client>);
+    let mut scene = use_state(cx, || Scene::ClientsList);
 
-    let firstname = use_state(cx, || String::new());
-    let lastname = use_state(cx, || String::new());
-    let description = use_state(cx, || String::new());
+    let mut firstname = use_state(cx, || String::new());
+    let mut lastname = use_state(cx, || String::new());
+    let mut description = use_state(cx, || String::new());
 
     let scene = match *scene {
         Scene::ClientsList => {

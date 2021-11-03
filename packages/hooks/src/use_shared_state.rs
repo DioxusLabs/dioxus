@@ -126,7 +126,7 @@ impl<'a, T: 'static> UseSharedState<'a, T> {
     ///
     ///
     /// TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
-    pub fn write(&mut self) -> RefMut<'_, T> {
+    pub fn write(&self) -> RefMut<'_, T> {
         self.cx.needs_update();
         self.notify_consumers();
         self.value.borrow_mut()

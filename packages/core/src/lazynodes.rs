@@ -11,7 +11,7 @@
 //! The logic for this was borrowed from https://docs.rs/stack_dst/0.6.1/stack_dst/. Unfortunately, this crate does not
 //! support non-static closures, so we've implemented the core logic of `ValueA` in this module.
 
-use crate::innerlude::{NodeFactory, VNode};
+use crate::prelude::{NodeFactory, VNode};
 use std::mem;
 
 /// A concrete type provider for closures that build VNode structures.
@@ -27,7 +27,7 @@ pub struct LazyNodes<'a, 'b> {
     inner: StackNodeStorage<'a, 'b>,
 }
 
-type StackHeapSize = [usize; 12];
+type StackHeapSize = [usize; 0];
 
 enum StackNodeStorage<'a, 'b> {
     Stack(LazyStack),
@@ -77,7 +77,7 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
                 }
             } else {
                 log::debug!("lazy nodes fits on stack!");
-                let mut buf: StackHeapSize = [0; 12];
+                let mut buf: StackHeapSize = StackHeapSize::default();
 
                 assert!(info.len() + round_to_words(size) <= buf.as_ref().len());
 
@@ -96,6 +96,8 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
                 for i in 0..size {
                     *dataptr.add(i) = *src_ptr.add(i);
                 }
+
+                std::mem::forget(val);
 
                 Self {
                     inner: StackNodeStorage::Stack(LazyStack { _align: [], buf }),
