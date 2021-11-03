@@ -142,6 +142,9 @@ pub(crate) struct Scheduler {
     // Garbage stored
     pub pending_garbage: FxHashSet<ScopeId>,
 
+    // Every component that has futures that need to be polled
+    pub pending_futures: FxHashSet<ScopeId>,
+
     // In-flight futures
     pub async_tasks: FuturesUnordered<FiberTask>,
 
@@ -268,6 +271,7 @@ impl Scheduler {
 
             garbage_scopes: HashSet::new(),
 
+            pending_futures: Default::default(),
             dirty_scopes: Default::default(),
             saved_state: Some(saved_state),
             in_progress: false,

@@ -64,7 +64,7 @@ pub struct VirtualDom {
     root_props: Rc<dyn Any>,
 
     // we need to keep the allocation around, but we don't necessarily use it
-    _root_caller: Rc<dyn Any>,
+    _root_caller: Box<dyn Any>,
 }
 
 impl VirtualDom {
@@ -143,28 +143,23 @@ impl VirtualDom {
 
         let props = root_props.clone();
 
-        let root_caller: Rc<dyn Fn(&ScopeInner) -> Element> = Rc::new(move |scope: &ScopeInner| {
-            let props = props.downcast_ref::<P>().unwrap();
-            let node = root((Context { scope }, props));
-            // cast into the right lifetime
-            unsafe { std::mem::transmute(node) }
-        });
+        let root_caller: Box<dyn Fn(&ScopeInner) -> Element> =
+            Box::new(move |scope: &ScopeInner| {
+                let props = props.downcast_ref::<P>().unwrap();
+                let node = root((scope, props));
+                // cast into the right lifetime
+                unsafe { std::mem::transmute(node) }
+            });
+        let caller = unsafe { bumpalo::boxed::Box::from_raw(root_caller.as_mut() as *mut _) };
 
         let scheduler = Scheduler::new(sender, receiver);
 
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
-            ScopeInner::new(
-                root_caller.as_ref(),
-                myidx,
-                None,
-                0,
-                0,
-                scheduler.pool.channel.clone(),
-            )
+            ScopeInner::new(caller, myidx, None, 0, 0, scheduler.pool.channel.clone())
         });
 
         Self {
-            _root_caller: Rc::new(root_caller),
+            _root_caller: Box::new(root_caller),
             root_fc,
             base_scope,
             scheduler,
@@ -223,7 +218,7 @@ impl VirtualDom {
             let root_caller: Box<dyn Fn(&ScopeInner) -> Element> =
                 Box::new(move |scope: &ScopeInner| unsafe {
                     let props: &'_ P = &*(props_ptr as *const P);
-                    std::mem::transmute(root((Context { scope }, props)))
+                    std::mem::transmute(root((scope, props)))
                 });
 
             root_scope.update_scope_dependencies(&root_caller);

@@ -12,27 +12,27 @@ Navigating this crate:
 
 Some utilities
 */
-pub mod bumpframe;
-pub mod childiter;
-pub mod component;
-pub mod context;
-pub mod diff;
-pub mod diff_stack;
-pub mod events;
-pub mod heuristics;
-pub mod hooklist;
-pub mod hooks;
-pub mod lazynodes;
-pub mod mutations;
-pub mod nodes;
-pub mod resources;
-pub mod scheduler;
-pub mod scope;
-pub mod tasks;
-pub mod test_dom;
-pub mod threadsafe;
-pub mod util;
-pub mod virtual_dom;
+pub(crate) mod bumpframe;
+pub(crate) mod childiter;
+pub(crate) mod component;
+pub(crate) mod coroutines;
+pub(crate) mod diff;
+pub(crate) mod diff_stack;
+pub(crate) mod events;
+pub(crate) mod heuristics;
+pub(crate) mod hooklist;
+pub(crate) mod hooks;
+pub(crate) mod lazynodes;
+pub(crate) mod mutations;
+pub(crate) mod nodes;
+pub(crate) mod resources;
+pub(crate) mod scheduler;
+pub(crate) mod scope;
+pub(crate) mod tasks;
+pub(crate) mod test_dom;
+pub(crate) mod threadsafe;
+pub(crate) mod util;
+pub(crate) mod virtual_dom;
 
 #[cfg(feature = "debug_vdom")]
 pub mod debug_dom;
@@ -41,7 +41,6 @@ pub(crate) mod innerlude {
     pub(crate) use crate::bumpframe::*;
     pub(crate) use crate::childiter::*;
     pub use crate::component::*;
-    pub use crate::context::*;
     pub(crate) use crate::diff::*;
     pub use crate::diff_stack::*;
     pub use crate::events::*;
@@ -66,14 +65,14 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes, MountType,
-    Mutations, NodeFactory, Properties, SchedulerMsg, ScopeChildren, ScopeId, SuspendedContext,
-    TaskHandle, TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
+    Mutations, NodeFactory, Properties, SchedulerMsg, ScopeChildren, ScopeId, TaskHandle, TestDom,
+    ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties, Scope};
-    pub use crate::context::Context;
     pub use crate::hooks::*;
+    pub use crate::innerlude::Context;
     pub use crate::innerlude::{DioxusElement, Element, LazyNodes, NodeFactory, ScopeChildren, FC};
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;

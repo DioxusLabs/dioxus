@@ -17,7 +17,7 @@ pub static App: FC<()> = |(cx, _)| {
 
     let (async_count, dir) = (count.for_async(), *direction);
 
-    let (task, _) = use_task(cx, move || async move {
+    let (task, _) = use_coroutine(cx, move || async move {
         loop {
             TimeoutFuture::new(250).await;
             *async_count.get_mut() += dir;

@@ -4,14 +4,12 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{
-        empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeInner,
-        SuspendedContext,
-    },
+    innerlude::{empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeInner},
     lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
 };
@@ -307,10 +305,8 @@ pub struct Listener<'bump> {
     /// IE "click" - whatever the renderer needs to attach the listener by name.
     pub event: &'static str,
 
-    #[allow(clippy::type_complexity)]
     /// The actual callback that the user specified
-    pub(crate) callback:
-        RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn std::any::Any + Send>) + 'bump>>>,
+    pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn Any + Send>) + 'bump>>>,
 }
 
 /// Virtual Components for custom user-defined components
@@ -325,9 +321,9 @@ pub struct VComponent<'src> {
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
 
-    pub(crate) caller: &'src dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
+    pub(crate) caller: BumpBox<'src, dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> + 'src>,
 
-    pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
+    pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
 
     pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
 
@@ -342,7 +338,7 @@ pub struct VSuspended<'a> {
     pub dom_id: Cell<Option<ElementId>>,
 
     #[allow(clippy::type_complexity)]
-    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> Element<'a>>>>,
+    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut() -> Element<'a> + 'a>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -491,7 +487,7 @@ impl<'a> NodeFactory<'a> {
         let raw_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
 
-        let comparator: Option<&dyn Fn(&VComponent) -> bool> = Some(bump.alloc_with(|| {
+        let comparator: &mut dyn Fn(&VComponent) -> bool = bump.alloc_with(|| {
             move |other: &VComponent| {
                 if user_fc == other.user_fc {
                     // Safety
@@ -504,8 +500,6 @@ impl<'a> NodeFactory<'a> {
                         props.memoize(real_other)
                     };
 
-                    log::debug!("comparing props...");
-
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
                     props_memoized
@@ -513,7 +507,8 @@ impl<'a> NodeFactory<'a> {
                     false
                 }
             }
-        }));
+        });
+        let comparator = Some(unsafe { BumpBox::from_raw(comparator) });
 
         let drop_props = {
             // create a closure to drop the props
@@ -547,11 +542,13 @@ impl<'a> NodeFactory<'a> {
                 let props: &'_ P = unsafe { &*(raw_props as *const P) };
 
                 let scp: &'a ScopeInner = unsafe { std::mem::transmute(scope) };
-                let s: Scope<'a, P> = (Context { scope: scp }, props);
+                let s: Scope<'a, P> = (scp, props);
 
                 let res: Element = component(s);
                 unsafe { std::mem::transmute(res) }
             });
+
+        let caller = unsafe { BumpBox::from_raw(caller) };
 
         VNode::Component(bump.alloc(VComponent {
             user_fc,
