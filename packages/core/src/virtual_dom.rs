@@ -80,12 +80,8 @@ pub struct VirtualDom {
 
     pub scopes: ScopeArena,
 
-    pub heuristics: FxHashMap<FcSlot, Heuristic>,
-
     pub receiver: UnboundedReceiver<SchedulerMsg>,
-
-    // Garbage stored
-    pub pending_garbage: FxHashSet<ScopeId>,
+    pub sender: UnboundedSender<SchedulerMsg>,
 
     // Every component that has futures that need to be polled
     pub pending_futures: FxHashSet<ScopeId>,
@@ -93,10 +89,6 @@ pub struct VirtualDom {
     pub ui_events: VecDeque<UserEvent>,
 
     pub pending_immediates: VecDeque<ScopeId>,
-
-    pub batched_events: VecDeque<UserEvent>,
-
-    pub garbage_scopes: HashSet<ScopeId>,
 
     pub dirty_scopes: IndexSet<ScopeId>,
 
@@ -173,7 +165,7 @@ impl VirtualDom {
         Self::new_with_props_and_scheduler(root, root_props, sender, receiver)
     }
 
-    /// Launch the VirtualDom, but provide your own channel for receiving and sending messages into the
+    /// Launch the VirtualDom, but provide your own channel for receiving and sending messages into the scheduler
     ///
     /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
     /// VirtualDom to be created just to retrieve its channel receiver.
@@ -188,74 +180,36 @@ impl VirtualDom {
         let base_scope = scopes.new_with_key(
             //
             root as _,
-            boxed_comp.as_ref(),
+            todo!(),
+            // boxed_comp.as_ref(),
             None,
             0,
             0,
             sender.clone(),
         );
 
-        // let root_fc = Box::new(root);
-
-        // let root_props: Rc<dyn Any> = Rc::new(root_props);
-
-        // let props = root_props.clone();
-
-        // let mut root_caller: Box<dyn Fn(&ScopeInner) -> Element> =
-        //     Box::new(move |scope: &ScopeInner| {
-        //         let props = props.downcast_ref::<P>().unwrap();
-        //         let node = root((scope, props));
-        //         // cast into the right lifetime
-        //         unsafe { std::mem::transmute(node) }
-        //     });
-
-        // let caller = unsafe { bumpalo::boxed::Box::from_raw(root_caller.as_mut() as *mut _) };
-
-        // // todo make the memory footprint congifurable
-        // let scheduler = Scheduler::new(sender, receiver, 100, 2000);
-
-        // let vcomp = VComponent {
-        //     key: todo!(),
-        //     associated_scope: todo!(),
-        //     user_fc: root as *const _,
-        //     can_memoize: todo!(),
-        //     raw_props: todo!(),
-        //     // drop_props: todo!(),
-        //     // caller,
-        //     comparator: todo!(),
-        //     caller: todo!(),
-        // };
-
-        // let boxed_comp = Box::new(vcomp);
-
-        // let base_scope = pool.insert_scope_with_key(|myidx| {
-        //     ScopeInner::new(
-        //         boxed_comp.as_ref(),
-        //         myidx,
-        //         None,
-        //         0,
-        //         0,
-        //         pool.channel.clone(),
-        //     )
-        // });
-
         Self {
             scopes,
-            base_scope: todo!(),
+            base_scope,
+            receiver,
+            sender,
+
             root_fc: todo!(),
             root_props: todo!(),
             _root_caller: todo!(),
-            heuristics: todo!(),
-            receiver,
-            pending_garbage: todo!(),
-            pending_futures: todo!(),
+
             ui_events: todo!(),
             pending_immediates: todo!(),
-            batched_events: todo!(),
-            garbage_scopes: todo!(),
-            dirty_scopes: todo!(),
-            saved_state: todo!(),
-            in_progress: todo!(),
+
+            pending_futures: Default::default(),
+            dirty_scopes: Default::default(),
+
+            saved_state: Some(SavedDiffWork {
+                mutations: Mutations::new(),
+                stack: DiffStack::new(),
+                seen_scopes: Default::default(),
+            }),
+            in_progress: false,
         }
     }
 
@@ -264,12 +218,14 @@ impl VirtualDom {
     /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
     /// directly.
     pub fn base_scope(&self) -> &ScopeInner {
-        self.pool.get_scope(&self.base_scope).unwrap()
+        todo!()
+        // self.get_scope(&self.base_scope).unwrap()
     }
 
     /// Get the [`Scope`] for a component given its [`ScopeId`]
-    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeInner> {
-        self.pool.get_scope(&id)
+    pub fn get_scope(&self, id: &ScopeId) -> Option<&ScopeInner> {
+        todo!()
+        // self.get_scope(&id)
     }
 
     /// Update the root props of this VirtualDOM.
@@ -297,7 +253,7 @@ impl VirtualDom {
         let root_scope = self.pool.get_scope_mut(&self.base_scope).unwrap();
 
         // Pre-emptively drop any downstream references of the old props
-        root_scope.ensure_drop_safety(&self.pool);
+        root_scope.ensure_drop_safety();
 
         let mut root_props: Rc<dyn Any> = Rc::new(root_props);
 
@@ -339,6 +295,7 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
+        todo!()
         // self.rebuild(self.base_scope)
     }
 
@@ -440,7 +397,7 @@ impl VirtualDom {
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        self.pool.channel.sender.clone()
+        self.sender.clone()
     }
 
     /// Waits for the scheduler to have work
@@ -479,13 +436,6 @@ impl VirtualDom {
         //     },
         // }
     }
-}
-
-pub type FcSlot = *const ();
-
-pub struct Heuristic {
-    hook_arena_size: usize,
-    node_arena_size: usize,
 }
 
 /*
@@ -670,19 +620,15 @@ impl VirtualDom {
         let saved_state = unsafe { self.load_work() };
 
         // We have to split away some parts of ourself - current lane is borrowed mutably
-        let shared = self.clone();
-        let mut machine = unsafe { saved_state.promote(&shared) };
+        let mut machine = unsafe { saved_state.promote() };
 
         let mut ran_scopes = FxHashSet::default();
 
         if machine.stack.is_empty() {
-            let shared = self.clone();
-
-            self.dirty_scopes
-                .retain(|id| shared.get_scope(id).is_some());
+            self.dirty_scopes.retain(|id| self.get_scope(id).is_some());
             self.dirty_scopes.sort_by(|a, b| {
-                let h1 = shared.get_scope(a).unwrap().height;
-                let h2 = shared.get_scope(b).unwrap().height;
+                let h1 = self.get_scope(a).unwrap().height;
+                let h2 = self.get_scope(b).unwrap().height;
                 h1.cmp(&h2).reverse()
             });
 
@@ -692,15 +638,14 @@ impl VirtualDom {
                     ran_scopes.insert(scopeid);
                     log::debug!("about to run scope {:?}", scopeid);
 
-                    if let Some(component) = self.get_scope_mut(&scopeid) {
-                        if component.run_scope(&self) {
-                            let (old, new) =
-                                (component.frames.wip_head(), component.frames.fin_head());
-                            // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                            machine.stack.scope_stack.push(scopeid);
-                            machine.stack.push(DiffInstruction::Diff { new, old });
-                        }
+                    // if let Some(component) = self.get_scope_mut(&scopeid) {
+                    if self.run_scope(&scopeid) {
+                        let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                        // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                        machine.stack.scope_stack.push(scopeid);
+                        machine.stack.push(DiffInstruction::Diff { new, old });
                     }
+                    // }
                 }
             }
         }
@@ -856,19 +801,17 @@ impl VirtualDom {
     ///
     /// Typically used to kickstart the VirtualDOM after initialization.
     pub fn rebuild_inner(&mut self, base_scope: ScopeId) -> Mutations {
-        let mut shared = self.clone();
-        let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
+        let mut diff_machine = DiffMachine::new(Mutations::new());
 
         // TODO: drain any in-flight work
         let cur_component = self
-            .pool
             .get_scope_mut(&base_scope)
             .expect("The base scope should never be moved");
 
         log::debug!("rebuild {:?}", base_scope);
 
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope(&self) {
+        if self.run_scope(&base_scope) {
             diff_machine
                 .stack
                 .create_node(cur_component.frames.fin_head(), MountType::Append);
@@ -889,14 +832,13 @@ impl VirtualDom {
 
     pub fn hard_diff(&mut self, base_scope: ScopeId) -> Mutations {
         let cur_component = self
-            .pool
             .get_scope_mut(&base_scope)
             .expect("The base scope should never be moved");
 
         log::debug!("hard diff {:?}", base_scope);
 
-        if cur_component.run_scope(&self) {
-            let mut diff_machine = DiffMachine::new(Mutations::new(), &mut self);
+        if self.run_scope(&base_scope) {
+            let mut diff_machine = DiffMachine::new(Mutations::new());
             diff_machine.cfg.force_diff = true;
             diff_machine.diff_scope(base_scope);
             diff_machine.mutations
@@ -904,36 +846,93 @@ impl VirtualDom {
             Mutations::new()
         }
     }
-}
 
-impl Future for VirtualDom {
-    type Output = ();
+    pub fn get_scope_mut(&mut self, id: &ScopeId) -> Option<&mut ScopeInner> {
+        self.scopes.get_mut(id)
+    }
 
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        let mut all_pending = true;
+    pub fn run_scope(&mut self, id: &ScopeId) -> bool {
+        let scope = self
+            .get_scope_mut(id)
+            .expect("The base scope should never be moved");
 
-        for fut in self.pending_futures.iter() {
-            let scope = self
-                .pool
-                .get_scope_mut(&fut)
-                .expect("Scope should never be moved");
+        // Cycle to the next frame and then reset it
+        // This breaks any latent references, invalidating every pointer referencing into it.
+        // Remove all the outdated listeners
+        scope.ensure_drop_safety();
 
-            let items = scope.items.get_mut();
-            for task in items.tasks.iter_mut() {
-                let t = task.as_mut();
-                let g = unsafe { Pin::new_unchecked(t) };
-                match g.poll(cx) {
-                    Poll::Ready(r) => {
-                        all_pending = false;
-                    }
-                    Poll::Pending => {}
-                }
-            }
-        }
+        // Safety:
+        // - We dropped the listeners, so no more &mut T can be used while these are held
+        // - All children nodes that rely on &mut T are replaced with a new reference
+        unsafe { scope.hooks.reset() };
 
-        match all_pending {
-            true => Poll::Pending,
-            false => Poll::Ready(()),
+        // Safety:
+        // - We've dropped all references to the wip bump frame
+        unsafe { scope.frames.reset_wip_frame() };
+
+        let items = scope.items.get_mut();
+
+        // just forget about our suspended nodes while we're at it
+        items.suspended_nodes.clear();
+
+        // guarantee that we haven't screwed up - there should be no latent references anywhere
+        debug_assert!(items.listeners.is_empty());
+        debug_assert!(items.suspended_nodes.is_empty());
+        debug_assert!(items.borrowed_props.is_empty());
+
+        log::debug!("Borrowed stuff is successfully cleared");
+
+        // temporarily cast the vcomponent to the right lifetime
+        let vcomp = scope.load_vcomp();
+
+        let render: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> = todo!();
+
+        // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
+        if let Some(builder) = render(scope) {
+            let new_head = builder.into_vnode(NodeFactory {
+                bump: &scope.frames.wip_frame().bump,
+            });
+            log::debug!("Render is successful");
+
+            // the user's component succeeded. We can safely cycle to the next frame
+            scope.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
+            scope.frames.cycle_frame();
+
+            true
+        } else {
+            false
         }
     }
 }
+
+// impl<'a> Future for PollAllTasks<'a> {
+//     type Output = ();
+
+//     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+//         let mut all_pending = true;
+
+//         for fut in self.pending_futures.iter() {
+//             let scope = self
+//                 .pool
+//                 .get_scope_mut(&fut)
+//                 .expect("Scope should never be moved");
+
+//             let items = scope.items.get_mut();
+//             for task in items.tasks.iter_mut() {
+//                 let t = task.as_mut();
+//                 let g = unsafe { Pin::new_unchecked(t) };
+//                 match g.poll(cx) {
+//                     Poll::Ready(r) => {
+//                         all_pending = false;
+//                     }
+//                     Poll::Pending => {}
+//                 }
+//             }
+//         }
+
+//         match all_pending {
+//             true => Poll::Pending,
+//             false => Poll::Ready(()),
+//         }
+//     }
+// }

@@ -105,7 +105,6 @@ use DomEdit::*;
 /// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
 /// stack machines all the way down!
 pub(crate) struct DiffMachine<'bump> {
-    pub vdom: &'bump ResourcePool,
     pub mutations: Mutations<'bump>,
     pub stack: DiffStack<'bump>,
     pub seen_scopes: FxHashSet<ScopeId>,
@@ -137,10 +136,9 @@ impl<'a> SavedDiffWork<'a> {
         std::mem::transmute(self)
     }
 
-    pub unsafe fn promote<'b>(self, vdom: &'b ResourcePool) -> DiffMachine<'b> {
+    pub unsafe fn promote<'b>(self) -> DiffMachine<'b> {
         let extended: SavedDiffWork<'b> = std::mem::transmute(self);
         DiffMachine {
-            vdom,
             cfg: DiffCfg::default(),
             mutations: extended.mutations,
             stack: extended.stack,
@@ -150,12 +148,11 @@ impl<'a> SavedDiffWork<'a> {
 }
 
 impl<'bump> DiffMachine<'bump> {
-    pub(crate) fn new(mutations: Mutations<'bump>, shared: &'bump ResourcePool) -> Self {
+    pub(crate) fn new(mutations: Mutations<'bump>) -> Self {
         Self {
             mutations,
             cfg: DiffCfg::default(),
             stack: DiffStack::new(),
-            vdom: shared,
             seen_scopes: FxHashSet::default(),
         }
     }

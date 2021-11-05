@@ -33,7 +33,7 @@ impl TestDom {
 
     pub fn diff<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mutations = Mutations::new();
-        let mut machine = DiffMachine::new(mutations, todo!());
+        let mut machine = DiffMachine::new(mutations);
         machine.stack.push(DiffInstruction::Diff { new, old });
         machine.mutations
     }
@@ -41,7 +41,7 @@ impl TestDom {
     pub fn create<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
         let old = self.bump.alloc(self.render_direct(left));
 
-        let mut machine = DiffMachine::new(Mutations::new(), todo!());
+        let mut machine = DiffMachine::new(Mutations::new());
 
         machine.stack.create_node(old, MountType::Append);
 
@@ -57,14 +57,14 @@ impl TestDom {
     ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render(left), self.render(right));
 
-        let mut machine = DiffMachine::new(Mutations::new(), todo!());
+        let mut machine = DiffMachine::new(Mutations::new());
 
         machine.stack.create_node(old, MountType::Append);
 
         machine.work(|| false);
         let create_edits = machine.mutations;
 
-        let mut machine = DiffMachine::new(Mutations::new(), todo!());
+        let mut machine = DiffMachine::new(Mutations::new());
 
         machine.stack.push(DiffInstruction::Diff { old, new });
 

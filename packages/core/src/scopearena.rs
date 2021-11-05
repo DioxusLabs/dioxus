@@ -5,6 +5,14 @@ use futures_channel::mpsc::UnboundedSender;
 
 use crate::innerlude::*;
 
+pub type FcSlot = *const ();
+// pub heuristics: FxHashMap<FcSlot, Heuristic>,
+
+pub struct Heuristic {
+    hook_arena_size: usize,
+    node_arena_size: usize,
+}
+
 // a slab-like arena with stable references even when new scopes are allocated
 // uses a bump arena as a backing
 //
@@ -22,6 +30,10 @@ impl ScopeArena {
             scopes: Vec::new(),
             free_scopes: Vec::new(),
         }
+    }
+
+    pub fn get_mut(&mut self, id: &ScopeId) -> Option<&mut ScopeInner> {
+        unsafe { Some(&mut *self.scopes[id.0]) }
     }
 
     pub fn new_with_key(

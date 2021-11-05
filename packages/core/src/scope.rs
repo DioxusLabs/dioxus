@@ -180,58 +180,6 @@ impl ScopeInner {
         }
     }
 
-    /// Render this component.
-    ///
-    /// Returns true if the scope completed successfully and false if running failed (IE a None error was propagated).
-    pub(crate) fn run_scope<'sel>(&'sel mut self) -> bool {
-        // Cycle to the next frame and then reset it
-        // This breaks any latent references, invalidating every pointer referencing into it.
-        // Remove all the outdated listeners
-        self.ensure_drop_safety();
-
-        // Safety:
-        // - We dropped the listeners, so no more &mut T can be used while these are held
-        // - All children nodes that rely on &mut T are replaced with a new reference
-        unsafe { self.hooks.reset() };
-
-        // Safety:
-        // - We've dropped all references to the wip bump frame
-        unsafe { self.frames.reset_wip_frame() };
-
-        let items = self.items.get_mut();
-
-        // just forget about our suspended nodes while we're at it
-        items.suspended_nodes.clear();
-
-        // guarantee that we haven't screwed up - there should be no latent references anywhere
-        debug_assert!(items.listeners.is_empty());
-        debug_assert!(items.suspended_nodes.is_empty());
-        debug_assert!(items.borrowed_props.is_empty());
-
-        log::debug!("Borrowed stuff is successfully cleared");
-
-        // temporarily cast the vcomponent to the right lifetime
-        let vcomp = self.load_vcomp();
-
-        let render: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> = todo!();
-
-        // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
-        if let Some(builder) = render(self) {
-            let new_head = builder.into_vnode(NodeFactory {
-                bump: &self.frames.wip_frame().bump,
-            });
-            log::debug!("Render is successful");
-
-            // the user's component succeeded. We can safely cycle to the next frame
-            self.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
-            self.frames.cycle_frame();
-
-            true
-        } else {
-            false
-        }
-    }
-
     pub(crate) fn new_subtree(&self) -> Option<u32> {
         todo!()
         // if self.is_subtree_root.get() {

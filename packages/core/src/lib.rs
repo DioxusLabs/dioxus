@@ -25,7 +25,6 @@ pub(crate) mod nodes;
 pub(crate) mod scope;
 pub(crate) mod scopearena;
 pub(crate) mod test_dom;
-pub(crate) mod threadsafe;
 pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
@@ -46,7 +45,6 @@ pub(crate) mod innerlude {
     pub use crate::scope::*;
     pub use crate::scopearena::*;
     pub use crate::test_dom::*;
-    pub use crate::threadsafe::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -56,8 +54,8 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes, MountType,
-    Mutations, NodeFactory, Properties, ScopeChildren, ScopeId, TestDom, ThreadsafeVirtualDom,
-    UserEvent, VNode, VirtualDom, FC,
+    Mutations, NodeFactory, Properties, ScopeChildren, ScopeId, TestDom, UserEvent, VNode,
+    VirtualDom, FC,
 };
 
 pub mod prelude {
