@@ -28,7 +28,6 @@ impl ActiveFrame {
             head_node: VNode::Fragment(VFragment {
                 key: None,
                 children: &[],
-                is_static: false,
             }),
             bump: b1,
 
@@ -39,7 +38,6 @@ impl ActiveFrame {
             head_node: VNode::Fragment(VFragment {
                 key: None,
                 children: &[],
-                is_static: false,
             }),
             bump: b2,
 

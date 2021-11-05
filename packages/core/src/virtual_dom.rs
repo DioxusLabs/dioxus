@@ -19,10 +19,24 @@
 //! This module includes just the barebones for a complete VirtualDOM API.
 //! Additional functionality is defined in the respective files.
 
+use crate::innerlude::*;
+use bumpalo::Bump;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_util::{pin_mut, stream::FuturesUnordered, Future, FutureExt, StreamExt};
+use fxhash::FxHashMap;
+use fxhash::FxHashSet;
+use indexmap::IndexSet;
+use slab::Slab;
+use std::pin::Pin;
+use std::task::Poll;
+use std::{
+    any::{Any, TypeId},
+    cell::{Cell, UnsafeCell},
+    collections::{HashSet, VecDeque},
+    rc::Rc,
+};
 
 use crate::innerlude::*;
-use std::{any::Any, rc::Rc};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 ///
@@ -55,8 +69,6 @@ use std::{any::Any, rc::Rc};
 /// }
 /// ```
 pub struct VirtualDom {
-    scheduler: Scheduler,
-
     base_scope: ScopeId,
 
     root_fc: Box<dyn Any>,
@@ -65,6 +77,49 @@ pub struct VirtualDom {
 
     // we need to keep the allocation around, but we don't necessarily use it
     _root_caller: Box<dyn Any>,
+
+    // /// All mounted components are arena allocated to make additions, removals, and references easy to work with
+    // /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
+    // ///
+    // /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
+    // /// and rusts's guarantees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
+    // pub pool: ResourcePool,
+    //
+    pub component_arena: Bump,
+
+    pub free_components: VecDeque<*mut ScopeInner>,
+
+    pub heuristics: FxHashMap<FcSlot, Heuristic>,
+
+    pub receiver: UnboundedReceiver<SchedulerMsg>,
+
+    // Garbage stored
+    pub pending_garbage: FxHashSet<ScopeId>,
+
+    // Every component that has futures that need to be polled
+    pub pending_futures: FxHashSet<ScopeId>,
+
+    pub ui_events: VecDeque<UserEvent>,
+
+    pub pending_immediates: VecDeque<ScopeId>,
+
+    pub batched_events: VecDeque<UserEvent>,
+
+    pub garbage_scopes: HashSet<ScopeId>,
+
+    pub dirty_scopes: IndexSet<ScopeId>,
+
+    pub saved_state: Option<SavedDiffWork<'static>>,
+
+    pub in_progress: bool,
+}
+
+pub enum SchedulerMsg {
+    // events from the host
+    UiEvent(UserEvent),
+
+    // setstate
+    Immediate(ScopeId),
 }
 
 impl VirtualDom {
@@ -127,7 +182,7 @@ impl VirtualDom {
         Self::new_with_props_and_scheduler(root, root_props, sender, receiver)
     }
 
-    /// Launch the VirtualDom, but provide your own channel for receiving and sending messages into the scheduler.
+    /// Launch the VirtualDom, but provide your own channel for receiving and sending messages into the
     ///
     /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
     /// VirtualDom to be created just to retrieve its channel receiver.
@@ -137,33 +192,71 @@ impl VirtualDom {
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,
     ) -> Self {
-        let root_fc = Box::new(root);
+        let mut component_arena = Bump::new();
 
-        let root_props: Rc<dyn Any> = Rc::new(root_props);
+        // let root_fc = Box::new(root);
 
-        let props = root_props.clone();
+        // let root_props: Rc<dyn Any> = Rc::new(root_props);
 
-        let root_caller: Box<dyn Fn(&ScopeInner) -> Element> =
-            Box::new(move |scope: &ScopeInner| {
-                let props = props.downcast_ref::<P>().unwrap();
-                let node = root((scope, props));
-                // cast into the right lifetime
-                unsafe { std::mem::transmute(node) }
-            });
-        let caller = unsafe { bumpalo::boxed::Box::from_raw(root_caller.as_mut() as *mut _) };
+        // let props = root_props.clone();
 
-        let scheduler = Scheduler::new(sender, receiver);
+        // let mut root_caller: Box<dyn Fn(&ScopeInner) -> Element> =
+        //     Box::new(move |scope: &ScopeInner| {
+        //         let props = props.downcast_ref::<P>().unwrap();
+        //         let node = root((scope, props));
+        //         // cast into the right lifetime
+        //         unsafe { std::mem::transmute(node) }
+        //     });
 
-        let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
-            ScopeInner::new(caller, myidx, None, 0, 0, scheduler.pool.channel.clone())
-        });
+        // let caller = unsafe { bumpalo::boxed::Box::from_raw(root_caller.as_mut() as *mut _) };
+
+        // // todo make the memory footprint congifurable
+        // let scheduler = Scheduler::new(sender, receiver, 100, 2000);
+
+        // let vcomp = VComponent {
+        //     key: todo!(),
+        //     associated_scope: todo!(),
+        //     user_fc: root as *const _,
+        //     can_memoize: todo!(),
+        //     raw_props: todo!(),
+        //     // drop_props: todo!(),
+        //     // caller,
+        //     comparator: todo!(),
+        //     caller: todo!(),
+        // };
+
+        // let boxed_comp = Box::new(vcomp);
+
+        // let base_scope = pool.insert_scope_with_key(|myidx| {
+        //     ScopeInner::new(
+        //         boxed_comp.as_ref(),
+        //         myidx,
+        //         None,
+        //         0,
+        //         0,
+        //         pool.channel.clone(),
+        //     )
+        // });
 
         Self {
-            _root_caller: Box::new(root_caller),
-            root_fc,
-            base_scope,
-            scheduler,
-            root_props,
+            scheduler: todo!(),
+            base_scope: todo!(),
+            root_fc: todo!(),
+            root_props: todo!(),
+            _root_caller: todo!(),
+            component_arena: todo!(),
+            free_components: todo!(),
+            heuristics: todo!(),
+            receiver,
+            pending_garbage: todo!(),
+            pending_futures: todo!(),
+            ui_events: todo!(),
+            pending_immediates: todo!(),
+            batched_events: todo!(),
+            garbage_scopes: todo!(),
+            dirty_scopes: todo!(),
+            saved_state: todo!(),
+            in_progress: todo!(),
         }
     }
 
@@ -172,12 +265,12 @@ impl VirtualDom {
     /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
     /// directly.
     pub fn base_scope(&self) -> &ScopeInner {
-        self.scheduler.pool.get_scope(self.base_scope).unwrap()
+        self.pool.get_scope(&self.base_scope).unwrap()
     }
 
     /// Get the [`Scope`] for a component given its [`ScopeId`]
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeInner> {
-        self.scheduler.pool.get_scope(id)
+        self.pool.get_scope(&id)
     }
 
     /// Update the root props of this VirtualDOM.
@@ -202,10 +295,10 @@ impl VirtualDom {
     where
         P: 'static,
     {
-        let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
+        let root_scope = self.pool.get_scope_mut(&self.base_scope).unwrap();
 
         // Pre-emptively drop any downstream references of the old props
-        root_scope.ensure_drop_safety(&self.scheduler.pool);
+        root_scope.ensure_drop_safety(&self.pool);
 
         let mut root_props: Rc<dyn Any> = Rc::new(root_props);
 
@@ -220,8 +313,6 @@ impl VirtualDom {
                     let props: &'_ P = &*(props_ptr as *const P);
                     std::mem::transmute(root((scope, props)))
                 });
-
-            root_scope.update_scope_dependencies(&root_caller);
 
             drop(root_props);
 
@@ -249,7 +340,7 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
-        self.scheduler.rebuild(self.base_scope)
+        self.rebuild(self.base_scope)
     }
 
     /// Compute a manual diff of the VirtualDOM between states.
@@ -287,7 +378,7 @@ impl VirtualDom {
     /// let edits = dom.diff();
     /// ```
     pub fn diff(&mut self) -> Mutations {
-        self.scheduler.hard_diff(self.base_scope)
+        self.hard_diff(self.base_scope)
     }
 
     /// Runs the virtualdom immediately, not waiting for any suspended nodes to complete.
@@ -295,8 +386,8 @@ impl VirtualDom {
     /// This method will not wait for any suspended nodes to complete. If there is no pending work, then this method will
     /// return "None"
     pub fn run_immediate(&mut self) -> Option<Vec<Mutations>> {
-        if self.scheduler.has_any_work() {
-            Some(self.scheduler.work_sync())
+        if self.has_any_work() {
+            Some(self.work_sync())
         } else {
             None
         }
@@ -346,18 +437,18 @@ impl VirtualDom {
     ///
     /// Mutations are the only link between the RealDOM and the VirtualDOM.
     pub fn run_with_deadline(&mut self, deadline: impl FnMut() -> bool) -> Vec<Mutations<'_>> {
-        self.scheduler.work_with_deadline(deadline)
+        self.work_with_deadline(deadline)
     }
 
     pub fn get_event_sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        self.scheduler.pool.channel.sender.clone()
+        self.pool.channel.sender.clone()
     }
 
     /// Waits for the scheduler to have work
     /// This lets us poll async tasks during idle periods without blocking the main thread.
     pub async fn wait_for_work(&mut self) {
         // todo: poll the events once even if there is work to do to prevent starvation
-        if self.scheduler.has_any_work() {
+        if self.has_any_work() {
             return;
         }
 
@@ -365,28 +456,485 @@ impl VirtualDom {
 
         // Wait for any new events if we have nothing to do
 
-        let tasks_fut = self.scheduler.async_tasks.next();
-        let scheduler_fut = self.scheduler.receiver.next();
+        // let tasks_fut = self.async_tasks.next();
+        // let scheduler_fut = self.receiver.next();
 
-        use futures_util::future::{select, Either};
-        match select(tasks_fut, scheduler_fut).await {
-            // poll the internal futures
-            Either::Left((_id, _)) => {
+        // use futures_util::future::{select, Either};
+        // match select(tasks_fut, scheduler_fut).await {
+        //     // poll the internal futures
+        //     Either::Left((_id, _)) => {
+        //         //
+        //     }
+
+        //     // wait for an external event
+        //     Either::Right((msg, _)) => match msg.unwrap() {
+        //         SchedulerMsg::Task(t) => {
+        //             self.handle_task(t);
+        //         }
+        //         SchedulerMsg::Immediate(im) => {
+        //             self.dirty_scopes.insert(im);
+        //         }
+        //         SchedulerMsg::UiEvent(evt) => {
+        //             self.ui_events.push_back(evt);
+        //         }
+        //     },
+        // }
+    }
+}
+
+pub type FcSlot = *const ();
+
+pub struct Heuristic {
+    hook_arena_size: usize,
+    node_arena_size: usize,
+}
+
+/*
+Welcome to Dioxus's cooperative, priority-based scheduler.
+
+I hope you enjoy your stay.
+
+Some essential reading:
+- https://github.com/facebook/react/blob/main/packages/scheduler/src/forks/Scheduler.js#L197-L200
+- https://github.com/facebook/react/blob/main/packages/scheduler/src/forks/Scheduler.js#L440
+- https://github.com/WICG/is-input-pending
+- https://web.dev/rail/
+- https://indepth.dev/posts/1008/inside-fiber-in-depth-overview-of-the-new-reconciliation-algorithm-in-react
+
+# What's going on?
+
+Dioxus is a framework for "user experience" - not just "user interfaces." Part of the "experience" is keeping the UI
+snappy and "jank free" even under heavy work loads. Dioxus already has the "speed" part figured out - but there's no
+point in being "fast" if you can't also be "responsive."
+
+As such, Dioxus can manually decide on what work is most important at any given moment in time. With a properly tuned
+priority system, Dioxus can ensure that user interaction is prioritized and committed as soon as possible (sub 100ms).
+The controller responsible for this priority management is called the "scheduler" and is responsible for juggling many
+different types of work simultaneously.
+
+# How does it work?
+
+Per the RAIL guide, we want to make sure that A) inputs are handled ASAP and B) animations are not blocked.
+React-three-fiber is a testament to how amazing this can be - a ThreeJS scene is threaded in between work periods of
+React, and the UI still stays snappy!
+
+While it's straightforward to run code ASAP and be as "fast as possible", what's not  _not_ straightforward is how to do
+this while not blocking the main thread. The current prevailing thought is to stop working periodically so the browser
+has time to paint and run animations. When the browser is finished, we can step in and continue our work.
+
+React-Fiber uses the "Fiber" concept to achieve a pause-resume functionality. This is worth reading up on, but not
+necessary to understand what we're doing here. In Dioxus, our DiffMachine is guided by DiffInstructions - essentially
+"commands" that guide the Diffing algorithm through the tree. Our "diff_scope" method is async - we can literally pause
+our DiffMachine "mid-sentence" (so to speak) by just stopping the poll on the future. The DiffMachine periodically yields
+so Rust's async machinery can take over, allowing us to customize when exactly to pause it.
+
+React's "should_yield" method is more complex than ours, and I assume we'll move in that direction as Dioxus matures. For
+now, Dioxus just assumes a TimeoutFuture, and selects! on both the Diff algorithm and timeout. If the DiffMachine finishes
+before the timeout, then Dioxus will work on any pending work in the interim. If there is no pending work, then the changes
+are committed, and coroutines are polled during the idle period. However, if the timeout expires, then the DiffMachine
+future is paused and saved (self-referentially).
+
+# Priority System
+
+So far, we've been able to thread our Dioxus work between animation frames - the main thread is not blocked! But that
+doesn't help us _under load_. How do we still stay snappy... even if we're doing a lot of work? Well, that's where
+priorities come into play. The goal with priorities is to schedule shorter work as a "high" priority and longer work as
+a "lower" priority. That way, we can interrupt long-running low-priority work with short-running high-priority work.
+
+React's priority system is quite complex.
+
+There are 5 levels of priority and 2 distinctions between UI events (discrete, continuous). I believe React really only
+uses 3 priority levels and "idle" priority isn't used... Regardless, there's some batching going on.
+
+For Dioxus, we're going with a 4 tier priority system:
+- Sync: Things that need to be done by the next frame, like TextInput on controlled elements
+- High: for events that block all others - clicks, keyboard, and hovers
+- Medium: for UI events caused by the user but not directly - scrolls/forms/focus (all other events)
+- Low: set_state called asynchronously, and anything generated by suspense
+
+In "Sync" state, we abort our "idle wait" future, and resolve the sync queue immediately and escape. Because we completed
+work before the next rAF, any edits can be immediately processed before the frame ends. Generally though, we want to leave
+as much time to rAF as possible. "Sync" is currently only used by onInput - we'll leave some docs telling people not to
+do anything too arduous from onInput.
+
+For the rest, we defer to the rIC period and work down each queue from high to low.
+*/
+
+/// The scheduler holds basically everything around "working"
+///
+/// Each scope has the ability to lightly interact with the scheduler (IE, schedule an update) but ultimately the scheduler calls the components.
+///
+/// In Dioxus, the scheduler provides 4 priority levels - each with their own "DiffMachine". The DiffMachine state can be saved if the deadline runs
+/// out.
+///
+/// Saved DiffMachine state can be self-referential, so we need to be careful about how we save it. All self-referential data is a link between
+/// pending DiffInstructions, Mutations, and their underlying Scope. It's okay for us to be self-referential with this data, provided we don't priority
+/// task shift to a higher priority task that needs mutable access to the same scopes.
+///
+/// We can prevent this safety issue from occurring if we track which scopes are invalidated when starting a new task.
+///
+/// There's a lot of raw pointers here...
+///
+/// Since we're building self-referential structures for each component, we need to make sure that the referencs stay stable
+/// The best way to do that is a bump allocator.
+///
+///
+///
+impl VirtualDom {
+    // returns true if the event is discrete
+    pub fn handle_ui_event(&mut self, event: UserEvent) -> bool {
+        let (discrete, priority) = event_meta(&event);
+
+        if let Some(scope) = self.get_scope_mut(&event.scope) {
+            if let Some(element) = event.mounted_dom_id {
+                // TODO: bubble properly here
+                scope.call_listener(event, element);
+
+                while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
+                    //
+                    //     self.add_dirty_scope(dirty_scope, trigger.priority)
+                }
+            }
+        }
+
+        // use EventPriority::*;
+
+        // match priority {
+        //     Immediate => todo!(),
+        //     High => todo!(),
+        //     Medium => todo!(),
+        //     Low => todo!(),
+        // }
+
+        discrete
+    }
+
+    fn prepare_work(&mut self) {
+        // while let Some(trigger) = self.ui_events.pop_back() {
+        //     if let Some(scope) = self.get_scope_mut(&trigger.scope) {}
+        // }
+    }
+
+    // nothing to do, no events on channels, no work
+    pub fn has_any_work(&self) -> bool {
+        !(self.dirty_scopes.is_empty() && self.ui_events.is_empty())
+    }
+
+    /// re-balance the work lanes, ensuring high-priority work properly bumps away low priority work
+    fn balance_lanes(&mut self) {}
+
+    fn save_work(&mut self, lane: SavedDiffWork) {
+        let saved: SavedDiffWork<'static> = unsafe { std::mem::transmute(lane) };
+        self.saved_state = Some(saved);
+    }
+
+    unsafe fn load_work(&mut self) -> SavedDiffWork<'static> {
+        self.saved_state.take().unwrap().extend()
+    }
+
+    pub fn handle_channel_msg(&mut self, msg: SchedulerMsg) {
+        match msg {
+            SchedulerMsg::Immediate(_) => todo!(),
+
+            SchedulerMsg::UiEvent(event) => {
                 //
+
+                let (discrete, priority) = event_meta(&event);
+
+                if let Some(scope) = self.get_scope_mut(&event.scope) {
+                    if let Some(element) = event.mounted_dom_id {
+                        // TODO: bubble properly here
+                        scope.call_listener(event, element);
+
+                        while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
+                            //
+                            //     self.add_dirty_scope(dirty_scope, trigger.priority)
+                        }
+                    }
+                }
+
+                discrete;
+            }
+        }
+    }
+
+    /// Load the current lane, and work on it, periodically checking in if the deadline has been reached.
+    ///
+    /// Returns true if the lane is finished before the deadline could be met.
+    pub fn work_on_current_lane(
+        &mut self,
+        deadline_reached: impl FnMut() -> bool,
+        mutations: &mut Vec<Mutations>,
+    ) -> bool {
+        // Work through the current subtree, and commit the results when it finishes
+        // When the deadline expires, give back the work
+        let saved_state = unsafe { self.load_work() };
+
+        // We have to split away some parts of ourself - current lane is borrowed mutably
+        let shared = self.clone();
+        let mut machine = unsafe { saved_state.promote(&shared) };
+
+        let mut ran_scopes = FxHashSet::default();
+
+        if machine.stack.is_empty() {
+            let shared = self.clone();
+
+            self.dirty_scopes
+                .retain(|id| shared.get_scope(id).is_some());
+            self.dirty_scopes.sort_by(|a, b| {
+                let h1 = shared.get_scope(a).unwrap().height;
+                let h2 = shared.get_scope(b).unwrap().height;
+                h1.cmp(&h2).reverse()
+            });
+
+            if let Some(scopeid) = self.dirty_scopes.pop() {
+                log::info!("handling dirty scope {:?}", scopeid);
+                if !ran_scopes.contains(&scopeid) {
+                    ran_scopes.insert(scopeid);
+                    log::debug!("about to run scope {:?}", scopeid);
+
+                    if let Some(component) = self.get_scope_mut(&scopeid) {
+                        if component.run_scope(&self) {
+                            let (old, new) =
+                                (component.frames.wip_head(), component.frames.fin_head());
+                            // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                            machine.stack.scope_stack.push(scopeid);
+                            machine.stack.push(DiffInstruction::Diff { new, old });
+                        }
+                    }
+                }
+            }
+        }
+
+        let work_completed = machine.work(deadline_reached);
+
+        // log::debug!("raw edits {:?}", machine.mutations.edits);
+
+        let mut machine: DiffMachine<'static> = unsafe { std::mem::transmute(machine) };
+        // let mut saved = machine.save();
+
+        if work_completed {
+            for node in machine.seen_scopes.drain() {
+                // self.dirty_scopes.clear();
+                // self.ui_events.clear();
+                self.dirty_scopes.remove(&node);
+                // self.dirty_scopes.remove(&node);
             }
 
-            // wait for an external event
-            Either::Right((msg, _)) => match msg.unwrap() {
-                SchedulerMsg::Task(t) => {
-                    self.scheduler.handle_task(t);
+            let mut new_mutations = Mutations::new();
+
+            for edit in machine.mutations.edits.drain(..) {
+                new_mutations.edits.push(edit);
+            }
+
+            // for edit in saved.edits.drain(..) {
+            //     new_mutations.edits.push(edit);
+            // }
+
+            // std::mem::swap(&mut new_mutations, &mut saved.mutations);
+
+            mutations.push(new_mutations);
+
+            // log::debug!("saved edits {:?}", mutations);
+
+            let mut saved = machine.save();
+            self.save_work(saved);
+            true
+
+            // self.save_work(saved);
+            // false
+        } else {
+            false
+        }
+    }
+
+    /// The primary workhorse of the VirtualDOM.
+    ///
+    /// Uses some fairly complex logic to schedule what work should be produced.
+    ///
+    /// Returns a list of successful mutations.
+    pub fn work_with_deadline<'a>(
+        &'a mut self,
+        mut deadline: impl FnMut() -> bool,
+    ) -> Vec<Mutations<'a>> {
+        /*
+        Strategy:
+        - When called, check for any UI events that might've been received since the last frame.
+        - Dump all UI events into a "pending discrete" queue and a "pending continuous" queue.
+
+        - If there are any pending discrete events, then elevate our priority level. If our priority level is already "high,"
+            then we need to finish the high priority work first. If the current work is "low" then analyze what scopes
+            will be invalidated by this new work. If this interferes with any in-flight medium or low work, then we need
+            to bump the other work out of the way, or choose to process it so we don't have any conflicts.
+            'static components have a leg up here since their work can be re-used among multiple scopes.
+            "High priority" is only for blocking! Should only be used on "clicks"
+
+        - If there are no pending discrete events, then check for continuous events. These can be completely batched
+
+        - we batch completely until we run into a discrete event
+        - all continuous events are batched together
+        - so D C C C C C would be two separate events - D and C. IE onclick and onscroll
+        - D C C C C C C D C C C D would be D C D C D in 5 distinct phases.
+
+        - !listener bubbling is not currently implemented properly and will need to be implemented somehow in the future
+            - we need to keep track of element parents to be able to traverse properly
+
+
+        Open questions:
+        - what if we get two clicks from the component during the same slice?
+            - should we batch?
+            - react says no - they are continuous
+            - but if we received both - then we don't need to diff, do we? run as many as we can and then finally diff?
+        */
+        let mut committed_mutations = Vec::<Mutations<'static>>::new();
+
+        while self.has_any_work() {
+            while let Ok(Some(msg)) = self.receiver.try_next() {
+                match msg {
+                    SchedulerMsg::Immediate(im) => {
+                        self.dirty_scopes.insert(im);
+                    }
+                    SchedulerMsg::UiEvent(evt) => {
+                        self.ui_events.push_back(evt);
+                    }
                 }
-                SchedulerMsg::Immediate(im) => {
-                    self.scheduler.dirty_scopes.insert(im);
+            }
+
+            // switch our priority, pop off any work
+            while let Some(event) = self.ui_events.pop_front() {
+                if let Some(scope) = self.get_scope_mut(&event.scope) {
+                    if let Some(element) = event.mounted_dom_id {
+                        log::info!("Calling listener {:?}, {:?}", event.scope, element);
+
+                        // TODO: bubble properly here
+                        scope.call_listener(event, element);
+
+                        while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
+                            match dirty_scope {
+                                SchedulerMsg::Immediate(im) => {
+                                    self.dirty_scopes.insert(im);
+                                }
+                                SchedulerMsg::UiEvent(e) => self.ui_events.push_back(e),
+                            }
+                        }
+                    }
                 }
-                SchedulerMsg::UiEvent(evt) => {
-                    self.scheduler.ui_events.push_back(evt);
+            }
+
+            let work_complete = self.work_on_current_lane(&mut deadline, &mut committed_mutations);
+
+            if !work_complete {
+                return committed_mutations;
+            }
+        }
+
+        committed_mutations
+    }
+
+    /// Work the scheduler down, not polling any ongoing tasks.
+    ///
+    /// Will use the standard priority-based scheduling, batching, etc, but just won't interact with the async reactor.
+    pub fn work_sync<'a>(&'a mut self) -> Vec<Mutations<'a>> {
+        let mut committed_mutations = Vec::new();
+
+        while let Ok(Some(msg)) = self.receiver.try_next() {
+            self.handle_channel_msg(msg);
+        }
+
+        if !self.has_any_work() {
+            return committed_mutations;
+        }
+
+        while self.has_any_work() {
+            self.prepare_work();
+            self.work_on_current_lane(|| false, &mut committed_mutations);
+        }
+
+        committed_mutations
+    }
+
+    /// Restart the entire VirtualDOM from scratch, wiping away any old state and components.
+    ///
+    /// Typically used to kickstart the VirtualDOM after initialization.
+    pub fn rebuild(&mut self, base_scope: ScopeId) -> Mutations {
+        let mut shared = self.clone();
+        let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
+
+        // TODO: drain any in-flight work
+        let cur_component = self
+            .pool
+            .get_scope_mut(&base_scope)
+            .expect("The base scope should never be moved");
+
+        log::debug!("rebuild {:?}", base_scope);
+
+        // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
+        if cur_component.run_scope(&self) {
+            diff_machine
+                .stack
+                .create_node(cur_component.frames.fin_head(), MountType::Append);
+
+            diff_machine.stack.scope_stack.push(base_scope);
+
+            diff_machine.work(|| false);
+        } else {
+            // todo: should this be a hard error?
+            log::warn!(
+                "Component failed to run successfully during rebuild.
+                This does not result in a failed rebuild, but indicates a logic failure within your app."
+            );
+        }
+
+        unsafe { std::mem::transmute(diff_machine.mutations) }
+    }
+
+    pub fn hard_diff(&mut self, base_scope: ScopeId) -> Mutations {
+        let cur_component = self
+            .pool
+            .get_scope_mut(&base_scope)
+            .expect("The base scope should never be moved");
+
+        log::debug!("hard diff {:?}", base_scope);
+
+        if cur_component.run_scope(&self) {
+            let mut diff_machine = DiffMachine::new(Mutations::new(), &mut self);
+            diff_machine.cfg.force_diff = true;
+            diff_machine.diff_scope(base_scope);
+            diff_machine.mutations
+        } else {
+            Mutations::new()
+        }
+    }
+}
+
+impl Future for VirtualDom {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        let mut all_pending = true;
+
+        for fut in self.pending_futures.iter() {
+            let scope = self
+                .pool
+                .get_scope_mut(&fut)
+                .expect("Scope should never be moved");
+
+            let items = scope.items.get_mut();
+            for task in items.tasks.iter_mut() {
+                let t = task.as_mut();
+                let g = unsafe { Pin::new_unchecked(t) };
+                match g.poll(cx) {
+                    Poll::Ready(r) => {
+                        all_pending = false;
+                    }
+                    Poll::Pending => {}
                 }
-            },
+            }
+        }
+
+        match all_pending {
+            true => Poll::Pending,
+            false => Poll::Ready(()),
         }
     }
 }

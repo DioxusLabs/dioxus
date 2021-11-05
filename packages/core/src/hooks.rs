@@ -13,73 +13,73 @@ use crate::innerlude::*;
 use futures_util::FutureExt;
 use std::{any::Any, cell::RefCell, future::Future, ops::Deref, rc::Rc};
 
-/// Awaits the given task, forcing the component to re-render when the value is ready.
-///
-/// Returns the handle to the task and the value (if it is ready, else None).
-///
-/// ```
-/// static Example: FC<()> = |(cx, props)| {
-///     let (task, value) = use_task(|| async {
-///         timer::sleep(Duration::from_secs(1)).await;
-///         "Hello World"
-///     });
-///
-///     match contents {
-///         Some(contents) => rsx!(cx, div { "{title}" }),
-///         None => rsx!(cx, div { "Loading..." }),
-///     }
-/// };
-/// ```
-pub fn use_coroutine<'src, Out, Fut, Init>(
-    cx: Context<'src>,
-    task_initializer: Init,
-) -> (&'src TaskHandle, &'src Option<Out>)
-where
-    Out: 'static,
-    Fut: Future<Output = Out> + 'static,
-    Init: FnOnce() -> Fut + 'src,
-{
-    struct TaskHook<T> {
-        handle: TaskHandle,
-        task_dump: Rc<RefCell<Option<T>>>,
-        value: Option<T>,
-    }
+// /// Awaits the given task, forcing the component to re-render when the value is ready.
+// ///
+// /// Returns the handle to the task and the value (if it is ready, else None).
+// ///
+// /// ```
+// /// static Example: FC<()> = |(cx, props)| {
+// ///     let (task, value) = use_task(|| async {
+// ///         timer::sleep(Duration::from_secs(1)).await;
+// ///         "Hello World"
+// ///     });
+// ///
+// ///     match contents {
+// ///         Some(contents) => rsx!(cx, div { "{title}" }),
+// ///         None => rsx!(cx, div { "Loading..." }),
+// ///     }
+// /// };
+// /// ```
+// pub fn use_coroutine<'src, Out, Fut, Init>(
+//     cx: Context<'src>,
+//     task_initializer: Init,
+// ) -> (&'src TaskHandle, &'src Option<Out>)
+// where
+//     Out: 'static,
+//     Fut: Future<Output = Out> + 'static,
+//     Init: FnOnce() -> Fut + 'src,
+// {
+//     struct TaskHook<T> {
+//         handle: TaskHandle,
+//         task_dump: Rc<RefCell<Option<T>>>,
+//         value: Option<T>,
+//     }
 
-    todo!()
+//     todo!()
 
-    // // whenever the task is complete, save it into th
-    // cx.use_hook(
-    //     move |_| {
-    //         let task_fut = task_initializer();
+//     // // whenever the task is complete, save it into th
+//     // cx.use_hook(
+//     //     move |_| {
+//     //         let task_fut = task_initializer();
 
-    //         let task_dump = Rc::new(RefCell::new(None));
+//     //         let task_dump = Rc::new(RefCell::new(None));
 
-    //         let slot = task_dump.clone();
+//     //         let slot = task_dump.clone();
 
-    //         let updater = cx.schedule_update_any();
-    //         let originator = cx.scope.our_arena_idx;
+//     //         let updater = cx.schedule_update_any();
+//     //         let originator = cx.scope.our_arena_idx;
 
-    //         let handle = cx.submit_task(Box::pin(task_fut.then(move |output| async move {
-    //             *slot.as_ref().borrow_mut() = Some(output);
-    //             updater(originator);
-    //             originator
-    //         })));
+//     //         let handle = cx.submit_task(Box::pin(task_fut.then(move |output| async move {
+//     //             *slot.as_ref().borrow_mut() = Some(output);
+//     //             updater(originator);
+//     //             originator
+//     //         })));
 
-    //         TaskHook {
-    //             task_dump,
-    //             value: None,
-    //             handle,
-    //         }
-    //     },
-    //     |hook| {
-    //         if let Some(val) = hook.task_dump.as_ref().borrow_mut().take() {
-    //             hook.value = Some(val);
-    //         }
-    //         (&hook.handle, &hook.value)
-    //     },
-    //     |_| {},
-    // )
-}
+//     //         TaskHook {
+//     //             task_dump,
+//     //             value: None,
+//     //             handle,
+//     //         }
+//     //     },
+//     //     |hook| {
+//     //         if let Some(val) = hook.task_dump.as_ref().borrow_mut().take() {
+//     //             hook.value = Some(val);
+//     //         }
+//     //         (&hook.handle, &hook.value)
+//     //     },
+//     //     |_| {},
+//     // )
+// }
 
 /// Asynchronously render new nodes once the given future has completed.
 ///
@@ -167,10 +167,10 @@ where
     // )
 }
 
-pub(crate) struct SuspenseHook {
-    pub handle: TaskHandle,
-    pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
-}
+// pub(crate) struct SuspenseHook {
+//     pub handle: TaskHandle,
+//     pub value: Rc<RefCell<Option<Box<dyn Any>>>>,
+// }
 
 #[derive(Clone, Copy)]
 pub struct NodeRef<'src, T: 'static>(&'src RefCell<Option<T>>);
@@ -183,5 +183,5 @@ impl<'a, T> Deref for NodeRef<'a, T> {
 }
 
 pub fn use_node_ref<T, P>(cx: Context) -> NodeRef<T> {
-    cx.use_hook(|_| RefCell::new(None), |f| NodeRef { 0: f }, |_| {})
+    cx.use_hook(|_| RefCell::new(None), |f| NodeRef { 0: f })
 }

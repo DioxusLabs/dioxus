@@ -62,7 +62,7 @@ impl<'a> Iterator for RealChildIterator<'a> {
                     VNode::Component(sc) => {
                         let scope = self
                             .scopes
-                            .get_scope(sc.associated_scope.get().unwrap())
+                            .get_scope(&sc.associated_scope.get().unwrap())
                             .unwrap();
 
                         // Simply swap the current node on the stack with the root of the component

@@ -169,7 +169,7 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     pub fn diff_scope(&mut self, id: ScopeId) {
-        if let Some(component) = self.vdom.get_scope_mut(id) {
+        if let Some(component) = self.vdom.get_scope_mut(&id) {
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             self.stack.push(DiffInstruction::Diff { new, old });
             self.work(|| false);
@@ -189,7 +189,10 @@ impl<'bump> DiffMachine<'bump> {
                 DiffInstruction::Diff { old, new } => self.diff_node(old, new),
                 DiffInstruction::Create { node } => self.create_node(node),
                 DiffInstruction::Mount { and } => self.mount(and),
-                DiffInstruction::PrepareMove { node } => self.prepare_move_node(node),
+                DiffInstruction::PrepareMove { node } => {
+                    let num_on_stack = self.push_all_nodes(node);
+                    self.stack.add_child_count(num_on_stack);
+                }
                 DiffInstruction::PopScope => self.stack.pop_off_scope(),
             };
 
@@ -202,10 +205,29 @@ impl<'bump> DiffMachine<'bump> {
         true
     }
 
-    fn prepare_move_node(&mut self, node: &'bump VNode<'bump>) {
-        for el in RealChildIterator::new(node, self.vdom) {
-            self.mutations.push_root(el.mounted_id());
-            self.stack.add_child_count(1);
+    // recursively push all the nodes of a tree onto the stack and return how many are there
+    fn push_all_nodes(&mut self, node: &'bump VNode<'bump>) -> usize {
+        match node {
+            VNode::Text(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
+                self.mutations.push_root(node.mounted_id());
+                1
+            }
+
+            VNode::Fragment(_) | VNode::Component(_) => node
+                .children()
+                .iter()
+                .map(|child| self.push_all_nodes(child))
+                .sum(),
+
+            VNode::Element(el) => {
+                let mut num_on_stack = 0;
+                for child in el.children.iter() {
+                    num_on_stack += self.push_all_nodes(child);
+                }
+                self.mutations.push_root(el.dom_id.get().unwrap());
+
+                num_on_stack + 1
+            }
         }
     }
 
@@ -307,7 +329,7 @@ impl<'bump> DiffMachine<'bump> {
         self.stack.add_child_count(1);
 
         if let Some(cur_scope_id) = self.stack.current_scope() {
-            let scope = self.vdom.get_scope(cur_scope_id).unwrap();
+            let scope = self.vdom.get_scope_mut(&cur_scope_id).unwrap();
 
             listeners.iter().for_each(|listener| {
                 self.attach_listener_to_scope(listener, scope);
@@ -332,18 +354,18 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
-        let caller = vcomponent.caller;
+        // let caller = vcomponent.caller;
 
         let parent_idx = self.stack.current_scope().unwrap();
 
         let shared = self.vdom.channel.clone();
 
         // Insert a new scope into our component list
-        let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
+        let parent_scope = self.vdom.get_scope(&parent_idx).unwrap();
 
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
             ScopeInner::new(
-                caller,
+                vcomponent,
                 new_idx,
                 Some(parent_idx),
                 parent_scope.height + 1,
@@ -356,17 +378,18 @@ impl<'bump> DiffMachine<'bump> {
         vcomponent.associated_scope.set(Some(new_idx));
 
         if !vcomponent.can_memoize {
-            let cur_scope = self.vdom.get_scope_mut(parent_idx).unwrap();
+            let cur_scope = self.vdom.get_scope_mut(&parent_idx).unwrap();
             let extended = vcomponent as *const VComponent;
             let extended: *const VComponent<'static> = unsafe { std::mem::transmute(extended) };
-            cur_scope.borrowed_props.borrow_mut().push(extended);
+
+            cur_scope.items.get_mut().borrowed_props.push(extended);
         }
 
         // TODO:
         //  add noderefs to current noderef list Noderefs
         //  add effects to current effect list Effects
 
-        let new_component = self.vdom.get_scope_mut(new_idx).unwrap();
+        let new_component = self.vdom.get_scope_mut(&new_idx).unwrap();
 
         log::debug!(
             "initializing component {:?} with height {:?}",
@@ -494,7 +517,7 @@ impl<'bump> DiffMachine<'bump> {
         //
         // TODO: take a more efficient path than this
         if let Some(cur_scope_id) = self.stack.current_scope() {
-            let scope = self.vdom.get_scope(cur_scope_id).unwrap();
+            let scope = self.vdom.get_scope_mut(&cur_scope_id).unwrap();
 
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
@@ -549,19 +572,21 @@ impl<'bump> DiffMachine<'bump> {
             new.associated_scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
-            let scope = self.vdom.get_scope_mut(scope_addr).unwrap();
-            scope.update_scope_dependencies(new.caller);
+            let scope = self.vdom.get_scope_mut(&scope_addr).unwrap();
+            scope.update_vcomp(new);
 
             // React doesn't automatically memoize, but we do.
-            let props_are_the_same = old.comparator.unwrap();
+            let props_are_the_same = todo!("reworking component memoization");
+            // let props_are_the_same = todo!("reworking component memoization");
+            // let props_are_the_same = old.comparator.unwrap();
 
-            if self.cfg.force_diff || !props_are_the_same(new) {
-                let succeeded = scope.run_scope(self.vdom);
+            // if self.cfg.force_diff || !props_are_the_same(new) {
+            //     let succeeded = scope.run_scope(self.vdom);
 
-                if succeeded {
-                    self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
-                }
-            }
+            //     if succeeded {
+            //         self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
+            //     }
+            // }
 
             self.stack.scope_stack.pop();
         } else {
@@ -1038,7 +1063,7 @@ impl<'bump> DiffMachine<'bump> {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    let scope = self.vdom.get_scope(scope_id).unwrap();
+                    let scope = self.vdom.get_scope(&scope_id).unwrap();
                     search_node = Some(scope.root_node());
                 }
             }
@@ -1056,7 +1081,7 @@ impl<'bump> DiffMachine<'bump> {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    let scope = self.vdom.get_scope(scope_id).unwrap();
+                    let scope = self.vdom.get_scope(&scope_id).unwrap();
                     search_node = Some(scope.root_node());
                 }
                 VNode::Text(t) => break t.dom_id.get(),
@@ -1131,12 +1156,12 @@ impl<'bump> DiffMachine<'bump> {
 
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
-                    let scope = self.vdom.get_scope_mut(scope_id).unwrap();
+                    let scope = self.vdom.get_scope_mut(&scope_id).unwrap();
                     let root = scope.root_node();
                     self.remove_nodes(Some(root), gen_muts);
 
                     log::debug!("Destroying scope {:?}", scope_id);
-                    let mut s = self.vdom.try_remove(scope_id).unwrap();
+                    let mut s = self.vdom.try_remove(&scope_id).unwrap();
                     s.hooks.clear_hooks();
                 }
             }
@@ -1161,23 +1186,27 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope<'a>(&mut self, listener: &'a Listener<'a>, scope: &ScopeInner) {
-        let mut queue = scope.listeners.borrow_mut();
+    fn attach_listener_to_scope<'a>(&mut self, listener: &'a Listener<'a>, scope: &mut ScopeInner) {
         let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
-        queue.push(long_listener as *const _)
+        scope
+            .items
+            .get_mut()
+            .listeners
+            .push(long_listener as *const _)
     }
 
     fn attach_suspended_node_to_scope(&mut self, suspended: &'bump VSuspended) {
         if let Some(scope) = self
             .stack
             .current_scope()
-            .and_then(|id| self.vdom.get_scope_mut(id))
+            .and_then(|id| self.vdom.get_scope_mut(&id))
         {
             // safety: this lifetime is managed by the logic on scope
             let extended: &VSuspended<'static> = unsafe { std::mem::transmute(suspended) };
             scope
+                .items
+                .get_mut()
                 .suspended_nodes
-                .borrow_mut()
                 .insert(suspended.task_id, extended as *const _);
         }
     }

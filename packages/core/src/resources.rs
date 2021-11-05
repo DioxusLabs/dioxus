@@ -32,18 +32,18 @@ pub(crate) struct ResourcePool {
 
 impl ResourcePool {
     /// this is unsafe because the caller needs to track which other scopes it's already using
-    pub fn get_scope(&self, idx: ScopeId) -> Option<&ScopeInner> {
+    pub fn get_scope(&self, idx: &ScopeId) -> Option<&ScopeInner> {
         let inner = unsafe { &*self.components.get() };
         inner.get(idx.0)
     }
 
     /// this is unsafe because the caller needs to track which other scopes it's already using
-    pub fn get_scope_mut(&self, idx: ScopeId) -> Option<&mut ScopeInner> {
+    pub fn get_scope_mut(&self, idx: &ScopeId) -> Option<&mut ScopeInner> {
         let inner = unsafe { &mut *self.components.get() };
         inner.get_mut(idx.0)
     }
 
-    pub fn try_remove(&self, id: ScopeId) -> Option<ScopeInner> {
+    pub fn try_remove(&self, id: &ScopeId) -> Option<ScopeInner> {
         let inner = unsafe { &mut *self.components.get() };
         Some(inner.remove(id.0))
         // .try_remove(id.0)

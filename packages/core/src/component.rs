@@ -5,10 +5,7 @@
 //! if the type supports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
-use crate::{
-    innerlude::{Context, Element, VAnchor, VFragment, VNode},
-    LazyNodes, ScopeChildren,
-};
+use crate::innerlude::{Context, Element, LazyNodes, ScopeChildren};
 /// A component is a wrapper around a Context and some Props that share a lifetime
 ///
 ///
@@ -51,7 +48,7 @@ pub struct FragmentBuilder<'a, const BUILT: bool> {
     children: Option<ScopeChildren<'a>>,
 }
 impl<'a> FragmentBuilder<'a, false> {
-    pub fn children(mut self, children: ScopeChildren<'a>) -> FragmentBuilder<'a, true> {
+    pub fn children(self, children: ScopeChildren<'a>) -> FragmentBuilder<'a, true> {
         FragmentBuilder {
             children: Some(children),
         }
@@ -75,7 +72,7 @@ impl<'a> Properties for FragmentProps<'a> {
         FragmentBuilder { children: None }
     }
 
-    unsafe fn memoize(&self, other: &Self) -> bool {
+    unsafe fn memoize(&self, _other: &Self) -> bool {
         false
     }
 }

@@ -154,6 +154,14 @@ impl<'src> VNode<'src> {
         }
     }
 
+    pub fn children(&self) -> &[VNode<'src>] {
+        match &self {
+            VNode::Fragment(f) => &f.children,
+            VNode::Component(c) => &c.children,
+            _ => &[],
+        }
+    }
+
     // Create an "owned" version of the vnode.
     pub fn decouple(&self) -> VNode<'src> {
         match self {
@@ -165,7 +173,6 @@ impl<'src> VNode<'src> {
             VNode::Fragment(f) => VNode::Fragment(VFragment {
                 children: f.children,
                 key: f.key,
-                is_static: f.is_static,
             }),
         }
     }
@@ -209,8 +216,6 @@ pub struct VFragment<'src> {
     pub key: Option<&'src str>,
 
     pub children: &'src [VNode<'src>],
-
-    pub is_static: bool,
 }
 
 /// An element like a "div" with children, listeners, and attributes.
@@ -316,21 +321,21 @@ pub struct VComponent<'src> {
 
     pub associated_scope: Cell<Option<ScopeId>>,
 
-    pub is_static: bool,
-
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
-
-    pub(crate) caller: BumpBox<'src, dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> + 'src>,
-
-    pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
-
-    pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
-
     pub(crate) can_memoize: bool,
 
     // Raw pointer into the bump arena for the props of the component
     pub(crate) raw_props: *const (),
+
+    // during the "teardown" process we'll take the caller out so it can be dropped properly
+    pub(crate) caller: Option<VCompCaller<'src>>,
+    pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
+}
+
+pub enum VCompCaller<'src> {
+    Borrowed(BumpBox<'src, dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> + 'src>),
+    Owned(Box<dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>>),
 }
 
 pub struct VSuspended<'a> {
@@ -473,7 +478,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn component<P>(
+    pub fn component<P, P1>(
         &self,
         component: fn(Scope<'a, P>) -> Element<'a>,
         props: P,
@@ -482,85 +487,109 @@ impl<'a> NodeFactory<'a> {
     where
         P: Properties + 'a,
     {
+        /*
+        our strategy:
+        - unsafe hackery
+        - lol
+
+        - we don't want to hit the global allocator
+        - allocate into our bump arena
+        - if the props aren't static, then we convert them into a box which we pass off between renders
+        */
+
         let bump = self.bump();
-        let props = bump.alloc(props);
-        let raw_props = props as *mut P as *mut ();
+
+        // let p = BumpBox::new_in(x, a)
+
+        // the best place to allocate the props are the other component's arena
+        // the second best place is the global allocator
+
+        // // if the props are static
+        // let boxed = if P::IS_STATIC {
+        //     todo!()
+        // } else {
+        //     todo!()
+        // }
+
+        // let caller = Box::new(|f: &ScopeInner| -> Element {
+        //     //
+        //     component((f, &props))
+        // });
+
         let user_fc = component as *const ();
 
-        let comparator: &mut dyn Fn(&VComponent) -> bool = bump.alloc_with(|| {
-            move |other: &VComponent| {
-                if user_fc == other.user_fc {
-                    // Safety
-                    // - We guarantee that FC<P> is the same by function pointer
-                    // - Because FC<P> is the same, then P must be the same (even with generics)
-                    // - Non-static P are autoderived to memoize as false
-                    // - This comparator is only called on a corresponding set of bumpframes
-                    let props_memoized = unsafe {
-                        let real_other: &P = &*(other.raw_props as *const _ as *const P);
-                        props.memoize(real_other)
-                    };
+        // let comparator: &mut dyn Fn(&VComponent) -> bool = bump.alloc_with(|| {
+        //     move |other: &VComponent| {
+        //         if user_fc == other.user_fc {
+        //             // Safety
+        //             // - We guarantee that FC<P> is the same by function pointer
+        //             // - Because FC<P> is the same, then P must be the same (even with generics)
+        //             // - Non-static P are autoderived to memoize as false
+        //             // - This comparator is only called on a corresponding set of bumpframes
+        //             let props_memoized = unsafe {
+        //                 let real_other: &P = &*(other.raw_props as *const _ as *const P);
+        //                 props.memoize(real_other)
+        //             };
 
-                    // It's only okay to memoize if there are no children and the props can be memoized
-                    // Implementing memoize is unsafe and done automatically with the props trait
-                    props_memoized
-                } else {
-                    false
-                }
-            }
-        });
-        let comparator = Some(unsafe { BumpBox::from_raw(comparator) });
-
-        let drop_props = {
-            // create a closure to drop the props
-            let mut has_dropped = false;
-
-            let drop_props: &mut dyn FnMut() = bump.alloc_with(|| {
-                move || unsafe {
-                    log::debug!("dropping props!");
-                    if !has_dropped {
-                        let real_other = raw_props as *mut _ as *mut P;
-                        let b = BumpBox::from_raw(real_other);
-                        std::mem::drop(b);
-
-                        has_dropped = true;
-                    } else {
-                        panic!("Drop props called twice - this is an internal failure of Dioxus");
-                    }
-                }
-            });
-
-            let drop_props = unsafe { BumpBox::from_raw(drop_props) };
-
-            RefCell::new(Some(drop_props))
-        };
+        //             // It's only okay to memoize if there are no children and the props can be memoized
+        //             // Implementing memoize is unsafe and done automatically with the props trait
+        //             props_memoized
+        //         } else {
+        //             false
+        //         }
+        //     }
+        // });
+        // let comparator = Some(unsafe { BumpBox::from_raw(comparator) });
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller: &'a mut dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> =
-            bump.alloc(move |scope: &ScopeInner| -> Element {
-                log::debug!("calling component renderr {:?}", scope.our_arena_idx);
-                let props: &'_ P = unsafe { &*(raw_props as *const P) };
+        let caller = match P::IS_STATIC {
+            true => {
+                // it just makes sense to box the props
+                let boxed_props: Box<P> = Box::new(props);
+                let props_we_know_are_static = todo!();
+                VCompCaller::Owned(Box::new(|f| {
+                    //
 
-                let scp: &'a ScopeInner = unsafe { std::mem::transmute(scope) };
-                let s: Scope<'a, P> = (scp, props);
+                    let p = todo!();
 
-                let res: Element = component(s);
-                unsafe { std::mem::transmute(res) }
-            });
+                    todo!()
+                }))
+            }
+            false => VCompCaller::Borrowed({
+                //
 
-        let caller = unsafe { BumpBox::from_raw(caller) };
+                todo!()
+                // let caller = bump.alloc()
+            }),
+        };
 
-        VNode::Component(bump.alloc(VComponent {
-            user_fc,
-            comparator,
-            raw_props,
-            caller,
-            is_static: P::IS_STATIC,
-            key,
-            can_memoize: P::IS_STATIC,
-            drop_props,
-            associated_scope: Cell::new(None),
-        }))
+        todo!()
+        // let caller: &'a mut dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> =
+        //     bump.alloc(move |scope: &ScopeInner| -> Element {
+        //         log::debug!("calling component renderr {:?}", scope.our_arena_idx);
+        //         let props: &'_ P = unsafe { &*(raw_props as *const P) };
+
+        //         let scp: &'a ScopeInner = unsafe { std::mem::transmute(scope) };
+        //         let s: Scope<'a, P> = (scp, props);
+
+        //         let res: Element = component(s);
+        //         unsafe { std::mem::transmute(res) }
+        //     });
+
+        // let caller = unsafe { BumpBox::from_raw(caller) };
+
+        // VNode::Component(bump.alloc(VComponent {
+        //     user_fc,
+        //     comparator,
+        //     raw_props,
+        //     caller,
+        //     is_static: P::IS_STATIC,
+        //     key,
+        //     can_memoize: P::IS_STATIC,
+        //     drop_props,
+        //     associated_scope: Cell::new(None),
+        // }))
     }
 
     pub fn fragment_from_iter(
@@ -604,7 +633,6 @@ impl<'a> NodeFactory<'a> {
         VNode::Fragment(VFragment {
             children,
             key: None,
-            is_static: false,
         })
     }
 
@@ -684,7 +712,6 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
             Some(lazy) => lazy.call(cx),
             None => VNode::Fragment(VFragment {
                 children: &[],
-                is_static: false,
                 key: None,
             }),
         }

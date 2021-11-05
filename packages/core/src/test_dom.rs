@@ -13,7 +13,7 @@ impl TestDom {
     pub fn new() -> TestDom {
         let bump = Bump::new();
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
-        let scheduler = Scheduler::new(sender, receiver);
+        let scheduler = Scheduler::new(sender, receiver, 10, 100);
         TestDom { bump, scheduler }
     }
 
