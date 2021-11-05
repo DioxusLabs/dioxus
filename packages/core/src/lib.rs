@@ -23,6 +23,7 @@ pub(crate) mod lazynodes;
 pub(crate) mod mutations;
 pub(crate) mod nodes;
 pub(crate) mod scope;
+pub(crate) mod scopearena;
 pub(crate) mod test_dom;
 pub(crate) mod threadsafe;
 pub(crate) mod util;
@@ -43,6 +44,7 @@ pub(crate) mod innerlude {
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
+    pub use crate::scopearena::*;
     pub use crate::test_dom::*;
     pub use crate::threadsafe::*;
     pub use crate::util::*;

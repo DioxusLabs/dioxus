@@ -78,16 +78,7 @@ pub struct VirtualDom {
     // we need to keep the allocation around, but we don't necessarily use it
     _root_caller: Box<dyn Any>,
 
-    // /// All mounted components are arena allocated to make additions, removals, and references easy to work with
-    // /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
-    // ///
-    // /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
-    // /// and rusts's guarantees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    // pub pool: ResourcePool,
-    //
-    pub component_arena: Bump,
-
-    pub free_components: VecDeque<*mut ScopeInner>,
+    pub scopes: ScopeArena,
 
     pub heuristics: FxHashMap<FcSlot, Heuristic>,
 
@@ -192,7 +183,17 @@ impl VirtualDom {
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,
     ) -> Self {
-        let mut component_arena = Bump::new();
+        let mut scopes = ScopeArena::new();
+
+        let base_scope = scopes.new_with_key(
+            //
+            root as _,
+            boxed_comp.as_ref(),
+            None,
+            0,
+            0,
+            sender.clone(),
+        );
 
         // let root_fc = Box::new(root);
 
@@ -239,13 +240,11 @@ impl VirtualDom {
         // });
 
         Self {
-            scheduler: todo!(),
+            scopes,
             base_scope: todo!(),
             root_fc: todo!(),
             root_props: todo!(),
             _root_caller: todo!(),
-            component_arena: todo!(),
-            free_components: todo!(),
             heuristics: todo!(),
             receiver,
             pending_garbage: todo!(),
@@ -340,7 +339,7 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
-        self.rebuild(self.base_scope)
+        // self.rebuild(self.base_scope)
     }
 
     /// Compute a manual diff of the VirtualDOM between states.
@@ -856,7 +855,7 @@ impl VirtualDom {
     /// Restart the entire VirtualDOM from scratch, wiping away any old state and components.
     ///
     /// Typically used to kickstart the VirtualDOM after initialization.
-    pub fn rebuild(&mut self, base_scope: ScopeId) -> Mutations {
+    pub fn rebuild_inner(&mut self, base_scope: ScopeId) -> Mutations {
         let mut shared = self.clone();
         let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
 

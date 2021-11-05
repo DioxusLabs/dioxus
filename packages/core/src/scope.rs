@@ -1,5 +1,6 @@
 use crate::innerlude::*;
 
+use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashMap;
 use std::{
     any::{Any, TypeId},
@@ -42,9 +43,13 @@ pub type Context<'a> = &'a ScopeInner;
 /// use case they might have.
 pub struct ScopeInner {
     // Book-keeping about our spot in the arena
-    pub(crate) parent_idx: Option<ScopeId>,
+    // yes, a raw pointer
+    // it's bump allocated so it's stable
+    // the safety of parent pointers is guaranteed by the logic in this crate
+    pub(crate) parent_scope: Option<*mut ScopeInner>,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
+
     pub(crate) subtree: Cell<u32>,
     pub(crate) is_subtree_root: Cell<bool>,
 
@@ -67,7 +72,7 @@ pub struct ScopeInner {
     // todo: move this into a centralized place - is more memory efficient
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
-    pub(crate) shared: EventChannel,
+    pub(crate) sender: UnboundedSender<SchedulerMsg>,
 }
 
 pub struct SelfReferentialItems<'a> {
@@ -78,47 +83,11 @@ pub struct SelfReferentialItems<'a> {
     pub(crate) pending_effects: Vec<BumpBox<'a, dyn FnMut()>>,
 }
 
+pub struct ScopeVcomp {
+    // important things
+}
+
 impl ScopeInner {
-    // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
-    // we are going to break this lifetime by force in order to save it on ourselves.
-    // To make sure that the lifetime isn't truly broken, we receive a Weak RC so we can't keep it around after the parent dies.
-    // This should never happen, but is a good check to keep around
-    //
-    // Scopes cannot be made anywhere else except for this file
-    // Therefore, their lifetimes are connected exclusively to the virtual dom
-    pub(crate) fn new(
-        vcomp: &VComponent,
-        our_arena_idx: ScopeId,
-        parent_idx: Option<ScopeId>,
-        height: u32,
-        subtree: u32,
-        shared: EventChannel,
-    ) -> Self {
-        let vcomp = unsafe { std::mem::transmute(vcomp as *const VComponent) };
-
-        Self {
-            shared,
-            parent_idx,
-            our_arena_idx,
-            height,
-            subtree: Cell::new(subtree),
-            is_subtree_root: Cell::new(false),
-            frames: ActiveFrame::new(),
-            vcomp,
-
-            hooks: Default::default(),
-            shared_contexts: Default::default(),
-
-            items: RefCell::new(SelfReferentialItems {
-                listeners: Default::default(),
-                borrowed_props: Default::default(),
-                suspended_nodes: Default::default(),
-                tasks: Default::default(),
-                pending_effects: Default::default(),
-            }),
-        }
-    }
-
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
     /// causing UB in our tree.
     ///
@@ -131,7 +100,7 @@ impl ScopeInner {
     ///
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
-    pub(crate) fn ensure_drop_safety(&mut self, pool: &ResourcePool) {
+    pub(crate) fn ensure_drop_safety(&mut self) {
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)
         // right now, we don't drop
@@ -147,13 +116,13 @@ impl ScopeInner {
                     .get()
                     .expect("VComponents should be associated with a valid Scope");
 
-                if let Some(scope) = pool.get_scope_mut(&scope_id) {
-                    scope.ensure_drop_safety(pool);
+                let scope = unsafe { &mut *scope_id };
 
-                    todo!("drop the component's props");
-                    // let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
-                    // drop_props();
-                }
+                scope.ensure_drop_safety();
+
+                todo!("drop the component's props");
+                // let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
+                // drop_props();
             });
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
@@ -204,7 +173,8 @@ impl ScopeInner {
     }
 
     // run the list of effects
-    pub(crate) fn run_effects(&mut self, pool: &ResourcePool) {
+    pub(crate) fn run_effects(&mut self) {
+        // pub(crate) fn run_effects(&mut self, pool: &ResourcePool) {
         for mut effect in self.items.get_mut().pending_effects.drain(..) {
             effect();
         }
@@ -213,11 +183,11 @@ impl ScopeInner {
     /// Render this component.
     ///
     /// Returns true if the scope completed successfully and false if running failed (IE a None error was propagated).
-    pub(crate) fn run_scope<'sel>(&'sel mut self, pool: &ResourcePool) -> bool {
+    pub(crate) fn run_scope<'sel>(&'sel mut self) -> bool {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
-        self.ensure_drop_safety(pool);
+        self.ensure_drop_safety();
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
@@ -356,7 +326,10 @@ impl ScopeInner {
     /// assert_eq!(base.parent(), None);
     /// ```
     pub fn parent(&self) -> Option<ScopeId> {
-        self.parent_idx
+        match self.parent_scope {
+            Some(p) => Some(unsafe { &*p }.our_arena_idx),
+            None => None,
+        }
     }
 
     /// Get the ID of this Scope within this Dioxus VirtualDOM.
@@ -381,7 +354,7 @@ impl ScopeInner {
     /// ## Notice: you should prefer using prepare_update and get_scope_id
     pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
         // pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
-        let chan = self.shared.sender.clone();
+        let chan = self.sender.clone();
         let id = self.scope_id();
         Rc::new(move || {
             chan.unbounded_send(SchedulerMsg::Immediate(id));
@@ -394,7 +367,7 @@ impl ScopeInner {
     ///
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Rc<dyn Fn(ScopeId)> {
-        let chan = self.shared.sender.clone();
+        let chan = self.sender.clone();
         Rc::new(move |id| {
             chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
@@ -411,8 +384,7 @@ impl ScopeInner {
     ///
     /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
     pub fn needs_update_any(&self, id: ScopeId) {
-        self.shared
-            .sender
+        self.sender
             .unbounded_send(SchedulerMsg::Immediate(id))
             .unwrap();
     }
@@ -508,7 +480,7 @@ impl ScopeInner {
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_state<T>(self, value: T)
+    pub fn provide_state<T>(&self, value: T)
     where
         T: 'static,
     {
@@ -520,11 +492,21 @@ impl ScopeInner {
     }
 
     /// Try to retrieve a SharedState with type T from the any parent Scope.
-    pub fn consume_state<T: 'static>(self) -> Option<Rc<T>> {
-        let getter = &self.shared.get_shared_context;
-        let ty = TypeId::of::<T>();
-        let idx = self.our_arena_idx;
-        getter(idx, ty).map(|f| f.downcast().unwrap())
+    pub fn consume_state<T: 'static>(&self) -> Option<Rc<T>> {
+        if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
+            Some(shared.clone().downcast::<T>().unwrap())
+        } else {
+            let mut search_parent = self.parent_scope;
+
+            while let Some(parent_ptr) = search_parent {
+                let parent = unsafe { &*parent_ptr };
+                if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
+                    return Some(shared.clone().downcast::<T>().unwrap());
+                }
+                search_parent = parent.parent_scope;
+            }
+            None
+        }
     }
 
     /// Create a new subtree with this scope as the root of the subtree.
@@ -542,7 +524,7 @@ impl ScopeInner {
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
     /// ```
-    pub fn create_subtree(self) -> Option<u32> {
+    pub fn create_subtree(&self) -> Option<u32> {
         self.new_subtree()
     }
 
@@ -559,7 +541,7 @@ impl ScopeInner {
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
     /// ```
-    pub fn get_current_subtree(self) -> u32 {
+    pub fn get_current_subtree(&self) -> u32 {
         self.subtree()
     }
 

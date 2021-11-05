@@ -6,15 +6,16 @@ use crate::nodes::IntoVNode;
 
 pub struct TestDom {
     bump: Bump,
-    scheduler: Scheduler,
+    // scheduler: Scheduler,
 }
 
 impl TestDom {
     pub fn new() -> TestDom {
         let bump = Bump::new();
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
-        let scheduler = Scheduler::new(sender, receiver, 10, 100);
-        TestDom { bump, scheduler }
+        todo!()
+        // let scheduler = Scheduler::new(sender, receiver, 10, 100);
+        // TestDom { bump, scheduler }
     }
 
     pub fn new_factory(&self) -> NodeFactory {
@@ -32,7 +33,7 @@ impl TestDom {
 
     pub fn diff<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mutations = Mutations::new();
-        let mut machine = DiffMachine::new(mutations, &self.scheduler.pool);
+        let mut machine = DiffMachine::new(mutations, todo!());
         machine.stack.push(DiffInstruction::Diff { new, old });
         machine.mutations
     }
@@ -40,7 +41,7 @@ impl TestDom {
     pub fn create<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
         let old = self.bump.alloc(self.render_direct(left));
 
-        let mut machine = DiffMachine::new(Mutations::new(), &self.scheduler.pool);
+        let mut machine = DiffMachine::new(Mutations::new(), todo!());
 
         machine.stack.create_node(old, MountType::Append);
 
@@ -56,14 +57,14 @@ impl TestDom {
     ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render(left), self.render(right));
 
-        let mut machine = DiffMachine::new(Mutations::new(), &self.scheduler.pool);
+        let mut machine = DiffMachine::new(Mutations::new(), todo!());
 
         machine.stack.create_node(old, MountType::Append);
 
         machine.work(|| false);
         let create_edits = machine.mutations;
 
-        let mut machine = DiffMachine::new(Mutations::new(), &self.scheduler.pool);
+        let mut machine = DiffMachine::new(Mutations::new(), todo!());
 
         machine.stack.push(DiffInstruction::Diff { old, new });
 

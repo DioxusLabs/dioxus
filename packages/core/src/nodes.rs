@@ -157,7 +157,7 @@ impl<'src> VNode<'src> {
     pub fn children(&self) -> &[VNode<'src>] {
         match &self {
             VNode::Fragment(f) => &f.children,
-            VNode::Component(c) => &c.children,
+            VNode::Component(c) => todo!("children are not accessible through this"),
             _ => &[],
         }
     }
@@ -319,7 +319,7 @@ pub struct Listener<'bump> {
 pub struct VComponent<'src> {
     pub key: Option<&'src str>,
 
-    pub associated_scope: Cell<Option<ScopeId>>,
+    pub associated_scope: Cell<Option<*mut ScopeInner>>,
 
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
