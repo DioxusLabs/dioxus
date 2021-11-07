@@ -679,10 +679,9 @@ impl<'a> NodeFactory<'a> {
         })
     }
 
-    pub fn annotate_lazy<'z, 'b, F>(f: F) -> Option<LazyNodes<'z, 'b>>
-    where
-        F: FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b,
-    {
+    pub fn annotate_lazy<'z, 'b>(
+        f: impl FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b,
+    ) -> Option<LazyNodes<'z, 'b>> {
         Some(LazyNodes::new(f))
     }
 }
