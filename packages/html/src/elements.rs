@@ -1,3 +1,7 @@
+use crate::{GlobalAttributes, SvgAttributes};
+use dioxus_core::*;
+use std::fmt::Arguments;
+
 macro_rules! builder_constructors {
     (
         $(

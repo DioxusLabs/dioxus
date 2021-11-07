@@ -69,7 +69,6 @@ pub fn use_state<'a, T: 'static>(
 
             UseState { inner: &*hook }
         },
-        |_| {},
     )
 }
 struct UseStateInner<T: 'static> {

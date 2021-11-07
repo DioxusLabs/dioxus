@@ -170,20 +170,17 @@
 #[cfg(feature = "core")]
 pub use dioxus_core as core;
 
-#[cfg(feature = "core")]
-pub use dioxus_core::events;
+#[cfg(feature = "hooks")]
+pub use dioxus_hooks as hooks;
+
+#[cfg(feature = "ssr")]
+pub use dioxus_ssr as ssr;
 
 #[cfg(feature = "web")]
 pub use dioxus_web as web;
 
 #[cfg(feature = "mobile")]
 pub use dioxus_mobile as mobile;
-
-#[cfg(feature = "ssr")]
-pub use dioxus_ssr as ssr;
-
-#[cfg(feature = "hooks")]
-pub use dioxus_hooks as hooks;
 
 #[cfg(feature = "desktop")]
 pub use dioxus_desktop as desktop;

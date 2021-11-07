@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeInner},
+    innerlude::{empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -20,7 +20,7 @@ use std::{
 ///
 /// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
 /// is essentially a unique key to guarantee safe usage of the Node.
-pub struct CachedNode {
+pub struct NodeLink {
     frame_id: u32,
     gen_id: u32,
     scope_id: ScopeId,
@@ -130,6 +130,13 @@ pub enum VNode<'src> {
     /// }
     /// ```
     Anchor(&'src VAnchor),
+
+    /// A type of node that links this node to another scope or render cycle
+    ///
+    /// Is essentially a "pointer" to a "rendered" node in a particular scope
+    ///
+    /// Used in portals
+    Linked(NodeLink),
 }
 
 impl<'src> VNode<'src> {
@@ -139,9 +146,11 @@ impl<'src> VNode<'src> {
             VNode::Element(el) => el.key,
             VNode::Component(c) => c.key,
             VNode::Fragment(f) => f.key,
+
             VNode::Text(_t) => None,
             VNode::Suspended(_s) => None,
             VNode::Anchor(_f) => None,
+            VNode::Linked(_c) => None,
         }
     }
 
@@ -161,6 +170,7 @@ impl<'src> VNode<'src> {
             VNode::Element(el) => el.dom_id.get(),
             VNode::Anchor(el) => el.dom_id.get(),
             VNode::Suspended(el) => el.dom_id.get(),
+            VNode::Linked(_) => None,
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
         }
@@ -186,6 +196,11 @@ impl<'src> VNode<'src> {
                 children: f.children,
                 key: f.key,
             }),
+            VNode::Linked(c) => VNode::Linked(NodeLink {
+                frame_id: c.frame_id,
+                gen_id: c.gen_id,
+                scope_id: c.scope_id,
+            }),
         }
     }
 }
@@ -205,6 +220,11 @@ impl Debug for VNode<'_> {
             VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
             VNode::Suspended { .. } => write!(s, "VSuspended"),
             VNode::Component(comp) => write!(s, "VComponent {{ fc: {:?}}}", comp.user_fc),
+            VNode::Linked(c) => write!(
+                s,
+                "VCached {{ frame_id: {}, gen_id: {}, scope_id: {:?} }}",
+                c.frame_id, c.gen_id, c.scope_id
+            ),
         }
     }
 }
@@ -347,8 +367,8 @@ pub struct VComponent<'src> {
 }
 
 pub enum VCompCaller<'src> {
-    Borrowed(BumpBox<'src, dyn for<'b> Fn(&'b ScopeInner) -> Element + 'src>),
-    Owned(Box<dyn for<'b> Fn(&'b ScopeInner) -> Element>),
+    Borrowed(BumpBox<'src, dyn for<'b> Fn(&'b ScopeState) -> Element + 'src>),
+    Owned(Box<dyn for<'b> Fn(&'b ScopeState) -> Element>),
 }
 
 pub struct VSuspended<'a> {
@@ -491,7 +511,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn component<P, P1>(
+    pub fn component<P>(
         &self,
         component: fn(Scope<'a, P>) -> Element,
         props: P,
@@ -605,6 +625,18 @@ impl<'a> NodeFactory<'a> {
         // }))
     }
 
+    pub fn listener(
+        self,
+        event: &'static str,
+        callback: BumpBox<'a, dyn FnMut(Box<dyn Any + Send>) + 'a>,
+    ) -> Listener<'a> {
+        Listener {
+            mounted_node: Cell::new(None),
+            event,
+            callback: RefCell::new(Some(callback)),
+        }
+    }
+
     pub fn fragment_from_iter(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
@@ -710,6 +742,21 @@ impl IntoVNode<'_> for () {
 impl IntoVNode<'_> for Option<()> {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.fragment_from_iter(None as Option<VNode>)
+    }
+}
+
+// Conveniently, we also support "None"
+impl IntoVNode<'_> for Option<NodeLink> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        todo!()
+        // cx.fragment_from_iter(None as Option<VNode>)
+    }
+}
+// Conveniently, we also support "None"
+impl IntoVNode<'_> for NodeLink {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        todo!()
+        // cx.fragment_from_iter(None as Option<VNode>)
     }
 }
 

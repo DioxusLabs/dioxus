@@ -1,3 +1,7 @@
+use bumpalo::boxed::Box as BumpBox;
+use dioxus_core::exports::bumpalo;
+use dioxus_core::*;
+use std::any::Any;
 
 pub mod on {
     use super::*;
@@ -39,11 +43,7 @@ pub mod on {
                         // ie copy
                         let shortname: &'static str = &event_name[2..];
 
-                        Listener {
-                            event: shortname,
-                            mounted_node: Cell::new(None),
-                            callback: RefCell::new(Some(callback)),
-                        }
+                        c.listener(shortname, callback)
                     }
                 )*
             )*
@@ -1062,7 +1062,7 @@ impl KeyCode {
     }
 }
 
-pub(crate) fn event_meta(event: &UserEvent) -> (bool, EventPriority) {
+pub(crate) fn _event_meta(event: &UserEvent) -> (bool, EventPriority) {
     use EventPriority::*;
 
     match event.name {

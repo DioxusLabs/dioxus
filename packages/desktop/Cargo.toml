@@ -24,6 +24,7 @@ tokio = { version = "1.12.0", features = [
     "rt",
 ], optional = true, default-features = false }
 dioxus-core-macro = { path = "../core-macro" }
+dioxus-html = { path = "../html", features = ["serialize"] }
 
 [features]
 default = ["tokio_runtime"]
@@ -31,6 +32,5 @@ tokio_runtime = ["tokio"]
 
 
 [dev-dependencies]
-dioxus-html = { path = "../html" }
 dioxus-hooks = { path = "../hooks" }
 simple_logger = "1.13.0"

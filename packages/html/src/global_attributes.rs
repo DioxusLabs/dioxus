@@ -1,3 +1,6 @@
+use dioxus_core::*;
+use std::fmt::Arguments;
+
 macro_rules! no_namespace_trait_methods {
     (
         $(

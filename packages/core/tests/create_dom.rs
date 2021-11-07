@@ -303,7 +303,7 @@ fn anchors() {
 #[test]
 fn suspended() {
     static App: FC<()> = |(cx, props)| {
-        let val = use_suspense(cx, || async {}, |cx, p| todo!());
+        let val = use_suspense(cx, || async {}, |p| todo!());
 
         cx.render(rsx! { {val} })
     };

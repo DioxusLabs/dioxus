@@ -16,7 +16,6 @@ pub(crate) mod bumpframe;
 pub(crate) mod component;
 pub(crate) mod diff;
 pub(crate) mod diff_stack;
-pub(crate) mod events;
 pub(crate) mod hooklist;
 pub(crate) mod hooks;
 pub(crate) mod lazynodes;
@@ -36,7 +35,6 @@ pub(crate) mod innerlude {
     pub use crate::component::*;
     pub(crate) use crate::diff::*;
     pub use crate::diff_stack::*;
-    pub use crate::events::*;
     pub(crate) use crate::hooklist::*;
     pub use crate::hooks::*;
     pub use crate::lazynodes::*;
@@ -48,14 +46,14 @@ pub(crate) mod innerlude {
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
-    pub type Element = Option<CachedNode>;
-    pub type FC<P> = for<'a> fn(Scope<'a, P>) -> CachedNode;
+    pub type Element = Option<NodeLink>;
+    pub type FC<P> = for<'a> fn(Scope<'a, P>) -> Element;
 }
 
 pub use crate::innerlude::{
-    Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes, MountType,
-    Mutations, NodeFactory, Properties, ScopeChildren, ScopeId, TestDom, UserEvent, VNode,
-    VirtualDom, FC,
+    Attribute, Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes,
+    Listener, MountType, Mutations, NodeFactory, Properties, SchedulerMsg, ScopeChildren, ScopeId,
+    TestDom, UserEvent, VAnchor, VElement, VFragment, VNode, VSuspended, VirtualDom, FC,
 };
 
 pub mod prelude {

@@ -21,7 +21,7 @@ fn main() {
 }
 
 fn App((cx, props): Scope<()>) -> Element {
-    let text: &mut Vec<String> = cx.use_hook(|_| vec![String::from("abc=def")], |f| f, |_| {});
+    let text: &mut Vec<String> = cx.use_hook(|_| vec![String::from("abc=def")], |f| f);
 
     let first = text.get_mut(0).unwrap();
 

@@ -177,7 +177,7 @@ fn round_to_words(len: usize) -> usize {
 fn it_works() {
     let bump = bumpalo::Bump::new();
 
-    simple_logger::init();
+    simple_logger::init().unwrap();
 
     let factory = NodeFactory { bump: &bump };
 

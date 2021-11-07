@@ -210,12 +210,12 @@ impl ToTokens for ElementAttrNamed {
 
             ElementAttr::EventClosure { name, closure } => {
                 quote! {
-                    dioxus::events::on::#name(__cx, #closure)
+                    dioxus_elements::on::#name(__cx, #closure)
                 }
             }
             ElementAttr::EventTokens { name, tokens } => {
                 quote! {
-                    dioxus::events::on::#name(__cx, #tokens)
+                    dioxus_elements::on::#name(__cx, #tokens)
                 }
             }
         };

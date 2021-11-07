@@ -30,7 +30,7 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 ///     cx.render(rsx!{ div {"Hello, {props.name}"} })
 /// }
 /// ```
-pub type Context<'a> = &'a ScopeInner;
+pub type Context<'a> = &'a ScopeState;
 
 /// Every component in Dioxus is represented by a `Scope`.
 ///
@@ -41,13 +41,13 @@ pub type Context<'a> = &'a ScopeInner;
 ///
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// use case they might have.
-pub struct ScopeInner {
+pub struct ScopeState {
     // Book-keeping about our spot in the arena
 
     // safety:
     //
     // pointers to scopes are *always* valid since they are bump allocated and never freed until this scope is also freed
-    pub(crate) parent_scope: Option<*mut ScopeInner>,
+    pub(crate) parent_scope: Option<*mut ScopeState>,
 
     pub(crate) our_arena_idx: ScopeId,
 
@@ -80,6 +80,11 @@ pub struct ScopeInner {
 }
 
 pub struct SelfReferentialItems<'a> {
+    // nodes stored by "cx.render"
+    pub(crate) cached_nodes: Vec<VNode<'a>>,
+
+    pub(crate) generation: u32,
+
     pub(crate) listeners: Vec<*const Listener<'a>>,
     pub(crate) borrowed_props: Vec<*const VComponent<'a>>,
     pub(crate) suspended_nodes: FxHashMap<u64, *const VSuspended<'a>>,
@@ -91,7 +96,7 @@ pub struct ScopeVcomp {
     // important things
 }
 
-impl ScopeInner {
+impl ScopeState {
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
     /// causing UB in our tree.
     ///
@@ -366,7 +371,7 @@ impl ScopeInner {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<CachedNode> {
+    pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
         todo!()
         // ) -> Option<VNode<'src>> {
         // let bump = &self.frames.wip_frame().bump;

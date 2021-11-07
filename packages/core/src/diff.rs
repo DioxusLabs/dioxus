@@ -178,7 +178,7 @@ impl<'bump> VirtualDom {
     // }
 
     pub fn diff_scope(&'bump self, state: &mut DiffState<'bump>, id: ScopeId) {
-        if let Some(component) = self.get_scope_mut(&id) {
+        if let Some(component) = self.scopes.get(&id) {
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             state.stack.push(DiffInstruction::Diff { new, old });
             self.work(state, || false);
@@ -228,6 +228,16 @@ impl<'bump> VirtualDom {
             VNode::Text(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
                 state.mutations.push_root(node.mounted_id());
                 1
+            }
+
+            VNode::Linked(linked) => {
+                todo!("load linked");
+                0
+                // let num_on_stack = linked.children.iter().map(|child| {
+                //     self.push_all_nodes(state, child)
+                // }).sum();
+                // state.mutations.push_root(node.mounted_id());
+                // num_on_stack + 1
             }
 
             VNode::Fragment(_) | VNode::Component(_) => {
@@ -302,6 +312,7 @@ impl<'bump> VirtualDom {
             VNode::Element(element) => self.create_element_node(state, element, node),
             VNode::Fragment(frag) => self.create_fragment_node(state, frag),
             VNode::Component(component) => self.create_component_node(state, component),
+            VNode::Linked(linked) => self.create_linked_node(state, linked),
         }
     }
 
@@ -371,7 +382,7 @@ impl<'bump> VirtualDom {
         state.stack.add_child_count(1);
 
         if let Some(cur_scope_id) = state.stack.current_scope() {
-            let scope = self.get_scope_mut(&cur_scope_id).unwrap();
+            let scope = self.scopes.get(&cur_scope_id).unwrap();
 
             for listener in *listeners {
                 self.attach_listener_to_scope(state, listener, scope);
@@ -434,7 +445,7 @@ impl<'bump> VirtualDom {
         vcomponent.associated_scope.set(Some(new_idx));
 
         if !vcomponent.can_memoize {
-            let cur_scope = self.get_scope_mut(&parent_idx).unwrap();
+            let cur_scope = self.scopes.get(&parent_idx).unwrap();
             let extended = vcomponent as *const VComponent;
             let extended: *const VComponent<'static> = unsafe { std::mem::transmute(extended) };
 
@@ -445,7 +456,7 @@ impl<'bump> VirtualDom {
         //  add noderefs to current noderef list Noderefs
         //  add effects to current effect list Effects
 
-        let new_component = self.get_scope_mut(&new_idx).unwrap();
+        let new_component = self.scopes.get(&new_idx).unwrap();
 
         log::debug!(
             "initializing component {:?} with height {:?}",
@@ -477,6 +488,10 @@ impl<'bump> VirtualDom {
         state.seen_scopes.insert(new_idx);
     }
 
+    fn create_linked_node(&'bump self, state: &mut DiffState<'bump>, link: &'bump NodeLink) {
+        todo!()
+    }
+
     // =================================
     //  Tools for diffing nodes
     // =================================
@@ -500,11 +515,14 @@ impl<'bump> VirtualDom {
             (Element(old), Element(new)) => {
                 self.diff_element_nodes(state, old, new, old_node, new_node)
             }
+            (Linked(old), Linked(new)) => self.diff_linked_nodes(state, old, new),
 
             // Anything else is just a basic replace and create
             (
-                Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_) | Suspended(_),
-                Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_) | Suspended(_),
+                Linked(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_)
+                | Suspended(_),
+                Linked(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_)
+                | Suspended(_),
             ) => state
                 .stack
                 .create_node(new_node, MountType::Replace { old: old_node }),
@@ -588,7 +606,7 @@ impl<'bump> VirtualDom {
         //
         // TODO: take a more efficient path than this
         if let Some(cur_scope_id) = state.stack.current_scope() {
-            let scope = self.get_scope_mut(&cur_scope_id).unwrap();
+            let scope = self.scopes.get(&cur_scope_id).unwrap();
 
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
@@ -646,7 +664,7 @@ impl<'bump> VirtualDom {
             new.associated_scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
-            let scope = self.get_scope_mut(&scope_addr).unwrap();
+            let scope = self.scopes.get(&scope_addr).unwrap();
             scope.update_vcomp(new);
 
             // React doesn't automatically memoize, but we do.
@@ -697,6 +715,17 @@ impl<'bump> VirtualDom {
     ) {
         new.dom_id.set(old.dom_id.get());
         self.attach_suspended_node_to_scope(state, new);
+    }
+
+    fn diff_linked_nodes(
+        &'bump self,
+        state: &mut DiffState<'bump>,
+        old: &'bump NodeLink,
+        new: &'bump NodeLink,
+    ) {
+        todo!();
+        // new.dom_id.set(old.dom_id.get());
+        // self.attach_linked_node_to_scope(state, new);
     }
 
     // =============================================
@@ -1168,7 +1197,9 @@ impl<'bump> VirtualDom {
                 VNode::Element(t) => break t.dom_id.get(),
                 VNode::Suspended(t) => break t.dom_id.get(),
                 VNode::Anchor(t) => break t.dom_id.get(),
-
+                VNode::Linked(_) => {
+                    todo!()
+                }
                 VNode::Fragment(frag) => {
                     search_node = frag.children.last();
                 }
@@ -1198,6 +1229,9 @@ impl<'bump> VirtualDom {
                     let scope_id = el.associated_scope.get().unwrap();
                     let scope = self.get_scope(&scope_id).unwrap();
                     search_node = Some(scope.root_node());
+                }
+                VNode::Linked(link) => {
+                    todo!("linked")
                 }
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
@@ -1272,9 +1306,13 @@ impl<'bump> VirtualDom {
                     self.remove_nodes(state, f.children, gen_muts);
                 }
 
+                VNode::Linked(l) => {
+                    todo!()
+                }
+
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
-                    let scope = self.get_scope_mut(&scope_id).unwrap();
+                    let scope = self.scopes.get(&scope_id).unwrap();
                     let root = scope.root_node();
                     self.remove_nodes(state, Some(root), gen_muts);
 
@@ -1310,7 +1348,7 @@ impl<'bump> VirtualDom {
         &'bump self,
         state: &mut DiffState<'bump>,
         listener: &'bump Listener<'bump>,
-        scope: &ScopeInner,
+        scope: &ScopeState,
     ) {
         let long_listener: &'bump Listener<'static> = unsafe { std::mem::transmute(listener) };
         scope
@@ -1328,7 +1366,7 @@ impl<'bump> VirtualDom {
         if let Some(scope) = state
             .stack
             .current_scope()
-            .and_then(|id| self.get_scope_mut(&id))
+            .and_then(|id| self.scopes.get(&id))
         {
             // safety: this lifetime is managed by the logic on scope
             let extended: &VSuspended<'static> = unsafe { std::mem::transmute(suspended) };

@@ -19,7 +19,7 @@ pub struct Heuristic {
 // has an internal heuristics engine to pre-allocate arenas to the right size
 pub(crate) struct ScopeArena {
     bump: Bump,
-    scopes: Vec<*mut ScopeInner>,
+    scopes: Vec<*mut ScopeState>,
     free_scopes: Vec<ScopeId>,
 }
 
@@ -32,7 +32,7 @@ impl ScopeArena {
         }
     }
 
-    pub fn get_mut(&self, id: &ScopeId) -> Option<&ScopeInner> {
+    pub fn get(&self, id: &ScopeId) -> Option<&ScopeState> {
         unsafe { Some(&*self.scopes[id.0]) }
     }
 
@@ -40,7 +40,7 @@ impl ScopeArena {
         &mut self,
         fc_ptr: *const (),
         vcomp: &VComponent,
-        parent_scope: Option<*mut ScopeInner>,
+        parent_scope: Option<*mut ScopeState>,
         height: u32,
         subtree: u32,
         sender: UnboundedSender<SchedulerMsg>,
@@ -56,7 +56,7 @@ impl ScopeArena {
 
             let vcomp = unsafe { std::mem::transmute(vcomp as *const VComponent) };
 
-            let new_scope = ScopeInner {
+            let new_scope = ScopeState {
                 sender,
                 parent_scope,
                 our_arena_idx: id,
@@ -75,6 +75,8 @@ impl ScopeArena {
                     suspended_nodes: Default::default(),
                     tasks: Default::default(),
                     pending_effects: Default::default(),
+                    cached_nodes: Default::default(),
+                    generation: Default::default(),
                 }),
             };
 
