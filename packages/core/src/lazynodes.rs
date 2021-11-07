@@ -12,7 +12,7 @@
 //! support non-static closures, so we've implemented the core logic of `ValueA` in this module.
 
 use crate::prelude::{NodeFactory, VNode};
-use std::mem::{self, ManuallyDrop};
+use std::mem;
 
 /// A concrete type provider for closures that build VNode structures.
 ///
@@ -31,7 +31,7 @@ type StackHeapSize = [usize; 8];
 
 enum StackNodeStorage<'a, 'b> {
     Stack(LazyStack),
-    Heap(Box<dyn FnMut(NodeFactory<'a>) -> VNode<'a> + 'b>),
+    Heap(Box<dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> + 'b>),
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
@@ -43,7 +43,10 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
 
         let val = move |f| {
             let inn = slot.take().unwrap();
-            inn(f)
+            match f {
+                Some(f) => Some(inn(f)),
+                None => None,
+            }
         };
 
         unsafe { LazyNodes::new_inner(val) }
@@ -51,9 +54,9 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
 
     unsafe fn new_inner<F>(val: F) -> Self
     where
-        F: FnMut(NodeFactory<'a>) -> VNode<'a> + 'b,
+        F: FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> + 'b,
     {
-        let mut ptr: *const _ = &val as &dyn FnMut(NodeFactory<'a>) -> VNode<'a>;
+        let mut ptr: *const _ = &val as &dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>>;
 
         assert_eq!(
             ptr as *const u8, &val as *const _ as *const u8,
@@ -135,9 +138,9 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         }
     }
 
-    pub fn call(mut self, f: NodeFactory<'a>) -> VNode<'a> {
+    pub fn call(self, f: NodeFactory<'a>) -> VNode<'a> {
         match self.inner {
-            StackNodeStorage::Heap(mut lazy) => lazy(f),
+            StackNodeStorage::Heap(mut lazy) => lazy(Some(f)).unwrap(),
             StackNodeStorage::Stack(mut stack) => stack.call(f),
         }
         // todo drop?
@@ -168,19 +171,20 @@ impl LazyStack {
         let LazyStack { buf, .. } = self;
         let data = buf.as_ref();
 
-        let info_size = mem::size_of::<*mut dyn FnOnce(NodeFactory<'a>) -> VNode<'a>>()
-            / mem::size_of::<usize>()
-            - 1;
+        let info_size =
+            mem::size_of::<*mut dyn FnOnce(Option<NodeFactory<'a>>) -> Option<VNode<'a>>>()
+                / mem::size_of::<usize>()
+                - 1;
 
         let info_ofs = data.len() - info_size;
 
-        let g: *mut dyn FnMut(NodeFactory<'a>) -> VNode<'a> =
+        let g: *mut dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> =
             unsafe { make_fat_ptr(data[..].as_ptr() as usize, &data[info_ofs..]) };
 
         self.dropped = true;
 
         let clos = unsafe { &mut *g };
-        clos(f)
+        clos(Some(f)).unwrap()
     }
 }
 impl Drop for LazyStack {
@@ -188,16 +192,23 @@ impl Drop for LazyStack {
         if !self.dropped {
             log::debug!("manually dropping lazy nodes");
 
-            // match &mut self.inner {
-            //     StackNodeStorage::Heap(mut lazy) => {
-            //         log::debug!("dropping lazy nodes on heap");
-            //         std::mem::drop(lazy);
-            //     }
-            //     StackNodeStorage::Stack(mut stack) => {
-            //         log::debug!("dropping lazy nodes on stack");
-            //         std::mem::drop(stack);
-            //     }
-            // }
+            let LazyStack { buf, .. } = self;
+            let data = buf.as_ref();
+
+            let info_size = mem::size_of::<
+                *mut dyn FnOnce(Option<NodeFactory<'_>>) -> Option<VNode<'_>>,
+            >() / mem::size_of::<usize>()
+                - 1;
+
+            let info_ofs = data.len() - info_size;
+
+            let g: *mut dyn FnMut(Option<NodeFactory<'_>>) -> Option<VNode<'_>> =
+                unsafe { make_fat_ptr(data[..].as_ptr() as usize, &data[info_ofs..]) };
+
+            self.dropped = true;
+
+            let clos = unsafe { &mut *g };
+            clos(None);
         }
     }
 }
@@ -248,6 +259,7 @@ fn it_works() {
 
 #[test]
 fn it_drops() {
+    use std::rc::Rc;
     let bump = bumpalo::Bump::new();
 
     simple_logger::init().unwrap();
@@ -262,22 +274,31 @@ fn it_drops() {
             log::debug!("dropping inner");
         }
     }
+    let val = Rc::new(10);
 
-    let it = (0..10).map(|i| {
-        NodeFactory::annotate_lazy(move |f| {
-            log::debug!("hell closure");
-            let inner = DropInner { id: i };
-            f.text(format_args!("hello world {:?}", inner.id))
+    {
+        let it = (0..10)
+            .map(|i| {
+                let val = val.clone();
+
+                NodeFactory::annotate_lazy(move |f| {
+                    log::debug!("hell closure");
+                    let inner = DropInner { id: i };
+                    f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let caller = NodeFactory::annotate_lazy(|f| {
+            log::debug!("main closure");
+            f.fragment_from_iter(it)
         })
-    });
+        .unwrap();
+    }
 
-    let caller = NodeFactory::annotate_lazy(|f| {
-        log::debug!("main closure");
-        f.fragment_from_iter(it)
-    })
-    .unwrap();
+    // let nodes = caller.call(factory);
 
-    let nodes = caller.call(factory);
+    // dbg!(nodes);
 
-    dbg!(nodes);
+    dbg!(Rc::strong_count(&val));
 }
