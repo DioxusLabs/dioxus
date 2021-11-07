@@ -39,14 +39,12 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
     {
+        // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
         let mut slot = Some(_val);
 
-        let val = move |f| {
-            let inn = slot.take().unwrap();
-            match f {
-                Some(f) => Some(inn(f)),
-                None => None,
-            }
+        let val = move |fac: Option<NodeFactory<'a>>| {
+            let inner = slot.take().unwrap();
+            fac.map(inner)
         };
 
         unsafe { LazyNodes::new_inner(val) }
@@ -125,7 +123,6 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
                 *dataptr.add(i) = *src_ptr.add(i);
             }
 
-            log::debug!("I am forgetting the contents of the stuff");
             std::mem::forget(val);
 
             Self {
@@ -143,7 +140,6 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
             StackNodeStorage::Heap(mut lazy) => lazy(Some(f)).unwrap(),
             StackNodeStorage::Stack(mut stack) => stack.call(f),
         }
-        // todo drop?
     }
 }
 
@@ -154,25 +150,12 @@ struct LazyStack {
 }
 
 impl LazyStack {
-    unsafe fn as_raw<'a>(&mut self) -> *mut dyn FnOnce(NodeFactory<'a>) -> VNode<'a> {
-        let LazyStack { buf, .. } = self;
-        let data = buf.as_ref();
-
-        let info_size = mem::size_of::<*mut dyn FnOnce(NodeFactory<'a>) -> VNode<'a>>()
-            / mem::size_of::<usize>()
-            - 1;
-
-        let info_ofs = data.len() - info_size;
-
-        make_fat_ptr(data[..].as_ptr() as usize, &data[info_ofs..])
-    }
-
     fn call<'a>(&mut self, f: NodeFactory<'a>) -> VNode<'a> {
         let LazyStack { buf, .. } = self;
         let data = buf.as_ref();
 
         let info_size =
-            mem::size_of::<*mut dyn FnOnce(Option<NodeFactory<'a>>) -> Option<VNode<'a>>>()
+            mem::size_of::<*mut dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>>>()
                 / mem::size_of::<usize>()
                 - 1;
 
@@ -190,13 +173,11 @@ impl LazyStack {
 impl Drop for LazyStack {
     fn drop(&mut self) {
         if !self.dropped {
-            log::debug!("manually dropping lazy nodes");
-
             let LazyStack { buf, .. } = self;
             let data = buf.as_ref();
 
             let info_size = mem::size_of::<
-                *mut dyn FnOnce(Option<NodeFactory<'_>>) -> Option<VNode<'_>>,
+                *mut dyn FnMut(Option<NodeFactory<'_>>) -> Option<VNode<'_>>,
             >() / mem::size_of::<usize>()
                 - 1;
 

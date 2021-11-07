@@ -177,7 +177,7 @@ impl<'src> VNode<'src> {
 
     pub fn children(&self) -> &[VNode<'src>] {
         match &self {
-            VNode::Fragment(f) => &f.children,
+            VNode::Fragment(f) => f.children,
             VNode::Component(c) => todo!("children are not accessible through this"),
             _ => &[],
         }

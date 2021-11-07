@@ -124,7 +124,7 @@ impl<'bump> DiffState<'bump> {
 
 impl<'bump> ScopeArena {
     pub fn diff_scope(&'bump self, state: &mut DiffState<'bump>, id: &ScopeId) {
-        if let Some(component) = self.get_scope(&id) {
+        if let Some(component) = self.get_scope(id) {
             let (old, new) = (component.wip_head(), component.fin_head());
             state.stack.push(DiffInstruction::Diff { new, old });
             self.work(state, || false);
@@ -221,7 +221,7 @@ impl<'bump> ScopeArena {
                     state.mutations.replace_with(old_id, nodes_created as u32);
                     self.remove_nodes(state, Some(old), true);
                 } else {
-                    if let Some(id) = self.find_first_element_id(state, old) {
+                    if let Some(id) = self.find_first_element_id(old) {
                         state.mutations.replace_with(id, nodes_created as u32);
                     }
                     self.remove_nodes(state, Some(old), true);
@@ -235,12 +235,12 @@ impl<'bump> ScopeArena {
             }
 
             MountType::InsertAfter { other_node } => {
-                let root = self.find_last_element(state, other_node).unwrap();
+                let root = self.find_last_element(other_node).unwrap();
                 state.mutations.insert_after(root, nodes_created as u32);
             }
 
             MountType::InsertBefore { other_node } => {
-                let root = self.find_first_element_id(state, other_node).unwrap();
+                let root = self.find_first_element_id(other_node).unwrap();
                 state.mutations.insert_before(root, nodes_created as u32);
             }
         }
@@ -331,7 +331,7 @@ impl<'bump> ScopeArena {
             let scope = self.get_scope(&cur_scope_id).unwrap();
 
             for listener in *listeners {
-                self.attach_listener_to_scope(state, listener, scope);
+                self.attach_listener_to_scope(listener, scope);
                 listener.mounted_node.set(Some(real_id));
                 state.mutations.new_event_listener(listener, cur_scope_id);
             }
@@ -561,7 +561,7 @@ impl<'bump> ScopeArena {
                         state.mutations.new_event_listener(new_l, cur_scope_id);
                     }
                     new_l.mounted_node.set(old_l.mounted_node.get());
-                    self.attach_listener_to_scope(state, new_l, scope);
+                    self.attach_listener_to_scope(new_l, scope);
                 }
             } else {
                 for listener in old.listeners {
@@ -572,7 +572,7 @@ impl<'bump> ScopeArena {
                 for listener in new.listeners {
                     listener.mounted_node.set(Some(root));
                     state.mutations.new_event_listener(listener, cur_scope_id);
-                    self.attach_listener_to_scope(state, listener, scope);
+                    self.attach_listener_to_scope(listener, scope);
                 }
             }
         }
@@ -1128,11 +1128,7 @@ impl<'bump> ScopeArena {
     //  Utilities
     // =====================
 
-    fn find_last_element(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        vnode: &'bump VNode<'bump>,
-    ) -> Option<ElementId> {
+    fn find_last_element(&'bump self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
 
         loop {
@@ -1156,11 +1152,7 @@ impl<'bump> ScopeArena {
         }
     }
 
-    fn find_first_element_id(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        vnode: &'bump VNode<'bump>,
-    ) -> Option<ElementId> {
+    fn find_first_element_id(&'bump self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
 
         loop {
@@ -1288,12 +1280,7 @@ impl<'bump> ScopeArena {
     }
 
     /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        listener: &'bump Listener<'bump>,
-        scope: &ScopeState,
-    ) {
+    fn attach_listener_to_scope(&'bump self, listener: &'bump Listener<'bump>, scope: &ScopeState) {
         let long_listener = unsafe { std::mem::transmute(listener) };
         scope.items.borrow_mut().listeners.push(long_listener)
     }

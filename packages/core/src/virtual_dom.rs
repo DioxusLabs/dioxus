@@ -69,7 +69,7 @@ use std::{
 pub struct VirtualDom {
     base_scope: ScopeId,
 
-    root_props: Rc<dyn Any>,
+    _root_props: Rc<dyn Any>,
 
     // we need to keep the allocation around, but we don't necessarily use it
     _root_caller: Box<dyn Any>,
@@ -156,7 +156,7 @@ impl VirtualDom {
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,
     ) -> Self {
-        let mut scopes = ScopeArena::new(sender.clone());
+        let mut scopes = ScopeArena::new(sender);
 
         let base_scope = scopes.new_with_key(
             //
@@ -166,7 +166,6 @@ impl VirtualDom {
             None,
             0,
             0,
-            sender.clone(),
         );
 
         Self {
@@ -175,7 +174,7 @@ impl VirtualDom {
             receiver,
             sender,
 
-            root_props: todo!(),
+            _root_props: todo!(),
             _root_caller: todo!(),
 
             pending_messages: VecDeque::new(),
@@ -201,7 +200,7 @@ impl VirtualDom {
     ///
     ///
     pub fn get_scope<'a>(&'a self, id: &ScopeId) -> Option<&'a ScopeState> {
-        self.scopes.get_scope(&id)
+        self.scopes.get_scope(id)
     }
 
     /// Get an [`UnboundedSender`] handle to the channel used by the scheduler.
@@ -265,7 +264,7 @@ impl VirtualDom {
                             // right now, they're bump allocated so this shouldn't matter anyway - they're not going to move
                             let unpinned = unsafe { Pin::new_unchecked(task) };
 
-                            if let Poll::Ready(_) = unpinned.poll(cx) {
+                            if unpinned.poll(cx).is_ready() {
                                 all_pending = false
                             }
                         }
@@ -331,7 +330,7 @@ impl VirtualDom {
     ///
     /// loop {
     ///     let mut timeout = TimeoutFuture::from_ms(16);
-    ///     let deadline = move || timeout.now_or_never();
+    ///     let deadline = move || (&mut timeout).now_or_never();
     ///
     ///     let mutations = dom.run_with_deadline(deadline).await;
     ///
@@ -346,11 +345,8 @@ impl VirtualDom {
     /// applied the edits.
     ///
     /// Mutations are the only link between the RealDOM and the VirtualDOM.
-    pub fn work_with_deadline<'a>(
-        &'a mut self,
-        mut deadline: impl FnMut() -> bool,
-    ) -> Vec<Mutations<'a>> {
-        let mut committed_mutations = Vec::<Mutations>::new();
+    pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
+        let mut committed_mutations = vec![];
 
         while self.has_any_work() {
             while let Ok(Some(msg)) = self.receiver.try_next() {
@@ -375,7 +371,7 @@ impl VirtualDom {
                                 self.pending_messages.push_front(dirty_scope);
                             }
                         } else {
-                            log::debug!("User event without a targetted ElementId. Unsure how to proceed. {:?}", event);
+                            log::debug!("User event without a targetted ElementId. Not currently supported.\nUnsure how to proceed. {:?}", event);
                         }
                     }
                 }
@@ -434,7 +430,8 @@ impl VirtualDom {
 
                 committed_mutations.push(mutations);
             } else {
-                todo!("don't have a mechanism to pause work (yet)");
+                // leave the work in an incomplete state
+                log::debug!("don't have a mechanism to pause work (yet)");
                 return committed_mutations;
             }
         }
@@ -506,7 +503,7 @@ impl VirtualDom {
     pub fn hard_diff<'a>(&'a mut self, scope_id: &ScopeId) -> Option<Mutations<'a>> {
         log::debug!("hard diff {:?}", scope_id);
 
-        if self.run_scope(&scope_id) {
+        if self.run_scope(scope_id) {
             let mut diff_machine = DiffState::new(Mutations::new());
 
             diff_machine.force_diff = true;

@@ -45,7 +45,6 @@ impl ScopeArena {
         parent_scope: Option<*mut ScopeState>,
         height: u32,
         subtree: u32,
-        sender: UnboundedSender<SchedulerMsg>,
     ) -> ScopeId {
         if let Some(id) = self.free_scopes.pop() {
             // have already called drop on it - the slot is still chillin tho
@@ -59,7 +58,7 @@ impl ScopeArena {
             let vcomp = unsafe { std::mem::transmute(vcomp as *const VComponent) };
 
             let new_scope = ScopeState {
-                sender,
+                sender: self.sender.clone(),
                 parent_scope,
                 our_arena_idx: id,
                 height,
