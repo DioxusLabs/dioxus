@@ -170,3 +170,34 @@ do anything too arduous from onInput.
 
 For the rest, we defer to the rIC period and work down each queue from high to low.
 */
+
+
+
+Strategy:
+- When called, check for any UI events that might've been received since the last frame.
+- Dump all UI events into a "pending discrete" queue and a "pending continuous" queue.
+
+- If there are any pending discrete events, then elevate our priority level. If our priority level is already "high,"
+    then we need to finish the high priority work first. If the current work is "low" then analyze what scopes
+    will be invalidated by this new work. If this interferes with any in-flight medium or low work, then we need
+    to bump the other work out of the way, or choose to process it so we don't have any conflicts.
+    'static components have a leg up here since their work can be re-used among multiple scopes.
+    "High priority" is only for blocking! Should only be used on "clicks"
+
+- If there are no pending discrete events, then check for continuous events. These can be completely batched
+
+- we batch completely until we run into a discrete event
+- all continuous events are batched together
+- so D C C C C C would be two separate events - D and C. IE onclick and onscroll
+- D C C C C C C D C C C D would be D C D C D in 5 distinct phases.
+
+- !listener bubbling is not currently implemented properly and will need to be implemented somehow in the future
+    - we need to keep track of element parents to be able to traverse properly
+
+
+Open questions:
+- what if we get two clicks from the component during the same slice?
+    - should we batch?
+    - react says no - they are continuous
+    - but if we received both - then we don't need to diff, do we? run as many as we can and then finally diff?
+

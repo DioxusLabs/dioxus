@@ -24,7 +24,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
         contents,
     } = ims.into_iter().next().unwrap();
 
-    let scope = ScopeId(scope as usize);
+    let scope_id = ScopeId(scope as usize);
     let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
 
     let name = event_name_from_typ(&event);
@@ -32,9 +32,10 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
 
     UserEvent {
         name,
-        event,
-        scope,
+        priority: EventPriority::Low,
+        scope_id,
         mounted_dom_id,
+        event,
     }
 }
 
