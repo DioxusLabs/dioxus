@@ -48,8 +48,8 @@ pub(crate) mod innerlude {
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
-    pub type Element<'a> = Option<VNode<'a>>;
-    pub type FC<P> = for<'a> fn(Scope<'a, P>) -> Element<'a>;
+    pub type Element = Option<CachedNode>;
+    pub type FC<P> = for<'a> fn(Scope<'a, P>) -> CachedNode;
 }
 
 pub use crate::innerlude::{

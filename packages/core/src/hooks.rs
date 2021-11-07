@@ -95,11 +95,11 @@ pub fn use_suspense<'src, Out, Fut, Cb>(
     cx: Context<'src>,
     task_initializer: impl FnOnce() -> Fut,
     user_callback: Cb,
-) -> Element<'src>
+) -> Element
 where
     Fut: Future<Output = Out>,
     Out: 'static,
-    Cb: FnMut(&Out) -> Element<'src> + 'src,
+    Cb: FnMut(&Out) -> Element + 'src,
 {
     /*
     General strategy:

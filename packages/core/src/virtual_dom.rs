@@ -267,7 +267,8 @@ impl VirtualDom {
             let root_caller: Box<dyn Fn(&ScopeInner) -> Element> =
                 Box::new(move |scope: &ScopeInner| unsafe {
                     let props: &'_ P = &*(props_ptr as *const P);
-                    std::mem::transmute(root((scope, props)))
+                    Some(root((scope, props)))
+                    // std::mem::transmute()
                 });
 
             drop(root_props);
@@ -896,18 +897,19 @@ impl VirtualDom {
         // temporarily cast the vcomponent to the right lifetime
         let vcomp = scope.load_vcomp();
 
-        let render: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> = todo!();
+        let render: &dyn Fn(&ScopeInner) -> Element = todo!();
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
         if let Some(builder) = render(scope) {
-            let new_head = builder.into_vnode(NodeFactory {
-                bump: &scope.frames.wip_frame().bump,
-            });
+            todo!("attach the niode");
+            // let new_head = builder.into_vnode(NodeFactory {
+            //     bump: &scope.frames.wip_frame().bump,
+            // });
             log::debug!("Render is successful");
 
             // the user's component succeeded. We can safely cycle to the next frame
-            scope.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
-            scope.frames.cycle_frame();
+            // scope.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
+            // scope.frames.cycle_frame();
 
             true
         } else {

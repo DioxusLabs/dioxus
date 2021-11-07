@@ -14,6 +14,18 @@ use std::{
     fmt::{Arguments, Debug, Formatter},
 };
 
+/// A cached node is a "pointer" to a "rendered" node in a particular scope
+///
+/// It does not provide direct access to the node, so it doesn't carry any lifetime information with it
+///
+/// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
+/// is essentially a unique key to guarantee safe usage of the Node.
+pub struct CachedNode {
+    frame_id: u32,
+    gen_id: u32,
+    scope_id: ScopeId,
+}
+
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
 ///
 /// VNodes are designed to be lightweight and used with with a bump allocator. To create a VNode, you can use either of:
@@ -335,8 +347,8 @@ pub struct VComponent<'src> {
 }
 
 pub enum VCompCaller<'src> {
-    Borrowed(BumpBox<'src, dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> + 'src>),
-    Owned(Box<dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>>),
+    Borrowed(BumpBox<'src, dyn for<'b> Fn(&'b ScopeInner) -> Element + 'src>),
+    Owned(Box<dyn for<'b> Fn(&'b ScopeInner) -> Element>),
 }
 
 pub struct VSuspended<'a> {
@@ -344,7 +356,7 @@ pub struct VSuspended<'a> {
     pub dom_id: Cell<Option<ElementId>>,
 
     #[allow(clippy::type_complexity)]
-    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut() -> Element<'a> + 'a>>>,
+    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut() -> Element + 'a>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -481,7 +493,7 @@ impl<'a> NodeFactory<'a> {
 
     pub fn component<P, P1>(
         &self,
-        component: fn(Scope<'a, P>) -> Element<'a>,
+        component: fn(Scope<'a, P>) -> Element,
         props: P,
         key: Option<Arguments>,
     ) -> VNode<'a>

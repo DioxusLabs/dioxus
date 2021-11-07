@@ -99,7 +99,7 @@ impl<'a> Properties for FragmentProps<'a> {
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 ///
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>((cx, props): Scope<'a, FragmentProps<'a>>) -> Element<'a> {
+pub fn Fragment<'a>((cx, props): Scope<'a, FragmentProps<'a>>) -> Element {
     cx.render(Some(LazyNodes::new(|f| {
         f.fragment_from_iter(&props.children)
     })))
@@ -170,6 +170,6 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element<'a>) -> T::Builder {
+pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
     T::builder()
 }

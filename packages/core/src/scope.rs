@@ -173,7 +173,7 @@ impl ScopeInner {
             let sus: &'a VSuspended<'static> = unsafe { &*suspended };
             let sus: &'a VSuspended<'a> = unsafe { std::mem::transmute(sus) };
             let mut boxed = sus.callback.borrow_mut().take().unwrap();
-            let new_node: Element<'a> = boxed();
+            let new_node: Element = boxed();
         }
     }
 
@@ -366,13 +366,12 @@ impl ScopeInner {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(
-        &'src self,
-        lazy_nodes: Option<LazyNodes<'src, '_>>,
-    ) -> Option<VNode<'src>> {
-        let bump = &self.frames.wip_frame().bump;
-        let factory = NodeFactory { bump };
-        lazy_nodes.map(|f| f.call(factory))
+    pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<CachedNode> {
+        todo!()
+        // ) -> Option<VNode<'src>> {
+        // let bump = &self.frames.wip_frame().bump;
+        // let factory = NodeFactory { bump };
+        // lazy_nodes.map(|f| f.call(factory))
     }
 
     /// Push an effect to be ran after the component has been successfully mounted to the dom
