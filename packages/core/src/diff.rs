@@ -108,7 +108,7 @@ pub struct DiffState<'bump> {
     pub mutations: Mutations<'bump>,
     pub(crate) stack: DiffStack<'bump>,
     pub seen_scopes: FxHashSet<ScopeId>,
-    pub(crate) cfg: DiffCfg,
+    pub force_diff: bool,
 }
 
 impl<'bump> DiffState<'bump> {
@@ -117,68 +117,14 @@ impl<'bump> DiffState<'bump> {
             mutations,
             stack: DiffStack::new(),
             seen_scopes: Default::default(),
-            cfg: Default::default(),
+            force_diff: false,
         }
     }
 }
 
-pub(crate) struct DiffCfg {
-    pub force_diff: bool,
-}
-impl Default for DiffCfg {
-    fn default() -> Self {
-        Self {
-            force_diff: Default::default(),
-        }
-    }
-}
-
-/// a "saved" form of a diff machine
-/// in regular diff machine, the &'bump reference is a stack borrow, but the
-/// bump lifetimes are heap borrows.
-pub(crate) struct SavedDiffWork<'bump> {
-    pub mutations: Mutations<'bump>,
-    pub stack: DiffStack<'bump>,
-    pub seen_scopes: FxHashSet<ScopeId>,
-}
-
-impl<'a> SavedDiffWork<'a> {
-    pub unsafe fn extend(self: SavedDiffWork<'a>) -> SavedDiffWork<'static> {
-        std::mem::transmute(self)
-    }
-
-    pub unsafe fn promote<'b>(self) -> DiffState<'b> {
-        let extended: SavedDiffWork<'b> = std::mem::transmute(self);
-        DiffState {
-            cfg: DiffCfg::default(),
-            mutations: extended.mutations,
-            stack: extended.stack,
-            seen_scopes: extended.seen_scopes,
-        }
-    }
-}
-
-impl<'bump> VirtualDom {
-    // impl<'bump> DiffState<'bump> {
-    // pub(crate) fn new(mutations: Mutations<'bump>) -> Self {
-    //     Self {
-    //         mutations,
-    //         cfg: DiffCfg::default(),
-    //         stack: DiffStack::new(),
-    //         seen_scopes: FxHashSet::default(),
-    //     }
-    // }
-
-    // pub fn save(self) -> SavedDiffWork<'bump> {
-    //     SavedDiffWork {
-    //         mutations: state.mutations,
-    //         stack: state.stack,
-    //         seen_scopes: self.seen_scopes,
-    //     }
-    // }
-
-    pub fn diff_scope(&'bump self, state: &mut DiffState<'bump>, id: ScopeId) {
-        if let Some(component) = self.scopes.get(&id) {
+impl<'bump> ScopeArena {
+    pub fn diff_scope(&'bump self, state: &mut DiffState<'bump>, id: &ScopeId) {
+        if let Some(component) = self.get_scope(&id) {
             let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
             state.stack.push(DiffInstruction::Diff { new, old });
             self.work(state, || false);
@@ -382,7 +328,7 @@ impl<'bump> VirtualDom {
         state.stack.add_child_count(1);
 
         if let Some(cur_scope_id) = state.stack.current_scope() {
-            let scope = self.scopes.get(&cur_scope_id).unwrap();
+            let scope = self.get_scope(&cur_scope_id).unwrap();
 
             for listener in *listeners {
                 self.attach_listener_to_scope(state, listener, scope);
@@ -427,7 +373,7 @@ impl<'bump> VirtualDom {
         let parent_scope = self.get_scope(&parent_idx).unwrap();
 
         let new_idx: ScopeId = todo!();
-        // self.scopes
+        // self
         //     .new_with_key(fc_ptr, vcomp, parent_scope, height, subtree, sender);
 
         // .(|new_idx| {
@@ -445,7 +391,7 @@ impl<'bump> VirtualDom {
         vcomponent.associated_scope.set(Some(new_idx));
 
         if !vcomponent.can_memoize {
-            let cur_scope = self.scopes.get(&parent_idx).unwrap();
+            let cur_scope = self.get_scope(&parent_idx).unwrap();
             let extended = vcomponent as *const VComponent;
             let extended: *const VComponent<'static> = unsafe { std::mem::transmute(extended) };
 
@@ -456,7 +402,7 @@ impl<'bump> VirtualDom {
         //  add noderefs to current noderef list Noderefs
         //  add effects to current effect list Effects
 
-        let new_component = self.scopes.get(&new_idx).unwrap();
+        let new_component = self.get_scope(&new_idx).unwrap();
 
         log::debug!(
             "initializing component {:?} with height {:?}",
@@ -606,7 +552,7 @@ impl<'bump> VirtualDom {
         //
         // TODO: take a more efficient path than this
         if let Some(cur_scope_id) = state.stack.current_scope() {
-            let scope = self.scopes.get(&cur_scope_id).unwrap();
+            let scope = self.get_scope(&cur_scope_id).unwrap();
 
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
@@ -664,7 +610,7 @@ impl<'bump> VirtualDom {
             new.associated_scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
-            let scope = self.scopes.get(&scope_addr).unwrap();
+            let scope = self.get_scope(&scope_addr).unwrap();
             scope.update_vcomp(new);
 
             // React doesn't automatically memoize, but we do.
@@ -1312,7 +1258,7 @@ impl<'bump> VirtualDom {
 
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
-                    let scope = self.scopes.get(&scope_id).unwrap();
+                    let scope = self.get_scope(&scope_id).unwrap();
                     let root = scope.root_node();
                     self.remove_nodes(state, Some(root), gen_muts);
 
@@ -1366,7 +1312,7 @@ impl<'bump> VirtualDom {
         if let Some(scope) = state
             .stack
             .current_scope()
-            .and_then(|id| self.scopes.get(&id))
+            .and_then(|id| self.get_scope(&id))
         {
             // safety: this lifetime is managed by the logic on scope
             let extended: &VSuspended<'static> = unsafe { std::mem::transmute(suspended) };

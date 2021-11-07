@@ -21,18 +21,20 @@ pub(crate) struct ScopeArena {
     bump: Bump,
     scopes: Vec<*mut ScopeState>,
     free_scopes: Vec<ScopeId>,
+    pub(crate) sender: UnboundedSender<SchedulerMsg>,
 }
 
 impl ScopeArena {
-    pub fn new() -> Self {
+    pub fn new(sender: UnboundedSender<SchedulerMsg>) -> Self {
         Self {
             bump: Bump::new(),
             scopes: Vec::new(),
             free_scopes: Vec::new(),
+            sender,
         }
     }
 
-    pub fn get(&self, id: &ScopeId) -> Option<&ScopeState> {
+    pub fn get_scope(&self, id: &ScopeId) -> Option<&ScopeState> {
         unsafe { Some(&*self.scopes[id.0]) }
     }
 
@@ -84,6 +86,19 @@ impl ScopeArena {
             self.scopes.push(stable);
             id
         }
+    }
+
+    pub fn try_remove(&self, id: &ScopeId) -> Option<ScopeState> {
+        todo!()
+    }
+
+    pub fn reserve_node(&self, node: &VNode) -> ElementId {
+        todo!()
+        // self.node_reservations.insert(id);
+    }
+
+    pub fn collect_garbage(&self, id: ElementId) {
+        todo!()
     }
 
     // scopes never get dropepd

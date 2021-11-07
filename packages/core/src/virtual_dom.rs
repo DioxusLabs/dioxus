@@ -88,8 +88,6 @@ pub struct VirtualDom {
     pending_messages: VecDeque<SchedulerMsg>,
     dirty_scopes: IndexSet<ScopeId>,
 
-    saved_state: Option<SavedDiffWork<'static>>,
-
     in_progress: bool,
 }
 
@@ -164,7 +162,7 @@ impl VirtualDom {
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,
     ) -> Self {
-        let mut scopes = ScopeArena::new();
+        let mut scopes = ScopeArena::new(sender.clone());
 
         let base_scope = scopes.new_with_key(
             //
@@ -191,7 +189,6 @@ impl VirtualDom {
             pending_futures: Default::default(),
             dirty_scopes: Default::default(),
 
-            saved_state: None,
             in_progress: false,
         }
     }
@@ -216,7 +213,7 @@ impl VirtualDom {
     ///
     ///
     pub fn get_scope<'a>(&'a self, id: &ScopeId) -> Option<&'a ScopeState> {
-        self.scopes.get(&id)
+        self.scopes.get_scope(&id)
     }
 
     /// Get an [`UnboundedSender`] handle to the channel used by the scheduler.
@@ -246,62 +243,73 @@ impl VirtualDom {
     /// This lets us poll async tasks during idle periods without blocking the main thread.
     pub async fn wait_for_work(&mut self) {
         // todo: poll the events once even if there is work to do to prevent starvation
-        if self.has_any_work() {
-            return;
-        }
 
-        struct PollTasks<'a> {
-            pending_futures: &'a FxHashSet<ScopeId>,
-            scopes: &'a ScopeArena,
-        }
+        // if there's no futures in the virtualdom, just wait for a scheduler message and put it into the queue to be processed
+        if self.pending_futures.is_empty() {
+            self.pending_messages
+                .push_front(self.receiver.next().await.unwrap());
+        } else {
+            struct PollTasks<'a> {
+                pending_futures: &'a FxHashSet<ScopeId>,
+                scopes: &'a ScopeArena,
+            }
 
-        impl<'a> Future for PollTasks<'a> {
-            type Output = ();
+            impl<'a> Future for PollTasks<'a> {
+                type Output = ();
 
-            fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-                let mut all_pending = true;
+                fn poll(
+                    self: Pin<&mut Self>,
+                    cx: &mut std::task::Context<'_>,
+                ) -> Poll<Self::Output> {
+                    let mut all_pending = true;
 
-                // Poll every scope manually
-                for fut in self.pending_futures.iter() {
-                    let scope = self.scopes.get(fut).expect("Scope should never be moved");
+                    // Poll every scope manually
+                    for fut in self.pending_futures.iter() {
+                        let scope = self
+                            .scopes
+                            .get_scope(fut)
+                            .expect("Scope should never be moved");
 
-                    let mut items = scope.items.borrow_mut();
-                    for task in items.tasks.iter_mut() {
-                        let task = task.as_mut();
+                        let mut items = scope.items.borrow_mut();
+                        for task in items.tasks.iter_mut() {
+                            let task = task.as_mut();
 
-                        // todo: does this make sense?
-                        // I don't usually write futures by hand
-                        let unpinned = unsafe { Pin::new_unchecked(task) };
-                        match unpinned.poll(cx) {
-                            Poll::Ready(_) => {
-                                all_pending = false;
+                            // todo: does this make sense?
+                            // I don't usually write futures by hand
+                            // I think the futures neeed to be pinned using bumpbox or something
+                            // right now, they're bump allocated so this shouldn't matter anyway - they're not going to move
+                            let unpinned = unsafe { Pin::new_unchecked(task) };
+
+                            if let Poll::Ready(_) = unpinned.poll(cx) {
+                                all_pending = false
                             }
-                            Poll::Pending => {}
                         }
                     }
-                }
 
-                // Resolve the future if any task is ready
-                match all_pending {
-                    true => Poll::Pending,
-                    false => Poll::Ready(()),
+                    // Resolve the future if any singular task is ready
+                    match all_pending {
+                        true => Poll::Pending,
+                        false => Poll::Ready(()),
+                    }
                 }
             }
-        }
 
-        let scheduler_fut = self.receiver.next();
-        let tasks_fut = PollTasks {
-            pending_futures: &self.pending_futures,
-            scopes: &self.scopes,
-        };
+            // Poll both the futures and the scheduler message queue simulataneously
+            use futures_util::future::{select, Either};
 
-        use futures_util::future::{select, Either};
-        match select(tasks_fut, scheduler_fut).await {
-            // Tasks themselves don't generate work
-            Either::Left((_, _)) => {}
+            let scheduler_fut = self.receiver.next();
+            let tasks_fut = PollTasks {
+                pending_futures: &self.pending_futures,
+                scopes: &self.scopes,
+            };
 
-            // Save these messages in FIFO to be processed later
-            Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
+            match select(tasks_fut, scheduler_fut).await {
+                // Futures don't generate work
+                Either::Left((_, _)) => {}
+
+                // Save these messages in FIFO to be processed later
+                Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
+            }
         }
     }
 
@@ -333,10 +341,15 @@ impl VirtualDom {
     ///
     /// ```no_run
     /// static App: FC<()> = |(cx, props)|rsx!(cx, div {"hello"} );
+    ///
     /// let mut dom = VirtualDom::new(App);
+    ///
     /// loop {
-    ///     let deadline = TimeoutFuture::from_ms(16);
+    ///     let mut timeout = TimeoutFuture::from_ms(16);
+    ///     let deadline = move || timeout.now_or_never();
+    ///
     ///     let mutations = dom.run_with_deadline(deadline).await;
+    ///
     ///     apply_mutations(mutations);
     /// }
     /// ```
@@ -352,124 +365,91 @@ impl VirtualDom {
         &'a mut self,
         mut deadline: impl FnMut() -> bool,
     ) -> Vec<Mutations<'a>> {
-        let mut committed_mutations = Vec::<Mutations<'static>>::new();
+        let mut committed_mutations = Vec::<Mutations>::new();
 
         while self.has_any_work() {
             while let Ok(Some(msg)) = self.receiver.try_next() {
                 self.pending_messages.push_front(msg);
             }
 
-            for msg in self.pending_messages.drain(..) {
+            while let Some(msg) = self.pending_messages.pop_back() {
                 match msg {
                     SchedulerMsg::Immediate(id) => {
-                        // it's dirty
                         self.dirty_scopes.insert(id);
                     }
                     SchedulerMsg::UiEvent(event) => {
-                        // there's an event
-                        let scope = self.scopes.get(&event.scope_id).unwrap();
                         if let Some(element) = event.mounted_dom_id {
                             log::info!("Calling listener {:?}, {:?}", event.scope_id, element);
+
+                            let scope = self.scopes.get_scope(&event.scope_id).unwrap();
 
                             // TODO: bubble properly here
                             scope.call_listener(event, element);
 
                             while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
-                                match dirty_scope {
-                                    SchedulerMsg::Immediate(im) => {
-                                        self.dirty_scopes.insert(im);
-                                    }
-                                    SchedulerMsg::UiEvent(e) => self.ui_events.push_back(e),
-                                }
+                                self.pending_messages.push_front(dirty_scope);
                             }
+                        } else {
+                            log::debug!("User event without a targetted ElementId. Unsure how to proceed. {:?}", event);
                         }
                     }
                 }
             }
 
-            let work_complete = {
-                // Work through the current subtree, and commit the results when it finishes
-                // When the deadline expires, give back the work
-                let saved_state = unsafe { self.load_work() };
+            let mut diff_state: DiffState = DiffState::new(Mutations::new());
 
-                // We have to split away some parts of ourself - current lane is borrowed mutably
-                let mut machine = unsafe { saved_state.promote() };
+            let mut ran_scopes = FxHashSet::default();
 
-                let mut ran_scopes = FxHashSet::default();
+            // todo: the 2021 version of rust will let us not have to force the borrow
+            let scopes = &self.scopes;
 
-                if machine.stack.is_empty() {
-                    todo!("order scopes");
-                    // self.dirty_scopes.retain(|id| self.get_scope(id).is_some());
-                    // self.dirty_scopes.sort_by(|a, b| {
-                    //     let h1 = self.get_scope(a).unwrap().height;
-                    //     let h2 = self.get_scope(b).unwrap().height;
-                    //     h1.cmp(&h2).reverse()
-                    // });
+            // Sort the scopes by height. Theoretically, we'll de-duplicate scopes by height
+            self.dirty_scopes
+                .retain(|id| scopes.get_scope(id).is_some());
 
-                    if let Some(scopeid) = self.dirty_scopes.pop() {
-                        log::info!("handling dirty scope {:?}", scopeid);
-                        if !ran_scopes.contains(&scopeid) {
-                            ran_scopes.insert(scopeid);
-                            log::debug!("about to run scope {:?}", scopeid);
+            self.dirty_scopes.sort_by(|a, b| {
+                let h1 = scopes.get_scope(a).unwrap().height;
+                let h2 = scopes.get_scope(b).unwrap().height;
+                h1.cmp(&h2).reverse()
+            });
 
-                            // if let Some(component) = self.get_scope_mut(&scopeid) {
-                            if self.run_scope(&scopeid) {
-                                todo!("diff the scope")
-                                // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                                // // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                                // machine.stack.scope_stack.push(scopeid);
-                                // machine.stack.push(DiffInstruction::Diff { new, old });
-                            }
-                            // }
-                        }
+            if let Some(scopeid) = self.dirty_scopes.pop() {
+                log::info!("handling dirty scope {:?}", scopeid);
+
+                if !ran_scopes.contains(&scopeid) {
+                    ran_scopes.insert(scopeid);
+
+                    log::debug!("about to run scope {:?}", scopeid);
+
+                    if self.run_scope(&scopeid) {
+                        let scope = self.scopes.get_scope(&scopeid).unwrap();
+                        let (old, new) = (scope.frames.wip_head(), scope.frames.fin_head());
+                        diff_state.stack.scope_stack.push(scopeid);
+                        diff_state.stack.push(DiffInstruction::Diff { new, old });
                     }
                 }
+            }
 
-                let work_completed: bool = todo!();
-                // let work_completed = machine.work(deadline_reached);
+            let work_completed = self.scopes.work(&mut diff_state, &mut deadline);
 
-                // log::debug!("raw edits {:?}", machine.mutations.edits);
+            if work_completed {
+                let DiffState {
+                    mutations,
+                    seen_scopes,
+                    stack,
+                    ..
+                } = diff_state;
 
-                let mut machine: DiffState<'static> = unsafe { std::mem::transmute(machine) };
-                // let mut saved = machine.save();
-
-                if work_completed {
-                    for node in machine.seen_scopes.drain() {
-                        // self.dirty_scopes.clear();
-                        // self.ui_events.clear();
-                        self.dirty_scopes.remove(&node);
-                        // self.dirty_scopes.remove(&node);
-                    }
-
-                    let mut new_mutations = Mutations::new();
-
-                    for edit in machine.mutations.edits.drain(..) {
-                        new_mutations.edits.push(edit);
-                    }
-
-                    // for edit in saved.edits.drain(..) {
-                    //     new_mutations.edits.push(edit);
-                    // }
-
-                    // std::mem::swap(&mut new_mutations, &mut saved.mutations);
-
-                    mutations.push(new_mutations);
-
-                    // log::debug!("saved edits {:?}", mutations);
-
-                    todo!();
-                    // let mut saved = machine.save();
-                    // self.save_work(saved);
-                    true
-
-                    // self.save_work(saved);
-                    // false
-                } else {
-                    false
+                for scope in seen_scopes {
+                    self.dirty_scopes.remove(&scope);
                 }
-            };
 
-            if !work_complete {
+                // I think the stack should be empty at the end of diffing?
+                debug_assert_eq!(stack.scope_stack.len(), 0);
+
+                committed_mutations.push(mutations);
+            } else {
+                todo!("don't have a mechanism to pause work (yet)");
                 return committed_mutations;
             }
         }
@@ -495,7 +475,13 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
-        self.hard_diff(&self.base_scope)
+        // todo: I think we need to append a node or something
+        //     diff_machine
+        //         .stack
+        //         .create_node(cur_component.frames.fin_head(), MountType::Append);
+
+        let scope = self.base_scope;
+        self.hard_diff(&scope).unwrap()
     }
 
     /// Compute a manual diff of the VirtualDOM between states.
@@ -532,59 +518,26 @@ impl VirtualDom {
     ///
     /// let edits = dom.diff();
     /// ```
-    pub fn hard_diff<'a>(&'a mut self, base_scope: &ScopeId) -> Mutations<'a> {
-        // // TODO: drain any in-flight work
-        // // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        // if self.run_scope(&base_scope) {
-        //     let cur_component = self
-        //         .get_scope_mut(&base_scope)
-        //         .expect("The base scope should never be moved");
+    pub fn hard_diff<'a>(&'a mut self, scope_id: &ScopeId) -> Option<Mutations<'a>> {
+        log::debug!("hard diff {:?}", scope_id);
 
-        //     log::debug!("rebuild {:?}", base_scope);
-
-        //     let mut diff_machine = DiffState::new(Mutations::new());
-        //     diff_machine
-        //         .stack
-        //         .create_node(cur_component.frames.fin_head(), MountType::Append);
-
-        //     diff_machine.stack.scope_stack.push(base_scope);
-
-        //     todo!()
-        //     // self.work(&mut diff_machine, || false);
-        //     // diff_machine.work(|| false);
-        // } else {
-        //     // todo: should this be a hard error?
-        //     log::warn!(
-        //         "Component failed to run successfully during rebuild.
-        //         This does not result in a failed rebuild, but indicates a logic failure within your app."
-        //     );
-        // }
-
-        // todo!()
-        // // unsafe { std::mem::transmute(diff_machine.mutations) }
-
-        let cur_component = self
-            .scopes
-            .get(&base_scope)
-            .expect("The base scope should never be moved");
-
-        log::debug!("hard diff {:?}", base_scope);
-
-        if self.run_scope(&base_scope) {
+        if self.run_scope(&scope_id) {
             let mut diff_machine = DiffState::new(Mutations::new());
-            diff_machine.cfg.force_diff = true;
-            self.diff_scope(&mut diff_machine, base_scope);
-            // diff_machine.diff_scope(base_scope);
-            diff_machine.mutations
+
+            diff_machine.force_diff = true;
+
+            self.scopes.diff_scope(&mut diff_machine, scope_id);
+
+            Some(diff_machine.mutations)
         } else {
-            Mutations::new()
+            None
         }
     }
 
-    pub fn run_scope(&mut self, id: &ScopeId) -> bool {
+    pub fn run_scope(&self, id: &ScopeId) -> bool {
         let scope = self
             .scopes
-            .get(id)
+            .get_scope(id)
             .expect("The base scope should never be moved");
 
         // Cycle to the next frame and then reset it
