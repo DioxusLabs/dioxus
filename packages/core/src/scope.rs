@@ -47,6 +47,8 @@ pub struct ScopeState {
     // safety:
     //
     // pointers to scopes are *always* valid since they are bump allocated and never freed until this scope is also freed
+    // this is just a bit of a hack to not need an Rc to the ScopeArena.
+    // todo: replace this will ScopeId and provide a connection to scope arena directly
     pub(crate) parent_scope: Option<*mut ScopeState>,
 
     pub(crate) our_arena_idx: ScopeId,
@@ -57,10 +59,13 @@ pub struct ScopeState {
 
     pub(crate) is_subtree_root: Cell<bool>,
 
-    // Nodes
-    pub(crate) frames: ActiveFrame,
+    // The double-buffering situation that we will use
+    pub(crate) frames: [Bump; 2],
 
     pub(crate) vcomp: *const VComponent<'static>,
+
+    pub(crate) old_root: RefCell<Option<NodeLink>>,
+    pub(crate) new_root: RefCell<Option<NodeLink>>,
 
     /*
     we care about:
@@ -81,136 +86,20 @@ pub struct ScopeState {
 
 pub struct SelfReferentialItems<'a> {
     // nodes stored by "cx.render"
-    pub(crate) cached_nodes: Vec<VNode<'a>>,
+    pub(crate) cached_nodes_old: Vec<VNode<'a>>,
+    pub(crate) cached_nodes_new: Vec<VNode<'a>>,
 
-    pub(crate) generation: u32,
+    pub(crate) generation: Cell<u32>,
 
-    pub(crate) listeners: Vec<*const Listener<'a>>,
-    pub(crate) borrowed_props: Vec<*const VComponent<'a>>,
-    pub(crate) suspended_nodes: FxHashMap<u64, *const VSuspended<'a>>,
+    pub(crate) listeners: Vec<&'a Listener<'a>>,
+    pub(crate) borrowed_props: Vec<&'a VComponent<'a>>,
+    pub(crate) suspended_nodes: FxHashMap<u64, &'a VSuspended<'a>>,
     pub(crate) tasks: Vec<BumpBox<'a, dyn Future<Output = ()>>>,
     pub(crate) pending_effects: Vec<BumpBox<'a, dyn FnMut()>>,
 }
 
-pub struct ScopeVcomp {
-    // important things
-}
-
+// Public methods exposed to libraries and components
 impl ScopeState {
-    /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
-    /// causing UB in our tree.
-    ///
-    /// This works by cleaning up our references from the bottom of the tree to the top. The directed graph of components
-    /// essentially forms a dependency tree that we can traverse from the bottom to the top. As we traverse, we remove
-    /// any possible references to the data in the hook list.
-    ///
-    /// References to hook data can only be stored in listeners and component props. During diffing, we make sure to log
-    /// all listeners and borrowed props so we can clear them here.
-    ///
-    /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
-    /// be dropped.
-    pub(crate) fn ensure_drop_safety(&self) {
-        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
-        // run the hooks (which hold an &mut Reference)
-        // right now, we don't drop
-        self.items
-            .borrow_mut()
-            .borrowed_props
-            .drain(..)
-            .map(|li| unsafe { &*li })
-            .for_each(|comp| {
-                // First drop the component's undropped references
-                let scope_id = comp
-                    .associated_scope
-                    .get()
-                    .expect("VComponents should be associated with a valid Scope");
-
-                todo!("move this onto virtualdom");
-                // let scope = unsafe { &mut *scope_id };
-
-                // scope.ensure_drop_safety();
-
-                todo!("drop the component's props");
-                // let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
-                // drop_props();
-            });
-
-        // Now that all the references are gone, we can safely drop our own references in our listeners.
-        self.items
-            .borrow_mut()
-            .listeners
-            .drain(..)
-            .map(|li| unsafe { &*li })
-            .for_each(|listener| drop(listener.callback.borrow_mut().take()));
-    }
-
-    /// A safe wrapper around calling listeners
-    pub(crate) fn call_listener(&self, event: UserEvent, element: ElementId) {
-        let listners = &mut self.items.borrow_mut().listeners;
-
-        let raw_listener = listners.iter().find(|lis| {
-            let search = unsafe { &***lis };
-            if search.event == event.name {
-                let search_id = search.mounted_node.get();
-                search_id.map(|f| f == element).unwrap_or(false)
-            } else {
-                false
-            }
-        });
-
-        if let Some(raw_listener) = raw_listener {
-            let listener = unsafe { &**raw_listener };
-            let mut cb = listener.callback.borrow_mut();
-            if let Some(cb) = cb.as_mut() {
-                (cb)(event.event);
-            }
-        } else {
-            log::warn!("An event was triggered but there was no listener to handle it");
-        }
-    }
-
-    // General strategy here is to load up the appropriate suspended task and then run it.
-    // Suspended nodes cannot be called repeatedly.
-    pub(crate) fn call_suspended_node<'a>(&'a mut self, task_id: u64) {
-        let mut nodes = &mut self.items.get_mut().suspended_nodes;
-
-        if let Some(suspended) = nodes.remove(&task_id) {
-            let sus: &'a VSuspended<'static> = unsafe { &*suspended };
-            let sus: &'a VSuspended<'a> = unsafe { std::mem::transmute(sus) };
-            let mut boxed = sus.callback.borrow_mut().take().unwrap();
-            let new_node: Element = boxed();
-        }
-    }
-
-    // run the list of effects
-    pub(crate) fn run_effects(&mut self) {
-        // pub(crate) fn run_effects(&mut self, pool: &ResourcePool) {
-        for mut effect in self.items.get_mut().pending_effects.drain(..) {
-            effect();
-        }
-    }
-
-    pub(crate) fn new_subtree(&self) -> Option<u32> {
-        todo!()
-        // if self.is_subtree_root.get() {
-        //     None
-        // } else {
-        //     let cur = self.shared.cur_subtree.get();
-        //     self.shared.cur_subtree.set(cur + 1);
-        //     Some(cur)
-        // }
-    }
-
-    pub(crate) fn update_vcomp(&self, vcomp: &VComponent) {
-        let f: *const _ = vcomp;
-        todo!()
-        // self.vcomp = unsafe { std::mem::transmute(f) };
-    }
-
-    pub(crate) fn load_vcomp<'a>(&'a mut self) -> &'a VComponent<'a> {
-        unsafe { std::mem::transmute(&*self.vcomp) }
-    }
-
     /// Get the root VNode for this Scope.
     ///
     /// This VNode is the "entrypoint" VNode. If the component renders multiple nodes, then this VNode will be a fragment.
@@ -227,7 +116,7 @@ impl ScopeState {
     /// }
     /// ```
     pub fn root_node(&self) -> &VNode {
-        self.frames.fin_head()
+        self.fin_head()
     }
 
     /// Get the subtree ID that this scope belongs to.
@@ -316,7 +205,7 @@ impl ScopeState {
         let chan = self.sender.clone();
         let id = self.scope_id();
         Rc::new(move || {
-            chan.unbounded_send(SchedulerMsg::Immediate(id));
+            let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
 
@@ -328,7 +217,7 @@ impl ScopeState {
     pub fn schedule_update_any(&self) -> Rc<dyn Fn(ScopeId)> {
         let chan = self.sender.clone();
         Rc::new(move |id| {
-            chan.unbounded_send(SchedulerMsg::Immediate(id));
+            let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
 
@@ -343,17 +232,14 @@ impl ScopeState {
     ///
     /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
     pub fn needs_update_any(&self, id: ScopeId) {
-        self.sender
-            .unbounded_send(SchedulerMsg::Immediate(id))
-            .unwrap();
+        let _ = self.sender.unbounded_send(SchedulerMsg::Immediate(id));
     }
 
     /// Get the [`ScopeId`] of a mounted component.
     ///
     /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
     pub fn bump(&self) -> &Bump {
-        let bump = &self.frames.wip_frame().bump;
-        bump
+        &self.wip_frame()
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -363,20 +249,28 @@ impl ScopeState {
     /// ## Example
     ///
     /// ```ignore
-    /// fn Component(cx: Context<()>) -> VNode {
+    /// fn Component(cx: Scope, props: &Props) -> Element {
     ///     // Lazy assemble the VNode tree
-    ///     let lazy_tree = html! {<div> "Hello World" </div>};
+    ///     let lazy_nodes = rsx!("hello world");
     ///
     ///     // Actually build the tree and allocate it
     ///     cx.render(lazy_tree)
     /// }
     ///```
     pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
-        todo!()
-        // ) -> Option<VNode<'src>> {
-        // let bump = &self.frames.wip_frame().bump;
-        // let factory = NodeFactory { bump };
-        // lazy_nodes.map(|f| f.call(factory))
+        let bump = &self.wip_frame();
+        let factory = NodeFactory { bump };
+        let node = lazy_nodes.map(|f| f.call(factory))?;
+
+        self.items
+            .borrow_mut()
+            .cached_nodes_old
+            .push(unsafe { std::mem::transmute(node) });
+
+        Some(NodeLink {
+            gen_id: self.items.borrow().generation.get(),
+            scope_id: self.our_arena_idx,
+        })
     }
 
     /// Push an effect to be ran after the component has been successfully mounted to the dom
@@ -544,3 +438,103 @@ Consult the `rules of hooks` to understand how to use hooks properly.
 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
 Functions prefixed with "use" should never be called conditionally.
 "###;
+
+// Important internal methods
+impl ScopeState {
+    /// Give out our self-referential item with our own borrowed lifetime
+    pub(crate) fn fin_head<'b>(&'b self) -> &'b VNode<'b> {
+        todo!()
+        // let cur_head = &self.finished_frame().head_node;
+        // unsafe { std::mem::transmute::<&VNode<'static>, &VNode<'b>>(cur_head) }
+    }
+
+    /// Give out our self-referential item with our own borrowed lifetime
+    pub(crate) fn wip_head<'b>(&'b self) -> &'b VNode<'b> {
+        todo!()
+        // let cur_head = &self.wip_frame().head_node;
+        // unsafe { std::mem::transmute::<&VNode<'static>, &VNode<'b>>(cur_head) }
+    }
+
+    /// The "work in progress frame" represents the frame that is currently being worked on.
+    pub(crate) fn wip_frame(&self) -> &Bump {
+        todo!()
+        // match self.cur_generation.get() & 1 == 0 {
+        //     true => &self.frames[0],
+        //     false => &self.frames[1],
+        // }
+    }
+
+    pub unsafe fn reset_wip_frame(&self) {
+        // todo: unsafecell or something
+        let bump = self.wip_frame() as *const _ as *mut Bump;
+        let g = &mut *bump;
+        g.reset();
+
+        // self.wip_frame_mut().bump.reset()
+    }
+
+    /// A safe wrapper around calling listeners
+    pub(crate) fn call_listener(&self, event: UserEvent, element: ElementId) {
+        let listners = &mut self.items.borrow_mut().listeners;
+
+        let listener = listners.iter().find(|lis| {
+            let search = lis;
+            if search.event == event.name {
+                let search_id = search.mounted_node.get();
+                search_id.map(|f| f == element).unwrap_or(false)
+            } else {
+                false
+            }
+        });
+
+        if let Some(listener) = listener {
+            let mut cb = listener.callback.borrow_mut();
+            if let Some(cb) = cb.as_mut() {
+                (cb)(event.event);
+            }
+        } else {
+            log::warn!("An event was triggered but there was no listener to handle it");
+        }
+    }
+
+    // General strategy here is to load up the appropriate suspended task and then run it.
+    // Suspended nodes cannot be called repeatedly.
+    pub(crate) fn call_suspended_node<'a>(&'a mut self, task_id: u64) {
+        let mut nodes = &mut self.items.get_mut().suspended_nodes;
+
+        if let Some(suspended) = nodes.remove(&task_id) {
+            let sus: &'a VSuspended<'static> = unsafe { &*suspended };
+            let sus: &'a VSuspended<'a> = unsafe { std::mem::transmute(sus) };
+            let mut boxed = sus.callback.borrow_mut().take().unwrap();
+            let new_node: Element = boxed();
+        }
+    }
+
+    // run the list of effects
+    pub(crate) fn run_effects(&mut self) {
+        for mut effect in self.items.get_mut().pending_effects.drain(..) {
+            effect();
+        }
+    }
+
+    pub(crate) fn new_subtree(&self) -> Option<u32> {
+        todo!()
+        // if self.is_subtree_root.get() {
+        //     None
+        // } else {
+        //     let cur = self.shared.cur_subtree.get();
+        //     self.shared.cur_subtree.set(cur + 1);
+        //     Some(cur)
+        // }
+    }
+
+    pub(crate) fn update_vcomp(&self, vcomp: &VComponent) {
+        let f: *const _ = vcomp;
+        todo!()
+        // self.vcomp = unsafe { std::mem::transmute(f) };
+    }
+
+    pub(crate) fn load_vcomp<'a>(&'a mut self) -> &'a VComponent<'a> {
+        unsafe { std::mem::transmute(&*self.vcomp) }
+    }
+}

@@ -12,7 +12,6 @@ Navigating this crate:
 
 Some utilities
 */
-pub(crate) mod bumpframe;
 pub(crate) mod component;
 pub(crate) mod diff;
 pub(crate) mod diff_stack;
@@ -31,7 +30,6 @@ pub(crate) mod virtual_dom;
 pub mod debug_dom;
 
 pub(crate) mod innerlude {
-    pub(crate) use crate::bumpframe::*;
     pub use crate::component::*;
     pub(crate) use crate::diff::*;
     pub use crate::diff_stack::*;

@@ -21,9 +21,8 @@ use std::{
 /// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
 /// is essentially a unique key to guarantee safe usage of the Node.
 pub struct NodeLink {
-    frame_id: u32,
-    gen_id: u32,
-    scope_id: ScopeId,
+    pub(crate) gen_id: u32,
+    pub(crate) scope_id: ScopeId,
 }
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -197,7 +196,6 @@ impl<'src> VNode<'src> {
                 key: f.key,
             }),
             VNode::Linked(c) => VNode::Linked(NodeLink {
-                frame_id: c.frame_id,
                 gen_id: c.gen_id,
                 scope_id: c.scope_id,
             }),
@@ -222,8 +220,8 @@ impl Debug for VNode<'_> {
             VNode::Component(comp) => write!(s, "VComponent {{ fc: {:?}}}", comp.user_fc),
             VNode::Linked(c) => write!(
                 s,
-                "VCached {{ frame_id: {}, gen_id: {}, scope_id: {:?} }}",
-                c.frame_id, c.gen_id, c.scope_id
+                "VCached {{ gen_id: {}, scope_id: {:?} }}",
+                c.gen_id, c.scope_id
             ),
         }
     }

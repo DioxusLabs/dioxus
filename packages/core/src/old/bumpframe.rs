@@ -3,20 +3,10 @@ use bumpalo::Bump;
 use std::cell::Cell;
 
 pub(crate) struct ActiveFrame {
-    // We use a "generation" for users of contents in the bump frames to ensure their data isn't broken
-    pub generation: Cell<usize>,
+    pub cur_generation: Cell<usize>,
 
     // The double-buffering situation that we will use
     pub frames: [BumpFrame; 2],
-}
-
-pub(crate) struct BumpFrame {
-    pub bump: Bump,
-    pub(crate) head_node: VNode<'static>,
-
-    #[cfg(test)]
-    // used internally for debugging
-    _name: &'static str,
 }
 
 impl ActiveFrame {
@@ -25,45 +15,39 @@ impl ActiveFrame {
         let b2 = Bump::new();
 
         let frame_a = BumpFrame {
-            head_node: VNode::Fragment(VFragment {
-                key: None,
-                children: &[],
-            }),
             bump: b1,
-
-            #[cfg(test)]
-            _name: "wip",
+            generation: 0.into(),
         };
         let frame_b = BumpFrame {
-            head_node: VNode::Fragment(VFragment {
-                key: None,
-                children: &[],
-            }),
             bump: b2,
-
-            #[cfg(test)]
-            _name: "fin",
-        };
-        Self {
             generation: 0.into(),
+        };
+
+        Self {
             frames: [frame_a, frame_b],
+            cur_generation: 0.into(),
         }
     }
 
-    pub unsafe fn reset_wip_frame(&mut self) {
-        self.wip_frame_mut().bump.reset()
+    pub unsafe fn reset_wip_frame(&self) {
+        // todo: unsafecell or something
+        let bump = self.wip_frame() as *const _ as *mut BumpFrame;
+        let g = &mut *bump;
+        g.bump.reset();
+
+        // self.wip_frame_mut().bump.reset()
     }
 
     /// The "work in progress frame" represents the frame that is currently being worked on.
     pub fn wip_frame(&self) -> &BumpFrame {
-        match self.generation.get() & 1 == 0 {
+        match self.cur_generation.get() & 1 == 0 {
             true => &self.frames[0],
             false => &self.frames[1],
         }
     }
 
     pub fn wip_frame_mut(&mut self) -> &mut BumpFrame {
-        match self.generation.get() & 1 == 0 {
+        match self.cur_generation.get() & 1 == 0 {
             true => &mut self.frames[0],
             false => &mut self.frames[1],
         }
@@ -71,26 +55,26 @@ impl ActiveFrame {
 
     /// The finished frame represents the frame that has been "finished" and cannot be modified again
     pub fn finished_frame(&self) -> &BumpFrame {
-        match self.generation.get() & 1 == 1 {
+        match self.cur_generation.get() & 1 == 1 {
             true => &self.frames[0],
             false => &self.frames[1],
         }
     }
 
-    /// Give out our self-referential item with our own borrowed lifetime
-    pub fn fin_head<'b>(&'b self) -> &'b VNode<'b> {
-        let cur_head = &self.finished_frame().head_node;
-        unsafe { std::mem::transmute::<&VNode<'static>, &VNode<'b>>(cur_head) }
-    }
+    // /// Give out our self-referential item with our own borrowed lifetime
+    // pub fn fin_head<'b>(&'b self) -> &'b VNode<'b> {
+    //     let cur_head = &self.finished_frame().head_node;
+    //     unsafe { std::mem::transmute::<&VNode<'static>, &VNode<'b>>(cur_head) }
+    // }
 
-    /// Give out our self-referential item with our own borrowed lifetime
-    pub fn wip_head<'b>(&'b self) -> &'b VNode<'b> {
-        let cur_head = &self.wip_frame().head_node;
-        unsafe { std::mem::transmute::<&VNode<'static>, &VNode<'b>>(cur_head) }
-    }
+    // /// Give out our self-referential item with our own borrowed lifetime
+    // pub fn wip_head<'b>(&'b self) -> &'b VNode<'b> {
+    //     let cur_head = &self.wip_frame().head_node;
+    //     unsafe { std::mem::transmute::<&VNode<'static>, &VNode<'b>>(cur_head) }
+    // }
 
     pub fn cycle_frame(&mut self) {
-        self.generation.set(self.generation.get() + 1);
+        self.cur_generation.set(self.cur_generation.get() + 1);
     }
 }
 
@@ -117,6 +101,6 @@ mod tests {
             assert_eq!(fin._name, "wip");
             frames.cycle_frame();
         }
-        assert_eq!(frames.generation.get(), 10);
+        assert_eq!(frames.cur_generation.get(), 10);
     }
 }

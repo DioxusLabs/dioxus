@@ -65,7 +65,7 @@ impl ScopeArena {
                 height,
                 subtree: Cell::new(subtree),
                 is_subtree_root: Cell::new(false),
-                frames: ActiveFrame::new(),
+                frames: [Bump::default(), Bump::default()],
                 vcomp,
 
                 hooks: Default::default(),
@@ -77,9 +77,12 @@ impl ScopeArena {
                     suspended_nodes: Default::default(),
                     tasks: Default::default(),
                     pending_effects: Default::default(),
-                    cached_nodes: Default::default(),
+                    cached_nodes_old: Default::default(),
                     generation: Default::default(),
+                    cached_nodes_new: todo!(),
                 }),
+                old_root: todo!(),
+                new_root: todo!(),
             };
 
             let stable = self.bump.alloc(new_scope);
@@ -101,5 +104,55 @@ impl ScopeArena {
         todo!()
     }
 
-    // scopes never get dropepd
+    // These methods would normally exist on `scope` but they need access to *all* of the scopes
+
+    /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
+    /// causing UB in our tree.
+    ///
+    /// This works by cleaning up our references from the bottom of the tree to the top. The directed graph of components
+    /// essentially forms a dependency tree that we can traverse from the bottom to the top. As we traverse, we remove
+    /// any possible references to the data in the hook list.
+    ///
+    /// References to hook data can only be stored in listeners and component props. During diffing, we make sure to log
+    /// all listeners and borrowed props so we can clear them here.
+    ///
+    /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
+    /// be dropped.
+    pub(crate) fn ensure_drop_safety(&self, scope_id: &ScopeId) {
+        let scope = self.get_scope(scope_id).unwrap();
+
+        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+        // run the hooks (which hold an &mut Reference)
+        // right now, we don't drop
+        scope
+            .items
+            .borrow_mut()
+            .borrowed_props
+            .drain(..)
+            .for_each(|comp| {
+                // First drop the component's undropped references
+                let scope_id = comp
+                    .associated_scope
+                    .get()
+                    .expect("VComponents should be associated with a valid Scope");
+
+                todo!("move this onto virtualdom");
+                // let scope = unsafe { &mut *scope_id };
+
+                // scope.ensure_drop_safety();
+
+                todo!("drop the component's props");
+                // let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
+                // drop_props();
+            });
+
+        // Now that all the references are gone, we can safely drop our own references in our listeners.
+        scope
+            .items
+            .borrow_mut()
+            .listeners
+            .drain(..)
+            .map(|li| unsafe { &*li })
+            .for_each(|listener| drop(listener.callback.borrow_mut().take()));
+    }
 }

@@ -125,7 +125,7 @@ impl<'bump> DiffState<'bump> {
 impl<'bump> ScopeArena {
     pub fn diff_scope(&'bump self, state: &mut DiffState<'bump>, id: &ScopeId) {
         if let Some(component) = self.get_scope(&id) {
-            let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+            let (old, new) = (component.wip_head(), component.fin_head());
             state.stack.push(DiffInstruction::Diff { new, old });
             self.work(state, || false);
         }
@@ -392,9 +392,7 @@ impl<'bump> ScopeArena {
 
         if !vcomponent.can_memoize {
             let cur_scope = self.get_scope(&parent_idx).unwrap();
-            let extended = vcomponent as *const VComponent;
-            let extended: *const VComponent<'static> = unsafe { std::mem::transmute(extended) };
-
+            let extended = unsafe { std::mem::transmute(vcomponent) };
             cur_scope.items.get_mut().borrowed_props.push(extended);
         }
 
@@ -1296,12 +1294,8 @@ impl<'bump> ScopeArena {
         listener: &'bump Listener<'bump>,
         scope: &ScopeState,
     ) {
-        let long_listener: &'bump Listener<'static> = unsafe { std::mem::transmute(listener) };
-        scope
-            .items
-            .borrow_mut()
-            .listeners
-            .push(long_listener as *const _)
+        let long_listener = unsafe { std::mem::transmute(listener) };
+        scope.items.borrow_mut().listeners.push(long_listener)
     }
 
     fn attach_suspended_node_to_scope(
@@ -1315,12 +1309,12 @@ impl<'bump> ScopeArena {
             .and_then(|id| self.get_scope(&id))
         {
             // safety: this lifetime is managed by the logic on scope
-            let extended: &VSuspended<'static> = unsafe { std::mem::transmute(suspended) };
+            let extended = unsafe { std::mem::transmute(suspended) };
             scope
                 .items
                 .borrow_mut()
                 .suspended_nodes
-                .insert(suspended.task_id, extended as *const _);
+                .insert(suspended.task_id, extended);
         }
     }
 }

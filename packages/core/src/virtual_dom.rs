@@ -36,8 +36,6 @@ use std::{
     rc::Rc,
 };
 
-use crate::innerlude::*;
-
 /// An integrated virtual node system that progresses events and diffs UI trees.
 ///
 /// Differences are converted into patches which a renderer can use to draw the UI.
@@ -423,7 +421,7 @@ impl VirtualDom {
 
                     if self.run_scope(&scopeid) {
                         let scope = self.scopes.get_scope(&scopeid).unwrap();
-                        let (old, new) = (scope.frames.wip_head(), scope.frames.fin_head());
+                        let (old, new) = (scope.wip_head(), scope.fin_head());
                         diff_state.stack.scope_stack.push(scopeid);
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                     }
@@ -543,7 +541,7 @@ impl VirtualDom {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
-        scope.ensure_drop_safety();
+        self.scopes.ensure_drop_safety(id);
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
@@ -551,11 +549,10 @@ impl VirtualDom {
         unsafe { scope.hooks.reset() };
 
         // Safety:
-        // - We've dropped all references to the wip bump frame
-        todo!("reset wip frame");
-        // unsafe { scope.frames.reset_wip_frame() };
+        // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
+        unsafe { scope.reset_wip_frame() };
 
-        let items = scope.items.get_mut();
+        let mut items = scope.items.borrow_mut();
 
         // just forget about our suspended nodes while we're at it
         items.suspended_nodes.clear();
@@ -568,12 +565,12 @@ impl VirtualDom {
         log::debug!("Borrowed stuff is successfully cleared");
 
         // temporarily cast the vcomponent to the right lifetime
-        let vcomp = scope.load_vcomp();
+        // let vcomp = scope.load_vcomp();
 
         let render: &dyn Fn(&ScopeState) -> Element = todo!();
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
-        if let Some(builder) = render(scope) {
+        if let Some(key) = render(scope) {
             todo!("attach the niode");
             // let new_head = builder.into_vnode(NodeFactory {
             //     bump: &scope.frames.wip_frame().bump,
@@ -588,19 +585,6 @@ impl VirtualDom {
         } else {
             false
         }
-    }
-
-    pub fn reserve_node(&self, node: &VNode) -> ElementId {
-        todo!()
-        // self.node_reservations.insert(id);
-    }
-
-    pub fn collect_garbage(&self, id: ElementId) {
-        todo!()
-    }
-
-    pub fn try_remove(&self, id: &ScopeId) -> Option<ScopeState> {
-        todo!()
     }
 }
 
@@ -627,7 +611,7 @@ pub struct UserEvent {
     /// The name that the renderer will use to mount the listener.
     pub name: &'static str,
 
-    /// The type of event
+    /// Event Data
     pub event: Box<dyn Any + Send>,
 }
 
