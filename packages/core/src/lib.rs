@@ -16,7 +16,6 @@ pub(crate) mod component;
 pub(crate) mod diff;
 pub(crate) mod diff_stack;
 pub(crate) mod hooklist;
-pub(crate) mod hooks;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
 pub(crate) mod nodes;
@@ -26,15 +25,11 @@ pub(crate) mod test_dom;
 pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
-#[cfg(feature = "debug_vdom")]
-pub mod debug_dom;
-
 pub(crate) mod innerlude {
     pub use crate::component::*;
     pub(crate) use crate::diff::*;
     pub use crate::diff_stack::*;
     pub(crate) use crate::hooklist::*;
-    pub use crate::hooks::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
@@ -56,7 +51,6 @@ pub use crate::innerlude::{
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties, Scope};
-    pub use crate::hooks::*;
     pub use crate::innerlude::Context;
     pub use crate::innerlude::{DioxusElement, Element, LazyNodes, NodeFactory, ScopeChildren, FC};
     pub use crate::nodes::VNode;

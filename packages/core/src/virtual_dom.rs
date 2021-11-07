@@ -69,8 +69,6 @@ use std::{
 pub struct VirtualDom {
     base_scope: ScopeId,
 
-    root_fc: Box<dyn Any>,
-
     root_props: Rc<dyn Any>,
 
     // we need to keep the allocation around, but we don't necessarily use it
@@ -85,8 +83,6 @@ pub struct VirtualDom {
     pending_futures: FxHashSet<ScopeId>,
     pending_messages: VecDeque<SchedulerMsg>,
     dirty_scopes: IndexSet<ScopeId>,
-
-    in_progress: bool,
 }
 
 // Methods to create the VirtualDom
@@ -179,21 +175,15 @@ impl VirtualDom {
             receiver,
             sender,
 
-            root_fc: todo!(),
             root_props: todo!(),
             _root_caller: todo!(),
 
             pending_messages: VecDeque::new(),
             pending_futures: Default::default(),
             dirty_scopes: Default::default(),
-
-            in_progress: false,
         }
     }
-}
 
-// Public utility methods
-impl VirtualDom {
     /// Get the [`ScopeState`] for the root component.
     ///
     /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
@@ -233,10 +223,7 @@ impl VirtualDom {
     pub fn has_any_work(&self) -> bool {
         !(self.dirty_scopes.is_empty() && self.pending_messages.is_empty())
     }
-}
 
-// Methods to actually run the VirtualDOM
-impl VirtualDom {
     /// Waits for the scheduler to have work
     /// This lets us poll async tasks during idle periods without blocking the main thread.
     pub async fn wait_for_work(&mut self) {
@@ -532,7 +519,7 @@ impl VirtualDom {
         }
     }
 
-    pub fn run_scope(&self, id: &ScopeId) -> bool {
+    fn run_scope(&self, id: &ScopeId) -> bool {
         let scope = self
             .scopes
             .get_scope(id)
@@ -571,11 +558,11 @@ impl VirtualDom {
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
         if let Some(key) = render(scope) {
-            todo!("attach the niode");
+            // todo!("attach the niode");
             // let new_head = builder.into_vnode(NodeFactory {
             //     bump: &scope.frames.wip_frame().bump,
             // });
-            log::debug!("Render is successful");
+            // log::debug!("Render is successful");
 
             // the user's component succeeded. We can safely cycle to the next frame
             // scope.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
