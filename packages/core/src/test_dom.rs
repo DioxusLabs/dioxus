@@ -33,7 +33,9 @@ impl TestDom {
 
     pub fn diff<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mutations = Mutations::new();
-        let mut machine = DiffMachine::new(mutations);
+        let mut machine: DiffState = todo!();
+        // let mut machine = DiffState::new(mutations);
+        // let mut machine = DiffState::new(mutations);
         machine.stack.push(DiffInstruction::Diff { new, old });
         machine.mutations
     }
@@ -41,13 +43,17 @@ impl TestDom {
     pub fn create<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
         let old = self.bump.alloc(self.render_direct(left));
 
-        let mut machine = DiffMachine::new(Mutations::new());
+        let mut machine: DiffState = todo!();
+        // let mut machine = DiffState::new(Mutations::new());
+        // let mut machine = DiffState::new(Mutations::new());
 
         machine.stack.create_node(old, MountType::Append);
 
-        machine.work(&mut || false);
+        todo!()
 
-        machine.mutations
+        // machine.work(&mut || false);
+
+        // machine.mutations
     }
 
     pub fn lazy_diff<'a>(
@@ -57,22 +63,26 @@ impl TestDom {
     ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render(left), self.render(right));
 
-        let mut machine = DiffMachine::new(Mutations::new());
+        let mut machine: DiffState = todo!();
+        // let mut machine = DiffState::new(Mutations::new());
 
         machine.stack.create_node(old, MountType::Append);
 
-        machine.work(|| false);
-        let create_edits = machine.mutations;
+        todo!()
 
-        let mut machine = DiffMachine::new(Mutations::new());
+        // machine.work(|| false);
+        // let create_edits = machine.mutations;
 
-        machine.stack.push(DiffInstruction::Diff { old, new });
+        // let mut machine: DiffState = todo!();
+        // // let mut machine = DiffState::new(Mutations::new());
 
-        machine.work(&mut || false);
+        // machine.stack.push(DiffInstruction::Diff { old, new });
 
-        let edits = machine.mutations;
+        // machine.work(&mut || false);
 
-        (create_edits, edits)
+        // let edits = machine.mutations;
+
+        // (create_edits, edits)
     }
 }
 

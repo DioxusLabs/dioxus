@@ -78,7 +78,7 @@ pub struct VirtualDom {
     // we need to keep the allocation around, but we don't necessarily use it
     _root_caller: Box<dyn Any>,
 
-    pub scopes: ScopeArena,
+    pub(crate) scopes: ScopeArena,
 
     pub receiver: UnboundedReceiver<SchedulerMsg>,
     pub sender: UnboundedSender<SchedulerMsg>,
@@ -92,7 +92,7 @@ pub struct VirtualDom {
 
     pub dirty_scopes: IndexSet<ScopeId>,
 
-    pub saved_state: Option<SavedDiffWork<'static>>,
+    pub(crate) saved_state: Option<SavedDiffWork<'static>>,
 
     pub in_progress: bool,
 }
@@ -250,7 +250,8 @@ impl VirtualDom {
     where
         P: 'static,
     {
-        let root_scope = self.pool.get_scope_mut(&self.base_scope).unwrap();
+        let base = self.base_scope;
+        let root_scope = self.get_scope_mut(&base).unwrap();
 
         // Pre-emptively drop any downstream references of the old props
         root_scope.ensure_drop_safety();
@@ -532,7 +533,7 @@ For the rest, we defer to the rIC period and work down each queue from high to l
 impl VirtualDom {
     // returns true if the event is discrete
     pub fn handle_ui_event(&mut self, event: UserEvent) -> bool {
-        let (discrete, priority) = event_meta(&event);
+        // let (discrete, priority) = event_meta(&event);
 
         if let Some(scope) = self.get_scope_mut(&event.scope) {
             if let Some(element) = event.mounted_dom_id {
@@ -555,7 +556,8 @@ impl VirtualDom {
         //     Low => todo!(),
         // }
 
-        discrete
+        todo!()
+        // discrete
     }
 
     fn prepare_work(&mut self) {
@@ -588,7 +590,7 @@ impl VirtualDom {
             SchedulerMsg::UiEvent(event) => {
                 //
 
-                let (discrete, priority) = event_meta(&event);
+                // let (discrete, priority) = event_meta(&event);
 
                 if let Some(scope) = self.get_scope_mut(&event.scope) {
                     if let Some(element) = event.mounted_dom_id {
@@ -602,7 +604,7 @@ impl VirtualDom {
                     }
                 }
 
-                discrete;
+                // discrete;
             }
         }
     }
@@ -625,12 +627,13 @@ impl VirtualDom {
         let mut ran_scopes = FxHashSet::default();
 
         if machine.stack.is_empty() {
-            self.dirty_scopes.retain(|id| self.get_scope(id).is_some());
-            self.dirty_scopes.sort_by(|a, b| {
-                let h1 = self.get_scope(a).unwrap().height;
-                let h2 = self.get_scope(b).unwrap().height;
-                h1.cmp(&h2).reverse()
-            });
+            todo!("order scopes");
+            // self.dirty_scopes.retain(|id| self.get_scope(id).is_some());
+            // self.dirty_scopes.sort_by(|a, b| {
+            //     let h1 = self.get_scope(a).unwrap().height;
+            //     let h2 = self.get_scope(b).unwrap().height;
+            //     h1.cmp(&h2).reverse()
+            // });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
                 log::info!("handling dirty scope {:?}", scopeid);
@@ -640,21 +643,23 @@ impl VirtualDom {
 
                     // if let Some(component) = self.get_scope_mut(&scopeid) {
                     if self.run_scope(&scopeid) {
-                        let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                        todo!("diff the scope")
                         // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
-                        machine.stack.scope_stack.push(scopeid);
-                        machine.stack.push(DiffInstruction::Diff { new, old });
+                        // // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
+                        // machine.stack.scope_stack.push(scopeid);
+                        // machine.stack.push(DiffInstruction::Diff { new, old });
                     }
                     // }
                 }
             }
         }
 
-        let work_completed = machine.work(deadline_reached);
+        let work_completed: bool = todo!();
+        // let work_completed = machine.work(deadline_reached);
 
         // log::debug!("raw edits {:?}", machine.mutations.edits);
 
-        let mut machine: DiffMachine<'static> = unsafe { std::mem::transmute(machine) };
+        let mut machine: DiffState<'static> = unsafe { std::mem::transmute(machine) };
         // let mut saved = machine.save();
 
         if work_completed {
@@ -681,8 +686,9 @@ impl VirtualDom {
 
             // log::debug!("saved edits {:?}", mutations);
 
-            let mut saved = machine.save();
-            self.save_work(saved);
+            todo!();
+            // let mut saved = machine.save();
+            // self.save_work(saved);
             true
 
             // self.save_work(saved);
@@ -801,24 +807,26 @@ impl VirtualDom {
     ///
     /// Typically used to kickstart the VirtualDOM after initialization.
     pub fn rebuild_inner(&mut self, base_scope: ScopeId) -> Mutations {
-        let mut diff_machine = DiffMachine::new(Mutations::new());
-
         // TODO: drain any in-flight work
-        let cur_component = self
-            .get_scope_mut(&base_scope)
-            .expect("The base scope should never be moved");
-
-        log::debug!("rebuild {:?}", base_scope);
 
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
         if self.run_scope(&base_scope) {
+            let cur_component = self
+                .get_scope_mut(&base_scope)
+                .expect("The base scope should never be moved");
+
+            log::debug!("rebuild {:?}", base_scope);
+
+            let mut diff_machine = DiffState::new(Mutations::new());
             diff_machine
                 .stack
                 .create_node(cur_component.frames.fin_head(), MountType::Append);
 
             diff_machine.stack.scope_stack.push(base_scope);
 
-            diff_machine.work(|| false);
+            todo!()
+            // self.work(&mut diff_machine, || false);
+            // diff_machine.work(|| false);
         } else {
             // todo: should this be a hard error?
             log::warn!(
@@ -827,7 +835,8 @@ impl VirtualDom {
             );
         }
 
-        unsafe { std::mem::transmute(diff_machine.mutations) }
+        todo!()
+        // unsafe { std::mem::transmute(diff_machine.mutations) }
     }
 
     pub fn hard_diff(&mut self, base_scope: ScopeId) -> Mutations {
@@ -838,16 +847,17 @@ impl VirtualDom {
         log::debug!("hard diff {:?}", base_scope);
 
         if self.run_scope(&base_scope) {
-            let mut diff_machine = DiffMachine::new(Mutations::new());
+            let mut diff_machine = DiffState::new(Mutations::new());
             diff_machine.cfg.force_diff = true;
-            diff_machine.diff_scope(base_scope);
+            self.diff_scope(&mut diff_machine, base_scope);
+            // diff_machine.diff_scope(base_scope);
             diff_machine.mutations
         } else {
             Mutations::new()
         }
     }
 
-    pub fn get_scope_mut(&mut self, id: &ScopeId) -> Option<&mut ScopeInner> {
+    pub fn get_scope_mut<'a>(&'a self, id: &ScopeId) -> Option<&'a ScopeInner> {
         self.scopes.get_mut(id)
     }
 
@@ -868,7 +878,8 @@ impl VirtualDom {
 
         // Safety:
         // - We've dropped all references to the wip bump frame
-        unsafe { scope.frames.reset_wip_frame() };
+        todo!("reset wip frame");
+        // unsafe { scope.frames.reset_wip_frame() };
 
         let items = scope.items.get_mut();
 
@@ -902,6 +913,19 @@ impl VirtualDom {
         } else {
             false
         }
+    }
+
+    pub fn reserve_node(&self, node: &VNode) -> ElementId {
+        todo!()
+        // self.node_reservations.insert(id);
+    }
+
+    pub fn collect_garbage(&self, id: ElementId) {
+        todo!()
+    }
+
+    pub fn try_remove(&self, id: &ScopeId) -> Option<ScopeInner> {
+        todo!()
     }
 }
 

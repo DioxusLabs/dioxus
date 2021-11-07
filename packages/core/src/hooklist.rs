@@ -34,7 +34,7 @@ impl HookList {
     ///
     /// This should only be ran by Dioxus itself before "running scope".
     /// Dioxus knows how to descend through the tree to prevent mutable aliasing.
-    pub(crate) unsafe fn reset(&mut self) {
+    pub(crate) unsafe fn reset(&self) {
         self.idx.set(0);
     }
 

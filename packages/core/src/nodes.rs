@@ -319,7 +319,8 @@ pub struct Listener<'bump> {
 pub struct VComponent<'src> {
     pub key: Option<&'src str>,
 
-    pub associated_scope: Cell<Option<*mut ScopeInner>>,
+    pub associated_scope: Cell<Option<ScopeId>>,
+    // pub associated_scope: Cell<Option<*mut ScopeInner>>,
 
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),

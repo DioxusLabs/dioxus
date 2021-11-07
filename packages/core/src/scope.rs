@@ -43,14 +43,18 @@ pub type Context<'a> = &'a ScopeInner;
 /// use case they might have.
 pub struct ScopeInner {
     // Book-keeping about our spot in the arena
-    // yes, a raw pointer
-    // it's bump allocated so it's stable
-    // the safety of parent pointers is guaranteed by the logic in this crate
+
+    // safety:
+    //
+    // pointers to scopes are *always* valid since they are bump allocated and never freed until this scope is also freed
     pub(crate) parent_scope: Option<*mut ScopeInner>,
+
     pub(crate) our_arena_idx: ScopeId,
+
     pub(crate) height: u32,
 
     pub(crate) subtree: Cell<u32>,
+
     pub(crate) is_subtree_root: Cell<bool>,
 
     // Nodes
@@ -100,12 +104,12 @@ impl ScopeInner {
     ///
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
-    pub(crate) fn ensure_drop_safety(&mut self) {
+    pub(crate) fn ensure_drop_safety(&self) {
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)
         // right now, we don't drop
         self.items
-            .get_mut()
+            .borrow_mut()
             .borrowed_props
             .drain(..)
             .map(|li| unsafe { &*li })
@@ -116,9 +120,10 @@ impl ScopeInner {
                     .get()
                     .expect("VComponents should be associated with a valid Scope");
 
-                let scope = unsafe { &mut *scope_id };
+                todo!("move this onto virtualdom");
+                // let scope = unsafe { &mut *scope_id };
 
-                scope.ensure_drop_safety();
+                // scope.ensure_drop_safety();
 
                 todo!("drop the component's props");
                 // let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
@@ -127,7 +132,7 @@ impl ScopeInner {
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
         self.items
-            .get_mut()
+            .borrow_mut()
             .listeners
             .drain(..)
             .map(|li| unsafe { &*li })
@@ -135,8 +140,8 @@ impl ScopeInner {
     }
 
     /// A safe wrapper around calling listeners
-    pub(crate) fn call_listener(&mut self, event: UserEvent, element: ElementId) {
-        let listners = &mut self.items.get_mut().listeners;
+    pub(crate) fn call_listener(&self, event: UserEvent, element: ElementId) {
+        let listners = &mut self.items.borrow_mut().listeners;
 
         let raw_listener = listners.iter().find(|lis| {
             let search = unsafe { &***lis };
@@ -191,9 +196,10 @@ impl ScopeInner {
         // }
     }
 
-    pub(crate) fn update_vcomp(&mut self, vcomp: &VComponent) {
+    pub(crate) fn update_vcomp(&self, vcomp: &VComponent) {
         let f: *const _ = vcomp;
-        self.vcomp = unsafe { std::mem::transmute(f) };
+        todo!()
+        // self.vcomp = unsafe { std::mem::transmute(f) };
     }
 
     pub(crate) fn load_vcomp<'a>(&'a mut self) -> &'a VComponent<'a> {

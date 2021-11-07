@@ -32,8 +32,8 @@ impl ScopeArena {
         }
     }
 
-    pub fn get_mut(&mut self, id: &ScopeId) -> Option<&mut ScopeInner> {
-        unsafe { Some(&mut *self.scopes[id.0]) }
+    pub fn get_mut(&self, id: &ScopeId) -> Option<&ScopeInner> {
+        unsafe { Some(&*self.scopes[id.0]) }
     }
 
     pub fn new_with_key(
