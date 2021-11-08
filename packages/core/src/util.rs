@@ -7,10 +7,6 @@ pub fn empty_cell() -> Cell<Option<ElementId>> {
     Cell::new(None)
 }
 
-pub fn type_name_of<T>(_: T) -> &'static str {
-    std::any::type_name::<T>()
-}
-
 /// A component's unique identifier.
 ///
 /// `ScopeId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is

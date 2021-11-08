@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeState},
+    innerlude::{empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId},
     lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -344,29 +344,27 @@ pub struct Listener<'bump> {
     pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn Any + Send>) + 'bump>>>,
 }
 
+pub type VCompCaller<'src> = BumpBox<'src, dyn Fn(Context) -> Element + 'src>;
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
     pub key: Option<&'src str>,
 
     pub associated_scope: Cell<Option<ScopeId>>,
-    // pub associated_scope: Cell<Option<*mut ScopeInner>>,
 
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
+
     pub(crate) can_memoize: bool,
 
+    pub(crate) hard_allocation: Cell<Option<*const ()>>,
+
     // Raw pointer into the bump arena for the props of the component
-    pub(crate) raw_props: *const (),
+    pub(crate) bump_props: *const (),
 
     // during the "teardown" process we'll take the caller out so it can be dropped properly
     pub(crate) caller: Option<VCompCaller<'src>>,
     pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
-}
-
-pub enum VCompCaller<'src> {
-    Borrowed(BumpBox<'src, dyn for<'b> Fn(&'b ScopeState) -> Element + 'src>),
-    Owned(Box<dyn for<'b> Fn(&'b ScopeState) -> Element>),
 }
 
 pub struct VSuspended<'a> {
@@ -511,7 +509,7 @@ impl<'a> NodeFactory<'a> {
 
     pub fn component<P>(
         &self,
-        component: fn(Scope<'a, P>) -> Element,
+        component: fn(Context<'a>, &'a P) -> Element,
         props: P,
         key: Option<Arguments>,
     ) -> VNode<'a>
@@ -530,18 +528,8 @@ impl<'a> NodeFactory<'a> {
 
         let bump = self.bump();
 
-        // let p = BumpBox::new_in(x, a)
-
-        // the best place to allocate the props are the other component's arena
-        // the second best place is the global allocator
-
-        // // if the props are static
-        // let boxed = if P::IS_STATIC {
-        //     todo!()
-        // } else {
-        //     todo!()
-        // }
-
+        // later, we'll do a hard allocation
+        let raw_ptr = bump.alloc(props);
         // let caller = Box::new(|f: &ScopeInner| -> Element {
         //     //
         //     component((f, &props))
@@ -574,26 +562,26 @@ impl<'a> NodeFactory<'a> {
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller = match P::IS_STATIC {
-            true => {
-                // it just makes sense to box the props
-                let boxed_props: Box<P> = Box::new(props);
-                let props_we_know_are_static = todo!();
-                VCompCaller::Owned(Box::new(|f| {
-                    //
+        // let caller = match P::IS_STATIC {
+        //     true => {
+        //         // it just makes sense to box the props
+        //         let boxed_props: Box<P> = Box::new(props);
+        //         let props_we_know_are_static = todo!();
+        //         VCompCaller::Owned(Box::new(|f| {
+        //             //
 
-                    let p = todo!();
+        //             let p = todo!();
 
-                    todo!()
-                }))
-            }
-            false => VCompCaller::Borrowed({
-                //
+        //             todo!()
+        //         }))
+        //     }
+        //     false => VCompCaller::Borrowed({
+        //         //
 
-                todo!()
-                // let caller = bump.alloc()
-            }),
-        };
+        //         todo!()
+        //         // let caller = bump.alloc()
+        //     }),
+        // };
 
         todo!()
         // let caller: &'a mut dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> =

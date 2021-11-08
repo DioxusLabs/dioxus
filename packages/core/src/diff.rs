@@ -90,6 +90,7 @@
 
 use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
+use slab::Slab;
 use DomEdit::*;
 
 /// Our DiffMachine is an iterative tree differ.
@@ -609,7 +610,7 @@ impl<'bump> ScopeArena {
 
             // make sure the component's caller function is up to date
             let scope = self.get_scope(&scope_addr).unwrap();
-            scope.update_vcomp(new);
+            let mut items = scope.items.borrow_mut();
 
             // React doesn't automatically memoize, but we do.
             let props_are_the_same = todo!("reworking component memoization");
@@ -1280,7 +1281,7 @@ impl<'bump> ScopeArena {
     }
 
     /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope(&'bump self, listener: &'bump Listener<'bump>, scope: &ScopeState) {
+    fn attach_listener_to_scope(&'bump self, listener: &'bump Listener<'bump>, scope: &Scope) {
         let long_listener = unsafe { std::mem::transmute(listener) };
         scope.items.borrow_mut().listeners.push(long_listener)
     }

@@ -30,7 +30,7 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 ///     cx.render(rsx!{ div {"Hello, {props.name}"} })
 /// }
 /// ```
-pub type Context<'a> = &'a ScopeState;
+pub type Context<'a> = &'a Scope;
 
 /// Every component in Dioxus is represented by a `Scope`.
 ///
@@ -41,7 +41,7 @@ pub type Context<'a> = &'a ScopeState;
 ///
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// use case they might have.
-pub struct ScopeState {
+pub struct Scope {
     // Book-keeping about our spot in the arena
 
     // safety:
@@ -49,7 +49,7 @@ pub struct ScopeState {
     // pointers to scopes are *always* valid since they are bump allocated and never freed until this scope is also freed
     // this is just a bit of a hack to not need an Rc to the ScopeArena.
     // todo: replace this will ScopeId and provide a connection to scope arena directly
-    pub(crate) parent_scope: Option<*mut ScopeState>,
+    pub(crate) parent_scope: Option<*mut Scope>,
 
     pub(crate) our_arena_idx: ScopeId,
 
@@ -61,8 +61,6 @@ pub struct ScopeState {
 
     // The double-buffering situation that we will use
     pub(crate) frames: [Bump; 2],
-
-    pub(crate) vcomp: *const VComponent<'static>,
 
     pub(crate) old_root: RefCell<Option<NodeLink>>,
     pub(crate) new_root: RefCell<Option<NodeLink>>,
@@ -89,6 +87,8 @@ pub struct SelfReferentialItems<'a> {
     pub(crate) cached_nodes_old: Vec<VNode<'a>>,
     pub(crate) cached_nodes_new: Vec<VNode<'a>>,
 
+    pub(crate) caller: &'a dyn Fn(&Scope) -> Element,
+
     pub(crate) generation: Cell<u32>,
 
     pub(crate) listeners: Vec<&'a Listener<'a>>,
@@ -99,7 +99,7 @@ pub struct SelfReferentialItems<'a> {
 }
 
 // Public methods exposed to libraries and components
-impl ScopeState {
+impl Scope {
     /// Get the root VNode for this Scope.
     ///
     /// This VNode is the "entrypoint" VNode. If the component renders multiple nodes, then this VNode will be a fragment.
@@ -440,7 +440,7 @@ Functions prefixed with "use" should never be called conditionally.
 "###;
 
 // Important internal methods
-impl ScopeState {
+impl Scope {
     /// Give out our self-referential item with our own borrowed lifetime
     pub(crate) fn fin_head<'b>(&'b self) -> &'b VNode<'b> {
         todo!()
@@ -526,15 +526,5 @@ impl ScopeState {
         //     self.shared.cur_subtree.set(cur + 1);
         //     Some(cur)
         // }
-    }
-
-    pub(crate) fn update_vcomp(&self, vcomp: &VComponent) {
-        let f: *const _ = vcomp;
-        todo!()
-        // self.vcomp = unsafe { std::mem::transmute(f) };
-    }
-
-    pub(crate) fn load_vcomp<'a>(&'a mut self) -> &'a VComponent<'a> {
-        unsafe { std::mem::transmute(&*self.vcomp) }
     }
 }

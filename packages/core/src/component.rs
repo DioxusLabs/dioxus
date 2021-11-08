@@ -6,39 +6,6 @@
 //! that ensures compile-time required and optional fields on cx.
 
 use crate::innerlude::{Context, Element, LazyNodes, ScopeChildren};
-/// A component is a wrapper around a Context and some Props that share a lifetime
-///
-///
-/// # Example
-///
-/// With memoized state:
-/// ```rust
-/// struct State {}
-///
-/// fn Example((cx, props): Scope<State>) -> DomTree {
-///     // ...
-/// }
-/// ```
-///
-/// With borrowed state:
-/// ```rust
-/// struct State<'a> {
-///     name: &'a str
-/// }
-///
-/// fn Example<'a>((cx, props): Scope<'a, State>) -> DomTree<'a> {
-///     // ...
-/// }
-/// ```
-///
-/// With owned state as a closure:
-/// ```rust
-/// static Example: FC<()> = |(cx, props)| {
-///     // ...
-/// };
-/// ```
-///
-pub type Scope<'a, T> = (Context<'a>, &'a T);
 
 pub struct FragmentProps<'a> {
     children: ScopeChildren<'a>,
@@ -99,7 +66,7 @@ impl<'a> Properties for FragmentProps<'a> {
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 ///
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>((cx, props): Scope<'a, FragmentProps<'a>>) -> Element {
+pub fn Fragment<'a>(cx: Context<'a>, props: &'a FragmentProps<'a>) -> Element {
     cx.render(Some(LazyNodes::new(|f| {
         f.fragment_from_iter(&props.children)
     })))
@@ -170,6 +137,7 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
+pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Context<'a>, &T) -> Element) -> T::Builder {
+    // pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
     T::builder()
 }

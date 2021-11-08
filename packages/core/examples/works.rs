@@ -7,7 +7,7 @@ fn main() {
     let _ = VirtualDom::new(Parent);
 }
 
-fn Parent((cx, _): Scope<()>) -> Element {
+fn Parent(cx: Context, props: &()) -> Element {
     let value = cx.use_hook(|_| String::new(), |f| &*f);
 
     cx.render(rsx! {
@@ -22,7 +22,7 @@ struct ChildProps<'a> {
     name: &'a str,
 }
 
-fn Child((cx, props): Scope<ChildProps>) -> Element {
+fn Child(cx: Context, props: &ChildProps) -> Element {
     cx.render(rsx! {
         div {
             h1 { "it's nested" }
@@ -36,7 +36,7 @@ struct Grandchild<'a> {
     name: &'a str,
 }
 
-fn Child2((cx, props): Scope<Grandchild>) -> Element {
+fn Child2(cx: Context, props: &Grandchild) -> Element {
     cx.render(rsx! {
         div { "Hello {props.name}!" }
     })
