@@ -20,21 +20,13 @@
 //! Additional functionality is defined in the respective files.
 
 use crate::innerlude::*;
-use bumpalo::Bump;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::{pin_mut, stream::FuturesUnordered, Future, FutureExt, StreamExt};
-use fxhash::FxHashMap;
+use futures_util::{Future, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
-use slab::Slab;
 use std::pin::Pin;
 use std::task::Poll;
-use std::{
-    any::{Any, TypeId},
-    cell::{Cell, UnsafeCell},
-    collections::{HashSet, VecDeque},
-    rc::Rc,
-};
+use std::{any::Any, collections::VecDeque};
 
 /// An integrated virtual node system that progresses events and diffs UI trees.
 ///
@@ -69,10 +61,7 @@ use std::{
 pub struct VirtualDom {
     base_scope: ScopeId,
 
-    _root_props: Rc<dyn Any>,
-
-    // we need to keep the allocation around, but we don't necessarily use it
-    _root_caller: Box<dyn Any>,
+    _root_caller: *mut dyn Fn(&Scope) -> Element,
 
     pub(crate) scopes: ScopeArena,
 
@@ -156,30 +145,22 @@ impl VirtualDom {
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,
     ) -> Self {
-        let mut scopes = ScopeArena::new(sender);
+        let mut scopes = ScopeArena::new(sender.clone());
 
-        let base_scope = scopes.new_with_key(
-            //
-            root as _,
-            todo!(),
-            // boxed_comp.as_ref(),
-            None,
-            0,
-            0,
-        );
+        let caller = Box::new(move |f: &Scope| -> Element { root(f, &root_props) });
+        let caller_ref: *mut dyn Fn(&Scope) -> Element = Box::into_raw(caller);
+        let base_scope = scopes.new_with_key(root as _, caller_ref, None, 0, 0);
 
         Self {
             scopes,
             base_scope,
             receiver,
-            sender,
-
-            _root_props: todo!(),
-            _root_caller: todo!(),
-
+            // todo: clean this up manually?
+            _root_caller: caller_ref,
             pending_messages: VecDeque::new(),
             pending_futures: Default::default(),
             dirty_scopes: Default::default(),
+            sender,
         }
     }
 
@@ -189,7 +170,7 @@ impl VirtualDom {
     /// directly.
     ///
     /// # Example
-    pub fn base_scope(&self) -> &ScopeState {
+    pub fn base_scope(&self) -> &Scope {
         self.get_scope(&self.base_scope).unwrap()
     }
 
@@ -199,7 +180,7 @@ impl VirtualDom {
     ///
     ///
     ///
-    pub fn get_scope<'a>(&'a self, id: &ScopeId) -> Option<&'a ScopeState> {
+    pub fn get_scope<'a>(&'a self, id: &ScopeId) -> Option<&'a Scope> {
         self.scopes.get_scope(id)
     }
 
@@ -402,9 +383,11 @@ impl VirtualDom {
 
                     log::debug!("about to run scope {:?}", scopeid);
 
-                    if self.run_scope(&scopeid) {
-                        let scope = self.scopes.get_scope(&scopeid).unwrap();
-                        let (old, new) = (scope.wip_head(), scope.fin_head());
+                    if self.scopes.run_scope(&scopeid) {
+                        let (old, new) = (
+                            self.scopes.wip_head(&scopeid),
+                            self.scopes.fin_head(&scopeid),
+                        );
                         diff_state.stack.scope_stack.push(scopeid);
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                     }
@@ -457,13 +440,20 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
-        // todo: I think we need to append a node or something
-        //     diff_machine
-        //         .stack
-        //         .create_node(cur_component.frames.fin_head(), MountType::Append);
+        let mut diff_machine = DiffState::new(Mutations::new());
 
-        let scope = self.base_scope;
-        self.hard_diff(&scope).unwrap()
+        let scope_id = self.base_scope;
+        if self.scopes.run_scope(&scope_id) {
+            diff_machine
+                .stack
+                .create_node(self.scopes.fin_head(&scope_id), MountType::Append);
+
+            diff_machine.stack.scope_stack.push(scope_id);
+
+            self.scopes.work(&mut diff_machine, || false);
+        }
+
+        diff_machine.mutations
     }
 
     /// Compute a manual diff of the VirtualDOM between states.
@@ -503,71 +493,18 @@ impl VirtualDom {
     pub fn hard_diff<'a>(&'a mut self, scope_id: &ScopeId) -> Option<Mutations<'a>> {
         log::debug!("hard diff {:?}", scope_id);
 
-        if self.run_scope(scope_id) {
+        if self.scopes.run_scope(scope_id) {
             let mut diff_machine = DiffState::new(Mutations::new());
 
             diff_machine.force_diff = true;
 
             self.scopes.diff_scope(&mut diff_machine, scope_id);
 
+            dbg!(&diff_machine.mutations);
+
             Some(diff_machine.mutations)
         } else {
             None
-        }
-    }
-
-    fn run_scope(&self, id: &ScopeId) -> bool {
-        let scope = self
-            .scopes
-            .get_scope(id)
-            .expect("The base scope should never be moved");
-
-        // Cycle to the next frame and then reset it
-        // This breaks any latent references, invalidating every pointer referencing into it.
-        // Remove all the outdated listeners
-        self.scopes.ensure_drop_safety(id);
-
-        // Safety:
-        // - We dropped the listeners, so no more &mut T can be used while these are held
-        // - All children nodes that rely on &mut T are replaced with a new reference
-        unsafe { scope.hooks.reset() };
-
-        // Safety:
-        // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
-        unsafe { scope.reset_wip_frame() };
-
-        let mut items = scope.items.borrow_mut();
-
-        // just forget about our suspended nodes while we're at it
-        items.suspended_nodes.clear();
-
-        // guarantee that we haven't screwed up - there should be no latent references anywhere
-        debug_assert!(items.listeners.is_empty());
-        debug_assert!(items.suspended_nodes.is_empty());
-        debug_assert!(items.borrowed_props.is_empty());
-
-        log::debug!("Borrowed stuff is successfully cleared");
-
-        // temporarily cast the vcomponent to the right lifetime
-        // let vcomp = scope.load_vcomp();
-
-        let render: &dyn Fn(&ScopeState) -> Element = todo!();
-
-        // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
-        if let Some(key) = render(scope) {
-            // todo!("attach the niode");
-            // let new_head = builder.into_vnode(NodeFactory {
-            //     bump: &scope.frames.wip_frame().bump,
-            // });
-            // log::debug!("Render is successful");
-
-            // the user's component succeeded. We can safely cycle to the next frame
-            // scope.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
-            // scope.frames.cycle_frame();
-
-            true
-        } else {
-            false
         }
     }
 }

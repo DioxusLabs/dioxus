@@ -90,6 +90,7 @@
 
 use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
+use slab::Slab;
 use DomEdit::*;
 
 /// Our DiffMachine is an iterative tree differ.
@@ -124,11 +125,13 @@ impl<'bump> DiffState<'bump> {
 
 impl<'bump> ScopeArena {
     pub fn diff_scope(&'bump self, state: &mut DiffState<'bump>, id: &ScopeId) {
-        if let Some(component) = self.get_scope(id) {
-            let (old, new) = (component.wip_head(), component.fin_head());
-            state.stack.push(DiffInstruction::Diff { new, old });
-            self.work(state, || false);
-        }
+        // if let Some(component) = self.get_scope(id) {
+
+        let (old, new) = (self.wip_head(id), self.fin_head(id));
+
+        state.stack.push(DiffInstruction::Diff { old, new });
+        self.work(state, || false);
+        // }
     }
 
     /// Progress the diffing for this "fiber"
@@ -609,7 +612,7 @@ impl<'bump> ScopeArena {
 
             // make sure the component's caller function is up to date
             let scope = self.get_scope(&scope_addr).unwrap();
-            scope.update_vcomp(new);
+            let mut items = scope.items.borrow_mut();
 
             // React doesn't automatically memoize, but we do.
             let props_are_the_same = todo!("reworking component memoization");
@@ -1145,8 +1148,8 @@ impl<'bump> ScopeArena {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    let scope = self.get_scope(&scope_id).unwrap();
-                    search_node = Some(scope.root_node());
+                    // let scope = self.get_scope(&scope_id).unwrap();
+                    search_node = Some(self.root_node(&scope_id));
                 }
             }
         }
@@ -1163,8 +1166,8 @@ impl<'bump> ScopeArena {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    let scope = self.get_scope(&scope_id).unwrap();
-                    search_node = Some(scope.root_node());
+                    // let scope = self.get_scope(&scope_id).unwrap();
+                    search_node = Some(self.root_node(&scope_id));
                 }
                 VNode::Linked(link) => {
                     todo!("linked")
@@ -1248,8 +1251,8 @@ impl<'bump> ScopeArena {
 
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
-                    let scope = self.get_scope(&scope_id).unwrap();
-                    let root = scope.root_node();
+                    // let scope = self.get_scope(&scope_id).unwrap();
+                    let root = self.root_node(&scope_id);
                     self.remove_nodes(state, Some(root), gen_muts);
 
                     log::debug!("Destroying scope {:?}", scope_id);
@@ -1280,7 +1283,7 @@ impl<'bump> ScopeArena {
     }
 
     /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope(&'bump self, listener: &'bump Listener<'bump>, scope: &ScopeState) {
+    fn attach_listener_to_scope(&'bump self, listener: &'bump Listener<'bump>, scope: &Scope) {
         let long_listener = unsafe { std::mem::transmute(listener) };
         scope.items.borrow_mut().listeners.push(long_listener)
     }

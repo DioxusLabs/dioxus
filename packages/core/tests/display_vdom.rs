@@ -13,7 +13,7 @@ mod test_logging;
 
 #[test]
 fn please_work() {
-    static App: FC<()> = |(cx, props)| {
+    static App: FC<()> = |cx, props| {
         cx.render(rsx! {
             div {
                 hidden: "true"
@@ -27,7 +27,7 @@ fn please_work() {
         })
     };
 
-    static Child: FC<()> = |(cx, props)| {
+    static Child: FC<()> = |cx, props| {
         cx.render(rsx! {
             div { "child" }
         })
@@ -35,6 +35,4 @@ fn please_work() {
 
     let mut dom = VirtualDom::new(App);
     dom.rebuild();
-
-    println!("{}", dom);
 }

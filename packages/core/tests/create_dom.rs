@@ -21,7 +21,7 @@ fn new_dom<P: 'static + Send>(app: FC<P>, props: P) -> VirtualDom {
 
 #[test]
 fn test_original_diff() {
-    static APP: FC<()> = |(cx, props)| {
+    static APP: FC<()> = |cx, props| {
         cx.render(rsx! {
             div {
                 div {
@@ -57,17 +57,17 @@ fn test_original_diff() {
 
 #[test]
 fn create() {
-    static APP: FC<()> = |(cx, props)| {
+    static APP: FC<()> = |cx, props| {
         cx.render(rsx! {
             div {
                 div {
                     "Hello, world!"
                     div {
                         div {
-                            // Fragment {
-                            //     "hello"
-                            //     "world"
-                            // }
+                            Fragment {
+                                "hello"
+                                "world"
+                            }
                         }
                     }
                 }
@@ -120,7 +120,7 @@ fn create() {
 
 #[test]
 fn create_list() {
-    static APP: FC<()> = |(cx, props)| {
+    static APP: FC<()> = |cx, props| {
         cx.render(rsx! {
             {(0..3).map(|f| rsx!{ div {
                 "hello"
@@ -169,7 +169,7 @@ fn create_list() {
 
 #[test]
 fn create_simple() {
-    static APP: FC<()> = |(cx, props)| {
+    static APP: FC<()> = |cx, props| {
         cx.render(rsx! {
             div {}
             div {}
@@ -207,7 +207,7 @@ fn create_simple() {
 }
 #[test]
 fn create_components() {
-    static App: FC<()> = |(cx, props)| {
+    static App: FC<()> = |cx, props| {
         cx.render(rsx! {
             Child { "abc1" }
             Child { "abc2" }
@@ -220,7 +220,7 @@ fn create_components() {
         children: ScopeChildren<'a>,
     }
 
-    fn Child<'a>((cx, props): Scope<'a, ChildProps<'a>>) -> Element {
+    fn Child<'a>(cx: Context<'a>, props: &ChildProps<'a>) -> Element {
         cx.render(rsx! {
             h1 {}
             div { {&props.children} }
@@ -273,7 +273,7 @@ fn create_components() {
 }
 #[test]
 fn anchors() {
-    static App: FC<()> = |(cx, props)| {
+    static App: FC<()> = |cx, props| {
         cx.render(rsx! {
             {true.then(|| rsx!{ div { "hello" } })}
             {false.then(|| rsx!{ div { "goodbye" } })}
@@ -302,17 +302,18 @@ fn anchors() {
 
 #[test]
 fn suspended() {
-    static App: FC<()> = |(cx, props)| {
-        let val = use_suspense(cx, || async {}, |p| todo!());
+    todo!()
+    // static App: FC<()> = |cx, props| {
+    //     let val = use_suspense(cx, || async {}, |p| todo!());
 
-        cx.render(rsx! { {val} })
-    };
+    //     cx.render(rsx! { {val} })
+    // };
 
-    let mut dom = new_dom(App, ());
-    let mutations = dom.rebuild();
+    // let mut dom = new_dom(App, ());
+    // let mutations = dom.rebuild();
 
-    assert_eq!(
-        mutations.edits,
-        [CreatePlaceholder { root: 0 }, AppendChildren { many: 1 },]
-    );
+    // assert_eq!(
+    //     mutations.edits,
+    //     [CreatePlaceholder { root: 0 }, AppendChildren { many: 1 },]
+    // );
 }

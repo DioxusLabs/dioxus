@@ -40,7 +40,7 @@ pub(crate) mod innerlude {
     pub use crate::virtual_dom::*;
 
     pub type Element = Option<NodeLink>;
-    pub type FC<P> = for<'a> fn(Scope<'a, P>) -> Element;
+    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> Element;
 }
 
 pub use crate::innerlude::{
@@ -50,9 +50,11 @@ pub use crate::innerlude::{
 };
 
 pub mod prelude {
-    pub use crate::component::{fc_to_builder, Fragment, Properties, Scope};
+    pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::innerlude::Context;
-    pub use crate::innerlude::{DioxusElement, Element, LazyNodes, NodeFactory, ScopeChildren, FC};
+    pub use crate::innerlude::{
+        DioxusElement, Element, LazyNodes, NodeFactory, Scope, ScopeChildren, FC,
+    };
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
 }
