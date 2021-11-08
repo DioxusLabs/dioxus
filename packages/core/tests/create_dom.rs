@@ -64,10 +64,10 @@ fn create() {
                     "Hello, world!"
                     div {
                         div {
-                            // Fragment {
-                            //     "hello"
-                            //     "world"
-                            // }
+                            Fragment {
+                                "hello"
+                                "world"
+                            }
                         }
                     }
                 }

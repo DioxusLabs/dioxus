@@ -531,89 +531,84 @@ impl<'a> NodeFactory<'a> {
         - if the props aren't static, then we convert them into a box which we pass off between renders
         */
 
+        // let bump = self.bump();
+
+        // // later, we'll do a hard allocation
+        // let raw_ptr = bump.alloc(props);
         let bump = self.bump();
-
-        // later, we'll do a hard allocation
-        let raw_ptr = bump.alloc(props);
-        // let caller = Box::new(|f: &ScopeInner| -> Element {
-        //     //
-        //     component((f, &props))
-        // });
-
+        let props = bump.alloc(props);
+        let bump_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
 
-        // let comparator: &mut dyn Fn(&VComponent) -> bool = bump.alloc_with(|| {
-        //     move |other: &VComponent| {
-        //         if user_fc == other.user_fc {
-        //             // Safety
-        //             // - We guarantee that FC<P> is the same by function pointer
-        //             // - Because FC<P> is the same, then P must be the same (even with generics)
-        //             // - Non-static P are autoderived to memoize as false
-        //             // - This comparator is only called on a corresponding set of bumpframes
-        //             let props_memoized = unsafe {
-        //                 let real_other: &P = &*(other.raw_props as *const _ as *const P);
-        //                 props.memoize(real_other)
-        //             };
+        let comparator: &mut dyn Fn(&VComponent) -> bool = bump.alloc_with(|| {
+            move |other: &VComponent| {
+                if user_fc == other.user_fc {
+                    // Safety
+                    // - We guarantee that FC<P> is the same by function pointer
+                    // - Because FC<P> is the same, then P must be the same (even with generics)
+                    // - Non-static P are autoderived to memoize as false
+                    // - This comparator is only called on a corresponding set of bumpframes
+                    let props_memoized = unsafe {
+                        let real_other: &P = &*(other.bump_props as *const _ as *const P);
+                        props.memoize(real_other)
+                    };
 
-        //             // It's only okay to memoize if there are no children and the props can be memoized
-        //             // Implementing memoize is unsafe and done automatically with the props trait
-        //             props_memoized
-        //         } else {
-        //             false
-        //         }
-        //     }
-        // });
-        // let comparator = Some(unsafe { BumpBox::from_raw(comparator) });
+                    // It's only okay to memoize if there are no children and the props can be memoized
+                    // Implementing memoize is unsafe and done automatically with the props trait
+                    props_memoized
+                } else {
+                    false
+                }
+            }
+        });
+
+        let drop_props = {
+            // create a closure to drop the props
+            let mut has_dropped = false;
+
+            let drop_props: &mut dyn FnMut() = bump.alloc_with(|| {
+                move || unsafe {
+                    log::debug!("dropping props!");
+                    if !has_dropped {
+                        let real_other = bump_props as *mut _ as *mut P;
+                        let b = BumpBox::from_raw(real_other);
+                        std::mem::drop(b);
+
+                        has_dropped = true;
+                    } else {
+                        panic!("Drop props called twice - this is an internal failure of Dioxus");
+                    }
+                }
+            });
+
+            let drop_props = unsafe { BumpBox::from_raw(drop_props) };
+
+            RefCell::new(Some(drop_props))
+        };
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        // let caller = match P::IS_STATIC {
-        //     true => {
-        //         // it just makes sense to box the props
-        //         let boxed_props: Box<P> = Box::new(props);
-        //         let props_we_know_are_static = todo!();
-        //         VCompCaller::Owned(Box::new(|f| {
-        //             //
+        let caller: &'a mut dyn Fn(&Scope) -> Element =
+            bump.alloc(move |scope: &Scope| -> Element {
+                log::debug!("calling component renderr {:?}", scope.our_arena_idx);
+                let props: &'_ P = unsafe { &*(bump_props as *const P) };
+                let res = component(scope, props);
+                // let res = component((Context { scope }, props));
+                unsafe { std::mem::transmute(res) }
+            });
 
-        //             let p = todo!();
+        let can_memoize = P::IS_STATIC;
 
-        //             todo!()
-        //         }))
-        //     }
-        //     false => VCompCaller::Borrowed({
-        //         //
-
-        //         todo!()
-        //         // let caller = bump.alloc()
-        //     }),
-        // };
-
-        todo!()
-        // let caller: &'a mut dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> =
-        //     bump.alloc(move |scope: &ScopeInner| -> Element {
-        //         log::debug!("calling component renderr {:?}", scope.our_arena_idx);
-        //         let props: &'_ P = unsafe { &*(raw_props as *const P) };
-
-        //         let scp: &'a ScopeInner = unsafe { std::mem::transmute(scope) };
-        //         let s: Scope<'a, P> = (scp, props);
-
-        //         let res: Element = component(s);
-        //         unsafe { std::mem::transmute(res) }
-        //     });
-
-        // let caller = unsafe { BumpBox::from_raw(caller) };
-
-        // VNode::Component(bump.alloc(VComponent {
-        //     user_fc,
-        //     comparator,
-        //     raw_props,
-        //     caller,
-        //     is_static: P::IS_STATIC,
-        //     key,
-        //     can_memoize: P::IS_STATIC,
-        //     drop_props,
-        //     associated_scope: Cell::new(None),
-        // }))
+        VNode::Component(bump.alloc(VComponent {
+            user_fc,
+            comparator,
+            bump_props,
+            caller,
+            key,
+            can_memoize,
+            drop_props,
+            associated_scope: Cell::new(None),
+        }))
     }
 
     pub fn listener(

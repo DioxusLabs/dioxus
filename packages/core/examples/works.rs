@@ -13,6 +13,7 @@ fn Parent(cx: Context, props: &()) -> Element {
     cx.render(rsx! {
         div {
             Child { name: value }
+            Fragment { "asd" }
         }
     })
 }
