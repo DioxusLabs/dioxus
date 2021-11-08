@@ -21,6 +21,6 @@ static App: FC<()> = |(cx, props)| {
 struct MyProps<'a> {
     text: &'a str,
 }
-fn App2<'a>(cx: Context<'a>, props: &'a MyProps) -> Element<'a> {
+fn App2(cx: Context, props: &MyProps) -> Element {
     None
 }

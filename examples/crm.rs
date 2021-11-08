@@ -90,15 +90,17 @@ static App: FC<()> = |(cx, _)| {
         }
     };
 
-    rsx!(cx, body {
-        link {
-            rel: "stylesheet"
-            href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css"
-            integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5"
-            crossorigin: "anonymous"
-        }
-        margin_left: "35%"
-        h1 {"Dioxus CRM Example"}
-        {scene}
-    })
+    cx.render(rsx!(
+        body {
+           link {
+               rel: "stylesheet"
+               href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css"
+               integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5"
+               crossorigin: "anonymous"
+           }
+           margin_left: "35%"
+           h1 {"Dioxus CRM Example"}
+           {scene}
+       }
+    ))
 };

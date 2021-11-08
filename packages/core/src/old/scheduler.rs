@@ -68,14 +68,17 @@ do anything too arduous from onInput.
 
 For the rest, we defer to the rIC period and work down each queue from high to low.
 */
-use crate::heuristics::*;
+
 use crate::innerlude::*;
+use bumpalo::Bump;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{pin_mut, stream::FuturesUnordered, Future, FutureExt, StreamExt};
 use fxhash::FxHashMap;
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use slab::Slab;
+use std::pin::Pin;
+use std::task::Poll;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
@@ -85,11 +88,7 @@ use std::{
 
 #[derive(Clone)]
 pub(crate) struct EventChannel {
-    pub task_counter: Rc<Cell<u64>>,
-    pub cur_subtree: Rc<Cell<u32>>,
     pub sender: UnboundedSender<SchedulerMsg>,
-    pub schedule_any_immediate: Rc<dyn Fn(ScopeId)>,
-    pub submit_task: Rc<dyn Fn(FiberTask) -> TaskHandle>,
     pub get_shared_context: GetSharedContext,
 }
 
@@ -101,16 +100,6 @@ pub enum SchedulerMsg {
 
     // setstate
     Immediate(ScopeId),
-
-    // tasks
-    Task(TaskMsg),
-}
-
-pub enum TaskMsg {
-    ToggleTask(u64),
-    PauseTask(u64),
-    ResumeTask(u64),
-    DropTask(u64),
 }
 
 /// The scheduler holds basically everything around "working"
@@ -126,16 +115,26 @@ pub enum TaskMsg {
 ///
 /// We can prevent this safety issue from occurring if we track which scopes are invalidated when starting a new task.
 ///
+/// There's a lot of raw pointers here...
+///
+/// Since we're building self-referential structures for each component, we need to make sure that the referencs stay stable
+/// The best way to do that is a bump allocator.
+///
+///
 ///
 pub(crate) struct Scheduler {
-    /// All mounted components are arena allocated to make additions, removals, and references easy to work with
-    /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
-    ///
-    /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
-    /// and rusts's guarantees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
-    pub pool: ResourcePool,
+    // /// All mounted components are arena allocated to make additions, removals, and references easy to work with
+    // /// A generational arena is used to re-use slots of deleted scopes without having to resize the underlying arena.
+    // ///
+    // /// This is wrapped in an UnsafeCell because we will need to get mutable access to unique values in unique bump arenas
+    // /// and rusts's guarantees cannot prove that this is safe. We will need to maintain the safety guarantees manually.
+    // pub pool: ResourcePool,
+    //
+    pub component_arena: Bump,
 
-    pub heuristics: HeuristicsEngine,
+    pub free_components: VecDeque<*mut ScopeInner>,
+
+    pub heuristics: FxHashMap<FcSlot, Heuristic>,
 
     pub receiver: UnboundedReceiver<SchedulerMsg>,
 
@@ -145,104 +144,70 @@ pub(crate) struct Scheduler {
     // Every component that has futures that need to be polled
     pub pending_futures: FxHashSet<ScopeId>,
 
-    // In-flight futures
-    pub async_tasks: FuturesUnordered<FiberTask>,
-
     // // scheduler stuff
     // pub current_priority: EventPriority,
     pub ui_events: VecDeque<UserEvent>,
 
     pub pending_immediates: VecDeque<ScopeId>,
 
-    pub pending_tasks: VecDeque<UserEvent>,
-
     pub batched_events: VecDeque<UserEvent>,
 
     pub garbage_scopes: HashSet<ScopeId>,
 
     pub dirty_scopes: IndexSet<ScopeId>,
+
     pub saved_state: Option<SavedDiffWork<'static>>,
+
     pub in_progress: bool,
+}
+
+pub type FcSlot = *const ();
+
+pub struct Heuristic {
+    hook_arena_size: usize,
+    node_arena_size: usize,
 }
 
 impl Scheduler {
     pub(crate) fn new(
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,
+        component_capacity: usize,
+        element_capacity: usize,
     ) -> Self {
         /*
         Preallocate 2000 elements and 100 scopes to avoid dynamic allocation.
         Perhaps this should be configurable from some external config?
         */
-        let components = Rc::new(UnsafeCell::new(Slab::with_capacity(100)));
-        let raw_elements = Rc::new(UnsafeCell::new(Slab::with_capacity(2000)));
 
-        let heuristics = HeuristicsEngine::new();
-
-        let task_counter = Rc::new(Cell::new(0));
-        let cur_subtree = Rc::new(Cell::new(0));
+        // let components = Rc::new(UnsafeCell::new(Slab::with_capacity(component_capacity)));
+        let raw_elements = Rc::new(UnsafeCell::new(Slab::with_capacity(element_capacity)));
 
         let channel = EventChannel {
-            cur_subtree,
-            task_counter: task_counter.clone(),
             sender: sender.clone(),
-            schedule_any_immediate: {
-                let sender = sender.clone();
-                Rc::new(move |id| {
-                    //
-                    log::debug!("scheduling immediate! {:?}", id);
-                    sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap()
-                })
-            },
-            // todo: we want to get the futures out of the scheduler message
-            // the scheduler message should be send/sync
-            submit_task: {
-                Rc::new(move |fiber_task| {
-                    let task_id = task_counter.get();
-                    task_counter.set(task_id + 1);
-
-                    todo!();
-                    // sender
-                    //     .unbounded_send(SchedulerMsg::Task(TaskMsg::SubmitTask(
-                    //         fiber_task, task_id,
-                    //     )))
-                    //     .unwrap();
-                    TaskHandle {
-                        our_id: task_id,
-                        sender: sender.clone(),
-                    }
-                })
-            },
             get_shared_context: {
-                let components = components.clone();
-                Rc::new(move |id, ty| {
-                    let components = unsafe { &*components.get() };
-                    let mut search: Option<&ScopeInner> = components.get(id.0);
-                    while let Some(inner) = search.take() {
-                        if let Some(shared) = inner.shared_contexts.borrow().get(&ty) {
-                            return Some(shared.clone());
-                        } else {
-                            search = inner.parent_idx.map(|id| components.get(id.0)).flatten();
-                        }
-                    }
-                    None
-                })
+                todo!()
+                // let components = components.clone();
+                // Rc::new(move |id, ty| {
+                //     let components = unsafe { &*components.get() };
+                //     let mut search: Option<&ScopeInner> = components.get(id.0);
+                //     while let Some(inner) = search.take() {
+                //         if let Some(shared) = inner.shared_contexts.borrow().get(&ty) {
+                //             return Some(shared.clone());
+                //         } else {
+                //             search = inner.parent_idx.map(|id| components.get(id.0)).flatten();
+                //         }
+                //     }
+                //     None
+                // })
             },
         };
 
-        let pool = ResourcePool {
-            components,
-            raw_elements,
-            channel,
-        };
-
-        let async_tasks = FuturesUnordered::new();
-
-        // push a task that would never resolve - prevents us from immediately aborting the scheduler
-        async_tasks.push(Box::pin(async {
-            std::future::pending::<()>().await;
-            ScopeId(0)
-        }) as FiberTask);
+        // let pool = ResourcePool {
+        //     components,
+        //     raw_elements,
+        //     channel,
+        // };
 
         let saved_state = SavedDiffWork {
             mutations: Mutations::new(),
@@ -251,21 +216,14 @@ impl Scheduler {
         };
 
         Self {
-            pool,
-
+            // pool,
             receiver,
 
-            async_tasks,
-
             pending_garbage: FxHashSet::default(),
-
-            heuristics,
 
             ui_events: VecDeque::new(),
 
             pending_immediates: VecDeque::new(),
-
-            pending_tasks: VecDeque::new(),
 
             batched_events: VecDeque::new(),
 
@@ -275,6 +233,8 @@ impl Scheduler {
             dirty_scopes: Default::default(),
             saved_state: Some(saved_state),
             in_progress: false,
+
+            heuristics: todo!(),
         }
     }
 
@@ -282,7 +242,7 @@ impl Scheduler {
     pub fn handle_ui_event(&mut self, event: UserEvent) -> bool {
         let (discrete, priority) = event_meta(&event);
 
-        if let Some(scope) = self.pool.get_scope_mut(event.scope) {
+        if let Some(scope) = self.get_scope_mut(&event.scope) {
             if let Some(element) = event.mounted_dom_id {
                 // TODO: bubble properly here
                 scope.call_listener(event, element);
@@ -308,7 +268,7 @@ impl Scheduler {
 
     fn prepare_work(&mut self) {
         // while let Some(trigger) = self.ui_events.pop_back() {
-        //     if let Some(scope) = self.pool.get_scope_mut(trigger.scope) {}
+        //     if let Some(scope) = self.get_scope_mut(&trigger.scope) {}
         // }
     }
 
@@ -328,15 +288,9 @@ impl Scheduler {
     unsafe fn load_work(&mut self) -> SavedDiffWork<'static> {
         self.saved_state.take().unwrap().extend()
     }
-    pub fn handle_task(&mut self, evt: TaskMsg) {
-        //
-    }
 
     pub fn handle_channel_msg(&mut self, msg: SchedulerMsg) {
         match msg {
-            //
-            SchedulerMsg::Task(msg) => todo!(),
-
             SchedulerMsg::Immediate(_) => todo!(),
 
             SchedulerMsg::UiEvent(event) => {
@@ -344,7 +298,7 @@ impl Scheduler {
 
                 let (discrete, priority) = event_meta(&event);
 
-                if let Some(scope) = self.pool.get_scope_mut(event.scope) {
+                if let Some(scope) = self.get_scope_mut(&event.scope) {
                     if let Some(element) = event.mounted_dom_id {
                         // TODO: bubble properly here
                         scope.call_listener(event, element);
@@ -374,19 +328,19 @@ impl Scheduler {
         let saved_state = unsafe { self.load_work() };
 
         // We have to split away some parts of ourself - current lane is borrowed mutably
-        let shared = self.pool.clone();
+        let shared = self.clone();
         let mut machine = unsafe { saved_state.promote(&shared) };
 
         let mut ran_scopes = FxHashSet::default();
 
         if machine.stack.is_empty() {
-            let shared = self.pool.clone();
+            let shared = self.clone();
 
             self.dirty_scopes
-                .retain(|id| shared.get_scope(*id).is_some());
+                .retain(|id| shared.get_scope(id).is_some());
             self.dirty_scopes.sort_by(|a, b| {
-                let h1 = shared.get_scope(*a).unwrap().height;
-                let h2 = shared.get_scope(*b).unwrap().height;
+                let h1 = shared.get_scope(a).unwrap().height;
+                let h2 = shared.get_scope(b).unwrap().height;
                 h1.cmp(&h2).reverse()
             });
 
@@ -396,8 +350,8 @@ impl Scheduler {
                     ran_scopes.insert(scopeid);
                     log::debug!("about to run scope {:?}", scopeid);
 
-                    if let Some(component) = self.pool.get_scope_mut(scopeid) {
-                        if component.run_scope(&self.pool) {
+                    if let Some(component) = self.get_scope_mut(&scopeid) {
+                        if component.run_scope(&self) {
                             let (old, new) =
                                 (component.frames.wip_head(), component.frames.fin_head());
                             // let (old, new) = (component.frames.wip_head(), component.frames.fin_head());
@@ -494,7 +448,6 @@ impl Scheduler {
         while self.has_any_work() {
             while let Ok(Some(msg)) = self.receiver.try_next() {
                 match msg {
-                    SchedulerMsg::Task(t) => todo!(),
                     SchedulerMsg::Immediate(im) => {
                         self.dirty_scopes.insert(im);
                     }
@@ -506,7 +459,7 @@ impl Scheduler {
 
             // switch our priority, pop off any work
             while let Some(event) = self.ui_events.pop_front() {
-                if let Some(scope) = self.pool.get_scope_mut(event.scope) {
+                if let Some(scope) = self.get_scope_mut(&event.scope) {
                     if let Some(element) = event.mounted_dom_id {
                         log::info!("Calling listener {:?}, {:?}", event.scope, element);
 
@@ -519,7 +472,6 @@ impl Scheduler {
                                     self.dirty_scopes.insert(im);
                                 }
                                 SchedulerMsg::UiEvent(e) => self.ui_events.push_back(e),
-                                SchedulerMsg::Task(_) => todo!(),
                             }
                         }
                     }
@@ -562,19 +514,19 @@ impl Scheduler {
     ///
     /// Typically used to kickstart the VirtualDOM after initialization.
     pub fn rebuild(&mut self, base_scope: ScopeId) -> Mutations {
-        let mut shared = self.pool.clone();
+        let mut shared = self.clone();
         let mut diff_machine = DiffMachine::new(Mutations::new(), &mut shared);
 
         // TODO: drain any in-flight work
         let cur_component = self
             .pool
-            .get_scope_mut(base_scope)
+            .get_scope_mut(&base_scope)
             .expect("The base scope should never be moved");
 
         log::debug!("rebuild {:?}", base_scope);
 
         // We run the component. If it succeeds, then we can diff it and add the changes to the dom.
-        if cur_component.run_scope(&self.pool) {
+        if cur_component.run_scope(&self) {
             diff_machine
                 .stack
                 .create_node(cur_component.frames.fin_head(), MountType::Append);
@@ -596,18 +548,50 @@ impl Scheduler {
     pub fn hard_diff(&mut self, base_scope: ScopeId) -> Mutations {
         let cur_component = self
             .pool
-            .get_scope_mut(base_scope)
+            .get_scope_mut(&base_scope)
             .expect("The base scope should never be moved");
 
         log::debug!("hard diff {:?}", base_scope);
 
-        if cur_component.run_scope(&self.pool) {
-            let mut diff_machine = DiffMachine::new(Mutations::new(), &mut self.pool);
+        if cur_component.run_scope(&self) {
+            let mut diff_machine = DiffMachine::new(Mutations::new(), &mut self);
             diff_machine.cfg.force_diff = true;
             diff_machine.diff_scope(base_scope);
             diff_machine.mutations
         } else {
             Mutations::new()
+        }
+    }
+}
+
+impl Future for Scheduler {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        let mut all_pending = true;
+
+        for fut in self.pending_futures.iter() {
+            let scope = self
+                .pool
+                .get_scope_mut(&fut)
+                .expect("Scope should never be moved");
+
+            let items = scope.items.get_mut();
+            for task in items.tasks.iter_mut() {
+                let t = task.as_mut();
+                let g = unsafe { Pin::new_unchecked(t) };
+                match g.poll(cx) {
+                    Poll::Ready(r) => {
+                        all_pending = false;
+                    }
+                    Poll::Pending => {}
+                }
+            }
+        }
+
+        match all_pending {
+            true => Poll::Pending,
+            false => Poll::Ready(()),
         }
     }
 }

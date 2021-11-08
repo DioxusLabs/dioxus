@@ -24,14 +24,16 @@ static App: FC<()> = |(cx, props)| {
                 .await
                 .unwrap();
         },
-        |cx, props| {
+        |props| {
             //
-            rsx!(WeatherDisplay {})
+            cx.render(rsx!(WeatherDisplay {}))
         },
     );
 
-    rsx!(cx, div {
-        {body}
+    cx.render(rsx! {
+        div {
+            {body}
+        }
     })
 };
 

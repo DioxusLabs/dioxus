@@ -82,13 +82,6 @@ pub fn use_shared_state<'a, T: 'static>(cx: Context<'a>) -> Option<UseSharedStat
                 _ => None,
             }
         },
-        |f| {
-            // we need to unsubscribe when our component is unounted
-            if let Some(root) = &f.root {
-                let mut root = root.borrow_mut();
-                root.consumers.remove(&f.scope_id);
-            }
-        },
     )
 }
 
@@ -97,6 +90,15 @@ struct SharedStateInner<T: 'static> {
     value: Option<Rc<RefCell<T>>>,
     scope_id: ScopeId,
     needs_notification: Cell<bool>,
+}
+impl<T> Drop for SharedStateInner<T> {
+    fn drop(&mut self) {
+        // we need to unsubscribe when our component is unounted
+        if let Some(root) = &self.root {
+            let mut root = root.borrow_mut();
+            root.consumers.remove(&self.scope_id);
+        }
+    }
 }
 
 pub struct UseSharedState<'a, T: 'static> {
@@ -172,6 +174,5 @@ pub fn use_provide_state<'a, T: 'static>(cx: Context<'a>, f: impl FnOnce() -> T)
             cx.provide_state(state)
         },
         |inner| {},
-        |_| {},
     )
 }

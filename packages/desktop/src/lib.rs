@@ -13,7 +13,6 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 
 use cfg::DesktopConfig;
-use dioxus_core::scheduler::SchedulerMsg;
 use dioxus_core::*;
 use serde::{Deserialize, Serialize};
 

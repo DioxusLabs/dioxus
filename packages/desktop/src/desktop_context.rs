@@ -57,7 +57,7 @@ pub struct WebviewWindowProps<'a> {
 ///
 ///
 ///
-pub fn WebviewWindow<'a>((cx, props): Scope<'a, WebviewWindowProps>) -> Element<'a> {
+pub fn WebviewWindow((cx, props): Scope<WebviewWindowProps>) -> Element {
     let dtcx = cx.consume_state::<RefCell<DesktopContext>>()?;
 
     cx.use_hook(
@@ -65,9 +65,6 @@ pub fn WebviewWindow<'a>((cx, props): Scope<'a, WebviewWindowProps>) -> Element<
             //
         },
         |state| {
-            //
-        },
-        |hook| {
             //
         },
     );

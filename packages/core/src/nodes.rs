@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeInner},
+    innerlude::{empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId},
     lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -13,6 +13,19 @@ use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
 };
+
+/// A cached node is a "pointer" to a "rendered" node in a particular scope
+///
+/// It does not provide direct access to the node, so it doesn't carry any lifetime information with it
+///
+/// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
+/// is essentially a unique key to guarantee safe usage of the Node.
+#[derive(Clone, Debug)]
+pub struct NodeLink {
+    pub(crate) link_idx: usize,
+    pub(crate) gen_id: u32,
+    pub(crate) scope_id: ScopeId,
+}
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
 ///
@@ -118,6 +131,13 @@ pub enum VNode<'src> {
     /// }
     /// ```
     Anchor(&'src VAnchor),
+
+    /// A type of node that links this node to another scope or render cycle
+    ///
+    /// Is essentially a "pointer" to a "rendered" node in a particular scope
+    ///
+    /// Used in portals
+    Linked(NodeLink),
 }
 
 impl<'src> VNode<'src> {
@@ -127,9 +147,11 @@ impl<'src> VNode<'src> {
             VNode::Element(el) => el.key,
             VNode::Component(c) => c.key,
             VNode::Fragment(f) => f.key,
+
             VNode::Text(_t) => None,
             VNode::Suspended(_s) => None,
             VNode::Anchor(_f) => None,
+            VNode::Linked(_c) => None,
         }
     }
 
@@ -149,8 +171,17 @@ impl<'src> VNode<'src> {
             VNode::Element(el) => el.dom_id.get(),
             VNode::Anchor(el) => el.dom_id.get(),
             VNode::Suspended(el) => el.dom_id.get(),
+            VNode::Linked(_) => None,
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
+        }
+    }
+
+    pub fn children(&self) -> &[VNode<'src>] {
+        match &self {
+            VNode::Fragment(f) => f.children,
+            VNode::Component(c) => todo!("children are not accessible through this"),
+            _ => &[],
         }
     }
 
@@ -165,7 +196,11 @@ impl<'src> VNode<'src> {
             VNode::Fragment(f) => VNode::Fragment(VFragment {
                 children: f.children,
                 key: f.key,
-                is_static: f.is_static,
+            }),
+            VNode::Linked(c) => VNode::Linked(NodeLink {
+                gen_id: c.gen_id,
+                scope_id: c.scope_id,
+                link_idx: c.link_idx,
             }),
         }
     }
@@ -175,17 +210,24 @@ impl Debug for VNode<'_> {
     fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match &self {
             VNode::Element(el) => s
-                .debug_struct("VElement")
+                .debug_struct("VNode::VElement")
                 .field("name", &el.tag_name)
                 .field("key", &el.key)
                 .finish(),
 
-            VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
-            VNode::Anchor(_) => write!(s, "VAnchor"),
+            VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
+            VNode::Anchor(_) => write!(s, "VNode::VAnchor"),
 
-            VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
-            VNode::Suspended { .. } => write!(s, "VSuspended"),
-            VNode::Component(comp) => write!(s, "VComponent {{ fc: {:?}}}", comp.user_fc),
+            VNode::Fragment(frag) => {
+                write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
+            }
+            VNode::Suspended { .. } => write!(s, "VNode::VSuspended"),
+            VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
+            VNode::Linked(c) => write!(
+                s,
+                "VNode::VCached {{ gen_id: {}, scope_id: {:?} }}",
+                c.gen_id, c.scope_id
+            ),
         }
     }
 }
@@ -209,8 +251,6 @@ pub struct VFragment<'src> {
     pub key: Option<&'src str>,
 
     pub children: &'src [VNode<'src>],
-
-    pub is_static: bool,
 }
 
 /// An element like a "div" with children, listeners, and attributes.
@@ -309,6 +349,7 @@ pub struct Listener<'bump> {
     pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn Any + Send>) + 'bump>>>,
 }
 
+pub type VCompCaller<'src> = BumpBox<'src, dyn Fn(Context) -> Element + 'src>;
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
@@ -316,21 +357,19 @@ pub struct VComponent<'src> {
 
     pub associated_scope: Cell<Option<ScopeId>>,
 
-    pub is_static: bool,
-
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
 
-    pub(crate) caller: BumpBox<'src, dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> + 'src>,
-
-    pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
-
-    pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
-
     pub(crate) can_memoize: bool,
 
+    pub(crate) hard_allocation: Cell<Option<*const ()>>,
+
     // Raw pointer into the bump arena for the props of the component
-    pub(crate) raw_props: *const (),
+    pub(crate) bump_props: *const (),
+
+    // during the "teardown" process we'll take the caller out so it can be dropped properly
+    pub(crate) caller: Option<VCompCaller<'src>>,
+    pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
 }
 
 pub struct VSuspended<'a> {
@@ -338,7 +377,7 @@ pub struct VSuspended<'a> {
     pub dom_id: Cell<Option<ElementId>>,
 
     #[allow(clippy::type_complexity)]
-    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut() -> Element<'a> + 'a>>>,
+    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut() -> Element + 'a>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -475,16 +514,30 @@ impl<'a> NodeFactory<'a> {
 
     pub fn component<P>(
         &self,
-        component: fn(Scope<'a, P>) -> Element<'a>,
+        component: fn(Context<'a>, &'a P) -> Element,
         props: P,
         key: Option<Arguments>,
     ) -> VNode<'a>
     where
         P: Properties + 'a,
     {
+        /*
+        our strategy:
+        - unsafe hackery
+        - lol
+
+        - we don't want to hit the global allocator
+        - allocate into our bump arena
+        - if the props aren't static, then we convert them into a box which we pass off between renders
+        */
+
+        // let bump = self.bump();
+
+        // // later, we'll do a hard allocation
+        // let raw_ptr = bump.alloc(props);
         let bump = self.bump();
         let props = bump.alloc(props);
-        let raw_props = props as *mut P as *mut ();
+        let bump_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
 
         let comparator: &mut dyn Fn(&VComponent) -> bool = bump.alloc_with(|| {
@@ -496,7 +549,7 @@ impl<'a> NodeFactory<'a> {
                     // - Non-static P are autoderived to memoize as false
                     // - This comparator is only called on a corresponding set of bumpframes
                     let props_memoized = unsafe {
-                        let real_other: &P = &*(other.raw_props as *const _ as *const P);
+                        let real_other: &P = &*(other.bump_props as *const _ as *const P);
                         props.memoize(real_other)
                     };
 
@@ -508,7 +561,6 @@ impl<'a> NodeFactory<'a> {
                 }
             }
         });
-        let comparator = Some(unsafe { BumpBox::from_raw(comparator) });
 
         let drop_props = {
             // create a closure to drop the props
@@ -518,7 +570,7 @@ impl<'a> NodeFactory<'a> {
                 move || unsafe {
                     log::debug!("dropping props!");
                     if !has_dropped {
-                        let real_other = raw_props as *mut _ as *mut P;
+                        let real_other = bump_props as *mut _ as *mut P;
                         let b = BumpBox::from_raw(real_other);
                         std::mem::drop(b);
 
@@ -536,31 +588,39 @@ impl<'a> NodeFactory<'a> {
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller: &'a mut dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> =
-            bump.alloc(move |scope: &ScopeInner| -> Element {
+        let caller: &'a mut dyn Fn(&Scope) -> Element =
+            bump.alloc(move |scope: &Scope| -> Element {
                 log::debug!("calling component renderr {:?}", scope.our_arena_idx);
-                let props: &'_ P = unsafe { &*(raw_props as *const P) };
-
-                let scp: &'a ScopeInner = unsafe { std::mem::transmute(scope) };
-                let s: Scope<'a, P> = (scp, props);
-
-                let res: Element = component(s);
+                let props: &'_ P = unsafe { &*(bump_props as *const P) };
+                let res = component(scope, props);
+                // let res = component((Context { scope }, props));
                 unsafe { std::mem::transmute(res) }
             });
 
-        let caller = unsafe { BumpBox::from_raw(caller) };
+        let can_memoize = P::IS_STATIC;
 
         VNode::Component(bump.alloc(VComponent {
             user_fc,
             comparator,
-            raw_props,
+            bump_props,
             caller,
-            is_static: P::IS_STATIC,
             key,
-            can_memoize: P::IS_STATIC,
+            can_memoize,
             drop_props,
             associated_scope: Cell::new(None),
         }))
+    }
+
+    pub fn listener(
+        self,
+        event: &'static str,
+        callback: BumpBox<'a, dyn FnMut(Box<dyn Any + Send>) + 'a>,
+    ) -> Listener<'a> {
+        Listener {
+            mounted_node: Cell::new(None),
+            event,
+            callback: RefCell::new(Some(callback)),
+        }
     }
 
     pub fn fragment_from_iter(
@@ -604,14 +664,12 @@ impl<'a> NodeFactory<'a> {
         VNode::Fragment(VFragment {
             children,
             key: None,
-            is_static: false,
         })
     }
 
-    pub fn annotate_lazy<'z, 'b, F>(f: F) -> Option<LazyNodes<'z, 'b>>
-    where
-        F: FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b,
-    {
+    pub fn annotate_lazy<'z, 'b>(
+        f: impl FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b,
+    ) -> Option<LazyNodes<'z, 'b>> {
         Some(LazyNodes::new(f))
     }
 }
@@ -672,6 +730,21 @@ impl IntoVNode<'_> for Option<()> {
     }
 }
 
+// Conveniently, we also support "None"
+impl IntoVNode<'_> for Option<NodeLink> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        todo!()
+        // cx.fragment_from_iter(None as Option<VNode>)
+    }
+}
+// Conveniently, we also support "None"
+impl IntoVNode<'_> for NodeLink {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        todo!()
+        // cx.fragment_from_iter(None as Option<VNode>)
+    }
+}
+
 impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
@@ -684,7 +757,6 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
             Some(lazy) => lazy.call(cx),
             None => VNode::Fragment(VFragment {
                 children: &[],
-                is_static: false,
                 key: None,
             }),
         }

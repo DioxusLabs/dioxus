@@ -1,4 +1,4 @@
-use crate::{innerlude::ScopeInner, virtual_dom::VirtualDom, VNode};
+use crate::{innerlude::ScopeState, virtual_dom::VirtualDom, VNode};
 
 impl std::fmt::Display for VirtualDom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -24,7 +24,7 @@ impl std::fmt::Display for VirtualDom {
 pub(crate) struct ScopeRenderer<'a> {
     pub skip_components: bool,
     pub show_fragments: bool,
-    pub _scope: &'a ScopeInner,
+    pub _scope: &'a ScopeState,
     pub _pre_render: bool,
     pub _newline: bool,
     pub _indent: bool,
@@ -48,6 +48,9 @@ impl<'a> ScopeRenderer<'a> {
         };
 
         match &node {
+            VNode::Linked(_) => {
+                write!(f, "Linked").unwrap();
+            }
             VNode::Text(text) => {
                 write_indent(f, il);
                 writeln!(f, "\"{}\"", text.text)?
@@ -115,7 +118,7 @@ impl<'a> ScopeRenderer<'a> {
             VNode::Component(vcomp) => {
                 let idx = vcomp.associated_scope.get().unwrap();
                 if !self.skip_components {
-                    let new_node = vdom.get_scope(idx).unwrap().root_node();
+                    let new_node = vdom.get_scope(&idx).unwrap().root_node();
                     self.render(vdom, new_node, f, il)?;
                 }
             }

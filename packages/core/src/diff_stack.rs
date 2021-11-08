@@ -49,10 +49,6 @@ impl<'bump> DiffStack<'bump> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.instructions.is_empty()
-    }
-
     pub fn pop(&mut self) -> Option<DiffInstruction<'bump>> {
         self.instructions.pop()
     }
