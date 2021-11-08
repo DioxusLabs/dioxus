@@ -1,5 +1,8 @@
 use slab::Slab;
-use std::cell::{Cell, RefCell};
+use std::{
+    borrow::BorrowMut,
+    cell::{Cell, RefCell},
+};
 
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use futures_channel::mpsc::UnboundedSender;
@@ -22,6 +25,7 @@ pub(crate) struct ScopeArena {
     bump: Bump,
     scopes: Vec<*mut Scope>,
     free_scopes: Vec<ScopeId>,
+    nodes: RefCell<Slab<*const VNode<'static>>>,
     pub(crate) sender: UnboundedSender<SchedulerMsg>,
 }
 
@@ -31,7 +35,7 @@ impl ScopeArena {
             bump: Bump::new(),
             scopes: Vec::new(),
             free_scopes: Vec::new(),
-
+            nodes: RefCell::new(Slab::new()),
             sender,
         }
     }
@@ -55,41 +59,49 @@ impl ScopeArena {
             todo!("override the scope contents");
             id
         } else {
-            let id = ScopeId(self.scopes.len());
+            let scope_id = ScopeId(self.scopes.len());
 
-            // cast off the lifetime
-            let caller = unsafe { std::mem::transmute(caller) };
+            let old_root = NodeLink {
+                link_idx: 0,
+                gen_id: 0,
+                scope_id,
+            };
+            let new_root = NodeLink {
+                link_idx: 0,
+                gen_id: 0,
+                scope_id,
+            };
 
             let new_scope = Scope {
                 sender: self.sender.clone(),
                 parent_scope,
-                our_arena_idx: id,
+                our_arena_idx: scope_id,
                 height,
                 subtree: Cell::new(subtree),
                 is_subtree_root: Cell::new(false),
-                frames: [Bump::default(), Bump::default()],
+                frames: [BumpFrame::new(), BumpFrame::new()],
 
                 hooks: Default::default(),
                 shared_contexts: Default::default(),
+                caller,
+                generation: 0.into(),
 
+                old_root: RefCell::new(Some(old_root)),
+                new_root: RefCell::new(Some(new_root)),
+                // old_root: RefCell::new(Some(old_root)),
+                // new_root: RefCell::new(None),
                 items: RefCell::new(SelfReferentialItems {
                     listeners: Default::default(),
                     borrowed_props: Default::default(),
                     suspended_nodes: Default::default(),
                     tasks: Default::default(),
                     pending_effects: Default::default(),
-                    cached_nodes_old: Default::default(),
-                    generation: Default::default(),
-                    cached_nodes_new: Default::default(),
-                    caller,
                 }),
-                old_root: todo!(),
-                new_root: todo!(),
             };
 
             let stable = self.bump.alloc(new_scope);
             self.scopes.push(stable);
-            id
+            scope_id
         }
     }
 
@@ -98,8 +110,20 @@ impl ScopeArena {
     }
 
     pub fn reserve_node(&self, node: &VNode) -> ElementId {
-        todo!()
-        // self.node_reservations.insert(id);
+        let mut els = self.nodes.borrow_mut();
+        let entry = els.vacant_entry();
+        let key = entry.key();
+        let id = ElementId(key);
+        let node = node as *const _;
+        let node = unsafe { std::mem::transmute(node) };
+        entry.insert(node);
+        id
+
+        // let nodes = self.nodes.borrow_mut();
+        // let id = nodes.insert(());
+        // let node_id = ElementId(id);
+        // node = Some(node_id);
+        // node_id
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
@@ -177,38 +201,90 @@ impl ScopeArena {
         // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
         unsafe { scope.reset_wip_frame() };
 
-        let mut items = scope.items.borrow_mut();
+        {
+            let mut items = scope.items.borrow_mut();
 
-        // just forget about our suspended nodes while we're at it
-        items.suspended_nodes.clear();
+            // just forget about our suspended nodes while we're at it
+            items.suspended_nodes.clear();
 
-        // guarantee that we haven't screwed up - there should be no latent references anywhere
-        debug_assert!(items.listeners.is_empty());
-        debug_assert!(items.suspended_nodes.is_empty());
-        debug_assert!(items.borrowed_props.is_empty());
+            // guarantee that we haven't screwed up - there should be no latent references anywhere
+            debug_assert!(items.listeners.is_empty());
+            debug_assert!(items.suspended_nodes.is_empty());
+            debug_assert!(items.borrowed_props.is_empty());
 
-        log::debug!("Borrowed stuff is successfully cleared");
+            log::debug!("Borrowed stuff is successfully cleared");
 
-        // temporarily cast the vcomponent to the right lifetime
-        // let vcomp = scope.load_vcomp();
+            // temporarily cast the vcomponent to the right lifetime
+            // let vcomp = scope.load_vcomp();
+        }
 
-        let render: &dyn Fn(&Scope) -> Element = todo!();
+        let render: &dyn Fn(&Scope) -> Element = unsafe { &*scope.caller };
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
+        scope.wip_frame().nodes.borrow_mut().clear();
         if let Some(key) = render(scope) {
-            // todo!("attach the niode");
-            // let new_head = builder.into_vnode(NodeFactory {
-            //     bump: &scope.frames.wip_frame().bump,
-            // });
-            // log::debug!("Render is successful");
+            dbg!(key);
+
+            dbg!(&scope.wip_frame().nodes.borrow_mut());
+            // let mut old = scope.old_root.borrow_mut();
+            // let mut new = scope.new_root.borrow_mut();
+
+            // let new_old = new.clone();
+            // *old = new_old;
+            // *new = Some(key);
+
+            // dbg!(&old);
+            // dbg!(&new);
 
             // the user's component succeeded. We can safely cycle to the next frame
             // scope.frames.wip_frame_mut().head_node = unsafe { std::mem::transmute(new_head) };
-            // scope.frames.cycle_frame();
+            scope.cycle_frame();
 
             true
         } else {
             false
         }
+    }
+
+    pub fn wip_head(&self, id: &ScopeId) -> &VNode {
+        let scope = self.get_scope(id).unwrap();
+        let wip_frame = scope.wip_frame();
+        let nodes = wip_frame.nodes.borrow();
+        let node = nodes.get(0).unwrap();
+        unsafe { std::mem::transmute(node) }
+        // let root = scope.old_root.borrow();
+        // let link = root.as_ref().unwrap();
+        // dbg!(link);
+
+        // // for now, components cannot pass portals through each other
+        // assert_eq!(link.scope_id, *id);
+        // // assert_eq!(link.gen_id, scope.generation.get() - 1);
+
+        // // let items = scope.items.borrow();
+        // let nodes = scope.wip_frame().nodes.borrow();
+        // let node = nodes.get(link.link_idx).unwrap();
+        // unsafe { std::mem::transmute(node) }
+    }
+
+    pub fn fin_head(&self, id: &ScopeId) -> &VNode {
+        let scope = self.get_scope(id).unwrap();
+        let wip_frame = scope.fin_frame();
+        let nodes = wip_frame.nodes.borrow();
+        let node = nodes.get(0).unwrap();
+        unsafe { std::mem::transmute(node) }
+        // let scope = self.get_scope(id).unwrap();
+        // let root = scope.new_root.borrow();
+        // let link = root.as_ref().unwrap();
+
+        // // for now, components cannot pass portals through each other
+        // assert_eq!(link.scope_id, *id);
+        // // assert_eq!(link.gen_id, scope.generation.get());
+
+        // let nodes = scope.fin_frame().nodes.borrow();
+        // let node = nodes.get(link.link_idx).unwrap();
+        // unsafe { std::mem::transmute(node) }
+    }
+    pub fn root_node(&self, id: &ScopeId) -> &VNode {
+        self.wip_head(id)
     }
 }

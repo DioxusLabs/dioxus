@@ -59,11 +59,15 @@ pub struct Scope {
 
     pub(crate) is_subtree_root: Cell<bool>,
 
+    pub(crate) generation: Cell<u32>,
+
     // The double-buffering situation that we will use
-    pub(crate) frames: [Bump; 2],
+    pub(crate) frames: [BumpFrame; 2],
 
     pub(crate) old_root: RefCell<Option<NodeLink>>,
     pub(crate) new_root: RefCell<Option<NodeLink>>,
+
+    pub(crate) caller: *mut dyn Fn(&Scope) -> Element,
 
     /*
     we care about:
@@ -83,14 +87,6 @@ pub struct Scope {
 }
 
 pub struct SelfReferentialItems<'a> {
-    // nodes stored by "cx.render"
-    pub(crate) cached_nodes_old: Vec<VNode<'a>>,
-    pub(crate) cached_nodes_new: Vec<VNode<'a>>,
-
-    pub(crate) caller: &'a dyn Fn(&Scope) -> Element,
-
-    pub(crate) generation: Cell<u32>,
-
     pub(crate) listeners: Vec<&'a Listener<'a>>,
     pub(crate) borrowed_props: Vec<&'a VComponent<'a>>,
     pub(crate) suspended_nodes: FxHashMap<u64, &'a VSuspended<'a>>,
@@ -100,25 +96,6 @@ pub struct SelfReferentialItems<'a> {
 
 // Public methods exposed to libraries and components
 impl Scope {
-    /// Get the root VNode for this Scope.
-    ///
-    /// This VNode is the "entrypoint" VNode. If the component renders multiple nodes, then this VNode will be a fragment.
-    ///
-    /// # Example
-    /// ```rust
-    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
-    /// dom.rebuild();
-    ///
-    /// let base = dom.base_scope();
-    ///
-    /// if let VNode::VElement(node) = base.root_node() {
-    ///     assert_eq!(node.tag_name, "div");
-    /// }
-    /// ```
-    pub fn root_node(&self) -> &VNode {
-        self.fin_head()
-    }
-
     /// Get the subtree ID that this scope belongs to.
     ///
     /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
@@ -239,7 +216,7 @@ impl Scope {
     ///
     /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
     pub fn bump(&self) -> &Bump {
-        &self.wip_frame()
+        &self.wip_frame().bump
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -258,18 +235,18 @@ impl Scope {
     /// }
     ///```
     pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
-        let bump = &self.wip_frame();
+        let bump = &self.wip_frame().bump;
         let factory = NodeFactory { bump };
         let node = lazy_nodes.map(|f| f.call(factory))?;
 
-        self.items
-            .borrow_mut()
-            .cached_nodes_old
-            .push(unsafe { std::mem::transmute(node) });
+        let idx = self
+            .wip_frame()
+            .add_node(unsafe { std::mem::transmute(node) });
 
         Some(NodeLink {
-            gen_id: self.items.borrow().generation.get(),
+            gen_id: self.generation.get(),
             scope_id: self.our_arena_idx,
+            link_idx: idx,
         })
     }
 
@@ -427,11 +404,7 @@ impl Scope {
             self.hooks.push_hook(initializer(self.hooks.len()));
         }
 
-        runner(self.hooks.next::<State>().expect(HOOK_ERR_MSG))
-    }
-}
-
-const HOOK_ERR_MSG: &str = r###"
+        const HOOK_ERR_MSG: &str = r###"
 Unable to retrieve the hook that was initialized at this index.
 Consult the `rules of hooks` to understand how to use hooks properly.
 
@@ -439,29 +412,24 @@ You likely used the hook in a conditional. Hooks rely on consistent ordering bet
 Functions prefixed with "use" should never be called conditionally.
 "###;
 
+        runner(self.hooks.next::<State>().expect(HOOK_ERR_MSG))
+    }
+}
+
 // Important internal methods
 impl Scope {
-    /// Give out our self-referential item with our own borrowed lifetime
-    pub(crate) fn fin_head<'b>(&'b self) -> &'b VNode<'b> {
-        todo!()
-        // let cur_head = &self.finished_frame().head_node;
-        // unsafe { std::mem::transmute::<&VNode<'static>, &VNode<'b>>(cur_head) }
-    }
-
-    /// Give out our self-referential item with our own borrowed lifetime
-    pub(crate) fn wip_head<'b>(&'b self) -> &'b VNode<'b> {
-        todo!()
-        // let cur_head = &self.wip_frame().head_node;
-        // unsafe { std::mem::transmute::<&VNode<'static>, &VNode<'b>>(cur_head) }
-    }
-
     /// The "work in progress frame" represents the frame that is currently being worked on.
-    pub(crate) fn wip_frame(&self) -> &Bump {
-        todo!()
-        // match self.cur_generation.get() & 1 == 0 {
-        //     true => &self.frames[0],
-        //     false => &self.frames[1],
-        // }
+    pub(crate) fn wip_frame(&self) -> &BumpFrame {
+        match self.generation.get() & 1 == 0 {
+            true => &self.frames[0],
+            false => &self.frames[1],
+        }
+    }
+    pub(crate) fn fin_frame(&self) -> &BumpFrame {
+        match self.generation.get() & 1 == 1 {
+            true => &self.frames[0],
+            false => &self.frames[1],
+        }
     }
 
     pub unsafe fn reset_wip_frame(&self) {
@@ -469,8 +437,10 @@ impl Scope {
         let bump = self.wip_frame() as *const _ as *mut Bump;
         let g = &mut *bump;
         g.reset();
+    }
 
-        // self.wip_frame_mut().bump.reset()
+    pub fn cycle_frame(&self) {
+        self.generation.set(self.generation.get() + 1);
     }
 
     /// A safe wrapper around calling listeners
@@ -526,5 +496,28 @@ impl Scope {
         //     self.shared.cur_subtree.set(cur + 1);
         //     Some(cur)
         // }
+    }
+}
+
+pub struct BumpFrame {
+    pub bump: Bump,
+    pub nodes: RefCell<Vec<VNode<'static>>>,
+}
+impl BumpFrame {
+    pub fn new() -> Self {
+        let bump = Bump::new();
+
+        let node = &*bump.alloc(VText {
+            text: "asd",
+            dom_id: Default::default(),
+            is_static: false,
+        });
+        let nodes = RefCell::new(vec![VNode::Text(unsafe { std::mem::transmute(node) })]);
+        Self { bump, nodes }
+    }
+    fn add_node(&self, node: VNode<'static>) -> usize {
+        let mut nodes = self.nodes.borrow_mut();
+        nodes.push(node);
+        nodes.len() - 1
     }
 }

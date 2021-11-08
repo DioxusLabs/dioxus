@@ -20,7 +20,9 @@ use std::{
 ///
 /// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
 /// is essentially a unique key to guarantee safe usage of the Node.
+#[derive(Clone, Debug)]
 pub struct NodeLink {
+    pub(crate) link_idx: usize,
     pub(crate) gen_id: u32,
     pub(crate) scope_id: ScopeId,
 }
@@ -198,6 +200,7 @@ impl<'src> VNode<'src> {
             VNode::Linked(c) => VNode::Linked(NodeLink {
                 gen_id: c.gen_id,
                 scope_id: c.scope_id,
+                link_idx: c.link_idx,
             }),
         }
     }
@@ -207,20 +210,22 @@ impl Debug for VNode<'_> {
     fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match &self {
             VNode::Element(el) => s
-                .debug_struct("VElement")
+                .debug_struct("VNode::VElement")
                 .field("name", &el.tag_name)
                 .field("key", &el.key)
                 .finish(),
 
-            VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
-            VNode::Anchor(_) => write!(s, "VAnchor"),
+            VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
+            VNode::Anchor(_) => write!(s, "VNode::VAnchor"),
 
-            VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
-            VNode::Suspended { .. } => write!(s, "VSuspended"),
-            VNode::Component(comp) => write!(s, "VComponent {{ fc: {:?}}}", comp.user_fc),
+            VNode::Fragment(frag) => {
+                write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
+            }
+            VNode::Suspended { .. } => write!(s, "VNode::VSuspended"),
+            VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
             VNode::Linked(c) => write!(
                 s,
-                "VCached {{ gen_id: {}, scope_id: {:?} }}",
+                "VNode::VCached {{ gen_id: {}, scope_id: {:?} }}",
                 c.gen_id, c.scope_id
             ),
         }

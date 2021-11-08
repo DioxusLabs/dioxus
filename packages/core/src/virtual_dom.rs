@@ -384,8 +384,10 @@ impl VirtualDom {
                     log::debug!("about to run scope {:?}", scopeid);
 
                     if self.scopes.run_scope(&scopeid) {
-                        let scope = self.scopes.get_scope(&scopeid).unwrap();
-                        let (old, new) = (scope.wip_head(), scope.fin_head());
+                        let (old, new) = (
+                            self.scopes.wip_head(&scopeid),
+                            self.scopes.fin_head(&scopeid),
+                        );
                         diff_state.stack.scope_stack.push(scopeid);
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                     }
@@ -438,13 +440,20 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
-        // todo: I think we need to append a node or something
-        //     diff_machine
-        //         .stack
-        //         .create_node(cur_component.frames.fin_head(), MountType::Append);
+        let mut diff_machine = DiffState::new(Mutations::new());
 
-        let scope = self.base_scope;
-        self.hard_diff(&scope).unwrap()
+        let scope_id = self.base_scope;
+        if self.scopes.run_scope(&scope_id) {
+            diff_machine
+                .stack
+                .create_node(self.scopes.fin_head(&scope_id), MountType::Append);
+
+            diff_machine.stack.scope_stack.push(scope_id);
+
+            self.scopes.work(&mut diff_machine, || false);
+        }
+
+        diff_machine.mutations
     }
 
     /// Compute a manual diff of the VirtualDOM between states.
@@ -490,6 +499,8 @@ impl VirtualDom {
             diff_machine.force_diff = true;
 
             self.scopes.diff_scope(&mut diff_machine, scope_id);
+
+            dbg!(&diff_machine.mutations);
 
             Some(diff_machine.mutations)
         } else {
