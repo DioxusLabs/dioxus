@@ -92,7 +92,8 @@ fn child_components() {
 #[test]
 fn suspended_works() {
     static App: FC<()> = |(cx, props)| {
-        let title = use_suspense(cx, || async { "bob" }, |cx, f| cx.render(rsx! { "{f}"}));
+        let title = use_suspense(cx, || async { "bob" }, move |cx, f| todo!());
+        // let title = use_suspense(cx, || async { "bob" }, move |cx, f| rsx! { "{f}"});
         cx.render(rsx!("hello" { title }))
     };
 

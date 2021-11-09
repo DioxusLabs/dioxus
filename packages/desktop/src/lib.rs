@@ -20,9 +20,9 @@ use serde::{Deserialize, Serialize};
 pub use wry;
 
 use wry::application::accelerator::{Accelerator, SysMods};
-use wry::application::event::{Event, StartCause, WindowEvent};
+use wry::application::event::{ElementState, Event, StartCause, WindowEvent};
 use wry::application::event_loop::{self, ControlFlow, EventLoop};
-use wry::application::keyboard::KeyCode;
+use wry::application::keyboard::{Key, KeyCode, ModifiersState};
 use wry::application::menu::{MenuBar, MenuItem, MenuItemAttributes};
 use wry::application::window::Fullscreen;
 use wry::webview::{WebView, WebViewBuilder};
@@ -94,6 +94,11 @@ pub fn run<T: 'static + Send + Sync>(
 
     let props_shared = Cell::new(Some(props));
 
+    // create local modifier state
+    let mut modifiers = ModifiersState::default();
+
+    let quit_hotkey = Accelerator::new(SysMods::Cmd, KeyCode::KeyQ);
+
     event_loop.run(move |event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
@@ -112,10 +117,8 @@ pub fn run<T: 'static + Send + Sync>(
                 first_menu.add_native_item(MenuItem::HideOthers);
                 first_menu.add_native_item(MenuItem::ShowAll);
 
-                let quit_item = first_menu.add_item(
-                    MenuItemAttributes::new("Quit")
-                        .with_accelerators(&Accelerator::new(SysMods::Cmd, KeyCode::KeyQ)),
-                );
+                first_menu.add_native_item(MenuItem::Quit);
+                first_menu.add_native_item(MenuItem::CloseWindow);
 
                 // create second menu
                 let mut second_menu = MenuBar::new();
@@ -129,6 +132,7 @@ pub fn run<T: 'static + Send + Sync>(
                 menu_bar_menu.add_submenu("Second menu", true, second_menu);
 
                 let window = WindowBuilder::new()
+                    .with_maximized(true)
                     .with_menu(menu_bar_menu)
                     .with_title("Dioxus App")
                     .build(event_loop)
@@ -197,6 +201,37 @@ pub fn run<T: 'static + Send + Sync>(
                 event, window_id, ..
             } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::Destroyed { .. } => {
+                    webviews.remove(&window_id);
+                    if webviews.is_empty() {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                }
+                // catch only pressed event
+                WindowEvent::KeyboardInput { event, .. } => {
+                    log::debug!("keybowrd input");
+                    if quit_hotkey.matches(&modifiers, &event.physical_key) {
+                        log::debug!("quitting");
+
+                        webviews.remove(&window_id);
+                        if webviews.is_empty() {
+                            *control_flow = ControlFlow::Exit;
+                        }
+                    }
+
+                    // println!(
+                    //     "KeyEvent:  `Shift` + `1` | logical_key: {:?}",
+                    //     &event.logical_key
+                    // );
+                    // we can match manually without `Accelerator`
+
+                    // else if event.key_without_modifiers() == Key::Character("1")
+                    //     && modifiers.is_empty()
+                    // {
+                    //     println!("KeyEvent: `1`");
+                    // }
+                }
+
                 WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
                     if let Some(view) = webviews.get_mut(&window_id) {
                         let _ = view.resize();

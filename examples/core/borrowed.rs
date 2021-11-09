@@ -20,31 +20,32 @@ struct ListItem {
     age: u32,
 }
 
-fn app<'a>(cx: Context<'a>, props: &AppProps) -> DomTree<'a> {
+fn app<'a>(cx: Context<'a>, props: &AppProps) -> Element<'a> {
     // let (val, set_val) = use_state_classic(cx, || 0);
 
-    cx.render(LazyNodes::new(move |_nodecx| {
-        todo!()
-        // builder::ElementBuilder::new(_nodecx, "div")
-        //     .iter_child({
-        //         cx.items.iter().map(|child| {
-        //             builder::virtual_child(
-        //                 _nodecx,
-        //                 ChildItem,
-        //                 ChildProps {
-        //                     item: child.clone(),
-        //                     item_handler: set_val.clone(),
-        //                 },
-        //                 None,
-        //                 &[],
-        //             )
-        //         })
-        //     })
-        //     .iter_child([builder::ElementBuilder::new(_nodecx, "div")
-        //         .iter_child([builder::text3(_nodecx.bump(), format_args!("{}", val))])
-        //         .finish()])
-        //     .finish()
-    }))
+    todo!()
+    // cx.render(LazyNodes::new(move |_nodecx| {
+    //     todo!()
+    //     // builder::ElementBuilder::new(_nodecx, "div")
+    //     //     .iter_child({
+    //     //         cx.items.iter().map(|child| {
+    //     //             builder::virtual_child(
+    //     //                 _nodecx,
+    //     //                 ChildItem,
+    //     //                 ChildProps {
+    //     //                     item: child.clone(),
+    //     //                     item_handler: set_val.clone(),
+    //     //                 },
+    //     //                 None,
+    //     //                 &[],
+    //     //             )
+    //     //         })
+    //     //     })
+    //     //     .iter_child([builder::ElementBuilder::new(_nodecx, "div")
+    //     //         .iter_child([builder::text3(_nodecx.bump(), format_args!("{}", val))])
+    //     //         .finish()])
+    //     //     .finish()
+    // }))
 }
 
 // props should derive a partialeq implementation automatically, but implement ptr compare for & fields
@@ -56,8 +57,8 @@ struct ChildProps {
     item_handler: Rc<dyn Fn(i32)>,
 }
 
-fn ChildItem<'a>(cx: Context<'a>, props: &'a ChildProps) -> DomTree<'a> {
-    cx.render(LazyNodes::new(move |__cx| todo!()))
+fn ChildItem<'a>(cx: Context<'a>, props: &'a ChildProps) -> Element<'a> {
+    todo!()
 }
 
 impl PartialEq for ChildProps {

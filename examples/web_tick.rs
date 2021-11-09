@@ -45,7 +45,7 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row((cx, props): Component<RowProps>) -> DomTree {
+fn Row((cx, props): Scope<RowProps>) -> Element {
     let [adj, col, noun] = props.label.0;
     cx.render(rsx! {
         tr {

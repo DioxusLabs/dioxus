@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 
-use dioxus::prelude::Component;
+use dioxus::prelude::Scope;
+use dioxus::ScopeChildren;
 use dioxus_core as dioxus;
-use dioxus_core::{Context, DomTree, LazyNodes, NodeFactory, Properties};
+use dioxus_core::{Context, Element, LazyNodes, NodeFactory, Properties};
 use dioxus_core_macro::Props;
 
 /*
@@ -42,6 +43,8 @@ pub struct WebviewWindowProps<'a> {
 
     /// focuse me
     onfocused: &'a dyn FnMut(()),
+
+    children: ScopeChildren<'a>,
 }
 
 /// A handle to a
@@ -54,7 +57,7 @@ pub struct WebviewWindowProps<'a> {
 ///
 ///
 ///
-pub fn WebviewWindow<'a>((cx, props): Component<'a, WebviewWindowProps>) -> DomTree<'a> {
+pub fn WebviewWindow<'a>((cx, props): Scope<'a, WebviewWindowProps>) -> Element<'a> {
     let dtcx = cx.consume_state::<RefCell<DesktopContext>>()?;
 
     cx.use_hook(
@@ -70,9 +73,10 @@ pub fn WebviewWindow<'a>((cx, props): Component<'a, WebviewWindowProps>) -> DomT
     );
 
     // render the children directly
-    cx.render(LazyNodes::new(move |f: NodeFactory| {
-        f.fragment_from_iter(cx.children())
-    }))
+    todo!()
+    // cx.render(LazyNodes::new(move |f: NodeFactory| {
+    //     f.fragment_from_iter(cx.children())
+    // }))
 }
 
 pub struct WindowHandle {}

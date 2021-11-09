@@ -1,4 +1,7 @@
 use dioxus_core::prelude::*;
+use dioxus_core_macro::format_args_f;
+use dioxus_core_macro::rsx;
+use dioxus_html as dioxus_elements;
 
 fn main() {
     let mut dom = VirtualDom::new(EXAMPLE);
@@ -7,9 +10,14 @@ fn main() {
 }
 
 pub static EXAMPLE: FC<()> = |(cx, _)| {
-    let list = (0..10).map(|_f| LazyNodes::new(move |_f| todo!()));
+    let list = (0..10).map(|_f| {
+        rsx! {
+            "{_f}"
+        }
+    });
+    // let list = (0..10).map(|_f| Some(Box::new(move |_f| todo!())));
 
-    cx.render(LazyNodes::new(move |cx| {
+    cx.render(Some(LazyNodes::new(move |cx| {
         cx.raw_element(
             "div",
             None,
@@ -22,5 +30,5 @@ pub static EXAMPLE: FC<()> = |(cx, _)| {
             ],
             None,
         )
-    }))
+    })))
 };

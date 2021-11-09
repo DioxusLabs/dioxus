@@ -9,6 +9,7 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 
 [dependencies]
 dioxus-core = { path = "./packages/core", version = "0.1.3" }
+dioxus-router = { path = "./packages/router", optional = true }
 dioxus-core-macro = { path = "./packages/core-macro", optional = true }
 dioxus-html = { path = "./packages/html", optional = true }
 dioxus-web = { path = "./packages/web", optional = true }
@@ -24,10 +25,10 @@ core = ["macro", "hooks", "html"]
 macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
+router = ["dioxus-router"]
 
 # utilities
 atoms = []
-router = []
 
 # targets
 ssr = ["dioxus-ssr"]
@@ -78,7 +79,6 @@ members = [
     "packages/ssr",
     "packages/desktop",
     "packages/mobile",
-    "packages/webview-client",
 ]
 
 

@@ -18,7 +18,7 @@ use std::{
 ///
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// use case they might have.
-pub struct Scope {
+pub struct ScopeInner {
     // Book-keeping about our spot in the arena
     pub(crate) parent_idx: Option<ScopeId>,
     pub(crate) our_arena_idx: ScopeId,
@@ -28,8 +28,7 @@ pub struct Scope {
 
     // Nodes
     pub(crate) frames: ActiveFrame,
-    pub(crate) caller: *const dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
-    pub(crate) child_nodes: ScopeChildren<'static>,
+    pub(crate) caller: *const dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
 
     /*
     we care about:
@@ -55,7 +54,7 @@ pub struct Scope {
 }
 
 /// Public interface for Scopes.
-impl Scope {
+impl ScopeInner {
     /// Get the root VNode for this Scope.
     ///
     /// This VNode is the "entrypoint" VNode. If the component renders multiple nodes, then this VNode will be a fragment.
@@ -167,7 +166,7 @@ impl Scope {
 pub type FiberTask = Pin<Box<dyn Future<Output = ScopeId>>>;
 
 /// Private interface for Scopes.
-impl Scope {
+impl ScopeInner {
     // we are being created in the scope of an existing component (where the creator_node lifetime comes into play)
     // we are going to break this lifetime by force in order to save it on ourselves.
     // To make sure that the lifetime isn't truly broken, we receive a Weak RC so we can't keep it around after the parent dies.
@@ -176,16 +175,13 @@ impl Scope {
     // Scopes cannot be made anywhere else except for this file
     // Therefore, their lifetimes are connected exclusively to the virtual dom
     pub(crate) fn new(
-        caller: &dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
+        caller: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
         our_arena_idx: ScopeId,
         parent_idx: Option<ScopeId>,
         height: u32,
         subtree: u32,
-        child_nodes: ScopeChildren,
         shared: EventChannel,
     ) -> Self {
-        let child_nodes = unsafe { child_nodes.extend_lifetime() };
-
         let schedule_any_update = shared.schedule_any_immediate.clone();
 
         let memoized_updater = Rc::new(move || schedule_any_update(our_arena_idx));
@@ -198,7 +194,6 @@ impl Scope {
         Self {
             memoized_updater,
             shared,
-            child_nodes,
             caller,
             parent_idx,
             our_arena_idx,
@@ -215,21 +210,13 @@ impl Scope {
         }
     }
 
-    pub(crate) fn update_scope_dependencies<'creator_node>(
+    pub(crate) fn update_scope_dependencies(
         &mut self,
-        caller: &'creator_node dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
-        child_nodes: ScopeChildren,
+        caller: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
     ) {
         log::debug!("Updating scope dependencies {:?}", self.our_arena_idx);
         let caller = caller as *const _;
         self.caller = unsafe { std::mem::transmute(caller) };
-
-        let child_nodes = unsafe { child_nodes.extend_lifetime() };
-        self.child_nodes = child_nodes;
-    }
-
-    pub(crate) fn child_nodes(&self) -> ScopeChildren {
-        unsafe { self.child_nodes.shorten_lifetime() }
     }
 
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
@@ -317,8 +304,25 @@ impl Scope {
 
             let mut cb = sus.callback.borrow_mut().take().unwrap();
 
-            let new_node: DomTree<'a> = (cb)(cx);
+            let new_node: Element<'a> = (cb)(cx);
         }
+    }
+
+    // run the list of effects
+    pub(crate) fn run_effects(&mut self, pool: &ResourcePool) {
+        todo!()
+        // let mut effects = self.frames.effects.borrow_mut();
+        // let mut effects = effects.drain(..).collect::<Vec<_>>();
+
+        // for effect in effects {
+        //     let effect = unsafe { &*effect };
+        //     let effect = effect.as_ref();
+
+        //     let mut effect = effect.borrow_mut();
+        //     let mut effect = effect.as_mut();
+
+        //     effect.run(pool);
+        // }
     }
 
     /// Render this component.
@@ -350,10 +354,13 @@ impl Scope {
         log::debug!("Borrowed stuff is successfully cleared");
 
         // Cast the caller ptr from static to one with our own reference
-        let render: &dyn for<'b> Fn(&'b Scope) -> DomTree<'b> = unsafe { &*self.caller };
+        let render: &dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> = unsafe { &*self.caller };
 
         // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
-        if let Some(new_head) = render(self) {
+        if let Some(builder) = render(self) {
+            let new_head = builder.into_vnode(NodeFactory {
+                bump: &self.frames.wip_frame().bump,
+            });
             log::debug!("Render is successful");
 
             // the user's component succeeded. We can safely cycle to the next frame
@@ -364,112 +371,5 @@ impl Scope {
         } else {
             false
         }
-    }
-}
-
-/// render the scope to a string using the rsx! syntax
-pub(crate) struct ScopeRenderer<'a> {
-    pub skip_components: bool,
-    pub show_fragments: bool,
-    pub _scope: &'a Scope,
-    pub _pre_render: bool,
-    pub _newline: bool,
-    pub _indent: bool,
-    pub _max_depth: usize,
-}
-
-// this is more or less a debug tool, but it'll render the entire tree to the terminal
-impl<'a> ScopeRenderer<'a> {
-    pub fn render(
-        &self,
-        vdom: &VirtualDom,
-        node: &VNode,
-        f: &mut std::fmt::Formatter,
-        il: u16,
-    ) -> std::fmt::Result {
-        const INDENT: &str = "    ";
-        let write_indent = |_f: &mut std::fmt::Formatter, le| {
-            for _ in 0..le {
-                write!(_f, "{}", INDENT).unwrap();
-            }
-        };
-
-        match &node {
-            VNode::Text(text) => {
-                write_indent(f, il);
-                writeln!(f, "\"{}\"", text.text)?
-            }
-            VNode::Anchor(_anchor) => {
-                write_indent(f, il);
-                writeln!(f, "Anchor {{}}")?;
-            }
-            VNode::Element(el) => {
-                write_indent(f, il);
-                writeln!(f, "{} {{", el.tag_name)?;
-                // write!(f, "element: {}", el.tag_name)?;
-                let mut attr_iter = el.attributes.iter().peekable();
-
-                while let Some(attr) = attr_iter.next() {
-                    match attr.namespace {
-                        None => {
-                            //
-                            write_indent(f, il + 1);
-                            writeln!(f, "{}: \"{}\"", attr.name, attr.value)?
-                        }
-
-                        Some(ns) => {
-                            // write the opening tag
-                            write_indent(f, il + 1);
-                            write!(f, " {}:\"", ns)?;
-                            let mut cur_ns_el = attr;
-                            'ns_parse: loop {
-                                write!(f, "{}:{};", cur_ns_el.name, cur_ns_el.value)?;
-                                match attr_iter.peek() {
-                                    Some(next_attr) if next_attr.namespace == Some(ns) => {
-                                        cur_ns_el = attr_iter.next().unwrap();
-                                    }
-                                    _ => break 'ns_parse,
-                                }
-                            }
-                            // write the closing tag
-                            write!(f, "\"")?;
-                        }
-                    }
-                }
-
-                for child in el.children {
-                    self.render(vdom, child, f, il + 1)?;
-                }
-                write_indent(f, il);
-
-                writeln!(f, "}}")?;
-            }
-            VNode::Fragment(frag) => {
-                if self.show_fragments {
-                    write_indent(f, il);
-                    writeln!(f, "Fragment {{")?;
-                    for child in frag.children {
-                        self.render(vdom, child, f, il + 1)?;
-                    }
-                    write_indent(f, il);
-                    writeln!(f, "}}")?;
-                } else {
-                    for child in frag.children {
-                        self.render(vdom, child, f, il)?;
-                    }
-                }
-            }
-            VNode::Component(vcomp) => {
-                let idx = vcomp.associated_scope.get().unwrap();
-                if !self.skip_components {
-                    let new_node = vdom.get_scope(idx).unwrap().root_node();
-                    self.render(vdom, new_node, f, il)?;
-                }
-            }
-            VNode::Suspended { .. } => {
-                // we can't do anything with suspended nodes
-            }
-        }
-        Ok(())
     }
 }

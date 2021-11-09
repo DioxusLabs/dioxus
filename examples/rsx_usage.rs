@@ -162,13 +162,13 @@ pub static Example: FC<()> = |(cx, props)| {
 
             // Can pass in props directly as an expression
             {{
-                let props = TallerProps {a: "hello"};
+                let props = TallerProps {a: "hello", children: Default::default()};
                 rsx!(Taller { ..props })
             }}
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!" }
+                ..TallerProps { a: "ballin!", children: Default::default() }
                 a: "not ballin!"
             }
 
@@ -180,22 +180,25 @@ pub static Example: FC<()> = |(cx, props)| {
 
 mod baller {
     use super::*;
-    #[derive(PartialEq, Props)]
+    #[derive(Props, PartialEq)]
     pub struct BallerProps {}
 
     /// This component totally balls
-    pub fn Baller(_: Component<BallerProps>) -> DomTree {
+    pub fn Baller(_: Scope<BallerProps>) -> Element {
         todo!()
     }
 }
 
-#[derive(Debug, PartialEq, Props)]
-pub struct TallerProps {
+#[derive(Props)]
+pub struct TallerProps<'a> {
     a: &'static str,
+
+    #[builder(default)]
+    children: ScopeChildren<'a>,
 }
 
 /// This component is taller than most :)
-pub fn Taller(_: Component<TallerProps>) -> DomTree {
+pub fn Taller<'a>(_: Scope<'a, TallerProps<'a>>) -> Element {
     let b = true;
     todo!()
 }

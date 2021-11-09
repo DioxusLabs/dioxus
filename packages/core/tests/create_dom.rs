@@ -64,10 +64,10 @@ fn create() {
                     "Hello, world!"
                     div {
                         div {
-                            Fragment {
-                                "hello"
-                                "world"
-                            }
+                            // Fragment {
+                            //     "hello"
+                            //     "world"
+                            // }
                         }
                     }
                 }
@@ -215,13 +215,18 @@ fn create_components() {
         })
     };
 
-    static Child: FC<()> = |(cx, props)| {
+    #[derive(Props)]
+    struct ChildProps<'a> {
+        children: ScopeChildren<'a>,
+    }
+
+    fn Child<'a>((cx, props): Scope<'a, ChildProps<'a>>) -> Element {
         cx.render(rsx! {
             h1 {}
-            div { {cx.children()} }
+            div { {&props.children} }
             p {}
         })
-    };
+    }
 
     let mut dom = new_dom(App, ());
     let mutations = dom.rebuild();
@@ -298,13 +303,8 @@ fn anchors() {
 #[test]
 fn suspended() {
     static App: FC<()> = |(cx, props)| {
-        let val = use_suspense(
-            cx,
-            || async {
-                //
-            },
-            |cx, p| cx.render(rsx! { "hi "}),
-        );
+        let val = use_suspense(cx, || async {}, |cx, p| todo!());
+
         cx.render(rsx! { {val} })
     };
 

@@ -61,10 +61,10 @@ pub struct VirtualDom {
 
     root_fc: Box<dyn Any>,
 
-    root_props: Rc<dyn Any + Send>,
+    root_props: Rc<dyn Any>,
 
     // we need to keep the allocation around, but we don't necessarily use it
-    _root_caller: RootCaller,
+    _root_caller: Rc<dyn Any>,
 }
 
 impl VirtualDom {
@@ -131,7 +131,7 @@ impl VirtualDom {
     ///
     /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
     /// VirtualDom to be created just to retrieve its channel receiver.
-    pub fn new_with_props_and_scheduler<P: 'static + Send>(
+    pub fn new_with_props_and_scheduler<P: 'static>(
         root: FC<P>,
         root_props: P,
         sender: UnboundedSender<SchedulerMsg>,
@@ -139,31 +139,32 @@ impl VirtualDom {
     ) -> Self {
         let root_fc = Box::new(root);
 
-        let root_props: Rc<dyn Any + Send> = Rc::new(root_props);
+        let root_props: Rc<dyn Any> = Rc::new(root_props);
 
-        let _p = root_props.clone();
-        // Safety: this callback is only valid for the lifetime of the root props
-        let root_caller: Rc<dyn Fn(&Scope) -> DomTree> = Rc::new(move |scope: &Scope| unsafe {
-            let props = _p.downcast_ref::<P>().unwrap();
-            std::mem::transmute(root((Context { scope }, props)))
+        let props = root_props.clone();
+
+        let root_caller: Rc<dyn Fn(&ScopeInner) -> Element> = Rc::new(move |scope: &ScopeInner| {
+            let props = props.downcast_ref::<P>().unwrap();
+            let node = root((Context { scope }, props));
+            // cast into the right lifetime
+            unsafe { std::mem::transmute(node) }
         });
 
         let scheduler = Scheduler::new(sender, receiver);
 
         let base_scope = scheduler.pool.insert_scope_with_key(|myidx| {
-            Scope::new(
+            ScopeInner::new(
                 root_caller.as_ref(),
                 myidx,
                 None,
                 0,
                 0,
-                ScopeChildren(&[]),
                 scheduler.pool.channel.clone(),
             )
         });
 
         Self {
-            _root_caller: RootCaller(root_caller),
+            _root_caller: Rc::new(root_caller),
             root_fc,
             base_scope,
             scheduler,
@@ -175,12 +176,12 @@ impl VirtualDom {
     ///
     /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
     /// directly.
-    pub fn base_scope(&self) -> &Scope {
+    pub fn base_scope(&self) -> &ScopeInner {
         self.scheduler.pool.get_scope(self.base_scope).unwrap()
     }
 
     /// Get the [`Scope`] for a component given its [`ScopeId`]
-    pub fn get_scope(&self, id: ScopeId) -> Option<&Scope> {
+    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeInner> {
         self.scheduler.pool.get_scope(id)
     }
 
@@ -204,14 +205,14 @@ impl VirtualDom {
     /// ```
     pub fn update_root_props<P>(&mut self, root_props: P) -> Option<Mutations>
     where
-        P: 'static + Send,
+        P: 'static,
     {
         let root_scope = self.scheduler.pool.get_scope_mut(self.base_scope).unwrap();
 
         // Pre-emptively drop any downstream references of the old props
         root_scope.ensure_drop_safety(&self.scheduler.pool);
 
-        let mut root_props: Rc<dyn Any + Send> = Rc::new(root_props);
+        let mut root_props: Rc<dyn Any> = Rc::new(root_props);
 
         if let Some(props_ptr) = root_props.downcast_ref::<P>().map(|p| p as *const P) {
             // Swap the old props and new props
@@ -219,13 +220,13 @@ impl VirtualDom {
 
             let root = *self.root_fc.downcast_ref::<FC<P>>().unwrap();
 
-            let root_caller: Box<dyn Fn(&Scope) -> DomTree> =
-                Box::new(move |scope: &Scope| unsafe {
+            let root_caller: Box<dyn Fn(&ScopeInner) -> Element> =
+                Box::new(move |scope: &ScopeInner| unsafe {
                     let props: &'_ P = &*(props_ptr as *const P);
                     std::mem::transmute(root((Context { scope }, props)))
                 });
 
-            root_scope.update_scope_dependencies(&root_caller, ScopeChildren(&[]));
+            root_scope.update_scope_dependencies(&root_caller);
 
             drop(root_props);
 
@@ -368,44 +369,29 @@ impl VirtualDom {
         use futures_util::StreamExt;
 
         // Wait for any new events if we have nothing to do
-        futures_util::select! {
-            _ = self.scheduler.async_tasks.next() => {}
-            msg = self.scheduler.receiver.next() => {
-                match msg.unwrap() {
-                    SchedulerMsg::Task(t) => {
-                        self.scheduler.handle_task(t);
-                    },
-                    SchedulerMsg::Immediate(im) => {
-                        self.scheduler.dirty_scopes.insert(im);
-                    }
-                    SchedulerMsg::UiEvent(evt) => {
-                        self.scheduler.ui_events.push_back(evt);
-                    }
+
+        let tasks_fut = self.scheduler.async_tasks.next();
+        let scheduler_fut = self.scheduler.receiver.next();
+
+        use futures_util::future::{select, Either};
+        match select(tasks_fut, scheduler_fut).await {
+            // poll the internal futures
+            Either::Left((_id, _)) => {
+                //
+            }
+
+            // wait for an external event
+            Either::Right((msg, _)) => match msg.unwrap() {
+                SchedulerMsg::Task(t) => {
+                    self.scheduler.handle_task(t);
+                }
+                SchedulerMsg::Immediate(im) => {
+                    self.scheduler.dirty_scopes.insert(im);
+                }
+                SchedulerMsg::UiEvent(evt) => {
+                    self.scheduler.ui_events.push_back(evt);
                 }
             },
         }
     }
 }
-
-impl std::fmt::Display for VirtualDom {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let base = self.base_scope();
-        let root = base.root_node();
-
-        let renderer = ScopeRenderer {
-            show_fragments: false,
-            skip_components: false,
-
-            _scope: base,
-            _pre_render: false,
-            _newline: true,
-            _indent: true,
-            _max_depth: usize::MAX,
-        };
-
-        renderer.render(self, root, f, 0)
-    }
-}
-
-// we never actually use the contents of this root caller
-struct RootCaller(Rc<dyn for<'b> Fn(&'b Scope) -> DomTree<'b> + 'static>);

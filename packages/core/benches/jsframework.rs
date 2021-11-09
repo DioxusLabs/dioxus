@@ -19,6 +19,7 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use rand::prelude::*;
 
+fn main() {}
 criterion_group!(mbenches, create_rows);
 criterion_main!(mbenches);
 
@@ -57,7 +58,7 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row((cx, props): Component<RowProps>) -> DomTree {
+fn Row((cx, props): Scope<RowProps>) -> Element {
     let [adj, col, noun] = props.label.0;
     cx.render(rsx! {
         tr {

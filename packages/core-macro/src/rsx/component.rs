@@ -161,12 +161,22 @@ impl ToTokens for Component {
             None => {
                 let mut toks = quote! { fc_to_builder(#name) };
                 for field in &self.body {
-                    if field.name == "key" {
-                        has_key = Some(field);
-                    } else {
-                        toks.append_all(quote! {#field})
+                    match field.name.to_string().as_str() {
+                        "key" => {
+                            //
+                            has_key = Some(field);
+                        }
+                        _ => toks.append_all(quote! {#field}),
                     }
                 }
+
+                if !self.children.is_empty() {
+                    let childs = &self.children;
+                    toks.append_all(quote! {
+                        .children(ScopeChildren::new(__cx.fragment_from_iter([ #( #childs ),* ])))
+                    });
+                }
+
                 toks.append_all(quote! {
                     .build()
                 });
@@ -182,17 +192,13 @@ impl ToTokens for Component {
             None => quote! { None },
         };
 
-        let childs = &self.children;
-        let children = quote! {
-            [ #( #childs ),* ]
-        };
+        // #children
 
         tokens.append_all(quote! {
             __cx.component(
                 #name,
                 #builder,
                 #key_token,
-                #children
             )
         })
     }

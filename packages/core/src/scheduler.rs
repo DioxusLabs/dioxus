@@ -214,7 +214,7 @@ impl Scheduler {
                 let components = components.clone();
                 Rc::new(move |id, ty| {
                     let components = unsafe { &*components.get() };
-                    let mut search: Option<&Scope> = components.get(id.0);
+                    let mut search: Option<&ScopeInner> = components.get(id.0);
                     while let Some(inner) = search.take() {
                         if let Some(shared) = inner.shared_contexts.borrow().get(&ty) {
                             return Some(shared.clone());

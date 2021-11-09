@@ -31,10 +31,7 @@ impl SsrRenderer {
         }
     }
 
-    pub fn render_lazy<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>>(
-        &'a mut self,
-        f: LazyNodes<'a, F>,
-    ) -> String {
+    pub fn render_lazy<'a>(&'a mut self, f: Option<LazyNodes<'a, '_>>) -> String {
         let bump = &mut self.inner as *mut _;
         let s = self.render_inner(f);
         // reuse the bump's memory
@@ -42,10 +39,7 @@ impl SsrRenderer {
         s
     }
 
-    fn render_inner<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>>(
-        &'a self,
-        f: LazyNodes<'a, F>,
-    ) -> String {
+    fn render_inner<'a>(&'a self, f: Option<LazyNodes<'a, '_>>) -> String {
         let factory = NodeFactory::new(&self.inner);
         let root = f.into_vnode(factory);
         format!(
@@ -59,7 +53,7 @@ impl SsrRenderer {
     }
 }
 
-pub fn render_lazy<'a, F: FnOnce(NodeFactory<'a>) -> VNode<'a>>(f: LazyNodes<'a, F>) -> String {
+pub fn render_lazy<'a>(f: Option<LazyNodes<'a, '_>>) -> String {
     let bump = bumpalo::Bump::new();
     let borrowed = &bump;
 
@@ -398,7 +392,7 @@ mod tests {
     fn styles() {
         static STLYE_APP: FC<()> = |(cx, _)| {
             cx.render(rsx! {
-                div { style: { color: "blue", font_size: "46px" } }
+                div { color: "blue", font_size: "46px"  }
             })
         };
 

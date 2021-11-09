@@ -342,13 +342,12 @@ impl<'bump> DiffMachine<'bump> {
         let parent_scope = self.vdom.get_scope(parent_idx).unwrap();
 
         let new_idx = self.vdom.insert_scope_with_key(|new_idx| {
-            Scope::new(
+            ScopeInner::new(
                 caller,
                 new_idx,
                 Some(parent_idx),
                 parent_scope.height + 1,
                 parent_scope.subtree(),
-                ScopeChildren(vcomponent.children),
                 shared,
             )
         });
@@ -551,7 +550,7 @@ impl<'bump> DiffMachine<'bump> {
 
             // make sure the component's caller function is up to date
             let scope = self.vdom.get_scope_mut(scope_addr).unwrap();
-            scope.update_scope_dependencies(new.caller, ScopeChildren(new.children));
+            scope.update_scope_dependencies(new.caller);
 
             // React doesn't automatically memoize, but we do.
             let props_are_the_same = old.comparator.unwrap();
@@ -1125,6 +1124,7 @@ impl<'bump> DiffMachine<'bump> {
 
                     self.remove_nodes(e.children, false);
                 }
+
                 VNode::Fragment(f) => {
                     self.remove_nodes(f.children, gen_muts);
                 }
@@ -1161,7 +1161,7 @@ impl<'bump> DiffMachine<'bump> {
     }
 
     /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope<'a>(&mut self, listener: &'a Listener<'a>, scope: &Scope) {
+    fn attach_listener_to_scope<'a>(&mut self, listener: &'a Listener<'a>, scope: &ScopeInner) {
         let mut queue = scope.listeners.borrow_mut();
         let long_listener: &'a Listener<'static> = unsafe { std::mem::transmute(listener) };
         queue.push(long_listener as *const _)

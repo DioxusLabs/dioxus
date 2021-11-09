@@ -114,12 +114,13 @@ const APP: FC<()> = |(cx, _)| {
 struct CalculatorKeyProps<'a> {
     name: &'static str,
     onclick: &'a dyn Fn(MouseEvent),
+    children: ScopeChildren<'a>,
 }
 
-fn CalculatorKey<'a>((cx, props): Component<'a, CalculatorKeyProps>) -> DomTree<'a> {
+fn CalculatorKey<'a>((cx, props): Scope<'a, CalculatorKeyProps<'a>>) -> Element {
     rsx!(cx, button {
         class: "calculator-key {props.name}"
         onclick: {props.onclick}
-        {cx.children()}
+        {&props.children}
     })
 }

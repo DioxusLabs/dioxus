@@ -11,6 +11,8 @@
   - [Lists](concepts/lists.md)
 - [Adding Interactivity](concepts/interactivity.md)
   - [Event handlers](concepts/event_handlers.md)
+  - [Hooks and Internal State](concepts/hooks.md)
+  - [Fundamental Hooks and `use_hook`](concepts/usestate.md)
   - [User Input and Controlled Components](concepts/errorhandling.md)
   - [Lifecycle, updates, and effects](concepts/lifecycles.md)
 
@@ -30,7 +32,6 @@ Extracting State Logic into a Reducer
 Passing Data Deeply with Context
 Scaling Up with Reducer and Context -->
 - [Managing State](concepts/managing_state.md)
-  - [Hooks and Internal State](concepts/hooks.md)
   - [Global State](concepts/sharedstate.md)
   - [Error handling](concepts/errorhandling.md)
   - [Effects](concepts/effects.md)

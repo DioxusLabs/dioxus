@@ -5,8 +5,10 @@
 //! if the type supports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
-use crate::innerlude::{Context, DomTree, LazyNodes, FC};
-
+use crate::{
+    innerlude::{Context, Element, VAnchor, VFragment, VNode},
+    LazyNodes, ScopeChildren,
+};
 /// A component is a wrapper around a Context and some Props that share a lifetime
 ///
 ///
@@ -16,7 +18,7 @@ use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 /// ```rust
 /// struct State {}
 ///
-/// fn Example((cx, props): Component<State>) -> DomTree {
+/// fn Example((cx, props): Scope<State>) -> DomTree {
 ///     // ...
 /// }
 /// ```
@@ -27,7 +29,7 @@ use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 ///     name: &'a str
 /// }
 ///
-/// fn Example<'a>((cx, props): Component<'a, State>) -> DomTree<'a> {
+/// fn Example<'a>((cx, props): Scope<'a, State>) -> DomTree<'a> {
 ///     // ...
 /// }
 /// ```
@@ -39,7 +41,44 @@ use crate::innerlude::{Context, DomTree, LazyNodes, FC};
 /// };
 /// ```
 ///
-pub type Component<'a, T> = (Context<'a>, &'a T);
+pub type Scope<'a, T> = (Context<'a>, &'a T);
+
+pub struct FragmentProps<'a> {
+    children: ScopeChildren<'a>,
+}
+
+pub struct FragmentBuilder<'a, const BUILT: bool> {
+    children: Option<ScopeChildren<'a>>,
+}
+impl<'a> FragmentBuilder<'a, false> {
+    pub fn children(mut self, children: ScopeChildren<'a>) -> FragmentBuilder<'a, true> {
+        FragmentBuilder {
+            children: Some(children),
+        }
+    }
+}
+
+impl<'a, const A: bool> FragmentBuilder<'a, A> {
+    pub fn build(self) -> FragmentProps<'a> {
+        FragmentProps {
+            children: self.children.unwrap_or_default(),
+        }
+    }
+}
+
+impl<'a> Properties for FragmentProps<'a> {
+    type Builder = FragmentBuilder<'a, false>;
+
+    const IS_STATIC: bool = false;
+
+    fn builder() -> Self::Builder {
+        FragmentBuilder { children: None }
+    }
+
+    unsafe fn memoize(&self, other: &Self) -> bool {
+        false
+    }
+}
 
 /// Create inline fragments using Component syntax.
 ///
@@ -63,8 +102,10 @@ pub type Component<'a, T> = (Context<'a>, &'a T);
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 ///
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment((cx, _): Component<()>) -> DomTree {
-    cx.render(LazyNodes::new(|f| f.fragment_from_iter(cx.children())))
+pub fn Fragment<'a>((cx, props): Scope<'a, FragmentProps<'a>>) -> Element<'a> {
+    cx.render(Some(LazyNodes::new(|f| {
+        f.fragment_from_iter(&props.children)
+    })))
 }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
@@ -132,6 +173,6 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<T: Properties>(_: FC<T>) -> T::Builder {
+pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element<'a>) -> T::Builder {
     T::builder()
 }

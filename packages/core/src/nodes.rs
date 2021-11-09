@@ -3,14 +3,17 @@
 //! VNodes represent lazily-constructed VDom trees that support diffing and event handlers. These VNodes should be *very*
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
-use crate::innerlude::{
-    empty_cell, Context, DomTree, ElementId, Properties, Scope, ScopeId, SuspendedContext, FC,
+use crate::{
+    innerlude::{
+        empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId, ScopeInner,
+        SuspendedContext,
+    },
+    lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
-    marker::PhantomData,
 };
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -33,7 +36,7 @@ pub enum VNode<'src> {
     ///     assert_eq!(vtext.is_static, true);
     /// }
     /// ```
-    Text(VText<'src>),
+    Text(&'src VText<'src>),
 
     /// Element VNodes are VNodes that may contain attributes, listeners, a key, a tag, and children.
     ///
@@ -116,7 +119,7 @@ pub enum VNode<'src> {
     ///     assert_eq!(root, VNode::Anchor);
     /// }
     /// ```
-    Anchor(VAnchor),
+    Anchor(&'src VAnchor),
 }
 
 impl<'src> VNode<'src> {
@@ -150,6 +153,41 @@ impl<'src> VNode<'src> {
             VNode::Suspended(el) => el.dom_id.get(),
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
+        }
+    }
+
+    // Create an "owned" version of the vnode.
+    pub fn decouple(&self) -> VNode<'src> {
+        match self {
+            VNode::Text(t) => VNode::Text(*t),
+            VNode::Element(e) => VNode::Element(*e),
+            VNode::Component(c) => VNode::Component(*c),
+            VNode::Suspended(s) => VNode::Suspended(*s),
+            VNode::Anchor(a) => VNode::Anchor(*a),
+            VNode::Fragment(f) => VNode::Fragment(VFragment {
+                children: f.children,
+                key: f.key,
+                is_static: f.is_static,
+            }),
+        }
+    }
+}
+
+impl Debug for VNode<'_> {
+    fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match &self {
+            VNode::Element(el) => s
+                .debug_struct("VElement")
+                .field("name", &el.tag_name)
+                .field("key", &el.key)
+                .finish(),
+
+            VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
+            VNode::Anchor(_) => write!(s, "VAnchor"),
+
+            VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
+            VNode::Suspended { .. } => write!(s, "VSuspended"),
+            VNode::Component(comp) => write!(s, "VComponent {{ fc: {:?}}}", comp.user_fc),
         }
     }
 }
@@ -287,9 +325,7 @@ pub struct VComponent<'src> {
     // Function pointer to the FC that was used to generate this component
     pub user_fc: *const (),
 
-    pub(crate) caller: &'src dyn for<'b> Fn(&'b Scope) -> DomTree<'b>,
-
-    pub(crate) children: &'src [VNode<'src>],
+    pub(crate) caller: &'src dyn for<'b> Fn(&'b ScopeInner) -> Element<'b>,
 
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
@@ -306,7 +342,7 @@ pub struct VSuspended<'a> {
     pub dom_id: Cell<Option<ElementId>>,
 
     #[allow(clippy::type_complexity)]
-    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> DomTree<'a>>>>,
+    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut(SuspendedContext<'a>) -> Element<'a>>>>,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -328,28 +364,13 @@ impl<'a> NodeFactory<'a> {
         self.bump
     }
 
-    pub fn render_directly<F>(&self, lazy_nodes: LazyNodes<'a, F>) -> DomTree<'a>
-    where
-        F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
-        Some(lazy_nodes.into_vnode(NodeFactory { bump: self.bump }))
-    }
-
-    pub fn unstable_place_holder() -> VNode<'static> {
-        VNode::Text(VText {
-            text: "",
-            dom_id: empty_cell(),
-            is_static: true,
-        })
-    }
-
     /// Directly pass in text blocks without the need to use the format_args macro.
     pub fn static_text(&self, text: &'static str) -> VNode<'a> {
-        VNode::Text(VText {
+        VNode::Text(self.bump.alloc(VText {
             dom_id: empty_cell(),
             text,
             is_static: true,
-        })
+        }))
     }
 
     /// Parses a lazy text Arguments and returns a string and a flag indicating if the text is 'static
@@ -372,11 +393,11 @@ impl<'a> NodeFactory<'a> {
     pub fn text(&self, args: Arguments) -> VNode<'a> {
         let (text, is_static) = self.raw_text(args);
 
-        VNode::Text(VText {
+        VNode::Text(self.bump.alloc(VText {
             text,
             is_static,
             dom_id: empty_cell(),
-        })
+        }))
     }
 
     pub fn element<L, A, V>(
@@ -456,20 +477,16 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn component<P, V>(
+    pub fn component<P>(
         &self,
-        component: FC<P>,
+        component: fn(Scope<'a, P>) -> Element<'a>,
         props: P,
         key: Option<Arguments>,
-        children: V,
     ) -> VNode<'a>
     where
         P: Properties + 'a,
-        V: 'a + AsRef<[VNode<'a>]>,
     {
         let bump = self.bump();
-        let children: &'a V = bump.alloc(children);
-        let children = children.as_ref();
         let props = bump.alloc(props);
         let raw_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
@@ -491,7 +508,7 @@ impl<'a> NodeFactory<'a> {
 
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
-                    matches!((props_memoized, children.is_empty()), (true, true))
+                    props_memoized
                 } else {
                     false
                 }
@@ -522,36 +539,51 @@ impl<'a> NodeFactory<'a> {
             RefCell::new(Some(drop_props))
         };
 
-        let is_static = children.is_empty() && P::IS_STATIC && key.is_none();
-
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller: &'a mut dyn for<'b> Fn(&'b Scope) -> DomTree<'b> =
-            bump.alloc(move |scope: &Scope| -> DomTree {
+        let caller: &'a mut dyn for<'b> Fn(&'b ScopeInner) -> Element<'b> =
+            bump.alloc(move |scope: &ScopeInner| -> Element {
                 log::debug!("calling component renderr {:?}", scope.our_arena_idx);
                 let props: &'_ P = unsafe { &*(raw_props as *const P) };
-                let res = component((Context { scope }, props));
+
+                let scp: &'a ScopeInner = unsafe { std::mem::transmute(scope) };
+                let s: Scope<'a, P> = (Context { scope: scp }, props);
+
+                let res: Element = component(s);
                 unsafe { std::mem::transmute(res) }
             });
-
-        let can_memoize = children.is_empty() && P::IS_STATIC;
 
         VNode::Component(bump.alloc(VComponent {
             user_fc,
             comparator,
             raw_props,
-            children,
             caller,
-            is_static,
+            is_static: P::IS_STATIC,
             key,
-            can_memoize,
+            can_memoize: P::IS_STATIC,
             drop_props,
             associated_scope: Cell::new(None),
         }))
     }
 
-    pub fn fragment_from_iter(self, node_iter: impl IntoVNodeList<'a>) -> VNode<'a> {
-        let children = node_iter.into_vnode_list(self);
+    pub fn fragment_from_iter(
+        self,
+        node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
+    ) -> VNode<'a> {
+        let bump = self.bump();
+        let mut nodes = bumpalo::collections::Vec::new_in(bump);
+
+        for node in node_iter {
+            nodes.push(node.into_vnode(self));
+        }
+
+        if nodes.is_empty() {
+            nodes.push(VNode::Anchor(bump.alloc(VAnchor {
+                dom_id: empty_cell(),
+            })));
+        }
+
+        let children = nodes.into_bump_slice();
 
         // TODO
         // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
@@ -578,6 +610,19 @@ impl<'a> NodeFactory<'a> {
             is_static: false,
         })
     }
+
+    pub fn annotate_lazy<'z, 'b, F>(f: F) -> Option<LazyNodes<'z, 'b>>
+    where
+        F: FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b,
+    {
+        Some(LazyNodes::new(f))
+    }
+}
+
+impl Debug for NodeFactory<'_> {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
 }
 
 /// Trait implementations for use in the rsx! and html! macros.
@@ -599,73 +644,6 @@ pub trait IntoVNode<'a> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 
-pub trait IntoVNodeList<'a> {
-    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>];
-}
-
-impl<'a, T, V> IntoVNodeList<'a> for T
-where
-    T: IntoIterator<Item = V>,
-    V: IntoVNode<'a>,
-{
-    fn into_vnode_list(self, cx: NodeFactory<'a>) -> &'a [VNode<'a>] {
-        let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
-
-        for node in self.into_iter() {
-            nodes.push(node.into_vnode(cx));
-        }
-
-        if nodes.is_empty() {
-            nodes.push(VNode::Anchor(VAnchor {
-                dom_id: empty_cell(),
-            }));
-        }
-
-        nodes.into_bump_slice()
-    }
-}
-
-/// Child nodes of the parent component.
-///
-/// # Example
-///
-/// ```rust
-/// let children = cx.children();
-/// let first_node = &children[0];
-/// rsx!{
-///     h1 { {first_node} }
-///     p { {&children[1..]} }
-/// }
-/// ```
-///
-pub struct ScopeChildren<'a>(pub &'a [VNode<'a>]);
-
-impl Copy for ScopeChildren<'_> {}
-
-impl<'a> Clone for ScopeChildren<'a> {
-    fn clone(&self) -> Self {
-        ScopeChildren(self.0)
-    }
-}
-
-impl ScopeChildren<'_> {
-    // dangerous method - used to fix the associated lifetime
-    pub(crate) unsafe fn extend_lifetime(self) -> ScopeChildren<'static> {
-        std::mem::transmute(self)
-    }
-
-    // dangerous method - used to fix the associated lifetime
-    pub(crate) unsafe fn shorten_lifetime<'a>(self) -> ScopeChildren<'a> {
-        std::mem::transmute(self)
-    }
-}
-
-impl<'a> IntoVNodeList<'a> for ScopeChildren<'a> {
-    fn into_vnode_list(self, _: NodeFactory<'a>) -> &'a [VNode<'a>] {
-        self.0
-    }
-}
-
 // For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoIterator for VNode<'a> {
     type Item = VNode<'a>;
@@ -675,61 +653,11 @@ impl<'a> IntoIterator for VNode<'a> {
     }
 }
 
-// For the case where a rendered VNode is passed into the rsx! macro through curly braces
+// TODO: do we even need this? It almost seems better not to
+// // For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoVNode<'a> for VNode<'a> {
     fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
         self
-    }
-}
-
-/// A concrete type provider for closures that build VNode structures.
-///
-/// This struct wraps lazy structs that build VNode trees Normally, we cannot perform a blanket implementation over
-/// closures, but if we wrap the closure in a concrete type, we can maintain separate implementations of IntoVNode.
-///
-///
-/// ```rust
-/// LazyNodes::new(|f| f.element("div", [], [], [] None))
-/// ```
-pub struct LazyNodes<'a, G>
-where
-    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-{
-    inner: G,
-    _p: PhantomData<&'a ()>,
-}
-
-impl<'a, G> LazyNodes<'a, G>
-where
-    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-{
-    pub fn new(f: G) -> Self {
-        Self {
-            inner: f,
-            _p: PhantomData {},
-        }
-    }
-}
-
-// Our blanket impl
-impl<'a, G> IntoVNode<'a> for LazyNodes<'a, G>
-where
-    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-{
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        (self.inner)(cx)
-    }
-}
-
-// Our blanket impl
-impl<'a, G> IntoIterator for LazyNodes<'a, G>
-where
-    G: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-{
-    type Item = Self;
-    type IntoIter = std::iter::Once<Self::Item>;
-    fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(self)
     }
 }
 
@@ -749,10 +677,26 @@ impl IntoVNode<'_> for Option<()> {
 
 impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
+    }
+}
+
+impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
-            Some(n) => n,
-            None => cx.fragment_from_iter(None as Option<VNode>),
+            Some(lazy) => lazy.call(cx),
+            None => VNode::Fragment(VFragment {
+                children: &[],
+                is_static: false,
+                key: None,
+            }),
         }
+    }
+}
+
+impl<'a> IntoVNode<'a> for LazyNodes<'a, '_> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        self.call(cx)
     }
 }
 
@@ -761,37 +705,86 @@ impl IntoVNode<'_> for &'static str {
         cx.static_text(self)
     }
 }
+
 impl IntoVNode<'_> for Arguments<'_> {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.text(self)
     }
 }
 
-impl Debug for NodeFactory<'_> {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
+/// Access the children elements passed into the component
+///
+/// This enables patterns where a component is passed children from its parent.
+///
+/// ## Details
+///
+/// Unlike React, Dioxus allows *only* lists of children to be passed from parent to child - not arbitrary functions
+/// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
+/// on the props that takes Context.
+///
+/// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
+/// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
+/// props are valid for the static lifetime.
+///
+/// ## Example
+///
+/// ```rust
+/// const App: FC<()> = |(cx, props)|{
+///     cx.render(rsx!{
+///         CustomCard {
+///             h1 {}
+///             p {}
+///         }
+///     })
+/// }
+///
+/// const CustomCard: FC<()> = |(cx, props)|{
+///     cx.render(rsx!{
+///         div {
+///             h1 {"Title card"}
+///             {props.children}
+///         }
+///     })
+/// }
+/// ```
+///
+/// ## Notes:
+///
+/// This method returns a "ScopeChildren" object. This object is copy-able and preserve the correct lifetime.
+pub struct ScopeChildren<'a> {
+    root: Option<VNode<'a>>,
+}
+
+impl Default for ScopeChildren<'_> {
+    fn default() -> Self {
+        Self { root: None }
     }
 }
 
-impl Debug for VNode<'_> {
-    fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        match &self {
-            VNode::Element(el) => s
-                .debug_struct("VElement")
-                .field("name", &el.tag_name)
-                .field("key", &el.key)
-                .finish(),
+impl<'a> ScopeChildren<'a> {
+    pub fn new(root: VNode<'a>) -> Self {
+        Self { root: Some(root) }
+    }
+    pub fn new_option(root: Option<VNode<'a>>) -> Self {
+        Self { root }
+    }
+}
 
-            VNode::Text(t) => write!(s, "VText {{ text: {} }}", t.text),
-            VNode::Anchor(_) => write!(s, "VAnchor"),
+impl IntoIterator for &ScopeChildren<'_> {
+    type Item = Self;
 
-            VNode::Fragment(frag) => write!(s, "VFragment {{ children: {:?} }}", frag.children),
-            VNode::Suspended { .. } => write!(s, "VSuspended"),
-            VNode::Component(comp) => write!(
-                s,
-                "VComponent {{ fc: {:?}, children: {:?} }}",
-                comp.user_fc, comp.children
-            ),
+    type IntoIter = std::iter::Once<Self>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(self)
+    }
+}
+
+impl<'a> IntoVNode<'a> for &ScopeChildren<'a> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        match &self.root {
+            Some(n) => n.decouple(),
+            None => cx.fragment_from_iter(None as Option<VNode>),
         }
     }
 }

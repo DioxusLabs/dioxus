@@ -19,11 +19,11 @@ fn please_work() {
                 hidden: "true"
                 "hello"
                 div { "hello" }
-                Child {}
-                Child {}
-                Child {}
+                // Child {}
+                // Child {}
+                // Child {}
             }
-            div { "hello" }
+            // div { "hello" }
         })
     };
 

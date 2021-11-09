@@ -15,7 +15,7 @@ pub(crate) struct ResourcePool {
 
     Wrapped in Rc so the "get_shared_context" closure can walk the tree (immutably!)
     */
-    pub components: Rc<UnsafeCell<Slab<Scope>>>,
+    pub components: Rc<UnsafeCell<Slab<ScopeInner>>>,
 
     /*
     Yes, a slab of "nil". We use this for properly ordering ElementIDs - all we care about is the allocation strategy
@@ -32,18 +32,18 @@ pub(crate) struct ResourcePool {
 
 impl ResourcePool {
     /// this is unsafe because the caller needs to track which other scopes it's already using
-    pub fn get_scope(&self, idx: ScopeId) -> Option<&Scope> {
+    pub fn get_scope(&self, idx: ScopeId) -> Option<&ScopeInner> {
         let inner = unsafe { &*self.components.get() };
         inner.get(idx.0)
     }
 
     /// this is unsafe because the caller needs to track which other scopes it's already using
-    pub fn get_scope_mut(&self, idx: ScopeId) -> Option<&mut Scope> {
+    pub fn get_scope_mut(&self, idx: ScopeId) -> Option<&mut ScopeInner> {
         let inner = unsafe { &mut *self.components.get() };
         inner.get_mut(idx.0)
     }
 
-    pub fn try_remove(&self, id: ScopeId) -> Option<Scope> {
+    pub fn try_remove(&self, id: ScopeId) -> Option<ScopeInner> {
         let inner = unsafe { &mut *self.components.get() };
         Some(inner.remove(id.0))
         // .try_remove(id.0)
@@ -67,7 +67,7 @@ impl ResourcePool {
         els.remove(id.0);
     }
 
-    pub fn insert_scope_with_key(&self, f: impl FnOnce(ScopeId) -> Scope) -> ScopeId {
+    pub fn insert_scope_with_key(&self, f: impl FnOnce(ScopeId) -> ScopeInner) -> ScopeId {
         let g = unsafe { &mut *self.components.get() };
         let entry = g.vacant_entry();
         let id = ScopeId(entry.key());

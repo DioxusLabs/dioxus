@@ -93,11 +93,11 @@ pub fn use_suspense<'src, Out, Fut, Cb>(
     cx: Context<'src>,
     task_initializer: impl FnOnce() -> Fut,
     user_callback: Cb,
-) -> DomTree<'src>
+) -> Element<'src>
 where
     Fut: Future<Output = Out> + 'static,
     Out: 'static,
-    Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> DomTree<'a> + 'static,
+    Cb: for<'a> Fn(SuspendedContext<'a>, &Out) -> Element<'a> + 'static,
 {
     /*
     General strategy:
@@ -135,32 +135,35 @@ where
             None => {
                 let value = hook.value.clone();
 
-                cx.render(LazyNodes::new(|f| {
-                    let bump = f.bump();
+                let id = hook.handle.our_id;
 
-                    use bumpalo::boxed::Box as BumpBox;
+                todo!()
+                // Some(LazyNodes::new(move |f| {
+                //     let bump = f.bump();
 
-                    let f: &mut dyn FnMut(SuspendedContext<'src>) -> DomTree<'src> =
-                        bump.alloc(move |sus| {
-                            let val = value.borrow();
+                //     use bumpalo::boxed::Box as BumpBox;
 
-                            let out = val
-                                .as_ref()
-                                .unwrap()
-                                .as_ref()
-                                .downcast_ref::<Out>()
-                                .unwrap();
+                //     let f: &mut dyn FnMut(SuspendedContext<'src>) -> Element<'src> =
+                //         bump.alloc(move |sus| {
+                //             let val = value.borrow();
 
-                            user_callback(sus, out)
-                        });
-                    let callback = unsafe { BumpBox::from_raw(f) };
+                //             let out = val
+                //                 .as_ref()
+                //                 .unwrap()
+                //                 .as_ref()
+                //                 .downcast_ref::<Out>()
+                //                 .unwrap();
 
-                    VNode::Suspended(bump.alloc(VSuspended {
-                        dom_id: empty_cell(),
-                        task_id: hook.handle.our_id,
-                        callback: RefCell::new(Some(callback)),
-                    }))
-                }))
+                //             user_callback(sus, out)
+                //         });
+                //     let callback = unsafe { BumpBox::from_raw(f) };
+
+                //     VNode::Suspended(bump.alloc(VSuspended {
+                //         dom_id: empty_cell(),
+                //         task_id: id,
+                //         callback: RefCell::new(Some(callback)),
+                //     }))
+                // }))
             }
         },
         |_| {},
@@ -177,13 +180,17 @@ pub struct SuspendedContext<'a> {
 }
 
 impl<'src> SuspendedContext<'src> {
-    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
-        self,
-        lazy_nodes: LazyNodes<'src, F>,
-    ) -> DomTree<'src> {
-        let bump = &self.inner.scope.frames.wip_frame().bump;
-        Some(lazy_nodes.into_vnode(NodeFactory { bump }))
-    }
+    // // pub fn render(
+    // pub fn render(
+    //     // pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
+    //     self,
+    //     lazy_nodes: LazyNodes<'_>,
+    //     // lazy_nodes: LazyNodes<'src, '_>,
+    // ) -> Element<'src> {
+    //     let bump = &self.inner.scope.frames.wip_frame().bump;
+    //     todo!("suspense")
+    //     // Some(lazy_nodes.into_vnode(NodeFactory { bump }))
+    // }
 }
 
 #[derive(Clone, Copy)]

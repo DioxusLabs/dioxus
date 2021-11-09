@@ -4,7 +4,9 @@
 //!
 //! We unsafely implement `send` for the VirtualDom, but those guarantees can only be
 
-use crate::innerlude::*;
+use bumpalo::Bump;
+
+use crate::{innerlude::*, lazynodes::LazyNodes};
 use std::{any::TypeId, ops::Deref, rc::Rc};
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
@@ -32,7 +34,7 @@ use std::{any::TypeId, ops::Deref, rc::Rc};
 /// }
 /// ```
 pub struct Context<'src> {
-    pub scope: &'src Scope,
+    pub scope: &'src ScopeInner,
 }
 
 impl<'src> Copy for Context<'src> {}
@@ -45,56 +47,13 @@ impl<'src> Clone for Context<'src> {
 // We currently deref to props, but it might make more sense to deref to Scope?
 // This allows for code that takes cx.xyz instead of cx.props.xyz
 impl<'a> Deref for Context<'a> {
-    type Target = &'a Scope;
+    type Target = &'a ScopeInner;
     fn deref(&self) -> &Self::Target {
         &self.scope
     }
 }
 
 impl<'src> Context<'src> {
-    /// Access the children elements passed into the component
-    ///
-    /// This enables patterns where a component is passed children from its parent.
-    ///
-    /// ## Details
-    ///
-    /// Unlike React, Dioxus allows *only* lists of children to be passed from parent to child - not arbitrary functions
-    /// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
-    /// on the props that takes Context.
-    ///
-    /// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
-    /// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
-    /// props are valid for the static lifetime.
-    ///
-    /// ## Example
-    ///
-    /// ```rust
-    /// const App: FC<()> = |(cx, props)|{
-    ///     cx.render(rsx!{
-    ///         CustomCard {
-    ///             h1 {}
-    ///             p {}
-    ///         }
-    ///     })
-    /// }
-    ///
-    /// const CustomCard: FC<()> = |(cx, props)|{
-    ///     cx.render(rsx!{
-    ///         div {
-    ///             h1 {"Title card"}
-    ///             {cx.children()}
-    ///         }
-    ///     })
-    /// }
-    /// ```
-    ///
-    /// ## Notes:
-    ///
-    /// This method returns a "ScopeChildren" object. This object is copy-able and preserve the correct lifetime.
-    pub fn children(&self) -> ScopeChildren<'src> {
-        self.scope.child_nodes()
-    }
-
     /// Create a subscription that schedules a future render for the reference component
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
@@ -104,6 +63,10 @@ impl<'src> Context<'src> {
 
     pub fn needs_update(&self) {
         (self.scope.memoized_updater)()
+    }
+
+    pub fn needs_update_any(&self, id: ScopeId) {
+        (self.scope.shared.schedule_any_immediate)(id)
     }
 
     /// Schedule an update for any component given its ScopeId.
@@ -122,6 +85,11 @@ impl<'src> Context<'src> {
         self.scope.our_arena_idx
     }
 
+    pub fn bump(&self) -> &'src Bump {
+        let bump = &self.scope.frames.wip_frame().bump;
+        bump
+    }
+
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
     ///
     /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
@@ -137,12 +105,10 @@ impl<'src> Context<'src> {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<F: FnOnce(NodeFactory<'src>) -> VNode<'src>>(
-        self,
-        lazy_nodes: LazyNodes<'src, F>,
-    ) -> DomTree<'src> {
+    pub fn render(self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<VNode<'src>> {
         let bump = &self.scope.frames.wip_frame().bump;
-        Some(lazy_nodes.into_vnode(NodeFactory { bump }))
+        let factory = NodeFactory { bump };
+        lazy_nodes.map(|f| f.call(factory))
     }
 
     /// `submit_task` will submit the future to be polled.
@@ -166,12 +132,11 @@ impl<'src> Context<'src> {
         (self.scope.shared.submit_task)(task)
     }
 
-    /// This hook enables the ability to expose state to children further down the VirtualDOM Tree.
+    /// This method enables the ability to expose state to children further down the VirtualDOM Tree.
     ///
-    /// This is a hook, so it should not be called conditionally!
+    /// This is a "fundamental" operation and should only be called during initialization of a hook.
     ///
-    /// The init method is ran *only* on first use, otherwise it is ignored. However, it uses hooks (ie `use`)
-    /// so don't put it in a conditional.
+    /// For a hook that provides the same functionality, use `use_provide_state` and `use_consume_state` instead.
     ///
     /// When the component is dropped, so is the context. Be aware of this behavior when consuming
     /// the context via Rc/Weak.
@@ -182,7 +147,7 @@ impl<'src> Context<'src> {
     /// struct SharedState(&'static str);
     ///
     /// static App: FC<()> = |(cx, props)|{
-    ///     cx.provide_state(SharedState("world"));
+    ///     cx.use_hook(|_| cx.provide_state(SharedState("world")), |_| {}, |_| {});
     ///     rsx!(cx, Child {})
     /// }
     ///

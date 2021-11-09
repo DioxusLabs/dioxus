@@ -22,7 +22,9 @@ longest-increasing-subsequence = "0.1.0"
 # internall used
 log = { version = "0.4", features = ["release_max_level_off"] }
 
-futures-util = { version = "0.3.15", no_default_features = true }
+futures-util = { version = "0.3.15", default-features = false, features = [
+    "std",
+] }
 
 smallvec = "1.6.1"
 
@@ -35,7 +37,7 @@ once_cell = "1.8.0"
 
 indexmap = "1.7.0"
 
-# # Serialize the Edits for use in Webview/Liveview instances
+# Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
 serde_repr = { version = "0.1.7", optional = true }
@@ -47,12 +49,13 @@ fern = { version = "0.6.0", features = ["colored"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
 simple_logger = "1.13.0"
 dioxus-core-macro = { path = "../core-macro", version = "0.1.2" }
-async-std = { version = "1.9.0", features = ["attributes"] }
-criterion = "0.3.5"
+# async-std = { version = "1.9.0", features = ["attributes"] }
+# criterion = "0.3.5"
 
 [features]
 default = []
 serialize = ["serde", "serde_repr"]
+debug_vdom = []
 
 [[bench]]
 name = "create"

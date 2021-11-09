@@ -20,7 +20,7 @@ fn main() {
     dioxus::desktop::launch(App, |c| c);
 }
 
-fn App((cx, props): Component<()>) -> DomTree {
+fn App((cx, props): Scope<()>) -> Element {
     let text: &mut Vec<String> = cx.use_hook(|_| vec![String::from("abc=def")], |f| f, |_| {});
 
     let first = text.get_mut(0).unwrap();
@@ -43,7 +43,7 @@ impl<'a> Drop for C1Props<'a> {
     fn drop(&mut self) {}
 }
 
-fn Child1<'a>((cx, props): Component<'a, C1Props>) -> DomTree<'a> {
+fn Child1<'a>((cx, props): Scope<'a, C1Props>) -> Element<'a> {
     let (left, right) = props.text.split_once("=").unwrap();
 
     cx.render(rsx! {
@@ -59,7 +59,7 @@ struct C2Props<'a> {
     text: &'a str,
 }
 
-fn Child2<'a>((cx, props): Component<'a, C2Props>) -> DomTree<'a> {
+fn Child2<'a>((cx, props): Scope<'a, C2Props>) -> Element<'a> {
     cx.render(rsx! {
         Child3 {
             text: props.text
@@ -72,7 +72,7 @@ struct C3Props<'a> {
     text: &'a str,
 }
 
-fn Child3<'a>((cx, props): Component<'a, C3Props>) -> DomTree<'a> {
+fn Child3<'a>((cx, props): Scope<'a, C3Props>) -> Element<'a> {
     cx.render(rsx! {
         div { "{props.text}"}
     })

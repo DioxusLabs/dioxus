@@ -21,17 +21,11 @@ impl TestDom {
         NodeFactory::new(&self.bump)
     }
 
-    pub fn render_direct<'a, F>(&'a self, lazy_nodes: LazyNodes<'a, F>) -> VNode<'a>
-    where
-        F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
+    pub fn render_direct<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> VNode<'a> {
         lazy_nodes.into_vnode(NodeFactory::new(&self.bump))
     }
 
-    pub fn render<'a, F>(&'a self, lazy_nodes: LazyNodes<'a, F>) -> &'a VNode<'a>
-    where
-        F: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
+    pub fn render<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> &'a VNode<'a> {
         self.bump
             .alloc(lazy_nodes.into_vnode(NodeFactory::new(&self.bump)))
     }
@@ -43,10 +37,7 @@ impl TestDom {
         machine.mutations
     }
 
-    pub fn create<'a, F1>(&'a self, left: LazyNodes<'a, F1>) -> Mutations<'a>
-    where
-        F1: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
+    pub fn create<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
         let old = self.bump.alloc(self.render_direct(left));
 
         let mut machine = DiffMachine::new(Mutations::new(), &self.scheduler.pool);
@@ -58,15 +49,11 @@ impl TestDom {
         machine.mutations
     }
 
-    pub fn lazy_diff<'a, F1, F2>(
+    pub fn lazy_diff<'a>(
         &'a self,
-        left: LazyNodes<'a, F1>,
-        right: LazyNodes<'a, F2>,
-    ) -> (Mutations<'a>, Mutations<'a>)
-    where
-        F1: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-        F2: FnOnce(NodeFactory<'a>) -> VNode<'a>,
-    {
+        left: Option<LazyNodes<'a, '_>>,
+        right: Option<LazyNodes<'a, '_>>,
+    ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render(left), self.render(right));
 
         let mut machine = DiffMachine::new(Mutations::new(), &self.scheduler.pool);
@@ -91,11 +78,5 @@ impl TestDom {
 impl Default for TestDom {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl VirtualDom {
-    pub fn simulate(&mut self) {
-        //
     }
 }

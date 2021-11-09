@@ -26,7 +26,7 @@ static App: FC<()> = |(cx, props)| {
         },
         |cx, props| {
             //
-            rsx!(cx, WeatherDisplay {})
+            rsx!(WeatherDisplay {})
         },
     );
 

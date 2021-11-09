@@ -21,16 +21,27 @@ pub(crate) struct BumpFrame {
 
 impl ActiveFrame {
     pub fn new() -> Self {
+        let b1 = Bump::new();
+        let b2 = Bump::new();
+
         let frame_a = BumpFrame {
-            bump: Bump::new(),
-            head_node: NodeFactory::unstable_place_holder(),
+            head_node: VNode::Fragment(VFragment {
+                key: None,
+                children: &[],
+                is_static: false,
+            }),
+            bump: b1,
 
             #[cfg(test)]
             _name: "wip",
         };
         let frame_b = BumpFrame {
-            bump: Bump::new(),
-            head_node: NodeFactory::unstable_place_holder(),
+            head_node: VNode::Fragment(VFragment {
+                key: None,
+                children: &[],
+                is_static: false,
+            }),
+            bump: b2,
 
             #[cfg(test)]
             _name: "fin",

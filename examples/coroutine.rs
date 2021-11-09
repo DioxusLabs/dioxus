@@ -46,7 +46,8 @@ static App: FC<()> = |(cx, props)| {
     });
 
     cx.render(rsx! {
-        div { style: { width: "400px", height: "400px", position: "relative", background: "yellow" }
+        div {
+            width: "400px", height: "400px", position: "relative", background: "yellow"
             button { "reset", onclick: move |_| {} }
             Horsey { pos: *p1, "horsey 1" }
             Horsey { pos: *p2, "horsey 2" }
@@ -54,18 +55,19 @@ static App: FC<()> = |(cx, props)| {
     })
 };
 
-#[derive(PartialEq, Props)]
-struct HorseyProps {
+#[derive(Props)]
+struct HorseyProps<'a> {
     pos: i32,
+    children: ScopeChildren<'a>,
 }
 
-static Horsey: FC<HorseyProps> = |(cx, props)| {
+fn Horsey<'a>((cx, props): Scope<'a, HorseyProps<'a>>) -> Element {
     cx.render(rsx! {
-    div {
-        button { "pause" }
         div {
-            {cx.children()}
+            button { "pause" }
+            div {
+                {&props.children}
+            }
         }
-      }
     })
-};
+}
