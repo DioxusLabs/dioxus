@@ -14,8 +14,6 @@ Some utilities
 */
 pub(crate) mod component;
 pub(crate) mod diff;
-pub(crate) mod diff_stack;
-pub(crate) mod hooklist;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
 pub(crate) mod nodes;
@@ -25,9 +23,7 @@ pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub use crate::component::*;
-    pub(crate) use crate::diff::*;
-    pub use crate::diff_stack::*;
-    pub(crate) use crate::hooklist::*;
+    pub use crate::diff::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
