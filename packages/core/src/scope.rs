@@ -315,10 +315,7 @@ impl Scope {
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_state<T>(&self, value: T)
-    where
-        T: 'static,
-    {
+    pub fn provide_state<T: 'static>(&self, value: T) {
         self.shared_contexts
             .borrow_mut()
             .insert(TypeId::of::<T>(), Rc::new(value))
@@ -354,13 +351,20 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// static App: FC<()> = |cx, props| {
+    /// fn App(cx: Context, props: &()) -> Element {
     ///     todo!();
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
     /// ```
     pub fn create_subtree(&self) -> Option<u32> {
-        self.new_subtree()
+        if self.is_subtree_root.get() {
+            None
+        } else {
+            todo!()
+            // let cur = self.subtree().get();
+            // self.shared.cur_subtree.set(cur + 1);
+            // Some(cur)
+        }
     }
 
     /// Get the subtree ID that this scope belongs to.
@@ -371,7 +375,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// static App: FC<()> = |cx, props| {
+    /// fn App(cx: Context, props: &()) -> Element {
     ///     let id = cx.get_current_subtree();
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
@@ -491,17 +495,6 @@ impl Scope {
         for mut effect in self.items.get_mut().pending_effects.drain(..) {
             effect();
         }
-    }
-
-    pub(crate) fn new_subtree(&self) -> Option<u32> {
-        todo!()
-        // if self.is_subtree_root.get() {
-        //     None
-        // } else {
-        //     let cur = self.shared.cur_subtree.get();
-        //     self.shared.cur_subtree.set(cur + 1);
-        //     Some(cur)
-        // }
     }
 }
 

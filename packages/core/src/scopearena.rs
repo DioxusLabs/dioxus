@@ -38,12 +38,17 @@ impl ScopeArena {
     }
 
     pub fn get_scope(&self, id: &ScopeId) -> Option<&Scope> {
-        unsafe { Some(&*self.scopes.borrow()[id.0]) }
+        unsafe { self.scopes.borrow().get(id.0).map(|f| &**f) }
     }
 
     // this is unsafe
-    pub unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<*mut Scope> {
-        Some(self.scopes.borrow()[id.0])
+    pub unsafe fn get_scope_raw(&self, id: &ScopeId) -> Option<*mut Scope> {
+        self.scopes.borrow().get(id.0).map(|f| *f)
+    }
+    // this is unsafe
+
+    pub unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<&mut Scope> {
+        self.scopes.borrow().get(id.0).map(|s| &mut **s)
     }
 
     pub fn new_with_key(
@@ -182,9 +187,11 @@ impl ScopeArena {
     }
 
     pub(crate) fn run_scope(&self, id: &ScopeId) -> bool {
-        let scope = self
-            .get_scope(id)
-            .expect("The base scope should never be moved");
+        let scope = unsafe {
+            &mut *self
+                .get_scope_mut(id)
+                .expect("The base scope should never be moved")
+        };
 
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.

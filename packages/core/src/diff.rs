@@ -442,7 +442,7 @@ impl<'bump> DiffState<'bump> {
         let height = parent_scope.height + 1;
         let subtree = parent_scope.subtree.get();
 
-        let parent_scope = unsafe { self.scopes.get_scope_mut(&parent_idx) };
+        let parent_scope = unsafe { self.scopes.get_scope_raw(&parent_idx) };
         let caller = unsafe { std::mem::transmute(vcomponent.caller as *const _) };
         let fc_ptr = vcomponent.user_fc;
 

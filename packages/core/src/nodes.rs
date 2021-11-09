@@ -14,26 +14,11 @@ use std::{
     fmt::{Arguments, Debug, Formatter},
 };
 
-/// A cached node is a "pointer" to a "rendered" node in a particular scope
-///
-/// It does not provide direct access to the node, so it doesn't carry any lifetime information with it
-///
-/// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
-/// is essentially a unique key to guarantee safe usage of the Node.
-///
-/// todo: remove "clone"
-#[derive(Clone, Debug)]
-pub struct NodeLink {
-    pub(crate) link_idx: usize,
-    pub(crate) gen_id: u32,
-    pub(crate) scope_id: ScopeId,
-}
-
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
 ///
 /// VNodes are designed to be lightweight and used with with a bump allocator. To create a VNode, you can use either of:
+///
 /// - the [`rsx`] macro
-/// - the [`html`] macro
 /// - the [`NodeFactory`] API
 pub enum VNode<'src> {
     /// Text VNodes simply bump-allocated (or static) string slices
@@ -41,7 +26,8 @@ pub enum VNode<'src> {
     /// # Example
     ///
     /// ```
-    /// let node = cx.render(rsx!{ "hello" }).unwrap();
+    /// let mut vdom = VirtualDom::new();
+    /// let node = vdom.render_vnode(rsx!( "hello" ));
     ///
     /// if let VNode::Text(vtext) = node {
     ///     assert_eq!(vtext.text, "hello");
@@ -56,7 +42,9 @@ pub enum VNode<'src> {
     /// # Example
     ///
     /// ```rust
-    /// let node = cx.render(rsx!{
+    /// let mut vdom = VirtualDom::new();
+    ///
+    /// let node = vdom.render_vnode(rsx!{
     ///     div {
     ///         key: "a",
     ///         onclick: |e| log::info!("clicked"),
@@ -64,7 +52,8 @@ pub enum VNode<'src> {
     ///         style: { background_color: "red" }
     ///         "hello"
     ///     }
-    /// }).unwrap();
+    /// });
+    ///
     /// if let VNode::Element(velement) = node {
     ///     assert_eq!(velement.tag_name, "div");
     ///     assert_eq!(velement.namespace, None);
@@ -93,13 +82,13 @@ pub enum VNode<'src> {
     /// # Example
     ///
     /// ```rust
-    /// fn Example(cx: Context<()>) -> DomTree {
+    /// fn Example(cx: Context, props: &()) -> Element {
     ///     todo!()
     /// }
     ///
-    /// let node = cx.render(rsx!{
-    ///     Example {}
-    /// }).unwrap();
+    /// let mut vdom = VirtualDom::new();
+    ///
+    /// let node = vdom.render_vnode(rsx!( Example {} ));
     ///
     /// if let VNode::Component(vcomp) = node {
     ///     assert_eq!(vcomp.user_fc, Example as *const ());
@@ -109,13 +98,11 @@ pub enum VNode<'src> {
 
     /// Suspended VNodes represent chunks of the UI tree that are not yet ready to be displayed.
     ///
-    /// These nodes currently can only be constructed via the [`use_suspense`] hook.
-    ///
     /// # Example
     ///
     /// ```rust
-    /// rsx!{
-    /// }
+    ///
+    ///
     /// ```
     Suspended(&'src VSuspended<'src>),
 
@@ -126,7 +113,10 @@ pub enum VNode<'src> {
     /// # Example
     ///
     /// ```rust
-    /// let node = cx.render(rsx! ( Fragment {} )).unwrap();
+    /// let mut vdom = VirtualDom::new();
+    ///
+    /// let node = vdom.render_vnode(rsx!( Fragment {} ));
+    ///
     /// if let VNode::Fragment(frag) = node {
     ///     let root = &frag.children[0];
     ///     assert_eq!(root, VNode::Anchor);
@@ -134,11 +124,20 @@ pub enum VNode<'src> {
     /// ```
     Anchor(&'src VAnchor),
 
-    /// A type of node that links this node to another scope or render cycle
+    /// A VNode that is actually a pointer to some nodes rather than the nodes directly. Useful when rendering portals
+    /// or eliding lifetimes on VNodes through runtime checks.
     ///
-    /// Is essentially a "pointer" to a "rendered" node in a particular scope
+    /// Linked VNodes can only be made through the [`Context::render`] method
     ///
-    /// Used in portals
+    /// Typically, linked nodes are found *not* in a VNode. When NodeLinks are in a VNode, the NodeLink was passed into
+    /// an `rsx!` call.
+    ///
+    /// # Example
+    /// ```rust
+    /// let mut vdom = VirtualDom::new();
+    ///
+    /// let node: NodeLink = vdom.render_vnode(rsx!( "hello" ));
+    /// ```
     Linked(NodeLink),
 }
 
@@ -273,7 +272,6 @@ pub struct VText<'src> {
 /// A list of VNodes with no single root.
 pub struct VFragment<'src> {
     pub key: Option<&'src str>,
-
     pub children: &'src [VNode<'src>],
 }
 
@@ -406,6 +404,24 @@ pub struct VSuspended<'a> {
 
     #[allow(clippy::type_complexity)]
     pub callback: RefCell<Option<BumpBox<'a, dyn FnMut() -> Element + 'a>>>,
+}
+
+/// A cached node is a "pointer" to a "rendered" node in a particular scope
+///
+/// It does not provide direct access to the node, so it doesn't carry any lifetime information with it
+///
+/// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
+/// is essentially a unique key to guarantee safe usage of the Node.
+///
+/// Linked VNodes can only be made through the [`Context::render`] method
+///
+/// Typically, NodeLinks are found *not* in a VNode. When NodeLinks are in a VNode, the NodeLink was passed into
+/// an `rsx!` call.
+#[derive(Debug)]
+pub struct NodeLink {
+    pub(crate) link_idx: usize,
+    pub(crate) gen_id: u32,
+    pub(crate) scope_id: ScopeId,
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -549,20 +565,6 @@ impl<'a> NodeFactory<'a> {
     where
         P: Properties + 'a,
     {
-        /*
-        our strategy:
-        - unsafe hackery
-        - lol
-
-        - we don't want to hit the global allocator
-        - allocate into our bump arena
-        - if the props aren't static, then we convert them into a box which we pass off between renders
-        */
-
-        // let bump = self.bump();
-
-        // // later, we'll do a hard allocation
-        // let raw_ptr = bump.alloc(props);
         let bump = self.bump();
         let props = bump.alloc(props);
         let bump_props = props as *mut P as *mut ();
@@ -758,21 +760,6 @@ impl IntoVNode<'_> for Option<()> {
     }
 }
 
-// Conveniently, we also support "None"
-impl IntoVNode<'_> for Option<NodeLink> {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        todo!()
-        // cx.fragment_from_iter(None as Option<VNode>)
-    }
-}
-// Conveniently, we also support "None"
-impl IntoVNode<'_> for NodeLink {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        todo!()
-        // cx.fragment_from_iter(None as Option<VNode>)
-    }
-}
-
 impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
@@ -809,79 +796,28 @@ impl IntoVNode<'_> for Arguments<'_> {
     }
 }
 
-/// Access the children elements passed into the component
-///
-/// This enables patterns where a component is passed children from its parent.
-///
-/// ## Details
-///
-/// Unlike React, Dioxus allows *only* lists of children to be passed from parent to child - not arbitrary functions
-/// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
-/// on the props that takes Context.
-///
-/// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
-/// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
-/// props are valid for the static lifetime.
-///
-/// ## Example
-///
-/// ```rust
-/// const App: FC<()> = |cx, props|{
-///     cx.render(rsx!{
-///         CustomCard {
-///             h1 {}
-///             p {}
-///         }
-///     })
-/// }
-///
-/// const CustomCard: FC<()> = |cx, props|{
-///     cx.render(rsx!{
-///         div {
-///             h1 {"Title card"}
-///             {props.children}
-///         }
-///     })
-/// }
-/// ```
-///
-/// ## Notes:
-///
-/// This method returns a "ScopeChildren" object. This object is copy-able and preserve the correct lifetime.
-pub struct ScopeChildren<'a> {
-    root: Option<VNode<'a>>,
-}
-
-impl Default for ScopeChildren<'_> {
-    fn default() -> Self {
-        Self { root: None }
+impl IntoVNode<'_> for Option<NodeLink> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        todo!()
     }
 }
 
-impl<'a> ScopeChildren<'a> {
-    pub fn new(root: VNode<'a>) -> Self {
-        Self { root: Some(root) }
-    }
-    pub fn new_option(root: Option<VNode<'a>>) -> Self {
-        Self { root }
+impl IntoVNode<'_> for &Option<NodeLink> {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        todo!()
     }
 }
 
-impl IntoIterator for &ScopeChildren<'_> {
-    type Item = Self;
-
-    type IntoIter = std::iter::Once<Self>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(self)
+// Conveniently, we also support "None"
+impl IntoVNode<'_> for NodeLink {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        todo!()
     }
 }
 
-impl<'a> IntoVNode<'a> for &ScopeChildren<'a> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        match &self.root {
-            Some(n) => n.decouple(),
-            None => cx.fragment_from_iter(None as Option<VNode>),
-        }
+// Conveniently, we also support "None"
+impl IntoVNode<'_> for &NodeLink {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        todo!()
     }
 }
