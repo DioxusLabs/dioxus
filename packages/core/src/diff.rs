@@ -89,6 +89,7 @@
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
 use crate::innerlude::*;
+use futures_channel::mpsc::UnboundedSender;
 use fxhash::{FxHashMap, FxHashSet};
 use slab::Slab;
 use DomEdit::*;
@@ -106,6 +107,7 @@ use DomEdit::*;
 /// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
 /// stack machines all the way down!
 pub struct DiffState<'bump> {
+    scopes: &'bump ScopeArena,
     pub mutations: Mutations<'bump>,
     pub(crate) stack: DiffStack<'bump>,
     pub seen_scopes: FxHashSet<ScopeId>,
@@ -113,25 +115,48 @@ pub struct DiffState<'bump> {
 }
 
 impl<'bump> DiffState<'bump> {
-    pub(crate) fn new(mutations: Mutations<'bump>) -> Self {
+    pub(crate) fn new(scopes: &'bump ScopeArena) -> Self {
         Self {
-            mutations,
+            scopes,
+            mutations: Mutations::new(),
             stack: DiffStack::new(),
             seen_scopes: Default::default(),
             force_diff: false,
         }
     }
+
+    pub fn try_remove(&self, id: &ScopeId) -> Option<Scope> {
+        todo!()
+    }
+
+    pub fn reserve_node(&self, node: &VNode) -> ElementId {
+        todo!()
+        // let mut els = self.nodes.borrow_mut();
+        // let entry = els.vacant_entry();
+        // let key = entry.key();
+        // let id = ElementId(key);
+        // let node = node as *const _;
+        // let node = unsafe { std::mem::transmute(node) };
+        // entry.insert(node);
+        // id
+
+        // let nodes = self.nodes.borrow_mut();
+        // let id = nodes.insert(());
+        // let node_id = ElementId(id);
+        // node = Some(node_id);
+        // node_id
+    }
+
+    pub fn collect_garbage(&self, id: ElementId) {
+        todo!()
+    }
 }
 
-impl<'bump> ScopeArena {
-    pub fn diff_scope(&'bump self, state: &mut DiffState<'bump>, id: &ScopeId) {
-        // if let Some(component) = self.get_scope(id) {
-
-        let (old, new) = (self.wip_head(id), self.fin_head(id));
-
-        state.stack.push(DiffInstruction::Diff { old, new });
-        self.work(state, || false);
-        // }
+impl<'bump> DiffState<'bump> {
+    pub fn diff_scope(&mut self, id: &ScopeId) {
+        let (old, new) = (self.scopes.wip_head(id), self.scopes.fin_head(id));
+        self.stack.push(DiffInstruction::Diff { old, new });
+        self.work(|| false);
     }
 
     /// Progress the diffing for this "fiber"
@@ -141,21 +166,17 @@ impl<'bump> ScopeArena {
     /// We do depth-first to maintain high cache locality (nodes were originally generated recursively).
     ///
     /// Returns a `bool` indicating that the work completed properly.
-    pub fn work(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        mut deadline_expired: impl FnMut() -> bool,
-    ) -> bool {
-        while let Some(instruction) = state.stack.pop() {
+    pub fn work(&mut self, mut deadline_expired: impl FnMut() -> bool) -> bool {
+        while let Some(instruction) = self.stack.pop() {
             match instruction {
-                DiffInstruction::Diff { old, new } => self.diff_node(state, old, new),
-                DiffInstruction::Create { node } => self.create_node(state, node),
-                DiffInstruction::Mount { and } => self.mount(state, and),
+                DiffInstruction::Diff { old, new } => self.diff_node(old, new),
+                DiffInstruction::Create { node } => self.create_node(node),
+                DiffInstruction::Mount { and } => self.mount(and),
                 DiffInstruction::PrepareMove { node } => {
-                    let num_on_stack = self.push_all_nodes(state, node);
-                    state.stack.add_child_count(num_on_stack);
+                    let num_on_stack = self.push_all_nodes(node);
+                    self.stack.add_child_count(num_on_stack);
                 }
-                DiffInstruction::PopScope => state.stack.pop_off_scope(),
+                DiffInstruction::PopScope => self.stack.pop_off_scope(),
             };
 
             if deadline_expired() {
@@ -168,14 +189,10 @@ impl<'bump> ScopeArena {
     }
 
     // recursively push all the nodes of a tree onto the stack and return how many are there
-    fn push_all_nodes(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        node: &'bump VNode<'bump>,
-    ) -> usize {
+    fn push_all_nodes(&mut self, node: &'bump VNode<'bump>) -> usize {
         match node {
             VNode::Text(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
-                state.mutations.push_root(node.mounted_id());
+                self.mutations.push_root(node.mounted_id());
                 1
             }
 
@@ -183,9 +200,9 @@ impl<'bump> ScopeArena {
                 todo!("load linked");
                 0
                 // let num_on_stack = linked.children.iter().map(|child| {
-                //     self.push_all_nodes(state, child)
+                //     self.push_all_nodes( child)
                 // }).sum();
-                // state.mutations.push_root(node.mounted_id());
+                // self.mutations.push_root(node.mounted_id());
                 // num_on_stack + 1
             }
 
@@ -193,7 +210,7 @@ impl<'bump> ScopeArena {
                 //
                 let mut added = 0;
                 for child in node.children() {
-                    added += self.push_all_nodes(state, child);
+                    added += self.push_all_nodes(child);
                 }
                 added
             }
@@ -201,50 +218,50 @@ impl<'bump> ScopeArena {
             VNode::Element(el) => {
                 let mut num_on_stack = 0;
                 for child in el.children.iter() {
-                    num_on_stack += self.push_all_nodes(state, child);
+                    num_on_stack += self.push_all_nodes(child);
                 }
-                state.mutations.push_root(el.dom_id.get().unwrap());
+                self.mutations.push_root(el.dom_id.get().unwrap());
 
                 num_on_stack + 1
             }
         }
     }
 
-    fn mount(&'bump self, state: &mut DiffState<'bump>, and: MountType<'bump>) {
-        let nodes_created = state.stack.pop_nodes_created();
+    fn mount(&mut self, and: MountType<'bump>) {
+        let nodes_created = self.stack.pop_nodes_created();
         match and {
             // add the nodes from this virtual list to the parent
             // used by fragments and components
             MountType::Absorb => {
-                state.stack.add_child_count(nodes_created);
+                self.stack.add_child_count(nodes_created);
             }
 
             MountType::Replace { old } => {
                 if let Some(old_id) = old.try_mounted_id() {
-                    state.mutations.replace_with(old_id, nodes_created as u32);
-                    self.remove_nodes(state, Some(old), true);
+                    self.mutations.replace_with(old_id, nodes_created as u32);
+                    self.remove_nodes(Some(old), true);
                 } else {
                     if let Some(id) = self.find_first_element_id(old) {
-                        state.mutations.replace_with(id, nodes_created as u32);
+                        self.mutations.replace_with(id, nodes_created as u32);
                     }
-                    self.remove_nodes(state, Some(old), true);
+                    self.remove_nodes(Some(old), true);
                 }
             }
 
             MountType::Append => {
-                state.mutations.edits.push(AppendChildren {
+                self.mutations.edits.push(AppendChildren {
                     many: nodes_created as u32,
                 });
             }
 
             MountType::InsertAfter { other_node } => {
                 let root = self.find_last_element(other_node).unwrap();
-                state.mutations.insert_after(root, nodes_created as u32);
+                self.mutations.insert_after(root, nodes_created as u32);
             }
 
             MountType::InsertBefore { other_node } => {
                 let root = self.find_first_element_id(other_node).unwrap();
-                state.mutations.insert_before(root, nodes_created as u32);
+                self.mutations.insert_before(root, nodes_created as u32);
             }
         }
     }
@@ -253,63 +270,43 @@ impl<'bump> ScopeArena {
     //  Tools for creating new nodes
     // =================================
 
-    fn create_node(&'bump self, state: &mut DiffState<'bump>, node: &'bump VNode<'bump>) {
+    fn create_node(&mut self, node: &'bump VNode<'bump>) {
         match node {
-            VNode::Text(vtext) => self.create_text_node(state, vtext, node),
-            VNode::Suspended(suspended) => self.create_suspended_node(state, suspended, node),
-            VNode::Anchor(anchor) => self.create_anchor_node(state, anchor, node),
-            VNode::Element(element) => self.create_element_node(state, element, node),
-            VNode::Fragment(frag) => self.create_fragment_node(state, frag),
-            VNode::Component(component) => self.create_component_node(state, component),
-            VNode::Linked(linked) => self.create_linked_node(state, linked),
+            VNode::Text(vtext) => self.create_text_node(vtext, node),
+            VNode::Suspended(suspended) => self.create_suspended_node(suspended, node),
+            VNode::Anchor(anchor) => self.create_anchor_node(anchor, node),
+            VNode::Element(element) => self.create_element_node(element, node),
+            VNode::Fragment(frag) => self.create_fragment_node(frag),
+            VNode::Component(component) => self.create_component_node(component),
+            VNode::Linked(linked) => self.create_linked_node(linked),
         }
     }
 
-    fn create_text_node(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        vtext: &'bump VText<'bump>,
-        node: &'bump VNode<'bump>,
-    ) {
+    fn create_text_node(&mut self, vtext: &'bump VText<'bump>, node: &'bump VNode<'bump>) {
         let real_id = self.reserve_node(node);
-        state.mutations.create_text_node(vtext.text, real_id);
+        self.mutations.create_text_node(vtext.text, real_id);
         vtext.dom_id.set(Some(real_id));
-        state.stack.add_child_count(1);
+        self.stack.add_child_count(1);
     }
 
-    fn create_suspended_node(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        suspended: &'bump VSuspended,
-        node: &'bump VNode<'bump>,
-    ) {
+    fn create_suspended_node(&mut self, suspended: &'bump VSuspended, node: &'bump VNode<'bump>) {
         let real_id = self.reserve_node(node);
-        state.mutations.create_placeholder(real_id);
+        self.mutations.create_placeholder(real_id);
 
         suspended.dom_id.set(Some(real_id));
-        state.stack.add_child_count(1);
+        self.stack.add_child_count(1);
 
-        self.attach_suspended_node_to_scope(state, suspended);
+        self.attach_suspended_node_to_scope(suspended);
     }
 
-    fn create_anchor_node(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        anchor: &'bump VAnchor,
-        node: &'bump VNode<'bump>,
-    ) {
+    fn create_anchor_node(&mut self, anchor: &'bump VAnchor, node: &'bump VNode<'bump>) {
         let real_id = self.reserve_node(node);
-        state.mutations.create_placeholder(real_id);
+        self.mutations.create_placeholder(real_id);
         anchor.dom_id.set(Some(real_id));
-        state.stack.add_child_count(1);
+        self.stack.add_child_count(1);
     }
 
-    fn create_element_node(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        element: &'bump VElement<'bump>,
-        node: &'bump VNode<'bump>,
-    ) {
+    fn create_element_node(&mut self, element: &'bump VElement<'bump>, node: &'bump VNode<'bump>) {
         let VElement {
             tag_name,
             listeners,
@@ -324,56 +321,45 @@ impl<'bump> ScopeArena {
 
         dom_id.set(Some(real_id));
 
-        state
-            .mutations
-            .create_element(tag_name, *namespace, real_id);
+        self.mutations.create_element(tag_name, *namespace, real_id);
 
-        state.stack.add_child_count(1);
+        self.stack.add_child_count(1);
 
-        if let Some(cur_scope_id) = state.stack.current_scope() {
-            let scope = self.get_scope(&cur_scope_id).unwrap();
+        if let Some(cur_scope_id) = self.stack.current_scope() {
+            let scope = self.scopes.get_scope(&cur_scope_id).unwrap();
 
             for listener in *listeners {
                 self.attach_listener_to_scope(listener, scope);
                 listener.mounted_node.set(Some(real_id));
-                state.mutations.new_event_listener(listener, cur_scope_id);
+                self.mutations.new_event_listener(listener, cur_scope_id);
             }
         } else {
             log::warn!("create element called with no scope on the stack - this is an error for a live dom");
         }
 
         for attr in *attributes {
-            state.mutations.set_attribute(attr, real_id.as_u64());
+            self.mutations.set_attribute(attr, real_id.as_u64());
         }
 
         if !children.is_empty() {
-            state.stack.create_children(children, MountType::Append);
+            self.stack.create_children(children, MountType::Append);
         }
     }
 
-    fn create_fragment_node(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        frag: &'bump VFragment<'bump>,
-    ) {
-        state
-            .stack
-            .create_children(frag.children, MountType::Absorb);
+    fn create_fragment_node(&mut self, frag: &'bump VFragment<'bump>) {
+        self.stack.create_children(frag.children, MountType::Absorb);
     }
 
-    fn create_component_node(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        vcomponent: &'bump VComponent<'bump>,
-    ) {
+    fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
         // let caller = vcomponent.caller;
 
-        let parent_idx = state.stack.current_scope().unwrap();
+        let parent_idx = self.stack.current_scope().unwrap();
 
-        let shared = self.sender.clone();
+        let shared: UnboundedSender<SchedulerMsg> = todo!();
+        // let shared: UnboundedSender<SchedulerMsg> = self.sender.clone();
 
         // Insert a new scope into our component list
-        let parent_scope = self.get_scope(&parent_idx).unwrap();
+        let parent_scope = self.scopes.get_scope(&parent_idx).unwrap();
 
         let new_idx: ScopeId = todo!();
         // self
@@ -394,7 +380,7 @@ impl<'bump> ScopeArena {
         vcomponent.associated_scope.set(Some(new_idx));
 
         if !vcomponent.can_memoize {
-            let cur_scope = self.get_scope(&parent_idx).unwrap();
+            let cur_scope = self.scopes.get_scope(&parent_idx).unwrap();
             let extended = unsafe { std::mem::transmute(vcomponent) };
             cur_scope.items.get_mut().borrowed_props.push(extended);
         }
@@ -403,7 +389,7 @@ impl<'bump> ScopeArena {
         //  add noderefs to current noderef list Noderefs
         //  add effects to current effect list Effects
 
-        let new_component = self.get_scope(&new_idx).unwrap();
+        let new_component = self.scopes.get_scope(&new_idx).unwrap();
 
         log::debug!(
             "initializing component {:?} with height {:?}",
@@ -417,7 +403,7 @@ impl<'bump> ScopeArena {
         // if new_component.run_scope(self) {
         //     // Take the node that was just generated from running the component
         //     let nextnode = new_component.frames.fin_head();
-        //     state.stack.create_component(new_idx, nextnode);
+        //     self.stack.create_component(new_idx, nextnode);
 
         //     //
         //     /*
@@ -427,15 +413,15 @@ impl<'bump> ScopeArena {
 
         //     */
         //     if new_component.is_subtree_root.get() {
-        //         state.stack.push_subtree();
+        //         self.stack.push_subtree();
         //     }
         // }
 
         // Finally, insert this scope as a seen node.
-        state.seen_scopes.insert(new_idx);
+        self.seen_scopes.insert(new_idx);
     }
 
-    fn create_linked_node(&'bump self, state: &mut DiffState<'bump>, link: &'bump NodeLink) {
+    fn create_linked_node(&mut self, link: &'bump NodeLink) {
         todo!()
     }
 
@@ -443,26 +429,19 @@ impl<'bump> ScopeArena {
     //  Tools for diffing nodes
     // =================================
 
-    pub fn diff_node(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old_node: &'bump VNode<'bump>,
-        new_node: &'bump VNode<'bump>,
-    ) {
+    pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
         use VNode::*;
         match (old_node, new_node) {
             // Check the most common cases first
-            (Text(old), Text(new)) => self.diff_text_nodes(state, old, new),
+            (Text(old), Text(new)) => self.diff_text_nodes(old, new),
             (Component(old), Component(new)) => {
-                self.diff_component_nodes(state, old_node, new_node, old, new)
+                self.diff_component_nodes(old_node, new_node, old, new)
             }
-            (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(state, old, new),
+            (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
-            (Suspended(old), Suspended(new)) => self.diff_suspended_nodes(state, old, new),
-            (Element(old), Element(new)) => {
-                self.diff_element_nodes(state, old, new, old_node, new_node)
-            }
-            (Linked(old), Linked(new)) => self.diff_linked_nodes(state, old, new),
+            (Suspended(old), Suspended(new)) => self.diff_suspended_nodes(old, new),
+            (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
+            (Linked(old), Linked(new)) => self.diff_linked_nodes(old, new),
 
             // Anything else is just a basic replace and create
             (
@@ -470,21 +449,16 @@ impl<'bump> ScopeArena {
                 | Suspended(_),
                 Linked(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_)
                 | Suspended(_),
-            ) => state
+            ) => self
                 .stack
                 .create_node(new_node, MountType::Replace { old: old_node }),
         }
     }
 
-    fn diff_text_nodes(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old: &'bump VText<'bump>,
-        new: &'bump VText<'bump>,
-    ) {
+    fn diff_text_nodes(&mut self, old: &'bump VText<'bump>, new: &'bump VText<'bump>) {
         if let Some(root) = old.dom_id.get() {
             if old.text != new.text {
-                state.mutations.set_text(new.text, root.as_u64());
+                self.mutations.set_text(new.text, root.as_u64());
             }
 
             new.dom_id.set(Some(root));
@@ -492,8 +466,8 @@ impl<'bump> ScopeArena {
     }
 
     fn diff_element_nodes(
-        &'bump self,
-        state: &mut DiffState<'bump>,
+        &mut self,
+
         old: &'bump VElement<'bump>,
         new: &'bump VElement<'bump>,
         old_node: &'bump VNode<'bump>,
@@ -508,11 +482,11 @@ impl<'bump> ScopeArena {
         if new.tag_name != old.tag_name || new.namespace != old.namespace {
             // maybe make this an instruction?
             // issue is that we need the "vnode" but this method only has the velement
-            state.stack.push_nodes_created(0);
-            state.stack.push(DiffInstruction::Mount {
+            self.stack.push_nodes_created(0);
+            self.stack.push(DiffInstruction::Mount {
                 and: MountType::Replace { old: old_node },
             });
-            self.create_element_node(state, new, new_node);
+            self.create_element_node(new, new_node);
             return;
         }
 
@@ -532,15 +506,15 @@ impl<'bump> ScopeArena {
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                 if old_attr.value != new_attr.value || new_attr.is_volatile {
-                    state.mutations.set_attribute(new_attr, root.as_u64());
+                    self.mutations.set_attribute(new_attr, root.as_u64());
                 }
             }
         } else {
             for attribute in old.attributes {
-                state.mutations.remove_attribute(attribute, root.as_u64());
+                self.mutations.remove_attribute(attribute, root.as_u64());
             }
             for attribute in new.attributes {
-                state.mutations.set_attribute(attribute, root.as_u64())
+                self.mutations.set_attribute(attribute, root.as_u64())
             }
         }
 
@@ -552,47 +526,45 @@ impl<'bump> ScopeArena {
         // We also need to make sure that all listeners are properly attached to the parent scope (fix_listener)
         //
         // TODO: take a more efficient path than this
-        if let Some(cur_scope_id) = state.stack.current_scope() {
-            let scope = self.get_scope(&cur_scope_id).unwrap();
+        if let Some(cur_scope_id) = self.stack.current_scope() {
+            let scope = self.scopes.get_scope(&cur_scope_id).unwrap();
 
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                     if old_l.event != new_l.event {
-                        state
-                            .mutations
+                        self.mutations
                             .remove_event_listener(old_l.event, root.as_u64());
-                        state.mutations.new_event_listener(new_l, cur_scope_id);
+                        self.mutations.new_event_listener(new_l, cur_scope_id);
                     }
                     new_l.mounted_node.set(old_l.mounted_node.get());
                     self.attach_listener_to_scope(new_l, scope);
                 }
             } else {
                 for listener in old.listeners {
-                    state
-                        .mutations
+                    self.mutations
                         .remove_event_listener(listener.event, root.as_u64());
                 }
                 for listener in new.listeners {
                     listener.mounted_node.set(Some(root));
-                    state.mutations.new_event_listener(listener, cur_scope_id);
+                    self.mutations.new_event_listener(listener, cur_scope_id);
                     self.attach_listener_to_scope(listener, scope);
                 }
             }
         }
 
         if old.children.is_empty() && !new.children.is_empty() {
-            state.mutations.edits.push(PushRoot {
+            self.mutations.edits.push(PushRoot {
                 root: root.as_u64(),
             });
-            state.stack.create_children(new.children, MountType::Append);
+            self.stack.create_children(new.children, MountType::Append);
         } else {
-            self.diff_children(state, old.children, new.children);
+            self.diff_children(old.children, new.children);
         }
     }
 
     fn diff_component_nodes(
-        &'bump self,
-        state: &mut DiffState<'bump>,
+        &mut self,
+
         old_node: &'bump VNode<'bump>,
         new_node: &'bump VNode<'bump>,
 
@@ -605,13 +577,13 @@ impl<'bump> ScopeArena {
         if old.user_fc == new.user_fc {
             log::debug!("Diffing component {:?} - {:?}", new.user_fc, scope_addr);
             //
-            state.stack.scope_stack.push(scope_addr);
+            self.stack.scope_stack.push(scope_addr);
 
             // Make sure the new component vnode is referencing the right scope id
             new.associated_scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
-            let scope = self.get_scope(&scope_addr).unwrap();
+            let scope = self.scopes.get_scope(&scope_addr).unwrap();
             let mut items = scope.items.borrow_mut();
 
             // React doesn't automatically memoize, but we do.
@@ -627,52 +599,36 @@ impl<'bump> ScopeArena {
             //     }
             // }
 
-            state.stack.scope_stack.pop();
+            self.stack.scope_stack.pop();
         } else {
-            state
-                .stack
+            self.stack
                 .create_node(new_node, MountType::Replace { old: old_node });
         }
     }
 
-    fn diff_fragment_nodes(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old: &'bump VFragment<'bump>,
-        new: &'bump VFragment<'bump>,
-    ) {
+    fn diff_fragment_nodes(&mut self, old: &'bump VFragment<'bump>, new: &'bump VFragment<'bump>) {
         // This is the case where options or direct vnodes might be used.
         // In this case, it's faster to just skip ahead to their diff
         if old.children.len() == 1 && new.children.len() == 1 {
-            self.diff_node(state, &old.children[0], &new.children[0]);
+            self.diff_node(&old.children[0], &new.children[0]);
             return;
         }
 
         debug_assert!(!old.children.is_empty());
         debug_assert!(!new.children.is_empty());
 
-        self.diff_children(state, old.children, new.children);
+        self.diff_children(old.children, new.children);
     }
 
-    fn diff_suspended_nodes(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old: &'bump VSuspended,
-        new: &'bump VSuspended,
-    ) {
+    fn diff_suspended_nodes(&mut self, old: &'bump VSuspended, new: &'bump VSuspended) {
         new.dom_id.set(old.dom_id.get());
-        self.attach_suspended_node_to_scope(state, new);
+        self.attach_suspended_node_to_scope(new);
     }
 
-    fn diff_linked_nodes(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old: &'bump NodeLink,
-        new: &'bump NodeLink,
-    ) {
+    fn diff_linked_nodes(&mut self, old: &'bump NodeLink, new: &'bump NodeLink) {
         todo!();
         // new.dom_id.set(old.dom_id.get());
-        // self.attach_linked_node_to_scope(state, new);
+        // self.attach_linked_node_to_scope( new);
     }
 
     // =============================================
@@ -694,32 +650,26 @@ impl<'bump> ScopeArena {
     //
     // Fragment nodes cannot generate empty children lists, so we can assume that when a list is empty, it belongs only
     // to an element, and appending makes sense.
-    fn diff_children(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
-    ) {
+    fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Remember, fragments can never be empty (they always have a single child)
         match (old, new) {
             ([], []) => {}
             ([], _) => {
                 // we need to push the
-                state.stack.create_children(new, MountType::Append);
+                self.stack.create_children(new, MountType::Append);
             }
             (_, []) => {
-                self.remove_nodes(state, old, true);
+                self.remove_nodes(old, true);
             }
             ([VNode::Anchor(old_anchor)], [VNode::Anchor(new_anchor)]) => {
                 old_anchor.dom_id.set(new_anchor.dom_id.get());
             }
             ([VNode::Anchor(_)], _) => {
-                state
-                    .stack
+                self.stack
                     .create_children(new, MountType::Replace { old: &old[0] });
             }
             (_, [VNode::Anchor(_)]) => {
-                self.replace_and_create_many_with_one(state, old, &new[0]);
+                self.replace_and_create_many_with_one(old, &new[0]);
             }
             _ => {
                 let new_is_keyed = new[0].key().is_some();
@@ -735,9 +685,9 @@ impl<'bump> ScopeArena {
                 );
 
                 if new_is_keyed && old_is_keyed {
-                    self.diff_keyed_children(state, old, new);
+                    self.diff_keyed_children(old, new);
                 } else {
-                    self.diff_non_keyed_children(state, old, new);
+                    self.diff_non_keyed_children(old, new);
                 }
             }
         }
@@ -751,25 +701,20 @@ impl<'bump> ScopeArena {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
-    ) {
+    fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         // Handled these cases in `diff_children` before calling this function.
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
         for (new, old) in new.iter().zip(old.iter()).rev() {
-            state.stack.push(DiffInstruction::Diff { new, old });
+            self.stack.push(DiffInstruction::Diff { new, old });
         }
 
         use std::cmp::Ordering;
         match old.len().cmp(&new.len()) {
-            Ordering::Greater => self.remove_nodes(state, &old[new.len()..], true),
+            Ordering::Greater => self.remove_nodes(&old[new.len()..], true),
             Ordering::Less => {
-                state.stack.create_children(
+                self.stack.create_children(
                     &new[old.len()..],
                     MountType::InsertAfter {
                         other_node: old.last().unwrap(),
@@ -798,12 +743,7 @@ impl<'bump> ScopeArena {
     // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
     //
     // The stack is empty upon entry.
-    fn diff_keyed_children(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
-    ) {
+    fn diff_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         if cfg!(debug_assertions) {
             let mut keys = fxhash::FxHashSet::default();
             let mut assert_unique_keys = |children: &'bump [VNode<'bump>]| {
@@ -831,7 +771,7 @@ impl<'bump> ScopeArena {
         //
         // `shared_prefix_count` is the count of how many nodes at the start of
         // `new` and `old` share the same keys.
-        let (left_offset, right_offset) = match self.diff_keyed_ends(state, old, new) {
+        let (left_offset, right_offset) = match self.diff_keyed_ends(old, new) {
             Some(count) => count,
             None => return,
         };
@@ -841,7 +781,7 @@ impl<'bump> ScopeArena {
         //     right_offset,
         // );
 
-        // log::debug!("stack before lo is {:#?}", state.stack.instructions);
+        // log::debug!("stack before lo is {:#?}", self.stack.instructions);
         // Ok, we now hopefully have a smaller range of children in the middle
         // within which to re-order nodes with the same keys, remove old nodes with
         // now-unused keys, and create new nodes with fresh keys.
@@ -855,14 +795,14 @@ impl<'bump> ScopeArena {
         );
         if new_middle.is_empty() {
             // remove the old elements
-            self.remove_nodes(state, old_middle, true);
+            self.remove_nodes(old_middle, true);
         } else if old_middle.is_empty() {
             // there were no old elements, so just create the new elements
             // we need to find the right "foothold" though - we shouldn't use the "append" at all
             if left_offset == 0 {
                 // insert at the beginning of the old list
                 let foothold = &old[old.len() - right_offset];
-                state.stack.create_children(
+                self.stack.create_children(
                     new_middle,
                     MountType::InsertBefore {
                         other_node: foothold,
@@ -871,7 +811,7 @@ impl<'bump> ScopeArena {
             } else if right_offset == 0 {
                 // insert at the end  the old list
                 let foothold = old.last().unwrap();
-                state.stack.create_children(
+                self.stack.create_children(
                     new_middle,
                     MountType::InsertAfter {
                         other_node: foothold,
@@ -880,7 +820,7 @@ impl<'bump> ScopeArena {
             } else {
                 // inserting in the middle
                 let foothold = &old[left_offset - 1];
-                state.stack.create_children(
+                self.stack.create_children(
                     new_middle,
                     MountType::InsertAfter {
                         other_node: foothold,
@@ -888,10 +828,10 @@ impl<'bump> ScopeArena {
                 );
             }
         } else {
-            self.diff_keyed_middle(state, old_middle, new_middle);
+            self.diff_keyed_middle(old_middle, new_middle);
         }
 
-        log::debug!("stack after km is {:#?}", state.stack.instructions);
+        log::debug!("stack after km is {:#?}", self.stack.instructions);
     }
 
     /// Diff both ends of the children that share keys.
@@ -900,8 +840,8 @@ impl<'bump> ScopeArena {
     ///
     /// If there is no offset, then this function returns None and the diffing is complete.
     fn diff_keyed_ends(
-        &'bump self,
-        state: &mut DiffState<'bump>,
+        &mut self,
+
         old: &'bump [VNode<'bump>],
         new: &'bump [VNode<'bump>],
     ) -> Option<(usize, usize)> {
@@ -912,14 +852,14 @@ impl<'bump> ScopeArena {
             if old.key() != new.key() {
                 break;
             }
-            state.stack.push(DiffInstruction::Diff { old, new });
+            self.stack.push(DiffInstruction::Diff { old, new });
             left_offset += 1;
         }
 
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if left_offset == old.len() {
-            state.stack.create_children(
+            self.stack.create_children(
                 &new[left_offset..],
                 MountType::InsertAfter {
                     other_node: old.last().unwrap(),
@@ -931,7 +871,7 @@ impl<'bump> ScopeArena {
         // And if that was all of the new children, then remove all of the remaining
         // old children and we're finished.
         if left_offset == new.len() {
-            self.remove_nodes(state, &old[left_offset..], true);
+            self.remove_nodes(&old[left_offset..], true);
             return None;
         }
 
@@ -942,7 +882,7 @@ impl<'bump> ScopeArena {
             if old.key() != new.key() {
                 break;
             }
-            self.diff_node(state, old, new);
+            self.diff_node(old, new);
             right_offset += 1;
         }
 
@@ -961,13 +901,8 @@ impl<'bump> ScopeArena {
     //
     // This function will load the appropriate nodes onto the stack and do diffing in place.
     //
-    // Upon exit from this function, it will be restored to that same state.
-    fn diff_keyed_middle(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
-    ) {
+    // Upon exit from this function, it will be restored to that same self.
+    fn diff_keyed_middle(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
         2. Create a map of old key to its index
@@ -1031,7 +966,7 @@ impl<'bump> ScopeArena {
             log::debug!("old_key_to_old_index, {:#?}", old_key_to_old_index);
             log::debug!("new_index_to_old_index, {:#?}", new_index_to_old_index);
             log::debug!("shared_keys, {:#?}", shared_keys);
-            self.replace_and_create_many_with_many(state, old, new);
+            self.replace_and_create_many_with_many(old, new);
             return;
         }
 
@@ -1075,15 +1010,15 @@ impl<'bump> ScopeArena {
         // add mount instruction for the last items not covered by the lis
         let first_lis = *lis_sequence.first().unwrap();
         if first_lis > 0 {
-            state.stack.push_nodes_created(0);
-            state.stack.push(DiffInstruction::Mount {
+            self.stack.push_nodes_created(0);
+            self.stack.push(DiffInstruction::Mount {
                 and: MountType::InsertBefore {
                     other_node: &new[first_lis],
                 },
             });
 
             for (idx, new_node) in new[..first_lis].iter().enumerate().rev() {
-                apply(idx, new_node, &mut state.stack);
+                apply(idx, new_node, &mut self.stack);
             }
         }
 
@@ -1092,14 +1027,14 @@ impl<'bump> ScopeArena {
         let mut last = *lis_iter.next().unwrap();
         for next in lis_iter {
             if last - next > 1 {
-                state.stack.push_nodes_created(0);
-                state.stack.push(DiffInstruction::Mount {
+                self.stack.push_nodes_created(0);
+                self.stack.push(DiffInstruction::Mount {
                     and: MountType::InsertBefore {
                         other_node: &new[last],
                     },
                 });
                 for (idx, new_node) in new[(next + 1)..last].iter().enumerate().rev() {
-                    apply(idx + next + 1, new_node, &mut state.stack);
+                    apply(idx + next + 1, new_node, &mut self.stack);
                 }
             }
             last = *next;
@@ -1108,19 +1043,19 @@ impl<'bump> ScopeArena {
         // add mount instruction for the first items not covered by the lis
         let last = *lis_sequence.last().unwrap();
         if last < (new.len() - 1) {
-            state.stack.push_nodes_created(0);
-            state.stack.push(DiffInstruction::Mount {
+            self.stack.push_nodes_created(0);
+            self.stack.push(DiffInstruction::Mount {
                 and: MountType::InsertAfter {
                     other_node: &new[last],
                 },
             });
             for (idx, new_node) in new[(last + 1)..].iter().enumerate().rev() {
-                apply(idx + last + 1, new_node, &mut state.stack);
+                apply(idx + last + 1, new_node, &mut self.stack);
             }
         }
 
         for idx in lis_sequence.iter().rev() {
-            state.stack.push(DiffInstruction::Diff {
+            self.stack.push(DiffInstruction::Diff {
                 new: &new[*idx],
                 old: &old[new_index_to_old_index[*idx]],
             });
@@ -1131,7 +1066,7 @@ impl<'bump> ScopeArena {
     //  Utilities
     // =====================
 
-    fn find_last_element(&'bump self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
+    fn find_last_element(&mut self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
 
         loop {
@@ -1148,14 +1083,14 @@ impl<'bump> ScopeArena {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    // let scope = self.get_scope(&scope_id).unwrap();
-                    search_node = Some(self.root_node(&scope_id));
+                    // let scope = self.scopes.get_scope(&scope_id).unwrap();
+                    search_node = Some(self.scopes.root_node(&scope_id));
                 }
             }
         }
     }
 
-    fn find_first_element_id(&'bump self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
+    fn find_first_element_id(&mut self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
 
         loop {
@@ -1166,8 +1101,8 @@ impl<'bump> ScopeArena {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    // let scope = self.get_scope(&scope_id).unwrap();
-                    search_node = Some(self.root_node(&scope_id));
+                    // let scope = self.scopes.get_scope(&scope_id).unwrap();
+                    search_node = Some(self.scopes.root_node(&scope_id));
                 }
                 VNode::Linked(link) => {
                     todo!("linked")
@@ -1181,26 +1116,24 @@ impl<'bump> ScopeArena {
     }
 
     fn replace_and_create_many_with_one(
-        &'bump self,
-        state: &mut DiffState<'bump>,
+        &mut self,
         old: &'bump [VNode<'bump>],
         new: &'bump VNode<'bump>,
     ) {
         if let Some(first_old) = old.get(0) {
-            self.remove_nodes(state, &old[1..], true);
-            state
-                .stack
+            self.remove_nodes(&old[1..], true);
+            self.stack
                 .create_node(new, MountType::Replace { old: first_old });
         } else {
-            state.stack.create_node(new, MountType::Append {});
+            self.stack.create_node(new, MountType::Append {});
         }
     }
 
     /// schedules nodes for garbage collection and pushes "remove" to the mutation stack
     /// remove can happen whenever
     fn remove_nodes(
-        &'bump self,
-        state: &mut DiffState<'bump>,
+        &mut self,
+
         nodes: impl IntoIterator<Item = &'bump VNode<'bump>>,
         gen_muts: bool,
     ) {
@@ -1212,7 +1145,7 @@ impl<'bump> ScopeArena {
                     self.collect_garbage(id);
 
                     if gen_muts {
-                        state.mutations.remove(id.as_u64());
+                        self.mutations.remove(id.as_u64());
                     }
                 }
                 VNode::Suspended(s) => {
@@ -1220,7 +1153,7 @@ impl<'bump> ScopeArena {
                     self.collect_garbage(id);
 
                     if gen_muts {
-                        state.mutations.remove(id.as_u64());
+                        self.mutations.remove(id.as_u64());
                     }
                 }
                 VNode::Anchor(a) => {
@@ -1228,21 +1161,21 @@ impl<'bump> ScopeArena {
                     self.collect_garbage(id);
 
                     if gen_muts {
-                        state.mutations.remove(id.as_u64());
+                        self.mutations.remove(id.as_u64());
                     }
                 }
                 VNode::Element(e) => {
                     let id = e.dom_id.get().unwrap();
 
                     if gen_muts {
-                        state.mutations.remove(id.as_u64());
+                        self.mutations.remove(id.as_u64());
                     }
 
-                    self.remove_nodes(state, e.children, false);
+                    self.remove_nodes(e.children, false);
                 }
 
                 VNode::Fragment(f) => {
-                    self.remove_nodes(state, f.children, gen_muts);
+                    self.remove_nodes(f.children, gen_muts);
                 }
 
                 VNode::Linked(l) => {
@@ -1251,9 +1184,9 @@ impl<'bump> ScopeArena {
 
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
-                    // let scope = self.get_scope(&scope_id).unwrap();
-                    let root = self.root_node(&scope_id);
-                    self.remove_nodes(state, Some(root), gen_muts);
+                    // let scope = self.scopes.get_scope(&scope_id).unwrap();
+                    let root = self.scopes.root_node(&scope_id);
+                    self.remove_nodes(Some(root), gen_muts);
 
                     log::debug!("Destroying scope {:?}", scope_id);
                     let mut s = self.try_remove(&scope_id).unwrap();
@@ -1267,36 +1200,31 @@ impl<'bump> ScopeArena {
     ///
     /// The new nodes *will* be created - don't create them yourself!
     fn replace_and_create_many_with_many(
-        &'bump self,
-        state: &mut DiffState<'bump>,
+        &mut self,
+
         old: &'bump [VNode<'bump>],
         new: &'bump [VNode<'bump>],
     ) {
         if let Some(first_old) = old.get(0) {
-            self.remove_nodes(state, &old[1..], true);
-            state
-                .stack
+            self.remove_nodes(&old[1..], true);
+            self.stack
                 .create_children(new, MountType::Replace { old: first_old })
         } else {
-            state.stack.create_children(new, MountType::Append {});
+            self.stack.create_children(new, MountType::Append {});
         }
     }
 
     /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope(&'bump self, listener: &'bump Listener<'bump>, scope: &Scope) {
+    fn attach_listener_to_scope(&mut self, listener: &'bump Listener<'bump>, scope: &Scope) {
         let long_listener = unsafe { std::mem::transmute(listener) };
         scope.items.borrow_mut().listeners.push(long_listener)
     }
 
-    fn attach_suspended_node_to_scope(
-        &'bump self,
-        state: &mut DiffState<'bump>,
-        suspended: &'bump VSuspended,
-    ) {
-        if let Some(scope) = state
+    fn attach_suspended_node_to_scope(&mut self, suspended: &'bump VSuspended) {
+        if let Some(scope) = self
             .stack
             .current_scope()
-            .and_then(|id| self.get_scope(&id))
+            .and_then(|id| self.scopes.get_scope(&id))
         {
             // safety: this lifetime is managed by the logic on scope
             let extended = unsafe { std::mem::transmute(suspended) };

@@ -44,10 +44,15 @@ impl ScopeArena {
         unsafe { Some(&*self.scopes[id.0]) }
     }
 
+    // this is unsafe
+    pub unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<*mut Scope> {
+        Some(self.scopes[id.0])
+    }
+
     pub fn new_with_key(
         &mut self,
         fc_ptr: *const (),
-        caller: *mut dyn Fn(&Scope) -> Element,
+        caller: *const dyn Fn(&Scope) -> Element,
         parent_scope: Option<*mut Scope>,
         height: u32,
         subtree: u32,

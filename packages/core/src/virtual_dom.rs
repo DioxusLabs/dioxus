@@ -63,7 +63,7 @@ pub struct VirtualDom {
 
     _root_caller: *mut dyn Fn(&Scope) -> Element,
 
-    pub(crate) scopes: ScopeArena,
+    pub(crate) scopes: Box<ScopeArena>,
 
     receiver: UnboundedReceiver<SchedulerMsg>,
     pub(crate) sender: UnboundedSender<SchedulerMsg>,
@@ -152,7 +152,7 @@ impl VirtualDom {
         let base_scope = scopes.new_with_key(root as _, caller_ref, None, 0, 0);
 
         Self {
-            scopes,
+            scopes: Box::new(scopes),
             base_scope,
             receiver,
             // todo: clean this up manually?
@@ -358,13 +358,13 @@ impl VirtualDom {
                 }
             }
 
-            let mut diff_state: DiffState = DiffState::new(Mutations::new());
+            let scopes = &self.scopes;
+            let mut diff_state = DiffState::new(scopes);
 
             let mut ran_scopes = FxHashSet::default();
 
             // todo: the 2021 version of rust will let us not have to force the borrow
-            let scopes = &self.scopes;
-
+            // let scopes = &self.scopes;
             // Sort the scopes by height. Theoretically, we'll de-duplicate scopes by height
             self.dirty_scopes
                 .retain(|id| scopes.get_scope(id).is_some());
@@ -394,7 +394,10 @@ impl VirtualDom {
                 }
             }
 
-            let work_completed = self.scopes.work(&mut diff_state, &mut deadline);
+            // let scopes = &mut self.scopes;
+            let work_completed = diff_state.work(&mut deadline);
+            // let work_completed = crate::diff::work(&mut diff_state, &mut deadline);
+            // let work_completed = crate::diff::work(&mut diff_state, &mut deadline);
 
             if work_completed {
                 let DiffState {
@@ -440,20 +443,25 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
-        let mut diff_machine = DiffState::new(Mutations::new());
+        let mut diff_state = DiffState::new(&self.scopes);
 
         let scope_id = self.base_scope;
         if self.scopes.run_scope(&scope_id) {
-            diff_machine
-                .stack
-                .create_node(self.scopes.fin_head(&scope_id), MountType::Append);
+            todo!();
+            // diff_state
+            //     .stack
+            //     .create_node(self.scopes.fin_head(&scope_id), MountType::Append);
 
-            diff_machine.stack.scope_stack.push(scope_id);
+            // diff_state.stack.scope_stack.push(scope_id);
 
-            self.scopes.work(&mut diff_machine, || false);
+            let work_completed = diff_state.work(|| false);
+            // let scopes = &mut self.scopes;
+            //
+            // let work_completed = crate::diff::work(&mut diff_state, || false);
+            // self.scopes.work(&mut diff_machine, || false);
         }
 
-        diff_machine.mutations
+        diff_state.mutations
     }
 
     /// Compute a manual diff of the VirtualDOM between states.
@@ -494,15 +502,28 @@ impl VirtualDom {
         log::debug!("hard diff {:?}", scope_id);
 
         if self.scopes.run_scope(scope_id) {
-            let mut diff_machine = DiffState::new(Mutations::new());
+            let mut diff_machine = DiffState::new(&self.scopes);
 
             diff_machine.force_diff = true;
 
-            self.scopes.diff_scope(&mut diff_machine, scope_id);
+            let work_completed = diff_machine.work(|| false);
+            // let scopes = &mut self.scopes;
+            // crate::diff::diff_scope(&mut diff_machine, scope_id);
+            // self.scopes.diff_scope(&mut diff_machine, scope_id);
 
-            dbg!(&diff_machine.mutations);
+            // dbg!(&diff_machine.mutations);
+            // let DiffState {
+            //     mutations,
+            //     stack,
+            //     seen_scopes,
+            //     force_diff,
+            //     ..
+            // } = mutations;
 
-            Some(diff_machine.mutations)
+            // let mutations = diff_machine.mutations;
+
+            // Some(unsafe { std::mem::transmute(mutations) })
+            todo!()
         } else {
             None
         }

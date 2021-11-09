@@ -67,7 +67,7 @@ pub struct Scope {
     pub(crate) old_root: RefCell<Option<NodeLink>>,
     pub(crate) new_root: RefCell<Option<NodeLink>>,
 
-    pub(crate) caller: *mut dyn Fn(&Scope) -> Element,
+    pub(crate) caller: *const dyn Fn(&Scope) -> Element,
 
     /*
     we care about:

@@ -368,8 +368,13 @@ pub struct VComponent<'src> {
     pub(crate) bump_props: *const (),
 
     // during the "teardown" process we'll take the caller out so it can be dropped properly
-    pub(crate) caller: Option<VCompCaller<'src>>,
-    pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
+    // pub(crate) caller: Option<VCompCaller<'src>>,
+    pub(crate) caller: &'src dyn Fn(&'src Scope) -> Element,
+
+    pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
+
+    pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
+    // pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
 }
 
 pub struct VSuspended<'a> {
@@ -588,26 +593,26 @@ impl<'a> NodeFactory<'a> {
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller: &'a mut dyn Fn(&Scope) -> Element =
+        let caller: &'a mut dyn Fn(&'a Scope) -> Element =
             bump.alloc(move |scope: &Scope| -> Element {
                 log::debug!("calling component renderr {:?}", scope.our_arena_idx);
                 let props: &'_ P = unsafe { &*(bump_props as *const P) };
                 let res = component(scope, props);
-                // let res = component((Context { scope }, props));
-                unsafe { std::mem::transmute(res) }
+                res
             });
 
         let can_memoize = P::IS_STATIC;
 
         VNode::Component(bump.alloc(VComponent {
             user_fc,
-            comparator,
+            comparator: Some(comparator),
             bump_props,
             caller,
             key,
             can_memoize,
             drop_props,
             associated_scope: Cell::new(None),
+            hard_allocation: Cell::new(None),
         }))
     }
 
