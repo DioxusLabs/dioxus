@@ -94,6 +94,14 @@ pub struct SelfReferentialItems<'a> {
     pub(crate) pending_effects: Vec<BumpBox<'a, dyn FnMut()>>,
 }
 
+/// A component's unique identifier.
+///
+/// `ScopeId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
+/// unmounted, then the `ScopeId` will be reused for a new component.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ScopeId(pub usize);
+
 // Public methods exposed to libraries and components
 impl Scope {
     /// Get the subtree ID that this scope belongs to.

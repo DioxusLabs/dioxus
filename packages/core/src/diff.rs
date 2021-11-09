@@ -124,32 +124,6 @@ impl<'bump> DiffState<'bump> {
             force_diff: false,
         }
     }
-
-    pub fn try_remove(&self, id: &ScopeId) -> Option<Scope> {
-        todo!()
-    }
-
-    pub fn reserve_node(&self, node: &VNode) -> ElementId {
-        todo!()
-        // let mut els = self.nodes.borrow_mut();
-        // let entry = els.vacant_entry();
-        // let key = entry.key();
-        // let id = ElementId(key);
-        // let node = node as *const _;
-        // let node = unsafe { std::mem::transmute(node) };
-        // entry.insert(node);
-        // id
-
-        // let nodes = self.nodes.borrow_mut();
-        // let id = nodes.insert(());
-        // let node_id = ElementId(id);
-        // node = Some(node_id);
-        // node_id
-    }
-
-    pub fn collect_garbage(&self, id: ElementId) {
-        todo!()
-    }
 }
 
 impl<'bump> DiffState<'bump> {
@@ -283,14 +257,14 @@ impl<'bump> DiffState<'bump> {
     }
 
     fn create_text_node(&mut self, vtext: &'bump VText<'bump>, node: &'bump VNode<'bump>) {
-        let real_id = self.reserve_node(node);
+        let real_id = self.scopes.reserve_node(node);
         self.mutations.create_text_node(vtext.text, real_id);
         vtext.dom_id.set(Some(real_id));
         self.stack.add_child_count(1);
     }
 
     fn create_suspended_node(&mut self, suspended: &'bump VSuspended, node: &'bump VNode<'bump>) {
-        let real_id = self.reserve_node(node);
+        let real_id = self.scopes.reserve_node(node);
         self.mutations.create_placeholder(real_id);
 
         suspended.dom_id.set(Some(real_id));
@@ -300,7 +274,7 @@ impl<'bump> DiffState<'bump> {
     }
 
     fn create_anchor_node(&mut self, anchor: &'bump VAnchor, node: &'bump VNode<'bump>) {
-        let real_id = self.reserve_node(node);
+        let real_id = self.scopes.reserve_node(node);
         self.mutations.create_placeholder(real_id);
         anchor.dom_id.set(Some(real_id));
         self.stack.add_child_count(1);
@@ -317,7 +291,7 @@ impl<'bump> DiffState<'bump> {
             ..
         } = element;
 
-        let real_id = self.reserve_node(node);
+        let real_id = self.scopes.reserve_node(node);
 
         dom_id.set(Some(real_id));
 
@@ -1142,7 +1116,7 @@ impl<'bump> DiffState<'bump> {
             match node {
                 VNode::Text(t) => {
                     let id = t.dom_id.get().unwrap();
-                    self.collect_garbage(id);
+                    self.scopes.collect_garbage(id);
 
                     if gen_muts {
                         self.mutations.remove(id.as_u64());
@@ -1150,7 +1124,7 @@ impl<'bump> DiffState<'bump> {
                 }
                 VNode::Suspended(s) => {
                     let id = s.dom_id.get().unwrap();
-                    self.collect_garbage(id);
+                    self.scopes.collect_garbage(id);
 
                     if gen_muts {
                         self.mutations.remove(id.as_u64());
@@ -1158,7 +1132,7 @@ impl<'bump> DiffState<'bump> {
                 }
                 VNode::Anchor(a) => {
                     let id = a.dom_id.get().unwrap();
-                    self.collect_garbage(id);
+                    self.scopes.collect_garbage(id);
 
                     if gen_muts {
                         self.mutations.remove(id.as_u64());
@@ -1189,7 +1163,7 @@ impl<'bump> DiffState<'bump> {
                     self.remove_nodes(Some(root), gen_muts);
 
                     log::debug!("Destroying scope {:?}", scope_id);
-                    let mut s = self.try_remove(&scope_id).unwrap();
+                    let mut s = self.scopes.try_remove(&scope_id).unwrap();
                     s.hooks.clear_hooks();
                 }
             }

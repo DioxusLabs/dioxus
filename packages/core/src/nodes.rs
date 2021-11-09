@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{empty_cell, Context, Element, ElementId, Properties, Scope, ScopeId},
+    innerlude::{Context, Element, Properties, Scope, ScopeId},
     lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -230,6 +230,28 @@ impl Debug for VNode<'_> {
             ),
         }
     }
+}
+
+/// An Element's unique identifier.
+///
+/// `ElementId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
+/// unmounted, then the `ElementId` will be reused for a new component.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ElementId(pub usize);
+impl std::fmt::Display for ElementId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl ElementId {
+    pub fn as_u64(self) -> u64 {
+        self.0 as u64
+    }
+}
+
+fn empty_cell() -> Cell<Option<ElementId>> {
+    Cell::new(None)
 }
 
 /// A placeholder node only generated when Fragments don't have any children.

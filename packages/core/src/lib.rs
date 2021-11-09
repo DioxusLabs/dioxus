@@ -22,7 +22,6 @@ pub(crate) mod nodes;
 pub(crate) mod scope;
 pub(crate) mod scopearena;
 pub(crate) mod test_dom;
-pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
@@ -36,7 +35,6 @@ pub(crate) mod innerlude {
     pub use crate::scope::*;
     pub use crate::scopearena::*;
     pub use crate::test_dom::*;
-    pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
     pub type Element = Option<NodeLink>;

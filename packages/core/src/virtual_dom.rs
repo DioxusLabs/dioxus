@@ -447,18 +447,13 @@ impl VirtualDom {
 
         let scope_id = self.base_scope;
         if self.scopes.run_scope(&scope_id) {
-            todo!();
-            // diff_state
-            //     .stack
-            //     .create_node(self.scopes.fin_head(&scope_id), MountType::Append);
+            diff_state
+                .stack
+                .create_node(self.scopes.fin_head(&scope_id), MountType::Append);
 
-            // diff_state.stack.scope_stack.push(scope_id);
+            diff_state.stack.scope_stack.push(scope_id);
 
             let work_completed = diff_state.work(|| false);
-            // let scopes = &mut self.scopes;
-            //
-            // let work_completed = crate::diff::work(&mut diff_state, || false);
-            // self.scopes.work(&mut diff_machine, || false);
         }
 
         diff_state.mutations
