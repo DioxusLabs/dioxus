@@ -1,8 +1,5 @@
 use slab::Slab;
-use std::{
-    borrow::BorrowMut,
-    cell::{Cell, RefCell},
-};
+use std::cell::{Cell, RefCell};
 
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use futures_channel::mpsc::UnboundedSender;
@@ -23,8 +20,8 @@ pub struct Heuristic {
 // has an internal heuristics engine to pre-allocate arenas to the right size
 pub(crate) struct ScopeArena {
     bump: Bump,
-    scopes: Vec<*mut Scope>,
-    free_scopes: Vec<ScopeId>,
+    scopes: RefCell<Vec<*mut Scope>>,
+    free_scopes: RefCell<Vec<ScopeId>>,
     nodes: RefCell<Slab<*const VNode<'static>>>,
     pub(crate) sender: UnboundedSender<SchedulerMsg>,
 }
@@ -33,38 +30,38 @@ impl ScopeArena {
     pub fn new(sender: UnboundedSender<SchedulerMsg>) -> Self {
         Self {
             bump: Bump::new(),
-            scopes: Vec::new(),
-            free_scopes: Vec::new(),
+            scopes: RefCell::new(Vec::new()),
+            free_scopes: RefCell::new(Vec::new()),
             nodes: RefCell::new(Slab::new()),
             sender,
         }
     }
 
     pub fn get_scope(&self, id: &ScopeId) -> Option<&Scope> {
-        unsafe { Some(&*self.scopes[id.0]) }
+        unsafe { Some(&*self.scopes.borrow()[id.0]) }
     }
 
     // this is unsafe
     pub unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<*mut Scope> {
-        Some(self.scopes[id.0])
+        Some(self.scopes.borrow()[id.0])
     }
 
     pub fn new_with_key(
-        &mut self,
+        &self,
         fc_ptr: *const (),
         caller: *const dyn Fn(&Scope) -> Element,
         parent_scope: Option<*mut Scope>,
         height: u32,
         subtree: u32,
     ) -> ScopeId {
-        if let Some(id) = self.free_scopes.pop() {
+        if let Some(id) = self.free_scopes.borrow_mut().pop() {
             // have already called drop on it - the slot is still chillin tho
-            let scope = unsafe { &mut *self.scopes[id.0 as usize] };
+            // let scope = unsafe { &mut *self.scopes.borrow()[id.0 as usize] };
 
             todo!("override the scope contents");
             id
         } else {
-            let scope_id = ScopeId(self.scopes.len());
+            let scope_id = ScopeId(self.scopes.borrow().len());
 
             let old_root = NodeLink {
                 link_idx: 0,
@@ -93,8 +90,6 @@ impl ScopeArena {
 
                 old_root: RefCell::new(Some(old_root)),
                 new_root: RefCell::new(Some(new_root)),
-                // old_root: RefCell::new(Some(old_root)),
-                // new_root: RefCell::new(None),
                 items: RefCell::new(SelfReferentialItems {
                     listeners: Default::default(),
                     borrowed_props: Default::default(),
@@ -105,7 +100,7 @@ impl ScopeArena {
             };
 
             let stable = self.bump.alloc(new_scope);
-            self.scopes.push(stable);
+            self.scopes.borrow_mut().push(stable);
             scope_id
         }
     }
@@ -119,8 +114,8 @@ impl ScopeArena {
         let entry = els.vacant_entry();
         let key = entry.key();
         let id = ElementId(key);
-        let node = node as *const _;
-        let node = unsafe { std::mem::transmute(node) };
+        let node: *const VNode = node as *const _;
+        let node = unsafe { std::mem::transmute::<*const VNode, *const VNode>(node) };
         entry.insert(node);
         id
 
@@ -183,7 +178,6 @@ impl ScopeArena {
             .borrow_mut()
             .listeners
             .drain(..)
-            .map(|li| unsafe { &*li })
             .for_each(|listener| drop(listener.callback.borrow_mut().take()));
     }
 
@@ -256,39 +250,17 @@ impl ScopeArena {
         let wip_frame = scope.wip_frame();
         let nodes = wip_frame.nodes.borrow();
         let node = nodes.get(0).unwrap();
-        unsafe { std::mem::transmute(node) }
-        // let root = scope.old_root.borrow();
-        // let link = root.as_ref().unwrap();
-        // dbg!(link);
-
-        // // for now, components cannot pass portals through each other
-        // assert_eq!(link.scope_id, *id);
-        // // assert_eq!(link.gen_id, scope.generation.get() - 1);
-
-        // // let items = scope.items.borrow();
-        // let nodes = scope.wip_frame().nodes.borrow();
-        // let node = nodes.get(link.link_idx).unwrap();
-        // unsafe { std::mem::transmute(node) }
+        unsafe { std::mem::transmute::<&VNode, &VNode>(node) }
     }
 
     pub fn fin_head(&self, id: &ScopeId) -> &VNode {
         let scope = self.get_scope(id).unwrap();
         let wip_frame = scope.fin_frame();
         let nodes = wip_frame.nodes.borrow();
-        let node = nodes.get(0).unwrap();
-        unsafe { std::mem::transmute(node) }
-        // let scope = self.get_scope(id).unwrap();
-        // let root = scope.new_root.borrow();
-        // let link = root.as_ref().unwrap();
-
-        // // for now, components cannot pass portals through each other
-        // assert_eq!(link.scope_id, *id);
-        // // assert_eq!(link.gen_id, scope.generation.get());
-
-        // let nodes = scope.fin_frame().nodes.borrow();
-        // let node = nodes.get(link.link_idx).unwrap();
-        // unsafe { std::mem::transmute(node) }
+        let node: &VNode = nodes.get(0).unwrap();
+        unsafe { std::mem::transmute::<&VNode, &VNode>(node) }
     }
+
     pub fn root_node(&self, id: &ScopeId) -> &VNode {
         self.wip_head(id)
     }

@@ -89,9 +89,7 @@
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
 use crate::innerlude::*;
-use futures_channel::mpsc::UnboundedSender;
 use fxhash::{FxHashMap, FxHashSet};
-use slab::Slab;
 use DomEdit::*;
 
 /// Our DiffMachine is an iterative tree differ.
@@ -325,30 +323,20 @@ impl<'bump> DiffState<'bump> {
     }
 
     fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
-        // let caller = vcomponent.caller;
-
         let parent_idx = self.stack.current_scope().unwrap();
-
-        let shared: UnboundedSender<SchedulerMsg> = todo!();
-        // let shared: UnboundedSender<SchedulerMsg> = self.sender.clone();
 
         // Insert a new scope into our component list
         let parent_scope = self.scopes.get_scope(&parent_idx).unwrap();
+        let height = parent_scope.height + 1;
+        let subtree = parent_scope.subtree.get();
 
-        let new_idx: ScopeId = todo!();
-        // self
-        //     .new_with_key(fc_ptr, vcomp, parent_scope, height, subtree, sender);
+        let parent_scope = unsafe { self.scopes.get_scope_mut(&parent_idx) };
+        let caller = unsafe { std::mem::transmute(vcomponent.caller as *const _) };
+        let fc_ptr = vcomponent.user_fc;
 
-        // .(|new_idx| {
-        //     // ScopeInner::new(
-        //         vcomponent,
-        //         new_idx,
-        //         Some(parent_idx),
-        //         parent_scope.height + 1,
-        //         parent_scope.subtree(),
-        //         shared,
-        //     // )
-        // });
+        let new_idx = self
+            .scopes
+            .new_with_key(fc_ptr, caller, parent_scope, height, subtree);
 
         // Actually initialize the caller's slot with the right address
         vcomponent.associated_scope.set(Some(new_idx));
@@ -356,7 +344,7 @@ impl<'bump> DiffState<'bump> {
         if !vcomponent.can_memoize {
             let cur_scope = self.scopes.get_scope(&parent_idx).unwrap();
             let extended = unsafe { std::mem::transmute(vcomponent) };
-            cur_scope.items.get_mut().borrowed_props.push(extended);
+            cur_scope.items.borrow_mut().borrowed_props.push(extended);
         }
 
         // TODO:
@@ -368,28 +356,19 @@ impl<'bump> DiffState<'bump> {
         log::debug!(
             "initializing component {:?} with height {:?}",
             new_idx,
-            parent_scope.height + 1
+            height + 1
         );
 
         // Run the scope for one iteration to initialize it
-        //
-        todo!("run scope");
-        // if new_component.run_scope(self) {
-        //     // Take the node that was just generated from running the component
-        //     let nextnode = new_component.frames.fin_head();
-        //     self.stack.create_component(new_idx, nextnode);
+        if self.scopes.run_scope(&new_idx) {
+            // Take the node that was just generated from running the component
+            let nextnode = self.scopes.fin_head(&new_idx);
+            self.stack.create_component(new_idx, nextnode);
 
-        //     //
-        //     /*
-        //     tree_item {
-
-        //     }
-
-        //     */
-        //     if new_component.is_subtree_root.get() {
-        //         self.stack.push_subtree();
-        //     }
-        // }
+            if new_component.is_subtree_root.get() {
+                self.stack.push_subtree();
+            }
+        }
 
         // Finally, insert this scope as a seen node.
         self.seen_scopes.insert(new_idx);

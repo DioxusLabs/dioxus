@@ -20,6 +20,8 @@ use std::{
 ///
 /// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
 /// is essentially a unique key to guarantee safe usage of the Node.
+///
+/// todo: remove "clone"
 #[derive(Clone, Debug)]
 pub struct NodeLink {
     pub(crate) link_idx: usize,
@@ -177,7 +179,7 @@ impl<'src> VNode<'src> {
         }
     }
 
-    pub fn children(&self) -> &[VNode<'src>] {
+    pub(crate) fn children(&self) -> &[VNode<'src>] {
         match &self {
             VNode::Fragment(f) => f.children,
             VNode::Component(c) => todo!("children are not accessible through this"),
@@ -396,7 +398,6 @@ pub struct VComponent<'src> {
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
     pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
-    // pub(crate) comparator: Option<BumpBox<'src, dyn Fn(&VComponent) -> bool + 'src>>,
 }
 
 pub struct VSuspended<'a> {
@@ -825,7 +826,7 @@ impl IntoVNode<'_> for Arguments<'_> {
 /// ## Example
 ///
 /// ```rust
-/// const App: FC<()> = |(cx, props)|{
+/// const App: FC<()> = |cx, props|{
 ///     cx.render(rsx!{
 ///         CustomCard {
 ///             h1 {}
@@ -834,7 +835,7 @@ impl IntoVNode<'_> for Arguments<'_> {
 ///     })
 /// }
 ///
-/// const CustomCard: FC<()> = |(cx, props)|{
+/// const CustomCard: FC<()> = |cx, props|{
 ///     cx.render(rsx!{
 ///         div {
 ///             h1 {"Title card"}

@@ -49,7 +49,7 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn App((cx, props): Scope<()>) -> Element {
+fn App(cx: Context, props: &()) -> Element {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(
@@ -141,16 +141,16 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | NodeRef                   | ✅      | ✅     | gain direct access to nodes                                          |
 | Re-hydration              | ✅      | ✅     | Pre-render to HTML to speed up first contentful paint                |
 | Jank-Free Rendering       | ✅      | ✅     | Large diffs are segmented across frames for silky-smooth transitions |
-| Cooperative Scheduling    | ✅      | ✅     | Prioritize important events over non-important events                |
+| Effects                   | ✅      | ✅     | Run effects after a component has been committed to render           |
+| Cooperative Scheduling    | 🛠      | ✅     | Prioritize important events over non-important events                |
+| Server Components         | 🛠      | ✅     | Hybrid components for SPA and Server                                 |
+| Bundle Splitting          | 👀      | ✅     | Efficiently and asynchronously load the app                          |
+| Lazy Components           | 👀      | ✅     | Dynamically load the new components as the page is loaded            |
+| 1st class global state    | ✅      | ✅     | redux/recoil/mobx on top of context                                  |
 | Runs natively             | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)                       |
-| 1st class global state    | ✅      | ❓     | redux/recoil/mobx on top of context                                  |
 | Subtree Memoization       | ✅      | ❓     | skip diffing static element subtrees                                 |
 | Compile-time correct      | ✅      | ❓     | Throw errors on invalid template layouts                             |
 | Heuristic Engine          | ✅      | ❓     | track component memory usage to minimize future allocations          |
-| Effects                   | 🛠      | ✅     | Run effects after a component has been committed to render           |
-| Server Components         | 🛠      | ✅     | Hybrid components for SPA and Server                                 |
-| Bundle Splitting          | 👀      | ✅     | Hybrid components for SPA and Server                                 |
-| Lazy Components           | 👀      | ✅     | Dynamically load the new components as the page is loaded            |
 | Fine-grained reactivity   | 👀      | ❓     | Skip diffing for fine-grain updates                                  |
 
 - ✅ = implemented and working

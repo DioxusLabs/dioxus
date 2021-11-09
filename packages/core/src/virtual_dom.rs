@@ -1,23 +1,6 @@
 //! # VirtualDOM Implementation for Rust
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
-//!
-//! In this file, multiple items are defined. This file is big, but should be documented well to
-//! navigate the inner workings of the Dom. We try to keep these main mechanics in this file to limit
-//! the possible exposed API surface (keep fields private). This particular implementation of VDOM
-//! is extremely efficient, but relies on some unsafety under the hood to do things like manage
-//! micro-heaps for components. We are currently working on refactoring the safety out into safe(r)
-//! abstractions, but current tests (MIRI and otherwise) show no issues with the current implementation.
-//!
-//! Included is:
-//! - The [`VirtualDom`] itself
-//! - The [`Scope`] object for managing component lifecycle
-//! - The [`ActiveFrame`] object for managing the Scope`s microheap
-//! - The [`Context`] object for exposing VirtualDOM API to components
-//! - The [`NodeFactory`] object for lazily exposing the `Context` API to the nodebuilder API
-//!
-//! This module includes just the barebones for a complete VirtualDOM API.
-//! Additional functionality is defined in the respective files.
 
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -28,33 +11,92 @@ use std::pin::Pin;
 use std::task::Poll;
 use std::{any::Any, collections::VecDeque};
 
-/// An integrated virtual node system that progresses events and diffs UI trees.
+/// A virtual node system that progresses user events and diffs UI trees.
 ///
-/// Differences are converted into patches which a renderer can use to draw the UI.
+/// Components are defined as simple functions that take [`Context`] and a [`Properties`] type and return an [`Element`].  
 ///
-/// If you are building an App with Dioxus, you probably won't want to reach for this directly, instead opting to defer
-/// to a particular crate's wrapper over the [`VirtualDom`] API.
-///
-/// Example
 /// ```rust
-/// static App: FC<()> = |(cx, props)|{
+/// #[derive(Props, PartialEq)]
+/// struct AppProps {
+///     title: String
+/// }
+///
+/// fn App(cx: Context, props: &AppProps) -> Element {
+///     cx.render(rsx!(
+///         div {"hello, {props.title}"}
+///     ))
+/// }
+/// ```
+///
+/// Components may be composed to make complex apps.
+///
+/// ```rust
+/// fn App(cx: Context, props: &AppProps) -> Element {
+///     cx.render(rsx!(
+///         NavBar { routes: ROUTES }
+///         Title { "{props.title}" }
+///         Footer {}
+///     ))
+/// }
+/// ```
+///
+/// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] to get the list of edits required to
+/// draw the UI.
+///
+/// ```rust
+/// let mut vdom = VirtualDom::new(App);
+/// let edits = vdom.rebuild();
+/// ```
+///
+/// To inject UserEvents into the VirtualDom, call [`VirtualDom::get_scheduler_channel`] to get access to the scheduler.
+///
+/// ```rust
+/// let channel = vdom.get_scheduler_channel();
+/// channel.send_unbounded(SchedulerMsg::UserEvent(UserEvent {
+///     // ...
+/// }))
+/// ```
+///
+/// While waiting for UserEvents to occur, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
+///
+/// ```rust
+/// vdom.wait_for_work().await;
+/// ```
+///
+/// Once work is ready, call [`VirtualDom::work_with_deadline`] to compute the differences between the previous and
+/// current UI trees. This will return a [`Mutations`] object that contains Edits, Effects, and NodeRefs that need to be
+/// handled by the renderer.
+///
+/// ```rust
+/// let mutations = vdom.work_with_deadline(|| false);
+/// for edit in mutations {
+///     apply(edit);
+/// }
+/// ```
+///
+/// ## Building an event loop around Dioxus:
+///
+/// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
+///
+/// ```rust
+/// fn App(cx: Context, props: &()) -> Element {
 ///     cx.render(rsx!{
-///         div {
-///             "Hello World"
-///         }
+///         div { "Hello World" }
 ///     })
 /// }
 ///
 /// async fn main() {
 ///     let mut dom = VirtualDom::new(App);
+///
 ///     let mut inital_edits = dom.rebuild();
-///     initialize_screen(inital_edits);
+///     apply_edits(inital_edits);
 ///
 ///     loop {
-///         let next_frame = TimeoutFuture::new(Duration::from_millis(16));
-///         let edits = dom.run_with_deadline(next_frame).await;
+///         dom.wait_for_work().await;
+///         let frame_timeout = TimeoutFuture::new(Duration::from_millis(16));
+///         let deadline = || (&mut frame_timeout).now_or_never();
+///         let edits = dom.run_with_deadline(deadline).await;
 ///         apply_edits(edits);
-///         render_frame();
 ///     }
 /// }
 /// ```
@@ -145,9 +187,9 @@ impl VirtualDom {
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,
     ) -> Self {
-        let mut scopes = ScopeArena::new(sender.clone());
+        let scopes = ScopeArena::new(sender.clone());
 
-        let caller = Box::new(move |f: &Scope| -> Element { root(f, &root_props) });
+        let caller = Box::new(move |scp: &Scope| -> Element { root(scp, &root_props) });
         let caller_ref: *mut dyn Fn(&Scope) -> Element = Box::into_raw(caller);
         let base_scope = scopes.new_with_key(root as _, caller_ref, None, 0, 0);
 
@@ -164,7 +206,7 @@ impl VirtualDom {
         }
     }
 
-    /// Get the [`ScopeState`] for the root component.
+    /// Get the [`Scope`] for the root component.
     ///
     /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
     /// directly.
@@ -174,7 +216,7 @@ impl VirtualDom {
         self.get_scope(&self.base_scope).unwrap()
     }
 
-    /// Get the [`ScopeState`] for a component given its [`ScopeId`]
+    /// Get the [`Scope`] for a component given its [`ScopeId`]
     ///
     /// # Example
     ///
@@ -305,7 +347,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```no_run
-    /// static App: FC<()> = |(cx, props)|rsx!(cx, div {"hello"} );
+    /// static App: FC<()> = |cx, props|rsx!(cx, div {"hello"} );
     ///
     /// let mut dom = VirtualDom::new(App);
     ///
@@ -436,7 +478,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```
-    /// static App: FC<()> = |(cx, props)| cx.render(rsx!{ "hello world" });
+    /// static App: FC<()> = |cx, props| cx.render(rsx!{ "hello world" });
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();
     ///
@@ -453,7 +495,7 @@ impl VirtualDom {
 
             diff_state.stack.scope_stack.push(scope_id);
 
-            let work_completed = diff_state.work(|| false);
+            diff_state.work(|| false);
         }
 
         diff_state.mutations
@@ -474,7 +516,7 @@ impl VirtualDom {
     ///     value: Shared<&'static str>,
     /// }
     ///
-    /// static App: FC<AppProps> = |(cx, props)|{
+    /// static App: FC<AppProps> = |cx, props|{
     ///     let val = cx.value.borrow();
     ///     cx.render(rsx! { div { "{val}" } })
     /// };
@@ -501,7 +543,7 @@ impl VirtualDom {
 
             diff_machine.force_diff = true;
 
-            let work_completed = diff_machine.work(|| false);
+            diff_machine.work(|| false);
             // let scopes = &mut self.scopes;
             // crate::diff::diff_scope(&mut diff_machine, scope_id);
             // self.scopes.diff_scope(&mut diff_machine, scope_id);
@@ -522,6 +564,78 @@ impl VirtualDom {
         } else {
             None
         }
+    }
+
+    /// Renders an `rsx` call into the Base Scope's allocator.
+    ///
+    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    pub fn render_vnodes<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> &'a VNode<'a> {
+        todo!()
+    }
+
+    /// Renders an `rsx` call into the Base Scope's allocator.
+    ///
+    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.    
+    pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
+        todo!()
+        // let mutations = Mutations::new();
+        // let mut machine: DiffState = todo!();
+        // // let mut machine = DiffState::new(mutations);
+        // // let mut machine = DiffState::new(mutations);
+        // machine.stack.push(DiffInstruction::Diff { new, old });
+        // machine.mutations
+    }
+
+    /// Renders an `rsx` call into the Base Scope's allocator.
+    ///
+    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    pub fn create_vnodes<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
+        todo!()
+        // let old = self.bump.alloc(self.render_direct(left));
+
+        // let mut machine: DiffState = todo!();
+        // // let mut machine = DiffState::new(Mutations::new());
+        // // let mut machine = DiffState::new(Mutations::new());
+
+        // machine.stack.create_node(old, MountType::Append);
+
+        // todo!()
+
+        // // machine.work(&mut || false);
+
+        // // machine.mutations
+    }
+
+    /// Renders an `rsx` call into the Base Scope's allocator.
+    ///
+    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    pub fn diff_lazynodes<'a>(
+        &'a self,
+        left: Option<LazyNodes<'a, '_>>,
+        right: Option<LazyNodes<'a, '_>>,
+    ) -> (Mutations<'a>, Mutations<'a>) {
+        let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
+
+        // let mut machine: DiffState = todo!();
+        // let mut machine = DiffState::new(Mutations::new());
+
+        // machine.stack.create_node(old, MountType::Append);
+
+        todo!()
+
+        // machine.work(|| false);
+        // let create_edits = machine.mutations;
+
+        // let mut machine: DiffState = todo!();
+        // // let mut machine = DiffState::new(Mutations::new());
+
+        // machine.stack.push(DiffInstruction::Diff { old, new });
+
+        // machine.work(&mut || false);
+
+        // let edits = machine.mutations;
+
+        // (create_edits, edits)
     }
 }
 

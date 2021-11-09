@@ -5,17 +5,17 @@
 //!
 //! It does not validated that component lifecycles work properly. This is done in another test file.
 
-use dioxus::{prelude::*, DomEdit, TestDom, VSuspended};
+use dioxus::{prelude::*, DomEdit, VSuspended};
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
 mod test_logging;
 
-fn new_dom() -> TestDom {
+fn new_dom() -> VirtualDom {
     const IS_LOGGING_ENABLED: bool = false;
     test_logging::set_up_logging(IS_LOGGING_ENABLED);
-    TestDom::new()
+    VirtualDom::new(|cx, props| todo!())
 }
 
 use DomEdit::*;
@@ -24,7 +24,7 @@ use DomEdit::*;
 #[test]
 fn html_and_rsx_generate_the_same_output() {
     let dom = new_dom();
-    let (create, change) = dom.lazy_diff(
+    let (create, change) = dom.diff_lazynodes(
         rsx! ( div { "Hello world" } ),
         rsx! ( div { "Goodbye world" } ),
     );
@@ -58,7 +58,7 @@ fn html_and_rsx_generate_the_same_output() {
 fn fragments_create_properly() {
     let dom = new_dom();
 
-    let create = dom.create(rsx! {
+    let create = dom.create_vnodes(rsx! {
         div { "Hello a" }
         div { "Hello b" }
         div { "Hello c" }
@@ -107,7 +107,7 @@ fn empty_fragments_create_anchors() {
     let left = rsx!({ (0..0).map(|_f| rsx! { div {}}) });
     let right = rsx!({ (0..1).map(|_f| rsx! { div {}}) });
 
-    let (create, change) = dom.lazy_diff(left, right);
+    let (create, change) = dom.diff_lazynodes(left, right);
 
     assert_eq!(
         create.edits,
@@ -133,7 +133,7 @@ fn empty_fragments_create_many_anchors() {
     let left = rsx!({ (0..0).map(|_f| rsx! { div {}}) });
     let right = rsx!({ (0..5).map(|_f| rsx! { div {}}) });
 
-    let (create, change) = dom.lazy_diff(left, right);
+    let (create, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         create.edits,
         [CreatePlaceholder { root: 0 }, AppendChildren { many: 1 }]
@@ -179,7 +179,7 @@ fn empty_fragments_create_anchors_with_many_children() {
         })
     });
 
-    let (create, change) = dom.lazy_diff(left, right);
+    let (create, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         create.edits,
         [CreatePlaceholder { root: 0 }, AppendChildren { many: 1 }]
@@ -231,7 +231,7 @@ fn many_items_become_fragment() {
     });
     let right = rsx!({ (0..0).map(|_| rsx! { div {} }) });
 
-    let (create, change) = dom.lazy_diff(left, right);
+    let (create, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         create.edits,
         [
@@ -284,7 +284,7 @@ fn two_equal_fragments_are_equal() {
         })
     });
 
-    let (_create, change) = dom.lazy_diff(left, right);
+    let (_create, change) = dom.diff_lazynodes(left, right);
     assert!(change.edits.is_empty());
 }
 
@@ -302,7 +302,7 @@ fn two_fragments_with_differrent_elements_are_differet() {
         p {}
     );
 
-    let (_create, changes) = dom.lazy_diff(left, right);
+    let (_create, changes) = dom.diff_lazynodes(left, right);
     log::debug!("{:#?}", &changes);
     assert_eq!(
         changes.edits,
@@ -335,7 +335,7 @@ fn two_fragments_with_differrent_elements_are_differet_shorter() {
         p {}
     );
 
-    let (create, change) = dom.lazy_diff(left, right);
+    let (create, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         create.edits,
         [
@@ -391,7 +391,7 @@ fn two_fragments_with_same_elements_are_differet() {
         p {}
     );
 
-    let (create, change) = dom.lazy_diff(left, right);
+    let (create, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         create.edits,
         [
@@ -441,7 +441,7 @@ fn keyed_diffing_order() {
         p {"e"}
     );
 
-    let (create, change) = dom.lazy_diff(left, right);
+    let (create, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         change.edits,
         [Remove { root: 2 }, Remove { root: 3 }, Remove { root: 4 },]
@@ -465,7 +465,7 @@ fn keyed_diffing_out_of_order() {
         })
     });
 
-    let (_, changes) = dom.lazy_diff(left, right);
+    let (_, changes) = dom.diff_lazynodes(left, right);
     log::debug!("{:?}", &changes);
     assert_eq!(
         changes.edits,
@@ -490,7 +490,7 @@ fn keyed_diffing_out_of_order_adds() {
         })
     });
 
-    let (_, change) = dom.lazy_diff(left, right);
+    let (_, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         change.edits,
         [
@@ -517,7 +517,7 @@ fn keyed_diffing_out_of_order_adds_2() {
         })
     });
 
-    let (_, change) = dom.lazy_diff(left, right);
+    let (_, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         change.edits,
         [
@@ -545,7 +545,7 @@ fn keyed_diffing_out_of_order_adds_3() {
         })
     });
 
-    let (_, change) = dom.lazy_diff(left, right);
+    let (_, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         change.edits,
         [
@@ -573,7 +573,7 @@ fn keyed_diffing_out_of_order_adds_4() {
         })
     });
 
-    let (_, change) = dom.lazy_diff(left, right);
+    let (_, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         change.edits,
         [
@@ -601,7 +601,7 @@ fn keyed_diffing_out_of_order_adds_5() {
         })
     });
 
-    let (_, change) = dom.lazy_diff(left, right);
+    let (_, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         change.edits,
         [PushRoot { root: 4 }, InsertBefore { n: 1, root: 3 }]
@@ -624,7 +624,7 @@ fn keyed_diffing_additions() {
         })
     });
 
-    let (_, change) = dom.lazy_diff(left, right);
+    let (_, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         change.edits,
         [
@@ -657,7 +657,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
         })
     });
 
-    let (_, change) = dom.lazy_diff(left, right);
+    let (_, change) = dom.diff_lazynodes(left, right);
     log::debug!("{:?}", change);
     assert_eq!(
         change.edits,
@@ -696,7 +696,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     });
 
     // LIS: 4, 5, 6
-    let (_, change) = dom.lazy_diff(left, right);
+    let (_, change) = dom.diff_lazynodes(left, right);
     log::debug!("{:#?}", change);
     assert_eq!(
         change.edits,
@@ -745,7 +745,7 @@ fn controlled_keyed_diffing_out_of_order() {
     });
 
     // LIS: 5, 6
-    let (_, changes) = dom.lazy_diff(left, right);
+    let (_, changes) = dom.diff_lazynodes(left, right);
     log::debug!("{:#?}", &changes);
     assert_eq!(
         changes.edits,
@@ -787,7 +787,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
         })
     });
 
-    let (_, changes) = dom.lazy_diff(left, right);
+    let (_, changes) = dom.diff_lazynodes(left, right);
     log::debug!("{:#?}", &changes);
     assert_eq!(
         changes.edits,
@@ -808,7 +808,7 @@ fn suspense() {
     let dom = new_dom();
 
     todo!()
-    // let edits = dom.create(Some(LazyNodes::new(|f| {
+    // let edits = dom.create_vnodes(Some(LazyNodes::new(|f| {
     //     use std::cell::{Cell, RefCell};
     //     VNode::Suspended(f.bump().alloc(VSuspended {
     //         task_id: 0,

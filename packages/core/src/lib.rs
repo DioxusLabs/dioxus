@@ -21,7 +21,6 @@ pub(crate) mod mutations;
 pub(crate) mod nodes;
 pub(crate) mod scope;
 pub(crate) mod scopearena;
-pub(crate) mod test_dom;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
@@ -34,7 +33,6 @@ pub(crate) mod innerlude {
     pub use crate::nodes::*;
     pub use crate::scope::*;
     pub use crate::scopearena::*;
-    pub use crate::test_dom::*;
     pub use crate::virtual_dom::*;
 
     pub type Element = Option<NodeLink>;
@@ -42,9 +40,10 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    Attribute, Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes,
-    Listener, MountType, Mutations, NodeFactory, Properties, SchedulerMsg, ScopeChildren, ScopeId,
-    TestDom, UserEvent, VAnchor, VElement, VFragment, VNode, VSuspended, VirtualDom, FC,
+    Attribute, Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, IntoVNode,
+    LazyNodes, Listener, MountType, Mutations, NodeFactory, Properties, SchedulerMsg,
+    ScopeChildren, ScopeId, UserEvent, VAnchor, VElement, VFragment, VNode, VSuspended, VirtualDom,
+    FC,
 };
 
 pub mod prelude {

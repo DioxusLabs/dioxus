@@ -26,7 +26,7 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 ///     name: String
 /// }
 ///
-/// fn Example((cx, props): Scope<Props>) -> Element {
+/// fn Example(cx: Context, props: &ExampleProps) -> Element {
 ///     cx.render(rsx!{ div {"Hello, {props.name}"} })
 /// }
 /// ```
@@ -42,8 +42,6 @@ pub type Context<'a> = &'a Scope;
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// use case they might have.
 pub struct Scope {
-    // Book-keeping about our spot in the arena
-
     // safety:
     //
     // pointers to scopes are *always* valid since they are bump allocated and never freed until this scope is also freed
@@ -113,7 +111,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -131,7 +129,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -151,7 +149,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -172,7 +170,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// let mut dom = VirtualDom::new(|(cx, props)|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     /// let base = dom.base_scope();
     ///
@@ -307,12 +305,12 @@ impl Scope {
     /// ```
     /// struct SharedState(&'static str);
     ///
-    /// static App: FC<()> = |(cx, props)|{
+    /// static App: FC<()> = |cx, props|{
     ///     cx.use_hook(|_| cx.provide_state(SharedState("world")), |_| {}, |_| {});
     ///     rsx!(cx, Child {})
     /// }
     ///
-    /// static Child: FC<()> = |(cx, props)|{
+    /// static Child: FC<()> = |cx, props|{
     ///     let state = cx.consume_state::<SharedState>();
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
@@ -356,7 +354,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// static App: FC<()> = |(cx, props)| {
+    /// static App: FC<()> = |cx, props| {
     ///     todo!();
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
@@ -373,7 +371,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// static App: FC<()> = |(cx, props)| {
+    /// static App: FC<()> = |cx, props| {
     ///     let id = cx.get_current_subtree();
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
@@ -528,4 +526,9 @@ impl BumpFrame {
         nodes.push(node);
         nodes.len() - 1
     }
+}
+
+#[test]
+fn sizeof() {
+    dbg!(std::mem::size_of::<Scope>());
 }
