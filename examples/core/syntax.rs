@@ -33,7 +33,7 @@ fn html_usage() {
 
 static App2: FC<()> = |(cx, _)| cx.render(rsx!("hello world!"));
 
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     let name = cx.use_state(|| 0);
 
     cx.render(rsx!(div {
@@ -99,7 +99,7 @@ impl<'a> Children<'a> {
     }
 }
 
-static Bapp: FC<()> = |(cx, props)| {
+static Bapp: FC<()> = |cx, props| {
     let name = cx.use_state(|| 0);
 
     cx.render(rsx!(
@@ -114,7 +114,7 @@ static Bapp: FC<()> = |(cx, props)| {
     ))
 };
 
-static Match: FC<()> = |(cx, props)| {
+static Match: FC<()> = |cx, props| {
     //
     let b: Box<dyn Fn(NodeFactory) -> VNode> = Box::new(|f| todo!());
 

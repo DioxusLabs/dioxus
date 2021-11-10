@@ -10,7 +10,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |(cx, props)| {
+pub static Example: FC<()> = |cx, props| {
     cx.render(rsx! {
         head {
             style: { background_color: "powderblue" }
@@ -29,7 +29,7 @@ pub static Example: FC<()> = |(cx, props)| {
 // .... technically the rsx! macro is slightly broken at the moment and allows styles not wrapped in style {}
 // I haven't noticed any name collisions yet, and am tentatively leaving this behavior in..
 // Don't rely on it.
-static Example2: FC<()> = |(cx, props)| {
+static Example2: FC<()> = |cx, props| {
     cx.render(rsx! {
         div { color: "red"
             "hello world!"

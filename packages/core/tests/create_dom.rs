@@ -215,12 +215,12 @@ fn create_components() {
         })
     };
 
-    #[derive(Props)]
-    struct ChildProps<'a> {
-        children: ScopeChildren<'a>,
+    #[derive(Props, PartialEq)]
+    struct ChildProps {
+        children: Element,
     }
 
-    fn Child<'a>(cx: Context<'a>, props: &ChildProps<'a>) -> Element {
+    fn Child(cx: Context, props: &ChildProps) -> Element {
         cx.render(rsx! {
             h1 {}
             div { {&props.children} }
@@ -298,22 +298,4 @@ fn anchors() {
             AppendChildren { many: 2 },
         ]
     );
-}
-
-#[test]
-fn suspended() {
-    todo!()
-    // static App: FC<()> = |cx, props| {
-    //     let val = use_suspense(cx, || async {}, |p| todo!());
-
-    //     cx.render(rsx! { {val} })
-    // };
-
-    // let mut dom = new_dom(App, ());
-    // let mutations = dom.rebuild();
-
-    // assert_eq!(
-    //     mutations.edits,
-    //     [CreatePlaceholder { root: 0 }, AppendChildren { many: 1 },]
-    // );
 }

@@ -2,6 +2,7 @@ use crate::innerlude::*;
 
 use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashMap;
+use smallvec::SmallVec;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -61,9 +62,6 @@ pub struct Scope {
 
     // The double-buffering situation that we will use
     pub(crate) frames: [BumpFrame; 2],
-
-    pub(crate) old_root: RefCell<Option<NodeLink>>,
-    pub(crate) new_root: RefCell<Option<NodeLink>>,
 
     pub(crate) caller: *const dyn Fn(&Scope) -> Element,
 
@@ -241,19 +239,22 @@ impl Scope {
     /// }
     ///```
     pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
-        let bump = &self.wip_frame().bump;
+        let frame = self.wip_frame();
+        let bump = &frame.bump;
         let factory = NodeFactory { bump };
         let node = lazy_nodes.map(|f| f.call(factory))?;
+        let node = bump.alloc(node);
 
-        let idx = self
-            .wip_frame()
-            .add_node(unsafe { std::mem::transmute(node) });
+        let node_ptr = node as *mut _;
+        let node_ptr = unsafe { std::mem::transmute(node_ptr) };
 
-        Some(NodeLink {
-            gen_id: self.generation.get(),
-            scope_id: self.our_arena_idx,
-            link_idx: idx,
-        })
+        let link = NodeLink {
+            scope_id: Cell::new(Some(self.our_arena_idx)),
+            link_idx: Cell::new(0),
+            node: node_ptr,
+        };
+
+        Some(link)
     }
 
     /// Push an effect to be ran after the component has been successfully mounted to the dom
@@ -435,6 +436,7 @@ impl Scope {
             false => &self.frames[1],
         }
     }
+
     pub(crate) fn fin_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 1 {
             true => &self.frames[0],
@@ -496,28 +498,42 @@ impl Scope {
             effect();
         }
     }
+
+    pub fn root_node(&self) -> &VNode {
+        let node = *self.wip_frame().nodes.borrow().get(0).unwrap();
+        unsafe { std::mem::transmute(&*node) }
+    }
 }
 
-pub struct BumpFrame {
+pub(crate) struct BumpFrame {
     pub bump: Bump,
-    pub nodes: RefCell<Vec<VNode<'static>>>,
+    pub nodes: RefCell<Vec<*const VNode<'static>>>,
 }
 impl BumpFrame {
-    pub fn new() -> Self {
-        let bump = Bump::new();
+    pub fn new(capacity: usize) -> Self {
+        let bump = Bump::with_capacity(capacity);
 
         let node = &*bump.alloc(VText {
             text: "asd",
             dom_id: Default::default(),
             is_static: false,
         });
-        let nodes = RefCell::new(vec![VNode::Text(unsafe { std::mem::transmute(node) })]);
+        let node = bump.alloc(VNode::Text(unsafe { std::mem::transmute(node) }));
+        let nodes = RefCell::new(vec![node as *const _]);
         Self { bump, nodes }
     }
-    fn add_node(&self, node: VNode<'static>) -> usize {
+
+    pub fn allocated_bytes(&self) -> usize {
+        self.bump.allocated_bytes()
+    }
+
+    pub fn assign_nodelink(&self, node: &NodeLink) {
         let mut nodes = self.nodes.borrow_mut();
-        nodes.push(node);
-        nodes.len() - 1
+
+        let len = nodes.len();
+        nodes.push(node.node);
+
+        node.link_idx.set(len);
     }
 }
 
@@ -531,11 +547,18 @@ impl BumpFrame {
 #[derive(Default)]
 pub(crate) struct HookList {
     arena: Bump,
-    vals: RefCell<Vec<*mut dyn Any>>,
+    vals: RefCell<SmallVec<[*mut dyn Any; 5]>>,
     idx: Cell<usize>,
 }
 
 impl HookList {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            arena: Bump::with_capacity(capacity),
+            ..Default::default()
+        }
+    }
+
     pub(crate) fn next<T: 'static>(&self) -> Option<&mut T> {
         self.vals.borrow().get(self.idx.get()).and_then(|inn| {
             self.idx.set(self.idx.get() + 1);
@@ -571,7 +594,7 @@ impl HookList {
         self.cur_idx() >= self.len()
     }
 
-    pub fn clear_hooks(&mut self) {
+    pub fn clear(&mut self) {
         self.vals.borrow_mut().drain(..).for_each(|state| {
             let as_mut = unsafe { &mut *state };
             let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };

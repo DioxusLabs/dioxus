@@ -245,7 +245,7 @@ fn it_drops() {
 
     simple_logger::init().unwrap();
 
-    let factory = NodeFactory { bump: &bump };
+    // let factory = NodeFactory { scope: &bump };
 
     struct DropInner {
         id: i32,

@@ -14,7 +14,7 @@ use std::fmt::{Display, Formatter};
 
 use dioxus_core::exports::bumpalo;
 use dioxus_core::exports::bumpalo::Bump;
-use dioxus_core::nodes::IntoVNode;
+use dioxus_core::IntoVNode;
 use dioxus_core::*;
 
 /// A memory pool for rendering
@@ -94,7 +94,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
         "{:}",
         TextRenderer {
             cfg: SsrConfig::default(),
-            root: vdom.get_scope(scope).unwrap().root_node(),
+            root: vdom.get_scope(&scope).unwrap().root_node(),
             vdom: Some(vdom)
         }
     ))
@@ -157,6 +157,9 @@ impl<'a> TextRenderer<'a, '_> {
                     }
                 }
                 write!(f, "<!-- -->")?;
+            }
+            VNode::Linked(link) => {
+                todo!();
             }
             VNode::Element(el) => {
                 if self.cfg.indent {
@@ -244,7 +247,7 @@ impl<'a> TextRenderer<'a, '_> {
                 let idx = vcomp.associated_scope.get().unwrap();
 
                 if let (Some(vdom), false) = (self.vdom, self.cfg.skip_components) {
-                    let new_node = vdom.get_scope(idx).unwrap().root_node();
+                    let new_node = vdom.get_scope(&idx).unwrap().root_node();
                     self.html_render(new_node, f, il + 1)?;
                 } else {
                 }
@@ -297,18 +300,17 @@ impl SsrConfig {
 mod tests {
     use super::*;
 
-    use dioxus_core as dioxus;
     use dioxus_core::prelude::*;
     use dioxus_core_macro::*;
     use dioxus_html as dioxus_elements;
 
-    static SIMPLE_APP: FC<()> = |(cx, _)| {
+    static SIMPLE_APP: FC<()> = |cx, _| {
         cx.render(rsx!(div {
             "hello world!"
         }))
     };
 
-    static SLIGHTLY_MORE_COMPLEX: FC<()> = |(cx, _)| {
+    static SLIGHTLY_MORE_COMPLEX: FC<()> = |cx, _| {
         cx.render(rsx! {
             div {
                 title: "About W3Schools"
@@ -327,14 +329,14 @@ mod tests {
         })
     };
 
-    static NESTED_APP: FC<()> = |(cx, _)| {
+    static NESTED_APP: FC<()> = |cx, _| {
         cx.render(rsx!(
             div {
                 SIMPLE_APP {}
             }
         ))
     };
-    static FRAGMENT_APP: FC<()> = |(cx, _)| {
+    static FRAGMENT_APP: FC<()> = |cx, _| {
         cx.render(rsx!(
             div { "f1" }
             div { "f2" }
@@ -390,7 +392,7 @@ mod tests {
 
     #[test]
     fn styles() {
-        static STLYE_APP: FC<()> = |(cx, _)| {
+        static STLYE_APP: FC<()> = |cx, _| {
             cx.render(rsx! {
                 div { color: "blue", font_size: "46px"  }
             })

@@ -321,14 +321,15 @@ impl<'bump> DiffState<'bump> {
             }
 
             MountType::Replace { old } => {
+                // todo: a bug here where we remove a node that is alread being replaced
                 if let Some(old_id) = old.try_mounted_id() {
                     self.mutations.replace_with(old_id, nodes_created as u32);
-                    self.remove_nodes(Some(old), true);
+                    self.remove_nodes(Some(old), false);
                 } else {
                     if let Some(id) = self.find_first_element_id(old) {
                         self.mutations.replace_with(id, nodes_created as u32);
                     }
-                    self.remove_nodes(Some(old), true);
+                    self.remove_nodes(Some(old), false);
                 }
             }
 
@@ -487,7 +488,11 @@ impl<'bump> DiffState<'bump> {
     }
 
     fn create_linked_node(&mut self, link: &'bump NodeLink) {
-        todo!()
+        if let Some(cur_scope) = self.stack.current_scope() {
+            link.scope_id.set(Some(cur_scope));
+            let node: &'bump VNode<'static> = unsafe { &*link.node };
+            self.create_node(unsafe { std::mem::transmute(node) });
+        }
     }
 
     // =================================
@@ -532,7 +537,6 @@ impl<'bump> DiffState<'bump> {
 
     fn diff_element_nodes(
         &mut self,
-
         old: &'bump VElement<'bump>,
         new: &'bump VElement<'bump>,
         old_node: &'bump VNode<'bump>,
@@ -629,10 +633,8 @@ impl<'bump> DiffState<'bump> {
 
     fn diff_component_nodes(
         &mut self,
-
         old_node: &'bump VNode<'bump>,
         new_node: &'bump VNode<'bump>,
-
         old: &'bump VComponent<'bump>,
         new: &'bump VComponent<'bump>,
     ) {
@@ -648,21 +650,20 @@ impl<'bump> DiffState<'bump> {
             new.associated_scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
-            let scope = self.scopes.get_scope(&scope_addr).unwrap();
-            let mut items = scope.items.borrow_mut();
+            let scope = unsafe { self.scopes.get_scope_mut(&scope_addr).unwrap() };
+            scope.caller = unsafe { std::mem::transmute(new.caller) };
 
             // React doesn't automatically memoize, but we do.
-            let props_are_the_same = todo!("reworking component memoization");
-            // let props_are_the_same = todo!("reworking component memoization");
-            // let props_are_the_same = old.comparator.unwrap();
+            let props_are_the_same = old.comparator.unwrap();
 
-            // if self.cfg.force_diff || !props_are_the_same(new) {
-            //     let succeeded = scope.run_scope(self);
-
-            //     if succeeded {
-            //         self.diff_node(scope.frames.wip_head(), scope.frames.fin_head());
-            //     }
-            // }
+            if self.force_diff || !props_are_the_same(new) {
+                if self.scopes.run_scope(&scope_addr) {
+                    self.diff_node(
+                        self.scopes.wip_head(&scope_addr),
+                        self.scopes.fin_head(&scope_addr),
+                    );
+                }
+            }
 
             self.stack.scope_stack.pop();
         } else {
@@ -1198,7 +1199,6 @@ impl<'bump> DiffState<'bump> {
     /// remove can happen whenever
     fn remove_nodes(
         &mut self,
-
         nodes: impl IntoIterator<Item = &'bump VNode<'bump>>,
         gen_muts: bool,
     ) {
@@ -1244,18 +1244,16 @@ impl<'bump> DiffState<'bump> {
                 }
 
                 VNode::Linked(l) => {
-                    todo!()
+                    let node = unsafe { std::mem::transmute(&*l.node) };
+                    self.remove_nodes(Some(node), gen_muts);
                 }
 
                 VNode::Component(c) => {
                     let scope_id = c.associated_scope.get().unwrap();
-                    // let scope = self.scopes.get_scope(&scope_id).unwrap();
                     let root = self.scopes.root_node(&scope_id);
                     self.remove_nodes(Some(root), gen_muts);
-
                     log::debug!("Destroying scope {:?}", scope_id);
-                    let mut s = self.scopes.try_remove(&scope_id).unwrap();
-                    s.hooks.clear_hooks();
+                    self.scopes.try_remove(&scope_id).unwrap();
                 }
             }
         }

@@ -173,7 +173,7 @@ impl ToTokens for Component {
                 if !self.children.is_empty() {
                     let childs = &self.children;
                     toks.append_all(quote! {
-                        .children(ScopeChildren::new(__cx.fragment_from_iter([ #( #childs ),* ])))
+                        .children(__cx.create_children([ #( #childs ),* ]))
                     });
                 }
 

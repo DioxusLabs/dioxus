@@ -257,12 +257,12 @@ fn many_items_become_fragment() {
         ]
     );
 
-    // hmmmmmmmmm worried about reusing IDs that we shouldnt be
+    // note: the ID gets reused
     assert_eq!(
         change.edits,
         [
             Remove { root: 2 },
-            CreatePlaceholder { root: 4 },
+            CreatePlaceholder { root: 3 },
             ReplaceWith { root: 0, m: 1 },
         ]
     );
@@ -433,7 +433,7 @@ fn keyed_diffing_order() {
     let dom = new_dom();
 
     let left = rsx!(
-        // {(0..5).map(|f| {rsx! { div { key: "{f}"  }}})}
+        {(0..5).map(|f| {rsx! { div { key: "{f}"  }}})}
         p {"e"}
     );
     let right = rsx!(
@@ -801,23 +801,4 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
             InsertBefore { n: 1, root: 0 },
         ]
     );
-}
-
-#[test]
-fn suspense() {
-    let dom = new_dom();
-
-    todo!()
-    // let edits = dom.create_vnodes(Some(LazyNodes::new(|f| {
-    //     use std::cell::{Cell, RefCell};
-    //     VNode::Suspended(f.bump().alloc(VSuspended {
-    //         task_id: 0,
-    //         callback: RefCell::new(None),
-    //         dom_id: Cell::new(None),
-    //     }))
-    // })));
-    // assert_eq!(
-    //     edits.edits,
-    //     [CreatePlaceholder { root: 0 }, AppendChildren { many: 1 }]
-    // );
 }

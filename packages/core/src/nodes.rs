@@ -181,7 +181,7 @@ impl<'src> VNode<'src> {
     pub(crate) fn children(&self) -> &[VNode<'src>] {
         match &self {
             VNode::Fragment(f) => f.children,
-            VNode::Component(c) => todo!("children are not accessible through this"),
+            VNode::Component(_c) => todo!("children are not accessible through this"),
             _ => &[],
         }
     }
@@ -199,9 +199,9 @@ impl<'src> VNode<'src> {
                 key: f.key,
             }),
             VNode::Linked(c) => VNode::Linked(NodeLink {
-                gen_id: c.gen_id,
-                scope_id: c.scope_id,
-                link_idx: c.link_idx,
+                scope_id: c.scope_id.clone(),
+                link_idx: c.link_idx.clone(),
+                node: c.node.clone(),
             }),
         }
     }
@@ -224,11 +224,7 @@ impl Debug for VNode<'_> {
             }
             VNode::Suspended { .. } => write!(s, "VNode::VSuspended"),
             VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
-            VNode::Linked(c) => write!(
-                s,
-                "VNode::VCached {{ gen_id: {}, scope_id: {:?} }}",
-                c.gen_id, c.scope_id
-            ),
+            VNode::Linked(c) => write!(s, "VNode::VCached {{ scope_id: {:?} }}", c.scope_id.get()),
         }
     }
 }
@@ -419,9 +415,25 @@ pub struct VSuspended<'a> {
 /// an `rsx!` call.
 #[derive(Debug)]
 pub struct NodeLink {
-    pub(crate) link_idx: usize,
-    pub(crate) gen_id: u32,
-    pub(crate) scope_id: ScopeId,
+    pub(crate) link_idx: Cell<usize>,
+    pub(crate) scope_id: Cell<Option<ScopeId>>,
+    pub(crate) node: *const VNode<'static>,
+}
+
+impl PartialEq for NodeLink {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node
+    }
+}
+impl NodeLink {
+    // we don't want to let users clone NodeLinks
+    pub(crate) fn clone_inner(&self) -> Self {
+        Self {
+            link_idx: self.link_idx.clone(),
+            scope_id: self.scope_id.clone(),
+            node: self.node.clone(),
+        }
+    }
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -440,7 +452,7 @@ impl<'a> NodeFactory<'a> {
 
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        self.bump
+        &self.bump
     }
 
     /// Directly pass in text blocks without the need to use the format_args macro.
@@ -460,7 +472,7 @@ impl<'a> NodeFactory<'a> {
             Some(static_str) => (static_str, true),
             None => {
                 use bumpalo::core_alloc::fmt::Write;
-                let mut str_buf = bumpalo::collections::String::new_in(self.bump());
+                let mut str_buf = bumpalo::collections::String::new_in(self.bump);
                 str_buf.write_fmt(args).unwrap();
                 (str_buf.into_bump_str(), false)
             }
@@ -516,18 +528,18 @@ impl<'a> NodeFactory<'a> {
         A: 'a + AsRef<[Attribute<'a>]>,
         V: 'a + AsRef<[VNode<'a>]>,
     {
-        let listeners: &'a L = self.bump().alloc(listeners);
+        let listeners: &'a L = self.bump.alloc(listeners);
         let listeners = listeners.as_ref();
 
-        let attributes: &'a A = self.bump().alloc(attributes);
+        let attributes: &'a A = self.bump.alloc(attributes);
         let attributes = attributes.as_ref();
 
-        let children: &'a V = self.bump().alloc(children);
+        let children: &'a V = self.bump.alloc(children);
         let children = children.as_ref();
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        VNode::Element(self.bump().alloc(VElement {
+        VNode::Element(self.bump.alloc(VElement {
             tag_name,
             key,
             namespace,
@@ -565,7 +577,7 @@ impl<'a> NodeFactory<'a> {
     where
         P: Properties + 'a,
     {
-        let bump = self.bump();
+        let bump = self.bump;
         let props = bump.alloc(props);
         let bump_props = props as *mut P as *mut ();
         let user_fc = component as *const ();
@@ -598,7 +610,6 @@ impl<'a> NodeFactory<'a> {
 
             let drop_props: &mut dyn FnMut() = bump.alloc_with(|| {
                 move || unsafe {
-                    log::debug!("dropping props!");
                     if !has_dropped {
                         let real_other = bump_props as *mut _ as *mut P;
                         let b = BumpBox::from_raw(real_other);
@@ -620,7 +631,6 @@ impl<'a> NodeFactory<'a> {
 
         let caller: &'a mut dyn Fn(&'a Scope) -> Element =
             bump.alloc(move |scope: &Scope| -> Element {
-                log::debug!("calling component renderr {:?}", scope.our_arena_idx);
                 let props: &'_ P = unsafe { &*(bump_props as *const P) };
                 let res = component(scope, props);
                 res
@@ -657,7 +667,7 @@ impl<'a> NodeFactory<'a> {
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
     ) -> VNode<'a> {
-        let bump = self.bump();
+        let bump = self.bump;
         let mut nodes = bumpalo::collections::Vec::new_in(bump);
 
         for node in node_iter {
@@ -694,6 +704,58 @@ impl<'a> NodeFactory<'a> {
         VNode::Fragment(VFragment {
             children,
             key: None,
+        })
+    }
+
+    // this isn't quite feasible yet
+    // I think we need some form of interior mutability or state on nodefactory that stores which subtree was created
+    pub fn create_children(
+        self,
+        node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
+    ) -> Element {
+        let bump = self.bump;
+        let mut nodes = bumpalo::collections::Vec::new_in(bump);
+
+        for node in node_iter {
+            nodes.push(node.into_vnode(self));
+        }
+
+        if nodes.is_empty() {
+            nodes.push(VNode::Anchor(bump.alloc(VAnchor {
+                dom_id: empty_cell(),
+            })));
+        }
+
+        let children = nodes.into_bump_slice();
+
+        // TODO
+        // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
+        //
+        // if cfg!(debug_assertions) {
+        //     if children.len() > 1 {
+        //         if children.last().unwrap().key().is_none() {
+        //             log::error!(
+        //                 r#"
+        // Warning: Each child in an array or iterator should have a unique "key" prop.
+        // Not providing a key will lead to poor performance with lists.
+        // See docs.rs/dioxus for more information.
+        // ---
+        // To help you identify where this error is coming from, we've generated a backtrace.
+        //                         "#,
+        //             );
+        //         }
+        //     }
+        // }
+
+        let frag = VNode::Fragment(VFragment {
+            children,
+            key: None,
+        });
+        let ptr = self.bump.alloc(frag) as *const _;
+        Some(NodeLink {
+            link_idx: Default::default(),
+            scope_id: Default::default(),
+            node: unsafe { std::mem::transmute(ptr) },
         })
     }
 
@@ -796,28 +858,48 @@ impl IntoVNode<'_> for Arguments<'_> {
     }
 }
 
+// called cx.render from a helper function
 impl IntoVNode<'_> for Option<NodeLink> {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        todo!()
+    fn into_vnode(self, _cx: NodeFactory) -> VNode {
+        match self {
+            Some(node) => VNode::Linked(node),
+            None => {
+                todo!()
+            }
+        }
     }
 }
 
+// essentially passing elements through props
+// just build a new element in place
 impl IntoVNode<'_> for &Option<NodeLink> {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        todo!()
+    fn into_vnode(self, _cx: NodeFactory) -> VNode {
+        match self {
+            Some(node) => VNode::Linked(NodeLink {
+                link_idx: node.link_idx.clone(),
+                scope_id: node.scope_id.clone(),
+                node: node.node,
+            }),
+            None => {
+                //
+                todo!()
+            }
+        }
     }
 }
 
-// Conveniently, we also support "None"
 impl IntoVNode<'_> for NodeLink {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        todo!()
+    fn into_vnode(self, _cx: NodeFactory) -> VNode {
+        VNode::Linked(self)
     }
 }
 
-// Conveniently, we also support "None"
 impl IntoVNode<'_> for &NodeLink {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        todo!()
+    fn into_vnode(self, _cx: NodeFactory) -> VNode {
+        VNode::Linked(NodeLink {
+            link_idx: self.link_idx.clone(),
+            scope_id: self.scope_id.clone(),
+            node: self.node,
+        })
     }
 }

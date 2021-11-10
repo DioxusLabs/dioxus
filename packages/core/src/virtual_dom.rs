@@ -13,6 +13,9 @@ use std::{any::Any, collections::VecDeque};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
+///
+/// ## Guide
+///
 /// Components are defined as simple functions that take [`Context`] and a [`Properties`] type and return an [`Element`].  
 ///
 /// ```rust
@@ -105,14 +108,16 @@ pub struct VirtualDom {
 
     _root_caller: *mut dyn Fn(&Scope) -> Element,
 
-    pub(crate) scopes: Box<ScopeArena>,
+    scopes: Box<ScopeArena>,
 
     receiver: UnboundedReceiver<SchedulerMsg>,
-    pub(crate) sender: UnboundedSender<SchedulerMsg>,
 
-    // Every component that has futures that need to be polled
+    sender: UnboundedSender<SchedulerMsg>,
+
     pending_futures: FxHashSet<ScopeId>,
+
     pending_messages: VecDeque<SchedulerMsg>,
+
     dirty_scopes: IndexSet<ScopeId>,
 }
 
@@ -130,7 +135,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```
-    /// fn Example(cx: Context<()>) -> DomTree  {
+    /// fn Example(cx: Context, props: &()) -> Element  {
     ///     cx.render(rsx!( div { "hello world" } ))
     /// }
     ///
@@ -159,7 +164,7 @@ impl VirtualDom {
     ///     name: &'static str
     /// }
     ///
-    /// fn Example(cx: Context<SomeProps>) -> DomTree  {
+    /// fn Example(cx: Context, props: &SomeProps) -> Element  {
     ///     cx.render(rsx!{ div{ "hello {cx.name}" } })
     /// }
     ///
@@ -172,7 +177,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P: 'static + Send>(root: FC<P>, root_props: P) -> Self {
+    pub fn new_with_props<P: 'static>(root: FC<P>, root_props: P) -> Self {
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
         Self::new_with_props_and_scheduler(root, root_props, sender, receiver)
     }
@@ -230,8 +235,10 @@ impl VirtualDom {
     ///
     /// # Example
     ///
+    /// ```rust
     ///
-    ///    
+    ///
+    /// ```
     pub fn get_scheduler_channel(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
         self.sender.clone()
     }
@@ -240,8 +247,10 @@ impl VirtualDom {
     ///
     /// # Example
     ///
+    /// ```rust
     ///
     ///
+    /// ```
     pub fn has_any_work(&self) -> bool {
         !(self.dirty_scopes.is_empty() && self.pending_messages.is_empty())
     }
@@ -347,7 +356,9 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```no_run
-    /// static App: FC<()> = |cx, props|rsx!(cx, div {"hello"} );
+    /// fn App(cx: Context, props: &()) -> Element {
+    ///     cx.render(rsx!( div {"hello"} ))
+    /// }
     ///
     /// let mut dom = VirtualDom::new(App);
     ///
@@ -368,6 +379,7 @@ impl VirtualDom {
     /// applied the edits.
     ///
     /// Mutations are the only link between the RealDOM and the VirtualDOM.
+    ///
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
 
@@ -436,10 +448,7 @@ impl VirtualDom {
                 }
             }
 
-            // let scopes = &mut self.scopes;
             let work_completed = diff_state.work(&mut deadline);
-            // let work_completed = crate::diff::work(&mut diff_state, &mut deadline);
-            // let work_completed = crate::diff::work(&mut diff_state, &mut deadline);
 
             if work_completed {
                 let DiffState {
@@ -454,7 +463,7 @@ impl VirtualDom {
                 }
 
                 // I think the stack should be empty at the end of diffing?
-                debug_assert_eq!(stack.scope_stack.len(), 0);
+                debug_assert_eq!(stack.scope_stack.len(), 1);
 
                 committed_mutations.push(mutations);
             } else {
@@ -536,74 +545,45 @@ impl VirtualDom {
     /// let edits = dom.diff();
     /// ```
     pub fn hard_diff<'a>(&'a mut self, scope_id: &ScopeId) -> Option<Mutations<'a>> {
-        log::debug!("hard diff {:?}", scope_id);
-
+        let mut diff_machine = DiffState::new(&self.scopes);
         if self.scopes.run_scope(scope_id) {
-            let mut diff_machine = DiffState::new(&self.scopes);
-
             diff_machine.force_diff = true;
-
-            diff_machine.work(|| false);
-            // let scopes = &mut self.scopes;
-            // crate::diff::diff_scope(&mut diff_machine, scope_id);
-            // self.scopes.diff_scope(&mut diff_machine, scope_id);
-
-            // dbg!(&diff_machine.mutations);
-            // let DiffState {
-            //     mutations,
-            //     stack,
-            //     seen_scopes,
-            //     force_diff,
-            //     ..
-            // } = mutations;
-
-            // let mutations = diff_machine.mutations;
-
-            // Some(unsafe { std::mem::transmute(mutations) })
-            todo!()
-        } else {
-            None
+            diff_machine.diff_scope(scope_id);
         }
+        Some(diff_machine.mutations)
     }
 
     /// Renders an `rsx` call into the Base Scope's allocator.
     ///
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     pub fn render_vnodes<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> &'a VNode<'a> {
-        todo!()
+        let scope = self.scopes.get_scope(&self.base_scope).unwrap();
+        let frame = scope.wip_frame();
+        let factory = NodeFactory { bump: &frame.bump };
+        let node = lazy_nodes.unwrap().call(factory);
+        frame.bump.alloc(node)
     }
 
     /// Renders an `rsx` call into the Base Scope's allocator.
     ///
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.    
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
-        todo!()
-        // let mutations = Mutations::new();
-        // let mut machine: DiffState = todo!();
-        // // let mut machine = DiffState::new(mutations);
-        // // let mut machine = DiffState::new(mutations);
-        // machine.stack.push(DiffInstruction::Diff { new, old });
-        // machine.mutations
+        let mut machine = DiffState::new(&self.scopes);
+        machine.stack.push(DiffInstruction::Diff { new, old });
+        machine.stack.scope_stack.push(self.base_scope);
+        machine.work(|| false);
+        machine.mutations
     }
 
     /// Renders an `rsx` call into the Base Scope's allocator.
     ///
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     pub fn create_vnodes<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
-        todo!()
-        // let old = self.bump.alloc(self.render_direct(left));
-
-        // let mut machine: DiffState = todo!();
-        // // let mut machine = DiffState::new(Mutations::new());
-        // // let mut machine = DiffState::new(Mutations::new());
-
-        // machine.stack.create_node(old, MountType::Append);
-
-        // todo!()
-
-        // // machine.work(&mut || false);
-
-        // // machine.mutations
+        let nodes = self.render_vnodes(left);
+        let mut machine = DiffState::new(&self.scopes);
+        machine.stack.create_node(nodes, MountType::Append);
+        machine.work(|| false);
+        machine.mutations
     }
 
     /// Renders an `rsx` call into the Base Scope's allocator.
@@ -616,26 +596,17 @@ impl VirtualDom {
     ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
 
-        // let mut machine: DiffState = todo!();
-        // let mut machine = DiffState::new(Mutations::new());
+        let mut create = DiffState::new(&self.scopes);
+        create.stack.scope_stack.push(self.base_scope);
+        create.stack.create_node(old, MountType::Append);
+        create.work(|| false);
 
-        // machine.stack.create_node(old, MountType::Append);
+        let mut edit = DiffState::new(&self.scopes);
+        create.stack.scope_stack.push(self.base_scope);
+        edit.stack.push(DiffInstruction::Diff { old, new });
+        edit.work(&mut || false);
 
-        todo!()
-
-        // machine.work(|| false);
-        // let create_edits = machine.mutations;
-
-        // let mut machine: DiffState = todo!();
-        // // let mut machine = DiffState::new(Mutations::new());
-
-        // machine.stack.push(DiffInstruction::Diff { old, new });
-
-        // machine.work(&mut || false);
-
-        // let edits = machine.mutations;
-
-        // (create_edits, edits)
+        (create.mutations, edit.mutations)
     }
 }
 

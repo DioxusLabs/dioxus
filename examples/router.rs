@@ -23,7 +23,7 @@ pub enum Route {
     NotFound,
 }
 
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     let route = use_router(cx, Route::parse)?;
 
     cx.render(rsx! {

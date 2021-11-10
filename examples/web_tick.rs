@@ -19,7 +19,7 @@ fn main() {
     dioxus::web::launch(App, |c| c);
 }
 
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     let mut rng = SmallRng::from_entropy();
     let rows = (0..1_000).map(|f| {
         let label = Label::new(&mut rng);

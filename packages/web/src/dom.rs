@@ -7,17 +7,12 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{
-    events::{KeyCode, UserEvent},
-    mutations::NodeRefMutation,
-    scheduler::SchedulerMsg,
-    DomEdit, ElementId, ScopeId,
-};
+use dioxus_core::{DomEdit, ElementId, SchedulerMsg, ScopeId, UserEvent};
 use fxhash::FxHashMap;
-use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
+use std::{any::Any, fmt::Debug, rc::Rc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
-    Attr, CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
+    CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
     HtmlOptionElement, HtmlTextAreaElement, Node, NodeList,
 };
 
@@ -55,7 +50,7 @@ impl WebsysDom {
         let document = load_document();
 
         let mut nodes = NodeSlab::new(2000);
-        let mut listeners = FxHashMap::default();
+        let listeners = FxHashMap::default();
 
         // re-hydrate the page - only supports one virtualdom per page
         if cfg.hydrate {
@@ -90,17 +85,17 @@ impl WebsysDom {
         }
     }
 
-    pub fn apply_refs(&mut self, refs: &[NodeRefMutation]) {
-        for item in refs {
-            if let Some(bla) = &item.element {
-                let node = self.nodes[item.element_id.as_u64() as usize]
-                    .as_ref()
-                    .unwrap()
-                    .clone();
-                bla.set(Box::new(node)).unwrap();
-            }
-        }
-    }
+    // pub fn apply_refs(&mut self, refs: &[NodeRefMutation]) {
+    //     for item in refs {
+    //         if let Some(bla) = &item.element {
+    //             let node = self.nodes[item.element_id.as_u64() as usize]
+    //                 .as_ref()
+    //                 .unwrap()
+    //                 .clone();
+    //             bla.set(Box::new(node)).unwrap();
+    //         }
+    //     }
+    // }
 
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
         for edit in edits.drain(..) {
@@ -309,8 +304,8 @@ impl WebsysDom {
         }
     }
 
-    fn remove_event_listener(&mut self, event: &str, root: u64) {
-        // todo!()
+    fn remove_event_listener(&mut self, _event: &str, _root: u64) {
+        todo!()
     }
 
     fn set_text(&mut self, text: &str, root: u64) {
@@ -489,8 +484,9 @@ unsafe impl Sync for DioxusWebsysEvent {}
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
 fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send> {
-    use crate::events::*;
-    use dioxus_core::events::on::*;
+    use dioxus_html::on::*;
+    use dioxus_html::KeyCode;
+    // use dioxus_core::events::on::*;
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => Box::new(ClipboardEvent {}),
         "compositionend" | "compositionstart" | "compositionupdate" => {
@@ -682,15 +678,6 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     let typ = event.type_();
 
-    // TODO: clean this up
-    if cfg!(debug_assertions) {
-        let attrs = target.attributes();
-        for x in 0..attrs.length() {
-            let attr: Attr = attrs.item(x).unwrap();
-            // log::debug!("attrs include: {:#?}, {:#?}", attr.name(), attr.value());
-        }
-    }
-
     use anyhow::Context;
 
     // The error handling here is not very descriptive and needs to be replaced with a zero-cost error system
@@ -716,7 +703,8 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
         name: event_name_from_typ(&typ),
         event: virtual_event_from_websys_event(event.clone()),
         mounted_dom_id: Some(ElementId(real_id as usize)),
-        scope: ScopeId(triggered_scope as usize),
+        scope_id: ScopeId(triggered_scope as usize),
+        priority: dioxus_core::EventPriority::Medium,
     })
 }
 

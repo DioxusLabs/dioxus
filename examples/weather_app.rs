@@ -12,7 +12,7 @@ fn main() {
 
 const ENDPOINT: &str = "https://api.openweathermap.org/data/2.5/weather";
 
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     //
     let body = use_suspense(
         cx,
@@ -40,7 +40,7 @@ static App: FC<()> = |(cx, props)| {
 #[derive(PartialEq, Props)]
 struct WeatherProps {}
 
-static WeatherDisplay: FC<WeatherProps> = |(cx, props)| {
+static WeatherDisplay: FC<WeatherProps> = |cx, props| {
     //
     cx.render(rsx!(
         div { class: "flex items-center justify-center flex-col"
