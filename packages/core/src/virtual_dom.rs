@@ -198,15 +198,19 @@ impl VirtualDom {
         let caller_ref: *mut dyn Fn(&Scope) -> Element = Box::into_raw(caller);
         let base_scope = scopes.new_with_key(root as _, caller_ref, None, 0, 0);
 
+        let pending_messages = VecDeque::new();
+        let mut dirty_scopes = IndexSet::new();
+        dirty_scopes.insert(base_scope);
+
         Self {
             scopes: Box::new(scopes),
             base_scope,
             receiver,
             // todo: clean this up manually?
             _root_caller: caller_ref,
-            pending_messages: VecDeque::new(),
+            pending_messages,
             pending_futures: Default::default(),
-            dirty_scopes: Default::default(),
+            dirty_scopes,
             sender,
         }
     }
@@ -462,8 +466,8 @@ impl VirtualDom {
                     self.dirty_scopes.remove(&scope);
                 }
 
-                // I think the stack should be empty at the end of diffing?
-                debug_assert_eq!(stack.scope_stack.len(), 1);
+                // // I think the stack should be empty at the end of diffing?
+                // debug_assert_eq!(stack.scope_stack.len(), 1);
 
                 committed_mutations.push(mutations);
             } else {

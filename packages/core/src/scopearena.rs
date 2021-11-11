@@ -1,9 +1,8 @@
+use bumpalo::Bump;
+use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashMap;
 use slab::Slab;
 use std::cell::{Cell, RefCell};
-
-use bumpalo::{boxed::Box as BumpBox, Bump};
-use futures_channel::mpsc::UnboundedSender;
 
 use crate::innerlude::*;
 
@@ -61,71 +60,71 @@ impl ScopeArena {
         height: u32,
         subtree: u32,
     ) -> ScopeId {
-        if let Some(id) = self.free_scopes.borrow_mut().pop() {
-            // have already called drop on it - the slot is still chillin tho
-            // let scope = unsafe { &mut *self.scopes.borrow()[id.0 as usize] };
+        let scope_id = ScopeId(self.scopes.borrow().len());
 
-            todo!("override the scope contents");
+        let (node_capacity, hook_capacity) = {
+            let heuristics = self.heuristics.borrow();
+            if let Some(heuristic) = heuristics.get(&fc_ptr) {
+                (heuristic.node_arena_size, heuristic.hook_arena_size)
+            } else {
+                (0, 0)
+            }
+        };
+
+        let mut frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
+
+        frames[0].nodes.get_mut().push({
+            let vnode = frames[0]
+                .bump
+                .alloc(VNode::Text(frames[0].bump.alloc(VText {
+                    dom_id: Default::default(),
+                    is_static: false,
+                    text: "",
+                })));
+            unsafe { std::mem::transmute(vnode as *mut VNode) }
+        });
+
+        frames[1].nodes.get_mut().push({
+            let vnode = frames[1]
+                .bump
+                .alloc(VNode::Text(frames[1].bump.alloc(VText {
+                    dom_id: Default::default(),
+                    is_static: false,
+                    text: "",
+                })));
+            unsafe { std::mem::transmute(vnode as *mut VNode) }
+        });
+
+        let mut new_scope = Scope {
+            sender: self.sender.clone(),
+            our_arena_idx: scope_id,
+            parent_scope,
+            height,
+            frames,
+            subtree: Cell::new(subtree),
+            is_subtree_root: Cell::new(false),
+
+            caller,
+            generation: 0.into(),
+
+            hooks: HookList::new(hook_capacity),
+            shared_contexts: Default::default(),
+
+            items: RefCell::new(SelfReferentialItems {
+                listeners: Default::default(),
+                borrowed_props: Default::default(),
+                suspended_nodes: Default::default(),
+                tasks: Default::default(),
+                pending_effects: Default::default(),
+            }),
+        };
+
+        if let Some(id) = self.free_scopes.borrow_mut().pop() {
+            let scope = unsafe { self.get_scope_mut(&id) }.unwrap();
+            std::mem::swap(&mut new_scope, scope);
             id
         } else {
-            let scope_id = ScopeId(self.scopes.borrow().len());
-
-            let (node_capacity, hook_capacity) = {
-                let heuristics = self.heuristics.borrow();
-                if let Some(heuristic) = heuristics.get(&fc_ptr) {
-                    (heuristic.node_arena_size, heuristic.hook_arena_size)
-                } else {
-                    (0, 0)
-                }
-            };
-
-            let mut frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
-
-            frames[0].nodes.get_mut().push({
-                let vnode = frames[0]
-                    .bump
-                    .alloc(VNode::Text(frames[0].bump.alloc(VText {
-                        dom_id: Default::default(),
-                        is_static: false,
-                        text: "",
-                    })));
-                unsafe { std::mem::transmute(vnode as *mut VNode) }
-            });
-
-            frames[1].nodes.get_mut().push({
-                let vnode = frames[1]
-                    .bump
-                    .alloc(VNode::Text(frames[1].bump.alloc(VText {
-                        dom_id: Default::default(),
-                        is_static: false,
-                        text: "",
-                    })));
-                unsafe { std::mem::transmute(vnode as *mut VNode) }
-            });
-
-            let scope = self.bump.alloc(Scope {
-                sender: self.sender.clone(),
-                parent_scope,
-                our_arena_idx: scope_id,
-                height,
-                subtree: Cell::new(subtree),
-                is_subtree_root: Cell::new(false),
-                frames,
-
-                hooks: HookList::new(hook_capacity),
-                shared_contexts: Default::default(),
-                caller,
-                generation: 0.into(),
-
-                items: RefCell::new(SelfReferentialItems {
-                    listeners: Default::default(),
-                    borrowed_props: Default::default(),
-                    suspended_nodes: Default::default(),
-                    tasks: Default::default(),
-                    pending_effects: Default::default(),
-                }),
-            });
-
+            let scope = self.bump.alloc(new_scope);
             self.scopes.borrow_mut().push(scope);
             scope_id
         }
@@ -274,6 +273,8 @@ impl ScopeArena {
                 // self.
             }
 
+            // make the "wip frame" contents the "finished frame"
+            // any future dipping into completed nodes after "render" will go through "fin head"
             scope.cycle_frame();
             true
         } else {
@@ -300,6 +301,6 @@ impl ScopeArena {
     }
 
     pub fn root_node(&self, id: &ScopeId) -> &VNode {
-        self.wip_head(id)
+        self.fin_head(id)
     }
 }

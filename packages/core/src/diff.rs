@@ -240,6 +240,8 @@ impl<'bump> DiffState<'bump> {
     pub fn diff_scope(&mut self, id: &ScopeId) {
         let (old, new) = (self.scopes.wip_head(id), self.scopes.fin_head(id));
         self.stack.push(DiffInstruction::Diff { old, new });
+        self.stack.scope_stack.push(*id);
+        self.stack.push_nodes_created(0);
         self.work(|| false);
     }
 
@@ -281,13 +283,9 @@ impl<'bump> DiffState<'bump> {
             }
 
             VNode::Linked(linked) => {
-                todo!("load linked");
-                0
-                // let num_on_stack = linked.children.iter().map(|child| {
-                //     self.push_all_nodes( child)
-                // }).sum();
-                // self.mutations.push_root(node.mounted_id());
-                // num_on_stack + 1
+                let node = unsafe { &*linked.node };
+                let node: &VNode = unsafe { std::mem::transmute(node) };
+                self.push_all_nodes(node)
             }
 
             VNode::Fragment(_) | VNode::Component(_) => {
@@ -321,16 +319,7 @@ impl<'bump> DiffState<'bump> {
             }
 
             MountType::Replace { old } => {
-                // todo: a bug here where we remove a node that is alread being replaced
-                if let Some(old_id) = old.try_mounted_id() {
-                    self.mutations.replace_with(old_id, nodes_created as u32);
-                    self.remove_nodes(Some(old), false);
-                } else {
-                    if let Some(id) = self.find_first_element_id(old) {
-                        self.mutations.replace_with(id, nodes_created as u32);
-                    }
-                    self.remove_nodes(Some(old), false);
-                }
+                self.replace_node(old, nodes_created);
             }
 
             MountType::Append => {
@@ -386,8 +375,10 @@ impl<'bump> DiffState<'bump> {
 
     fn create_anchor_node(&mut self, anchor: &'bump VAnchor, node: &'bump VNode<'bump>) {
         let real_id = self.scopes.reserve_node(node);
+
         self.mutations.create_placeholder(real_id);
         anchor.dom_id.set(Some(real_id));
+
         self.stack.add_child_count(1);
     }
 
@@ -488,11 +479,13 @@ impl<'bump> DiffState<'bump> {
     }
 
     fn create_linked_node(&mut self, link: &'bump NodeLink) {
-        if let Some(cur_scope) = self.stack.current_scope() {
-            link.scope_id.set(Some(cur_scope));
-            let node: &'bump VNode<'static> = unsafe { &*link.node };
-            self.create_node(unsafe { std::mem::transmute(node) });
+        if link.scope_id.get().is_none() {
+            if let Some(cur_scope) = self.stack.current_scope() {
+                link.scope_id.set(Some(cur_scope));
+            }
         }
+        let node: &'bump VNode<'static> = unsafe { &*link.node };
+        self.create_node(unsafe { std::mem::transmute(node) });
     }
 
     // =================================
@@ -692,9 +685,16 @@ impl<'bump> DiffState<'bump> {
     }
 
     fn diff_linked_nodes(&mut self, old: &'bump NodeLink, new: &'bump NodeLink) {
-        todo!();
-        // new.dom_id.set(old.dom_id.get());
-        // self.attach_linked_node_to_scope( new);
+        if !std::ptr::eq(old.node, new.node) {
+            // if the ptrs are the same then theyr're the same
+            let old: &VNode = unsafe { std::mem::transmute(&*old.node) };
+            let new: &VNode = unsafe { std::mem::transmute(&*new.node) };
+            self.diff_node(old, new);
+        }
+
+        if new.scope_id.get().is_none() {
+            todo!("attach the link to the scope - when children are not created");
+        }
     }
 
     // =============================================
@@ -735,7 +735,14 @@ impl<'bump> DiffState<'bump> {
                     .create_children(new, MountType::Replace { old: &old[0] });
             }
             (_, [VNode::Anchor(_)]) => {
-                self.replace_and_create_many_with_one(old, &new[0]);
+                let new: &'bump VNode<'bump> = &new[0];
+                if let Some(first_old) = old.get(0) {
+                    self.remove_nodes(&old[1..], true);
+                    self.stack
+                        .create_node(new, MountType::Replace { old: first_old });
+                } else {
+                    self.stack.create_node(new, MountType::Append {});
+                }
             }
             _ => {
                 let new_is_keyed = new[0].key().is_some();
@@ -1032,7 +1039,14 @@ impl<'bump> DiffState<'bump> {
             log::debug!("old_key_to_old_index, {:#?}", old_key_to_old_index);
             log::debug!("new_index_to_old_index, {:#?}", new_index_to_old_index);
             log::debug!("shared_keys, {:#?}", shared_keys);
-            self.replace_and_create_many_with_many(old, new);
+
+            if let Some(first_old) = old.get(0) {
+                self.remove_nodes(&old[1..], true);
+                self.stack
+                    .create_children(new, MountType::Replace { old: first_old })
+            } else {
+                self.stack.create_children(new, MountType::Append {});
+            }
             return;
         }
 
@@ -1167,11 +1181,11 @@ impl<'bump> DiffState<'bump> {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    // let scope = self.scopes.get_scope(&scope_id).unwrap();
                     search_node = Some(self.scopes.root_node(&scope_id));
                 }
                 VNode::Linked(link) => {
-                    todo!("linked")
+                    let node = unsafe { std::mem::transmute(&*link.node) };
+                    search_node = Some(node);
                 }
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
@@ -1181,17 +1195,27 @@ impl<'bump> DiffState<'bump> {
         }
     }
 
-    fn replace_and_create_many_with_one(
-        &mut self,
-        old: &'bump [VNode<'bump>],
-        new: &'bump VNode<'bump>,
-    ) {
-        if let Some(first_old) = old.get(0) {
-            self.remove_nodes(&old[1..], true);
-            self.stack
-                .create_node(new, MountType::Replace { old: first_old });
-        } else {
-            self.stack.create_node(new, MountType::Append {});
+    fn replace_node(&mut self, old: &'bump VNode<'bump>, nodes_created: usize) {
+        match old {
+            VNode::Text(_) | VNode::Element(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
+                let id = old.try_mounted_id().expect(&format!("broke on {:?}", old));
+                self.mutations.replace_with(id, nodes_created as u32);
+            }
+
+            VNode::Fragment(f) => {
+                self.replace_node(&f.children[0], nodes_created);
+                self.remove_nodes(f.children.iter().skip(1), true);
+            }
+
+            VNode::Component(c) => {
+                let node = self.scopes.fin_head(&c.associated_scope.get().unwrap());
+                self.replace_node(node, nodes_created);
+            }
+
+            VNode::Linked(l) => {
+                let node: &'bump VNode<'bump> = unsafe { std::mem::transmute(&*l.node) };
+                self.replace_node(node, nodes_created);
+            }
         }
     }
 
@@ -1206,11 +1230,13 @@ impl<'bump> DiffState<'bump> {
         for node in nodes {
             match node {
                 VNode::Text(t) => {
-                    let id = t.dom_id.get().unwrap();
-                    self.scopes.collect_garbage(id);
+                    // this check exists because our null node will be removed but does not have an ID
+                    if let Some(id) = t.dom_id.get() {
+                        self.scopes.collect_garbage(id);
 
-                    if gen_muts {
-                        self.mutations.remove(id.as_u64());
+                        if gen_muts {
+                            self.mutations.remove(id.as_u64());
+                        }
                     }
                 }
                 VNode::Suspended(s) => {
@@ -1256,24 +1282,6 @@ impl<'bump> DiffState<'bump> {
                     self.scopes.try_remove(&scope_id).unwrap();
                 }
             }
-        }
-    }
-
-    /// Remove all the old nodes and replace them with newly created new nodes.
-    ///
-    /// The new nodes *will* be created - don't create them yourself!
-    fn replace_and_create_many_with_many(
-        &mut self,
-
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
-    ) {
-        if let Some(first_old) = old.get(0) {
-            self.remove_nodes(&old[1..], true);
-            self.stack
-                .create_children(new, MountType::Replace { old: first_old })
-        } else {
-            self.stack.create_children(new, MountType::Append {});
         }
     }
 

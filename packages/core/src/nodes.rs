@@ -172,6 +172,7 @@ impl<'src> VNode<'src> {
             VNode::Element(el) => el.dom_id.get(),
             VNode::Anchor(el) => el.dom_id.get(),
             VNode::Suspended(el) => el.dom_id.get(),
+
             VNode::Linked(_) => None,
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
