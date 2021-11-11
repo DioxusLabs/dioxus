@@ -8,7 +8,7 @@ fn main() {
     dioxus_desktop::launch(App, |c| c);
 }
 
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     cx.render(rsx!(
         div {
             "hello world!"

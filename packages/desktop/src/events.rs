@@ -4,7 +4,8 @@
 use std::sync::Arc;
 use std::{any::Any, rc::Rc};
 
-use dioxus_core::{events::on::MouseEvent, ElementId, EventPriority, ScopeId, UserEvent};
+use dioxus_core::{ElementId, EventPriority, ScopeId, UserEvent};
+use dioxus_html::on::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImEvent {
@@ -23,7 +24,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
         contents,
     } = ims.into_iter().next().unwrap();
 
-    let scope = ScopeId(scope as usize);
+    let scope_id = ScopeId(scope as usize);
     let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
 
     let name = event_name_from_typ(&event);
@@ -31,15 +32,14 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
 
     UserEvent {
         name,
-        event,
-        scope,
+        priority: EventPriority::Low,
+        scope_id,
         mounted_dom_id,
+        event,
     }
 }
 
 fn make_synthetic_event(name: &str, val: serde_json::Value) -> Box<dyn Any + Send> {
-    use dioxus_core::events::on::*;
-
     match name {
         "copy" | "cut" | "paste" => {
             //

@@ -13,7 +13,6 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 
 use cfg::DesktopConfig;
-use dioxus_core::scheduler::SchedulerMsg;
 use dioxus_core::*;
 use serde::{Deserialize, Serialize};
 
@@ -167,7 +166,7 @@ pub fn run<T: 'static + Send + Sync>(
                                 sender.unbounded_send(SchedulerMsg::UiEvent(event)).unwrap();
 
                                 if let Some(BridgeEvent::Update(edits)) = rx.blocking_recv() {
-                                    log::info!("bridge received message {:?}", edits);
+                                    log::info!("bridge received message");
                                     Some(RpcResponse::new_result(req.id.take(), Some(edits)))
                                 } else {
                                     log::info!("none received message");
@@ -277,7 +276,7 @@ pub(crate) fn launch_vdom_with_tokio<P: Send + 'static>(
 
         runtime.block_on(async move {
             let mut vir = VirtualDom::new_with_props_and_scheduler(root, props, sender, receiver);
-            let _ = vir.get_event_sender();
+            let _ = vir.get_scheduler_channel();
 
             let edits = vir.rebuild();
 
@@ -299,14 +298,13 @@ pub(crate) fn launch_vdom_with_tokio<P: Send + 'static>(
                 // todo: maybe we want to schedule ourselves in
                 // on average though, the virtualdom running natively is stupid fast
 
-                let mut muts = vir.run_with_deadline(|| false);
+                let mut muts = vir.work_with_deadline(|| false);
 
                 log::debug!("finished running with deadline");
 
                 let mut edits = vec![];
 
                 while let Some(edit) = muts.pop() {
-                    log::debug!("sending message on channel with edit {:?}", edit);
                     let edit_string = serde_json::to_value(Evt { edits: edit.edits })
                         .expect("serializing edits should never fail");
                     edits.push(edit_string);

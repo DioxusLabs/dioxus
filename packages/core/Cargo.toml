@@ -40,8 +40,6 @@ indexmap = "1.7.0"
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
-serde_repr = { version = "0.1.7", optional = true }
-
 [dev-dependencies]
 anyhow = "1.0.42"
 dioxus-html = { path = "../html" }
@@ -49,12 +47,13 @@ fern = { version = "0.6.0", features = ["colored"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
 simple_logger = "1.13.0"
 dioxus-core-macro = { path = "../core-macro", version = "0.1.2" }
+dioxus-hooks = { path = "../hooks" }
 # async-std = { version = "1.9.0", features = ["attributes"] }
 # criterion = "0.3.5"
 
 [features]
 default = []
-serialize = ["serde", "serde_repr"]
+serialize = ["serde"]
 debug_vdom = []
 
 [[bench]]

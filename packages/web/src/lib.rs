@@ -57,8 +57,8 @@ use std::rc::Rc;
 pub use crate::cfg::WebConfig;
 use crate::dom::load_document;
 use cache::intern_cached_strings;
-use dioxus::prelude::Properties;
-use dioxus::virtual_dom::VirtualDom;
+use dioxus::SchedulerMsg;
+use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
 use dioxus_core::prelude::FC;
 use futures_util::FutureExt;
@@ -66,7 +66,6 @@ use futures_util::FutureExt;
 mod cache;
 mod cfg;
 mod dom;
-mod events;
 mod nodeslab;
 mod ric_raf;
 
@@ -144,9 +143,10 @@ pub async fn run_with_props<T: 'static + Send>(root: FC<T>, root_props: T, cfg: 
 
     let root_el = load_document().get_element_by_id(&cfg.rootname).unwrap();
 
-    let tasks = dom.get_event_sender();
+    let tasks = dom.get_scheduler_channel();
 
-    let sender_callback = Rc::new(move |event| tasks.unbounded_send(event).unwrap());
+    let sender_callback: Rc<dyn Fn(SchedulerMsg)> =
+        Rc::new(move |event| tasks.unbounded_send(event).unwrap());
 
     let mut websys_dom = dom::WebsysDom::new(root_el, cfg, sender_callback);
 
@@ -170,13 +170,12 @@ pub async fn run_with_props<T: 'static + Send>(root: FC<T>, root_props: T, cfg: 
         let mut deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let mutations = dom.run_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
 
         // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;
 
         for mut edit in mutations {
-            // log::debug!("edits are {:#?}", edit);
             // actually apply our changes during the animation frame
             websys_dom.process_edits(&mut edit.edits);
         }

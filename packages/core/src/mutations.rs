@@ -3,21 +3,32 @@
 //! This module contains an internal API to generate these instructions.
 
 use crate::innerlude::*;
-use std::any::Any;
+use std::{any::Any, fmt::Debug};
 
-#[derive(Debug)]
 pub struct Mutations<'a> {
     pub edits: Vec<DomEdit<'a>>,
     pub noderefs: Vec<NodeRefMutation<'a>>,
+    pub effects: Vec<&'a dyn FnMut()>,
+}
+impl Debug for Mutations<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Mutations")
+            .field("edits", &self.edits)
+            .field("noderefs", &self.noderefs)
+            // .field("effects", &self.effects)
+            .finish()
+    }
 }
 
 use DomEdit::*;
 
 impl<'a> Mutations<'a> {
     pub(crate) fn new() -> Self {
-        let edits = Vec::new();
-        let noderefs = Vec::new();
-        Self { edits, noderefs }
+        Self {
+            edits: Vec::new(),
+            noderefs: Vec::new(),
+            effects: Vec::new(),
+        }
     }
 
     // Navigation

@@ -18,7 +18,7 @@ fn main() {
     });
 }
 
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     let file_manager = use_ref(cx, || Files::new());
     let files = file_manager.read();
 

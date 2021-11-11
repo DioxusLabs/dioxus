@@ -27,18 +27,18 @@ fn main() {
 
 use dioxus::prelude::*;
 
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     let p1 = use_state(cx, || 0);
     let p2 = use_state(cx, || 0);
 
     let (mut p1_async, mut p2_async) = (p1.for_async(), p2.for_async());
-    let (p1_handle, _) = use_task(cx, || async move {
+    let (p1_handle, _) = use_coroutine(cx, || async move {
         loop {
             *p1_async.get_mut() += 1;
             async_std::task::sleep(std::time::Duration::from_millis(75)).await;
         }
     });
-    let (p2_handle, _) = use_task(cx, || async move {
+    let (p2_handle, _) = use_coroutine(cx, || async move {
         loop {
             *p2_async.get_mut() += 1;
             async_std::task::sleep(std::time::Duration::from_millis(100)).await;

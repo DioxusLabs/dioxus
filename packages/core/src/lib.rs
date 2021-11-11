@@ -12,69 +12,39 @@ Navigating this crate:
 
 Some utilities
 */
-pub mod bumpframe;
-pub mod childiter;
-pub mod component;
-pub mod context;
-pub mod diff;
-pub mod diff_stack;
-pub mod events;
-pub mod heuristics;
-pub mod hooklist;
-pub mod hooks;
-pub mod lazynodes;
-pub mod mutations;
-pub mod nodes;
-pub mod resources;
-pub mod scheduler;
-pub mod scope;
-pub mod tasks;
-pub mod test_dom;
-pub mod threadsafe;
-pub mod util;
-pub mod virtual_dom;
-
-#[cfg(feature = "debug_vdom")]
-pub mod debug_dom;
+pub(crate) mod component;
+pub(crate) mod diff;
+pub(crate) mod lazynodes;
+pub(crate) mod mutations;
+pub(crate) mod nodes;
+pub(crate) mod scope;
+pub(crate) mod scopearena;
+pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
-    pub(crate) use crate::bumpframe::*;
-    pub(crate) use crate::childiter::*;
     pub use crate::component::*;
-    pub use crate::context::*;
-    pub(crate) use crate::diff::*;
-    pub use crate::diff_stack::*;
-    pub use crate::events::*;
-    pub use crate::heuristics::*;
-    pub(crate) use crate::hooklist::*;
-    pub use crate::hooks::*;
+    pub use crate::diff::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
-    pub(crate) use crate::resources::*;
-    pub use crate::scheduler::*;
     pub use crate::scope::*;
-    pub use crate::tasks::*;
-    pub use crate::test_dom::*;
-    pub use crate::threadsafe::*;
-    pub use crate::util::*;
+    pub use crate::scopearena::*;
     pub use crate::virtual_dom::*;
 
-    pub type Element<'a> = Option<VNode<'a>>;
-    pub type FC<P> = for<'a> fn(Scope<'a, P>) -> Element<'a>;
+    pub type Element = Option<NodeLink>;
+    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> Element;
 }
 
 pub use crate::innerlude::{
-    Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, LazyNodes, MountType,
-    Mutations, NodeFactory, Properties, SchedulerMsg, ScopeChildren, ScopeId, SuspendedContext,
-    TaskHandle, TestDom, ThreadsafeVirtualDom, UserEvent, VNode, VirtualDom, FC,
+    Attribute, Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, IntoVNode,
+    LazyNodes, Listener, MountType, Mutations, NodeFactory, Properties, SchedulerMsg, ScopeId,
+    UserEvent, VAnchor, VElement, VFragment, VNode, VSuspended, VirtualDom, FC,
 };
 
 pub mod prelude {
-    pub use crate::component::{fc_to_builder, Fragment, Properties, Scope};
-    pub use crate::context::Context;
-    pub use crate::hooks::*;
-    pub use crate::innerlude::{DioxusElement, Element, LazyNodes, NodeFactory, ScopeChildren, FC};
+    pub use crate::component::{fc_to_builder, Fragment, Properties};
+    pub use crate::innerlude::Context;
+    pub use crate::innerlude::{DioxusElement, Element, LazyNodes, NodeFactory, Scope, FC};
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
 }

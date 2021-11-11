@@ -19,7 +19,7 @@ h1   {color: blue;}
 p    {color: red;}
 "#;
 
-pub static Example: FC<()> = |(cx, props)| {
+pub static Example: FC<()> = |cx, props| {
     cx.render(rsx! {
         head { style { "{STYLE}" } }
         body {

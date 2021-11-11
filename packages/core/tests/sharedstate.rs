@@ -1,6 +1,6 @@
 #![allow(unused, non_upper_case_globals)]
 
-use dioxus::{prelude::*, DomEdit, Mutations, TestDom};
+use dioxus::{prelude::*, DomEdit, Mutations};
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
@@ -13,12 +13,12 @@ mod test_logging;
 fn shared_state_test() {
     struct MySharedState(&'static str);
 
-    static App: FC<()> = |(cx, props)| {
+    static App: FC<()> = |cx, props| {
         cx.provide_state(MySharedState("world!"));
         cx.render(rsx!(Child {}))
     };
 
-    static Child: FC<()> = |(cx, props)| {
+    static Child: FC<()> = |cx, props| {
         let shared = cx.consume_state::<MySharedState>()?;
         cx.render(rsx!("Hello, {shared.0}"))
     };

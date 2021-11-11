@@ -40,3 +40,19 @@ We have big goals for Dioxus. The final implementation must:
 - Be "live". Components should be able to be both server rendered and client rendered without needing frontend APIs.
 - Be modular. Components and hooks should be work anywhere without worrying about target platform.
 
+
+
+## Safety
+
+Dioxus deals with arenas, lifetimes, asynchronous tasks, custom allocators, pinning, and a lot more foundational low-level work that is very difficult to implement with 0 unsafe.
+
+If you don't want to use a crate that uses unsafe, then this crate is not for you.
+
+however, we are always interested in decreasing the scope of the core VirtualDom to make it easier to review.
+
+We'd also be happy to welcome PRs that can eliminate unsafe code while still upholding the numerous variants required to execute certain features.
+
+There's a few invariants that are very important:
+
+- References to `ScopeInner` and `Props` passed into components are *always* valid for as long as the component exists. Even if the scope backing is resized to fit more scopes, the scope has to stay the same place in memory.
+

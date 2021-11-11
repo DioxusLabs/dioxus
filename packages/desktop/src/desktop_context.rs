@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 
 use dioxus::prelude::Scope;
-use dioxus::ScopeChildren;
 use dioxus_core as dioxus;
 use dioxus_core::{Context, Element, LazyNodes, NodeFactory, Properties};
 use dioxus_core_macro::Props;
@@ -44,7 +43,7 @@ pub struct WebviewWindowProps<'a> {
     /// focuse me
     onfocused: &'a dyn FnMut(()),
 
-    children: ScopeChildren<'a>,
+    children: Element,
 }
 
 /// A handle to a
@@ -57,7 +56,7 @@ pub struct WebviewWindowProps<'a> {
 ///
 ///
 ///
-pub fn WebviewWindow<'a>((cx, props): Scope<'a, WebviewWindowProps>) -> Element<'a> {
+pub fn WebviewWindow(cx: Context, props: &WebviewWindowProps) -> Element {
     let dtcx = cx.consume_state::<RefCell<DesktopContext>>()?;
 
     cx.use_hook(
@@ -65,9 +64,6 @@ pub fn WebviewWindow<'a>((cx, props): Scope<'a, WebviewWindowProps>) -> Element<
             //
         },
         |state| {
-            //
-        },
-        |hook| {
             //
         },
     );
@@ -94,7 +90,7 @@ fn syntax_works() {
     use dioxus_hooks::*;
     use dioxus_html as dioxus_elements;
 
-    static App: FC<()> = |(cx, props)| {
+    static App: FC<()> = |cx, props| {
         cx.render(rsx! {
             // left window
             WebviewWindow {

@@ -27,89 +27,107 @@ pub struct LazyNodes<'a, 'b> {
     inner: StackNodeStorage<'a, 'b>,
 }
 
-type StackHeapSize = [usize; 0];
+type StackHeapSize = [usize; 16];
 
 enum StackNodeStorage<'a, 'b> {
     Stack(LazyStack),
-    Heap(Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b>),
+    Heap(Box<dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> + 'b>),
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
-    pub fn new<F>(val: F) -> Self
+    pub fn new<F>(_val: F) -> Self
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
     {
-        unsafe {
-            let mut ptr: *const _ = &val as &dyn FnOnce(NodeFactory<'a>) -> VNode<'a>;
+        // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
+        let mut slot = Some(_val);
 
-            assert_eq!(
-                ptr as *const u8, &val as *const _ as *const u8,
-                "MISUSE: Closure returned different pointer"
-            );
-            assert_eq!(
-                std::mem::size_of_val(&*ptr),
-                std::mem::size_of::<F>(),
-                "MISUSE: Closure returned a subset pointer"
-            );
-            let words = ptr_as_slice(&mut ptr);
-            assert!(
-                words[0] == &val as *const _ as usize,
-                "BUG: Pointer layout is not (data_ptr, info...)"
-            );
+        let val = move |fac: Option<NodeFactory<'a>>| {
+            let inner = slot.take().unwrap();
+            fac.map(inner)
+        };
 
-            // - Ensure that Self is aligned same as data requires
-            assert!(
-                std::mem::align_of::<F>() <= std::mem::align_of::<Self>(),
-                "TODO: Enforce alignment >{} (requires {})",
-                std::mem::align_of::<Self>(),
-                std::mem::align_of::<F>()
-            );
+        unsafe { LazyNodes::new_inner(val) }
+    }
 
-            let info = &words[1..];
-            let data = words[0] as *mut ();
-            let size = mem::size_of::<F>();
+    unsafe fn new_inner<F>(val: F) -> Self
+    where
+        F: FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> + 'b,
+    {
+        let mut ptr: *const _ = &val as &dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>>;
 
-            if info.len() * mem::size_of::<usize>() + size > mem::size_of::<StackHeapSize>() {
-                log::debug!("lazy nodes was too large to fit into stack. falling back to heap");
+        assert_eq!(
+            ptr as *const u8, &val as *const _ as *const u8,
+            "MISUSE: Closure returned different pointer"
+        );
+        assert_eq!(
+            std::mem::size_of_val(&*ptr),
+            std::mem::size_of::<F>(),
+            "MISUSE: Closure returned a subset pointer"
+        );
 
-                Self {
-                    inner: StackNodeStorage::Heap(Box::new(val)),
+        let words = ptr_as_slice(&mut ptr);
+        assert!(
+            words[0] == &val as *const _ as usize,
+            "BUG: Pointer layout is not (data_ptr, info...)"
+        );
+
+        // - Ensure that Self is aligned same as data requires
+        assert!(
+            std::mem::align_of::<F>() <= std::mem::align_of::<Self>(),
+            "TODO: Enforce alignment >{} (requires {})",
+            std::mem::align_of::<Self>(),
+            std::mem::align_of::<F>()
+        );
+
+        let info = &words[1..];
+        let data = words[0] as *mut ();
+        let size = mem::size_of::<F>();
+
+        let stored_size = info.len() * mem::size_of::<usize>() + size;
+        let max_size = mem::size_of::<StackHeapSize>();
+
+        if stored_size > max_size {
+            Self {
+                inner: StackNodeStorage::Heap(Box::new(val)),
+            }
+        } else {
+            let mut buf: StackHeapSize = StackHeapSize::default();
+
+            assert!(info.len() + round_to_words(size) <= buf.as_ref().len());
+
+            // Place pointer information at the end of the region
+            // - Allows the data to be at the start for alignment purposes
+            {
+                let info_ofs = buf.as_ref().len() - info.len();
+                let info_dst = &mut buf.as_mut()[info_ofs..];
+                for (d, v) in Iterator::zip(info_dst.iter_mut(), info.iter()) {
+                    *d = *v;
                 }
-            } else {
-                log::debug!("lazy nodes fits on stack!");
-                let mut buf: StackHeapSize = StackHeapSize::default();
+            }
 
-                assert!(info.len() + round_to_words(size) <= buf.as_ref().len());
+            let src_ptr = data as *const u8;
+            let dataptr = buf.as_mut()[..].as_mut_ptr() as *mut u8;
+            for i in 0..size {
+                *dataptr.add(i) = *src_ptr.add(i);
+            }
 
-                // Place pointer information at the end of the region
-                // - Allows the data to be at the start for alignment purposes
-                {
-                    let info_ofs = buf.as_ref().len() - info.len();
-                    let info_dst = &mut buf.as_mut()[info_ofs..];
-                    for (d, v) in Iterator::zip(info_dst.iter_mut(), info.iter()) {
-                        *d = *v;
-                    }
-                }
+            std::mem::forget(val);
 
-                let src_ptr = data as *const u8;
-                let dataptr = buf.as_mut()[..].as_mut_ptr() as *mut u8;
-                for i in 0..size {
-                    *dataptr.add(i) = *src_ptr.add(i);
-                }
-
-                std::mem::forget(val);
-
-                Self {
-                    inner: StackNodeStorage::Stack(LazyStack { _align: [], buf }),
-                }
+            Self {
+                inner: StackNodeStorage::Stack(LazyStack {
+                    _align: [],
+                    buf,
+                    dropped: false,
+                }),
             }
         }
     }
 
     pub fn call(self, f: NodeFactory<'a>) -> VNode<'a> {
         match self.inner {
-            StackNodeStorage::Heap(lazy) => lazy(f),
-            StackNodeStorage::Stack(stack) => stack.call(f),
+            StackNodeStorage::Heap(mut lazy) => lazy(Some(f)).unwrap(),
+            StackNodeStorage::Stack(mut stack) => stack.call(f),
         }
     }
 }
@@ -117,34 +135,51 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
 struct LazyStack {
     _align: [u64; 0],
     buf: StackHeapSize,
+    dropped: bool,
 }
 
 impl LazyStack {
-    unsafe fn create_boxed<'a>(&mut self) -> Box<dyn FnOnce(NodeFactory<'a>) -> VNode<'a>> {
+    fn call<'a>(&mut self, f: NodeFactory<'a>) -> VNode<'a> {
         let LazyStack { buf, .. } = self;
         let data = buf.as_ref();
 
-        let info_size = mem::size_of::<*mut dyn FnOnce(NodeFactory<'a>) -> VNode<'a>>()
-            / mem::size_of::<usize>()
-            - 1;
+        let info_size =
+            mem::size_of::<*mut dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>>>()
+                / mem::size_of::<usize>()
+                - 1;
 
         let info_ofs = data.len() - info_size;
 
-        let g: *mut dyn FnOnce(NodeFactory<'a>) -> VNode<'a> =
-            make_fat_ptr(data[..].as_ptr() as usize, &data[info_ofs..]);
+        let g: *mut dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> =
+            unsafe { make_fat_ptr(data[..].as_ptr() as usize, &data[info_ofs..]) };
 
-        Box::from_raw(g)
-    }
+        self.dropped = true;
 
-    fn call(mut self, f: NodeFactory) -> VNode {
-        let boxed = unsafe { self.create_boxed() };
-        boxed(f)
+        let clos = unsafe { &mut *g };
+        clos(Some(f)).unwrap()
     }
 }
 impl Drop for LazyStack {
     fn drop(&mut self) {
-        let boxed = unsafe { self.create_boxed() };
-        mem::drop(boxed);
+        if !self.dropped {
+            let LazyStack { buf, .. } = self;
+            let data = buf.as_ref();
+
+            let info_size = mem::size_of::<
+                *mut dyn FnMut(Option<NodeFactory<'_>>) -> Option<VNode<'_>>,
+            >() / mem::size_of::<usize>()
+                - 1;
+
+            let info_ofs = data.len() - info_size;
+
+            let g: *mut dyn FnMut(Option<NodeFactory<'_>>) -> Option<VNode<'_>> =
+                unsafe { make_fat_ptr(data[..].as_ptr() as usize, &data[info_ofs..]) };
+
+            self.dropped = true;
+
+            let clos = unsafe { &mut *g };
+            clos(None);
+        }
     }
 }
 
@@ -177,7 +212,7 @@ fn round_to_words(len: usize) -> usize {
 fn it_works() {
     let bump = bumpalo::Bump::new();
 
-    simple_logger::init();
+    simple_logger::init().unwrap();
 
     let factory = NodeFactory { bump: &bump };
 
@@ -190,4 +225,50 @@ fn it_works() {
     let g = caller.call(factory);
 
     dbg!(g);
+}
+
+#[test]
+fn it_drops() {
+    use std::rc::Rc;
+    let bump = bumpalo::Bump::new();
+
+    simple_logger::init().unwrap();
+
+    // let factory = NodeFactory { scope: &bump };
+
+    struct DropInner {
+        id: i32,
+    }
+    impl Drop for DropInner {
+        fn drop(&mut self) {
+            log::debug!("dropping inner");
+        }
+    }
+    let val = Rc::new(10);
+
+    {
+        let it = (0..10)
+            .map(|i| {
+                let val = val.clone();
+
+                NodeFactory::annotate_lazy(move |f| {
+                    log::debug!("hell closure");
+                    let inner = DropInner { id: i };
+                    f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let caller = NodeFactory::annotate_lazy(|f| {
+            log::debug!("main closure");
+            f.fragment_from_iter(it)
+        })
+        .unwrap();
+    }
+
+    // let nodes = caller.call(factory);
+
+    // dbg!(nodes);
+
+    dbg!(Rc::strong_count(&val));
 }

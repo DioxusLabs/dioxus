@@ -16,7 +16,6 @@ pub fn use_ref<T: 'static>(cx: Context, f: impl FnOnce() -> T) -> UseRef<T> {
             inner.update_scheuled.set(false);
             UseRef { inner }
         },
-        |_| {},
     )
 }
 

@@ -49,7 +49,7 @@ const NONE_ELEMENT: Option<()> = None;
 use baller::Baller;
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |(cx, props)| {
+pub static Example: FC<()> = |cx, props| {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
@@ -102,12 +102,9 @@ pub static Example: FC<()> = |(cx, props)| {
             }}
 
             // Matching
-            // Matching will throw a Rust error about "no two closures are the same type"
-            // To fix this, call "render" method or use the "in" syntax to produce VNodes.
-            // There's nothing we can do about it, sorry :/ (unless you want *really* unhygienic macros)
             {match true {
-                true => rsx!(cx, h1 {"Top text"}),
-                false => cx.render(rsx!( h1 {"Bottom text"}))
+                true => rsx!( h1 {"Top text"}),
+                false => rsx!( h1 {"Bottom text"})
             }}
 
             // Conditional rendering
@@ -174,9 +171,16 @@ pub static Example: FC<()> = |(cx, props)| {
 
             // Can take children too!
             Taller { a: "asd", div {"hello world!"} }
+
+            // helper functions
+            {helper(cx, "hello world!")}
         }
     })
 };
+
+fn helper(cx: Context, text: &str) -> Element {
+    rsx!(cx, p { "{text}" })
+}
 
 mod baller {
     use super::*;
