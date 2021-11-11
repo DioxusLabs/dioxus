@@ -1155,8 +1155,9 @@ impl<'bump> DiffState<'bump> {
                 VNode::Element(t) => break t.dom_id.get(),
                 VNode::Suspended(t) => break t.dom_id.get(),
                 VNode::Anchor(t) => break t.dom_id.get(),
-                VNode::Linked(_) => {
-                    todo!()
+                VNode::Linked(l) => {
+                    let node: &VNode = unsafe { std::mem::transmute(&*l.node) };
+                    self.find_last_element(node);
                 }
                 VNode::Fragment(frag) => {
                     search_node = frag.children.last();
