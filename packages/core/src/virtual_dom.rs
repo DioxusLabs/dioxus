@@ -401,13 +401,13 @@ impl VirtualDom {
                         if let Some(element) = event.mounted_dom_id {
                             log::info!("Calling listener {:?}, {:?}", event.scope_id, element);
 
-                            let scope = self.scopes.get_scope(&event.scope_id).unwrap();
+                            if let Some(scope) = self.scopes.get_scope(&event.scope_id) {
+                                // TODO: bubble properly here
+                                scope.call_listener(event, element);
 
-                            // TODO: bubble properly here
-                            scope.call_listener(event, element);
-
-                            while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
-                                self.pending_messages.push_front(dirty_scope);
+                                while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
+                                    self.pending_messages.push_front(dirty_scope);
+                                }
                             }
                         } else {
                             log::debug!("User event without a targetted ElementId. Not currently supported.\nUnsure how to proceed. {:?}", event);

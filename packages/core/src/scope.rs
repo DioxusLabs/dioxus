@@ -499,7 +499,7 @@ impl Scope {
         }
     }
 
-    pub fn root_node(&self) -> &VNode {
+    pub fn root_node<'a>(&'a self) -> &'a VNode<'a> {
         let node = *self.wip_frame().nodes.borrow().get(0).unwrap();
         unsafe { std::mem::transmute(&*node) }
     }

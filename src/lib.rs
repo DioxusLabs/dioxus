@@ -185,6 +185,9 @@ pub use dioxus_mobile as mobile;
 #[cfg(feature = "desktop")]
 pub use dioxus_desktop as desktop;
 
+#[cfg(feature = "router")]
+pub use dioxus_router as router;
+
 pub mod debug {}
 
 pub mod prelude {

@@ -454,7 +454,6 @@ impl<'bump> DiffState<'bump> {
         // TODO:
         //  add noderefs to current noderef list Noderefs
         //  add effects to current effect list Effects
-
         let new_component = self.scopes.get_scope(&new_idx).unwrap();
 
         log::debug!(
@@ -633,17 +632,26 @@ impl<'bump> DiffState<'bump> {
     ) {
         let scope_addr = old.associated_scope.get().unwrap();
 
+        log::debug!(
+            "Diffing components. old_scope: {:?}, old_addr: {:?}, new_addr: {:?}",
+            scope_addr,
+            old.user_fc,
+            new.user_fc
+        );
+
         // Make sure we're dealing with the same component (by function pointer)
         if old.user_fc == new.user_fc {
-            log::debug!("Diffing component {:?} - {:?}", new.user_fc, scope_addr);
-            //
             self.stack.scope_stack.push(scope_addr);
 
             // Make sure the new component vnode is referencing the right scope id
             new.associated_scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
-            let scope = unsafe { self.scopes.get_scope_mut(&scope_addr).unwrap() };
+            let scope = unsafe {
+                self.scopes
+                    .get_scope_mut(&scope_addr)
+                    .expect(&format!("could not find {:?}", scope_addr))
+            };
             scope.caller = unsafe { std::mem::transmute(new.caller) };
 
             // React doesn't automatically memoize, but we do.
@@ -1164,7 +1172,6 @@ impl<'bump> DiffState<'bump> {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    // let scope = self.scopes.get_scope(&scope_id).unwrap();
                     search_node = Some(self.scopes.root_node(&scope_id));
                 }
             }
@@ -1198,7 +1205,13 @@ impl<'bump> DiffState<'bump> {
 
     fn replace_node(&mut self, old: &'bump VNode<'bump>, nodes_created: usize) {
         match old {
-            VNode::Text(_) | VNode::Element(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
+            VNode::Element(el) => {
+                let id = old.try_mounted_id().expect(&format!("broke on {:?}", old));
+                self.mutations.replace_with(id, nodes_created as u32);
+                self.remove_nodes(el.children, false);
+            }
+
+            VNode::Text(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
                 let id = old.try_mounted_id().expect(&format!("broke on {:?}", old));
                 self.mutations.replace_with(id, nodes_created as u32);
             }
@@ -1211,6 +1224,11 @@ impl<'bump> DiffState<'bump> {
             VNode::Component(c) => {
                 let node = self.scopes.fin_head(&c.associated_scope.get().unwrap());
                 self.replace_node(node, nodes_created);
+
+                let scope_id = c.associated_scope.get().unwrap();
+                println!("replacing c {:?} ", scope_id);
+                log::debug!("Destroying scope {:?}", scope_id);
+                self.scopes.try_remove(&scope_id).unwrap();
             }
 
             VNode::Linked(l) => {
@@ -1276,14 +1294,18 @@ impl<'bump> DiffState<'bump> {
                 }
 
                 VNode::Component(c) => {
-                    let scope_id = c.associated_scope.get().unwrap();
-                    let root = self.scopes.root_node(&scope_id);
-                    self.remove_nodes(Some(root), gen_muts);
-                    log::debug!("Destroying scope {:?}", scope_id);
-                    self.scopes.try_remove(&scope_id).unwrap();
+                    self.destroy_vomponent(c, gen_muts);
                 }
             }
         }
+    }
+
+    fn destroy_vomponent(&mut self, vc: &VComponent, gen_muts: bool) {
+        let scope_id = vc.associated_scope.get().unwrap();
+        let root = self.scopes.root_node(&scope_id);
+        self.remove_nodes(Some(root), gen_muts);
+        log::debug!("Destroying scope {:?}", scope_id);
+        self.scopes.try_remove(&scope_id).unwrap();
     }
 
     /// Adds a listener closure to a scope during diff.

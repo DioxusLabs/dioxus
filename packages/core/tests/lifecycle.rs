@@ -220,3 +220,96 @@ fn components_generate() {
         ]
     );
 }
+
+#[test]
+fn component_swap() {
+    // simple_logger::init();
+    static App: FC<()> = |cx, _| {
+        let mut render_phase = use_state(cx, || 0);
+        render_phase += 1;
+
+        cx.render(match *render_phase {
+            0 => rsx!(
+                div {
+                    NavBar {}
+                    Dashboard {}
+                }
+            ),
+            1 => rsx!(
+                div {
+                    NavBar {}
+                    Results {}
+                }
+            ),
+            2 => rsx!(
+                div {
+                    NavBar {}
+                    Dashboard {}
+                }
+            ),
+            3 => rsx!(
+                div {
+                    NavBar {}
+                    Results {}
+                }
+            ),
+            4 => rsx!(
+                div {
+                    NavBar {}
+                    Dashboard {}
+                }
+            ),
+            _ => rsx!("blah"),
+        })
+    };
+
+    static NavBar: FC<()> = |cx, _| {
+        println!("running navbar");
+        cx.render(rsx! {
+            h1 {
+                "NavBar"
+                {(0..3).map(|f| rsx!(NavLink {}))}
+            }
+        })
+    };
+
+    static NavLink: FC<()> = |cx, _| {
+        println!("running navlink");
+        cx.render(rsx! {
+            h1 {
+                "NavLink"
+            }
+        })
+    };
+
+    static Dashboard: FC<()> = |cx, _| {
+        println!("running dashboard");
+        cx.render(rsx! {
+            div {
+                "dashboard"
+            }
+        })
+    };
+
+    static Results: FC<()> = |cx, _| {
+        println!("running results");
+        cx.render(rsx! {
+            div {
+                "results"
+            }
+        })
+    };
+
+    let mut dom = VirtualDom::new(App);
+    let edits = dom.rebuild();
+    dbg!(&edits);
+
+    let edits = dom.work_with_deadline(|| false);
+    dbg!(&edits);
+    let edits = dom.work_with_deadline(|| false);
+    dbg!(&edits);
+    let edits = dom.work_with_deadline(|| false);
+    dbg!(&edits);
+    let edits = dom.work_with_deadline(|| false);
+    dbg!(&edits);
+}

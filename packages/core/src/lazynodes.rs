@@ -27,7 +27,7 @@ pub struct LazyNodes<'a, 'b> {
     inner: StackNodeStorage<'a, 'b>,
 }
 
-type StackHeapSize = [usize; 8];
+type StackHeapSize = [usize; 16];
 
 enum StackNodeStorage<'a, 'b> {
     Stack(LazyStack),
@@ -88,21 +88,10 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         let max_size = mem::size_of::<StackHeapSize>();
 
         if stored_size > max_size {
-            log::debug!(
-                    "lazy nodes was too large to fit into stack. falling back to heap. max: {}, actual {:?}",
-                    max_size,
-                    stored_size
-                );
-
             Self {
                 inner: StackNodeStorage::Heap(Box::new(val)),
             }
         } else {
-            log::debug!(
-                "lazy nodes fits on stack! max: {}, actual: {:?}",
-                max_size,
-                stored_size
-            );
             let mut buf: StackHeapSize = StackHeapSize::default();
 
             assert!(info.len() + round_to_words(size) <= buf.as_ref().len());
