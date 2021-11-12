@@ -1,6 +1,6 @@
 use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
-use fxhash::FxHashMap;
+use fxhash::{FxHashMap, FxHashSet};
 use slab::Slab;
 use std::{
     borrow::Borrow,
@@ -22,8 +22,9 @@ pub struct Heuristic {
 // has an internal heuristics engine to pre-allocate arenas to the right size
 pub(crate) struct ScopeArena {
     bump: Bump,
+    pub pending_futures: FxHashSet<ScopeId>,
     scope_counter: Cell<usize>,
-    scopes: RefCell<FxHashMap<ScopeId, *mut Scope>>,
+    pub scopes: RefCell<FxHashMap<ScopeId, *mut Scope>>,
     pub heuristics: RefCell<FxHashMap<FcSlot, Heuristic>>,
     free_scopes: RefCell<Vec<*mut Scope>>,
     nodes: RefCell<Slab<*const VNode<'static>>>,
@@ -55,6 +56,7 @@ impl ScopeArena {
         Self {
             scope_counter: Cell::new(0),
             bump,
+            pending_futures: FxHashSet::default(),
             scopes: RefCell::new(FxHashMap::default()),
             heuristics: RefCell::new(FxHashMap::default()),
             free_scopes: RefCell::new(Vec::new()),
@@ -354,7 +356,7 @@ impl ScopeArena {
             debug_assert_eq!(scope.wip_frame().nodes.borrow().len(), 1);
 
             if !scope.items.borrow().tasks.is_empty() {
-                // self.
+                //
             }
 
             // make the "wip frame" contents the "finished frame"

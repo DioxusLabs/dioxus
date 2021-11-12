@@ -7,6 +7,7 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{Future, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
+use smallvec::SmallVec;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -116,8 +117,6 @@ pub struct VirtualDom {
 
     sender: UnboundedSender<SchedulerMsg>,
 
-    pending_futures: FxHashSet<ScopeId>,
-
     pending_messages: VecDeque<SchedulerMsg>,
 
     dirty_scopes: IndexSet<ScopeId>,
@@ -210,7 +209,6 @@ impl VirtualDom {
             receiver,
             _root_props: caller,
             pending_messages,
-            pending_futures: Default::default(),
             dirty_scopes,
             sender,
         }
@@ -266,45 +264,61 @@ impl VirtualDom {
         // todo: poll the events once even if there is work to do to prevent starvation
 
         // if there's no futures in the virtualdom, just wait for a scheduler message and put it into the queue to be processed
-        if self.pending_futures.is_empty() {
+        if self.scopes.pending_futures.is_empty() {
             self.pending_messages
                 .push_front(self.receiver.next().await.unwrap());
         } else {
             struct PollTasks<'a> {
-                pending_futures: &'a FxHashSet<ScopeId>,
-                scopes: &'a ScopeArena,
+                scopes: &'a mut ScopeArena,
             }
 
             impl<'a> Future for PollTasks<'a> {
                 type Output = ();
 
                 fn poll(
-                    self: Pin<&mut Self>,
+                    mut self: Pin<&mut Self>,
                     cx: &mut std::task::Context<'_>,
                 ) -> Poll<Self::Output> {
                     let mut all_pending = true;
 
+                    let mut unfinished_tasks: SmallVec<[_; 10]> = smallvec::smallvec![];
+                    let mut scopes_to_clear: SmallVec<[_; 10]> = smallvec::smallvec![];
+
                     // Poll every scope manually
-                    for fut in self.pending_futures.iter() {
+                    for fut in self.scopes.pending_futures.iter() {
                         let scope = self
                             .scopes
                             .get_scope(fut)
                             .expect("Scope should never be moved");
 
                         let mut items = scope.items.borrow_mut();
-                        for task in items.tasks.iter_mut() {
-                            let task = task.as_mut();
 
+                        while let Some(mut task) = items.tasks.pop() {
                             // todo: does this make sense?
                             // I don't usually write futures by hand
                             // I think the futures neeed to be pinned using bumpbox or something
                             // right now, they're bump allocated so this shouldn't matter anyway - they're not going to move
-                            let unpinned = unsafe { Pin::new_unchecked(task) };
+                            let task_mut = task.as_mut();
+                            let unpinned = unsafe { Pin::new_unchecked(task_mut) };
 
                             if unpinned.poll(cx).is_ready() {
                                 all_pending = false
+                            } else {
+                                unfinished_tasks.push(task);
                             }
                         }
+
+                        if unfinished_tasks.is_empty() {
+                            scopes_to_clear.push(*fut);
+                        }
+
+                        for task in unfinished_tasks.drain(..) {
+                            items.tasks.push(task);
+                        }
+                    }
+
+                    for scope in scopes_to_clear {
+                        self.scopes.pending_futures.remove(&scope);
                     }
 
                     // Resolve the future if any singular task is ready
@@ -320,8 +334,7 @@ impl VirtualDom {
 
             let scheduler_fut = self.receiver.next();
             let tasks_fut = PollTasks {
-                pending_futures: &self.pending_futures,
-                scopes: &self.scopes,
+                scopes: &mut self.scopes,
             };
 
             match select(tasks_fut, scheduler_fut).await {

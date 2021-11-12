@@ -40,7 +40,7 @@ impl<const A: bool> FragmentBuilder<A> {
 /// fn App(cx: Context, props: &()) -> Element {
 ///     cx.render(rsx!{
 ///         CustomCard {
-///             h1 {}
+///             h1 {}2
 ///             p {}
 ///         }
 ///     })
