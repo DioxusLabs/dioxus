@@ -5,6 +5,7 @@ use std::any::Any;
 
 pub mod on {
     use super::*;
+    use std::sync::Arc;
     macro_rules! event_directory {
         ( $(
             $( #[$attr:meta] )*
@@ -23,19 +24,19 @@ pub mod on {
                         c: NodeFactory<'a>,
                         mut callback: F,
                     ) -> Listener<'a>
-                        where F: FnMut($wrapper) + 'a
+                        where F: FnMut(&$wrapper) + 'a
                     {
                         let bump = &c.bump();
 
                         // we can't allocate unsized in bumpalo's box, so we need to craft the box manually
                         // safety: this is essentially the same as calling Box::new() but manually
                         // The box is attached to the lifetime of the bumpalo allocator
-                        let cb: &mut dyn FnMut(Box<dyn Any + Send>) = bump.alloc(move |evt: Box<dyn Any + Send>| {
-                            let event = evt.downcast::<$wrapper>().unwrap();
-                            callback(*event)
+                        let cb: &mut dyn FnMut(Arc<dyn Any + Send + Sync>) = bump.alloc(move |evt: Arc<dyn Any + Send + Sync>| {
+                            let event = evt.downcast_ref::<$wrapper>().unwrap();
+                            callback(event)
                         });
 
-                        let callback: BumpBox<dyn FnMut(Box<dyn Any + Send>) + 'a> = unsafe { BumpBox::from_raw(cb) };
+                        let callback: BumpBox<dyn FnMut(Arc<dyn Any + Send + Sync>) + 'a> = unsafe { BumpBox::from_raw(cb) };
 
                         // ie oncopy
                         let event_name = stringify!($name);

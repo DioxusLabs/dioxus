@@ -2,7 +2,10 @@ use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashMap;
 use slab::Slab;
-use std::cell::{Cell, RefCell};
+use std::{
+    borrow::Borrow,
+    cell::{Cell, RefCell},
+};
 
 use crate::innerlude::*;
 
@@ -358,6 +361,28 @@ impl ScopeArena {
             true
         } else {
             false
+        }
+    }
+
+    pub fn call_listener_with_bubbling(&self, event: UserEvent, element: ElementId) {
+        let nodes = self.nodes.borrow();
+        let mut cur_el = Some(element);
+
+        while let Some(id) = cur_el.take() {
+            if let Some(el) = nodes.get(id.0) {
+                let real_el = unsafe { &**el };
+                if let VNode::Element(real_el) = real_el {
+                    for listener in real_el.listeners.borrow().iter() {
+                        if listener.event == event.name {
+                            let mut cb = listener.callback.borrow_mut();
+                            if let Some(cb) = cb.as_mut() {
+                                (cb)(event.event.clone());
+                            }
+                        }
+                    }
+                    cur_el = real_el.parent_id.get();
+                }
+            }
         }
     }
 

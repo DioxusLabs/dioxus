@@ -12,6 +12,7 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
+    sync::Arc,
 };
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -366,7 +367,8 @@ pub struct Listener<'bump> {
     pub event: &'static str,
 
     /// The actual callback that the user specified
-    pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn Any + Send>) + 'bump>>>,
+    pub(crate) callback:
+        RefCell<Option<BumpBox<'bump, dyn FnMut(std::sync::Arc<dyn Any + Send + Sync>) + 'bump>>>,
 }
 
 /// Virtual Components for custom user-defined components
@@ -643,7 +645,7 @@ impl<'a> NodeFactory<'a> {
     pub fn listener(
         self,
         event: &'static str,
-        callback: BumpBox<'a, dyn FnMut(Box<dyn Any + Send>) + 'a>,
+        callback: BumpBox<'a, dyn FnMut(Arc<dyn Any + Send + Sync>) + 'a>,
     ) -> Listener<'a> {
         Listener {
             mounted_node: Cell::new(None),

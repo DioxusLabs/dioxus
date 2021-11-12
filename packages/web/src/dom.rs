@@ -9,7 +9,7 @@
 
 use dioxus_core::{DomEdit, ElementId, SchedulerMsg, ScopeId, UserEvent};
 use fxhash::FxHashMap;
-use std::{any::Any, fmt::Debug, rc::Rc};
+use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
@@ -92,7 +92,7 @@ impl WebsysDom {
     //                 .as_ref()
     //                 .unwrap()
     //                 .clone();
-    //             bla.set(Box::new(node)).unwrap();
+    //             bla.set(Arc::new(node)).unwrap();
     //         }
     //     }
     // }
@@ -286,14 +286,16 @@ impl WebsysDom {
         } else {
             let trigger = self.sender_callback.clone();
 
-            let handler = Closure::wrap(Box::new(move |event: &web_sys::Event| {
+            let c: Box<dyn FnMut(&Event)> = Box::new(move |event: &web_sys::Event| {
                 // "Result" cannot be received from JS
                 // Instead, we just build and immediately execute a closure that returns result
                 match decode_trigger(event) {
                     Ok(synthetic_event) => trigger.as_ref()(SchedulerMsg::UiEvent(synthetic_event)),
                     Err(e) => log::error!("Error decoding Dioxus event attribute. {:#?}", e),
                 };
-            }) as Box<dyn FnMut(&Event)>);
+            });
+
+            let handler = Closure::wrap(c);
 
             self.root
                 .add_event_listener_with_callback(event, (&handler).as_ref().unchecked_ref())
@@ -483,21 +485,21 @@ unsafe impl Sync for DioxusWebsysEvent {}
 
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
-fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send> {
+fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send + Sync> {
     use dioxus_html::on::*;
     use dioxus_html::KeyCode;
     // use dioxus_core::events::on::*;
     match event.type_().as_str() {
-        "copy" | "cut" | "paste" => Box::new(ClipboardEvent {}),
+        "copy" | "cut" | "paste" => Arc::new(ClipboardEvent {}),
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: &web_sys::CompositionEvent = event.dyn_ref().unwrap();
-            Box::new(CompositionEvent {
+            Arc::new(CompositionEvent {
                 data: evt.data().unwrap_or_default(),
             })
         }
         "keydown" | "keypress" | "keyup" => {
             let evt: &web_sys::KeyboardEvent = event.dyn_ref().unwrap();
-            Box::new(KeyboardEvent {
+            Arc::new(KeyboardEvent {
                 alt_key: evt.alt_key(),
                 char_code: evt.char_code(),
                 key: evt.key(),
@@ -513,7 +515,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send>
         }
         "focus" | "blur" => {
             //
-            Box::new(FocusEvent {})
+            Arc::new(FocusEvent {})
         }
         // "change" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
 
@@ -558,13 +560,13 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send>
                 })
                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-            Box::new(FormEvent { value })
+            Arc::new(FormEvent { value })
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             let evt: &web_sys::MouseEvent = event.dyn_ref().unwrap();
-            Box::new(MouseEvent {
+            Arc::new(MouseEvent {
                 alt_key: evt.alt_key(),
                 button: evt.button(),
                 buttons: evt.buttons(),
@@ -582,7 +584,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send>
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             let evt: &web_sys::PointerEvent = event.dyn_ref().unwrap();
-            Box::new(PointerEvent {
+            Arc::new(PointerEvent {
                 alt_key: evt.alt_key(),
                 button: evt.button(),
                 buttons: evt.buttons(),
@@ -608,11 +610,11 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send>
                 // get_modifier_state: evt.get_modifier_state(),
             })
         }
-        "select" => Box::new(SelectionEvent {}),
+        "select" => Arc::new(SelectionEvent {}),
 
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
             let evt: &web_sys::TouchEvent = event.dyn_ref().unwrap();
-            Box::new(TouchEvent {
+            Arc::new(TouchEvent {
                 alt_key: evt.alt_key(),
                 ctrl_key: evt.ctrl_key(),
                 meta_key: evt.meta_key(),
@@ -620,11 +622,11 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send>
             })
         }
 
-        "scroll" => Box::new(()),
+        "scroll" => Arc::new(()),
 
         "wheel" => {
             let evt: &web_sys::WheelEvent = event.dyn_ref().unwrap();
-            Box::new(WheelEvent {
+            Arc::new(WheelEvent {
                 delta_x: evt.delta_x(),
                 delta_y: evt.delta_y(),
                 delta_z: evt.delta_z(),
@@ -634,7 +636,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send>
 
         "animationstart" | "animationend" | "animationiteration" => {
             let evt: &web_sys::AnimationEvent = event.dyn_ref().unwrap();
-            Box::new(AnimationEvent {
+            Arc::new(AnimationEvent {
                 elapsed_time: evt.elapsed_time(),
                 animation_name: evt.animation_name(),
                 pseudo_element: evt.pseudo_element(),
@@ -643,7 +645,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send>
 
         "transitionend" => {
             let evt: &web_sys::TransitionEvent = event.dyn_ref().unwrap();
-            Box::new(TransitionEvent {
+            Arc::new(TransitionEvent {
                 elapsed_time: evt.elapsed_time(),
                 property_name: evt.property_name(),
                 pseudo_element: evt.pseudo_element(),
@@ -655,15 +657,15 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Box<dyn Any + Send>
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
             //
-            Box::new(MediaEvent {})
+            Arc::new(MediaEvent {})
         }
 
         "toggle" => {
             //
-            Box::new(ToggleEvent {})
+            Arc::new(ToggleEvent {})
         }
 
-        _ => Box::new(()),
+        _ => Arc::new(()),
     }
 }
 

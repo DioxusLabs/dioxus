@@ -449,30 +449,6 @@ impl Scope {
         self.generation.set(self.generation.get() + 1);
     }
 
-    /// A safe wrapper around calling listeners
-    pub(crate) fn call_listener(&self, event: UserEvent, element: ElementId) {
-        let listners = &mut self.items.borrow_mut().listeners;
-
-        let listener = listners.iter().find(|lis| {
-            let search = lis;
-            if search.event == event.name {
-                let search_id = search.mounted_node.get();
-                search_id.map(|f| f == element).unwrap_or(false)
-            } else {
-                false
-            }
-        });
-
-        if let Some(listener) = listener {
-            let mut cb = listener.callback.borrow_mut();
-            if let Some(cb) = cb.as_mut() {
-                (cb)(event.event);
-            }
-        } else {
-            log::warn!("An event was triggered but there was no listener to handle it");
-        }
-    }
-
     // General strategy here is to load up the appropriate suspended task and then run it.
     // Suspended nodes cannot be called repeatedly.
     pub(crate) fn call_suspended_node<'a>(&'a mut self, task_id: u64) {

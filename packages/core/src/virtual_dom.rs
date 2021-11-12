@@ -8,6 +8,8 @@ use futures_util::{Future, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use std::pin::Pin;
+use std::rc::Rc;
+use std::sync::Arc;
 use std::task::Poll;
 use std::{any::Any, collections::VecDeque};
 
@@ -402,9 +404,7 @@ impl VirtualDom {
                             log::info!("Calling listener {:?}, {:?}", event.scope_id, element);
 
                             if let Some(scope) = self.scopes.get_scope(&event.scope_id) {
-                                // TODO: bubble properly here
-                                scope.call_listener(event, element);
-
+                                self.scopes.call_listener_with_bubbling(event, element);
                                 while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
                                     self.pending_messages.push_front(dirty_scope);
                                 }
@@ -644,7 +644,7 @@ pub struct UserEvent {
     pub name: &'static str,
 
     /// Event Data
-    pub event: Box<dyn Any + Send>,
+    pub event: Arc<dyn Any + Send + Sync>,
 }
 
 /// Priority of Event Triggers.
