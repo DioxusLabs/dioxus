@@ -24,7 +24,7 @@ pub mod on {
                         c: NodeFactory<'a>,
                         mut callback: F,
                     ) -> Listener<'a>
-                        where F: FnMut(&$wrapper) + 'a
+                        where F: FnMut(Arc<$wrapper>) + 'a
                     {
                         let bump = &c.bump();
 
@@ -32,7 +32,7 @@ pub mod on {
                         // safety: this is essentially the same as calling Box::new() but manually
                         // The box is attached to the lifetime of the bumpalo allocator
                         let cb: &mut dyn FnMut(Arc<dyn Any + Send + Sync>) = bump.alloc(move |evt: Arc<dyn Any + Send + Sync>| {
-                            let event = evt.downcast_ref::<$wrapper>().unwrap();
+                            let event = evt.downcast::<$wrapper>().unwrap();
                             callback(event)
                         });
 

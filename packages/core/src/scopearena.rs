@@ -369,6 +369,7 @@ impl ScopeArena {
         let mut cur_el = Some(element);
 
         while let Some(id) = cur_el.take() {
+            log::debug!("checking element {:?} for listeners", id);
             if let Some(el) = nodes.get(id.0) {
                 let real_el = unsafe { &**el };
                 if let VNode::Element(real_el) = real_el {

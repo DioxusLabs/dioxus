@@ -567,6 +567,7 @@ impl<'bump> DiffState<'bump> {
             return;
         }
 
+        self.scopes.update_reservation(new_node, root);
         new.dom_id.set(Some(root));
 
         // todo: attributes currently rely on the element on top of the stack, but in theory, we only need the id of the
