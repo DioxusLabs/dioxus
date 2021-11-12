@@ -244,7 +244,8 @@ impl<'bump> DiffState<'bump> {
         let (old, new) = (self.scopes.wip_head(id), self.scopes.fin_head(id));
         self.stack.push(DiffInstruction::Diff { old, new });
         self.stack.scope_stack.push(*id);
-        self.stack.push_nodes_created(0);
+        let scope = self.scopes.get_scope(id).unwrap();
+        self.stack.element_stack.push(scope.container);
         self.work(|| false);
     }
 

@@ -77,25 +77,25 @@ fn events_generate() {
         [
             CreateElement {
                 tag: "div",
-                root: 0,
+                root: 1,
             },
             NewEventListener {
                 event_name: "click",
                 scope: ScopeId(0),
-                root: 0,
+                root: 1,
             },
             CreateElement {
                 tag: "div",
-                root: 1,
+                root: 2,
             },
             CreateTextNode {
                 text: "nested",
-                root: 2,
+                root: 3,
             },
             AppendChildren { many: 1 },
             CreateTextNode {
                 text: "Click me!",
-                root: 3,
+                root: 4,
             },
             AppendChildren { many: 2 },
             AppendChildren { many: 1 },
@@ -123,7 +123,6 @@ fn components_generate() {
     };
 
     static Child: FC<()> = |cx, _| {
-        println!("running child");
         cx.render(rsx! {
             h1 {}
         })
@@ -136,7 +135,7 @@ fn components_generate() {
         [
             CreateTextNode {
                 text: "Text0",
-                root: 0,
+                root: 1,
             },
             AppendChildren { many: 1 },
         ]
@@ -148,18 +147,6 @@ fn components_generate() {
         [
             CreateElement {
                 tag: "div",
-                root: 1,
-            },
-            ReplaceWith { root: 0, m: 1 },
-        ]
-    );
-
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
-    assert_eq!(
-        edits.edits,
-        [
-            CreateTextNode {
-                text: "Text2",
                 root: 2,
             },
             ReplaceWith { root: 1, m: 1 },
@@ -170,7 +157,10 @@ fn components_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement { tag: "h1", root: 3 },
+            CreateTextNode {
+                text: "Text2",
+                root: 3,
+            },
             ReplaceWith { root: 2, m: 1 },
         ]
     );
@@ -178,7 +168,16 @@ fn components_generate() {
     let edits = dom.hard_diff(&ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
-        [CreatePlaceholder { root: 4 }, ReplaceWith { root: 3, m: 1 },]
+        [
+            CreateElement { tag: "h1", root: 4 },
+            ReplaceWith { root: 3, m: 1 },
+        ]
+    );
+
+    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    assert_eq!(
+        edits.edits,
+        [CreatePlaceholder { root: 5 }, ReplaceWith { root: 4, m: 1 },]
     );
 
     let edits = dom.hard_diff(&ScopeId(0)).unwrap();
@@ -187,9 +186,9 @@ fn components_generate() {
         [
             CreateTextNode {
                 text: "text 3",
-                root: 5,
+                root: 6,
             },
-            ReplaceWith { root: 4, m: 1 },
+            ReplaceWith { root: 5, m: 1 },
         ]
     );
 
@@ -199,13 +198,13 @@ fn components_generate() {
         [
             CreateTextNode {
                 text: "text 0",
-                root: 6,
+                root: 7,
             },
             CreateTextNode {
                 text: "text 1",
-                root: 7,
+                root: 8,
             },
-            ReplaceWith { root: 5, m: 2 },
+            ReplaceWith { root: 6, m: 2 },
         ]
     );
 
@@ -213,9 +212,9 @@ fn components_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement { tag: "h1", root: 8 },
-            ReplaceWith { root: 6, m: 1 },
-            Remove { root: 7 },
+            CreateElement { tag: "h1", root: 9 },
+            ReplaceWith { root: 7, m: 1 },
+            Remove { root: 8 },
         ]
     );
 }

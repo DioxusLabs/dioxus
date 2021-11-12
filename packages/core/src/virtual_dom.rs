@@ -446,10 +446,10 @@ impl VirtualDom {
                             self.scopes.wip_head(&scopeid),
                             self.scopes.fin_head(&scopeid),
                         );
+                        diff_state.stack.push(DiffInstruction::Diff { new, old });
                         diff_state.stack.scope_stack.push(scopeid);
                         let scope = scopes.get_scope(&scopeid).unwrap();
                         diff_state.stack.element_stack.push(scope.container);
-                        diff_state.stack.push(DiffInstruction::Diff { new, old });
                     }
                 }
             }
@@ -576,6 +576,7 @@ impl VirtualDom {
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.stack.push(DiffInstruction::Diff { new, old });
+        machine.stack.element_stack.push(ElementId(0));
         machine.stack.scope_stack.push(self.base_scope);
         machine.work(|| false);
         machine.mutations
@@ -587,6 +588,7 @@ impl VirtualDom {
     pub fn create_vnodes<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
         let nodes = self.render_vnodes(left);
         let mut machine = DiffState::new(&self.scopes);
+        machine.stack.element_stack.push(ElementId(0));
         machine.stack.create_node(nodes, MountType::Append);
         machine.work(|| false);
         machine.mutations
@@ -604,11 +606,13 @@ impl VirtualDom {
 
         let mut create = DiffState::new(&self.scopes);
         create.stack.scope_stack.push(self.base_scope);
+        create.stack.element_stack.push(ElementId(0));
         create.stack.create_node(old, MountType::Append);
         create.work(|| false);
 
         let mut edit = DiffState::new(&self.scopes);
-        create.stack.scope_stack.push(self.base_scope);
+        edit.stack.scope_stack.push(self.base_scope);
+        edit.stack.element_stack.push(ElementId(0));
         edit.stack.push(DiffInstruction::Diff { old, new });
         edit.work(&mut || false);
 

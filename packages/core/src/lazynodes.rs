@@ -219,9 +219,6 @@ fn round_to_words(len: usize) -> usize {
 fn it_works() {
     let bump = bumpalo::Bump::new();
 
-    #[cfg(not(miri))]
-    simple_logger::init().unwrap();
-
     let factory = NodeFactory { bump: &bump };
 
     let caller = NodeFactory::annotate_lazy(|f| {
@@ -239,9 +236,6 @@ fn it_works() {
 fn it_drops() {
     use std::rc::Rc;
     let bump = bumpalo::Bump::new();
-
-    #[cfg(not(miri))]
-    simple_logger::init().unwrap();
 
     let factory = NodeFactory { bump: &bump };
 
