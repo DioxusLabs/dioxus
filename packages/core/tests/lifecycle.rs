@@ -18,8 +18,6 @@ type Shared<T> = Arc<Mutex<T>>;
 
 #[test]
 fn manual_diffing() {
-    test_logging::set_up_logging(IS_LOGGING_ENABLED);
-
     struct AppProps {
         value: Shared<&'static str>,
     }
@@ -73,9 +71,9 @@ fn events_generate() {
     let mut channel = dom.get_scheduler_channel();
     assert!(dom.has_any_work());
 
-    let edits = dom.work_with_deadline(|| false);
+    let edits = dom.rebuild();
     assert_eq!(
-        edits[0].edits,
+        edits.edits,
         [
             CreateElement {
                 tag: "div",
@@ -100,6 +98,7 @@ fn events_generate() {
                 root: 3,
             },
             AppendChildren { many: 2 },
+            AppendChildren { many: 1 },
         ]
     )
 }

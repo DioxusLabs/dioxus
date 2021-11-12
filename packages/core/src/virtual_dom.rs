@@ -18,7 +18,7 @@ use std::{any::Any, collections::VecDeque};
 ///
 /// Components are defined as simple functions that take [`Context`] and a [`Properties`] type and return an [`Element`].  
 ///
-/// ```rust
+/// ```rust, ignore
 /// #[derive(Props, PartialEq)]
 /// struct AppProps {
 ///     title: String
@@ -33,7 +33,7 @@ use std::{any::Any, collections::VecDeque};
 ///
 /// Components may be composed to make complex apps.
 ///
-/// ```rust
+/// ```rust, ignore
 /// fn App(cx: Context, props: &AppProps) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
@@ -46,14 +46,14 @@ use std::{any::Any, collections::VecDeque};
 /// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] to get the list of edits required to
 /// draw the UI.
 ///
-/// ```rust
+/// ```rust, ignore
 /// let mut vdom = VirtualDom::new(App);
 /// let edits = vdom.rebuild();
 /// ```
 ///
 /// To inject UserEvents into the VirtualDom, call [`VirtualDom::get_scheduler_channel`] to get access to the scheduler.
 ///
-/// ```rust
+/// ```rust, ignore
 /// let channel = vdom.get_scheduler_channel();
 /// channel.send_unbounded(SchedulerMsg::UserEvent(UserEvent {
 ///     // ...
@@ -62,7 +62,7 @@ use std::{any::Any, collections::VecDeque};
 ///
 /// While waiting for UserEvents to occur, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
 ///
-/// ```rust
+/// ```rust, ignore
 /// vdom.wait_for_work().await;
 /// ```
 ///
@@ -70,7 +70,7 @@ use std::{any::Any, collections::VecDeque};
 /// current UI trees. This will return a [`Mutations`] object that contains Edits, Effects, and NodeRefs that need to be
 /// handled by the renderer.
 ///
-/// ```rust
+/// ```rust, ignore
 /// let mutations = vdom.work_with_deadline(|| false);
 /// for edit in mutations {
 ///     apply(edit);
@@ -81,7 +81,7 @@ use std::{any::Any, collections::VecDeque};
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 ///
-/// ```rust
+/// ```rust, ignore
 /// fn App(cx: Context, props: &()) -> Element {
 ///     cx.render(rsx!{
 ///         div { "Hello World" }
@@ -106,7 +106,7 @@ use std::{any::Any, collections::VecDeque};
 pub struct VirtualDom {
     base_scope: ScopeId,
 
-    _root_caller: *mut dyn Fn(&Scope) -> Element,
+    _root_props: Box<dyn Any>,
 
     scopes: Box<ScopeArena>,
 
@@ -134,7 +134,7 @@ impl VirtualDom {
     ///
     ///
     /// # Example
-    /// ```
+    /// ```rust, ignore
     /// fn Example(cx: Context, props: &()) -> Element  {
     ///     cx.render(rsx!( div { "hello world" } ))
     /// }
@@ -158,7 +158,7 @@ impl VirtualDom {
     ///
     ///
     /// # Example
-    /// ```
+    /// ```rust, ignore
     /// #[derive(PartialEq, Props)]
     /// struct SomeProps {
     ///     name: &'static str
@@ -173,7 +173,7 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDOM is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
@@ -194,9 +194,9 @@ impl VirtualDom {
     ) -> Self {
         let scopes = ScopeArena::new(sender.clone());
 
-        let caller = Box::new(move |scp: &Scope| -> Element { root(scp, &root_props) });
-        let caller_ref: *mut dyn Fn(&Scope) -> Element = Box::into_raw(caller);
-        let base_scope = scopes.new_with_key(root as _, caller_ref, None, 0, 0);
+        let mut caller = Box::new(move |scp: &Scope| -> Element { root(scp, &root_props) });
+        let caller_ref: *mut dyn Fn(&Scope) -> Element = caller.as_mut() as *mut _;
+        let base_scope = scopes.new_with_key(root as _, caller_ref, None, ElementId(0), 0, 0);
 
         let pending_messages = VecDeque::new();
         let mut dirty_scopes = IndexSet::new();
@@ -206,8 +206,7 @@ impl VirtualDom {
             scopes: Box::new(scopes),
             base_scope,
             receiver,
-            // todo: clean this up manually?
-            _root_caller: caller_ref,
+            _root_props: caller,
             pending_messages,
             pending_futures: Default::default(),
             dirty_scopes,
@@ -239,7 +238,7 @@ impl VirtualDom {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     ///
     ///
     /// ```
@@ -251,7 +250,7 @@ impl VirtualDom {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     ///
     ///
     /// ```
@@ -359,7 +358,7 @@ impl VirtualDom {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```rust, ignore
     /// fn App(cx: Context, props: &()) -> Element {
     ///     cx.render(rsx!( div {"hello"} ))
     /// }
@@ -394,6 +393,7 @@ impl VirtualDom {
 
             while let Some(msg) = self.pending_messages.pop_back() {
                 match msg {
+                    // TODO: Suspsense
                     SchedulerMsg::Immediate(id) => {
                         self.dirty_scopes.insert(id);
                     }
@@ -447,6 +447,8 @@ impl VirtualDom {
                             self.scopes.fin_head(&scopeid),
                         );
                         diff_state.stack.scope_stack.push(scopeid);
+                        let scope = scopes.get_scope(&scopeid).unwrap();
+                        diff_state.stack.element_stack.push(scope.container);
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                     }
                 }
@@ -458,7 +460,6 @@ impl VirtualDom {
                 let DiffState {
                     mutations,
                     seen_scopes,
-                    stack,
                     ..
                 } = diff_state;
 
@@ -490,7 +491,7 @@ impl VirtualDom {
     /// All state stored in components will be completely wiped away.
     ///
     /// # Example
-    /// ```
+    /// ```rust, ignore
     /// static App: FC<()> = |cx, props| cx.render(rsx!{ "hello world" });
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();
@@ -506,6 +507,7 @@ impl VirtualDom {
                 .stack
                 .create_node(self.scopes.fin_head(&scope_id), MountType::Append);
 
+            diff_state.stack.element_stack.push(ElementId(0));
             diff_state.stack.scope_stack.push(scope_id);
 
             diff_state.work(|| false);
@@ -523,7 +525,7 @@ impl VirtualDom {
     ///
     ///
     /// # Example
-    /// ```rust
+    /// ```rust, ignore
     /// #[derive(PartialEq, Props)]
     /// struct AppProps {
     ///     value: Shared<&'static str>,

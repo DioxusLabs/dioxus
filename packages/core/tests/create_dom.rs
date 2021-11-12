@@ -37,15 +37,15 @@ fn test_original_diff() {
         mutations.edits,
         [
             CreateElement {
-                root: 0,
-                tag: "div"
-            },
-            CreateElement {
                 root: 1,
                 tag: "div"
             },
-            CreateTextNode {
+            CreateElement {
                 root: 2,
+                tag: "div"
+            },
+            CreateTextNode {
+                root: 3,
                 text: "Hello, world!"
             },
             AppendChildren { many: 1 },
@@ -82,31 +82,31 @@ fn create() {
         mutations.edits,
         [
             CreateElement {
-                root: 0,
-                tag: "div"
-            },
-            CreateElement {
                 root: 1,
                 tag: "div"
             },
-            CreateTextNode {
-                root: 2,
-                text: "Hello, world!"
-            },
             CreateElement {
-                root: 3,
+                root: 2,
                 tag: "div"
+            },
+            CreateTextNode {
+                root: 3,
+                text: "Hello, world!"
             },
             CreateElement {
                 root: 4,
                 tag: "div"
             },
-            CreateTextNode {
+            CreateElement {
                 root: 5,
-                text: "hello"
+                tag: "div"
             },
             CreateTextNode {
                 root: 6,
+                text: "hello"
+            },
+            CreateTextNode {
+                root: 7,
                 text: "world"
             },
             AppendChildren { many: 2 },
@@ -136,29 +136,29 @@ fn create_list() {
         mutations.edits,
         [
             CreateElement {
-                root: 0,
-                tag: "div"
-            },
-            CreateTextNode {
                 root: 1,
-                text: "hello"
+                tag: "div"
             },
-            AppendChildren { many: 1 },
-            CreateElement {
+            CreateTextNode {
                 root: 2,
-                tag: "div"
-            },
-            CreateTextNode {
-                root: 3,
                 text: "hello"
             },
             AppendChildren { many: 1 },
             CreateElement {
-                root: 4,
+                root: 3,
                 tag: "div"
             },
             CreateTextNode {
+                root: 4,
+                text: "hello"
+            },
+            AppendChildren { many: 1 },
+            CreateElement {
                 root: 5,
+                tag: "div"
+            },
+            CreateTextNode {
+                root: 6,
                 text: "hello"
             },
             AppendChildren { many: 1 },
@@ -186,10 +186,6 @@ fn create_simple() {
         mutations.edits,
         [
             CreateElement {
-                root: 0,
-                tag: "div"
-            },
-            CreateElement {
                 root: 1,
                 tag: "div"
             },
@@ -199,6 +195,10 @@ fn create_simple() {
             },
             CreateElement {
                 root: 3,
+                tag: "div"
+            },
+            CreateElement {
+                root: 4,
                 tag: "div"
             },
             AppendChildren { many: 4 },
@@ -234,39 +234,39 @@ fn create_components() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { root: 0, tag: "h1" },
+            CreateElement { root: 1, tag: "h1" },
             CreateElement {
-                root: 1,
+                root: 2,
                 tag: "div"
             },
             CreateTextNode {
-                root: 2,
+                root: 3,
                 text: "abc1"
             },
             AppendChildren { many: 1 },
-            CreateElement { root: 3, tag: "p" },
-            CreateElement { root: 4, tag: "h1" },
+            CreateElement { root: 4, tag: "p" },
+            CreateElement { root: 5, tag: "h1" },
             CreateElement {
-                root: 5,
+                root: 6,
                 tag: "div"
             },
             CreateTextNode {
-                root: 6,
+                root: 7,
                 text: "abc2"
             },
             AppendChildren { many: 1 },
-            CreateElement { root: 7, tag: "p" },
-            CreateElement { root: 8, tag: "h1" },
+            CreateElement { root: 8, tag: "p" },
+            CreateElement { root: 9, tag: "h1" },
             CreateElement {
-                root: 9,
+                root: 10,
                 tag: "div"
             },
             CreateTextNode {
-                root: 10,
+                root: 11,
                 text: "abc3"
             },
             AppendChildren { many: 1 },
-            CreateElement { root: 11, tag: "p" },
+            CreateElement { root: 12, tag: "p" },
             AppendChildren { many: 9 },
         ]
     );
@@ -286,15 +286,15 @@ fn anchors() {
         mutations.edits,
         [
             CreateElement {
-                root: 0,
+                root: 1,
                 tag: "div"
             },
             CreateTextNode {
-                root: 1,
+                root: 2,
                 text: "hello"
             },
             AppendChildren { many: 1 },
-            CreatePlaceholder { root: 2 },
+            CreatePlaceholder { root: 3 },
             AppendChildren { many: 2 },
         ]
     );

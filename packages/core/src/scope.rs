@@ -43,12 +43,8 @@ pub type Context<'a> = &'a Scope;
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// use case they might have.
 pub struct Scope {
-    // safety:
-    //
-    // pointers to scopes are *always* valid since they are bump allocated and never freed until this scope is also freed
-    // this is just a bit of a hack to not need an Rc to the ScopeArena.
-    // todo: replace this will ScopeId and provide a connection to scope arena directly
     pub(crate) parent_scope: Option<*mut Scope>,
+    pub(crate) container: ElementId,
 
     pub(crate) our_arena_idx: ScopeId,
 
@@ -60,23 +56,14 @@ pub struct Scope {
 
     pub(crate) generation: Cell<u32>,
 
-    // The double-buffering situation that we will use
     pub(crate) frames: [BumpFrame; 2],
 
     pub(crate) caller: *const dyn Fn(&Scope) -> Element,
 
-    /*
-    we care about:
-    - listeners (and how to call them when an event is triggered)
-    - borrowed props (and how to drop them when the parent is dropped)
-    - suspended nodes (and how to call their callback when their associated tasks are complete)
-    */
     pub(crate) items: RefCell<SelfReferentialItems<'static>>,
 
-    // State
     pub(crate) hooks: HookList,
 
-    // todo: move this into a centralized place - is more memory efficient
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
     pub(crate) sender: UnboundedSender<SchedulerMsg>,
@@ -108,7 +95,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
@@ -126,7 +113,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
@@ -146,7 +133,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
@@ -155,10 +142,7 @@ impl Scope {
     /// assert_eq!(base.parent(), None);
     /// ```
     pub fn parent(&self) -> Option<ScopeId> {
-        match self.parent_scope {
-            Some(p) => Some(unsafe { &*p }.our_arena_idx),
-            None => None,
-        }
+        self.parent_scope.map(|p| unsafe { &*p }.our_arena_idx)
     }
 
     /// Get the ID of this Scope within this Dioxus VirtualDOM.
@@ -167,7 +151,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     /// let base = dom.base_scope();
@@ -303,7 +287,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust, ignore
     /// struct SharedState(&'static str);
     ///
     /// static App: FC<()> = |cx, props|{
@@ -311,7 +295,7 @@ impl Scope {
     ///     rsx!(cx, Child {})
     /// }
     ///
-    /// static Child: FC<()> = |cx, props|{
+    /// static Child: FC<()> = |cx, props| {
     ///     let state = cx.consume_state::<SharedState>();
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
@@ -351,7 +335,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn App(cx: Context, props: &()) -> Element {
     ///     todo!();
     ///     rsx!(cx, div { "Subtree {id}"})
@@ -375,7 +359,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn App(cx: Context, props: &()) -> Element {
     ///     let id = cx.get_current_subtree();
     ///     rsx!(cx, div { "Subtree {id}"})
@@ -437,6 +421,13 @@ impl Scope {
         }
     }
 
+    pub(crate) fn wip_frame_mut(&mut self) -> &mut BumpFrame {
+        match self.generation.get() & 1 == 0 {
+            true => &mut self.frames[0],
+            false => &mut self.frames[1],
+        }
+    }
+
     pub(crate) fn fin_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 1 {
             true => &self.frames[0],
@@ -444,14 +435,17 @@ impl Scope {
         }
     }
 
-    pub unsafe fn reset_wip_frame(&self) {
+    /// Reset this component's frame
+    ///
+    /// # Safety:
+    /// This method breaks every reference of VNodes in the current frame.
+    pub(crate) unsafe fn reset_wip_frame(&mut self) {
         // todo: unsafecell or something
-        let bump = self.wip_frame() as *const _ as *mut Bump;
-        let g = &mut *bump;
-        g.reset();
+        let bump = self.wip_frame_mut();
+        bump.bump.reset();
     }
 
-    pub fn cycle_frame(&self) {
+    pub(crate) fn cycle_frame(&self) {
         self.generation.set(self.generation.get() + 1);
     }
 
@@ -485,7 +479,7 @@ impl Scope {
         let mut nodes = &mut self.items.get_mut().suspended_nodes;
 
         if let Some(suspended) = nodes.remove(&task_id) {
-            let sus: &'a VSuspended<'static> = unsafe { &*suspended };
+            let sus: &'a VSuspended<'static> = suspended;
             let sus: &'a VSuspended<'a> = unsafe { std::mem::transmute(sus) };
             let mut boxed = sus.callback.borrow_mut().take().unwrap();
             let new_node: Element = boxed();

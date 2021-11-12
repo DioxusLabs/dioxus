@@ -28,45 +28,65 @@ pub(crate) struct ScopeArena {
 }
 
 impl ScopeArena {
-    pub fn new(sender: UnboundedSender<SchedulerMsg>) -> Self {
+    pub(crate) fn new(sender: UnboundedSender<SchedulerMsg>) -> Self {
+        let bump = Bump::new();
+
+        // allocate a container for the root element
+        // this will *never* show up in the diffing process
+        let el = bump.alloc(VElement {
+            tag_name: "root",
+            namespace: None,
+            key: None,
+            dom_id: Cell::new(Some(ElementId(0))),
+            parent_id: Default::default(),
+            listeners: &[],
+            attributes: &[],
+            children: &[],
+        });
+
+        let node = bump.alloc(VNode::Element(el));
+        let mut nodes = Slab::new();
+        let root_id = nodes.insert(unsafe { std::mem::transmute(node as *const _) });
+        debug_assert_eq!(root_id, 0);
+
         Self {
             scope_counter: Cell::new(0),
-            bump: Bump::new(),
+            bump,
             scopes: RefCell::new(FxHashMap::default()),
             heuristics: RefCell::new(FxHashMap::default()),
             free_scopes: RefCell::new(Vec::new()),
-            nodes: RefCell::new(Slab::new()),
+            nodes: RefCell::new(nodes),
             sender,
         }
     }
 
-    pub fn get_scope(&self, id: &ScopeId) -> Option<&Scope> {
+    /// Safety:
+    /// - Obtaining a mutable refernece to any Scope is unsafe
+    /// - Scopes use interior mutability when sharing data into components
+    pub(crate) fn get_scope(&self, id: &ScopeId) -> Option<&Scope> {
         unsafe { self.scopes.borrow().get(id).map(|f| &**f) }
     }
 
-    // this is unsafe
-    pub unsafe fn get_scope_raw(&self, id: &ScopeId) -> Option<*mut Scope> {
-        self.scopes.borrow().get(id).map(|f| *f)
+    pub(crate) unsafe fn get_scope_raw(&self, id: &ScopeId) -> Option<*mut Scope> {
+        self.scopes.borrow().get(id).copied()
     }
-    // this is unsafe
 
-    pub unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<&mut Scope> {
+    pub(crate) unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<&mut Scope> {
         self.scopes.borrow().get(id).map(|s| &mut **s)
     }
 
-    pub fn new_with_key(
+    pub(crate) fn new_with_key(
         &self,
         fc_ptr: *const (),
         caller: *const dyn Fn(&Scope) -> Element,
         parent_scope: Option<*mut Scope>,
+        container: ElementId,
         height: u32,
         subtree: u32,
     ) -> ScopeId {
         let new_scope_id = ScopeId(self.scope_counter.get());
         self.scope_counter.set(self.scope_counter.get() + 1);
 
-        //
-        //
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             let scope = unsafe { &mut *old_scope };
             log::debug!(
@@ -80,6 +100,7 @@ impl ScopeArena {
             scope.height = height;
             scope.subtree = Cell::new(subtree);
             scope.our_arena_idx = new_scope_id;
+            scope.container = container;
 
             scope.frames[0].nodes.get_mut().push({
                 let vnode = scope.frames[0]
@@ -103,9 +124,8 @@ impl ScopeArena {
                 unsafe { std::mem::transmute(vnode as *mut VNode) }
             });
 
-            let r = self.scopes.borrow_mut().insert(new_scope_id, scope);
-
-            assert!(r.is_none());
+            let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
+            debug_assert!(any_item.is_none());
 
             new_scope_id
         } else {
@@ -144,6 +164,7 @@ impl ScopeArena {
 
             let scope = self.bump.alloc(Scope {
                 sender: self.sender.clone(),
+                container,
                 our_arena_idx: new_scope_id,
                 parent_scope,
                 height,
@@ -166,12 +187,8 @@ impl ScopeArena {
                 }),
             });
 
-            dbg!(self.scopes.borrow());
-
-            let r = self.scopes.borrow_mut().insert(new_scope_id, scope);
-
-            assert!(r.is_none());
-            // .expect(&format!("scope shouldnt exist, {:?}", new_scope_id));
+            let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
+            debug_assert!(any_item.is_none());
 
             new_scope_id
         }
@@ -181,9 +198,11 @@ impl ScopeArena {
         self.ensure_drop_safety(id);
 
         log::debug!("removing scope {:?}", id);
-        println!("removing scope {:?}", id);
 
-        let scope = unsafe { &mut *self.scopes.borrow_mut().remove(&id).unwrap() };
+        // Safety:
+        // - ensure_drop_safety ensures that no references to this scope are in use
+        // - this raw pointer is removed from the map
+        let scope = unsafe { &mut *self.scopes.borrow_mut().remove(id).unwrap() };
 
         // we're just reusing scopes so we need to clear it out
         scope.hooks.clear();
@@ -227,6 +246,11 @@ impl ScopeArena {
         let node = unsafe { std::mem::transmute::<*const VNode, *const VNode>(node) };
         entry.insert(node);
         id
+    }
+
+    pub fn update_reservation(&self, node: &VNode, id: ElementId) {
+        let node = unsafe { std::mem::transmute::<*const VNode, *const VNode>(node) };
+        *self.nodes.borrow_mut().get_mut(id.0).unwrap() = node;
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
@@ -275,14 +299,14 @@ impl ScopeArena {
     }
 
     pub(crate) fn run_scope(&self, id: &ScopeId) -> bool {
-        let scope = unsafe { &mut *self.get_scope_mut(id).expect("could not find scope") };
-
-        log::debug!("found scope, about to run: {:?}", id);
-
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
         self.ensure_drop_safety(id);
+
+        let scope = unsafe { &mut *self.get_scope_mut(id).expect("could not find scope") };
+
+        log::debug!("found scope, about to run: {:?}", id);
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held

@@ -25,7 +25,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust, ignore
     /// let mut vdom = VirtualDom::new();
     /// let node = vdom.render_vnode(rsx!( "hello" ));
     ///
@@ -41,7 +41,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut vdom = VirtualDom::new();
     ///
     /// let node = vdom.render_vnode(rsx!{
@@ -66,7 +66,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// rsx!{
     ///     a {}
     ///     link {}
@@ -81,7 +81,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn Example(cx: Context, props: &()) -> Element {
     ///     todo!()
     /// }
@@ -100,7 +100,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     ///
     ///
     /// ```
@@ -112,7 +112,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut vdom = VirtualDom::new();
     ///
     /// let node = vdom.render_vnode(rsx!( Fragment {} ));
@@ -133,7 +133,7 @@ pub enum VNode<'src> {
     /// an `rsx!` call.
     ///
     /// # Example
-    /// ```rust
+    /// ```rust, ignore
     /// let mut vdom = VirtualDom::new();
     ///
     /// let node: NodeLink = vdom.render_vnode(rsx!( "hello" ));
@@ -202,7 +202,7 @@ impl<'src> VNode<'src> {
             VNode::Linked(c) => VNode::Linked(NodeLink {
                 scope_id: c.scope_id.clone(),
                 link_idx: c.link_idx.clone(),
-                node: c.node.clone(),
+                node: c.node,
             }),
         }
     }
@@ -282,6 +282,7 @@ pub struct VElement<'a> {
 
     pub dom_id: Cell<Option<ElementId>>,
 
+    // Keep the parent id around so we can bubble events through the tree
     pub parent_id: Cell<Option<ElementId>>,
 
     pub listeners: &'a [Listener<'a>],
@@ -310,7 +311,7 @@ impl Debug for VElement<'_> {
 ///
 /// This trait provides the ability to use custom elements in the `rsx!` macro.
 ///
-/// ```rust
+/// ```rust, ignore
 /// struct my_element;
 ///
 /// impl DioxusElement for my_element {
@@ -368,7 +369,6 @@ pub struct Listener<'bump> {
     pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn Any + Send>) + 'bump>>>,
 }
 
-pub type VCompCaller<'src> = BumpBox<'src, dyn Fn(Context) -> Element + 'src>;
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
@@ -381,7 +381,7 @@ pub struct VComponent<'src> {
 
     pub(crate) can_memoize: bool,
 
-    pub(crate) hard_allocation: Cell<Option<*const ()>>,
+    pub(crate) _hard_allocation: Cell<Option<*const ()>>,
 
     // Raw pointer into the bump arena for the props of the component
     pub(crate) bump_props: *const (),
@@ -426,16 +426,6 @@ impl PartialEq for NodeLink {
         self.node == other.node
     }
 }
-impl NodeLink {
-    // we don't want to let users clone NodeLinks
-    pub(crate) fn clone_inner(&self) -> Self {
-        Self {
-            link_idx: self.link_idx.clone(),
-            scope_id: self.scope_id.clone(),
-            node: self.node.clone(),
-        }
-    }
-}
 
 /// This struct provides an ergonomic API to quickly build VNodes.
 ///
@@ -453,7 +443,7 @@ impl<'a> NodeFactory<'a> {
 
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        &self.bump
+        self.bump
     }
 
     /// Directly pass in text blocks without the need to use the format_args macro.
@@ -591,14 +581,13 @@ impl<'a> NodeFactory<'a> {
                     // - Because FC<P> is the same, then P must be the same (even with generics)
                     // - Non-static P are autoderived to memoize as false
                     // - This comparator is only called on a corresponding set of bumpframes
-                    let props_memoized = unsafe {
-                        let real_other: &P = &*(other.bump_props as *const _ as *const P);
-                        props.memoize(real_other)
-                    };
-
+                    //
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
-                    props_memoized
+                    unsafe {
+                        let real_other: &P = &*(other.bump_props as *const _ as *const P);
+                        props.memoize(real_other)
+                    }
                 } else {
                     false
                 }
@@ -633,8 +622,7 @@ impl<'a> NodeFactory<'a> {
         let caller: &'a mut dyn Fn(&'a Scope) -> Element =
             bump.alloc(move |scope: &Scope| -> Element {
                 let props: &'_ P = unsafe { &*(bump_props as *const P) };
-                let res = component(scope, props);
-                res
+                component(scope, props)
             });
 
         let can_memoize = P::IS_STATIC;
@@ -648,7 +636,7 @@ impl<'a> NodeFactory<'a> {
             can_memoize,
             drop_props,
             associated_scope: Cell::new(None),
-            hard_allocation: Cell::new(None),
+            _hard_allocation: Cell::new(None),
         }))
     }
 
@@ -782,7 +770,7 @@ impl Debug for NodeFactory<'_> {
 ///
 /// All dynamic content in the macros must flow in through `fragment_from_iter`. Everything else must be statically layed out.
 /// We pipe basically everything through `fragment_from_iter`, so we expect a very specific type:
-/// ```
+/// ```rust, ignore
 /// impl IntoIterator<Item = impl IntoVNode<'a>>
 /// ```
 ///

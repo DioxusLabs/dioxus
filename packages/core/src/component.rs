@@ -36,7 +36,7 @@ impl<const A: bool> FragmentBuilder<A> {
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust, ignore
 /// fn App(cx: Context, props: &()) -> Element {
 ///     cx.render(rsx!{
 ///         CustomCard {
@@ -82,7 +82,7 @@ impl Properties for FragmentProps {
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust, ignore
 /// rsx!{
 ///     Fragment { key: "abc" }
 /// }
@@ -118,7 +118,7 @@ pub fn Fragment(cx: Context, props: &FragmentProps) -> Element {
 /// ## Example
 ///
 /// For props that are 'static:
-/// ```rust ignore
+/// ```rust, ignore ignore
 /// #[derive(Props, PartialEq)]
 /// struct MyProps {
 ///     data: String
@@ -127,7 +127,7 @@ pub fn Fragment(cx: Context, props: &FragmentProps) -> Element {
 ///
 /// For props that borrow:
 ///
-/// ```rust ignore
+/// ```rust, ignore ignore
 /// #[derive(Props)]
 /// struct MyProps<'a >{
 ///     data: &'a str

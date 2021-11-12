@@ -88,17 +88,3 @@ fn child_components() {
     let edits = vdom.rebuild();
     dbg!(edits);
 }
-
-#[test]
-fn suspended_works() {
-    todo!()
-    // static App: FC<()> = |cx, props| {
-    //     let title = use_suspense(cx, || async { "bob" }, move |cx, f| todo!());
-    //     // let title = use_suspense(cx, || async { "bob" }, move |cx, f| rsx! { "{f}"});
-    //     cx.render(rsx!("hello" { title }))
-    // };
-
-    // let mut vdom = VirtualDom::new(App);
-    // let edits = vdom.rebuild();
-    // dbg!(edits);
-}
