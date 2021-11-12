@@ -365,7 +365,6 @@ impl<'bump> DiffState<'bump> {
 
     fn create_text_node(&mut self, vtext: &'bump VText<'bump>, node: &'bump VNode<'bump>) {
         let real_id = self.scopes.reserve_node(node);
-        let parent = self.stack.element_stack.last().unwrap();
 
         self.mutations.create_text_node(vtext.text, real_id);
         vtext.dom_id.set(Some(real_id));
@@ -413,7 +412,6 @@ impl<'bump> DiffState<'bump> {
         let real_id = self.scopes.reserve_node(node);
         self.stack.element_stack.push(real_id);
         dom_id.set(Some(real_id));
-        log::debug!("Parent ID for {:?} set to {:?}", real_id, parent_id.get());
 
         self.mutations.create_element(tag_name, *namespace, real_id);
 
@@ -545,7 +543,7 @@ impl<'bump> DiffState<'bump> {
         &mut self,
         old: &'bump VText<'bump>,
         new: &'bump VText<'bump>,
-        old_node: &'bump VNode<'bump>,
+        _old_node: &'bump VNode<'bump>,
         new_node: &'bump VNode<'bump>,
     ) {
         if let Some(root) = old.dom_id.get() {

@@ -261,9 +261,7 @@ pub struct VAnchor {
 /// A bump-allocated string slice and metadata.
 pub struct VText<'src> {
     pub text: &'src str,
-
     pub dom_id: Cell<Option<ElementId>>,
-
     pub is_static: bool,
 }
 
@@ -276,20 +274,12 @@ pub struct VFragment<'src> {
 /// An element like a "div" with children, listeners, and attributes.
 pub struct VElement<'a> {
     pub tag_name: &'static str,
-
     pub namespace: Option<&'static str>,
-
     pub key: Option<&'a str>,
-
     pub dom_id: Cell<Option<ElementId>>,
-
-    // Keep the parent id around so we can bubble events through the tree
     pub parent_id: Cell<Option<ElementId>>,
-
     pub listeners: &'a [Listener<'a>],
-
     pub attributes: &'a [Attribute<'a>],
-
     pub children: &'a [VNode<'a>],
 }
 

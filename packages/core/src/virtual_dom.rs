@@ -9,7 +9,6 @@ use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use smallvec::SmallVec;
 use std::pin::Pin;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Poll;
 use std::{any::Any, collections::VecDeque};
@@ -293,6 +292,7 @@ impl VirtualDom {
 
                         let mut items = scope.items.borrow_mut();
 
+                        // really this should just be retain_mut but that doesn't exist yet
                         while let Some(mut task) = items.tasks.pop() {
                             // todo: does this make sense?
                             // I don't usually write futures by hand
@@ -312,9 +312,7 @@ impl VirtualDom {
                             scopes_to_clear.push(*fut);
                         }
 
-                        for task in unfinished_tasks.drain(..) {
-                            items.tasks.push(task);
-                        }
+                        items.tasks.extend(unfinished_tasks.drain(..));
                     }
 
                     for scope in scopes_to_clear {
@@ -461,17 +459,14 @@ impl VirtualDom {
                         );
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                         diff_state.stack.scope_stack.push(scopeid);
+
                         let scope = scopes.get_scope(&scopeid).unwrap();
-                        let container = scope.container;
-                        log::debug!("scope {:?} container {:?}", scope.our_arena_idx, container);
-                        diff_state.stack.element_stack.push(container);
+                        diff_state.stack.element_stack.push(scope.container);
                     }
                 }
             }
 
-            let work_completed = diff_state.work(&mut deadline);
-
-            if work_completed {
+            if diff_state.work(&mut deadline) {
                 let DiffState {
                     mutations,
                     seen_scopes,
