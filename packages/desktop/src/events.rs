@@ -11,7 +11,7 @@ use dioxus_html::on::*;
 struct ImEvent {
     event: String,
     mounted_dom_id: u64,
-    scope: u64,
+    // scope: u64,
     contents: serde_json::Value,
 }
 
@@ -20,11 +20,11 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
     let ImEvent {
         event,
         mounted_dom_id,
-        scope,
+        // scope,
         contents,
     } = ims.into_iter().next().unwrap();
 
-    let scope_id = ScopeId(scope as usize);
+    // let scope_id = ScopeId(scope as usize);
     let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
 
     let name = event_name_from_typ(&event);
@@ -33,7 +33,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
     UserEvent {
         name,
         priority: EventPriority::Low,
-        scope_id,
+        scope_id: None,
         mounted_dom_id,
         event,
     }

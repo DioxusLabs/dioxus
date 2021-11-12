@@ -365,6 +365,8 @@ impl<'bump> DiffState<'bump> {
 
     fn create_text_node(&mut self, vtext: &'bump VText<'bump>, node: &'bump VNode<'bump>) {
         let real_id = self.scopes.reserve_node(node);
+        let parent = self.stack.element_stack.last().unwrap();
+
         self.mutations.create_text_node(vtext.text, real_id);
         vtext.dom_id.set(Some(real_id));
         self.stack.add_child_count(1);
@@ -403,6 +405,7 @@ impl<'bump> DiffState<'bump> {
 
         // set the parent ID for event bubbling
         self.stack.instructions.push(DiffInstruction::PopElement);
+
         let parent = self.stack.element_stack.last().unwrap();
         parent_id.set(Some(*parent));
 
@@ -410,6 +413,7 @@ impl<'bump> DiffState<'bump> {
         let real_id = self.scopes.reserve_node(node);
         self.stack.element_stack.push(real_id);
         dom_id.set(Some(real_id));
+        log::debug!("Parent ID for {:?} set to {:?}", real_id, parent_id.get());
 
         self.mutations.create_element(tag_name, *namespace, real_id);
 
@@ -457,6 +461,8 @@ impl<'bump> DiffState<'bump> {
         let new_idx =
             self.scopes
                 .new_with_key(fc_ptr, caller, parent_scope, container, height, subtree);
+
+        log::debug!("container for scope {:?} is {:?}", new_idx, container);
 
         // Actually initialize the caller's slot with the right address
         vcomponent.associated_scope.set(Some(new_idx));
@@ -511,7 +517,9 @@ impl<'bump> DiffState<'bump> {
         use VNode::*;
         match (old_node, new_node) {
             // Check the most common cases first
-            (Text(old), Text(new)) => self.diff_text_nodes(old, new),
+            (Text(old), Text(new)) => {
+                self.diff_text_nodes(old, new, old_node, new_node);
+            }
             (Component(old), Component(new)) => {
                 self.diff_component_nodes(old_node, new_node, old, new)
             }
@@ -533,11 +541,18 @@ impl<'bump> DiffState<'bump> {
         }
     }
 
-    fn diff_text_nodes(&mut self, old: &'bump VText<'bump>, new: &'bump VText<'bump>) {
+    fn diff_text_nodes(
+        &mut self,
+        old: &'bump VText<'bump>,
+        new: &'bump VText<'bump>,
+        old_node: &'bump VNode<'bump>,
+        new_node: &'bump VNode<'bump>,
+    ) {
         if let Some(root) = old.dom_id.get() {
             if old.text != new.text {
                 self.mutations.set_text(new.text, root.as_u64());
             }
+            self.scopes.update_node(new_node, root);
 
             new.dom_id.set(Some(root));
         }
@@ -567,8 +582,10 @@ impl<'bump> DiffState<'bump> {
             return;
         }
 
-        self.scopes.update_reservation(new_node, root);
+        self.scopes.update_node(new_node, root);
+
         new.dom_id.set(Some(root));
+        new.parent_id.set(old.parent_id.get());
 
         // todo: attributes currently rely on the element on top of the stack, but in theory, we only need the id of the
         // element to modify its attributes.
@@ -634,8 +651,12 @@ impl<'bump> DiffState<'bump> {
             self.mutations.edits.push(PushRoot {
                 root: root.as_u64(),
             });
+            self.stack.element_stack.push(root);
+            self.stack.instructions.push(DiffInstruction::PopElement);
             self.stack.create_children(new.children, MountType::Append);
         } else {
+            self.stack.element_stack.push(root);
+            self.stack.instructions.push(DiffInstruction::PopElement);
             self.diff_children(old.children, new.children);
         }
     }
@@ -871,13 +892,7 @@ impl<'bump> DiffState<'bump> {
             Some(count) => count,
             None => return,
         };
-        // log::debug!(
-        //     "Left offset, right offset, {}, {}",
-        //     left_offset,
-        //     right_offset,
-        // );
 
-        // log::debug!("stack before lo is {:#?}", self.stack.instructions);
         // Ok, we now hopefully have a smaller range of children in the middle
         // within which to re-order nodes with the same keys, remove old nodes with
         // now-unused keys, and create new nodes with fresh keys.
@@ -926,8 +941,6 @@ impl<'bump> DiffState<'bump> {
         } else {
             self.diff_keyed_middle(old_middle, new_middle);
         }
-
-        log::debug!("stack after km is {:#?}", self.stack.instructions);
     }
 
     /// Diff both ends of the children that share keys.
@@ -1054,15 +1067,6 @@ impl<'bump> DiffState<'bump> {
         // If none of the old keys are reused by the new children, then we remove all the remaining old children and
         // create the new children afresh.
         if shared_keys.is_empty() {
-            log::debug!(
-                "no shared keys, replacing and creating many with many, {:#?}, {:#?}",
-                old,
-                new
-            );
-            log::debug!("old_key_to_old_index, {:#?}", old_key_to_old_index);
-            log::debug!("new_index_to_old_index, {:#?}", new_index_to_old_index);
-            log::debug!("shared_keys, {:#?}", shared_keys);
-
             if let Some(first_old) = old.get(0) {
                 self.remove_nodes(&old[1..], true);
                 self.stack
@@ -1224,6 +1228,8 @@ impl<'bump> DiffState<'bump> {
                 let id = old
                     .try_mounted_id()
                     .unwrap_or_else(|| panic!("broke on {:?}", old));
+
+                log::debug!("element parent is {:?}", el.parent_id.get());
 
                 self.mutations.replace_with(id, nodes_created as u32);
                 self.remove_nodes(el.children, false);

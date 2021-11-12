@@ -90,6 +90,8 @@ impl ScopeArena {
         let new_scope_id = ScopeId(self.scope_counter.get());
         self.scope_counter.set(self.scope_counter.get() + 1);
 
+        log::debug!("new scope {:?} with parent {:?}", new_scope_id, container);
+
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             let scope = unsafe { &mut *old_scope };
             log::debug!(
@@ -251,7 +253,7 @@ impl ScopeArena {
         id
     }
 
-    pub fn update_reservation(&self, node: &VNode, id: ElementId) {
+    pub fn update_node(&self, node: &VNode, id: ElementId) {
         let node = unsafe { std::mem::transmute::<*const VNode, *const VNode>(node) };
         *self.nodes.borrow_mut().get_mut(id.0).unwrap() = node;
     }
@@ -369,10 +371,10 @@ impl ScopeArena {
         let mut cur_el = Some(element);
 
         while let Some(id) = cur_el.take() {
-            log::debug!("checking element {:?} for listeners", id);
             if let Some(el) = nodes.get(id.0) {
                 let real_el = unsafe { &**el };
                 if let VNode::Element(real_el) = real_el {
+                    //
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
                             let mut cb = listener.callback.borrow_mut();
@@ -381,6 +383,7 @@ impl ScopeArena {
                             }
                         }
                     }
+
                     cur_el = real_el.parent_id.get();
                 }
             }

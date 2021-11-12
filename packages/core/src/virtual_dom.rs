@@ -403,12 +403,12 @@ impl VirtualDom {
                         if let Some(element) = event.mounted_dom_id {
                             log::info!("Calling listener {:?}, {:?}", event.scope_id, element);
 
-                            if let Some(scope) = self.scopes.get_scope(&event.scope_id) {
-                                self.scopes.call_listener_with_bubbling(event, element);
-                                while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
-                                    self.pending_messages.push_front(dirty_scope);
-                                }
+                            // if let Some(scope) = self.scopes.get_scope(&event.scope_id) {
+                            self.scopes.call_listener_with_bubbling(event, element);
+                            while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
+                                self.pending_messages.push_front(dirty_scope);
                             }
+                            // }
                         } else {
                             log::debug!("User event without a targetted ElementId. Not currently supported.\nUnsure how to proceed. {:?}", event);
                         }
@@ -449,7 +449,9 @@ impl VirtualDom {
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                         diff_state.stack.scope_stack.push(scopeid);
                         let scope = scopes.get_scope(&scopeid).unwrap();
-                        diff_state.stack.element_stack.push(scope.container);
+                        let container = scope.container;
+                        log::debug!("scope {:?} container {:?}", scope.our_arena_idx, container);
+                        diff_state.stack.element_stack.push(container);
                     }
                 }
             }
@@ -466,9 +468,6 @@ impl VirtualDom {
                 for scope in seen_scopes {
                     self.dirty_scopes.remove(&scope);
                 }
-
-                // // I think the stack should be empty at the end of diffing?
-                // debug_assert_eq!(stack.scope_stack.len(), 1);
 
                 committed_mutations.push(mutations);
             } else {
@@ -631,7 +630,7 @@ pub enum SchedulerMsg {
 #[derive(Debug)]
 pub struct UserEvent {
     /// The originator of the event trigger
-    pub scope_id: ScopeId,
+    pub scope_id: Option<ScopeId>,
 
     pub priority: EventPriority,
 

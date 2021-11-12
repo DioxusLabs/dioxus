@@ -39,13 +39,8 @@ class Interpreter {
   }
 
   ReplaceWith(edit) {
-    // console.log(edit);
     let root = this.nodes[edit.root];
     let els = this.stack.splice(this.stack.length - edit.m);
-
-    // console.log(root);
-    // console.log(els);
-
 
     root.replaceWith(...els);
   }
@@ -79,6 +74,7 @@ class Interpreter {
     const tagName = edit.tag;
     const el = document.createElement(tagName);
     this.nodes[edit.root] = el;
+    el.setAttribute("dioxus-id", edit.root);
     this.stack.push(el);
   }
 
@@ -110,14 +106,14 @@ class Interpreter {
       this.root.addEventListener(event_name, (event) => {
         // console.log("CLICKED");
         const target = event.target;
-        const val = target.getAttribute(`dioxus-event-${event_name}`);
-        if (val == null) {
+        const real_id = target.getAttribute(`dioxus-id`);
+        if (real_id == null) {
           return;
         }
 
-        const fields = val.split(".");
-        const scope_id = parseInt(fields[0]);
-        const real_id = parseInt(fields[1]);
+        // const fields = val.split(".");
+        // const scope_id = parseInt(fields[0]);
+        // const real_id = parseInt(fields[1]);
 
         // // console.log(`parsed event with scope_id ${scope_id} and real_id ${real_id}`);
 
@@ -125,8 +121,8 @@ class Interpreter {
         let contents = serialize_event(event);
         let evt = {
           event: event_name,
-          scope: scope_id,
-          mounted_dom_id: real_id,
+          // scope: scope_id,
+          mounted_dom_id: parseInt(real_id),
           contents: contents,
         };
         // console.log(evt);
