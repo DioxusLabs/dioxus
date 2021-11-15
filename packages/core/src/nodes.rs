@@ -105,7 +105,7 @@ pub enum VNode<'src> {
     ///
     ///
     /// ```
-    Suspended(&'src VSuspended<'src>),
+    Suspended(&'src VSuspended),
 
     /// Anchors are a type of placeholder VNode used when fragments don't contain any children.
     ///
@@ -387,12 +387,11 @@ pub struct VComponent<'src> {
     pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
 }
 
-pub struct VSuspended<'a> {
-    pub task_id: u64,
+pub struct VSuspended {
+    pub task_id: usize,
+    pub scope: Cell<Option<ScopeId>>,
     pub dom_id: Cell<Option<ElementId>>,
-
-    #[allow(clippy::type_complexity)]
-    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut() -> Element + 'a>>>,
+    pub parent: Cell<Option<ElementId>>,
 }
 
 /// A cached node is a "pointer" to a "rendered" node in a particular scope

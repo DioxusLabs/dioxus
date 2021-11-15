@@ -263,7 +263,7 @@ impl VirtualDom {
         // todo: poll the events once even if there is work to do to prevent starvation
 
         // if there's no futures in the virtualdom, just wait for a scheduler message and put it into the queue to be processed
-        if self.scopes.pending_futures.is_empty() {
+        if self.scopes.pending_futures.borrow().is_empty() {
             self.pending_messages
                 .push_front(self.receiver.next().await.unwrap());
         } else {
@@ -275,7 +275,7 @@ impl VirtualDom {
                 type Output = ();
 
                 fn poll(
-                    mut self: Pin<&mut Self>,
+                    self: Pin<&mut Self>,
                     cx: &mut std::task::Context<'_>,
                 ) -> Poll<Self::Output> {
                     let mut all_pending = true;
@@ -284,7 +284,7 @@ impl VirtualDom {
                     let mut scopes_to_clear: SmallVec<[_; 10]> = smallvec::smallvec![];
 
                     // Poll every scope manually
-                    for fut in self.scopes.pending_futures.iter() {
+                    for fut in self.scopes.pending_futures.borrow().iter() {
                         let scope = self
                             .scopes
                             .get_scope(fut)
@@ -316,7 +316,7 @@ impl VirtualDom {
                     }
 
                     for scope in scopes_to_clear {
-                        self.scopes.pending_futures.remove(&scope);
+                        self.scopes.pending_futures.borrow_mut().remove(&scope);
                     }
 
                     // Resolve the future if any singular task is ready
@@ -347,27 +347,30 @@ impl VirtualDom {
 
     /// Run the virtualdom with a deadline.
     ///
-    /// This method will progress async tasks until the deadline is reached. If tasks are completed before the deadline,
-    /// and no tasks are pending, this method will return immediately. If tasks are still pending, then this method will
-    /// exhaust the deadline working on them.
+    /// This method will perform any outstanding diffing work and try to return as many mutations as possible before the
+    /// deadline is reached. This method accepts a closure that returns `true` if the deadline has been reached. To wrap
+    /// your future into a deadline, consider the `now_or_never` method from `future_utils`.
+    ///
+    /// ```rust, ignore
+    /// let mut vdom = VirtualDom::new(App);
+    ///
+    /// let timeout = TimeoutFuture::from_ms(16);
+    /// let deadline = || (&mut timeout).now_or_never();
+    ///
+    /// let mutations = vdom.work_with_deadline(deadline);
+    /// ```
     ///
     /// This method is useful when needing to schedule the virtualdom around other tasks on the main thread to prevent
     /// "jank". It will try to finish whatever work it has by the deadline to free up time for other work.
     ///
-    /// Due to platform differences in how time is handled, this method accepts a future that resolves when the deadline
-    /// is exceeded. However, the deadline won't be met precisely, so you might want to build some wiggle room into the
-    /// deadline closure manually.
-    ///
-    /// The deadline is polled before starting to diff components. This strikes a balance between the overhead of checking
-    /// the deadline and just completing the work. However, if an individual component takes more than 16ms to render, then
-    /// the screen will "jank" up. In debug, this will trigger an alert.
-    ///
-    /// If there are no in-flight fibers when this method is called, it will await any possible tasks, aborting early if
-    /// the provided deadline future resolves.
+    /// If the work is not finished by the deadline, Dioxus will store it for later and return when work_with_deadline
+    /// is called again. This means you can ensure some level of free time on the VirtualDom's thread during the work phase.
     ///
     /// For use in the web, it is expected that this method will be called to be executed during "idle times" and the
     /// mutations to be applied during the "paint times" IE "animation frames". With this strategy, it is possible to craft
     /// entirely jank-free applications that perform a ton of work.
+    ///
+    /// In general use, Dioxus is plenty fast enough to not need to worry about this.
     ///
     /// # Example
     ///
@@ -387,15 +390,6 @@ impl VirtualDom {
     ///     apply_mutations(mutations);
     /// }
     /// ```
-    ///
-    /// ## Mutations
-    ///
-    /// This method returns "mutations" - IE the necessary changes to get the RealDOM to match the VirtualDOM. It also
-    /// includes a list of NodeRefs that need to be applied and effects that need to be triggered after the RealDOM has
-    /// applied the edits.
-    ///
-    /// Mutations are the only link between the RealDOM and the VirtualDOM.
-    ///
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
 
@@ -410,16 +404,18 @@ impl VirtualDom {
                     SchedulerMsg::Immediate(id) => {
                         self.dirty_scopes.insert(id);
                     }
+                    SchedulerMsg::Suspended { node, scope } => {
+                        todo!("should wire up suspense")
+                        // self.suspense_scopes.insert(id);
+                    }
                     SchedulerMsg::UiEvent(event) => {
-                        if let Some(element) = event.mounted_dom_id {
+                        if let Some(element) = event.element {
                             log::info!("Calling listener {:?}, {:?}", event.scope_id, element);
 
-                            // if let Some(scope) = self.scopes.get_scope(&event.scope_id) {
                             self.scopes.call_listener_with_bubbling(event, element);
                             while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
                                 self.pending_messages.push_front(dirty_scope);
                             }
-                            // }
                         } else {
                             log::debug!("User event without a targetted ElementId. Not currently supported.\nUnsure how to proceed. {:?}", event);
                         }
@@ -432,12 +428,9 @@ impl VirtualDom {
 
             let mut ran_scopes = FxHashSet::default();
 
-            // todo: the 2021 version of rust will let us not have to force the borrow
-            // let scopes = &self.scopes;
             // Sort the scopes by height. Theoretically, we'll de-duplicate scopes by height
             self.dirty_scopes
                 .retain(|id| scopes.get_scope(id).is_some());
-
             self.dirty_scopes.sort_by(|a, b| {
                 let h1 = scopes.get_scope(a).unwrap().height;
                 let h2 = scopes.get_scope(b).unwrap().height;
@@ -445,12 +438,8 @@ impl VirtualDom {
             });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                log::info!("handling dirty scope {:?}", scopeid);
-
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
-
-                    log::debug!("about to run scope {:?}", scopeid);
 
                     if self.scopes.run_scope(&scopeid) {
                         let (old, new) = (
@@ -480,7 +469,6 @@ impl VirtualDom {
                 committed_mutations.push(mutations);
             } else {
                 // leave the work in an incomplete state
-                log::debug!("don't have a mechanism to pause work (yet)");
                 return committed_mutations;
             }
         }
@@ -530,7 +518,6 @@ impl VirtualDom {
     /// In this case, every component will be diffed, even if their props are memoized. This method is intended to be used
     /// to force an update of the DOM when the state of the app is changed outside of the app.
     ///
-    ///
     /// # Example
     /// ```rust, ignore
     /// #[derive(PartialEq, Props)]
@@ -544,12 +531,7 @@ impl VirtualDom {
     /// };
     ///
     /// let value = Rc::new(RefCell::new("Hello"));
-    /// let mut dom = VirtualDom::new_with_props(
-    ///     App,
-    ///     AppProps {
-    ///         value: value.clone(),
-    ///     },
-    /// );
+    /// let mut dom = VirtualDom::new_with_props(App, AppProps { value: value.clone(), });
     ///
     /// let _ = dom.rebuild();
     ///
@@ -633,8 +615,41 @@ pub enum SchedulerMsg {
 
     // setstate
     Immediate(ScopeId),
+
+    Suspended { scope: ScopeId, node: NodeLink },
 }
 
+/// User Events are events that are shuttled from the renderer into the VirtualDom trhough the scheduler channel.
+///
+/// These events will be passed to the appropriate Element given by `mounted_dom_id` and then bubbled up through the tree
+/// where each listener is checked and fired if the event name matches.
+///
+/// It is the expectation that the event name matches the corresponding event listener, otherwise Dioxus will panic in
+/// attempting to downcast the event data.
+///
+/// Because Event Data is sent across threads, it must be `Send + Sync`. We are hoping to lift the `Sync` restriction but
+/// `Send` will not be lifted. The entire `UserEvent` must also be `Send + Sync` due to its use in the scheduler channel.
+///
+/// # Example
+/// ```rust
+/// fn App(cx: Context, props: &()) -> Element {
+///     rsx!(cx, div {
+///         onclick: move |_| println!("Clicked!")
+///     })
+/// }
+///
+/// let mut dom = VirtualDom::new(App);
+/// let mut scheduler = dom.get_scheduler_channel();
+/// scheduler.unbounded_send(SchedulerMsg::UiEvent(
+///     UserEvent {
+///         scope_id: None,
+///         priority: EventPriority::Medium,
+///         name: "click",
+///         element: Some(ElementId(0)),
+///         data: Arc::new(ClickEvent { .. })
+///     }
+/// )).unwrap();
+/// ```
 #[derive(Debug)]
 pub struct UserEvent {
     /// The originator of the event trigger
@@ -643,7 +658,7 @@ pub struct UserEvent {
     pub priority: EventPriority,
 
     /// The optional real node associated with the trigger
-    pub mounted_dom_id: Option<ElementId>,
+    pub element: Option<ElementId>,
 
     /// The event type IE "onclick" or "onmouseover"
     ///
@@ -651,7 +666,7 @@ pub struct UserEvent {
     pub name: &'static str,
 
     /// Event Data
-    pub event: Arc<dyn Any + Send + Sync>,
+    pub data: Arc<dyn Any + Send + Sync>,
 }
 
 /// Priority of Event Triggers.

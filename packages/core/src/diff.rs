@@ -1344,13 +1344,14 @@ impl<'bump> DiffState<'bump> {
             .current_scope()
             .and_then(|id| self.scopes.get_scope(&id))
         {
-            // safety: this lifetime is managed by the logic on scope
-            let extended = unsafe { std::mem::transmute(suspended) };
-            scope
-                .items
-                .borrow_mut()
-                .suspended_nodes
-                .insert(suspended.task_id, extended);
+            todo!()
+            // // safety: this lifetime is managed by the logic on scope
+            // let extended = unsafe { std::mem::transmute(suspended) };
+            // scope
+            //     .items
+            //     .borrow_mut()
+            //     .suspended_nodes
+            //     .insert(suspended.task_id, extended);
         }
     }
 }

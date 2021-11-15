@@ -5,19 +5,102 @@
 use crate::innerlude::*;
 use std::{any::Any, fmt::Debug};
 
+/// ## Mutations
+///
+/// This method returns "mutations" - IE the necessary changes to get the RealDOM to match the VirtualDOM. It also
+/// includes a list of NodeRefs that need to be applied and effects that need to be triggered after the RealDOM has
+/// applied the edits.
+///
+/// Mutations are the only link between the RealDOM and the VirtualDOM.
 pub struct Mutations<'a> {
     pub edits: Vec<DomEdit<'a>>,
-    pub noderefs: Vec<NodeRefMutation<'a>>,
+    pub refs: Vec<NodeRefMutation<'a>>,
     pub effects: Vec<&'a dyn FnMut()>,
 }
+
 impl Debug for Mutations<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Mutations")
             .field("edits", &self.edits)
-            .field("noderefs", &self.noderefs)
-            // .field("effects", &self.effects)
+            .field("noderefs", &self.refs)
             .finish()
     }
+}
+
+/// A `DomEdit` represents a serialized form of the VirtualDom's trait-based API. This allows streaming edits across the
+/// network or through FFI boundaries.
+#[derive(Debug, PartialEq)]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(tag = "type")
+)]
+pub enum DomEdit<'bump> {
+    PushRoot {
+        root: u64,
+    },
+    PopRoot,
+
+    AppendChildren {
+        many: u32,
+    },
+
+    // "Root" refers to the item directly
+    // it's a waste of an instruction to push the root directly
+    ReplaceWith {
+        root: u64,
+        m: u32,
+    },
+    InsertAfter {
+        root: u64,
+        n: u32,
+    },
+    InsertBefore {
+        root: u64,
+        n: u32,
+    },
+    Remove {
+        root: u64,
+    },
+    CreateTextNode {
+        text: &'bump str,
+        root: u64,
+    },
+    CreateElement {
+        tag: &'bump str,
+        root: u64,
+    },
+    CreateElementNs {
+        tag: &'bump str,
+        root: u64,
+        ns: &'static str,
+    },
+    CreatePlaceholder {
+        root: u64,
+    },
+    NewEventListener {
+        event_name: &'static str,
+        scope: ScopeId,
+        root: u64,
+    },
+    RemoveEventListener {
+        root: u64,
+        event: &'static str,
+    },
+    SetText {
+        root: u64,
+        text: &'bump str,
+    },
+    SetAttribute {
+        root: u64,
+        field: &'static str,
+        value: &'bump str,
+        ns: Option<&'bump str>,
+    },
+    RemoveAttribute {
+        root: u64,
+        name: &'static str,
+    },
 }
 
 use DomEdit::*;
@@ -26,7 +109,7 @@ impl<'a> Mutations<'a> {
     pub(crate) fn new() -> Self {
         Self {
             edits: Vec::new(),
-            noderefs: Vec::new(),
+            refs: Vec::new(),
             effects: Vec::new(),
         }
     }
@@ -154,103 +237,5 @@ impl<'a> NodeRefMutation<'a> {
             .as_mut()
             .and_then(|f| f.get_mut())
             .and_then(|f| f.downcast_mut::<T>())
-    }
-}
-
-/// A `DomEdit` represents a serialized form of the VirtualDom's trait-based API. This allows streaming edits across the
-/// network or through FFI boundaries.
-#[derive(Debug, PartialEq)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
-pub enum DomEdit<'bump> {
-    PushRoot {
-        root: u64,
-    },
-    PopRoot,
-
-    AppendChildren {
-        many: u32,
-    },
-
-    // "Root" refers to the item directly
-    // it's a waste of an instruction to push the root directly
-    ReplaceWith {
-        root: u64,
-        m: u32,
-    },
-    InsertAfter {
-        root: u64,
-        n: u32,
-    },
-    InsertBefore {
-        root: u64,
-        n: u32,
-    },
-    Remove {
-        root: u64,
-    },
-    CreateTextNode {
-        text: &'bump str,
-        root: u64,
-    },
-    CreateElement {
-        tag: &'bump str,
-        root: u64,
-    },
-    CreateElementNs {
-        tag: &'bump str,
-        root: u64,
-        ns: &'static str,
-    },
-    CreatePlaceholder {
-        root: u64,
-    },
-    NewEventListener {
-        event_name: &'static str,
-        scope: ScopeId,
-        root: u64,
-    },
-    RemoveEventListener {
-        root: u64,
-        event: &'static str,
-    },
-    SetText {
-        root: u64,
-        text: &'bump str,
-    },
-    SetAttribute {
-        root: u64,
-        field: &'static str,
-        value: &'bump str,
-        ns: Option<&'bump str>,
-    },
-    RemoveAttribute {
-        root: u64,
-        name: &'static str,
-    },
-}
-impl DomEdit<'_> {
-    pub fn is(&self, id: &'static str) -> bool {
-        match self {
-            DomEdit::InsertAfter { .. } => id == "InsertAfter",
-            DomEdit::InsertBefore { .. } => id == "InsertBefore",
-            DomEdit::PushRoot { .. } => id == "PushRoot",
-            DomEdit::PopRoot => id == "PopRoot",
-            DomEdit::AppendChildren { .. } => id == "AppendChildren",
-            DomEdit::ReplaceWith { .. } => id == "ReplaceWith",
-            DomEdit::Remove { .. } => id == "Remove",
-            DomEdit::CreateTextNode { .. } => id == "CreateTextNode",
-            DomEdit::CreateElement { .. } => id == "CreateElement",
-            DomEdit::CreateElementNs { .. } => id == "CreateElementNs",
-            DomEdit::CreatePlaceholder { .. } => id == "CreatePlaceholder",
-            DomEdit::NewEventListener { .. } => id == "NewEventListener",
-            DomEdit::RemoveEventListener { .. } => id == "RemoveEventListener",
-            DomEdit::SetText { .. } => id == "SetText",
-            DomEdit::SetAttribute { .. } => id == "SetAttribute",
-            DomEdit::RemoveAttribute { .. } => id == "RemoveAttribute",
-        }
     }
 }

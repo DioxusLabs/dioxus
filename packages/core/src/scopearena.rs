@@ -22,7 +22,7 @@ pub struct Heuristic {
 // has an internal heuristics engine to pre-allocate arenas to the right size
 pub(crate) struct ScopeArena {
     bump: Bump,
-    pub pending_futures: FxHashSet<ScopeId>,
+    pub pending_futures: RefCell<FxHashSet<ScopeId>>,
     scope_counter: Cell<usize>,
     pub scopes: RefCell<FxHashMap<ScopeId, *mut Scope>>,
     pub heuristics: RefCell<FxHashMap<FcSlot, Heuristic>>,
@@ -56,7 +56,7 @@ impl ScopeArena {
         Self {
             scope_counter: Cell::new(0),
             bump,
-            pending_futures: FxHashSet::default(),
+            pending_futures: RefCell::new(FxHashSet::default()),
             scopes: RefCell::new(FxHashMap::default()),
             heuristics: RefCell::new(FxHashMap::default()),
             free_scopes: RefCell::new(Vec::new()),
@@ -356,7 +356,7 @@ impl ScopeArena {
             debug_assert_eq!(scope.wip_frame().nodes.borrow().len(), 1);
 
             if !scope.items.borrow().tasks.is_empty() {
-                //
+                self.pending_futures.borrow_mut().insert(*id);
             }
 
             // make the "wip frame" contents the "finished frame"
@@ -381,7 +381,7 @@ impl ScopeArena {
                         if listener.event == event.name {
                             let mut cb = listener.callback.borrow_mut();
                             if let Some(cb) = cb.as_mut() {
-                                (cb)(event.event.clone());
+                                (cb)(event.data.clone());
                             }
                         }
                     }

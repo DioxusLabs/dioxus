@@ -703,9 +703,9 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     Ok(UserEvent {
         name: event_name_from_typ(&typ),
-        event: virtual_event_from_websys_event(event.clone()),
-        mounted_dom_id: Some(ElementId(real_id as usize)),
-        scope_id: ScopeId(triggered_scope as usize),
+        data: virtual_event_from_websys_event(event.clone()),
+        element: Some(ElementId(real_id as usize)),
+        scope_id: Some(ScopeId(triggered_scope as usize)),
         priority: dioxus_core::EventPriority::Medium,
     })
 }

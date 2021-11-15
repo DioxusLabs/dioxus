@@ -34,8 +34,8 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
         name,
         priority: EventPriority::Low,
         scope_id: None,
-        mounted_dom_id,
-        event,
+        element: mounted_dom_id,
+        data: event,
     }
 }
 

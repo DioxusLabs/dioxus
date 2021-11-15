@@ -72,7 +72,7 @@ pub struct Scope {
 pub struct SelfReferentialItems<'a> {
     pub(crate) listeners: Vec<&'a Listener<'a>>,
     pub(crate) borrowed_props: Vec<&'a VComponent<'a>>,
-    pub(crate) suspended_nodes: FxHashMap<u64, &'a VSuspended<'a>>,
+    pub(crate) suspended_nodes: FxHashMap<u64, &'a VSuspended>,
     pub(crate) tasks: Vec<BumpBox<'a, dyn Future<Output = ()>>>,
     pub(crate) pending_effects: Vec<BumpBox<'a, dyn FnMut()>>,
 }
@@ -105,6 +105,32 @@ impl Scope {
     /// ```
     pub fn subtree(&self) -> u32 {
         self.subtree.get()
+    }
+
+    /// Create a new subtree with this scope as the root of the subtree.
+    ///
+    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
+    /// the mutations to the correct window/portal/subtree.
+    ///
+    /// This method
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// fn App(cx: Context, props: &()) -> Element {
+    ///     todo!();
+    ///     rsx!(cx, div { "Subtree {id}"})
+    /// };
+    /// ```
+    pub fn create_subtree(&self) -> Option<u32> {
+        if self.is_subtree_root.get() {
+            None
+        } else {
+            todo!()
+            // let cur = self.subtree().get();
+            // self.shared.cur_subtree.set(cur + 1);
+            // Some(cur)
+        }
     }
 
     /// Get the height of this Scope - IE the number of scopes above it.
@@ -207,75 +233,6 @@ impl Scope {
         &self.wip_frame().bump
     }
 
-    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
-    ///
-    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
-    ///
-    /// ## Example
-    ///
-    /// ```ignore
-    /// fn Component(cx: Scope, props: &Props) -> Element {
-    ///     // Lazy assemble the VNode tree
-    ///     let lazy_nodes = rsx!("hello world");
-    ///
-    ///     // Actually build the tree and allocate it
-    ///     cx.render(lazy_tree)
-    /// }
-    ///```
-    pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
-        let frame = self.wip_frame();
-        let bump = &frame.bump;
-        let factory = NodeFactory { bump };
-        let node = lazy_nodes.map(|f| f.call(factory))?;
-        let node = bump.alloc(node);
-
-        let node_ptr = node as *mut _;
-        let node_ptr = unsafe { std::mem::transmute(node_ptr) };
-
-        let link = NodeLink {
-            scope_id: Cell::new(Some(self.our_arena_idx)),
-            link_idx: Cell::new(0),
-            node: node_ptr,
-        };
-
-        Some(link)
-    }
-
-    /// Push an effect to be ran after the component has been successfully mounted to the dom
-    /// Returns the effect's position in the stack
-    pub fn push_effect<'src>(&'src self, effect: impl FnOnce() + 'src) -> usize {
-        // this is some tricker to get around not being able to actually call fnonces
-        let mut slot = Some(effect);
-        let fut: &mut dyn FnMut() = self.bump().alloc(move || slot.take().unwrap()());
-
-        // wrap it in a type that will actually drop the contents
-        let boxed_fut = unsafe { BumpBox::from_raw(fut) };
-
-        // erase the 'src lifetime for self-referential storage
-        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
-
-        let mut items = self.items.borrow_mut();
-        items.pending_effects.push(self_ref_fut);
-        items.pending_effects.len() - 1
-    }
-
-    /// Pushes the future onto the poll queue to be polled
-    /// The future is forcibly dropped if the component is not ready by the next render
-    pub fn push_task<'src>(&'src self, fut: impl Future<Output = ()> + 'src) -> usize {
-        // allocate the future
-        let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut);
-
-        // wrap it in a type that will actually drop the contents
-        let boxed_fut: BumpBox<dyn Future<Output = ()>> = unsafe { BumpBox::from_raw(fut) };
-
-        // erase the 'src lifetime for self-referential storage
-        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
-
-        let mut items = self.items.borrow_mut();
-        items.tasks.push(self_ref_fut);
-        items.tasks.len() - 1
-    }
-
     /// This method enables the ability to expose state to children further down the VirtualDOM Tree.
     ///
     /// This is a "fundamental" operation and should only be called during initialization of a hook.
@@ -326,47 +283,102 @@ impl Scope {
         }
     }
 
-    /// Create a new subtree with this scope as the root of the subtree.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    /// This method
-    ///
-    /// # Example
-    ///
-    /// ```rust, ignore
-    /// fn App(cx: Context, props: &()) -> Element {
-    ///     todo!();
-    ///     rsx!(cx, div { "Subtree {id}"})
-    /// };
-    /// ```
-    pub fn create_subtree(&self) -> Option<u32> {
-        if self.is_subtree_root.get() {
-            None
-        } else {
-            todo!()
-            // let cur = self.subtree().get();
-            // self.shared.cur_subtree.set(cur + 1);
-            // Some(cur)
-        }
+    /// Push an effect to be ran after the component has been successfully mounted to the dom
+    /// Returns the effect's position in the stack
+    pub fn push_effect<'src>(&'src self, effect: impl FnOnce() + 'src) -> usize {
+        // this is some tricker to get around not being able to actually call fnonces
+        let mut slot = Some(effect);
+        let fut: &mut dyn FnMut() = self.bump().alloc(move || slot.take().unwrap()());
+
+        // wrap it in a type that will actually drop the contents
+        let boxed_fut = unsafe { BumpBox::from_raw(fut) };
+
+        // erase the 'src lifetime for self-referential storage
+        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
+
+        let mut items = self.items.borrow_mut();
+        items.pending_effects.push(self_ref_fut);
+        items.pending_effects.len() - 1
     }
 
-    /// Get the subtree ID that this scope belongs to.
+    /// Pushes the future onto the poll queue to be polled
+    /// The future is forcibly dropped if the component is not ready by the next render
+    pub fn push_task<'src, F: Future<Output = ()> + 'src>(
+        &'src self,
+        mut fut: impl FnOnce() -> F + 'src,
+    ) -> usize {
+        // allocate the future
+        let fut = fut();
+        let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut);
+
+        // wrap it in a type that will actually drop the contents
+        let boxed_fut: BumpBox<dyn Future<Output = ()>> = unsafe { BumpBox::from_raw(fut) };
+
+        // erase the 'src lifetime for self-referential storage
+        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
+
+        let mut items = self.items.borrow_mut();
+        items.tasks.push(self_ref_fut);
+        items.tasks.len() - 1
+    }
+
+    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
     ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
+    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
     ///
-    /// # Example
+    /// ## Example
     ///
-    /// ```rust, ignore
-    /// fn App(cx: Context, props: &()) -> Element {
-    ///     let id = cx.get_current_subtree();
-    ///     rsx!(cx, div { "Subtree {id}"})
-    /// };
-    /// ```
-    pub fn get_current_subtree(&self) -> u32 {
-        self.subtree()
+    /// ```ignore
+    /// fn Component(cx: Scope, props: &Props) -> Element {
+    ///     // Lazy assemble the VNode tree
+    ///     let lazy_nodes = rsx!("hello world");
+    ///
+    ///     // Actually build the tree and allocate it
+    ///     cx.render(lazy_tree)
+    /// }
+    ///```
+    pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
+        let frame = self.wip_frame();
+        let bump = &frame.bump;
+        let factory = NodeFactory { bump };
+        let node = lazy_nodes.map(|f| f.call(factory))?;
+        let node = bump.alloc(node);
+
+        let node_ptr = node as *mut _;
+        let node_ptr = unsafe { std::mem::transmute(node_ptr) };
+
+        let link = NodeLink {
+            scope_id: Cell::new(Some(self.our_arena_idx)),
+            link_idx: Cell::new(0),
+            node: node_ptr,
+        };
+
+        Some(link)
+    }
+
+    pub fn suspend<'src, F: Future<Output = Element> + 'src>(
+        &'src self,
+        mut fut: impl FnMut() -> F,
+    ) -> Option<VNode> {
+        let channel = self.sender.clone();
+        let node_fut = fut();
+
+        let scope = self.scope_id();
+
+        // self.push_task(move || {
+        //
+        // async move {
+        //     //
+        //     let r = node_fut.await;
+        //     if let Some(node) = r {
+        //         channel
+        //             .unbounded_send(SchedulerMsg::Suspended { node, scope })
+        //             .unwrap();
+        //     }
+        // }
+        // });
+
+        todo!()
     }
 
     /// Store a value between renders
@@ -455,10 +467,9 @@ impl Scope {
         let mut nodes = &mut self.items.get_mut().suspended_nodes;
 
         if let Some(suspended) = nodes.remove(&task_id) {
-            let sus: &'a VSuspended<'static> = suspended;
-            let sus: &'a VSuspended<'a> = unsafe { std::mem::transmute(sus) };
-            let mut boxed = sus.callback.borrow_mut().take().unwrap();
-            let new_node: Element = boxed();
+            let sus: &'a VSuspended = suspended;
+            // let mut boxed = sus.callback.borrow_mut().take().unwrap();
+            // let new_node: Element = boxed();
         }
     }
 
@@ -469,7 +480,7 @@ impl Scope {
         }
     }
 
-    pub fn root_node<'a>(&'a self) -> &'a VNode<'a> {
+    pub fn root_node(&self) -> &VNode {
         let node = *self.wip_frame().nodes.borrow().get(0).unwrap();
         unsafe { std::mem::transmute(&*node) }
     }
