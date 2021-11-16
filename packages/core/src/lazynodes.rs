@@ -20,7 +20,7 @@ use std::mem;
 /// closures, but if we wrap the closure in a concrete type, we can maintain separate implementations of IntoVNode.
 ///
 ///
-/// ```rust
+/// ```rust, ignore
 /// LazyNodes::new(|f| f.element("div", [], [], [] None))
 /// ```
 pub struct LazyNodes<'a, 'b> {
@@ -47,7 +47,14 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
             fac.map(inner)
         };
 
-        unsafe { LazyNodes::new_inner(val) }
+        // miri does not know how to work with mucking directly into bytes
+        if cfg!(miri) {
+            Self {
+                inner: StackNodeStorage::Heap(Box::new(val)),
+            }
+        } else {
+            unsafe { LazyNodes::new_inner(val) }
+        }
     }
 
     unsafe fn new_inner<F>(val: F) -> Self
@@ -212,8 +219,6 @@ fn round_to_words(len: usize) -> usize {
 fn it_works() {
     let bump = bumpalo::Bump::new();
 
-    simple_logger::init().unwrap();
-
     let factory = NodeFactory { bump: &bump };
 
     let caller = NodeFactory::annotate_lazy(|f| {
@@ -232,9 +237,7 @@ fn it_drops() {
     use std::rc::Rc;
     let bump = bumpalo::Bump::new();
 
-    simple_logger::init().unwrap();
-
-    // let factory = NodeFactory { scope: &bump };
+    let factory = NodeFactory { bump: &bump };
 
     struct DropInner {
         id: i32,
@@ -246,7 +249,7 @@ fn it_drops() {
     }
     let val = Rc::new(10);
 
-    {
+    let caller = {
         let it = (0..10)
             .map(|i| {
                 let val = val.clone();
@@ -259,16 +262,13 @@ fn it_drops() {
             })
             .collect::<Vec<_>>();
 
-        let caller = NodeFactory::annotate_lazy(|f| {
+        NodeFactory::annotate_lazy(|f| {
             log::debug!("main closure");
             f.fragment_from_iter(it)
         })
-        .unwrap();
-    }
+        .unwrap()
+    };
 
-    // let nodes = caller.call(factory);
-
-    // dbg!(nodes);
-
-    dbg!(Rc::strong_count(&val));
+    let _ = caller.call(factory);
+    assert_eq!(Rc::strong_count(&val), 1);
 }

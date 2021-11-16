@@ -202,6 +202,8 @@ pub fn rsx(s: TokenStream) -> TokenStream {
 ///     Home,
 ///     #[at("/secure")]
 ///     Secure,
+///     #[at("/profile/{id}")]
+///     Profile(u32),
 ///     #[at("/404")]
 ///     NotFound,
 /// }

@@ -17,8 +17,6 @@ pub(crate) struct ProvidedStateInner<T> {
 impl<T> ProvidedStateInner<T> {
     pub(crate) fn notify_consumers(&mut self) {
         for consumer in self.consumers.iter() {
-            println!("notifiying {:?}", consumer);
-            // log::debug("notifiying {:?}", consumer);
             (self.notify_any)(*consumer);
         }
     }

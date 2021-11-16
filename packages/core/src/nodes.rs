@@ -12,6 +12,7 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
+    sync::Arc,
 };
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -25,7 +26,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust, ignore
     /// let mut vdom = VirtualDom::new();
     /// let node = vdom.render_vnode(rsx!( "hello" ));
     ///
@@ -41,7 +42,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut vdom = VirtualDom::new();
     ///
     /// let node = vdom.render_vnode(rsx!{
@@ -66,7 +67,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// rsx!{
     ///     a {}
     ///     link {}
@@ -81,7 +82,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn Example(cx: Context, props: &()) -> Element {
     ///     todo!()
     /// }
@@ -100,11 +101,11 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     ///
     ///
     /// ```
-    Suspended(&'src VSuspended<'src>),
+    Suspended(&'src VSuspended),
 
     /// Anchors are a type of placeholder VNode used when fragments don't contain any children.
     ///
@@ -112,7 +113,7 @@ pub enum VNode<'src> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut vdom = VirtualDom::new();
     ///
     /// let node = vdom.render_vnode(rsx!( Fragment {} ));
@@ -133,7 +134,7 @@ pub enum VNode<'src> {
     /// an `rsx!` call.
     ///
     /// # Example
-    /// ```rust
+    /// ```rust, ignore
     /// let mut vdom = VirtualDom::new();
     ///
     /// let node: NodeLink = vdom.render_vnode(rsx!( "hello" ));
@@ -202,7 +203,7 @@ impl<'src> VNode<'src> {
             VNode::Linked(c) => VNode::Linked(NodeLink {
                 scope_id: c.scope_id.clone(),
                 link_idx: c.link_idx.clone(),
-                node: c.node.clone(),
+                node: c.node,
             }),
         }
     }
@@ -260,9 +261,7 @@ pub struct VAnchor {
 /// A bump-allocated string slice and metadata.
 pub struct VText<'src> {
     pub text: &'src str,
-
     pub dom_id: Cell<Option<ElementId>>,
-
     pub is_static: bool,
 }
 
@@ -275,19 +274,12 @@ pub struct VFragment<'src> {
 /// An element like a "div" with children, listeners, and attributes.
 pub struct VElement<'a> {
     pub tag_name: &'static str,
-
     pub namespace: Option<&'static str>,
-
     pub key: Option<&'a str>,
-
     pub dom_id: Cell<Option<ElementId>>,
-
     pub parent_id: Cell<Option<ElementId>>,
-
     pub listeners: &'a [Listener<'a>],
-
     pub attributes: &'a [Attribute<'a>],
-
     pub children: &'a [VNode<'a>],
 }
 
@@ -310,7 +302,7 @@ impl Debug for VElement<'_> {
 ///
 /// This trait provides the ability to use custom elements in the `rsx!` macro.
 ///
-/// ```rust
+/// ```rust, ignore
 /// struct my_element;
 ///
 /// impl DioxusElement for my_element {
@@ -365,10 +357,10 @@ pub struct Listener<'bump> {
     pub event: &'static str,
 
     /// The actual callback that the user specified
-    pub(crate) callback: RefCell<Option<BumpBox<'bump, dyn FnMut(Box<dyn Any + Send>) + 'bump>>>,
+    pub(crate) callback:
+        RefCell<Option<BumpBox<'bump, dyn FnMut(std::sync::Arc<dyn Any + Send + Sync>) + 'bump>>>,
 }
 
-pub type VCompCaller<'src> = BumpBox<'src, dyn Fn(Context) -> Element + 'src>;
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
@@ -381,7 +373,7 @@ pub struct VComponent<'src> {
 
     pub(crate) can_memoize: bool,
 
-    pub(crate) hard_allocation: Cell<Option<*const ()>>,
+    pub(crate) _hard_allocation: Cell<Option<*const ()>>,
 
     // Raw pointer into the bump arena for the props of the component
     pub(crate) bump_props: *const (),
@@ -395,12 +387,11 @@ pub struct VComponent<'src> {
     pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
 }
 
-pub struct VSuspended<'a> {
-    pub task_id: u64,
+pub struct VSuspended {
+    pub task_id: usize,
+    pub scope: Cell<Option<ScopeId>>,
     pub dom_id: Cell<Option<ElementId>>,
-
-    #[allow(clippy::type_complexity)]
-    pub callback: RefCell<Option<BumpBox<'a, dyn FnMut() -> Element + 'a>>>,
+    pub parent: Cell<Option<ElementId>>,
 }
 
 /// A cached node is a "pointer" to a "rendered" node in a particular scope
@@ -426,16 +417,6 @@ impl PartialEq for NodeLink {
         self.node == other.node
     }
 }
-impl NodeLink {
-    // we don't want to let users clone NodeLinks
-    pub(crate) fn clone_inner(&self) -> Self {
-        Self {
-            link_idx: self.link_idx.clone(),
-            scope_id: self.scope_id.clone(),
-            node: self.node.clone(),
-        }
-    }
-}
 
 /// This struct provides an ergonomic API to quickly build VNodes.
 ///
@@ -453,7 +434,7 @@ impl<'a> NodeFactory<'a> {
 
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
-        &self.bump
+        self.bump
     }
 
     /// Directly pass in text blocks without the need to use the format_args macro.
@@ -591,14 +572,13 @@ impl<'a> NodeFactory<'a> {
                     // - Because FC<P> is the same, then P must be the same (even with generics)
                     // - Non-static P are autoderived to memoize as false
                     // - This comparator is only called on a corresponding set of bumpframes
-                    let props_memoized = unsafe {
-                        let real_other: &P = &*(other.bump_props as *const _ as *const P);
-                        props.memoize(real_other)
-                    };
-
+                    //
                     // It's only okay to memoize if there are no children and the props can be memoized
                     // Implementing memoize is unsafe and done automatically with the props trait
-                    props_memoized
+                    unsafe {
+                        let real_other: &P = &*(other.bump_props as *const _ as *const P);
+                        props.memoize(real_other)
+                    }
                 } else {
                     false
                 }
@@ -633,8 +613,7 @@ impl<'a> NodeFactory<'a> {
         let caller: &'a mut dyn Fn(&'a Scope) -> Element =
             bump.alloc(move |scope: &Scope| -> Element {
                 let props: &'_ P = unsafe { &*(bump_props as *const P) };
-                let res = component(scope, props);
-                res
+                component(scope, props)
             });
 
         let can_memoize = P::IS_STATIC;
@@ -648,14 +627,14 @@ impl<'a> NodeFactory<'a> {
             can_memoize,
             drop_props,
             associated_scope: Cell::new(None),
-            hard_allocation: Cell::new(None),
+            _hard_allocation: Cell::new(None),
         }))
     }
 
     pub fn listener(
         self,
         event: &'static str,
-        callback: BumpBox<'a, dyn FnMut(Box<dyn Any + Send>) + 'a>,
+        callback: BumpBox<'a, dyn FnMut(Arc<dyn Any + Send + Sync>) + 'a>,
     ) -> Listener<'a> {
         Listener {
             mounted_node: Cell::new(None),
@@ -664,9 +643,9 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn fragment_from_iter(
+    pub fn fragment_from_iter<'b, 'c>(
         self,
-        node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
+        node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
     ) -> VNode<'a> {
         let bump = self.bump;
         let mut nodes = bumpalo::collections::Vec::new_in(bump);
@@ -683,24 +662,25 @@ impl<'a> NodeFactory<'a> {
 
         let children = nodes.into_bump_slice();
 
-        // TODO
-        // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
-        //
-        // if cfg!(debug_assertions) {
-        //     if children.len() > 1 {
-        //         if children.last().unwrap().key().is_none() {
-        //             log::error!(
-        //                 r#"
-        // Warning: Each child in an array or iterator should have a unique "key" prop.
-        // Not providing a key will lead to poor performance with lists.
-        // See docs.rs/dioxus for more information.
-        // ---
-        // To help you identify where this error is coming from, we've generated a backtrace.
-        //                         "#,
-        //             );
-        //         }
-        //     }
-        // }
+        // todo: add a backtrace
+        if cfg!(debug_assertions) && children.len() > 1 && children.last().unwrap().key().is_none()
+        {
+            // todo: rsx! calls get turned into fragments which means they always trip this error
+            //
+            //
+            // use backtrace::Backtrace;
+            // let bt = Backtrace::new();
+
+            log::error!(
+                r#"
+                Warning: Each child in an array or iterator should have a unique "key" prop.
+                Not providing a key will lead to poor performance with lists.
+                See docs.rs/dioxus for more information.
+                -------------
+                "#,
+                // bt
+            );
+        }
 
         VNode::Fragment(VFragment {
             children,
@@ -782,7 +762,7 @@ impl Debug for NodeFactory<'_> {
 ///
 /// All dynamic content in the macros must flow in through `fragment_from_iter`. Everything else must be statically layed out.
 /// We pipe basically everything through `fragment_from_iter`, so we expect a very specific type:
-/// ```
+/// ```rust, ignore
 /// impl IntoIterator<Item = impl IntoVNode<'a>>
 /// ```
 ///
@@ -841,7 +821,7 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
     }
 }
 
-impl<'a> IntoVNode<'a> for LazyNodes<'a, '_> {
+impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.call(cx)
     }

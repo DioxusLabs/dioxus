@@ -30,7 +30,7 @@ fn shared_state_test() {
         edits,
         [
             CreateTextNode {
-                root: 0,
+                root: 1,
                 text: "Hello, world!"
             },
             AppendChildren { many: 1 },

@@ -11,7 +11,7 @@ use dioxus_html::on::*;
 struct ImEvent {
     event: String,
     mounted_dom_id: u64,
-    scope: u64,
+    // scope: u64,
     contents: serde_json::Value,
 }
 
@@ -20,11 +20,11 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
     let ImEvent {
         event,
         mounted_dom_id,
-        scope,
+        // scope,
         contents,
     } = ims.into_iter().next().unwrap();
 
-    let scope_id = ScopeId(scope as usize);
+    // let scope_id = ScopeId(scope as usize);
     let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
 
     let name = event_name_from_typ(&event);
@@ -33,75 +33,75 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
     UserEvent {
         name,
         priority: EventPriority::Low,
-        scope_id,
-        mounted_dom_id,
-        event,
+        scope_id: None,
+        element: mounted_dom_id,
+        data: event,
     }
 }
 
-fn make_synthetic_event(name: &str, val: serde_json::Value) -> Box<dyn Any + Send> {
+fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Send + Sync> {
     match name {
         "copy" | "cut" | "paste" => {
             //
-            Box::new(ClipboardEvent {})
+            Arc::new(ClipboardEvent {})
         }
         "compositionend" | "compositionstart" | "compositionupdate" => {
-            Box::new(serde_json::from_value::<CompositionEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<CompositionEvent>(val).unwrap())
         }
         "keydown" | "keypress" | "keyup" => {
             let evt = serde_json::from_value::<KeyboardEvent>(val).unwrap();
-            Box::new(evt)
+            Arc::new(evt)
         }
         "focus" | "blur" => {
             //
-            Box::new(FocusEvent {})
+            Arc::new(FocusEvent {})
         }
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
         "change" | "input" | "invalid" | "reset" | "submit" => {
-            Box::new(serde_json::from_value::<FormEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<FormEvent>(val).unwrap())
         }
 
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            Box::new(serde_json::from_value::<MouseEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<MouseEvent>(val).unwrap())
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            Box::new(serde_json::from_value::<PointerEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<PointerEvent>(val).unwrap())
         }
         "select" => {
             //
-            Box::new(serde_json::from_value::<SelectionEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<SelectionEvent>(val).unwrap())
         }
 
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
-            Box::new(serde_json::from_value::<TouchEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<TouchEvent>(val).unwrap())
         }
 
-        "scroll" => Box::new(()),
+        "scroll" => Arc::new(()),
 
-        "wheel" => Box::new(serde_json::from_value::<WheelEvent>(val).unwrap()),
+        "wheel" => Arc::new(serde_json::from_value::<WheelEvent>(val).unwrap()),
 
         "animationstart" | "animationend" | "animationiteration" => {
-            Box::new(serde_json::from_value::<AnimationEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<AnimationEvent>(val).unwrap())
         }
 
-        "transitionend" => Box::new(serde_json::from_value::<TransitionEvent>(val).unwrap()),
+        "transitionend" => Arc::new(serde_json::from_value::<TransitionEvent>(val).unwrap()),
 
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
             //
-            Box::new(MediaEvent {})
+            Arc::new(MediaEvent {})
         }
 
-        "toggle" => Box::new(ToggleEvent {}),
+        "toggle" => Arc::new(ToggleEvent {}),
 
-        _ => Box::new(()),
+        _ => Arc::new(()),
     }
 }
 

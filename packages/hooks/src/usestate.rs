@@ -126,7 +126,10 @@ impl<'a, T: 'static> UseState<'a, T> {
 
     pub fn setter(&self) -> Rc<dyn Fn(T)> {
         let slot = self.inner.wip.clone();
-        Rc::new(move |new| *slot.borrow_mut() = Some(new))
+        Rc::new(move |new| {
+            //
+            *slot.borrow_mut() = Some(new);
+        })
     }
 
     pub fn for_async(&self) -> AsyncUseState<T> {

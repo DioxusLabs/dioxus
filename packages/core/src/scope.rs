@@ -43,12 +43,8 @@ pub type Context<'a> = &'a Scope;
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// use case they might have.
 pub struct Scope {
-    // safety:
-    //
-    // pointers to scopes are *always* valid since they are bump allocated and never freed until this scope is also freed
-    // this is just a bit of a hack to not need an Rc to the ScopeArena.
-    // todo: replace this will ScopeId and provide a connection to scope arena directly
     pub(crate) parent_scope: Option<*mut Scope>,
+    pub(crate) container: ElementId,
 
     pub(crate) our_arena_idx: ScopeId,
 
@@ -60,23 +56,14 @@ pub struct Scope {
 
     pub(crate) generation: Cell<u32>,
 
-    // The double-buffering situation that we will use
     pub(crate) frames: [BumpFrame; 2],
 
     pub(crate) caller: *const dyn Fn(&Scope) -> Element,
 
-    /*
-    we care about:
-    - listeners (and how to call them when an event is triggered)
-    - borrowed props (and how to drop them when the parent is dropped)
-    - suspended nodes (and how to call their callback when their associated tasks are complete)
-    */
     pub(crate) items: RefCell<SelfReferentialItems<'static>>,
 
-    // State
     pub(crate) hooks: HookList,
 
-    // todo: move this into a centralized place - is more memory efficient
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
     pub(crate) sender: UnboundedSender<SchedulerMsg>,
@@ -85,7 +72,7 @@ pub struct Scope {
 pub struct SelfReferentialItems<'a> {
     pub(crate) listeners: Vec<&'a Listener<'a>>,
     pub(crate) borrowed_props: Vec<&'a VComponent<'a>>,
-    pub(crate) suspended_nodes: FxHashMap<u64, &'a VSuspended<'a>>,
+    pub(crate) suspended_nodes: FxHashMap<u64, &'a VSuspended>,
     pub(crate) tasks: Vec<BumpBox<'a, dyn Future<Output = ()>>>,
     pub(crate) pending_effects: Vec<BumpBox<'a, dyn FnMut()>>,
 }
@@ -108,7 +95,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
@@ -120,13 +107,39 @@ impl Scope {
         self.subtree.get()
     }
 
+    /// Create a new subtree with this scope as the root of the subtree.
+    ///
+    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
+    /// the mutations to the correct window/portal/subtree.
+    ///
+    /// This method
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// fn App(cx: Context, props: &()) -> Element {
+    ///     todo!();
+    ///     rsx!(cx, div { "Subtree {id}"})
+    /// };
+    /// ```
+    pub fn create_subtree(&self) -> Option<u32> {
+        if self.is_subtree_root.get() {
+            None
+        } else {
+            todo!()
+            // let cur = self.subtree().get();
+            // self.shared.cur_subtree.set(cur + 1);
+            // Some(cur)
+        }
+    }
+
     /// Get the height of this Scope - IE the number of scopes above it.
     ///
     /// A Scope with a height of `0` is the root scope - there are no other scopes above it.
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
@@ -146,7 +159,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
@@ -155,10 +168,7 @@ impl Scope {
     /// assert_eq!(base.parent(), None);
     /// ```
     pub fn parent(&self) -> Option<ScopeId> {
-        match self.parent_scope {
-            Some(p) => Some(unsafe { &*p }.our_arena_idx),
-            None => None,
-        }
+        self.parent_scope.map(|p| unsafe { &*p }.our_arena_idx)
     }
 
     /// Get the ID of this Scope within this Dioxus VirtualDOM.
@@ -167,7 +177,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     /// let base = dom.base_scope();
@@ -186,6 +196,7 @@ impl Scope {
         let chan = self.sender.clone();
         let id = self.scope_id();
         Rc::new(move || {
+            log::debug!("set on channel an update for scope {:?}", id);
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
@@ -223,6 +234,104 @@ impl Scope {
         &self.wip_frame().bump
     }
 
+    /// This method enables the ability to expose state to children further down the VirtualDOM Tree.
+    ///
+    /// This is a "fundamental" operation and should only be called during initialization of a hook.
+    ///
+    /// For a hook that provides the same functionality, use `use_provide_state` and `use_consume_state` instead.
+    ///
+    /// When the component is dropped, so is the context. Be aware of this behavior when consuming
+    /// the context via Rc/Weak.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// struct SharedState(&'static str);
+    ///
+    /// static App: FC<()> = |cx, props|{
+    ///     cx.use_hook(|_| cx.provide_state(SharedState("world")), |_| {}, |_| {});
+    ///     rsx!(cx, Child {})
+    /// }
+    ///
+    /// static Child: FC<()> = |cx, props| {
+    ///     let state = cx.consume_state::<SharedState>();
+    ///     rsx!(cx, div { "hello {state.0}" })
+    /// }
+    /// ```
+    pub fn provide_state<T: 'static>(&self, value: T) {
+        self.shared_contexts
+            .borrow_mut()
+            .insert(TypeId::of::<T>(), Rc::new(value))
+            .map(|f| f.downcast::<T>().ok())
+            .flatten();
+    }
+
+    /// Try to retrieve a SharedState with type T from the any parent Scope.
+    pub fn consume_state<T: 'static>(&self) -> Option<Rc<T>> {
+        if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
+            Some(shared.clone().downcast::<T>().unwrap())
+        } else {
+            let mut search_parent = self.parent_scope;
+
+            while let Some(parent_ptr) = search_parent {
+                let parent = unsafe { &*parent_ptr };
+                if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
+                    return Some(shared.clone().downcast::<T>().unwrap());
+                }
+                search_parent = parent.parent_scope;
+            }
+            None
+        }
+    }
+
+    /// Push an effect to be ran after the component has been successfully mounted to the dom
+    /// Returns the effect's position in the stack
+    pub fn push_effect<'src>(&'src self, effect: impl FnOnce() + 'src) -> usize {
+        // this is some tricker to get around not being able to actually call fnonces
+        let mut slot = Some(effect);
+        let fut: &mut dyn FnMut() = self.bump().alloc(move || slot.take().unwrap()());
+
+        // wrap it in a type that will actually drop the contents
+        let boxed_fut = unsafe { BumpBox::from_raw(fut) };
+
+        // erase the 'src lifetime for self-referential storage
+        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
+
+        let mut items = self.items.borrow_mut();
+        items.pending_effects.push(self_ref_fut);
+        items.pending_effects.len() - 1
+    }
+
+    /// Pushes the future onto the poll queue to be polled
+    /// The future is forcibly dropped if the component is not ready by the next render
+    pub fn push_task<'src, F: Future<Output = ()>>(
+        &'src self,
+        fut: impl FnOnce() -> F + 'src,
+    ) -> usize
+    where
+        F::Output: 'src,
+        F: 'src,
+    {
+        self.sender
+            .unbounded_send(SchedulerMsg::TaskPushed(self.our_arena_idx))
+            .unwrap();
+
+        // allocate the future
+        let fut = fut();
+        let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut);
+
+        // wrap it in a type that will actually drop the contents
+        let boxed_fut: BumpBox<dyn Future<Output = ()>> = unsafe { BumpBox::from_raw(fut) };
+
+        // erase the 'src lifetime for self-referential storage
+        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
+
+        let mut items = self.items.borrow_mut();
+
+        items.tasks.push(self_ref_fut);
+        items.tasks.len() - 1
+    }
+
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
     ///
     /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
@@ -257,132 +366,29 @@ impl Scope {
         Some(link)
     }
 
-    /// Push an effect to be ran after the component has been successfully mounted to the dom
-    /// Returns the effect's position in the stack
-    pub fn push_effect<'src>(&'src self, effect: impl FnOnce() + 'src) -> usize {
-        // this is some tricker to get around not being able to actually call fnonces
-        let mut slot = Some(effect);
-        let fut: &mut dyn FnMut() = self.bump().alloc(move || slot.take().unwrap()());
+    pub fn suspend<'src, F: Future<Output = Element> + 'src>(
+        &'src self,
+        mut fut: impl FnMut() -> F,
+    ) -> Option<VNode> {
+        let channel = self.sender.clone();
+        let node_fut = fut();
 
-        // wrap it in a type that will actually drop the contents
-        let boxed_fut = unsafe { BumpBox::from_raw(fut) };
+        let scope = self.scope_id();
 
-        // erase the 'src lifetime for self-referential storage
-        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
+        // self.push_task(move || {
+        //
+        // async move {
+        //     //
+        //     let r = node_fut.await;
+        //     if let Some(node) = r {
+        //         channel
+        //             .unbounded_send(SchedulerMsg::Suspended { node, scope })
+        //             .unwrap();
+        //     }
+        // }
+        // });
 
-        let mut items = self.items.borrow_mut();
-        items.pending_effects.push(self_ref_fut);
-        items.pending_effects.len() - 1
-    }
-
-    /// Pushes the future onto the poll queue to be polled
-    /// The future is forcibly dropped if the component is not ready by the next render
-    pub fn push_task<'src>(&'src self, fut: impl Future<Output = ()> + 'src) -> usize {
-        // allocate the future
-        let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut);
-
-        // wrap it in a type that will actually drop the contents
-        let boxed_fut: BumpBox<dyn Future<Output = ()>> = unsafe { BumpBox::from_raw(fut) };
-
-        // erase the 'src lifetime for self-referential storage
-        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
-
-        let mut items = self.items.borrow_mut();
-        items.tasks.push(self_ref_fut);
-        items.tasks.len() - 1
-    }
-
-    /// This method enables the ability to expose state to children further down the VirtualDOM Tree.
-    ///
-    /// This is a "fundamental" operation and should only be called during initialization of a hook.
-    ///
-    /// For a hook that provides the same functionality, use `use_provide_state` and `use_consume_state` instead.
-    ///
-    /// When the component is dropped, so is the context. Be aware of this behavior when consuming
-    /// the context via Rc/Weak.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// struct SharedState(&'static str);
-    ///
-    /// static App: FC<()> = |cx, props|{
-    ///     cx.use_hook(|_| cx.provide_state(SharedState("world")), |_| {}, |_| {});
-    ///     rsx!(cx, Child {})
-    /// }
-    ///
-    /// static Child: FC<()> = |cx, props|{
-    ///     let state = cx.consume_state::<SharedState>();
-    ///     rsx!(cx, div { "hello {state.0}" })
-    /// }
-    /// ```
-    pub fn provide_state<T: 'static>(&self, value: T) {
-        self.shared_contexts
-            .borrow_mut()
-            .insert(TypeId::of::<T>(), Rc::new(value))
-            .map(|f| f.downcast::<T>().ok())
-            .flatten();
-    }
-
-    /// Try to retrieve a SharedState with type T from the any parent Scope.
-    pub fn consume_state<T: 'static>(&self) -> Option<Rc<T>> {
-        if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-            Some(shared.clone().downcast::<T>().unwrap())
-        } else {
-            let mut search_parent = self.parent_scope;
-
-            while let Some(parent_ptr) = search_parent {
-                let parent = unsafe { &*parent_ptr };
-                if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-                    return Some(shared.clone().downcast::<T>().unwrap());
-                }
-                search_parent = parent.parent_scope;
-            }
-            None
-        }
-    }
-
-    /// Create a new subtree with this scope as the root of the subtree.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    /// This method
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// fn App(cx: Context, props: &()) -> Element {
-    ///     todo!();
-    ///     rsx!(cx, div { "Subtree {id}"})
-    /// };
-    /// ```
-    pub fn create_subtree(&self) -> Option<u32> {
-        if self.is_subtree_root.get() {
-            None
-        } else {
-            todo!()
-            // let cur = self.subtree().get();
-            // self.shared.cur_subtree.set(cur + 1);
-            // Some(cur)
-        }
-    }
-
-    /// Get the subtree ID that this scope belongs to.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// fn App(cx: Context, props: &()) -> Element {
-    ///     let id = cx.get_current_subtree();
-    ///     rsx!(cx, div { "Subtree {id}"})
-    /// };
-    /// ```
-    pub fn get_current_subtree(&self) -> u32 {
-        self.subtree()
+        todo!()
     }
 
     /// Store a value between renders
@@ -437,6 +443,13 @@ impl Scope {
         }
     }
 
+    pub(crate) fn wip_frame_mut(&mut self) -> &mut BumpFrame {
+        match self.generation.get() & 1 == 0 {
+            true => &mut self.frames[0],
+            false => &mut self.frames[1],
+        }
+    }
+
     pub(crate) fn fin_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 1 {
             true => &self.frames[0],
@@ -444,39 +457,18 @@ impl Scope {
         }
     }
 
-    pub unsafe fn reset_wip_frame(&self) {
+    /// Reset this component's frame
+    ///
+    /// # Safety:
+    /// This method breaks every reference of VNodes in the current frame.
+    pub(crate) unsafe fn reset_wip_frame(&mut self) {
         // todo: unsafecell or something
-        let bump = self.wip_frame() as *const _ as *mut Bump;
-        let g = &mut *bump;
-        g.reset();
+        let bump = self.wip_frame_mut();
+        bump.bump.reset();
     }
 
-    pub fn cycle_frame(&self) {
+    pub(crate) fn cycle_frame(&self) {
         self.generation.set(self.generation.get() + 1);
-    }
-
-    /// A safe wrapper around calling listeners
-    pub(crate) fn call_listener(&self, event: UserEvent, element: ElementId) {
-        let listners = &mut self.items.borrow_mut().listeners;
-
-        let listener = listners.iter().find(|lis| {
-            let search = lis;
-            if search.event == event.name {
-                let search_id = search.mounted_node.get();
-                search_id.map(|f| f == element).unwrap_or(false)
-            } else {
-                false
-            }
-        });
-
-        if let Some(listener) = listener {
-            let mut cb = listener.callback.borrow_mut();
-            if let Some(cb) = cb.as_mut() {
-                (cb)(event.event);
-            }
-        } else {
-            log::warn!("An event was triggered but there was no listener to handle it");
-        }
     }
 
     // General strategy here is to load up the appropriate suspended task and then run it.
@@ -485,10 +477,9 @@ impl Scope {
         let mut nodes = &mut self.items.get_mut().suspended_nodes;
 
         if let Some(suspended) = nodes.remove(&task_id) {
-            let sus: &'a VSuspended<'static> = unsafe { &*suspended };
-            let sus: &'a VSuspended<'a> = unsafe { std::mem::transmute(sus) };
-            let mut boxed = sus.callback.borrow_mut().take().unwrap();
-            let new_node: Element = boxed();
+            let sus: &'a VSuspended = suspended;
+            // let mut boxed = sus.callback.borrow_mut().take().unwrap();
+            // let new_node: Element = boxed();
         }
     }
 
@@ -499,7 +490,7 @@ impl Scope {
         }
     }
 
-    pub fn root_node<'a>(&'a self) -> &'a VNode<'a> {
+    pub fn root_node(&self) -> &VNode {
         let node = *self.wip_frame().nodes.borrow().get(0).unwrap();
         unsafe { std::mem::transmute(&*node) }
     }

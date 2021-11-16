@@ -11,19 +11,18 @@
 //! Don't have a good way to validate, everything is done manually ATM
 
 use dioxus::prelude::*;
+use dioxus::DomEdit;
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
+use DomEdit::*;
 
 #[test]
 fn app_runs() {
-    static App: FC<()> = |cx, props| {
-        //
-        cx.render(rsx!( div{"hello"} ))
-    };
+    static App: FC<()> = |cx, props| rsx!(cx, div{"hello"} );
+
     let mut vdom = VirtualDom::new(App);
     let edits = vdom.rebuild();
-    dbg!(edits);
 }
 
 #[test]
@@ -65,9 +64,25 @@ fn conditional_rendering() {
     let mut vdom = VirtualDom::new(App);
 
     let mutations = vdom.rebuild();
-    dbg!(&mutations);
-    // the "false" fragment should generate an empty placeholder to re-visit
-    assert!(mutations.edits[mutations.edits.len() - 2].is("CreatePlaceholder"));
+    assert_eq!(
+        mutations.edits,
+        [
+            CreateElement { root: 1, tag: "h1" },
+            CreateTextNode {
+                root: 2,
+                text: "hello"
+            },
+            AppendChildren { many: 1 },
+            CreateElement {
+                root: 3,
+                tag: "span"
+            },
+            CreateTextNode { root: 4, text: "a" },
+            AppendChildren { many: 1 },
+            CreatePlaceholder { root: 5 },
+            AppendChildren { many: 3 },
+        ]
+    )
 }
 
 #[test]
@@ -87,18 +102,4 @@ fn child_components() {
     let mut vdom = VirtualDom::new(App);
     let edits = vdom.rebuild();
     dbg!(edits);
-}
-
-#[test]
-fn suspended_works() {
-    todo!()
-    // static App: FC<()> = |cx, props| {
-    //     let title = use_suspense(cx, || async { "bob" }, move |cx, f| todo!());
-    //     // let title = use_suspense(cx, || async { "bob" }, move |cx, f| rsx! { "{f}"});
-    //     cx.render(rsx!("hello" { title }))
-    // };
-
-    // let mut vdom = VirtualDom::new(App);
-    // let edits = vdom.rebuild();
-    // dbg!(edits);
 }
