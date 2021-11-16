@@ -55,11 +55,6 @@ pub fn launch_with_props<P: Properties + 'static + Send + Sync>(
 }
 
 #[derive(Serialize)]
-enum RpcEvent<'a> {
-    Initialize { edits: Vec<DomEdit<'a>> },
-}
-
-#[derive(Serialize)]
 struct Response<'a> {
     pre_rendered: Option<String>,
     edits: Vec<DomEdit<'a>>,
@@ -74,7 +69,7 @@ pub fn run<T: 'static + Send + Sync>(
     let mut cfg = DesktopConfig::new();
     user_builder(&mut cfg);
     let DesktopConfig {
-        window,
+        window: window_cfg,
         manual_edits,
         pre_rendered,
         ..
@@ -100,7 +95,7 @@ pub fn run<T: 'static + Send + Sync>(
 
         match window_event {
             Event::NewEvents(StartCause::Init) => {
-                let window = create_window(event_loop);
+                let window = create_window(event_loop, &window_cfg);
                 let window_id = window.id();
                 let sender =
                     launch_vdom_with_tokio(root, props_shared.take().unwrap(), edit_queue.clone());
@@ -234,13 +229,9 @@ fn build_menu() -> MenuBar {
     menu_bar_menu
 }
 
-fn create_window(event_loop: &EventLoopWindowTarget<()>) -> Window {
-    WindowBuilder::new()
-        .with_maximized(true)
-        .with_menu(build_menu())
-        .with_title("Dioxus App")
-        .build(event_loop)
-        .unwrap()
+fn create_window(event_loop: &EventLoopWindowTarget<()>, cfg: &WindowBuilder) -> Window {
+    let builder = cfg.clone().with_menu(build_menu());
+    builder.build(event_loop).unwrap()
 }
 
 fn create_webview(
@@ -264,7 +255,7 @@ fn create_webview(
                 }
                 _ => {}
             }
-
+            // always driven through eval
             None
         })
         // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"

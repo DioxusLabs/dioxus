@@ -682,8 +682,35 @@ builder_constructors! {
     /// Build a
     /// [`<script>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script)
     /// element.
+    ///
+    /// The [`script`] HTML element is used to embed executable code or data; this is typically used to embed or refer to
+    /// JavaScript code. The [`script`] element can also be used with other languages, such as WebGL's GLSL shader
+    /// programming language and JSON.
     script {
+        /// Normal script elements pass minimal information to the window.onerror for scripts which do not pass the
+        /// standard CORS checks. To allow error logging for sites which use a separate domain for static media, use
+        /// this attribute. See CORS settings attributes for a more descriptive explanation of its valid arguments.
         crossorigin: CrossOrigin,
+
+        /// This Boolean attribute is set to indicate to a browser that the script is meant to be executed after the
+        /// document has been parsed, but before firing DOMContentLoaded.
+        ///
+        /// Scripts with the defer attribute will prevent the DOMContentLoaded event from firing until the script has
+        /// loaded and finished evaluating.
+        ///
+        /// ----
+        /// ### Warning:
+        ///
+        /// This attribute must not be used if the src attribute is absent (i.e. for inline scripts), in this
+        /// case it would have no effect.
+        ///
+        /// ----
+        ///
+        /// The defer attribute has no effect on module scripts — they defer by default.
+        /// Scripts with the defer attribute will execute in the order in which they appear in the document.
+        ///
+        /// This attribute allows the elimination of parser-blocking JavaScript where the browser would have to load and
+        /// evaluate scripts before continuing to parse. async has a similar effect in this case.
         defer: Bool,
         integrity: Integrity,
         nomodule: Bool,

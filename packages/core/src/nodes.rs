@@ -643,6 +643,29 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    pub fn fragment_root<'b, 'c>(
+        self,
+        node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
+    ) -> VNode<'a> {
+        let bump = self.bump;
+        let mut nodes = bumpalo::collections::Vec::new_in(bump);
+
+        for node in node_iter {
+            nodes.push(node.into_vnode(self));
+        }
+
+        if nodes.is_empty() {
+            nodes.push(VNode::Anchor(bump.alloc(VAnchor {
+                dom_id: empty_cell(),
+            })));
+        }
+
+        VNode::Fragment(VFragment {
+            children: nodes.into_bump_slice(),
+            key: None,
+        })
+    }
+
     pub fn fragment_from_iter<'b, 'c>(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
@@ -665,20 +688,17 @@ impl<'a> NodeFactory<'a> {
         // todo: add a backtrace
         if cfg!(debug_assertions) && children.len() > 1 && children.last().unwrap().key().is_none()
         {
-            // todo: rsx! calls get turned into fragments which means they always trip this error
-            //
-            //
-            // use backtrace::Backtrace;
-            // let bt = Backtrace::new();
-
+            use backtrace::Backtrace;
+            let bt = Backtrace::new();
             log::error!(
                 r#"
                 Warning: Each child in an array or iterator should have a unique "key" prop.
                 Not providing a key will lead to poor performance with lists.
                 See docs.rs/dioxus for more information.
                 -------------
+                {:?}
                 "#,
-                // bt
+                bt
             );
         }
 
