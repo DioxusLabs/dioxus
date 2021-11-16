@@ -347,11 +347,11 @@ impl Scope {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(&'src self, lazy_nodes: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
+    pub fn render<'src>(&'src self, rsx: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
         let frame = self.wip_frame();
         let bump = &frame.bump;
         let factory = NodeFactory { bump };
-        let node = lazy_nodes.map(|f| f.call(factory))?;
+        let node = rsx.map(|f| f.call(factory))?;
         let node = bump.alloc(node);
 
         let node_ptr = node as *mut _;
