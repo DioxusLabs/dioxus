@@ -39,6 +39,7 @@ indexmap = "1.7.0"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
+backtrace = "0.3.63"
 
 [dev-dependencies]
 anyhow = "1.0.42"

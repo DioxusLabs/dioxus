@@ -643,9 +643,9 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    pub fn fragment_from_iter(
+    pub fn fragment_from_iter<'b, 'c>(
         self,
-        node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
+        node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
     ) -> VNode<'a> {
         let bump = self.bump;
         let mut nodes = bumpalo::collections::Vec::new_in(bump);
@@ -662,24 +662,25 @@ impl<'a> NodeFactory<'a> {
 
         let children = nodes.into_bump_slice();
 
-        // TODO
-        // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
-        //
-        // if cfg!(debug_assertions) {
-        //     if children.len() > 1 {
-        //         if children.last().unwrap().key().is_none() {
-        //             log::error!(
-        //                 r#"
-        // Warning: Each child in an array or iterator should have a unique "key" prop.
-        // Not providing a key will lead to poor performance with lists.
-        // See docs.rs/dioxus for more information.
-        // ---
-        // To help you identify where this error is coming from, we've generated a backtrace.
-        //                         "#,
-        //             );
-        //         }
-        //     }
-        // }
+        // todo: add a backtrace
+        if cfg!(debug_assertions) && children.len() > 1 && children.last().unwrap().key().is_none()
+        {
+            // todo: rsx! calls get turned into fragments which means they always trip this error
+            //
+            //
+            // use backtrace::Backtrace;
+            // let bt = Backtrace::new();
+
+            log::error!(
+                r#"
+                Warning: Each child in an array or iterator should have a unique "key" prop.
+                Not providing a key will lead to poor performance with lists.
+                See docs.rs/dioxus for more information.
+                -------------
+                "#,
+                // bt
+            );
+        }
 
         VNode::Fragment(VFragment {
             children,
@@ -820,7 +821,7 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
     }
 }
 
-impl<'a> IntoVNode<'a> for LazyNodes<'a, '_> {
+impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.call(cx)
     }

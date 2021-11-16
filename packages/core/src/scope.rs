@@ -196,6 +196,7 @@ impl Scope {
         let chan = self.sender.clone();
         let id = self.scope_id();
         Rc::new(move || {
+            log::debug!("set on channel an update for scope {:?}", id);
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
@@ -303,10 +304,18 @@ impl Scope {
 
     /// Pushes the future onto the poll queue to be polled
     /// The future is forcibly dropped if the component is not ready by the next render
-    pub fn push_task<'src, F: Future<Output = ()> + 'src>(
+    pub fn push_task<'src, F: Future<Output = ()>>(
         &'src self,
-        mut fut: impl FnOnce() -> F + 'src,
-    ) -> usize {
+        fut: impl FnOnce() -> F + 'src,
+    ) -> usize
+    where
+        F::Output: 'src,
+        F: 'src,
+    {
+        self.sender
+            .unbounded_send(SchedulerMsg::TaskPushed(self.our_arena_idx))
+            .unwrap();
+
         // allocate the future
         let fut = fut();
         let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut);
@@ -318,6 +327,7 @@ impl Scope {
         let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
 
         let mut items = self.items.borrow_mut();
+
         items.tasks.push(self_ref_fut);
         items.tasks.len() - 1
     }

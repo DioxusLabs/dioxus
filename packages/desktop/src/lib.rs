@@ -5,7 +5,7 @@
 
 use std::borrow::BorrowMut;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
@@ -20,10 +20,10 @@ pub use wry;
 
 use wry::application::accelerator::{Accelerator, SysMods};
 use wry::application::event::{ElementState, Event, StartCause, WindowEvent};
-use wry::application::event_loop::{self, ControlFlow, EventLoop};
+use wry::application::event_loop::{self, ControlFlow, EventLoop, EventLoopWindowTarget};
 use wry::application::keyboard::{Key, KeyCode, ModifiersState};
 use wry::application::menu::{MenuBar, MenuItem, MenuItemAttributes};
-use wry::application::window::Fullscreen;
+use wry::application::window::{Fullscreen, WindowId};
 use wry::webview::{WebView, WebViewBuilder};
 use wry::{
     application::menu,
@@ -59,12 +59,6 @@ enum RpcEvent<'a> {
     Initialize { edits: Vec<DomEdit<'a>> },
 }
 
-#[derive(Debug)]
-enum BridgeEvent {
-    Initialize(serde_json::Value),
-    Update(serde_json::Value),
-}
-
 #[derive(Serialize)]
 struct Response<'a> {
     pre_rendered: Option<String>,
@@ -88,111 +82,29 @@ pub fn run<T: 'static + Send + Sync>(
 
     // All of our webview windows are stored in a way that we can look them up later
     // The "DesktopContext" will provide functionality for spawning these windows
-    let mut webviews = HashMap::new();
+    let mut webviews = HashMap::<WindowId, WebView>::new();
     let event_loop = EventLoop::new();
 
     let props_shared = Cell::new(Some(props));
 
     // create local modifier state
-    let mut modifiers = ModifiersState::default();
+    let modifiers = ModifiersState::default();
 
     let quit_hotkey = Accelerator::new(SysMods::Cmd, KeyCode::KeyQ);
 
-    event_loop.run(move |event, event_loop, control_flow| {
+    let edit_queue = Arc::new(RwLock::new(VecDeque::new()));
+    let is_ready: Arc<AtomicBool> = Default::default();
+
+    event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
-        match event {
+        match window_event {
             Event::NewEvents(StartCause::Init) => {
-                // create main menubar menu
-                let mut menu_bar_menu = MenuBar::new();
-
-                // create `first_menu`
-                let mut first_menu = MenuBar::new();
-
-                first_menu.add_native_item(MenuItem::About("Todos".to_string()));
-                first_menu.add_native_item(MenuItem::Services);
-                first_menu.add_native_item(MenuItem::Separator);
-                first_menu.add_native_item(MenuItem::Hide);
-                first_menu.add_native_item(MenuItem::HideOthers);
-                first_menu.add_native_item(MenuItem::ShowAll);
-
-                first_menu.add_native_item(MenuItem::Quit);
-                first_menu.add_native_item(MenuItem::CloseWindow);
-
-                // create second menu
-                let mut second_menu = MenuBar::new();
-
-                // second_menu.add_submenu("Sub menu", true, my_sub_menu);
-                second_menu.add_native_item(MenuItem::Copy);
-                second_menu.add_native_item(MenuItem::Paste);
-                second_menu.add_native_item(MenuItem::SelectAll);
-
-                menu_bar_menu.add_submenu("First menu", true, first_menu);
-                menu_bar_menu.add_submenu("Second menu", true, second_menu);
-
-                let window = WindowBuilder::new()
-                    .with_maximized(true)
-                    .with_menu(menu_bar_menu)
-                    .with_title("Dioxus App")
-                    .build(event_loop)
-                    .unwrap();
+                let window = create_window(event_loop);
                 let window_id = window.id();
-
-                let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
-                let my_props = props_shared.take().unwrap();
-
-                let sender = launch_vdom_with_tokio(root, my_props, event_tx);
-
-                let locked_receiver = Rc::new(RefCell::new(event_rx));
-
-                let webview = WebViewBuilder::new(window)
-                    .unwrap()
-                    .with_url("wry://index.html")
-                    .unwrap()
-                    .with_rpc_handler(move |_window: &Window, mut req: RpcRequest| {
-                        let mut rx = (*locked_receiver).borrow_mut();
-                        match req.method.as_str() {
-                            "initiate" => {
-                                if let Ok(BridgeEvent::Initialize(edits)) = rx.try_recv() {
-                                    Some(RpcResponse::new_result(req.id.take(), Some(edits)))
-                                } else {
-                                    None
-                                }
-                            }
-                            "user_event" => {
-                                let event = events::trigger_from_serialized(req.params.unwrap());
-                                log::debug!("User event: {:?}", event);
-
-                                sender.unbounded_send(SchedulerMsg::UiEvent(event)).unwrap();
-
-                                if let Some(BridgeEvent::Update(edits)) = rx.blocking_recv() {
-                                    log::info!("bridge received message");
-                                    Some(RpcResponse::new_result(req.id.take(), Some(edits)))
-                                } else {
-                                    log::info!("none received message");
-                                    None
-                                }
-                            }
-                            _ => None,
-                        }
-                    })
-                    // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"
-                    // For now, we only serve two pieces of content which get included as bytes into the final binary.
-                    .with_custom_protocol("wry".into(), move |request| {
-                        let path = request.uri().replace("wry://", "");
-                        let (data, meta) = match path.as_str() {
-                            "index.html" => (include_bytes!("./index.html").to_vec(), "text/html"),
-                            "index.html/index.js" => {
-                                (include_bytes!("./index.js").to_vec(), "text/javascript")
-                            }
-                            _ => unimplemented!("path {}", path),
-                        };
-
-                        wry::http::ResponseBuilder::new().mimetype(meta).body(data)
-                    })
-                    .build()
-                    .unwrap();
-
+                let sender =
+                    launch_vdom_with_tokio(root, props_shared.take().unwrap(), edit_queue.clone());
+                let webview = create_webview(window, is_ready.clone(), sender);
                 webviews.insert(window_id, webview);
             }
 
@@ -206,29 +118,17 @@ pub fn run<T: 'static + Send + Sync>(
                         *control_flow = ControlFlow::Exit;
                     }
                 }
-                // catch only pressed event
-                WindowEvent::KeyboardInput { event, .. } => {
-                    log::debug!("keybowrd input");
-                    if quit_hotkey.matches(&modifiers, &event.physical_key) {
-                        log::debug!("quitting");
+                WindowEvent::Moved(pos) => {
+                    //
+                }
 
+                WindowEvent::KeyboardInput { event, .. } => {
+                    if quit_hotkey.matches(&modifiers, &event.physical_key) {
                         webviews.remove(&window_id);
                         if webviews.is_empty() {
                             *control_flow = ControlFlow::Exit;
                         }
                     }
-
-                    // println!(
-                    //     "KeyEvent:  `Shift` + `1` | logical_key: {:?}",
-                    //     &event.logical_key
-                    // );
-                    // we can match manually without `Accelerator`
-
-                    // else if event.key_without_modifiers() == Key::Character("1")
-                    //     && modifiers.is_empty()
-                    // {
-                    //     println!("KeyEvent: `1`");
-                    // }
                 }
 
                 WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
@@ -240,7 +140,18 @@ pub fn run<T: 'static + Send + Sync>(
                 _ => {}
             },
 
-            Event::MainEventsCleared => {}
+            Event::MainEventsCleared => {
+                // I hate this ready hack but it's needed to wait for the "onload" to occur
+                // We can't run any initializion scripts because the window isn't ready yet?
+                if is_ready.load(std::sync::atomic::Ordering::Relaxed) {
+                    let mut queue = edit_queue.write().unwrap();
+                    let (id, view) = webviews.iter_mut().next().unwrap();
+                    while let Some(edit) = queue.pop_back() {
+                        view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
+                            .unwrap();
+                    }
+                }
+            }
             Event::Resumed => {}
             Event::Suspended => {}
             Event::LoopDestroyed => {}
@@ -250,19 +161,11 @@ pub fn run<T: 'static + Send + Sync>(
     })
 }
 
-pub fn start<P: 'static + Send>(
-    root: FC<P>,
-    config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
-) -> ((), ()) {
-    //
-    ((), ())
-}
-
 // Create a new tokio runtime on a dedicated thread and then launch the apps VirtualDom.
 pub(crate) fn launch_vdom_with_tokio<P: Send + 'static>(
     root: FC<P>,
     props: P,
-    event_tx: tokio::sync::mpsc::UnboundedSender<BridgeEvent>,
+    edit_queue: Arc<RwLock<VecDeque<String>>>,
 ) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
     let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
     let return_sender = sender.clone();
@@ -275,47 +178,107 @@ pub(crate) fn launch_vdom_with_tokio<P: Send + 'static>(
             .unwrap();
 
         runtime.block_on(async move {
-            let mut vir = VirtualDom::new_with_props_and_scheduler(root, props, sender, receiver);
-            let _ = vir.get_scheduler_channel();
+            let mut dom = VirtualDom::new_with_props_and_scheduler(root, props, sender, receiver);
 
-            let edits = vir.rebuild();
+            let edits = dom.rebuild();
 
-            // the receiving end expects something along these lines
-            #[derive(Serialize)]
-            struct Evt<'a> {
-                edits: Vec<DomEdit<'a>>,
-            }
-
-            let edit_string = serde_json::to_value(Evt { edits: edits.edits }).unwrap();
-
-            event_tx
-                .send(BridgeEvent::Initialize(edit_string))
-                .expect("Sending should not fail");
+            edit_queue
+                .write()
+                .unwrap()
+                .push_front(serde_json::to_string(&edits.edits).unwrap());
 
             loop {
-                vir.wait_for_work().await;
-                // we're running on our own thread, so we don't need to worry about blocking anything
-                // todo: maybe we want to schedule ourselves in
-                // on average though, the virtualdom running natively is stupid fast
-
-                let mut muts = vir.work_with_deadline(|| false);
-
-                log::debug!("finished running with deadline");
-
-                let mut edits = vec![];
-
+                dom.wait_for_work().await;
+                let mut muts = dom.work_with_deadline(|| false);
                 while let Some(edit) = muts.pop() {
-                    let edit_string = serde_json::to_value(Evt { edits: edit.edits })
-                        .expect("serializing edits should never fail");
-                    edits.push(edit_string);
+                    edit_queue
+                        .write()
+                        .unwrap()
+                        .push_front(serde_json::to_string(&edit.edits).unwrap());
                 }
-
-                event_tx
-                    .send(BridgeEvent::Update(serde_json::Value::Array(edits)))
-                    .expect("Sending should not fail");
             }
         })
     });
 
     return_sender
+}
+
+fn build_menu() -> MenuBar {
+    // create main menubar menu
+    let mut menu_bar_menu = MenuBar::new();
+
+    // create `first_menu`
+    let mut first_menu = MenuBar::new();
+
+    first_menu.add_native_item(MenuItem::About("Todos".to_string()));
+    first_menu.add_native_item(MenuItem::Services);
+    first_menu.add_native_item(MenuItem::Separator);
+    first_menu.add_native_item(MenuItem::Hide);
+    first_menu.add_native_item(MenuItem::HideOthers);
+    first_menu.add_native_item(MenuItem::ShowAll);
+
+    first_menu.add_native_item(MenuItem::Quit);
+    first_menu.add_native_item(MenuItem::CloseWindow);
+
+    // create second menu
+    let mut second_menu = MenuBar::new();
+
+    // second_menu.add_submenu("Sub menu", true, my_sub_menu);
+    second_menu.add_native_item(MenuItem::Copy);
+    second_menu.add_native_item(MenuItem::Paste);
+    second_menu.add_native_item(MenuItem::SelectAll);
+
+    menu_bar_menu.add_submenu("First menu", true, first_menu);
+    menu_bar_menu.add_submenu("Second menu", true, second_menu);
+
+    menu_bar_menu
+}
+
+fn create_window(event_loop: &EventLoopWindowTarget<()>) -> Window {
+    WindowBuilder::new()
+        .with_maximized(true)
+        .with_menu(build_menu())
+        .with_title("Dioxus App")
+        .build(event_loop)
+        .unwrap()
+}
+
+fn create_webview(
+    window: Window,
+    is_ready: Arc<AtomicBool>,
+    sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+) -> WebView {
+    WebViewBuilder::new(window)
+        .unwrap()
+        .with_url("wry://index.html")
+        .unwrap()
+        .with_rpc_handler(move |_window: &Window, mut req: RpcRequest| {
+            match req.method.as_str() {
+                "user_event" => {
+                    let event = events::trigger_from_serialized(req.params.unwrap());
+                    log::debug!("User event: {:?}", event);
+                    sender.unbounded_send(SchedulerMsg::UiEvent(event)).unwrap();
+                }
+                "initialize" => {
+                    is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                _ => {}
+            }
+
+            None
+        })
+        // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"
+        // For now, we only serve two pieces of content which get included as bytes into the final binary.
+        .with_custom_protocol("wry".into(), move |request| {
+            let path = request.uri().replace("wry://", "");
+            let (data, meta) = match path.as_str() {
+                "index.html" => (include_bytes!("./index.html").to_vec(), "text/html"),
+                "index.html/index.js" => (include_bytes!("./index.js").to_vec(), "text/javascript"),
+                _ => unimplemented!("path {}", path),
+            };
+
+            wry::http::ResponseBuilder::new().mimetype(meta).body(data)
+        })
+        .build()
+        .unwrap()
 }

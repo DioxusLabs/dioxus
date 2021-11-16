@@ -260,87 +260,45 @@ impl VirtualDom {
     /// Waits for the scheduler to have work
     /// This lets us poll async tasks during idle periods without blocking the main thread.
     pub async fn wait_for_work(&mut self) {
-        // todo: poll the events once even if there is work to do to prevent starvation
-
-        // if there's no futures in the virtualdom, just wait for a scheduler message and put it into the queue to be processed
-        if self.scopes.pending_futures.borrow().is_empty() {
-            self.pending_messages
-                .push_front(self.receiver.next().await.unwrap());
-        } else {
-            struct PollTasks<'a> {
-                scopes: &'a mut ScopeArena,
+        loop {
+            if !self.dirty_scopes.is_empty() && self.pending_messages.is_empty() {
+                break;
             }
 
-            impl<'a> Future for PollTasks<'a> {
-                type Output = ();
+            if self.pending_messages.is_empty() {
+                if self.scopes.pending_futures.borrow().is_empty() {
+                    self.pending_messages
+                        .push_front(self.receiver.next().await.unwrap());
+                } else {
+                    use futures_util::future::{select, Either};
 
-                fn poll(
-                    self: Pin<&mut Self>,
-                    cx: &mut std::task::Context<'_>,
-                ) -> Poll<Self::Output> {
-                    let mut all_pending = true;
-
-                    let mut unfinished_tasks: SmallVec<[_; 10]> = smallvec::smallvec![];
-                    let mut scopes_to_clear: SmallVec<[_; 10]> = smallvec::smallvec![];
-
-                    // Poll every scope manually
-                    for fut in self.scopes.pending_futures.borrow().iter() {
-                        let scope = self
-                            .scopes
-                            .get_scope(fut)
-                            .expect("Scope should never be moved");
-
-                        let mut items = scope.items.borrow_mut();
-
-                        // really this should just be retain_mut but that doesn't exist yet
-                        while let Some(mut task) = items.tasks.pop() {
-                            // todo: does this make sense?
-                            // I don't usually write futures by hand
-                            // I think the futures neeed to be pinned using bumpbox or something
-                            // right now, they're bump allocated so this shouldn't matter anyway - they're not going to move
-                            let task_mut = task.as_mut();
-                            let unpinned = unsafe { Pin::new_unchecked(task_mut) };
-
-                            if unpinned.poll(cx).is_ready() {
-                                all_pending = false
-                            } else {
-                                unfinished_tasks.push(task);
-                            }
-                        }
-
-                        if unfinished_tasks.is_empty() {
-                            scopes_to_clear.push(*fut);
-                        }
-
-                        items.tasks.extend(unfinished_tasks.drain(..));
-                    }
-
-                    for scope in scopes_to_clear {
-                        self.scopes.pending_futures.borrow_mut().remove(&scope);
-                    }
-
-                    // Resolve the future if any singular task is ready
-                    match all_pending {
-                        true => Poll::Pending,
-                        false => Poll::Ready(()),
+                    match select(PollTasks(&mut self.scopes), self.receiver.next()).await {
+                        Either::Left((_, _)) => {}
+                        Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
                     }
                 }
             }
 
-            // Poll both the futures and the scheduler message queue simulataneously
-            use futures_util::future::{select, Either};
+            while let Ok(Some(msg)) = self.receiver.try_next() {
+                self.pending_messages.push_front(msg);
+            }
 
-            let scheduler_fut = self.receiver.next();
-            let tasks_fut = PollTasks {
-                scopes: &mut self.scopes,
-            };
-
-            match select(tasks_fut, scheduler_fut).await {
-                // Futures don't generate work
-                Either::Left((_, _)) => {}
-
-                // Save these messages in FIFO to be processed later
-                Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
+            if let Some(msg) = self.pending_messages.pop_back() {
+                match msg {
+                    // just keep looping, the task is now saved but we should actually poll it
+                    SchedulerMsg::TaskPushed(id) => {
+                        self.scopes.pending_futures.borrow_mut().insert(id);
+                    }
+                    SchedulerMsg::UiEvent(event) => {
+                        if let Some(element) = event.element {
+                            self.scopes.call_listener_with_bubbling(event, element);
+                        }
+                    }
+                    SchedulerMsg::Immediate(s) => {
+                        self.dirty_scopes.insert(s);
+                    }
+                    SchedulerMsg::Suspended { scope } => todo!(),
+                }
             }
         }
     }
@@ -393,36 +351,8 @@ impl VirtualDom {
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
 
-        while self.has_any_work() {
-            while let Ok(Some(msg)) = self.receiver.try_next() {
-                self.pending_messages.push_front(msg);
-            }
-
-            while let Some(msg) = self.pending_messages.pop_back() {
-                match msg {
-                    // TODO: Suspsense
-                    SchedulerMsg::Immediate(id) => {
-                        self.dirty_scopes.insert(id);
-                    }
-                    SchedulerMsg::Suspended { node, scope } => {
-                        todo!("should wire up suspense")
-                        // self.suspense_scopes.insert(id);
-                    }
-                    SchedulerMsg::UiEvent(event) => {
-                        if let Some(element) = event.element {
-                            log::info!("Calling listener {:?}, {:?}", event.scope_id, element);
-
-                            self.scopes.call_listener_with_bubbling(event, element);
-                            while let Ok(Some(dirty_scope)) = self.receiver.try_next() {
-                                self.pending_messages.push_front(dirty_scope);
-                            }
-                        } else {
-                            log::debug!("User event without a targetted ElementId. Not currently supported.\nUnsure how to proceed. {:?}", event);
-                        }
-                    }
-                }
-            }
-
+        while !self.dirty_scopes.is_empty() {
+            log::debug!("working with deadline");
             let scopes = &self.scopes;
             let mut diff_state = DiffState::new(scopes);
 
@@ -616,7 +546,10 @@ pub enum SchedulerMsg {
     // setstate
     Immediate(ScopeId),
 
-    Suspended { scope: ScopeId, node: NodeLink },
+    // an async task pushed from an event handler (or just spawned)
+    TaskPushed(ScopeId),
+
+    Suspended { scope: ScopeId },
 }
 
 /// User Events are events that are shuttled from the renderer into the VirtualDom trhough the scheduler channel.
@@ -719,4 +652,56 @@ pub enum EventPriority {
     ///
     /// This is considered "idle" work or "background" work.
     Low = 0,
+}
+
+struct PollTasks<'a>(&'a mut ScopeArena);
+
+impl<'a> Future for PollTasks<'a> {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        let mut all_pending = true;
+
+        let mut unfinished_tasks: SmallVec<[_; 10]> = smallvec::smallvec![];
+        let mut scopes_to_clear: SmallVec<[_; 10]> = smallvec::smallvec![];
+
+        // Poll every scope manually
+        for fut in self.0.pending_futures.borrow().iter() {
+            let scope = self.0.get_scope(fut).expect("Scope should never be moved");
+
+            let mut items = scope.items.borrow_mut();
+
+            // really this should just be retain_mut but that doesn't exist yet
+            while let Some(mut task) = items.tasks.pop() {
+                // todo: does this make sense?
+                // I don't usually write futures by hand
+                // I think the futures neeed to be pinned using bumpbox or something
+                // right now, they're bump allocated so this shouldn't matter anyway - they're not going to move
+                let task_mut = task.as_mut();
+                let unpinned = unsafe { Pin::new_unchecked(task_mut) };
+
+                if unpinned.poll(cx).is_ready() {
+                    all_pending = false
+                } else {
+                    unfinished_tasks.push(task);
+                }
+            }
+
+            if unfinished_tasks.is_empty() {
+                scopes_to_clear.push(*fut);
+            }
+
+            items.tasks.extend(unfinished_tasks.drain(..));
+        }
+
+        for scope in scopes_to_clear {
+            self.0.pending_futures.borrow_mut().remove(&scope);
+        }
+
+        // Resolve the future if any singular task is ready
+        match all_pending {
+            true => Poll::Pending,
+            false => Poll::Ready(()),
+        }
+    }
 }

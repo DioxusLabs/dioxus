@@ -133,8 +133,6 @@ impl ScopeArena {
 
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
             debug_assert!(any_item.is_none());
-
-            new_scope_id
         } else {
             let (node_capacity, hook_capacity) = {
                 let heuristics = self.heuristics.borrow();
@@ -196,9 +194,9 @@ impl ScopeArena {
 
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
             debug_assert!(any_item.is_none());
-
-            new_scope_id
         }
+
+        new_scope_id
     }
 
     pub fn try_remove(&self, id: &ScopeId) -> Option<()> {
