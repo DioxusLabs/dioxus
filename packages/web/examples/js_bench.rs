@@ -1,24 +1,100 @@
+use std::cell::Cell;
+
 use dioxus::prelude::*;
+use dioxus_core as dioxus;
+use dioxus_core_macro::*;
+use dioxus_hooks::{use_ref, use_state};
+use dioxus_html as dioxus_elements;
+use dioxus_web;
+use gloo_timers::future::TimeoutFuture;
 use rand::prelude::*;
 
 fn main() {
-    dioxus::web::launch(App, |c| c);
-    // dioxus::desktop::launch(App, |c| c);
+    console_error_panic_hook::set_once();
+    if cfg!(debug_assertions) {
+        wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+        log::debug!("hello world");
+    }
+
+    for a in ADJECTIVES {
+        wasm_bindgen::intern(*a);
+    }
+    for a in COLOURS {
+        wasm_bindgen::intern(*a);
+    }
+    for a in NOUNS {
+        wasm_bindgen::intern(*a);
+    }
+    for a in [
+        "container",
+        "jumbotron",
+        "row",
+        "Dioxus",
+        "col-md-6",
+        "col-md-1",
+        "Create 1,000 rows",
+        "run",
+        "Create 10,000 rows",
+        "runlots",
+        "Append 1,000 rows",
+        "add",
+        "Update every 10th row",
+        "update",
+        "Clear",
+        "clear",
+        "Swap rows",
+        "swaprows",
+        "preloadicon glyphicon glyphicon-remove", //
+        "aria-hidden",
+        "onclick",
+        "true",
+        "false",
+        "danger",
+        "type",
+        "id",
+        "class",
+        "glyphicon glyphicon-remove remove",
+        "dioxus-id",
+        "dioxus-event-click",
+        "dioxus",
+        "click",
+        "1.10",
+        "lbl",
+        "remove",
+        "dioxus-event",
+        "col-sm-6 smallpad",
+        "btn btn-primary btn-block",
+        "",
+        " ",
+    ] {
+        wasm_bindgen::intern(a);
+    }
+    for x in 0..100_000 {
+        wasm_bindgen::intern(&x.to_string());
+    }
+
+    dioxus_web::launch(App, |c| c.rootname("main"));
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Copy)]
 struct Label {
     key: usize,
     labels: [&'static str; 3],
 }
 
+static mut Counter: Cell<usize> = Cell::new(1);
+
 impl Label {
     fn new_list(num: usize) -> Vec<Self> {
         let mut rng = SmallRng::from_entropy();
         let mut labels = Vec::with_capacity(num);
-        for _ in 0..num {
+
+        let offset = unsafe { Counter.get() };
+        unsafe { Counter.set(offset + num) };
+
+        for k in offset..(offset + num) {
             labels.push(Label {
-                key: 0,
+                key: k,
                 labels: [
                     ADJECTIVES.choose(&mut rng).unwrap(),
                     COLOURS.choose(&mut rng).unwrap(),
@@ -26,6 +102,7 @@ impl Label {
                 ],
             });
         }
+
         labels
     }
 }
@@ -56,22 +133,25 @@ static App: FC<()> = |cx, _props| {
                             ActionButton { name: "Clear", id: "clear",
                                 onclick: move || items.write().clear(),
                             }
-                            ActionButton { name: "Swap rows", id: "swaprows",
+                            ActionButton { name: "Swap Rows", id: "swaprows",
                                 onclick: move || items.write().swap(0, 998),
                             }
                         }
                     }
                 }
             }
-            table {
-                tbody {
+            table { class: "table table-hover table-striped test-data"
+                tbody { id: "tbody"
                     {items.read().iter().enumerate().map(|(id, item)| {
+                        let [adj, col, noun] = item.labels;
                         let is_in_danger = if (*selected).map(|s| s == id).unwrap_or(false) {"danger"} else {""};
-                        rsx!(tr { class: "{is_in_danger}"
+                        rsx!(tr { 
+                            class: "{is_in_danger}",
+                            key: "{id}",
                             td { class:"col-md-1" }
                             td { class:"col-md-1", "{item.key}" }
                             td { class:"col-md-1", onclick: move |_| selected.set(Some(id)),
-                                a { class: "lbl", {item.labels} }
+                                a { class: "lbl", "{adj} {col} {noun}" }
                             }
                             td { class: "col-md-1"
                                 a { class: "remove", onclick: move |_| { items.write().remove(id); },
@@ -83,7 +163,7 @@ static App: FC<()> = |cx, _props| {
                     })}
                 }
              }
-            // span { class: "preloadicon glyphicon glyphicon-remove" aria_hidden: "true" }
+            span { class: "preloadicon glyphicon glyphicon-remove" aria_hidden: "true" }
         }
     })
 };

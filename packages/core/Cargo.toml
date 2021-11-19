@@ -49,8 +49,7 @@ rand = { version = "0.8.4", features = ["small_rng"] }
 simple_logger = "1.13.0"
 dioxus-core-macro = { path = "../core-macro", version = "0.1.2" }
 dioxus-hooks = { path = "../hooks" }
-# async-std = { version = "1.9.0", features = ["attributes"] }
-# criterion = "0.3.5"
+criterion = "0.3.5"
 
 [features]
 default = []
@@ -64,3 +63,11 @@ harness = false
 [[bench]]
 name = "jsframework"
 harness = false
+
+[[example]]
+name = "rows"
+path = "./examples/rows.rs"
+
+
+[profile.release]
+debug = true

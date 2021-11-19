@@ -32,7 +32,7 @@ pub struct TodoItem {
 }
 pub type Todos = HashMap<u32, TodoItem>;
 
-pub static App: FC<()> = |(cx, _)| {
+pub static App: FC<()> = |cx, _| {
     // Share our TodoList to the todos themselves
     use_provide_state(cx, Todos::new);
 

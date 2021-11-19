@@ -11,14 +11,18 @@ use web_sys::Event;
 
 use crate::utils::fetch_base_url;
 
+pub trait Routable: 'static + Send + Clone + ToString + PartialEq {}
+impl<T> Routable for T where T: 'static + Send + Clone + ToString + PartialEq {}
+
 pub struct RouterService<R: Routable> {
-    history: RefCell<Vec<R>>,
+    historic_routes: RefCell<Vec<R>>,
+    history_service: web_sys::History,
     base_ur: RefCell<Option<String>>,
 }
 
 impl<R: Routable> RouterService<R> {
     fn push_route(&self, r: R) {
-        self.history.borrow_mut().push(r);
+        self.historic_routes.borrow_mut().push(r);
     }
 
     fn get_current_route(&self) -> &str {
@@ -61,7 +65,7 @@ impl<R: Routable> RouterService<R> {
 /// This hould only be used once per app
 ///
 /// You can manually parse the route if you want, but the derived `parse` method on `Routable` will also work just fine
-pub fn use_router<R: Routable>(cx: Context, cfg: impl FnOnce(&str) -> R) -> Option<&R> {
+pub fn use_router<R: Routable>(cx: Context, parse: impl FnMut(&str) -> R) -> &R {
     // for the web, attach to the history api
     cx.use_hook(
         |f| {
@@ -71,9 +75,12 @@ pub fn use_router<R: Routable>(cx: Context, cfg: impl FnOnce(&str) -> R) -> Opti
             let base_url = fetch_base_url();
 
             let service: RouterService<R> = RouterService {
-                history: RefCell::new(vec![]),
+                historic_routes: RefCell::new(vec![]),
+                history_service: web_sys::window().unwrap().history().expect("no history"),
                 base_ur: RefCell::new(base_url),
             };
+
+            // service.history_service.push_state(data, title);
 
             cx.provide_state(service);
 
@@ -105,30 +112,13 @@ pub struct LinkProps<R: Routable> {
     children: Element,
 }
 
-pub fn Link<'a, R: Routable>(cx: Context, props: &LinkProps<R>) -> Element {
+pub fn Link<R: Routable>(cx: Context, props: &LinkProps<R>) -> Element {
     let service = use_router_service::<R>(cx)?;
     cx.render(rsx! {
         a {
-            href: format_args!("{}", props.to.to_path()),
+            href: format_args!("{}", props.to.to_string()),
             onclick: move |_| service.push_route(props.to.clone()),
             {&props.children},
         }
     })
-}
-
-pub trait Routable: Sized + Clone + 'static {
-    /// Converts path to an instance of the routes enum.
-    fn from_path(path: &str, params: &HashMap<&str, &str>) -> Option<Self>;
-
-    /// Converts the route to a string that can passed to the history API.
-    fn to_path(&self) -> String;
-
-    /// Lists all the available routes
-    fn routes() -> Vec<&'static str>;
-
-    /// The route to redirect to on 404
-    fn not_found_route() -> Option<Self>;
-
-    /// Match a route based on the path
-    fn recognize(pathname: &str) -> Option<Self>;
 }

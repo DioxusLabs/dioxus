@@ -9,7 +9,7 @@ fn main() {
     println!("{}", dom);
 }
 
-pub static EXAMPLE: FC<()> = |(cx, _)| {
+pub static EXAMPLE: FC<()> = |cx, _| {
     let list = (0..10).map(|_f| {
         rsx! {
             "{_f}"

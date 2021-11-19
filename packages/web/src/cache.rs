@@ -7,6 +7,11 @@
 /// Eventually we might want to procedurally generate these strings for common words, phrases, and values.
 pub(crate) fn intern_cached_strings() {
     let cached_words = [
+        // Important tags to dioxus
+        "dioxus-id",
+        "dioxus",
+        "dioxus-event-click", // todo: more events
+        "click",
         // All the HTML Tags
         "a",
         "abbr",

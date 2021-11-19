@@ -7,7 +7,7 @@ fn main() {
     dioxus::desktop::launch(App, |c| c)
 }
 
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     let (count, set_count) = use_state(cx, || 0);
 
     cx.render(rsx!(
@@ -34,7 +34,7 @@ Window management, system trays, notifications, and other desktop-related functi
 Managing windows is done by simply rendering content into a `WebviewWindow` component. 
 
 ```rust
-static App: FC<()> = |(cx, props)| {
+static App: FC<()> = |cx, props| {
     rsx!(cx, WebviewWindow { "hello world" } )
 }
 ```
@@ -46,7 +46,7 @@ Notifications also use a declarative approach. Sending a notification has never 
 The api has been somewhat modeled after https://github.com/mikaelbr/node-notifier
 
 ```rust
-static Notifications: FC<()> = |(cx, props)| {
+static Notifications: FC<()> = |cx, props| {
     cx.render(rsx!(
         Notification {
             title: "title"
@@ -78,7 +78,7 @@ static Notifications: FC<()> = |(cx, props)| {
 Dioxus Desktop supports app trays, which can be built with native menu groups or with a custom window.
 
 ```rust
-static Tray: FC<()> = |(cx, props)| {
+static Tray: FC<()> = |cx, props| {
     cx.render(rsx!(
         GlobalTray {
             MenuGroup {
@@ -90,7 +90,7 @@ static Tray: FC<()> = |(cx, props)| {
 };
 
 // using a builder
-static Tray: FC<()> = |(cx, props)| {
+static Tray: FC<()> = |cx, props| {
     let menu = MenuGroup::builder(cx)
         .with_items([
             MenuGroupItem::builder()
@@ -107,7 +107,7 @@ static Tray: FC<()> = |(cx, props)| {
 }
 
 // or with a custom window
-static Tray: FC<()> = |(cx, props)| {
+static Tray: FC<()> = |cx, props| {
     rsx!(cx, GlobalTray { div { "custom buttons here" } })
 };
 ```
@@ -116,7 +116,7 @@ static Tray: FC<()> = |(cx, props)| {
 Declaring menus is convenient and cross-platform.
 
 ```rust
-static Menu: FC<()> = |(cx, props)| {
+static Menu: FC<()> = |cx, props| {
     cx.render(rsx!(
         MenuBarMajorItem { title: "File"
             MenuGroup {

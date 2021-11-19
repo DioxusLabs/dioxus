@@ -91,3 +91,7 @@ path = "./examples/webview.rs"
 required-features = ["desktop"]
 name = "tailwind"
 path = "./examples/tailwind.rs"
+
+
+[patch.crates-io]
+wasm-bindgen = { path = "../Tinkering/wasm-bindgen" }

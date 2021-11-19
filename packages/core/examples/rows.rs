@@ -19,33 +19,30 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use rand::prelude::*;
 
-criterion_group!(mbenches, create_rows);
-criterion_main!(mbenches);
-
-fn create_rows(c: &mut Criterion) {
+fn main() {
     static App: FC<()> = |cx, _| {
         let mut rng = SmallRng::from_entropy();
         let rows = (0..10_000_usize).map(|f| {
             let label = Label::new(&mut rng);
-            rsx!(Row {
-                row_id: f,
-                label: label
-            })
+            rsx! {
+                Row {
+                    row_id: f,
+                    label: label
+                }
+            }
         });
-        rsx!(cx, table {
-            tbody {
-                {rows}
+        cx.render(rsx! {
+            table {
+                tbody {
+                    {rows}
+                }
             }
         })
     };
 
-    c.bench_function("create rows", |b| {
-        b.iter(|| {
-            let mut dom = VirtualDom::new(App);
-            let g = dom.rebuild();
-            assert!(g.edits.len() > 1);
-        })
-    });
+    let mut dom = VirtualDom::new(App);
+    let g = dom.rebuild();
+    assert!(g.edits.len() > 1);
 }
 
 #[derive(PartialEq, Props)]

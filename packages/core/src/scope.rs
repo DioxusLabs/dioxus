@@ -196,7 +196,7 @@ impl Scope {
         let chan = self.sender.clone();
         let id = self.scope_id();
         Rc::new(move || {
-            log::debug!("set on channel an update for scope {:?}", id);
+            // log::debug!("set on channel an update for scope {:?}", id);
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }

@@ -5,7 +5,7 @@ Render a Dioxus VirtualDOM to a string.
 
 ```rust
 // Our app:
-const App: FC<()> = |(cx, props)| rsx!(cx, div {"hello world!"});
+const App: FC<()> = |cx, props| rsx!(cx, div {"hello world!"});
 
 // Build the virtualdom from our app
 let mut vdom = VirtualDOM::new(App);

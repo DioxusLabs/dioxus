@@ -92,15 +92,15 @@ impl ScopeArena {
         let new_scope_id = ScopeId(self.scope_counter.get());
         self.scope_counter.set(self.scope_counter.get() + 1);
 
-        log::debug!("new scope {:?} with parent {:?}", new_scope_id, container);
+        // log::debug!("new scope {:?} with parent {:?}", new_scope_id, container);
 
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             let scope = unsafe { &mut *old_scope };
-            log::debug!(
-                "reusing scope {:?} as {:?}",
-                scope.our_arena_idx,
-                new_scope_id
-            );
+            // log::debug!(
+            //     "reusing scope {:?} as {:?}",
+            //     scope.our_arena_idx,
+            //     new_scope_id
+            // );
 
             scope.caller = caller;
             scope.parent_scope = parent_scope;
@@ -202,7 +202,7 @@ impl ScopeArena {
     pub fn try_remove(&self, id: &ScopeId) -> Option<()> {
         self.ensure_drop_safety(id);
 
-        log::debug!("removing scope {:?}", id);
+        // log::debug!("removing scope {:?}", id);
 
         // Safety:
         // - ensure_drop_safety ensures that no references to this scope are in use
@@ -311,7 +311,7 @@ impl ScopeArena {
 
         let scope = unsafe { &mut *self.get_scope_mut(id).expect("could not find scope") };
 
-        log::debug!("found scope, about to run: {:?}", id);
+        // log::debug!("found scope, about to run: {:?}", id);
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held

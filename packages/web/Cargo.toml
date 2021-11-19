@@ -11,10 +11,17 @@ license = "MIT/Apache-2.0"
 dioxus-core = { path = "../core", version = "0.1.2" }
 dioxus-html = { path = "../html" }
 js-sys = "0.3"
+# wasm-bindgen-shared = { path = "../../../Tinkering/wasm-bindgen/crates/shared" }
+# wasm-bindgen-macro-support = { path = "../../../Tinkering/wasm-bindgen/crates/macro-support" }
+# wasm-bindgen = { features = [
+
+
 wasm-bindgen = { version = "0.2.78", features = ["enable-interning"] }
+# wasm-bindgen = { version = "0.2.78", features = ["enable-interning"] }
+# wasm-bindgen = { version = "0.2.78", features = ["enable-interning"] }
 lazy_static = "1.4.0"
 wasm-bindgen-futures = "0.4.20"
-log = "0.4.14"
+log = { version = "0.4.14", features = ["release_max_level_off"] }
 fxhash = "0.2.1"
 wasm-logger = "0.2.0"
 console_error_panic_hook = "0.1.6"
@@ -24,6 +31,11 @@ async-channel = "1.6.1"
 anyhow = "1.0"
 gloo-timers = { version = "0.2.1", features = ["futures"] }
 futures-util = "0.3.15"
+smallstr = "0.2.0"
+
+[patch.crates-io]
+wasm-bindgen = { path = "../../../Tinkering/wasm-bindgen/" }
+
 
 [dependencies.web-sys]
 version = "0.3.51"
@@ -65,6 +77,7 @@ features = [
     "IdleDeadline",
 ]
 
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -76,7 +89,12 @@ serde = { version = "1.0.126", features = ["derive"] }
 reqwest = { version = "0.11", features = ["json"] }
 dioxus-hooks = { path = "../hooks" }
 dioxus-core-macro = { path = "../core-macro" }
-# rand = { version="0.8.4", features=["small_rng"] }
+rand = { version = "0.8.4", features = ["small_rng"] }
+
+[dev-dependencies.getrandom]
+version = "0.2"
+features = ["js"]
+
 # surf = { version = "2.3.1", default-features = false, features = [
 #     "wasm-client",
 # ] }

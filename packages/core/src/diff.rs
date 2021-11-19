@@ -434,8 +434,15 @@ impl<'bump> DiffState<'bump> {
         }
 
         if !children.is_empty() {
-            self.stack.create_children(children, MountType::Append);
+            if children.len() == 1 {
+                if let VNode::Text(vtext) = children[0] {
+                    self.mutations.set_text(vtext.text, real_id.as_u64());
+                    return;
+                }
+            }
         }
+
+        self.stack.create_children(children, MountType::Append);
     }
 
     fn create_fragment_node(&mut self, frag: &'bump VFragment<'bump>) {
@@ -645,17 +652,59 @@ impl<'bump> DiffState<'bump> {
             }
         }
 
-        if old.children.is_empty() && !new.children.is_empty() {
-            self.mutations.edits.push(PushRoot {
-                root: root.as_u64(),
-            });
-            self.stack.element_stack.push(root);
-            self.stack.instructions.push(DiffInstruction::PopElement);
-            self.stack.create_children(new.children, MountType::Append);
-        } else {
-            self.stack.element_stack.push(root);
-            self.stack.instructions.push(DiffInstruction::PopElement);
-            self.diff_children(old.children, new.children);
+        match (old.children.len(), new.children.len()) {
+            (0, 0) => {}
+            (1, 1) => {
+                let old1 = &old.children[0];
+                let new1 = &new.children[0];
+
+                match (old1, new1) {
+                    (VNode::Text(old_text), VNode::Text(new_text)) => {
+                        if old_text.text != new_text.text {
+                            self.mutations.set_text(new_text.text, root.as_u64());
+                        }
+                    }
+                    (VNode::Text(old_text), _) => {
+                        self.stack.element_stack.push(root);
+                        self.stack.instructions.push(DiffInstruction::PopElement);
+                        self.stack.create_node(new1, MountType::Append);
+                    }
+                    (_, VNode::Text(new_text)) => {
+                        self.remove_nodes([old1], false);
+                        self.mutations.set_text(new_text.text, root.as_u64());
+                    }
+                    _ => {
+                        self.stack.element_stack.push(root);
+                        self.stack.instructions.push(DiffInstruction::PopElement);
+                        self.diff_children(old.children, new.children);
+                    }
+                }
+            }
+            (0, 1) => {
+                if let VNode::Text(text) = &new.children[0] {
+                    self.mutations.set_text(text.text, root.as_u64());
+                } else {
+                    self.stack.element_stack.push(root);
+                    self.stack.instructions.push(DiffInstruction::PopElement);
+                }
+            }
+            (0, _) => {
+                self.mutations.edits.push(PushRoot {
+                    root: root.as_u64(),
+                });
+                self.stack.element_stack.push(root);
+                self.stack.instructions.push(DiffInstruction::PopElement);
+                self.stack.create_children(new.children, MountType::Append);
+            }
+            (_, 0) => {
+                self.remove_nodes(old.children, false);
+                self.mutations.set_text("", root.as_u64());
+            }
+            (_, _) => {
+                self.stack.element_stack.push(root);
+                self.stack.instructions.push(DiffInstruction::PopElement);
+                self.diff_children(old.children, new.children);
+            }
         }
     }
 

@@ -17,7 +17,7 @@ impl Default for WebConfig {
     fn default() -> Self {
         Self {
             hydrate: false,
-            rootname: "dioxusroot".to_string(),
+            rootname: "main".to_string(),
         }
     }
 }

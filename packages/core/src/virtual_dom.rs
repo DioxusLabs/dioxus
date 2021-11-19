@@ -352,7 +352,7 @@ impl VirtualDom {
         let mut committed_mutations = vec![];
 
         while !self.dirty_scopes.is_empty() {
-            log::debug!("working with deadline");
+            // log::debug!("working with deadline");
             let scopes = &self.scopes;
             let mut diff_state = DiffState::new(scopes);
 

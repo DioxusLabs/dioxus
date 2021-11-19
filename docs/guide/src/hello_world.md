@@ -143,7 +143,7 @@ fn App<'a>(cx: Component<'a, ()>) -> Element<'a> {
 
 Writing `fn App((cx, props): Component<()>) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
 ```rust
-static App: Fc<()> = |(cx, props)| {
+static App: Fc<()> = |cx, props| {
     cx.render(rsx! {
         div { "Hello, world!" }
     })

@@ -110,7 +110,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
 ///
 /// ## Example
 /// ```ignore
-/// static App: FC<()> = |(cx, props)|cx.render(rsx!(div { "hello world" }));
+/// static App: FC<()> = |cx, props|cx.render(rsx!(div { "hello world" }));
 /// let mut vdom = VirtualDom::new(App);
 /// vdom.rebuild();
 ///

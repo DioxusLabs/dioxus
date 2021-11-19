@@ -90,6 +90,8 @@ pub fn run<T: 'static + Send + Sync>(
     let edit_queue = Arc::new(RwLock::new(VecDeque::new()));
     let is_ready: Arc<AtomicBool> = Default::default();
 
+    let mut frame = 0;
+
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
@@ -145,6 +147,9 @@ pub fn run<T: 'static + Send + Sync>(
                         view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                             .unwrap();
                     }
+                } else {
+                    println!("waiting for onload {:?}", frame);
+                    frame += 1;
                 }
             }
             Event::Resumed => {}
@@ -258,6 +263,7 @@ fn create_webview(
             // always driven through eval
             None
         })
+        // .with_initialization_script(include_str!("./index.js"))
         // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"
         // For now, we only serve two pieces of content which get included as bytes into the final binary.
         .with_custom_protocol("wry".into(), move |request| {

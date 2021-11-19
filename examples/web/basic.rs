@@ -14,7 +14,7 @@ fn main() {
     dioxus_web::launch(APP, |c| c)
 }
 
-static APP: FC<()> = |(cx, _)| {
+static APP: FC<()> = |cx, _| {
     let mut count = use_state(cx, || 3);
     let content = use_state(cx, || String::from("h1"));
     let text_content = use_state(cx, || String::from("Hello, world!"));
@@ -86,4 +86,4 @@ fn render_list(cx: Context, count: usize) -> Element {
     rsx!(cx, ul { {items} })
 }
 
-static CHILD: FC<()> = |(cx, _)| rsx!(cx, div {"hello child"});
+static CHILD: FC<()> = |cx, _| rsx!(cx, div {"hello child"});
