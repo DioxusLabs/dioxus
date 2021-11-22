@@ -74,7 +74,6 @@ pub struct SelfReferentialItems<'a> {
     pub(crate) borrowed_props: Vec<&'a VComponent<'a>>,
     pub(crate) suspended_nodes: FxHashMap<u64, &'a VSuspended>,
     pub(crate) tasks: Vec<BumpBox<'a, dyn Future<Output = ()>>>,
-    pub(crate) pending_effects: Vec<BumpBox<'a, dyn FnMut()>>,
 }
 
 /// A component's unique identifier.
@@ -284,24 +283,6 @@ impl Scope {
         }
     }
 
-    /// Push an effect to be ran after the component has been successfully mounted to the dom
-    /// Returns the effect's position in the stack
-    pub fn push_effect<'src>(&'src self, effect: impl FnOnce() + 'src) -> usize {
-        // this is some tricker to get around not being able to actually call fnonces
-        let mut slot = Some(effect);
-        let fut: &mut dyn FnMut() = self.bump().alloc(move || slot.take().unwrap()());
-
-        // wrap it in a type that will actually drop the contents
-        let boxed_fut = unsafe { BumpBox::from_raw(fut) };
-
-        // erase the 'src lifetime for self-referential storage
-        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
-
-        let mut items = self.items.borrow_mut();
-        items.pending_effects.push(self_ref_fut);
-        items.pending_effects.len() - 1
-    }
-
     /// Pushes the future onto the poll queue to be polled
     /// The future is forcibly dropped if the component is not ready by the next render
     pub fn push_task<'src, F: Future<Output = ()>>(
@@ -480,13 +461,6 @@ impl Scope {
             let sus: &'a VSuspended = suspended;
             // let mut boxed = sus.callback.borrow_mut().take().unwrap();
             // let new_node: Element = boxed();
-        }
-    }
-
-    // run the list of effects
-    pub(crate) fn run_effects(&mut self) {
-        for mut effect in self.items.get_mut().pending_effects.drain(..) {
-            effect();
         }
     }
 

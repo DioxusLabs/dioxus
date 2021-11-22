@@ -409,7 +409,7 @@ class Interpreter {
 }
 
 function main() {
-  let root = window.document.getElementById("_dioxusroot");
+  let root = window.document.getElementById("main");
   window.interpreter = new Interpreter(root);
   console.log(window.interpreter);
 

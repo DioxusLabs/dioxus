@@ -206,43 +206,43 @@ pub fn routable_derive_impl(input: Routable) -> TokenStream {
         //     static #cache_thread_local_ident: ::std::cell::RefCell<::std::option::Option<#ident>> = ::std::cell::RefCell::new(::std::option::Option::None);
         // }
 
-        #[automatically_derived]
-        impl ::dioxus::router::Routable for #ident {
-            #from_path
-            #to_path
+        // #[automatically_derived]
+        // impl ::dioxus::router::Routable for #ident {
+        //     #from_path
+        //     #to_path
 
-            fn routes() -> ::std::vec::Vec<&'static str> {
-                ::std::vec![#(#ats),*]
-            }
+        //     // fn routes() -> ::std::vec::Vec<&'static str> {
+        //     //     ::std::vec![#(#ats),*]
+        //     // }
 
-            fn not_found_route() -> ::std::option::Option<Self> {
-                #not_found_route
-            }
+        //     fn not_found_route() -> ::std::option::Option<Self> {
+        //         #not_found_route
+        //     }
 
-            // fn current_route() -> ::std::option::Option<Self> {
-            //     #cache_thread_local_ident.with(|val| ::std::clone::Clone::clone(&*val.borrow()))
-            // }
+        //     // fn current_route() -> ::std::option::Option<Self> {
+        //     //     #cache_thread_local_ident.with(|val| ::std::clone::Clone::clone(&*val.borrow()))
+        //     // }
 
-            fn recognize(pathname: &str) -> ::std::option::Option<Self> {
-                todo!()
-                // ::std::thread_local! {
-                //     static ROUTER: ::dioxus::router::__macro::Router = ::dioxus::router::__macro::build_router::<#ident>();
-                // }
-                // let route = ROUTER.with(|router| ::dioxus::router::__macro::recognize_with_router(router, pathname));
-                // {
-                //     let route = ::std::clone::Clone::clone(&route);
-                //     #cache_thread_local_ident.with(move |val| {
-                //         *val.borrow_mut() = route;
-                //     });
-                // }
-                // route
-            }
+        //     fn recognize(pathname: &str) -> ::std::option::Option<Self> {
+        //         todo!()
+        //         // ::std::thread_local! {
+        //         //     static ROUTER: ::dioxus::router::__macro::Router = ::dioxus::router::__macro::build_router::<#ident>();
+        //         // }
+        //         // let route = ROUTER.with(|router| ::dioxus::router::__macro::recognize_with_router(router, pathname));
+        //         // {
+        //         //     let route = ::std::clone::Clone::clone(&route);
+        //         //     #cache_thread_local_ident.with(move |val| {
+        //         //         *val.borrow_mut() = route;
+        //         //     });
+        //         // }
+        //         // route
+        //     }
 
-            // fn cleanup() {
-            //     #cache_thread_local_ident.with(move |val| {
-            //         *val.borrow_mut() = ::std::option::Option::None;
-            //     });
-            // }
-        }
+        //     // fn cleanup() {
+        //     //     #cache_thread_local_ident.with(move |val| {
+        //     //         *val.borrow_mut() = ::std::option::Option::None;
+        //     //     });
+        //     // }
+        // }
     }
 }

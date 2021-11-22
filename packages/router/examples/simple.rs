@@ -5,41 +5,35 @@ use dioxus_router::*;
 
 fn main() {
     console_error_panic_hook::set_once();
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     dioxus_web::launch(App, |c| c);
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum Route {
-    Home,
-    About,
-    NotFound,
-}
-
 static App: FC<()> = |cx, props| {
-    let route = use_router(cx, Route::parse);
-
-    match route {
-        Route::Home => rsx!(cx, div { "Home" }),
-        Route::About => rsx!(cx, div { "About" }),
-        Route::NotFound => rsx!(cx, div { "NotFound" }),
+    #[derive(Clone, Debug, PartialEq)]
+    enum Route {
+        Home,
+        About,
+        NotFound,
     }
+
+    let route = use_router(cx, |s| match s {
+        "/" => Route::Home,
+        "/about" => Route::About,
+        _ => Route::NotFound,
+    });
+
+    cx.render(rsx! {
+        div {
+            {match route {
+                Route::Home => rsx!(h1 { "Home" }),
+                Route::About => rsx!(h1 { "About" }),
+                Route::NotFound => rsx!(h1 { "NotFound" }),
+            }}
+            nav {
+                Link { to: Route::Home, href: |_| "/".to_string() }
+                Link { to: Route::About, href: |_| "/about".to_string() }
+            }
+        }
+    })
 };
-
-impl ToString for Route {
-    fn to_string(&self) -> String {
-        match self {
-            Route::Home => "/".to_string(),
-            Route::About => "/about".to_string(),
-            Route::NotFound => "/404".to_string(),
-        }
-    }
-}
-impl Route {
-    fn parse(s: &str) -> Self {
-        match s {
-            "/" => Route::Home,
-            "/about" => Route::About,
-            _ => Route::NotFound,
-        }
-    }
-}
