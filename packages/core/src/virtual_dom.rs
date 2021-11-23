@@ -297,7 +297,6 @@ impl VirtualDom {
                     SchedulerMsg::Immediate(s) => {
                         self.dirty_scopes.insert(s);
                     }
-                    SchedulerMsg::Suspended { scope } => todo!(),
                 }
             }
         }
@@ -548,8 +547,6 @@ pub enum SchedulerMsg {
 
     // an async task pushed from an event handler (or just spawned)
     TaskPushed(ScopeId),
-
-    Suspended { scope: ScopeId },
 }
 
 /// User Events are events that are shuttled from the renderer into the VirtualDom trhough the scheduler channel.

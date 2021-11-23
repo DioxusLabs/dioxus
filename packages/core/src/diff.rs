@@ -284,7 +284,7 @@ impl<'bump> DiffState<'bump> {
     // recursively push all the nodes of a tree onto the stack and return how many are there
     fn push_all_nodes(&mut self, node: &'bump VNode<'bump>) -> usize {
         match node {
-            VNode::Text(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
+            VNode::Text(_) | VNode::Placeholder(_) => {
                 self.mutations.push_root(node.mounted_id());
                 1
             }
@@ -354,8 +354,7 @@ impl<'bump> DiffState<'bump> {
     fn create_node(&mut self, node: &'bump VNode<'bump>) {
         match node {
             VNode::Text(vtext) => self.create_text_node(vtext, node),
-            VNode::Suspended(suspended) => self.create_suspended_node(suspended, node),
-            VNode::Anchor(anchor) => self.create_anchor_node(anchor, node),
+            VNode::Placeholder(anchor) => self.create_anchor_node(anchor, node),
             VNode::Element(element) => self.create_element_node(element, node),
             VNode::Fragment(frag) => self.create_fragment_node(frag),
             VNode::Component(component) => self.create_component_node(component),
@@ -371,17 +370,7 @@ impl<'bump> DiffState<'bump> {
         self.stack.add_child_count(1);
     }
 
-    fn create_suspended_node(&mut self, suspended: &'bump VSuspended, node: &'bump VNode<'bump>) {
-        let real_id = self.scopes.reserve_node(node);
-        self.mutations.create_placeholder(real_id);
-
-        suspended.dom_id.set(Some(real_id));
-        self.stack.add_child_count(1);
-
-        self.attach_suspended_node_to_scope(suspended);
-    }
-
-    fn create_anchor_node(&mut self, anchor: &'bump VAnchor, node: &'bump VNode<'bump>) {
+    fn create_anchor_node(&mut self, anchor: &'bump VPlaceholder, node: &'bump VNode<'bump>) {
         let real_id = self.scopes.reserve_node(node);
 
         self.mutations.create_placeholder(real_id);
@@ -433,12 +422,10 @@ impl<'bump> DiffState<'bump> {
             self.mutations.set_attribute(attr, real_id.as_u64());
         }
 
-        if !children.is_empty() {
-            if children.len() == 1 {
-                if let VNode::Text(vtext) = children[0] {
-                    self.mutations.set_text(vtext.text, real_id.as_u64());
-                    return;
-                }
+        if !children.is_empty() && children.len() == 1 {
+            if let VNode::Text(vtext) = children[0] {
+                self.mutations.set_text(vtext.text, real_id.as_u64());
+                return;
             }
         }
 
@@ -529,17 +516,14 @@ impl<'bump> DiffState<'bump> {
                 self.diff_component_nodes(old_node, new_node, old, new)
             }
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
-            (Anchor(old), Anchor(new)) => new.dom_id.set(old.dom_id.get()),
-            (Suspended(old), Suspended(new)) => self.diff_suspended_nodes(old, new),
+            (Placeholder(old), Placeholder(new)) => new.dom_id.set(old.dom_id.get()),
             (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
             (Linked(old), Linked(new)) => self.diff_linked_nodes(old, new),
 
             // Anything else is just a basic replace and create
             (
-                Linked(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_)
-                | Suspended(_),
-                Linked(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Anchor(_)
-                | Suspended(_),
+                Linked(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
+                Linked(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
             ) => self
                 .stack
                 .create_node(new_node, MountType::Replace { old: old_node }),
@@ -664,7 +648,7 @@ impl<'bump> DiffState<'bump> {
                             self.mutations.set_text(new_text.text, root.as_u64());
                         }
                     }
-                    (VNode::Text(old_text), _) => {
+                    (VNode::Text(_old_text), _) => {
                         self.stack.element_stack.push(root);
                         self.stack.instructions.push(DiffInstruction::PopElement);
                         self.stack.create_node(new1, MountType::Append);
@@ -770,11 +754,6 @@ impl<'bump> DiffState<'bump> {
         self.diff_children(old.children, new.children);
     }
 
-    fn diff_suspended_nodes(&mut self, old: &'bump VSuspended, new: &'bump VSuspended) {
-        new.dom_id.set(old.dom_id.get());
-        self.attach_suspended_node_to_scope(new);
-    }
-
     fn diff_linked_nodes(&mut self, old: &'bump NodeLink, new: &'bump NodeLink) {
         if !std::ptr::eq(old.node, new.node) {
             // if the ptrs are the same then theyr're the same
@@ -818,14 +797,14 @@ impl<'bump> DiffState<'bump> {
             (_, []) => {
                 self.remove_nodes(old, true);
             }
-            ([VNode::Anchor(old_anchor)], [VNode::Anchor(new_anchor)]) => {
+            ([VNode::Placeholder(old_anchor)], [VNode::Placeholder(new_anchor)]) => {
                 old_anchor.dom_id.set(new_anchor.dom_id.get());
             }
-            ([VNode::Anchor(_)], _) => {
+            ([VNode::Placeholder(_)], _) => {
                 self.stack
                     .create_children(new, MountType::Replace { old: &old[0] });
             }
-            (_, [VNode::Anchor(_)]) => {
+            (_, [VNode::Placeholder(_)]) => {
                 let new: &'bump VNode<'bump> = &new[0];
                 if let Some(first_old) = old.get(0) {
                     self.remove_nodes(&old[1..], true);
@@ -1227,8 +1206,7 @@ impl<'bump> DiffState<'bump> {
             match &search_node.take().unwrap() {
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
-                VNode::Suspended(t) => break t.dom_id.get(),
-                VNode::Anchor(t) => break t.dom_id.get(),
+                VNode::Placeholder(t) => break t.dom_id.get(),
                 VNode::Linked(l) => {
                     let node: &VNode = unsafe { std::mem::transmute(&*l.node) };
                     self.find_last_element(node);
@@ -1263,8 +1241,7 @@ impl<'bump> DiffState<'bump> {
                 }
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
-                VNode::Suspended(t) => break t.dom_id.get(),
-                VNode::Anchor(t) => break t.dom_id.get(),
+                VNode::Placeholder(t) => break t.dom_id.get(),
             }
         }
     }
@@ -1282,7 +1259,7 @@ impl<'bump> DiffState<'bump> {
                 self.remove_nodes(el.children, false);
             }
 
-            VNode::Text(_) | VNode::Anchor(_) | VNode::Suspended(_) => {
+            VNode::Text(_) | VNode::Placeholder(_) => {
                 let id = old
                     .try_mounted_id()
                     .unwrap_or_else(|| panic!("broke on {:?}", old));
@@ -1331,15 +1308,7 @@ impl<'bump> DiffState<'bump> {
                         }
                     }
                 }
-                VNode::Suspended(s) => {
-                    let id = s.dom_id.get().unwrap();
-                    self.scopes.collect_garbage(id);
-
-                    if gen_muts {
-                        self.mutations.remove(id.as_u64());
-                    }
-                }
-                VNode::Anchor(a) => {
+                VNode::Placeholder(a) => {
                     let id = a.dom_id.get().unwrap();
                     self.scopes.collect_garbage(id);
 
@@ -1385,22 +1354,5 @@ impl<'bump> DiffState<'bump> {
     fn attach_listener_to_scope(&mut self, listener: &'bump Listener<'bump>, scope: &Scope) {
         let long_listener = unsafe { std::mem::transmute(listener) };
         scope.items.borrow_mut().listeners.push(long_listener)
-    }
-
-    fn attach_suspended_node_to_scope(&mut self, suspended: &'bump VSuspended) {
-        if let Some(scope) = self
-            .stack
-            .current_scope()
-            .and_then(|id| self.scopes.get_scope(&id))
-        {
-            todo!()
-            // // safety: this lifetime is managed by the logic on scope
-            // let extended = unsafe { std::mem::transmute(suspended) };
-            // scope
-            //     .items
-            //     .borrow_mut()
-            //     .suspended_nodes
-            //     .insert(suspended.task_id, extended);
-        }
     }
 }

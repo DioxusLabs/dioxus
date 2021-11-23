@@ -107,7 +107,7 @@ To do this, we use the familiar struct-style syntax that Rust provides. Commas a
 ```rust
 rsx!(
     div {
-        hidden: true,
+        hidden: "true",
         background_color: "blue",
         class: "card color-{mycolor}"
     }

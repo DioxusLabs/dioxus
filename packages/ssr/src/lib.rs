@@ -149,7 +149,7 @@ impl<'a> TextRenderer<'a, '_> {
                 }
                 write!(f, "{}", text.text)?
             }
-            VNode::Anchor(_anchor) => {
+            VNode::Placeholder(_anchor) => {
                 //
                 if self.cfg.indent {
                     for _ in 0..il {
@@ -251,9 +251,6 @@ impl<'a> TextRenderer<'a, '_> {
                     self.html_render(new_node, f, il + 1)?;
                 } else {
                 }
-            }
-            VNode::Suspended { .. } => {
-                // we can't do anything with suspended nodes
             }
         }
         Ok(())

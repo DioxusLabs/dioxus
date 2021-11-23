@@ -32,8 +32,10 @@
 //! ```
 //! use dioxus::prelude::*;
 //!
-//! fn Example(cx: Context<()>) -> DomTree {
-//!     html! { <div> "Hello, world!" </div> }
+//! fn App(cx: Context, props: &()) -> Element {
+//!     cx.render(rsx!(
+//!         div {"hello world"}
+//!     ))
 //! }
 //! ```
 //! Components need to take a "Context" parameter which is generic over some properties. This defines how the component can be used
@@ -41,11 +43,15 @@
 //! `()`, and components with properties must declare their properties as a struct:
 //!
 //! ```
-//! #[derive(Props)]
-//! struct Props { name: String }
+//! #[derive(Props, PartialEq)]
+//! struct AppProps {
+//!     name: String
+//! }
 //!
-//! fn Example(cx: Context<Props>) -> DomTree {
-//!     html! { <div> "Hello {cx.props.name}!" </div> }
+//! fn App(cx: Context, props: &AppProps) -> Element {
+//!     cx.render(rsx!(
+//!         div { "Hello {props.name}!" }
+//!     ))
 //! }
 //! ```
 //!
@@ -57,22 +63,20 @@
 //!
 //! ```
 //! #[derive(Props)]
-//! struct Props<'a> { name: &'a str }
+//! struct Props<'a> {
+//!     name: &'a str
+//! }
 //!
-//! fn Example<'a>(cx: Context<'a, Props<'a>>) -> DomTree {
-//!     html! { <div> "Hello {cx.props.name}!" </div> }
+//! fn Example(cx: Context, props: &AppProps) -> Element {
+//!     cx.render(rsx!(
+//!         div { "Hello {props.name}!" }
+//!     ))
 //! }
 //! ```
 //!
-//!
-//!
-//! The lifetimes might look a little messy, but are crucially important for Dioxus's efficiency and overall ergonimics.
-//! Components can also be crafted as pub static closures, enabling type inference without all the type signature noise. However,
-//! closure-style components cannot work with borrowed data due to limitations in Rust's lifetime system.
-//!
 //! To use custom properties for components, you'll need to derive the `Props` trait for your properties. This trait
-//! exposes a compile-time correct builder pattern (similar to typed-builder) that can be used in the `rsx!` and `html!`
-//! macros to build components. Component props may have default fields notated by the `Default` attribute:
+//! exposes a compile-time correct builder pattern (similar to typed-builder) that can be used in the `rsx!` macro to
+//! build components. Component props may have default fields notated by the `Default` attribute:
 //!
 //! ```
 //! #[derive(Props)]
@@ -82,7 +86,7 @@
 //!     #[props(default = false)]
 //!     checked: bool,
 //!
-//!     #[props(default, setter(strip_option, into))]
+//!     #[props(default, into))]
 //!     title: Option<String>
 //! }
 //! ```
@@ -94,34 +98,30 @@
 //!
 //! ```
 //! pub pub static Example: FC<()> = |cx, props|{
-//!     let (val, set_val) = use_state(cx, || 0);
+//!     let mut val = use_state(cx, || 0);
 //!     cx.render(rsx!(
-//!         button { onclick: move |_| set_val(val + 1) }
+//!         button { onclick: move |_| val += 1 }
 //!     ))
 //! }
 //! ````
 //!
-//! Instead of using a single struct to represent a component and its state, hooks use the "use_hook" building block
-//! which allows the persistence of data between function component renders. This primitive is exposed directly through
-//! the `Context` item:
+//! As a building block for hooks, Dioxus provides the `use_hook` method on Context that stores a provided value in a
+//! list of other values. Whenever `use_hook` is called, the next hook value in the list is returned.
 //! ```
-//! fn my_hook<'a>(cx: &impl Scoped<'a>) -> &'a String {
+//! fn my_hook(cx: Context) -> &String {
 //!     cx.use_hook(
 //!         // Initializer stores a value
 //!         |hook_idx| String::new("stored_data"),
 //!
 //!         // Runner returns the hook value every time the component is rendered
 //!         |hook| &*hook,
-//!
-//!         // Cleanup runs after the component is unmounted
-//!         |hook| log::debug!("cleaning up hook with value {:#?}", hook)
 //!     )
 //! }
 //! ```
-//! Under the hood, hooks store their data in a series of "memory cells". The first render defines the layout of these
-//! memory cells, and on each subsequent render, each `use_hook` call accesses its corresponding memory cell. If a hook
-//! accesses the wrong memory cell, `use_hook` will panic, and your app will crash. You can always use `try_use_hook` but
-//! these types of errors can be easily mitigated by following the rules of hooks:
+//! Under the hood, hooks store their data in a list of `Box<dyn Any>`. The first render defines the layout of these
+//! list, and on each subsequent render, each `use_hook` call accesses its corresponding list item. If a hook
+//! accesses the wrong index, `use_hook` will panic when trying to downcast `Any` to your type, and your app will crash.
+//! These types of errors can be easily mitigated by following the rules of hooks:
 //!
 //! - Don’t call Hooks inside loops, conditions, or nested functions
 //! - Don't call hooks in changing order between renders

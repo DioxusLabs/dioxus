@@ -67,7 +67,3 @@ harness = false
 [[example]]
 name = "rows"
 path = "./examples/rows.rs"
-
-
-[profile.release]
-debug = true

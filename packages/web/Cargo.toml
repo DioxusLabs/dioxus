@@ -33,10 +33,6 @@ gloo-timers = { version = "0.2.1", features = ["futures"] }
 futures-util = "0.3.15"
 smallstr = "0.2.0"
 
-[patch.crates-io]
-wasm-bindgen = { path = "../../../Tinkering/wasm-bindgen/" }
-
-
 [dependencies.web-sys]
 version = "0.3.51"
 features = [

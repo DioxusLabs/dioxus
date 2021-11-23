@@ -186,7 +186,6 @@ impl ScopeArena {
                 items: RefCell::new(SelfReferentialItems {
                     listeners: Default::default(),
                     borrowed_props: Default::default(),
-                    suspended_nodes: Default::default(),
                     tasks: Default::default(),
                 }),
             });
@@ -225,13 +224,11 @@ impl ScopeArena {
         let SelfReferentialItems {
             borrowed_props,
             listeners,
-            suspended_nodes,
             tasks,
         } = scope.items.get_mut();
 
         borrowed_props.clear();
         listeners.clear();
-        suspended_nodes.clear();
         tasks.clear();
 
         self.free_scopes.borrow_mut().push(scope);
@@ -323,13 +320,11 @@ impl ScopeArena {
             let mut items = scope.items.borrow_mut();
 
             // just forget about our suspended nodes while we're at it
-            items.suspended_nodes.clear();
             items.tasks.clear();
 
             // guarantee that we haven't screwed up - there should be no latent references anywhere
             debug_assert!(items.listeners.is_empty());
             debug_assert!(items.borrowed_props.is_empty());
-            debug_assert!(items.suspended_nodes.is_empty());
             debug_assert!(items.tasks.is_empty());
 
             // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.

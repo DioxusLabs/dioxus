@@ -93,5 +93,5 @@ name = "tailwind"
 path = "./examples/tailwind.rs"
 
 
-[patch.crates-io]
-wasm-bindgen = { path = "../Tinkering/wasm-bindgen" }
+# [patch.crates-io]
+# wasm-bindgen = { path = "../Tinkering/wasm-bindgen" }

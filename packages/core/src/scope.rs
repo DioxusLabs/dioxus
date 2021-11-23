@@ -1,7 +1,6 @@
 use crate::innerlude::*;
 
 use futures_channel::mpsc::UnboundedSender;
-use fxhash::FxHashMap;
 use smallvec::SmallVec;
 use std::{
     any::{Any, TypeId},
@@ -72,7 +71,6 @@ pub struct Scope {
 pub struct SelfReferentialItems<'a> {
     pub(crate) listeners: Vec<&'a Listener<'a>>,
     pub(crate) borrowed_props: Vec<&'a VComponent<'a>>,
-    pub(crate) suspended_nodes: FxHashMap<u64, &'a VSuspended>,
     pub(crate) tasks: Vec<BumpBox<'a, dyn Future<Output = ()>>>,
 }
 
@@ -347,31 +345,6 @@ impl Scope {
         Some(link)
     }
 
-    pub fn suspend<'src, F: Future<Output = Element> + 'src>(
-        &'src self,
-        mut fut: impl FnMut() -> F,
-    ) -> Option<VNode> {
-        let channel = self.sender.clone();
-        let node_fut = fut();
-
-        let scope = self.scope_id();
-
-        // self.push_task(move || {
-        //
-        // async move {
-        //     //
-        //     let r = node_fut.await;
-        //     if let Some(node) = r {
-        //         channel
-        //             .unbounded_send(SchedulerMsg::Suspended { node, scope })
-        //             .unwrap();
-        //     }
-        // }
-        // });
-
-        todo!()
-    }
-
     /// Store a value between renders
     ///
     /// This is *the* foundational hook for all other hooks.
@@ -452,18 +425,6 @@ impl Scope {
         self.generation.set(self.generation.get() + 1);
     }
 
-    // General strategy here is to load up the appropriate suspended task and then run it.
-    // Suspended nodes cannot be called repeatedly.
-    pub(crate) fn call_suspended_node<'a>(&'a mut self, task_id: u64) {
-        let mut nodes = &mut self.items.get_mut().suspended_nodes;
-
-        if let Some(suspended) = nodes.remove(&task_id) {
-            let sus: &'a VSuspended = suspended;
-            // let mut boxed = sus.callback.borrow_mut().take().unwrap();
-            // let new_node: Element = boxed();
-        }
-    }
-
     pub fn root_node(&self) -> &VNode {
         let node = *self.wip_frame().nodes.borrow().get(0).unwrap();
         unsafe { std::mem::transmute(&*node) }
@@ -488,7 +449,7 @@ impl BumpFrame {
         Self { bump, nodes }
     }
 
-    pub fn allocated_bytes(&self) -> usize {
+    pub fn _allocated_bytes(&self) -> usize {
         self.bump.allocated_bytes()
     }
 
@@ -569,7 +530,7 @@ impl HookList {
 
     /// Get the ammount of memory a hooklist uses
     /// Used in heuristics
-    pub fn get_hook_arena_size(&self) -> usize {
+    pub fn _get_hook_arena_size(&self) -> usize {
         self.arena.allocated_bytes()
     }
 }

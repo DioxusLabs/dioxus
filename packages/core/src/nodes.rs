@@ -97,19 +97,9 @@ pub enum VNode<'src> {
     /// ```
     Component(&'src VComponent<'src>),
 
-    /// Suspended VNodes represent chunks of the UI tree that are not yet ready to be displayed.
+    /// Placeholders are a type of placeholder VNode used when fragments don't contain any children.
     ///
-    /// # Example
-    ///
-    /// ```rust, ignore
-    ///
-    ///
-    /// ```
-    Suspended(&'src VSuspended),
-
-    /// Anchors are a type of placeholder VNode used when fragments don't contain any children.
-    ///
-    /// Anchors cannot be directly constructed via public APIs.
+    /// Placeholders cannot be directly constructed via public APIs.
     ///
     /// # Example
     ///
@@ -123,7 +113,7 @@ pub enum VNode<'src> {
     ///     assert_eq!(root, VNode::Anchor);
     /// }
     /// ```
-    Anchor(&'src VAnchor),
+    Placeholder(&'src VPlaceholder),
 
     /// A VNode that is actually a pointer to some nodes rather than the nodes directly. Useful when rendering portals
     /// or eliding lifetimes on VNodes through runtime checks.
@@ -151,8 +141,7 @@ impl<'src> VNode<'src> {
             VNode::Fragment(f) => f.key,
 
             VNode::Text(_t) => None,
-            VNode::Suspended(_s) => None,
-            VNode::Anchor(_f) => None,
+            VNode::Placeholder(_f) => None,
             VNode::Linked(_c) => None,
         }
     }
@@ -171,8 +160,7 @@ impl<'src> VNode<'src> {
         match &self {
             VNode::Text(el) => el.dom_id.get(),
             VNode::Element(el) => el.dom_id.get(),
-            VNode::Anchor(el) => el.dom_id.get(),
-            VNode::Suspended(el) => el.dom_id.get(),
+            VNode::Placeholder(el) => el.dom_id.get(),
 
             VNode::Linked(_) => None,
             VNode::Fragment(_) => None,
@@ -194,8 +182,7 @@ impl<'src> VNode<'src> {
             VNode::Text(t) => VNode::Text(*t),
             VNode::Element(e) => VNode::Element(*e),
             VNode::Component(c) => VNode::Component(*c),
-            VNode::Suspended(s) => VNode::Suspended(*s),
-            VNode::Anchor(a) => VNode::Anchor(*a),
+            VNode::Placeholder(a) => VNode::Placeholder(*a),
             VNode::Fragment(f) => VNode::Fragment(VFragment {
                 children: f.children,
                 key: f.key,
@@ -219,12 +206,11 @@ impl Debug for VNode<'_> {
                 .finish(),
 
             VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
-            VNode::Anchor(_) => write!(s, "VNode::VAnchor"),
+            VNode::Placeholder(_) => write!(s, "VNode::VAnchor"),
 
             VNode::Fragment(frag) => {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
-            VNode::Suspended { .. } => write!(s, "VNode::VSuspended"),
             VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
             VNode::Linked(c) => write!(s, "VNode::VCached {{ scope_id: {:?} }}", c.scope_id.get()),
         }
@@ -254,7 +240,7 @@ fn empty_cell() -> Cell<Option<ElementId>> {
 }
 
 /// A placeholder node only generated when Fragments don't have any children.
-pub struct VAnchor {
+pub struct VPlaceholder {
     pub dom_id: Cell<Option<ElementId>>,
 }
 
@@ -357,6 +343,7 @@ pub struct Listener<'bump> {
     pub event: &'static str,
 
     /// The actual callback that the user specified
+    #[allow(clippy::type_complexity)]
     pub(crate) callback:
         RefCell<Option<BumpBox<'bump, dyn FnMut(std::sync::Arc<dyn Any + Send + Sync>) + 'bump>>>,
 }
@@ -655,7 +642,7 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Anchor(bump.alloc(VAnchor {
+            nodes.push(VNode::Placeholder(bump.alloc(VPlaceholder {
                 dom_id: empty_cell(),
             })));
         }
@@ -678,7 +665,7 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Anchor(bump.alloc(VAnchor {
+            nodes.push(VNode::Placeholder(bump.alloc(VPlaceholder {
                 dom_id: empty_cell(),
             })));
         }
@@ -722,7 +709,7 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Anchor(bump.alloc(VAnchor {
+            nodes.push(VNode::Placeholder(bump.alloc(VPlaceholder {
                 dom_id: empty_cell(),
             })));
         }

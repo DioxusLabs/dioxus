@@ -35,7 +35,7 @@ fn main() {
 When Dioxus renders your app, it will pass an immutable reference of `PostProps` to your `Post` component. Here, you can pass the state down into children.
 
 ```rust
-fn App((cx, props): Scope<PostProps>) -> Element {
+fn App(cx: Context, props: &PostProps) -> Element {
     cx.render(rsx!{
         Title { title: &props.title }
         Score { score: &props.score }
@@ -63,8 +63,8 @@ Instead, you'll want to store state internally in your components and let *that*
 The most common hook you'll use for storing state is `use_state`. `use_state` provides a slot for some data that allows you to read and update the value without accidentally mutating it.
 
 ```rust
-fn App((cx, props): Scope<()>) -> Element {
-    let post = use_state(|| {
+fn App(cx: Context, props: &())-> Element {
+    let post = use_state(cx, || {
         PostData {
             id: Uuid::new_v4(),
             score: 10,
@@ -111,8 +111,8 @@ When responding to user-triggered events, we'll want to "listen" for an event on
 For example, let's say we provide a button to generate a new post. Whenever the user clicks the button, they get a new post. To achieve this functionality, we'll want to attach a function to the `on_click` method of `button`. Whenever the button is clicked, our function will run, and we'll get new Post data to work with.
 
 ```rust
-fn App((cx, props): Scope<()>) -> Element {
-    let post = use_state(|| PostData::new());
+fn App(cx: Context, props: &())-> Element {
+    let post = use_state(cx, || PostData::new());
 
     cx.render(rsx!{
         button {
@@ -134,8 +134,8 @@ We can use tasks in our components to build a tiny stopwatch that ticks every se
 
 ```rust
 
-fn App((cx, props): Scope<()>) -> Element {
-    let mut sec_elapsed = use_state(|| 0);
+fn App(cx: Context, props: &())-> Element {
+    let mut sec_elapsed = use_state(cx, || 0);
 
     cx.spawn_task(async move {
         TimeoutFuture::from_ms(1000).await;
