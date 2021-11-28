@@ -129,7 +129,7 @@ pub enum VNode<'src> {
     ///
     /// let node: NodeLink = vdom.render_vnode(rsx!( "hello" ));
     /// ```
-    Linked(NodeLink),
+    Portal(VPortal),
 }
 
 impl<'src> VNode<'src> {
@@ -139,10 +139,9 @@ impl<'src> VNode<'src> {
             VNode::Element(el) => el.key,
             VNode::Component(c) => c.key,
             VNode::Fragment(f) => f.key,
-
             VNode::Text(_t) => None,
             VNode::Placeholder(_f) => None,
-            VNode::Linked(_c) => None,
+            VNode::Portal(_c) => None,
         }
     }
 
@@ -161,8 +160,7 @@ impl<'src> VNode<'src> {
             VNode::Text(el) => el.dom_id.get(),
             VNode::Element(el) => el.dom_id.get(),
             VNode::Placeholder(el) => el.dom_id.get(),
-
-            VNode::Linked(_) => None,
+            VNode::Portal(_) => None,
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
         }
@@ -171,7 +169,6 @@ impl<'src> VNode<'src> {
     pub(crate) fn children(&self) -> &[VNode<'src>] {
         match &self {
             VNode::Fragment(f) => f.children,
-            VNode::Component(_c) => todo!("children are not accessible through this"),
             _ => &[],
         }
     }
@@ -187,7 +184,7 @@ impl<'src> VNode<'src> {
                 children: f.children,
                 key: f.key,
             }),
-            VNode::Linked(c) => VNode::Linked(NodeLink {
+            VNode::Portal(c) => VNode::Portal(VPortal {
                 scope_id: c.scope_id.clone(),
                 link_idx: c.link_idx.clone(),
                 node: c.node,
@@ -204,15 +201,13 @@ impl Debug for VNode<'_> {
                 .field("name", &el.tag_name)
                 .field("key", &el.key)
                 .finish(),
-
             VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
             VNode::Placeholder(_) => write!(s, "VNode::VAnchor"),
-
             VNode::Fragment(frag) => {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
             VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
-            VNode::Linked(c) => write!(s, "VNode::VCached {{ scope_id: {:?} }}", c.scope_id.get()),
+            VNode::Portal(c) => write!(s, "VNode::VCached {{ scope_id: {:?} }}", c.scope_id.get()),
         }
     }
 }
@@ -348,6 +343,32 @@ pub struct Listener<'bump> {
         RefCell<Option<BumpBox<'bump, dyn FnMut(std::sync::Arc<dyn Any + Send + Sync>) + 'bump>>>,
 }
 
+/// A cached node is a "pointer" to a "rendered" node in a particular scope
+///
+/// It does not provide direct access to the node, so it doesn't carry any lifetime information with it
+///
+/// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
+/// is essentially a unique key to guarantee safe usage of the Node.
+///
+/// Linked VNodes can only be made through the [`Context::render`] method
+///
+/// Typically, NodeLinks are found *not* in a VNode. When NodeLinks are in a VNode, the NodeLink was passed into
+/// an `rsx!` call.
+///
+/// todo: remove the raw pointer and use runtime checks instead
+#[derive(Debug)]
+pub struct VPortal {
+    pub(crate) link_idx: Cell<usize>,
+    pub(crate) scope_id: Cell<Option<ScopeId>>,
+    pub(crate) node: *const VNode<'static>,
+}
+
+impl PartialEq for VPortal {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node
+    }
+}
+
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
@@ -366,43 +387,12 @@ pub struct VComponent<'src> {
     pub(crate) bump_props: *const (),
 
     // during the "teardown" process we'll take the caller out so it can be dropped properly
-    // pub(crate) caller: Option<VCompCaller<'src>>,
     pub(crate) caller: &'src dyn Fn(&'src Scope) -> Element,
 
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
+    // todo: re-add this
     pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
-}
-
-pub struct VSuspended {
-    pub task_id: usize,
-    pub scope: Cell<Option<ScopeId>>,
-    pub dom_id: Cell<Option<ElementId>>,
-    pub parent: Cell<Option<ElementId>>,
-}
-
-/// A cached node is a "pointer" to a "rendered" node in a particular scope
-///
-/// It does not provide direct access to the node, so it doesn't carry any lifetime information with it
-///
-/// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
-/// is essentially a unique key to guarantee safe usage of the Node.
-///
-/// Linked VNodes can only be made through the [`Context::render`] method
-///
-/// Typically, NodeLinks are found *not* in a VNode. When NodeLinks are in a VNode, the NodeLink was passed into
-/// an `rsx!` call.
-#[derive(Debug)]
-pub struct NodeLink {
-    pub(crate) link_idx: Cell<usize>,
-    pub(crate) scope_id: Cell<Option<ScopeId>>,
-    pub(crate) node: *const VNode<'static>,
-}
-
-impl PartialEq for NodeLink {
-    fn eq(&self, other: &Self) -> bool {
-        self.node == other.node
-    }
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -624,8 +614,8 @@ impl<'a> NodeFactory<'a> {
         callback: BumpBox<'a, dyn FnMut(Arc<dyn Any + Send + Sync>) + 'a>,
     ) -> Listener<'a> {
         Listener {
-            mounted_node: Cell::new(None),
             event,
+            mounted_node: Cell::new(None),
             callback: RefCell::new(Some(callback)),
         }
     }
@@ -634,15 +624,14 @@ impl<'a> NodeFactory<'a> {
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
     ) -> VNode<'a> {
-        let bump = self.bump;
-        let mut nodes = bumpalo::collections::Vec::new_in(bump);
+        let mut nodes = bumpalo::collections::Vec::new_in(self.bump);
 
         for node in node_iter {
             nodes.push(node.into_vnode(self));
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Placeholder(bump.alloc(VPlaceholder {
+            nodes.push(VNode::Placeholder(self.bump.alloc(VPlaceholder {
                 dom_id: empty_cell(),
             })));
         }
@@ -657,26 +646,23 @@ impl<'a> NodeFactory<'a> {
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
     ) -> VNode<'a> {
-        let bump = self.bump;
-        let mut nodes = bumpalo::collections::Vec::new_in(bump);
+        let mut nodes = bumpalo::collections::Vec::new_in(self.bump);
 
         for node in node_iter {
             nodes.push(node.into_vnode(self));
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Placeholder(bump.alloc(VPlaceholder {
+            nodes.push(VNode::Placeholder(self.bump.alloc(VPlaceholder {
                 dom_id: empty_cell(),
             })));
         }
 
         let children = nodes.into_bump_slice();
 
-        // todo: add a backtrace
         if cfg!(debug_assertions) && children.len() > 1 && children.last().unwrap().key().is_none()
         {
-            use backtrace::Backtrace;
-            let bt = Backtrace::new();
+            // todo: make the backtrace prettier or remove it altogether
             log::error!(
                 r#"
                 Warning: Each child in an array or iterator should have a unique "key" prop.
@@ -685,7 +671,7 @@ impl<'a> NodeFactory<'a> {
                 -------------
                 {:?}
                 "#,
-                bt
+                backtrace::Backtrace::new()
             );
         }
 
@@ -740,7 +726,7 @@ impl<'a> NodeFactory<'a> {
             key: None,
         });
         let ptr = self.bump.alloc(frag) as *const _;
-        Some(NodeLink {
+        Some(VPortal {
             link_idx: Default::default(),
             scope_id: Default::default(),
             node: unsafe { std::mem::transmute(ptr) },
@@ -847,10 +833,10 @@ impl IntoVNode<'_> for Arguments<'_> {
 }
 
 // called cx.render from a helper function
-impl IntoVNode<'_> for Option<NodeLink> {
+impl IntoVNode<'_> for Option<VPortal> {
     fn into_vnode(self, _cx: NodeFactory) -> VNode {
         match self {
-            Some(node) => VNode::Linked(node),
+            Some(node) => VNode::Portal(node),
             None => {
                 todo!()
             }
@@ -860,10 +846,10 @@ impl IntoVNode<'_> for Option<NodeLink> {
 
 // essentially passing elements through props
 // just build a new element in place
-impl IntoVNode<'_> for &Option<NodeLink> {
+impl IntoVNode<'_> for &Option<VPortal> {
     fn into_vnode(self, _cx: NodeFactory) -> VNode {
         match self {
-            Some(node) => VNode::Linked(NodeLink {
+            Some(node) => VNode::Portal(VPortal {
                 link_idx: node.link_idx.clone(),
                 scope_id: node.scope_id.clone(),
                 node: node.node,
@@ -876,15 +862,15 @@ impl IntoVNode<'_> for &Option<NodeLink> {
     }
 }
 
-impl IntoVNode<'_> for NodeLink {
+impl IntoVNode<'_> for VPortal {
     fn into_vnode(self, _cx: NodeFactory) -> VNode {
-        VNode::Linked(self)
+        VNode::Portal(self)
     }
 }
 
-impl IntoVNode<'_> for &NodeLink {
+impl IntoVNode<'_> for &VPortal {
     fn into_vnode(self, _cx: NodeFactory) -> VNode {
-        VNode::Linked(NodeLink {
+        VNode::Portal(VPortal {
             link_idx: self.link_idx.clone(),
             scope_id: self.scope_id.clone(),
             node: self.node,

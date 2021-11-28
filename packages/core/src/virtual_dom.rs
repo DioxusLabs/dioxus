@@ -8,10 +8,7 @@ use futures_util::{Future, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use smallvec::SmallVec;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::Poll;
-use std::{any::Any, collections::VecDeque};
+use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -286,7 +283,7 @@ impl VirtualDom {
             if let Some(msg) = self.pending_messages.pop_back() {
                 match msg {
                     // just keep looping, the task is now saved but we should actually poll it
-                    SchedulerMsg::TaskPushed(id) => {
+                    SchedulerMsg::NewTask(id) => {
                         self.scopes.pending_futures.borrow_mut().insert(id);
                     }
                     SchedulerMsg::UiEvent(event) => {
@@ -546,7 +543,7 @@ pub enum SchedulerMsg {
     Immediate(ScopeId),
 
     // an async task pushed from an event handler (or just spawned)
-    TaskPushed(ScopeId),
+    NewTask(ScopeId),
 }
 
 /// User Events are events that are shuttled from the renderer into the VirtualDom trhough the scheduler channel.
@@ -675,9 +672,9 @@ impl<'a> Future for PollTasks<'a> {
                 // I think the futures neeed to be pinned using bumpbox or something
                 // right now, they're bump allocated so this shouldn't matter anyway - they're not going to move
                 let task_mut = task.as_mut();
-                let unpinned = unsafe { Pin::new_unchecked(task_mut) };
+                let pinned = unsafe { Pin::new_unchecked(task_mut) };
 
-                if unpinned.poll(cx).is_ready() {
+                if pinned.poll(cx).is_ready() {
                     all_pending = false
                 } else {
                     unfinished_tasks.push(task);

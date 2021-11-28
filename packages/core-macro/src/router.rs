@@ -189,39 +189,9 @@ pub fn routable_derive_impl(input: Routable) -> TokenStream {
     let from_path = input.build_from_path();
     let to_path = input.build_to_path();
 
-    let not_found_route = match not_found_route {
-        Some(route) => quote! { ::std::option::Option::Some(Self::#route) },
-        None => quote! { ::std::option::Option::None },
-    };
-
-    let cache_thread_local_ident = Ident::new(
-        &format!("__{}_ROUTER_CURRENT_ROUTE_CACHE", ident),
-        ident.span(),
-    );
-
     quote! {
-        // ::std::thread_local! {
-        //     #[doc(hidden)]
-        //     #[allow(non_upper_case_globals)]
-        //     static #cache_thread_local_ident: ::std::cell::RefCell<::std::option::Option<#ident>> = ::std::cell::RefCell::new(::std::option::Option::None);
-        // }
-
         // #[automatically_derived]
         // impl ::dioxus::router::Routable for #ident {
-        //     #from_path
-        //     #to_path
-
-        //     // fn routes() -> ::std::vec::Vec<&'static str> {
-        //     //     ::std::vec![#(#ats),*]
-        //     // }
-
-        //     fn not_found_route() -> ::std::option::Option<Self> {
-        //         #not_found_route
-        //     }
-
-        //     // fn current_route() -> ::std::option::Option<Self> {
-        //     //     #cache_thread_local_ident.with(|val| ::std::clone::Clone::clone(&*val.borrow()))
-        //     // }
 
         //     fn recognize(pathname: &str) -> ::std::option::Option<Self> {
         //         todo!()
@@ -237,12 +207,6 @@ pub fn routable_derive_impl(input: Routable) -> TokenStream {
         //         // }
         //         // route
         //     }
-
-        //     // fn cleanup() {
-        //     //     #cache_thread_local_ident.with(move |val| {
-        //     //         *val.borrow_mut() = ::std::option::Option::None;
-        //     //     });
-        //     // }
         // }
     }
 }

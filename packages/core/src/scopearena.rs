@@ -180,7 +180,6 @@ impl ScopeArena {
                 caller,
                 generation: 0.into(),
 
-                hooks: HookList::new(hook_capacity),
                 shared_contexts: Default::default(),
 
                 items: RefCell::new(SelfReferentialItems {
@@ -188,6 +187,10 @@ impl ScopeArena {
                     borrowed_props: Default::default(),
                     tasks: Default::default(),
                 }),
+
+                hook_arena: Bump::new(),
+                hook_vals: RefCell::new(smallvec::SmallVec::with_capacity(hook_capacity)),
+                hook_idx: Default::default(),
             });
 
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
@@ -208,7 +211,14 @@ impl ScopeArena {
         let scope = unsafe { &mut *self.scopes.borrow_mut().remove(id).unwrap() };
 
         // we're just reusing scopes so we need to clear it out
-        scope.hooks.clear();
+        scope.hook_vals.get_mut().drain(..).for_each(|state| {
+            let as_mut = unsafe { &mut *state };
+            let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
+            drop(boxed);
+        });
+        scope.hook_idx.set(0);
+        scope.hook_arena.reset();
+
         scope.shared_contexts.get_mut().clear();
         scope.parent_scope = None;
         scope.generation.set(0);
@@ -310,7 +320,13 @@ impl ScopeArena {
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
         // - All children nodes that rely on &mut T are replaced with a new reference
-        unsafe { scope.hooks.reset() };
+        scope.hook_vals.get_mut().drain(..).for_each(|state| {
+            let as_mut = unsafe { &mut *state };
+            let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
+            drop(boxed);
+        });
+        scope.hook_idx.set(0);
+        scope.hook_arena.reset();
 
         // Safety:
         // - We've dropped all references to the wip bump frame with "ensure_drop_safety"

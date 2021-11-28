@@ -43,6 +43,7 @@ pub type Context<'a> = &'a Scope;
 /// use case they might have.
 pub struct Scope {
     pub(crate) parent_scope: Option<*mut Scope>,
+
     pub(crate) container: ElementId,
 
     pub(crate) our_arena_idx: ScopeId,
@@ -61,7 +62,9 @@ pub struct Scope {
 
     pub(crate) items: RefCell<SelfReferentialItems<'static>>,
 
-    pub(crate) hooks: HookList,
+    pub(crate) hook_arena: Bump,
+    pub(crate) hook_vals: RefCell<SmallVec<[*mut dyn Any; 5]>>,
+    pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
@@ -100,7 +103,9 @@ impl Scope {
     ///
     /// assert_eq!(base.subtree(), 0);
     /// ```
-    pub fn subtree(&self) -> u32 {
+    ///
+    /// todo: enable
+    pub(crate) fn _subtree(&self) -> u32 {
         self.subtree.get()
     }
 
@@ -119,14 +124,13 @@ impl Scope {
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
     /// ```
-    pub fn create_subtree(&self) -> Option<u32> {
+    ///
+    /// todo: enable subtree
+    pub(crate) fn _create_subtree(&self) -> Option<u32> {
         if self.is_subtree_root.get() {
             None
         } else {
             todo!()
-            // let cur = self.subtree().get();
-            // self.shared.cur_subtree.set(cur + 1);
-            // Some(cur)
         }
     }
 
@@ -165,6 +169,7 @@ impl Scope {
     /// assert_eq!(base.parent(), None);
     /// ```
     pub fn parent(&self) -> Option<ScopeId> {
+        // safety: the pointer to our parent is *always* valid thanks to the bump arena
         self.parent_scope.map(|p| unsafe { &*p }.our_arena_idx)
     }
 
@@ -189,11 +194,8 @@ impl Scope {
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
     pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
-        // pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
-        let chan = self.sender.clone();
-        let id = self.scope_id();
+        let (chan, id) = (self.sender.clone(), self.scope_id());
         Rc::new(move || {
-            // log::debug!("set on channel an update for scope {:?}", id);
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
@@ -281,7 +283,11 @@ impl Scope {
         }
     }
 
-    /// Pushes the future onto the poll queue to be polled
+    /// Pushes the future onto the poll queue to be polled after the component renders.
+    ///
+    ///
+    ///
+    ///
     /// The future is forcibly dropped if the component is not ready by the next render
     pub fn push_task<'src, F: Future<Output = ()>>(
         &'src self,
@@ -292,7 +298,7 @@ impl Scope {
         F: 'src,
     {
         self.sender
-            .unbounded_send(SchedulerMsg::TaskPushed(self.our_arena_idx))
+            .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
             .unwrap();
 
         // allocate the future
@@ -326,7 +332,7 @@ impl Scope {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(&'src self, rsx: Option<LazyNodes<'src, '_>>) -> Option<NodeLink> {
+    pub fn render<'src>(&'src self, rsx: Option<LazyNodes<'src, '_>>) -> Option<VPortal> {
         let frame = self.wip_frame();
         let bump = &frame.bump;
         let factory = NodeFactory { bump };
@@ -336,7 +342,7 @@ impl Scope {
         let node_ptr = node as *mut _;
         let node_ptr = unsafe { std::mem::transmute(node_ptr) };
 
-        let link = NodeLink {
+        let link = VPortal {
             scope_id: Cell::new(Some(self.our_arena_idx)),
             link_idx: Cell::new(0),
             node: node_ptr,
@@ -371,24 +377,35 @@ impl Scope {
         initializer: impl FnOnce(usize) -> State,
         runner: impl FnOnce(&'src mut State) -> Output,
     ) -> Output {
-        if self.hooks.at_end() {
-            self.hooks.push_hook(initializer(self.hooks.len()));
+        let mut vals = self.hook_vals.borrow_mut();
+        let hook_len = vals.len();
+        let cur_idx = self.hook_idx.get();
+
+        if cur_idx >= hook_len {
+            let val = self.hook_arena.alloc(initializer(hook_len));
+            vals.push(val);
         }
 
-        const HOOK_ERR_MSG: &str = r###"
-Unable to retrieve the hook that was initialized at this index.
-Consult the `rules of hooks` to understand how to use hooks properly.
+        let state = vals
+            .get(cur_idx)
+            .and_then(|inn| {
+                self.hook_idx.set(cur_idx + 1);
+                let raw_box = unsafe { &mut **inn };
+                raw_box.downcast_mut::<State>()
+            })
+            .expect(
+                r###"
+                Unable to retrieve the hook that was initialized at this index.
+                Consult the `rules of hooks` to understand how to use hooks properly.
 
-You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
-Functions prefixed with "use" should never be called conditionally.
-"###;
+                You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+                Functions prefixed with "use" should never be called conditionally.
+                "###,
+            );
 
-        runner(self.hooks.next::<State>().expect(HOOK_ERR_MSG))
+        runner(state)
     }
-}
 
-// Important internal methods
-impl Scope {
     /// The "work in progress frame" represents the frame that is currently being worked on.
     pub(crate) fn wip_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 0 {
@@ -449,89 +466,13 @@ impl BumpFrame {
         Self { bump, nodes }
     }
 
-    pub fn _allocated_bytes(&self) -> usize {
-        self.bump.allocated_bytes()
-    }
-
-    pub fn assign_nodelink(&self, node: &NodeLink) {
+    pub fn assign_nodelink(&self, node: &VPortal) {
         let mut nodes = self.nodes.borrow_mut();
 
         let len = nodes.len();
         nodes.push(node.node);
 
         node.link_idx.set(len);
-    }
-}
-
-/// An abstraction over internally stored data using a hook-based memory layout.
-///
-/// Hooks are allocated using Boxes and then our stored references are given out.
-///
-/// It's unsafe to "reset" the hooklist, but it is safe to add hooks into it.
-///
-/// Todo: this could use its very own bump arena, but that might be a tad overkill
-#[derive(Default)]
-pub(crate) struct HookList {
-    arena: Bump,
-    vals: RefCell<SmallVec<[*mut dyn Any; 5]>>,
-    idx: Cell<usize>,
-}
-
-impl HookList {
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            arena: Bump::with_capacity(capacity),
-            ..Default::default()
-        }
-    }
-
-    pub(crate) fn next<T: 'static>(&self) -> Option<&mut T> {
-        self.vals.borrow().get(self.idx.get()).and_then(|inn| {
-            self.idx.set(self.idx.get() + 1);
-            let raw_box = unsafe { &mut **inn };
-            raw_box.downcast_mut::<T>()
-        })
-    }
-
-    /// This resets the internal iterator count
-    /// It's okay that we've given out each hook, but now we have the opportunity to give it out again
-    /// Therefore, resetting is considered unsafe
-    ///
-    /// This should only be ran by Dioxus itself before "running scope".
-    /// Dioxus knows how to descend through the tree to prevent mutable aliasing.
-    pub(crate) unsafe fn reset(&self) {
-        self.idx.set(0);
-    }
-
-    pub(crate) fn push_hook<T: 'static>(&self, new: T) {
-        let val = self.arena.alloc(new);
-        self.vals.borrow_mut().push(val)
-    }
-
-    pub(crate) fn len(&self) -> usize {
-        self.vals.borrow().len()
-    }
-
-    pub(crate) fn cur_idx(&self) -> usize {
-        self.idx.get()
-    }
-
-    pub(crate) fn at_end(&self) -> bool {
-        self.cur_idx() >= self.len()
-    }
-
-    pub fn clear(&mut self) {
-        self.vals.borrow_mut().drain(..).for_each(|state| {
-            let as_mut = unsafe { &mut *state };
-            let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
-            drop(boxed);
-        });
-    }
-
-    /// Get the ammount of memory a hooklist uses
-    /// Used in heuristics
-    pub fn _get_hook_arena_size(&self) -> usize {
-        self.arena.allocated_bytes()
     }
 }
 

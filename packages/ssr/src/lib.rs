@@ -158,7 +158,7 @@ impl<'a> TextRenderer<'a, '_> {
                 }
                 write!(f, "<!-- -->")?;
             }
-            VNode::Linked(link) => {
+            VNode::Portal(link) => {
                 todo!();
             }
             VNode::Element(el) => {

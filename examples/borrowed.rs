@@ -20,7 +20,7 @@ fn main() {
     dioxus::desktop::launch(App, |c| c);
 }
 
-fn App((cx, props): Scope<()>) -> Element {
+fn App(cx: Context, props: &()) -> Element {
     let text: &mut Vec<String> = cx.use_hook(|_| vec![String::from("abc=def")], |f| f);
 
     let first = text.get_mut(0).unwrap();
@@ -39,11 +39,7 @@ struct C1Props<'a> {
     text: &'a mut String,
 }
 
-impl<'a> Drop for C1Props<'a> {
-    fn drop(&mut self) {}
-}
-
-fn Child1<'a>((cx, props): Scope<'a, C1Props>) -> Element<'a> {
+fn Child1(cx: Context, props: &C1Props) -> Element {
     let (left, right) = props.text.split_once("=").unwrap();
 
     cx.render(rsx! {
@@ -59,7 +55,7 @@ struct C2Props<'a> {
     text: &'a str,
 }
 
-fn Child2<'a>((cx, props): Scope<'a, C2Props>) -> Element<'a> {
+fn Child2(cx: Context, props: &C2Props) -> Element {
     cx.render(rsx! {
         Child3 {
             text: props.text
@@ -72,7 +68,7 @@ struct C3Props<'a> {
     text: &'a str,
 }
 
-fn Child3<'a>((cx, props): Scope<'a, C3Props>) -> Element<'a> {
+fn Child3(cx: Context, props: &C3Props) -> Element {
     cx.render(rsx! {
         div { "{props.text}"}
     })
