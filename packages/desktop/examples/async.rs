@@ -11,14 +11,16 @@ use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 
 fn main() {
+    simple_logger::init().unwrap();
     dioxus_desktop::launch(App, |c| c);
 }
 
 static App: FC<()> = |cx, props| {
     let mut count = use_state(cx, || 0);
+    log::debug!("count is {:?}", count);
 
     cx.push_task(|| async move {
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
         count += 1;
     });
 

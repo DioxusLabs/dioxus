@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
@@ -109,85 +111,85 @@ fn parse_variants_attributes(
 }
 
 impl Routable {
-    fn build_from_path(&self) -> TokenStream {
-        let from_path_matches = self.variants.iter().enumerate().map(|(i, variant)| {
-            let ident = &variant.ident;
-            let right = match &variant.fields {
-                Fields::Unit => quote! { Self::#ident },
-                Fields::Named(field) => {
-                    let fields = field.named.iter().map(|it| {
-                        //named fields have idents
-                        it.ident.as_ref().unwrap()
-                    });
-                    quote! { Self::#ident { #(#fields: params.get(stringify!(#fields))?.parse().ok()?,)* } }
-                }
-                Fields::Unnamed(_) => unreachable!(), // already checked
-            };
+    // fn build_from_path(&self) -> TokenStream {
+    //     let from_path_matches = self.variants.iter().enumerate().map(|(i, variant)| {
+    //         let ident = &variant.ident;
+    //         let right = match &variant.fields {
+    //             Fields::Unit => quote! { Self::#ident },
+    //             Fields::Named(field) => {
+    //                 let fields = field.named.iter().map(|it| {
+    //                     //named fields have idents
+    //                     it.ident.as_ref().unwrap()
+    //                 });
+    //                 quote! { Self::#ident { #(#fields: params.get(stringify!(#fields))?.parse().ok()?,)* } }
+    //             }
+    //             Fields::Unnamed(_) => unreachable!(), // already checked
+    //         };
 
-            let left = self.ats.get(i).unwrap();
-            quote! {
-                #left => ::std::option::Option::Some(#right)
-            }
-        });
+    //         let left = self.ats.get(i).unwrap();
+    //         quote! {
+    //             #left => ::std::option::Option::Some(#right)
+    //         }
+    //     });
 
-        quote! {
-            fn from_path(path: &str, params: &::std::collections::HashMap<&str, &str>) -> ::std::option::Option<Self> {
-                match path {
-                    #(#from_path_matches),*,
-                    _ => ::std::option::Option::None,
-                }
-            }
-        }
-    }
+    //     quote! {
+    //         fn from_path(path: &str, params: &::std::collections::HashMap<&str, &str>) -> ::std::option::Option<Self> {
+    //             match path {
+    //                 #(#from_path_matches),*,
+    //                 _ => ::std::option::Option::None,
+    //             }
+    //         }
+    //     }
+    // }
 
-    fn build_to_path(&self) -> TokenStream {
-        let to_path_matches = self.variants.iter().enumerate().map(|(i, variant)| {
-            let ident = &variant.ident;
-            let mut right = self.ats.get(i).unwrap().value();
+    // fn build_to_path(&self) -> TokenStream {
+    //     let to_path_matches = self.variants.iter().enumerate().map(|(i, variant)| {
+    //         let ident = &variant.ident;
+    //         let mut right = self.ats.get(i).unwrap().value();
 
-            match &variant.fields {
-                Fields::Unit => quote! { Self::#ident => ::std::string::ToString::to_string(#right) },
-                Fields::Named(field) => {
-                    let fields = field
-                        .named
-                        .iter()
-                        .map(|it| it.ident.as_ref().unwrap())
-                        .collect::<Vec<_>>();
+    //         match &variant.fields {
+    //             Fields::Unit => quote! { Self::#ident => ::std::string::ToString::to_string(#right) },
+    //             Fields::Named(field) => {
+    //                 let fields = field
+    //                     .named
+    //                     .iter()
+    //                     .map(|it| it.ident.as_ref().unwrap())
+    //                     .collect::<Vec<_>>();
 
-                    for field in fields.iter() {
-                        // :param -> {param}
-                        // so we can pass it to `format!("...", param)`
-                        right = right.replace(&format!(":{}", field), &format!("{{{}}}", field))
-                    }
+    //                 for field in fields.iter() {
+    //                     // :param -> {param}
+    //                     // so we can pass it to `format!("...", param)`
+    //                     right = right.replace(&format!(":{}", field), &format!("{{{}}}", field))
+    //                 }
 
-                    quote! {
-                        Self::#ident { #(#fields),* } => ::std::format!(#right, #(#fields = #fields),*)
-                    }
-                }
-                Fields::Unnamed(_) => unreachable!(), // already checked
-            }
-        });
+    //                 quote! {
+    //                     Self::#ident { #(#fields),* } => ::std::format!(#right, #(#fields = #fields),*)
+    //                 }
+    //             }
+    //             Fields::Unnamed(_) => unreachable!(), // already checked
+    //         }
+    //     });
 
-        quote! {
-            fn to_path(&self) -> ::std::string::String {
-                match self {
-                    #(#to_path_matches),*,
-                }
-            }
-        }
-    }
+    //     quote! {
+    //         fn to_path(&self) -> ::std::string::String {
+    //             match self {
+    //                 #(#to_path_matches),*,
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 pub fn routable_derive_impl(input: Routable) -> TokenStream {
     let Routable {
-        ats,
-        not_found_route,
-        ident,
+        // ats,
+        // not_found_route,
+        // ident,
         ..
     } = &input;
 
-    let from_path = input.build_from_path();
-    let to_path = input.build_to_path();
+    // let from_path = input.build_from_path();
+    // let to_path = input.build_to_path();
 
     quote! {
         // #[automatically_derived]

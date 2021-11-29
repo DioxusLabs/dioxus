@@ -1,7 +1,7 @@
 use dioxus_core::prelude::Context;
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
-    fmt::Display,
+    fmt::{Debug, Display},
     ops::Not,
     rc::Rc,
 };
@@ -54,11 +54,14 @@ pub fn use_state<'a, T: 'static>(
     initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
     cx.use_hook(
-        move |_| UseStateInner {
-            current_val: initial_state_fn(),
-            update_callback: cx.schedule_update(),
-            wip: Rc::new(RefCell::new(None)),
-            update_scheuled: Cell::new(false),
+        move |_| {
+            //
+            UseStateInner {
+                current_val: initial_state_fn(),
+                update_callback: cx.schedule_update(),
+                wip: Rc::new(RefCell::new(None)),
+                update_scheuled: Cell::new(false),
+            }
         },
         move |hook| {
             hook.update_scheuled.set(false);
@@ -91,7 +94,11 @@ where
         UseState { inner: self.inner }
     }
 }
-
+impl<T: Debug> Debug for UseState<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.inner.current_val)
+    }
+}
 impl<'a, T: 'static> UseState<'a, T> {
     /// Tell the Dioxus Scheduler that we need to be processed
     pub fn needs_update(&self) {

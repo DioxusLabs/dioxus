@@ -473,6 +473,12 @@ impl<'bump> DiffState<'bump> {
         // TODO: add noderefs to current noderef list Noderefs
         let _new_component = self.scopes.get_scope(&new_idx).unwrap();
 
+        log::debug!(
+            "initializing component {:?} with height {:?}",
+            new_idx,
+            height + 1
+        );
+
         // Run the scope for one iteration to initialize it
         if self.scopes.run_scope(&new_idx) {
             // Take the node that was just generated from running the component

@@ -19,7 +19,7 @@ You can always use it "normally" with the `split` method:
 let value = use_state(cx, || 10);
 
 // "Classic" usage:
-let (value, set_value) = use_state(cx, || 0).classic();
+let (value, set_value) = use_state(cx, || 0).split();
 ```
 
 ## use_ref

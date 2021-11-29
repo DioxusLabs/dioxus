@@ -9,7 +9,7 @@ Using the router should feel similar to tide's routing framework where an "addre
 Here's an example of how to use the router hook:
 
 ```rust
-#[derive(Clone, Routable)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Routable)]
 enum AppRoute {
     Home, 
     Posts,

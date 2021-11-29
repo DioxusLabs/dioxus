@@ -16,7 +16,8 @@ use std::fmt::{self, Write};
 ///
 /// view.eval(&format!("callback({});", web_view::escape(string)));
 /// ```
-pub fn escape(string: &str) -> Escaper {
+#[allow(unused)]
+pub fn escape_js_string(string: &str) -> Escaper {
     Escaper(string)
 }
 
@@ -76,6 +77,6 @@ impl<'a> fmt::Display for Escaper<'a> {
 #[test]
 fn test() {
     let plain = "ABC \n\r' abc \\  \u{2028}   \u{2029}123";
-    let escaped = escape(plain).to_string();
+    let escaped = escape_js_string(plain).to_string();
     assert!(escaped == "'ABC \\n\\r\\' abc \\\\  \\u2028   \\u2029123'");
 }

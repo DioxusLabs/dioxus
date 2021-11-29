@@ -315,18 +315,10 @@ impl ScopeArena {
 
         let scope = unsafe { &mut *self.get_scope_mut(id).expect("could not find scope") };
 
-        // log::debug!("found scope, about to run: {:?}", id);
-
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
         // - All children nodes that rely on &mut T are replaced with a new reference
-        scope.hook_vals.get_mut().drain(..).for_each(|state| {
-            let as_mut = unsafe { &mut *state };
-            let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
-            drop(boxed);
-        });
         scope.hook_idx.set(0);
-        scope.hook_arena.reset();
 
         // Safety:
         // - We've dropped all references to the wip bump frame with "ensure_drop_safety"

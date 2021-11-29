@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 use smallvec::SmallVec;
 use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 
-/// A virtual node system that progresses user events and diffs UI trees.
+/// A virtual node s ystem that progresses user events and diffs UI trees.
 ///
 ///
 /// ## Guide
@@ -347,8 +347,13 @@ impl VirtualDom {
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
 
+        log::debug!(
+            "Working with deadline. \nDirty scopes: {:?}. \nPending messages: {:?}",
+            self.dirty_scopes,
+            self.pending_messages
+        );
+
         while !self.dirty_scopes.is_empty() {
-            // log::debug!("working with deadline");
             let scopes = &self.scopes;
             let mut diff_state = DiffState::new(scopes);
 
@@ -357,6 +362,7 @@ impl VirtualDom {
             // Sort the scopes by height. Theoretically, we'll de-duplicate scopes by height
             self.dirty_scopes
                 .retain(|id| scopes.get_scope(id).is_some());
+
             self.dirty_scopes.sort_by(|a, b| {
                 let h1 = scopes.get_scope(a).unwrap().height;
                 let h2 = scopes.get_scope(b).unwrap().height;
@@ -364,6 +370,7 @@ impl VirtualDom {
             });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
+                log::debug!("Analyzing dirty scope {:?}", scopeid);
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
 
@@ -372,6 +379,7 @@ impl VirtualDom {
                             self.scopes.wip_head(&scopeid),
                             self.scopes.fin_head(&scopeid),
                         );
+                        log::debug!("Diffing old: {:?}, new: {:?}", old, new);
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                         diff_state.stack.scope_stack.push(scopeid);
 
@@ -391,9 +399,11 @@ impl VirtualDom {
                 for scope in seen_scopes {
                     self.dirty_scopes.remove(&scope);
                 }
+                log::debug!("Working generated mutations: {:?}", mutations);
 
                 committed_mutations.push(mutations);
             } else {
+                log::debug!("Could not finish work in time");
                 // leave the work in an incomplete state
                 return committed_mutations;
             }
@@ -535,6 +545,7 @@ impl VirtualDom {
     }
 }
 
+#[derive(Debug)]
 pub enum SchedulerMsg {
     // events from the host
     UiEvent(UserEvent),
