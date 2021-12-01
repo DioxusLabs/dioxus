@@ -110,7 +110,7 @@ By using Rust, we gain:
 - Clean, efficient, composable iterators
 - Inline built-in unit/integration testing
 - Best-in-class error handling
-- Powerful and sane, standard library
+- Powerful and sane standard library
 - Flexible macro system
 - Access to `crates.io`
 
@@ -125,9 +125,11 @@ And much more. Dioxus makes Rust apps just as fast to write as React apps, but a
 
 ### Why NOT Dioxus?
 You shouldn't use Dioxus if:
+
 - You don't like the React Hooks approach to frontend
 - You need a no-std renderer
 - You want to support browsers where Wasm or asm.js are not supported.
+- You need a Send+Sync UI solution (Dioxus is not currently ThreadSafe)
 
 # Parity with React
 
