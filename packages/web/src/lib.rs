@@ -85,7 +85,7 @@ mod ric_raf;
 ///     dioxus_web::launch(App, |c| c);
 /// }
 ///
-/// static App: FC<()> = |(cx, props)| {
+/// static App: FC<()> = |cx, props| {
 ///     rsx!(cx, div {"hello world"})
 /// }
 /// ```
@@ -109,7 +109,7 @@ pub fn launch(root_component: FC<()>, configuration: impl FnOnce(WebConfig) -> W
 ///     name: String
 /// }
 ///
-/// static App: FC<RootProps> = |(cx, props)| {
+/// static App: FC<RootProps> = |cx, props| {
 ///     rsx!(cx, div {"hello {props.name}"})
 /// }
 /// ```
@@ -155,7 +155,7 @@ pub async fn run_with_props<T: 'static + Send>(root: FC<T>, root_props: T, cfg: 
     // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding
     // ElementIds should already line up because the web_sys dom has already loaded elements with the DioxusID into memory
     if !should_hydrate {
-        log::info!("Applying rebuild edits..., {:?}", mutations);
+        // log::info!("Applying rebuild edits..., {:?}", mutations);
         websys_dom.process_edits(&mut mutations.edits);
     }
 
@@ -166,17 +166,20 @@ pub async fn run_with_props<T: 'static + Send>(root: FC<T>, root_props: T, cfg: 
         // if there is work then this future resolves immediately.
         dom.wait_for_work().await;
 
-        // wait for the mainthread to schedule us in
-        let mut deadline = work_loop.wait_for_idle_time().await;
+        // // wait for the mainthread to schedule us in
+        // let mut deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        let mutations = dom.work_with_deadline(|| false);
+        // // run the virtualdom work phase until the frame deadline is reached
+        // let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
 
         // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;
 
         for mut edit in mutations {
             // actually apply our changes during the animation frame
+            // log::info!("Applying change edits..., {:?}", edit);
             websys_dom.process_edits(&mut edit.edits);
         }
     }

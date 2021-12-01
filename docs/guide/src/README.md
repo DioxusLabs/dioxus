@@ -5,7 +5,7 @@
 **Dioxus** is a framework and ecosystem for building fast, scalable, and robust user interfaces with the Rust programming language. This guide will help you get up-and-running with Dioxus running on the Web, Desktop, Mobile, and more.
 
 ```rust
-fn App((cx, props): Component<()>) -> Element {
+fn App(cx: Context, props: &()) -> Element {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(
@@ -16,10 +16,19 @@ fn App((cx, props): Component<()>) -> Element {
 };
 ```
 
-The Dioxus API and patterns closely resemble React - if this guide is lacking in any general concept or an error message is confusing, we recommend substituting "React" for "Dioxus" in your web search terms. A major goal of Dioxus is to provide a familiar toolkit for UI in Rust, so we've chosen to follow in the footsteps of popular UI frameworks (React, Redux, etc) - if you know React, then you already know Dioxus. If you don't know either, this guide will still help you!
-
+In general, Dioxus and React share many functional similarities. If this guide is lacking in any general concept or an error message is confusing, React's documentation might be more helpful. We are dedicated to providing a *familiar* toolkit for UI in Rust, so we've chosen to follow in the footsteps of popular UI frameworks (React, Redux, etc). If you know React, then you already know Dioxus. If you don't know either, this guide will still help you!
 
 > This is introduction book! For advanced topics, check out the [Reference Guide]() instead.
+
+## Multiplatform
+
+Dioxus is a *portable* toolkit, meaning the Core implementation can run anywhere with no platform-dependent linking. Unlike many other Rust frontend toolkits, Dioxus is not intrinsically linked to Web-Sys. In fact, every element and event listener can be swapped out at compile time. By default, Dioxus ships with the `Html` feature enabled which can be disabled depending on your target renderer.
+
+Right now, we have several 1st-party renderers:
+- WebSys (for WASM)
+- Tao/Tokio (for Desktop apps)
+- Tao/Tokio (for Mobile apps)
+- SSR (for generating static markup)
 
 ### Web Support
 ---
@@ -39,19 +48,13 @@ Examples:
 
 ### SSR Support
 ---
-Dioxus supports server-side rendering! In a pinch, you can literally "debug" the VirtualDom:
-
-```rust
-let dom = VirtualDom::new(App);
-println!("{:?}, dom");
-```
+Dioxus supports server-side rendering! 
 
 For rendering statically to an `.html` file or from a WebServer, then you'll want to make sure the `ssr` feature is enabled in the `dioxus` crate and use the `dioxus::ssr` API. We don't expect the SSR API to change drastically in the future.
 
 ```rust
 let contents = dioxus::ssr::render_vdom(&dom, |c| c);
 ```
-
 
 [Jump to the getting started guide for SSR.]()
 

@@ -92,15 +92,15 @@ impl ScopeArena {
         let new_scope_id = ScopeId(self.scope_counter.get());
         self.scope_counter.set(self.scope_counter.get() + 1);
 
-        log::debug!("new scope {:?} with parent {:?}", new_scope_id, container);
+        // log::debug!("new scope {:?} with parent {:?}", new_scope_id, container);
 
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             let scope = unsafe { &mut *old_scope };
-            log::debug!(
-                "reusing scope {:?} as {:?}",
-                scope.our_arena_idx,
-                new_scope_id
-            );
+            // log::debug!(
+            //     "reusing scope {:?} as {:?}",
+            //     scope.our_arena_idx,
+            //     new_scope_id
+            // );
 
             scope.caller = caller;
             scope.parent_scope = parent_scope;
@@ -180,16 +180,17 @@ impl ScopeArena {
                 caller,
                 generation: 0.into(),
 
-                hooks: HookList::new(hook_capacity),
                 shared_contexts: Default::default(),
 
                 items: RefCell::new(SelfReferentialItems {
                     listeners: Default::default(),
                     borrowed_props: Default::default(),
-                    suspended_nodes: Default::default(),
                     tasks: Default::default(),
-                    pending_effects: Default::default(),
                 }),
+
+                hook_arena: Bump::new(),
+                hook_vals: RefCell::new(smallvec::SmallVec::with_capacity(hook_capacity)),
+                hook_idx: Default::default(),
             });
 
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
@@ -202,7 +203,7 @@ impl ScopeArena {
     pub fn try_remove(&self, id: &ScopeId) -> Option<()> {
         self.ensure_drop_safety(id);
 
-        log::debug!("removing scope {:?}", id);
+        // log::debug!("removing scope {:?}", id);
 
         // Safety:
         // - ensure_drop_safety ensures that no references to this scope are in use
@@ -210,7 +211,14 @@ impl ScopeArena {
         let scope = unsafe { &mut *self.scopes.borrow_mut().remove(id).unwrap() };
 
         // we're just reusing scopes so we need to clear it out
-        scope.hooks.clear();
+        scope.hook_vals.get_mut().drain(..).for_each(|state| {
+            let as_mut = unsafe { &mut *state };
+            let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
+            drop(boxed);
+        });
+        scope.hook_idx.set(0);
+        scope.hook_arena.reset();
+
         scope.shared_contexts.get_mut().clear();
         scope.parent_scope = None;
         scope.generation.set(0);
@@ -226,15 +234,11 @@ impl ScopeArena {
         let SelfReferentialItems {
             borrowed_props,
             listeners,
-            pending_effects,
-            suspended_nodes,
             tasks,
         } = scope.items.get_mut();
 
         borrowed_props.clear();
         listeners.clear();
-        pending_effects.clear();
-        suspended_nodes.clear();
         tasks.clear();
 
         self.free_scopes.borrow_mut().push(scope);
@@ -311,12 +315,10 @@ impl ScopeArena {
 
         let scope = unsafe { &mut *self.get_scope_mut(id).expect("could not find scope") };
 
-        log::debug!("found scope, about to run: {:?}", id);
-
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
         // - All children nodes that rely on &mut T are replaced with a new reference
-        unsafe { scope.hooks.reset() };
+        scope.hook_idx.set(0);
 
         // Safety:
         // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
@@ -326,16 +328,12 @@ impl ScopeArena {
             let mut items = scope.items.borrow_mut();
 
             // just forget about our suspended nodes while we're at it
-            items.suspended_nodes.clear();
             items.tasks.clear();
-            items.pending_effects.clear();
 
             // guarantee that we haven't screwed up - there should be no latent references anywhere
             debug_assert!(items.listeners.is_empty());
             debug_assert!(items.borrowed_props.is_empty());
-            debug_assert!(items.suspended_nodes.is_empty());
             debug_assert!(items.tasks.is_empty());
-            debug_assert!(items.pending_effects.is_empty());
 
             // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
             scope.wip_frame().nodes.borrow_mut().clear();

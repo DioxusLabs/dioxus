@@ -72,7 +72,7 @@ impl ToTokens for RsxTemplate {
 
         // // create a lazy tree that accepts a bump allocator
         // let final_tokens = quote! {
-        //     dioxus::prelude::LazyNodes::new(move |(cx, props)|{
+        //     dioxus::prelude::LazyNodes::new(move |cx, props|{
         //         let bump = &cx.bump();
 
         //         #new_toks

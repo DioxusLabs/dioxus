@@ -48,3 +48,148 @@ These web-specific examples must be run with `dioxus-cli` using `dioxus develop 
 | ------- | ------------ |
 | asd     | this does    |
 | asd     | this does    |
+
+
+
+## Show me some examples!
+
+In our collection of examples, guides, and tutorials, we have:
+- The book (an introductory course)
+- The guide (an in-depth analysis of everything in Dioxus)
+- The reference (a collection of examples with heavy documentation)
+- The general examples
+- The platform-specific examples (web, ssr, desktop, mobile, server)
+  
+Here's what a few common tasks look like in Dioxus:
+
+Nested components with children and internal state:
+```rust
+fn App(cx: Context, props: &()) -> Element {
+  cx.render(rsx!( Toggle { "Toggle me" } ))
+}
+
+#[derive(PartialEq, Props)]
+struct ToggleProps { children: Element }
+
+fn Toggle(cx: Context, props: &ToggleProps) -> Element {
+  let mut toggled = use_state(cx, || false);
+  cx.render(rsx!{
+    div {
+      {&props.children}
+      button { onclick: move |_| toggled.set(true),
+        {toggled.and_then(|| "On").or_else(|| "Off")}
+      }
+    }
+  })
+}
+```
+
+Controlled inputs:
+```rust
+fn App(cx: Context, props: &()) -> Element {
+  let value = use_state(cx, String::new);
+  cx.render(rsx!( 
+    input {
+      "type": "text",
+      value: "{value}",
+      oninput: move |evt| value.set(evt.value.clone())
+    }
+  ))
+}
+```
+
+Lists and Conditional rendering:
+```rust
+fn App(cx: Context, props: &()) -> Element {
+  let list = (0..10).map(|i| {
+    rsx!(li { key: "{i}", "Value: {i}" })
+  });
+  
+  let title = match list.len() {
+    0 => rsx!("Not enough"),
+    _ => rsx!("Plenty!"),
+  };
+
+  if should_show {
+    cx.render(rsx!( 
+      {title}
+      ul { {list} } 
+    ))
+  } else {
+    None
+  }
+}
+```
+
+Tiny components:
+```rust
+static App: FC<()> = |cx, _| rsx!(cx, div {"hello world!"});
+```
+
+Borrowed prop contents:
+```rust
+fn App(cx: Context, props: &()) -> Element {
+  let name = use_state(cx, || String::from("example"));
+  rsx!(cx, Child { title: name.as_str() })
+}
+
+#[derive(Props)]
+struct ChildProps<'a> { title: &'a str }
+
+fn Child(cx: Context, props: &ChildProps) -> Element {
+  rsx!(cx, "Hello {props.title}")
+}
+```
+
+Global State
+```rust
+struct GlobalState { name: String }
+
+fn App(cx: Context, props: &()) -> Element {
+  use_provide_shared_state(cx, || GlobalState { name: String::from("Toby") })
+  rsx!(cx, Leaf {})
+}
+
+fn Leaf(cx: Context, props: &()) -> Element {
+  let state = use_consume_shared_state::<GlobalState>(cx)?;
+  rsx!(cx, "Hello {state.name}")
+}
+```
+
+Router (inspired by Yew-Router)
+```rust
+#[derive(PartialEq, Clone,  Hash, Eq, Routable)]
+enum Route {
+  #[at("/")]
+  Home,
+  #[at("/post/{id}")]
+  Post(id)
+}
+
+fn App(cx: Context, props: &()) -> Element {
+  let route = use_router(cx, Route::parse);
+  cx.render(rsx!(div {
+    {match route {
+      Route::Home => rsx!( Home {} ),
+      Route::Post(id) => rsx!( Post { id: id })
+    }}
+  }))  
+}
+```
+
+Suspense 
+```rust
+fn App(cx: Context, props: &()) -> Element {
+  let doggo = use_suspense(cx,
+    || async { reqwest::get("https://dog.ceo/api/breeds/image/random").await.unwrap().json::<Response>().await.unwrap() },
+    |response| cx.render(rsx!( img { src: "{response.message}" }))
+  );
+  
+  cx.render(rsx!{
+    div {
+      "One doggo coming right up:"
+      {doggo}
+    }
+  })
+}
+```

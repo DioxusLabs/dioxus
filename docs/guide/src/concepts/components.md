@@ -84,7 +84,7 @@ struct PostProps {
 
 And our render function:
 ```rust
-fn Post((cx, props): Scope<PostProps>) -> Element {
+fn Post(cx: Context, props: &PostProps) -> Element {
     cx.render(rsx!{
         div { class: "post-container"
             VoteButton {
@@ -120,7 +120,7 @@ struct VoteButtonProps {
     score: i32
 }
 
-fn VoteButton((cx, props): Scope<VoteButtonProps>) -> Element {
+fn VoteButton(cx: Context, props: &VoteButtonProps) -> Element {
     cx.render(rsx!{
         div { class: "votebutton"
             div { class: "arrow up" }
@@ -145,7 +145,7 @@ struct TitleCardProps<'a> {
     title: &'a str,
 }
 
-fn TitleCard<'a>((cx, props): Scope<'a, TitleCardProps>) -> Element<'a> {
+fn TitleCard(cx: Context, props: &TitleCardProps) -> Element {
     cx.render(rsx!{
         h1 { "{props.title}" }
     })
@@ -174,8 +174,8 @@ function Component(props) {
 Because Dioxus needs to work with the rules of Rust it uses the `Context` object to maintain some internal bookkeeping. That's what the `Context` object is: a place for the component to store state, manage listeners, and allocate elements. Advanced users of Dioxus will want to learn how to properly leverage the `Context` object to build robust and performant extensions for Dioxus.
 
 ```rust
-fn Post((cx /* <-- our Context object*/, props): Scope<PostProps>) -> Element {
-    cx.render(rsx!{ })
+fn Post(cx: Context, props: &PostProps) -> Element {
+    cx.render(rsx!("hello"))
 }
 ```
 ## Moving forward

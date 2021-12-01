@@ -26,7 +26,7 @@ container.push(green_light);
 container.push(yellow_light);
 container.push(red_light);
 
-container.onclick(move |_| {
+container.set_onclick(move |_| {
     if red_light.enabled() {
         red_light.set_enabled(false);
         green_light.set_enabled(true);
@@ -45,22 +45,23 @@ As the UI grows in scale, our logic to keep each element in the proper state wou
 Instead, with Dioxus, we *declare* what we want our UI to look like:
 
 ```rust
-let state = "red";
+let mut state = use_state(cx, || "red");
 
-rsx!(
+cx.render(rsx!(
     Container {
-        Light { color: "red", enabled: {state == "red"}  }
-        Light { color: "yellow", enabled: {state == "yellow"}  }
-        Light { color: "green", enabled: {state == "green"}  }
-        onclick: |_| {
-            state = match state {
+        Light { color: "red", enabled: format_args!("{}", state == "red")  }
+        Light { color: "yellow", enabled: format_args!("{}", state == "yellow") }
+        Light { color: "green", enabled: format_args!("{}", state == "green") }
+
+        onclick: move |_| {
+            state.set(match *state {
                 "green" => "yellow",
                 "yellow" => "red",
                 "red" => "green",
-            }
+            })
         }
     }
-)
+))
 ```
 
 Remember: this concept is not new! Many frameworks are declarative - with React being the most popular. Declarative frameworks tend to be much more enjoyable to work with than imperative frameworks.

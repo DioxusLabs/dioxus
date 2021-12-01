@@ -33,6 +33,11 @@ impl<'a, T> UseRef<'a, T> {
         self.inner.value.borrow()
     }
 
+    pub fn set(&self, new: T) {
+        *self.inner.value.borrow_mut() = new;
+        self.needs_update();
+    }
+
     pub fn read_write(&self) -> (Ref<'_, T>, &Self) {
         (self.read(), self)
     }

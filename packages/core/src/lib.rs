@@ -31,14 +31,14 @@ pub(crate) mod innerlude {
     pub use crate::scopearena::*;
     pub use crate::virtual_dom::*;
 
-    pub type Element = Option<NodeLink>;
+    pub type Element = Option<VPortal>;
     pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> Element;
 }
 
 pub use crate::innerlude::{
     Attribute, Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, IntoVNode,
     LazyNodes, Listener, MountType, Mutations, NodeFactory, Properties, SchedulerMsg, ScopeId,
-    UserEvent, VAnchor, VElement, VFragment, VNode, VSuspended, VirtualDom, FC,
+    UserEvent, VElement, VFragment, VNode, VirtualDom, FC,
 };
 
 pub mod prelude {

@@ -8,12 +8,9 @@ use futures_util::{Future, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use smallvec::SmallVec;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::Poll;
-use std::{any::Any, collections::VecDeque};
+use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 
-/// A virtual node system that progresses user events and diffs UI trees.
+/// A virtual node s ystem that progresses user events and diffs UI trees.
 ///
 ///
 /// ## Guide
@@ -286,7 +283,7 @@ impl VirtualDom {
             if let Some(msg) = self.pending_messages.pop_back() {
                 match msg {
                     // just keep looping, the task is now saved but we should actually poll it
-                    SchedulerMsg::TaskPushed(id) => {
+                    SchedulerMsg::NewTask(id) => {
                         self.scopes.pending_futures.borrow_mut().insert(id);
                     }
                     SchedulerMsg::UiEvent(event) => {
@@ -297,7 +294,6 @@ impl VirtualDom {
                     SchedulerMsg::Immediate(s) => {
                         self.dirty_scopes.insert(s);
                     }
-                    SchedulerMsg::Suspended { scope } => todo!(),
                 }
             }
         }
@@ -352,7 +348,6 @@ impl VirtualDom {
         let mut committed_mutations = vec![];
 
         while !self.dirty_scopes.is_empty() {
-            log::debug!("working with deadline");
             let scopes = &self.scopes;
             let mut diff_state = DiffState::new(scopes);
 
@@ -361,6 +356,7 @@ impl VirtualDom {
             // Sort the scopes by height. Theoretically, we'll de-duplicate scopes by height
             self.dirty_scopes
                 .retain(|id| scopes.get_scope(id).is_some());
+
             self.dirty_scopes.sort_by(|a, b| {
                 let h1 = scopes.get_scope(a).unwrap().height;
                 let h2 = scopes.get_scope(b).unwrap().height;
@@ -386,18 +382,16 @@ impl VirtualDom {
             }
 
             if diff_state.work(&mut deadline) {
-                let DiffState {
-                    mutations,
-                    seen_scopes,
-                    ..
-                } = diff_state;
+                let DiffState { mutations, .. } = diff_state;
 
-                for scope in seen_scopes {
-                    self.dirty_scopes.remove(&scope);
+                for scope in &mutations.dirty_scopes {
+                    self.dirty_scopes.remove(scope);
                 }
 
                 committed_mutations.push(mutations);
             } else {
+                log::debug!("Could not finish work in time");
+
                 // leave the work in an incomplete state
                 return committed_mutations;
             }
@@ -539,6 +533,7 @@ impl VirtualDom {
     }
 }
 
+#[derive(Debug)]
 pub enum SchedulerMsg {
     // events from the host
     UiEvent(UserEvent),
@@ -547,9 +542,7 @@ pub enum SchedulerMsg {
     Immediate(ScopeId),
 
     // an async task pushed from an event handler (or just spawned)
-    TaskPushed(ScopeId),
-
-    Suspended { scope: ScopeId },
+    NewTask(ScopeId),
 }
 
 /// User Events are events that are shuttled from the renderer into the VirtualDom trhough the scheduler channel.
@@ -678,9 +671,9 @@ impl<'a> Future for PollTasks<'a> {
                 // I think the futures neeed to be pinned using bumpbox or something
                 // right now, they're bump allocated so this shouldn't matter anyway - they're not going to move
                 let task_mut = task.as_mut();
-                let unpinned = unsafe { Pin::new_unchecked(task_mut) };
+                let pinned = unsafe { Pin::new_unchecked(task_mut) };
 
-                if unpinned.poll(cx).is_ready() {
+                if pinned.poll(cx).is_ready() {
                     all_pending = false
                 } else {
                     unfinished_tasks.push(task);

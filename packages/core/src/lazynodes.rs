@@ -35,6 +35,14 @@ enum StackNodeStorage<'a, 'b> {
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
+    
+    pub fn new_some<F>(_val: F) -> Option<Self>
+    where
+        F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
+    {
+        Some(Self::new(_val))
+    }
+
     pub fn new<F>(_val: F) -> Self
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
@@ -221,7 +229,7 @@ fn it_works() {
 
     let factory = NodeFactory { bump: &bump };
 
-    let caller = NodeFactory::annotate_lazy(|f| {
+    let caller = LazyNodes::new_some(|f| {
         //
         f.text(format_args!("hello world!"))
     })
@@ -254,7 +262,7 @@ fn it_drops() {
             .map(|i| {
                 let val = val.clone();
 
-                NodeFactory::annotate_lazy(move |f| {
+                LazyNodes::new_some(move |f| {
                     log::debug!("hell closure");
                     let inner = DropInner { id: i };
                     f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
@@ -262,7 +270,7 @@ fn it_drops() {
             })
             .collect::<Vec<_>>();
 
-        NodeFactory::annotate_lazy(|f| {
+        LazyNodes::new_some(|f| {
             log::debug!("main closure");
             f.fragment_from_iter(it)
         })

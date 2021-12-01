@@ -201,3 +201,8 @@ Open questions:
     - react says no - they are continuous
     - but if we received both - then we don't need to diff, do we? run as many as we can and then finally diff?
 
+
+
+## Render functions
+
+One main issue of components is type eras

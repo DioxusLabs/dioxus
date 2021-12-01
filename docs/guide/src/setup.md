@@ -20,6 +20,16 @@ Dioxus requires a few main things to get up and running:
 
 Dioxus integrates very well with the Rust-Analyzer IDE plugin which will provide appropriate syntax highlighting, code navigation, folding, and more.
 
+### Installing Rust
+
+Head over to [https://rust-lang.org](http://rust-lang.org) and install the Rust compiler. 
+
+Once installed, make sure to  install wasm32-unknown-unknown as a target if you're planning on deploying your app to the web.
+
+```
+rustup target add wasm32-unknown-uknown
+```
+
 ### Dioxus-CLI for dev server, bundling, etc.
 
 We also recommend installing the Dioxus CLI. The Dioxus CLI automates building and packaging for various targets and integrates with simulators, development servers, and app deployment. To install the CLI, you'll need cargo (should be automatically installed with Rust):

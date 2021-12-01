@@ -26,7 +26,7 @@ struct AppProps {
 Now that we have a "logged_in" flag accessible in our props, we can render two different screens:
 
 ```rust
-fn App((cx, props): Scope<AppProps>) -> Element {
+fn App(cx: Context, props: &AppProps) -> Element {
     if props.logged_in {
         cx.render(rsx!{
             DashboardScreen {}
@@ -48,7 +48,7 @@ Rust provides us algebraic datatypes: enums that can contain values. Using the `
 For instance, we could run a function that returns a Result:
 
 ```rust
-fn App((cx, props): Scope<()>) -> Element {
+fn App(cx: Context, props: &())-> Element {
     match get_name() {
         Ok(name) => cx.render(rsx!( "Hello, {name}!" )),
         Err(err) => cx.render(rsx!( "Sorry, I don't know your name, because an error occurred: {err}" )),
@@ -58,7 +58,7 @@ fn App((cx, props): Scope<()>) -> Element {
 
 We can even match against values:
 ```rust
-fn App((cx, props): Scope<()>) -> Element {
+fn App(cx: Context, props: &())-> Element {
     match get_name() {
         "jack" => cx.render(rsx!( "Hey Jack, how's Diane?" )),
         "diane" => cx.render(rsx!( "Hey Diana, how's Jack?" )),
@@ -67,12 +67,12 @@ fn App((cx, props): Scope<()>) -> Element {
 }
 ```
 
-Do note: the `rsx!` macro returns a `Closure`, an anonymous function that has a unique type. 
+Do note: the `rsx!` macro returns a `Closure`, an anonymous function that has a unique type. To turn our `rsx!` into Elements, we need to call `cx.render`.
 
 To make patterns like these less verbose, the `rsx!` macro accepts an optional first argument on which it will call `render`. Our previous component can be shortened with this alternative syntax:
 
 ```rust
-fn App((cx, props): Scope<()>) -> Element {
+fn App(cx: Context, props: &())-> Element {
     match get_name() {
         "jack" => rsx!(cx, "Hey Jack, how's Diane?" ),
         "diane" => rsx!(cx, "Hey Diana, how's Jack?" ),
@@ -83,13 +83,13 @@ fn App((cx, props): Scope<()>) -> Element {
 
 This syntax even enables us to write a one-line component:
 ```rust
-static App: Fc<()> = |(cx, props)| rsx!(cx, "hello world!");
+static App: FC<()> = |cx, props| rsx!(cx, "hello world!");
 ```
 
 Alternatively, for match statements, we can just return the builder itself and pass it into a final, single call to `cx.render`:
 
 ```rust
-fn App((cx, props): Scope<()>) -> Element {
+fn App(cx: Context, props: &())-> Element {
     let greeting = match get_name() {
         "jack" => rsx!("Hey Jack, how's Diane?" ),
         "diane" => rsx!("Hey Diana, how's Jack?" ),

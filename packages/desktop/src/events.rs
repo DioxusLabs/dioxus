@@ -1,10 +1,10 @@
 //! Convert a serialized event to an event Trigger
 //!
 
+use std::any::Any;
 use std::sync::Arc;
-use std::{any::Any, rc::Rc};
 
-use dioxus_core::{ElementId, EventPriority, ScopeId, UserEvent};
+use dioxus_core::{ElementId, EventPriority, UserEvent};
 use dioxus_html::on::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -16,11 +16,11 @@ struct ImEvent {
 }
 
 pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
-    let mut ims: Vec<ImEvent> = serde_json::from_value(val).unwrap();
+    let ims: Vec<ImEvent> = serde_json::from_value(val).unwrap();
+
     let ImEvent {
         event,
         mounted_dom_id,
-        // scope,
         contents,
     } = ims.into_iter().next().unwrap();
 

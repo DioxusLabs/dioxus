@@ -717,8 +717,7 @@ builder_constructors! {
         nonce: Nonce,
         src: Uri,
         text: String,
-        r#async: Bool,
-        r#type: String, // TODO could be an enum
+
     };
 
 
@@ -823,7 +822,6 @@ builder_constructors! {
         formnovalidate: Bool,
         formtarget: Target,
         name: Id,
-        r#type: ButtonType,
         value: String,
     };
 
@@ -1063,6 +1061,23 @@ impl input {
 /*
 volatile attributes
 */
+
+impl script {
+    // r#async: Bool,
+    // r#type: String, // TODO could be an enum
+    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("type", val, None, false)
+    }
+    pub fn r#script<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("script", val, None, false)
+    }
+}
+
+impl button {
+    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("type", val, None, false)
+    }
+}
 
 impl select {
     pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {

@@ -14,6 +14,7 @@ use std::{any::Any, fmt::Debug};
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
 pub struct Mutations<'a> {
     pub edits: Vec<DomEdit<'a>>,
+    pub dirty_scopes: FxHashSet<ScopeId>,
     pub refs: Vec<NodeRefMutation<'a>>,
     pub effects: Vec<&'a dyn FnMut()>,
 }
@@ -103,6 +104,7 @@ pub enum DomEdit<'bump> {
     },
 }
 
+use fxhash::FxHashSet;
 use DomEdit::*;
 
 impl<'a> Mutations<'a> {
@@ -110,6 +112,7 @@ impl<'a> Mutations<'a> {
         Self {
             edits: Vec::new(),
             refs: Vec::new(),
+            dirty_scopes: Default::default(),
             effects: Vec::new(),
         }
     }

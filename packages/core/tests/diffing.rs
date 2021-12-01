@@ -5,7 +5,7 @@
 //!
 //! It does not validated that component lifecycles work properly. This is done in another test file.
 
-use dioxus::{prelude::*, DomEdit, VSuspended};
+use dioxus::{prelude::*, DomEdit};
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;

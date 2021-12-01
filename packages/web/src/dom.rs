@@ -213,7 +213,7 @@ impl WebsysDom {
 
     fn create_placeholder(&mut self, id: u64) {
         self.create_element("pre", None, id);
-        // self.set_attribute("hidden", "", None);
+        self.set_attribute("hidden", "", None, id);
     }
 
     fn create_text_node(&mut self, text: &str, id: u64) {
@@ -246,8 +246,15 @@ impl WebsysDom {
                 .unwrap(),
         };
 
+        use smallstr;
+        use smallstr::SmallString;
+        use std::fmt::Write;
+
+        let mut s: SmallString<[u8; 8]> = smallstr::SmallString::new();
+        write!(s, "{}", id).unwrap();
+
         let el2 = el.dyn_ref::<Element>().unwrap();
-        el2.set_attribute("dioxus-id", &format!("{}", id)).unwrap();
+        el2.set_attribute("dioxus-id", s.as_str()).unwrap();
 
         self.stack.push(el.clone());
         self.nodes[(id as usize)] = Some(el);
@@ -263,18 +270,21 @@ impl WebsysDom {
 
         let el = self.stack.top();
 
-        let el = el
-            .dyn_ref::<Element>()
-            .expect(&format!("not an element: {:?}", el));
+        let el = el.dyn_ref::<Element>().unwrap();
+        // let el = el.dyn_ref::<Element>().unwrap();
+        // .expect(&format!("not an element: {:?}", el));
 
         // let scope_id = scope.data().as_ffi();
-        let scope_id = scope.0 as u64;
+        // let scope_id = scope.0 as u64;
+        // "dioxus-event-click",
+        // "1.10"
+        // &format!("", scope_id, real_id),
+        // &format!("dioxus-event-{}", event),
+        // &format!("{}.{}", scope_id, real_id),
+        // &format!("dioxus-event-{}", event),
+        // &format!("{}.{}", scope_id, real_id),
 
-        el.set_attribute(
-            &format!("dioxus-event-{}", event),
-            &format!("{}.{}", scope_id, real_id),
-        )
-        .unwrap();
+        el.set_attribute("dioxus-event", event).unwrap();
 
         // el.set_attribute(&format!("dioxus-event"), &format!("{}", event))
         //     .unwrap();
@@ -488,6 +498,8 @@ unsafe impl Sync for DioxusWebsysEvent {}
 fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send + Sync> {
     use dioxus_html::on::*;
     use dioxus_html::KeyCode;
+    // event.prevent_default();
+
     // use dioxus_core::events::on::*;
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => Arc::new(ClipboardEvent {}),
@@ -682,30 +694,40 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     use anyhow::Context;
 
+    let element_id = target
+        .get_attribute("dioxus-id")
+        .context("Could not find element id on event target")?
+        .parse()?;
+
     // The error handling here is not very descriptive and needs to be replaced with a zero-cost error system
     let val: String = target
-        .get_attribute(&format!("dioxus-event-{}", typ))
+        .get_attribute("dioxus-event")
         .context(format!("wrong format - received {:#?}", typ))?;
+    // .get_attribute(&format!("dioxus-event-{}", typ))
+    // .context(format!("wrong format - received {:#?}", typ))?;
 
     let mut fields = val.splitn(3, ".");
 
-    let gi_id = fields
-        .next()
-        .and_then(|f| f.parse::<u64>().ok())
-        .context("failed to parse gi id")?;
+    // let gi_id = fields
+    //     .next()
+    //     .and_then(|f| f.parse::<u64>().ok())
+    //     .context("failed to parse gi id")?;
 
-    let real_id = fields
-        .next()
-        .and_then(|raw_id| raw_id.parse::<u64>().ok())
-        .context("failed to parse real id")?;
+    // let real_id = fields
+    //     .next()
+    //     .and_then(|raw_id| raw_id.parse::<u64>().ok())
+    //     .context("failed to parse real id")?;
 
-    let triggered_scope = gi_id;
+    // let triggered_scope = gi_id;
 
     Ok(UserEvent {
         name: event_name_from_typ(&typ),
         data: virtual_event_from_websys_event(event.clone()),
-        element: Some(ElementId(real_id as usize)),
-        scope_id: Some(ScopeId(triggered_scope as usize)),
+        element: Some(ElementId(element_id)),
+        scope_id: None,
+        // scope_id: Some(ScopeId(triggered_scope as usize)),
+        // element: Some(ElementId(real_id as usize)),
+        // scope_id: Some(ScopeId(triggered_scope as usize)),
         priority: dioxus_core::EventPriority::Medium,
     })
 }

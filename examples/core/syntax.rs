@@ -31,7 +31,7 @@ fn html_usage() {
     // let p = rsx!(div { {f} });
 }
 
-static App2: FC<()> = |(cx, _)| cx.render(rsx!("hello world!"));
+static App2: FC<()> = |cx, _| cx.render(rsx!("hello world!"));
 
 static App: FC<()> = |cx, props| {
     let name = cx.use_state(|| 0);

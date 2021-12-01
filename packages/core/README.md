@@ -56,3 +56,23 @@ There's a few invariants that are very important:
 
 - References to `ScopeInner` and `Props` passed into components are *always* valid for as long as the component exists. Even if the scope backing is resized to fit more scopes, the scope has to stay the same place in memory.
 
+
+
+## Suspense
+
+Suspense is done through combinators on values. 
+
+```rust
+let name = get_name(cx).suspend();
+
+rsx!(
+    div {
+        {name}
+        div {
+            div {
+    
+            }
+        }
+    }
+)
+```

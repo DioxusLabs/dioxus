@@ -1,4 +1,4 @@
-# Hello World
+# Hello, World desktop app
 
 Let's put together a simple "hello world" desktop application to get acquainted with Dioxus. 
 
@@ -92,10 +92,10 @@ use dioxus::prelude::*;
 
 
 fn main() {
-    dioxus::desktop::start(App, |c| c);
+    dioxus::desktop::launch(App, |c| c);
 }
 
-fn App((cx, props): Component<()>) -> Element {
+fn App(cx: Context, props: &()) -> Element {
     cx.render(rsx! (
         div { "Hello, world!" }
     ))
@@ -108,7 +108,7 @@ At this point, you could call `cargo run` and be greeted with a simple `Hello, W
 
 ### Dissecting our example
 
-This bit of code imports everything from the the `prelude` module. This brings into scope the right traits, types, and macros needed for working with Dioxus.
+The `use` statement at the top of our app imports everything from the the `prelude` module. `use`-ing the prelude imports the right traits, types, and macros needed for working with Dioxus.
 
 ```rust
 use dioxus::prelude::*;
@@ -118,44 +118,34 @@ This initialization code launches a Tokio runtime on a helper thread where your 
 
 ```rust
 fn main() {
-    dioxus::desktop::start(App, |c| c);
+    dioxus::desktop::launch(App, |c| c);
 }
 ```
 
 Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Element`.
 
 ```rust
-fn App((cx, props): Component<()>) -> Element {
+fn App(cx: Context, props: &()) -> Element {
     cx.render(rsx! {
         div { "Hello, world!" }
     })    
 }
 ```
-In cases where props need to borrow from their parent, you will need to specify lifetimes using the function syntax:
+
+Writing `fn App(cx: Context, props: &()) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
 
 ```rust
-fn App<'a>(cx: Component<'a, ()>) -> Element<'a> {
-    cx.render(rsx! {
-        div { "Hello, world!" }
-    })
-}
+static App: FC<()> = |cx, props| cx.render(rsx!(div { "Hello, world!" }));
 ```
 
-Writing `fn App((cx, props): Component<()>) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
-```rust
-static App: Fc<()> = |(cx, props)| {
-    cx.render(rsx! {
-        div { "Hello, world!" }
-    })
-};
-```
+### What is this `Context` object?
 
-### The `Context` object
+Coming from React, the `Context` object might be confusing. In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. 
 
-In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data.
+In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data. The `Context` object provides a handful of useful APIs for features like suspense, rendering, and more.
 
-### The `rsx!` macro
+## Moving on
 
-Next, we're greeted with the `rsx!` macro. This lets us add a custom DSL for declaratively building the structure of our app. The semantics of this macro are similar to that of JSX and HTML, though with a familiar Rust-y interface. The `html!` macro is also available for writing components with a JSX/HTML syntax.
+Congrats! You've built your first desktop application with Dioxus. Next, we're going to learn about the basics of building interactive user interfaces.
 
-The `rsx!` macro is lazy: it does not immediately produce elements or allocates, but rather builds a closure which can be rendered with `cx.render`.
+

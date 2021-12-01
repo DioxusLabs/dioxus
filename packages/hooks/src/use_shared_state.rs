@@ -173,6 +173,6 @@ pub fn use_provide_state<'a, T: 'static>(cx: Context<'a>, f: impl FnOnce() -> T)
             });
             cx.provide_state(state)
         },
-        |inner| {},
+        |_inner| {},
     )
 }

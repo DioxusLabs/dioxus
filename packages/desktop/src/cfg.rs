@@ -1,14 +1,7 @@
-use std::ops::{Deref, DerefMut};
-
 use dioxus_core::DomEdit;
 use wry::{
-    application::{
-        error::OsError,
-        event_loop::{EventLoop, EventLoopWindowTarget},
-        menu::MenuBar,
-        window::{Fullscreen, Icon, Window, WindowBuilder},
-    },
-    webview::{RpcRequest, RpcResponse, WebView},
+    application::{event_loop::EventLoop, window::WindowBuilder},
+    webview::WebView,
 };
 
 pub struct DesktopConfig<'a> {
@@ -22,7 +15,7 @@ impl<'a> DesktopConfig<'a> {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
-        let mut window = WindowBuilder::new().with_title("Dioxus app");
+        let window = WindowBuilder::new().with_title("Dioxus app");
         Self {
             event_handler: None,
             window,
@@ -41,13 +34,24 @@ impl<'a> DesktopConfig<'a> {
         self
     }
 
-    pub fn with_window(&mut self, f: impl FnOnce(WindowBuilder) -> WindowBuilder) -> &mut Self {
+    pub fn with_window(
+        &mut self,
+        configure: impl FnOnce(WindowBuilder) -> WindowBuilder,
+    ) -> &mut Self {
         // gots to do a swap because the window builder only takes itself as muy self
         // I wish more people knew about returning &mut Self
         let mut builder = WindowBuilder::default().with_title("Dioxus App");
         std::mem::swap(&mut self.window, &mut builder);
-        builder = f(builder);
+        builder = configure(builder);
         std::mem::swap(&mut self.window, &mut builder);
+        self
+    }
+
+    pub fn with_event_handler(
+        &mut self,
+        handler: impl Fn(&mut EventLoop<()>, &mut WebView) + 'static,
+    ) -> &mut Self {
+        self.event_handler = Some(Box::new(handler));
         self
     }
 }
