@@ -49,7 +49,7 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope, props: &()) -> Element {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(
@@ -65,12 +65,11 @@ Dioxus can be used to deliver webapps, desktop apps, static sites, liveview apps
 If you know React, then you already know Dioxus.
 
 ### Unique features:
-- The most ergonomic and powerful state management of any Rust UI toolkit.
 - Desktop apps running natively (no Electron!) in less than 10 lines of code.
-- Starting a new app takes zero templates or special tools - get a new app running in just seconds.
-- Incredible inline documentation. Supports hover and guides for all HTML elements, listeners, and events.
-- Custom bump-allocator backing for all components. Nearly 0 allocations for steady-state components.
-- Multithreaded asynchronous coroutine scheduler for powerful async code.
+- Incredibly ergonomic and powerful state management.
+- Incredible inline documentation - hover and guides for all HTML elements, listeners, and events.
+- Extremely memory efficient - 0 global allocations for steady-state components.
+- Multithreaded asynchronous coroutine scheduler for first-class async support.
 - And more! Read the full release post here.
 
 ## Get Started with...
@@ -95,24 +94,40 @@ If you know React, then you already know Dioxus.
 
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
 
-## Why?
+## Why Dioxus and why Rust?
 
-TypeScript is a great addition to JavaScript, but comes with a lot of tweaking flags, a slight performance hit, and an uneven ecosystem where some of the most important packages are not properly typed. TypeScript provides a lot of great benefits to JS projects, but comes with its own "tax" that can slow down dev teams. Rust can be seen as a step up from TypeScript, supporting:
+TypeScript is a fantastic addition to JavaScript, but it's still fundamentally JavaScript. TS code runs slightly slower, has tons of configuration options, and not every package is properly typed. 
 
-- static types for _all_ libraries
-- advanced pattern matching
-- immutability by default
-- clean, composable iterators
-- a good module system
-- integrated documentation
-- inline built-in unit/integration testing
-- best-in-class error handling
-- simple and fast build system (compared to WebPack!)
-- powerful standard library (no need for lodash or underscore)
-- include_str! for integrating html/css/svg templates directly
-- various macros (`html!`, `rsx!`) for fast template iteration
+In contrast, Dioxus is written in Rust - which is almost like "TypeScript on steroids". 
 
-And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time. Dioxus also works on the server, on the web, on mobile, on desktop - and it runs completely natively so performance is never an issue.
+By using Rust, we gain:
+
+- Static types for *every* library
+- Immutability by default
+- A simple and intuitive module system
+- Integrated documentation (`go to source` _actually goes to source_)
+- Advanced pattern matching
+- Clean, efficient, composable iterators
+- Inline built-in unit/integration testing
+- Best-in-class error handling
+- Powerful and sane, standard library
+- Flexible macro system
+- Access to `crates.io`
+
+Specifically, Dioxus provides us many other assurances:
+
+- Proper use of immutable datastructures
+- Guaranteed error handling (so you can sleep easy at night not worrying about `cannot read property of undefined`) 
+- Native performance on mobile
+- Direct access to system IO
+
+And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time. 
+
+### Why NOT Dioxus?
+You shouldn't use Dioxus if:
+- You don't like the React Hooks approach to frontend
+- You need a no-std renderer
+- You want to support browsers where Wasm or asm.js are not supported.
 
 # Parity with React
 
@@ -158,189 +173,6 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 - 👀 = not yet implemented or being worked on
 - ❓ = not sure if will or can implement
 
-## FAQ:
-
-### Aren't VDOMs just pure overhead? Why not something like Solid or Svelte?
-Remember: Dioxus is a library - not a compiler like Svelte. Plus, the inner VirtualDOM allows Dioxus to easily port into different runtimes, support SSR, and run remotely in the cloud. VDOMs tend to more ergonomic to work with and feel roughly like natural Rust code. The overhead of Dioxus is **extraordinarily** minimal... sure, there may be some overhead but on an order of magnitude lower than the time required to actually update the page.
-
-
-### Isn't the overhead for interacting with the DOM from Wasm too much?
-The overhead layer between Wasm and JS APIs is extremely poorly understood. Rust web benchmarks typically suffer from differences in how Rust and JS cache strings. In Dioxus, we solve most of these issues and our JS Framework Benchmark actually beats the Wasm Bindgen benchmark in many cases. Compared to a "pure vanilla JS" solution, Dioxus adds less than 5% of overhead and takes advantage of batched DOM manipulation.
-
-### Aren't Wasm binaries too huge to deploy in production?
-Wasm binary sizes are another poorly understood characteristic of Rust web apps. 50kb of Wasm and 50kb of JS are _not_ made equally. In JS, the code must be downloaded _first_ and _then_ JIT-ted. Just-in-time compiling 50kb of JavaScript takes a while which is why 50kb of JavaScript sounds like a lot! However, with Wasm, the code is downloaded and JIT-ted _simultaneously_ through the magic of streaming compilation. By the time the 50kb of Rust is finished downloading, it is already ready to go. Again, Dioxus beats out many benchmarks with time-to-interactivity.
-
-For reference, Dioxus `hello-world` clocks in at around 70kb gzip or 60kb brotli, and Dioxus supports SSR.
-
-### Why hooks? Why not MVC, classes, traits, messages, etc?
-There are plenty Rust Elm-like frameworks in the world - we were not interested in making another! Instead, we borrowed hooks from React. JS and Rust share many structural similarities, so if you're comfortable with React, then you'll be plenty comfortable with Dioxus.
-
-### Why a custom DSL? Why not just pure function calls?
-The `RSX` DSL is _barely_ a DSL. Rustaceans will find the DSL very similar to simply assembling nested structs, but without the syntactical overhead of "Default" everywhere or having to jump through hoops with the builder pattern. Between RSX, HTML, the Raw Factory API, and the NodeBuilder syntax, there's plenty of options to choose from.
-
-### What are the build times like? Why on earth would I choose Rust instead of JS/TS/Elm?
-Dioxus builds as roughly as fast as a complex WebPack-TypeScript site. Compile times will be slower than an equivalent TypeScript site, but not unbearably slow. The Wasm compiler backend for Rust is very fast. Iterating on small components is basically instant and larger apps takes a few seconds. In practice, the compiler guarantees of Rust balance out the rebuild times.
-
-### What about Yew/Seed/Sycamore/Dominator/Dodrio/Percy?
-- Yew and Seed use an Elm-like pattern and don't support SSR or any alternate rendering platforms
-- Sycamore and Dominator are more like SolidJS/Svelte, requiring no VDOM but has less naturally-Rusty state management
-- Percy isn't quite mature yet
-- Dodrio is the spiritual predecessor of Dioxus, but is currently an archived research project without the batteries of Dioxus
-
-### How do the mobile and desktop renderers work? Is it Electron?
-Currently, Dioxus uses your device's native WebView library to draw the page. None of your app code is actually running in the WebView thread, so you can access system resources instead of having to go through something like NodeJS. This means your app will use Safari on macOS/iOS, Edge (Chromium) on Windows, and whatever is the default Web Browser for Linux and Android. Because your code is compiled and running natively, performance is not a problem. You will have to use the various "Escape Hatches" to use browser-native APIs (like WebGL) and work around visual differences in how Safari and Chrome render the page.
-
-In the future, we are interested in using Webrenderer to provide a fully native renderer without having to go through the system WebView library. In practice, Dioxus mobile and desktop are great for CRUD-style apps, but the ergonomic cross-platform APIs (GPS, Camera, etc) are not there yet.
-
-### Why NOT Dioxus?
-You shouldn't use Dioxus if:
-- You don't like the React Hooks approach to frontend
-- You need a no-std renderer
-- You want to support browsers where Wasm or asm.js are not supported.
-
-
-## Show me some examples!
-
-In our collection of examples, guides, and tutorials, we have:
-- The book (an introductory course)
-- The guide (an in-depth analysis of everything in Dioxus)
-- The reference (a collection of examples with heavy documentation)
-- The general examples
-- The platform-specific examples (web, ssr, desktop, mobile, server)
-  
-Here's what a few common tasks look like in Dioxus:
-
-Nested components with children and internal state:
-```rust
-fn App(cx: Context, props: &()) -> Element {
-  cx.render(rsx!( Toggle { "Toggle me" } ))
-}
-
-#[derive(PartialEq, Props)]
-struct ToggleProps { children: Element }
-
-fn Toggle(cx: Context, props: &ToggleProps) -> Element {
-  let mut toggled = use_state(cx, || false);
-  cx.render(rsx!{
-    div {
-      {&props.children}
-      button { onclick: move |_| toggled.set(true),
-        {toggled.and_then(|| "On").or_else(|| "Off")}
-      }
-    }
-  })
-}
-```
-
-Controlled inputs:
-```rust
-fn App(cx: Context, props: &()) -> Element {
-  let value = use_state(cx, String::new);
-  cx.render(rsx!( 
-    input {
-      "type": "text",
-      value: "{value}",
-      oninput: move |evt| value.set(evt.value.clone())
-    }
-  ))
-}
-```
-
-Lists and Conditional rendering:
-```rust
-fn App(cx: Context, props: &()) -> Element {
-  let list = (0..10).map(|i| {
-    rsx!(li { key: "{i}", "Value: {i}" })
-  });
-  
-  let title = match list.len() {
-    0 => rsx!("Not enough"),
-    _ => rsx!("Plenty!"),
-  };
-
-  if should_show {
-    cx.render(rsx!( 
-      {title}
-      ul { {list} } 
-    ))
-  } else {
-    None
-  }
-}
-```
-
-Tiny components:
-```rust
-static App: FC<()> = |cx, _| rsx!(cx, div {"hello world!"});
-```
-
-Borrowed prop contents:
-```rust
-fn App(cx: Context, props: &()) -> Element {
-  let name = use_state(cx, || String::from("example"));
-  rsx!(cx, Child { title: name.as_str() })
-}
-
-#[derive(Props)]
-struct ChildProps<'a> { title: &'a str }
-
-fn Child(cx: Context, props: &ChildProps) -> Element {
-  rsx!(cx, "Hello {props.title}")
-}
-```
-
-Global State
-```rust
-struct GlobalState { name: String }
-
-fn App(cx: Context, props: &()) -> Element {
-  use_provide_shared_state(cx, || GlobalState { name: String::from("Toby") })
-  rsx!(cx, Leaf {})
-}
-
-fn Leaf(cx: Context, props: &()) -> Element {
-  let state = use_consume_shared_state::<GlobalState>(cx)?;
-  rsx!(cx, "Hello {state.name}")
-}
-```
-
-Router (inspired by Yew-Router)
-```rust
-#[derive(PartialEq, Clone,  Hash, Eq, Routable)]
-enum Route {
-  #[at("/")]
-  Home,
-  #[at("/post/{id}")]
-  Post(id)
-}
-
-fn App(cx: Context, props: &()) -> Element {
-  let route = use_router(cx, Route::parse);
-  cx.render(rsx!(div {
-    {match route {
-      Route::Home => rsx!( Home {} ),
-      Route::Post(id) => rsx!( Post { id: id })
-    }}
-  }))  
-}
-```
-
-Suspense 
-```rust
-fn App(cx: Context, props: &()) -> Element {
-  let doggo = use_suspense(cx,
-    || async { reqwest::get("https://dog.ceo/api/breeds/image/random").await.unwrap().json::<Response>().await.unwrap() },
-    |response| cx.render(rsx!( img { src: "{response.message}" }))
-  );
-  
-  cx.render(rsx!{
-    div {
-      "One doggo coming right up:"
-      {doggo}
-    }
-  })
-}
-```
 
 ## License
 

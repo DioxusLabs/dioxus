@@ -732,12 +732,6 @@ impl<'a> NodeFactory<'a> {
             node: unsafe { std::mem::transmute(ptr) },
         })
     }
-
-    pub fn annotate_lazy<'z, 'b>(
-        f: impl FnOnce(NodeFactory<'z>) -> VNode<'z> + 'b,
-    ) -> Option<LazyNodes<'z, 'b>> {
-        Some(LazyNodes::new(f))
-    }
 }
 
 impl Debug for NodeFactory<'_> {

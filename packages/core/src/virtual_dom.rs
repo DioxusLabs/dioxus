@@ -347,12 +347,6 @@ impl VirtualDom {
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
 
-        log::debug!(
-            "Working with deadline. \nDirty scopes: {:?}. \nPending messages: {:?}",
-            self.dirty_scopes,
-            self.pending_messages
-        );
-
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
             let mut diff_state = DiffState::new(scopes);
@@ -370,7 +364,6 @@ impl VirtualDom {
             });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                log::debug!("Analyzing dirty scope {:?}", scopeid);
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
 
@@ -379,7 +372,6 @@ impl VirtualDom {
                             self.scopes.wip_head(&scopeid),
                             self.scopes.fin_head(&scopeid),
                         );
-                        log::debug!("Diffing old: {:?}, new: {:?}", old, new);
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                         diff_state.stack.scope_stack.push(scopeid);
 
@@ -390,20 +382,16 @@ impl VirtualDom {
             }
 
             if diff_state.work(&mut deadline) {
-                let DiffState {
-                    mutations,
-                    seen_scopes,
-                    ..
-                } = diff_state;
+                let DiffState { mutations, .. } = diff_state;
 
-                for scope in seen_scopes {
-                    self.dirty_scopes.remove(&scope);
+                for scope in &mutations.dirty_scopes {
+                    self.dirty_scopes.remove(scope);
                 }
-                log::debug!("Working generated mutations: {:?}", mutations);
 
                 committed_mutations.push(mutations);
             } else {
                 log::debug!("Could not finish work in time");
+
                 // leave the work in an incomplete state
                 return committed_mutations;
             }

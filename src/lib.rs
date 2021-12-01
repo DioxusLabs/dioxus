@@ -4,166 +4,124 @@
 //!     <strong>A concurrent, functional, virtual DOM for Rust</strong>
 //!   </p>
 //! </div>
-//! Dioxus: a concurrent, functional, reactive virtual dom for any renderer in Rust.
 //!
-//! This crate aims to maintain a hook-based, renderer-agnostic framework for cross-platform UI development.
+//! # Resources
 //!
-//! ## Overview and Goals
-//! Dioxus' ultimate goal is to save you from writing new code when bringing your application to new platforms. We forsee
-//! a future where WebApps, Mobile Apps, Desktop Apps, and even AR apps can be written in the same language, ecosystem,
-//! and leverage the same platform-agnostic libraries.
+//! This overview is provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
+//! - [Getting Started](https://dioxuslabs.com/getting-started)
+//! - [Book](https://dioxuslabs.com/book)
+//! - [Reference](https://dioxuslabs.com/refernce-guide)
+
 //!
-//! In this aim we chose to use a variety of techniques:
-//! - We use a VirtualDOM to abstract the true renderer from application logic.
-//! - We use functions as components to limit the API churn for greater stability.
-//! - We use hooks as state to allow reusable logic across the whole ecosystem.
-//! - We support an extensible and compile-time safe DSL for building interfaces.
+//! # Overview and Goals
 //!
-//! Our guiding stars (in order of priority):
-//! - Ergonomics
-//! - Reusability
-//! - Speed and memory efficiency
-//! - Safety
+//! Dioxus makes it easy to quickly build complex user interfaces with Rust. Any Dioxus app can run in the web browser,
+//! as a desktop app, as a mobile app, or anywhere else provided you build the right renderer.
+//!
+//! Dioxus is heavily inspired by React, supporting many of the same concepts:
+//!
+//! - Hooks for state
+//! - VirtualDom & diffing
+//! - Concurrency & asynchronous rendering
+//! - JSX-like templating syntax
+//!
+//! If you know React, then you know Dioxus.
+//!
+//! Dioxus is *substantially* faster than many of the other Rust UI libraries (Yew/Percy) and is *significantly* faster
+//! than React, competitve with InfernoJS and frameworks like Svelte/SolidJS.
+//!
+//! ## Brief Overview
+//!
+//! All Dioxus apps are built by composing functions that take in a `Scope` and `Properties` and return an `Element`. A `Scope` holds
+//! relevant state data for the the currently-rendered component.
+//!
+//! ```rust
+//! use dioxus::prelude::*;
+//!
+//! fn main() {
+//!     dioxus::desktop::launch(App);
+//! }
+//!
+//! fn App(cx: Scope, props: &()) -> Element {
+//!     let mut count = use_state(cx, || 0);
+//!
+//!     cx.render(rsx!(
+//!         div { "Count: {count}" }
+//!         button { onclick: move |_| count += 1, "Increment" }
+//!         button { onclick: move |_| count -= 1, "Decrement" }
+//!     ))
+//! }
+//! ```
 //!
 //! ## Components
-//! The base unit of Dioxus is the `component`. Components can be easily created from just a function - no traits or
-//! proc macros required:
 //!
-//! ```
-//! use dioxus::prelude::*;
+//! We can compose these function components to build a complex app. Each new component we design must take some Properties.
+//! For components with no explicit properties, we can use the `()` type. In Dioxus, all properties are memoized by default!
 //!
-//! fn App(cx: Context, props: &()) -> Element {
+//! ```rust
+//! fn App(cx: Scope, props &()) -> Element {
 //!     cx.render(rsx!(
-//!         div {"hello world"}
+//!         Header {
+//!             title: "My App",
+//!             color: "red",
+//!         }
 //!     ))
 //! }
 //! ```
-//! Components need to take a "Context" parameter which is generic over some properties. This defines how the component can be used
-//! and what properties can be used to specify it in the VNode output. Components without properties may be generic over
-//! `()`, and components with properties must declare their properties as a struct:
 //!
+//! Our `Header` component takes in a `title` and a `color` property, which we delcare on an explicit `HeaderProps` struct.
 //! ```
+//! // The `Props` derive macro lets us add additional functionality to how props are interpreted.
 //! #[derive(Props, PartialEq)]
-//! struct AppProps {
-//!     name: String
+//! struct HeaderProps {
+//!     title: String,
+//!     color: String,
 //! }
 //!
-//! fn App(cx: Context, props: &AppProps) -> Element {
+//! fn Header(cx: Scope, props: &HeaderProps) -> Element {
 //!     cx.render(rsx!(
-//!         div { "Hello {props.name}!" }
+//!         div {
+//!             background_color: "{props.color}"
+//!             h1 { "{props.title}" }
+//!         }
 //!     ))
 //! }
 //! ```
 //!
-//! Props that are valid for the `'pub static` lifetime automatically get memoized by Diouxs. This means the component won't
-//! re-render if its Props didn't change. However, Props that borrow data from their parent cannot be safely memoized, and
-//! will always re-render if their parent changes. To borrow data from a parent, your component needs to add explicit lifetimes,
-//! otherwise Rust will get confused about whether data is borrowed from either Props or Context. Since Dioxus manages
-//! these lifetimes internally, Context and your Props must share the same lifetime:
+//! ## Hooks
 //!
-//! ```
-//! #[derive(Props)]
-//! struct Props<'a> {
-//!     name: &'a str
-//! }
+//! While components are reusable forms of UI elements, hooks are reusable forms of logic. The details of hooks are
+//! somewhat complicated. In essence, hooks let us save state between renders of our components and reuse the accompanying
+//! logic across different apps.
 //!
-//! fn Example(cx: Context, props: &AppProps) -> Element {
-//!     cx.render(rsx!(
-//!         div { "Hello {props.name}!" }
-//!     ))
+//! Hooks are simply composition of other hooks. To create our first hook we can create a simple function that takes in
+//! an Scope. We can then call `use_hook` on the `Scope` to get a mutable reference to the stored value.
+//!
+//! ```rust
+//! fn use_say_hello(cx: Scope) -> &mut String {
+//!     cx.use_hook(|_| "Hello".to_string(), |hook| hook)
 //! }
 //! ```
 //!
-//! To use custom properties for components, you'll need to derive the `Props` trait for your properties. This trait
-//! exposes a compile-time correct builder pattern (similar to typed-builder) that can be used in the `rsx!` macro to
-//! build components. Component props may have default fields notated by the `Default` attribute:
+//! If you want to extend Dioxus with some new functionality, you'll probably want to implement a new hook.
 //!
-//! ```
-//! #[derive(Props)]
-//! struct Props {
-//!     name: String
 //!
-//!     #[props(default = false)]
-//!     checked: bool,
+//! ## Features
 //!
-//!     #[props(default, into))]
-//!     title: Option<String>
-//! }
-//! ```
+//! This overview doesn't cover everything. Make sure to check out the tutorial and reference guide on the official
+//! website for more details.
 //!
-//! These flags roughly follow that of typed-builder, though tweaked to support the `Props` usecase.
-//!
-//! ## Hooks and State
-//! Dioxus uses hooks for state management. Hooks are a form of state persisted between calls of the function component.
-//!
-//! ```
-//! pub pub static Example: FC<()> = |cx, props|{
-//!     let mut val = use_state(cx, || 0);
-//!     cx.render(rsx!(
-//!         button { onclick: move |_| val += 1 }
-//!     ))
-//! }
-//! ````
-//!
-//! As a building block for hooks, Dioxus provides the `use_hook` method on Context that stores a provided value in a
-//! list of other values. Whenever `use_hook` is called, the next hook value in the list is returned.
-//! ```
-//! fn my_hook(cx: Context) -> &String {
-//!     cx.use_hook(
-//!         // Initializer stores a value
-//!         |hook_idx| String::new("stored_data"),
-//!
-//!         // Runner returns the hook value every time the component is rendered
-//!         |hook| &*hook,
-//!     )
-//! }
-//! ```
-//! Under the hood, hooks store their data in a list of `Box<dyn Any>`. The first render defines the layout of these
-//! list, and on each subsequent render, each `use_hook` call accesses its corresponding list item. If a hook
-//! accesses the wrong index, `use_hook` will panic when trying to downcast `Any` to your type, and your app will crash.
-//! These types of errors can be easily mitigated by following the rules of hooks:
-//!
-//! - Don’t call Hooks inside loops, conditions, or nested functions
-//! - Don't call hooks in changing order between renders
-//!
-//! Hooks provide a very powerful way to reuse stateful logic between components, simplify large complex components,
-//! and adopt more clear context subscription patterns to make components easier to read. The mechanics of hooks in Dioxus
-//! shares a great amount of similarity with React's hooks and there are many guides to hooks in React online.
-//!
-//! ## Supported Renderers
-//! Instead of being tightly coupled to a platform, browser, or toolkit, Dioxus implements a VirtualDOM object which
-//! can be consumed to draw the UI. The Dioxus VDOM is reactive and easily consumable by 3rd-party renderers via
-//! the `RealDom` trait. See [Implementing a Renderer](docs/8-custom-renderer.md), the `StringRenderer`, and `WebSys` render implementations for a template
-//! on how to implement your own custom renderer. We provide 1st-class support for these renderers:
-//!
-//! - dioxus-desktop (via WebView)
-//! - dioxus-web (via WebSys)
-//! - dioxus-ssr (via StringRenderer)
-//! - dioxus-liveview (SSR + WebSys)
-//!
-//! In the main `dioxus` crate, these are all accessible through configuration flags.
-//!
-//! ## Rendering to the Web
-//!
-//! Most dioxus apps will be initialized in roughly the same way. The `launch` method in `web` will immediately start a
-//! VirtualDOM and await it using `wasm_bindgen_futures`.
-//!
-//! An example app that starts a websys app and internally awaits works as follows:
-//!
-//! ```
-//! use dioxus::prelude::*;
-//! fn main() {
-//!     dioxus::web::launch(Example);
-//! }
-//!
-//! pub pub static Example: FC<()> = |cx, props|{
-//!     cx.render(rsx! {
-//!         div { "Hello World!" }
-//!     })
-//! };
-//! ```
-//!
-//! In reality, you'll want to integrate analytics, logging, crash-protection and more.
+//! Beyond this overview, Dioxus supports:
+//! - Server-side rendering
+//! - Concurrent rendering (with async support)
+//! - Web/Desktop/Mobile support
+//! - Pre-rendering and rehydration
+//! - Fragments, Portals, and Suspense
+//! - Inline-styles
+//! - Custom event handlers
+//! - Custom elements
+//! - Basic fine-grained reactivity (IE SolidJS/Svelte)
+//! - and more!
 
 // Just a heads-up, the core functionality of dioxus rests in Dioxus-Core. This crate just wraps a bunch of utilities
 // together and exports their namespaces to something predicatble.
@@ -188,15 +146,12 @@ pub use dioxus_desktop as desktop;
 #[cfg(feature = "router")]
 pub use dioxus_router as router;
 
-pub mod debug {}
-
 pub mod events {
     #[cfg(feature = "html")]
     pub use dioxus_html::{on::*, KeyCode};
 }
 
 pub mod prelude {
-    //! A glob import that includes helper types like FC, rsx!, html!, and required traits
     pub use dioxus_core::prelude::*;
     pub use dioxus_core_macro::{format_args_f, rsx, Props, Routable};
     pub use dioxus_elements::{GlobalAttributes, SvgAttributes};

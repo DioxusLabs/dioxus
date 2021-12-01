@@ -1,7 +1,6 @@
 use dioxus_core::Context;
 use futures::Future;
 use std::{
-    borrow::Borrow,
     cell::{Cell, RefCell},
     pin::Pin,
     rc::Rc,
@@ -42,7 +41,7 @@ pub fn use_coroutine<'a, F: Future<Output = ()> + 'a>(
             } else {
                 // make sure to drop the old future
                 if let Some(fut) = state.fut.borrow_mut().take() {
-                    //
+                    drop(fut);
                 }
             }
             CoroutineHandle { cx, inner: state }

@@ -1,10 +1,10 @@
 mod utils;
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
-use dioxus_core_macro::{format_args_f, rsx, Props};
+use dioxus_core_macro::{rsx, Props};
 use dioxus_html as dioxus_elements;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{window, Event};
@@ -128,9 +128,7 @@ pub fn use_router<R: Routable>(cx: Context, mut parse: impl FnMut(&str) -> R + '
             }
             let history = state.history_service.borrow();
 
-            todo!()
-            // history.state.historic_routes.last().unwrap()
-            //
+            state.historic_routes.last().unwrap()
         },
     )
 }

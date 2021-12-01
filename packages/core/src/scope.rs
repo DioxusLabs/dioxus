@@ -44,6 +44,7 @@ pub type Context<'a> = &'a Scope;
 pub struct Scope {
     pub(crate) parent_scope: Option<*mut Scope>,
 
+    // parent element I think?
     pub(crate) container: ElementId,
 
     pub(crate) our_arena_idx: ScopeId,
@@ -79,8 +80,8 @@ pub struct SelfReferentialItems<'a> {
 
 /// A component's unique identifier.
 ///
-/// `ScopeId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
-/// unmounted, then the `ScopeId` will be reused for a new component.
+/// `ScopeId` is a `usize` that is unique across the entire VirtualDOM and across time. ScopeIDs will never be reused
+/// once a component has been unmounted.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ScopeId(pub usize);
@@ -141,7 +142,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx, props| cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -161,7 +162,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx, props| cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -180,7 +181,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx, props| cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     /// let base = dom.base_scope();
     ///

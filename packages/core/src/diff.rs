@@ -109,7 +109,6 @@ pub struct DiffState<'bump> {
     scopes: &'bump ScopeArena,
     pub mutations: Mutations<'bump>,
     pub(crate) stack: DiffStack<'bump>,
-    pub seen_scopes: FxHashSet<ScopeId>,
     pub force_diff: bool,
 }
 
@@ -119,7 +118,6 @@ impl<'bump> DiffState<'bump> {
             scopes,
             mutations: Mutations::new(),
             stack: DiffStack::new(),
-            seen_scopes: Default::default(),
             force_diff: false,
         }
     }
@@ -492,7 +490,7 @@ impl<'bump> DiffState<'bump> {
         }
 
         // Finally, insert this scope as a seen node.
-        self.seen_scopes.insert(new_idx);
+        self.mutations.dirty_scopes.insert(new_idx);
     }
 
     fn create_linked_node(&mut self, link: &'bump VPortal) {
