@@ -31,7 +31,7 @@ fn main() {
     });
 }
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx, props| {
     let state = use_ref(cx, || Calculator::new());
 
     let clear_display = state.read().display_value.eq("0");

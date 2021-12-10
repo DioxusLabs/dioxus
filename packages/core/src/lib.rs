@@ -32,19 +32,21 @@ pub(crate) mod innerlude {
     pub use crate::virtual_dom::*;
 
     pub type Element = Option<VPortal>;
-    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> Element;
+    pub type Component<P> = for<'a> fn(Context<'a>, &'a P) -> Element;
 }
 
 pub use crate::innerlude::{
-    Attribute, Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, IntoVNode,
-    LazyNodes, Listener, MountType, Mutations, NodeFactory, Properties, SchedulerMsg, ScopeId,
-    UserEvent, VElement, VFragment, VNode, VirtualDom, FC,
+    Attribute, Component, Context, DioxusElement, DomEdit, Element, ElementId, EventHandler,
+    EventPriority, IntoVNode, LazyNodes, Listener, MountType, Mutations, NodeFactory, Properties,
+    SchedulerMsg, ScopeId, UserEvent, VElement, VFragment, VNode, VirtualDom,
 };
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::innerlude::Context;
-    pub use crate::innerlude::{DioxusElement, Element, LazyNodes, NodeFactory, Scope, FC};
+    pub use crate::innerlude::{
+        Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory, Scope,
+    };
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
 }

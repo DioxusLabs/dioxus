@@ -281,30 +281,30 @@ impl ScopeArena {
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
     pub(crate) fn ensure_drop_safety(&self, scope_id: &ScopeId) {
-        let scope = self.get_scope(scope_id).unwrap();
+        if let Some(scope) = self.get_scope(scope_id) {
+            let mut items = scope.items.borrow_mut();
 
-        let mut items = scope.items.borrow_mut();
+            // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+            // run the hooks (which hold an &mut Reference)
+            // recursively call ensure_drop_safety on all children
+            items.borrowed_props.drain(..).for_each(|comp| {
+                let scope_id = comp
+                    .associated_scope
+                    .get()
+                    .expect("VComponents should be associated with a valid Scope");
 
-        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
-        // run the hooks (which hold an &mut Reference)
-        // recursively call ensure_drop_safety on all children
-        items.borrowed_props.drain(..).for_each(|comp| {
-            let scope_id = comp
-                .associated_scope
-                .get()
-                .expect("VComponents should be associated with a valid Scope");
+                self.ensure_drop_safety(&scope_id);
 
-            self.ensure_drop_safety(&scope_id);
+                let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
+                drop_props();
+            });
 
-            let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
-            drop_props();
-        });
-
-        // Now that all the references are gone, we can safely drop our own references in our listeners.
-        items
-            .listeners
-            .drain(..)
-            .for_each(|listener| drop(listener.callback.borrow_mut().take()));
+            // Now that all the references are gone, we can safely drop our own references in our listeners.
+            items
+                .listeners
+                .drain(..)
+                .for_each(|listener| drop(listener.callback.callback.borrow_mut().take()));
+        }
     }
 
     pub(crate) fn run_scope(&self, id: &ScopeId) -> bool {
@@ -375,7 +375,7 @@ impl ScopeArena {
                     //
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
-                            let mut cb = listener.callback.borrow_mut();
+                            let mut cb = listener.callback.callback.borrow_mut();
                             if let Some(cb) = cb.as_mut() {
                                 (cb)(event.data.clone());
                             }

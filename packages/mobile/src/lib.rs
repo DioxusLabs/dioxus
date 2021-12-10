@@ -26,11 +26,14 @@ fn init_logging() {
 
 static HTML_CONTENT: &'static str = include_str!("../../desktop/src/index.html");
 
-pub fn launch(root: FC<()>, builder: fn(WindowBuilder) -> WindowBuilder) -> anyhow::Result<()> {
+pub fn launch(
+    root: Component<()>,
+    builder: fn(WindowBuilder) -> WindowBuilder,
+) -> anyhow::Result<()> {
     launch_with_props(root, (), builder)
 }
 pub fn launch_with_props<P: 'static + Send>(
-    root: FC<P>,
+    root: Component<P>,
     props: P,
     builder: fn(WindowBuilder) -> WindowBuilder,
 ) -> anyhow::Result<()> {
@@ -41,7 +44,7 @@ pub fn launch_with_props<P: 'static + Send>(
 /// Components used in WebviewRenderer instances can directly use system libraries, access the filesystem, and multithread with ease.
 pub struct WebviewRenderer<T> {
     /// The root component used to render the Webview
-    root: FC<T>,
+    root: Component<T>,
 }
 enum RpcEvent<'a> {
     Initialize {
@@ -52,7 +55,7 @@ enum RpcEvent<'a> {
 
 impl<T: 'static + Send> WebviewRenderer<T> {
     pub fn run(
-        root: FC<T>,
+        root: Component<T>,
         props: T,
         user_builder: fn(WindowBuilder) -> WindowBuilder,
     ) -> anyhow::Result<()> {
@@ -60,7 +63,7 @@ impl<T: 'static + Send> WebviewRenderer<T> {
     }
 
     pub fn run_with_edits(
-        root: FC<T>,
+        root: Component<T>,
         props: T,
         user_builder: fn(WindowBuilder) -> WindowBuilder,
         redits: Option<Vec<DomEdit<'static>>>,

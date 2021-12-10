@@ -1,0 +1,19 @@
+[package]
+name = "dioxus-liveview"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = { version = "0.4.2", optional = true, features = ["ws", "headers"] }
+
+[features]
+default = ["axum"]
+
+[dev-dependencies]
+tokio = { version = "1.14.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tower-http = { version = "0.2.0", features = ["fs", "trace"] }
+headers = "0.3"

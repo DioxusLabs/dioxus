@@ -8,7 +8,7 @@ use std::{
 
 /// Store state between component renders!
 ///
-/// ## The "Pinnacle" of state hooks
+/// ## Dioxus equivalent of useState, designed for Rust
 ///
 /// The Dioxus version of `useState` is the "king daddy" of state management. It allows you to ergonomically store and
 /// modify state between component renders. When the state is updated, the component will re-render.
@@ -54,17 +54,15 @@ pub fn use_state<'a, T: 'static>(
     initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
     cx.use_hook(
-        move |_| {
-            //
-            UseStateInner {
-                current_val: initial_state_fn(),
-                update_callback: cx.schedule_update(),
-                wip: Rc::new(RefCell::new(None)),
-                update_scheuled: Cell::new(false),
-            }
+        move |_| UseStateInner {
+            current_val: initial_state_fn(),
+            update_callback: cx.schedule_update(),
+            wip: Rc::new(RefCell::new(None)),
+            update_scheuled: Cell::new(false),
         },
         move |hook| {
             hook.update_scheuled.set(false);
+
             let mut new_val = hook.wip.borrow_mut();
             if new_val.is_some() {
                 hook.current_val = new_val.take().unwrap();
@@ -134,13 +132,13 @@ impl<'a, T: 'static> UseState<'a, T> {
     pub fn setter(&self) -> Rc<dyn Fn(T)> {
         let slot = self.inner.wip.clone();
         Rc::new(move |new| {
-            //
             *slot.borrow_mut() = Some(new);
         })
     }
 
     pub fn for_async(&self) -> AsyncUseState<T> {
         AsyncUseState {
+            re_render: self.inner.update_callback.clone(),
             wip: self.inner.wip.clone(),
         }
     }
@@ -168,6 +166,10 @@ impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
             }
             slot.as_mut().unwrap()
         })
+    }
+
+    pub fn inner(self) -> T {
+        self.inner.current_val.to_owned()
     }
 }
 
@@ -254,6 +256,7 @@ impl<'a, T: 'static + Display> std::fmt::Display for UseState<'a, T> {
 
 /// A less ergonmic but still capable form of use_state that's valid for `static lifetime
 pub struct AsyncUseState<T: 'static> {
+    re_render: Rc<dyn Fn()>,
     wip: Rc<RefCell<Option<T>>>,
 }
 
@@ -269,7 +272,10 @@ impl<T: ToOwned> AsyncUseState<T> {
             slot.as_mut().unwrap()
         })
     }
+}
+impl<T> AsyncUseState<T> {
     pub fn set(&mut self, val: T) {
+        (self.re_render)();
         *self.wip.borrow_mut() = Some(val);
     }
 }

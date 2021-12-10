@@ -22,7 +22,7 @@ fn manual_diffing() {
         value: Shared<&'static str>,
     }
 
-    static App: FC<AppProps> = |cx, props| {
+    static App: Component<AppProps> = |cx, props| {
         let val = props.value.lock().unwrap();
         cx.render(rsx! { div { "{val}" } })
     };
@@ -46,7 +46,7 @@ fn manual_diffing() {
 
 #[test]
 fn events_generate() {
-    static App: FC<()> = |cx, _| {
+    static App: Component<()> = |cx, _| {
         let mut count = use_state(cx, || 0);
 
         let inner = match *count {
@@ -105,7 +105,7 @@ fn events_generate() {
 
 #[test]
 fn components_generate() {
-    static App: FC<()> = |cx, _| {
+    static App: Component<()> = |cx, _| {
         let mut render_phase = use_state(cx, || 0);
         render_phase += 1;
 
@@ -122,7 +122,7 @@ fn components_generate() {
         })
     };
 
-    static Child: FC<()> = |cx, _| {
+    static Child: Component<()> = |cx, _| {
         cx.render(rsx! {
             h1 {}
         })
@@ -222,7 +222,7 @@ fn components_generate() {
 #[test]
 fn component_swap() {
     // simple_logger::init();
-    static App: FC<()> = |cx, _| {
+    static App: Component<()> = |cx, _| {
         let mut render_phase = use_state(cx, || 0);
         render_phase += 1;
 
@@ -261,7 +261,7 @@ fn component_swap() {
         })
     };
 
-    static NavBar: FC<()> = |cx, _| {
+    static NavBar: Component<()> = |cx, _| {
         println!("running navbar");
         cx.render(rsx! {
             h1 {
@@ -271,7 +271,7 @@ fn component_swap() {
         })
     };
 
-    static NavLink: FC<()> = |cx, _| {
+    static NavLink: Component<()> = |cx, _| {
         println!("running navlink");
         cx.render(rsx! {
             h1 {
@@ -280,7 +280,7 @@ fn component_swap() {
         })
     };
 
-    static Dashboard: FC<()> = |cx, _| {
+    static Dashboard: Component<()> = |cx, _| {
         println!("running dashboard");
         cx.render(rsx! {
             div {
@@ -289,7 +289,7 @@ fn component_swap() {
         })
     };
 
-    static Results: FC<()> = |cx, _| {
+    static Results: Component<()> = |cx, _| {
         println!("running results");
         cx.render(rsx! {
             div {

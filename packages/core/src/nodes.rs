@@ -338,9 +338,32 @@ pub struct Listener<'bump> {
     pub event: &'static str,
 
     /// The actual callback that the user specified
-    #[allow(clippy::type_complexity)]
-    pub(crate) callback:
-        RefCell<Option<BumpBox<'bump, dyn FnMut(std::sync::Arc<dyn Any + Send + Sync>) + 'bump>>>,
+    pub(crate) callback: EventHandler<'bump>,
+}
+
+pub struct EventHandler<'bump> {
+    pub callback: &'bump RefCell<Option<ListenerCallback<'bump>>>,
+}
+
+impl EventHandler<'_> {
+    pub fn call(&self, event: Arc<dyn Any + Send + Sync>) {
+        if let Some(callback) = self.callback.borrow_mut().as_mut() {
+            callback(event);
+        }
+    }
+    pub fn release(&self) {
+        self.callback.replace(None);
+    }
+}
+type ListenerCallback<'bump> = BumpBox<'bump, dyn FnMut(Arc<dyn Any + Send + Sync>) + 'bump>;
+
+impl Copy for EventHandler<'_> {}
+impl Clone for EventHandler<'_> {
+    fn clone(&self) -> Self {
+        Self {
+            callback: self.callback,
+        }
+    }
 }
 
 /// A cached node is a "pointer" to a "rendered" node in a particular scope
@@ -608,15 +631,11 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    pub fn listener(
-        self,
-        event: &'static str,
-        callback: BumpBox<'a, dyn FnMut(Arc<dyn Any + Send + Sync>) + 'a>,
-    ) -> Listener<'a> {
+    pub fn listener(self, event: &'static str, callback: EventHandler<'a>) -> Listener<'a> {
         Listener {
             event,
             mounted_node: Cell::new(None),
-            callback: RefCell::new(Some(callback)),
+            callback,
         }
     }
 

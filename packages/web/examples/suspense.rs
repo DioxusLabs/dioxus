@@ -14,7 +14,7 @@ fn main() {
     dioxus_web::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx, _| {
+static App: Component<()> = |cx, _| {
     let doggo = cx.suspend(|| async move {
         #[derive(serde::Deserialize)]
         struct Doggo {

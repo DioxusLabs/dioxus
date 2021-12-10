@@ -274,6 +274,7 @@ impl Scope {
             let mut search_parent = self.parent_scope;
 
             while let Some(parent_ptr) = search_parent {
+                // safety: all parent pointers are valid thanks to the bump arena
                 let parent = unsafe { &*parent_ptr };
                 if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
                     return Some(shared.clone().downcast::<T>().unwrap());

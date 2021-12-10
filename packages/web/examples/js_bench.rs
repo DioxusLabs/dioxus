@@ -107,7 +107,7 @@ impl Label {
     }
 }
 
-static App: FC<()> = |cx, _props| {
+static App: Component<()> = |cx, _props| {
     let mut items = use_ref(cx, || vec![]);
     let mut selected = use_state(cx, || None);
 

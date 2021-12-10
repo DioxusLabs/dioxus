@@ -60,7 +60,7 @@ use cache::intern_cached_strings;
 use dioxus::SchedulerMsg;
 use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
-use dioxus_core::prelude::FC;
+use dioxus_core::prelude::Component;
 use futures_util::FutureExt;
 
 mod cache;
@@ -89,7 +89,7 @@ mod ric_raf;
 ///     rsx!(cx, div {"hello world"})
 /// }
 /// ```
-pub fn launch(root_component: FC<()>, configuration: impl FnOnce(WebConfig) -> WebConfig) {
+pub fn launch(root_component: Component<()>, configuration: impl FnOnce(WebConfig) -> WebConfig) {
     launch_with_props(root_component, (), configuration)
 }
 
@@ -113,8 +113,11 @@ pub fn launch(root_component: FC<()>, configuration: impl FnOnce(WebConfig) -> W
 ///     rsx!(cx, div {"hello {props.name}"})
 /// }
 /// ```
-pub fn launch_with_props<T, F>(root_component: FC<T>, root_properties: T, configuration_builder: F)
-where
+pub fn launch_with_props<T, F>(
+    root_component: Component<T>,
+    root_properties: T,
+    configuration_builder: F,
+) where
     T: Send + 'static,
     F: FnOnce(WebConfig) -> WebConfig,
 {
@@ -134,7 +137,7 @@ where
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: 'static + Send>(root: FC<T>, root_props: T, cfg: WebConfig) {
+pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
     intern_cached_strings();

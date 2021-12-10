@@ -140,7 +140,7 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDOM is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
-    pub fn new(root: FC<()>) -> Self {
+    pub fn new(root: Component<()>) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -174,7 +174,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P: 'static>(root: FC<P>, root_props: P) -> Self {
+    pub fn new_with_props<P: 'static>(root: Component<P>, root_props: P) -> Self {
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
         Self::new_with_props_and_scheduler(root, root_props, sender, receiver)
     }
@@ -184,7 +184,7 @@ impl VirtualDom {
     /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
     /// VirtualDom to be created just to retrieve its channel receiver.
     pub fn new_with_props_and_scheduler<P: 'static>(
-        root: FC<P>,
+        root: Component<P>,
         root_props: P,
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,

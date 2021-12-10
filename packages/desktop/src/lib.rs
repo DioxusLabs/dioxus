@@ -15,7 +15,6 @@ use std::{
     sync::atomic::AtomicBool,
     sync::{Arc, RwLock},
 };
-use tokio::task::LocalSet;
 use wry::{
     application::{
         accelerator::{Accelerator, SysMods},
@@ -30,14 +29,14 @@ use wry::{
 };
 
 pub fn launch(
-    root: FC<()>,
+    root: Component<()>,
     config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) {
     launch_with_props(root, (), config_builder)
 }
 
 pub fn launch_with_props<P: Properties + 'static + Send + Sync>(
-    root: FC<P>,
+    root: Component<P>,
     props: P,
     builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) {
@@ -51,7 +50,7 @@ struct Response<'a> {
 }
 
 pub fn run<T: 'static + Send + Sync>(
-    root: FC<T>,
+    root: Component<T>,
     props: T,
     user_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) {
@@ -112,7 +111,7 @@ pub struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub fn new_on_tokio<P: Send + 'static>(root: FC<P>, props: P) -> Self {
+    pub fn new_on_tokio<P: Send + 'static>(root: Component<P>, props: P) -> Self {
         let edit_queue = Arc::new(RwLock::new(VecDeque::new()));
         let pending_edits = edit_queue.clone();
 
@@ -142,7 +141,6 @@ impl DesktopController {
                     dom.wait_for_work().await;
                     let mut muts = dom.work_with_deadline(|| false);
                     while let Some(edit) = muts.pop() {
-                        log::debug!("found mutations {:?}", muts);
                         edit_queue
                             .write()
                             .unwrap()

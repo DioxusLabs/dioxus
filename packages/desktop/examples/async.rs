@@ -15,7 +15,7 @@ fn main() {
     dioxus_desktop::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx, props| {
     let mut count = use_state(cx, || 0);
     log::debug!("count is {:?}", count);
 
