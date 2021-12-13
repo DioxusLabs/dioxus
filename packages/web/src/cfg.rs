@@ -11,6 +11,7 @@
 pub struct WebConfig {
     pub(crate) hydrate: bool,
     pub(crate) rootname: String,
+    pub(crate) cached_strings: Vec<String>,
 }
 
 impl Default for WebConfig {
@@ -18,6 +19,7 @@ impl Default for WebConfig {
         Self {
             hydrate: false,
             rootname: "main".to_string(),
+            cached_strings: Vec::new(),
         }
     }
 }
@@ -39,6 +41,14 @@ impl WebConfig {
     /// This is akint to calling React.render() on the element with the specified name.
     pub fn rootname(mut self, name: impl Into<String>) -> Self {
         self.rootname = name.into();
+        self
+    }
+
+    /// Set the name of the element that Dioxus will use as the root.
+    ///
+    /// This is akint to calling React.render() on the element with the specified name.
+    pub fn with_string_cache(mut self, cache: Vec<String>) -> Self {
+        self.cached_strings = cache;
         self
     }
 }

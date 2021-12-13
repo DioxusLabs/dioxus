@@ -16,7 +16,6 @@ pub struct Mutations<'a> {
     pub edits: Vec<DomEdit<'a>>,
     pub dirty_scopes: FxHashSet<ScopeId>,
     pub refs: Vec<NodeRefMutation<'a>>,
-    pub effects: Vec<&'a dyn FnMut()>,
 }
 
 impl Debug for Mutations<'_> {
@@ -113,7 +112,6 @@ impl<'a> Mutations<'a> {
             edits: Vec::new(),
             refs: Vec::new(),
             dirty_scopes: Default::default(),
-            effects: Vec::new(),
         }
     }
 

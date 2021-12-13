@@ -59,6 +59,15 @@ pub struct CoroutineHandle<'a> {
     cx: Context<'a>,
     inner: &'a State,
 }
+impl Clone for CoroutineHandle<'_> {
+    fn clone(&self) -> Self {
+        CoroutineHandle {
+            cx: self.cx,
+            inner: self.inner,
+        }
+    }
+}
+impl Copy for CoroutineHandle<'_> {}
 
 impl<'a> CoroutineHandle<'a> {
     pub fn start(&self) {

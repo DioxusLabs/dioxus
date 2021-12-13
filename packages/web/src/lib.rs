@@ -56,7 +56,6 @@ use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
 use crate::dom::load_document;
-use cache::intern_cached_strings;
 use dioxus::SchedulerMsg;
 use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
@@ -82,15 +81,15 @@ mod ric_raf;
 ///
 /// ```rust
 /// fn main() {
-///     dioxus_web::launch(App, |c| c);
+///     dioxus_web::launch(App);
 /// }
 ///
-/// static App: FC<()> = |cx, props| {
+/// static App: Component<()> = |cx, props| {
 ///     rsx!(cx, div {"hello world"})
 /// }
 /// ```
-pub fn launch(root_component: Component<()>, configuration: impl FnOnce(WebConfig) -> WebConfig) {
-    launch_with_props(root_component, (), configuration)
+pub fn launch(root_component: Component<()>) {
+    launch_with_props(root_component, (), |c| c);
 }
 
 /// Launches the VirtualDOM from the specified component function and props.
@@ -109,7 +108,7 @@ pub fn launch(root_component: Component<()>, configuration: impl FnOnce(WebConfi
 ///     name: String
 /// }
 ///
-/// static App: FC<RootProps> = |cx, props| {
+/// static App: Component<RootProps> = |cx, props| {
 ///     rsx!(cx, div {"hello {props.name}"})
 /// }
 /// ```
@@ -140,7 +139,12 @@ pub fn launch_with_props<T, F>(
 pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    intern_cached_strings();
+    for s in crate::cache::BUILTIN_INTERNED_STRINGS {
+        wasm_bindgen::intern(s);
+    }
+    for s in &cfg.cached_strings {
+        wasm_bindgen::intern(s);
+    }
 
     let should_hydrate = cfg.hydrate;
 
@@ -158,7 +162,6 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
     // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding
     // ElementIds should already line up because the web_sys dom has already loaded elements with the DioxusID into memory
     if !should_hydrate {
-        // log::info!("Applying rebuild edits..., {:?}", mutations);
         websys_dom.process_edits(&mut mutations.edits);
     }
 
@@ -169,20 +172,17 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         // if there is work then this future resolves immediately.
         dom.wait_for_work().await;
 
-        // // wait for the mainthread to schedule us in
-        // let mut deadline = work_loop.wait_for_idle_time().await;
+        // wait for the mainthread to schedule us in
+        let mut deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let mutations = dom.work_with_deadline(|| false);
-        // // run the virtualdom work phase until the frame deadline is reached
-        // let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
 
         // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;
 
         for mut edit in mutations {
             // actually apply our changes during the animation frame
-            // log::info!("Applying change edits..., {:?}", edit);
             websys_dom.process_edits(&mut edit.edits);
         }
     }

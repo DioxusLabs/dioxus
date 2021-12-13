@@ -7,6 +7,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     future::Future,
+    pin::Pin,
     rc::Rc,
 };
 
@@ -32,6 +33,14 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 /// ```
 pub type Context<'a> = &'a Scope;
 
+/// A component's unique identifier.
+///
+/// `ScopeId` is a `usize` that is unique across the entire VirtualDOM and across time. ScopeIDs will never be reused
+/// once a component has been unmounted.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ScopeId(pub usize);
+
 /// Every component in Dioxus is represented by a `Scope`.
 ///
 /// Scopes contain the state for hooks, the component's props, and other lifecycle information.
@@ -44,7 +53,6 @@ pub type Context<'a> = &'a Scope;
 pub struct Scope {
     pub(crate) parent_scope: Option<*mut Scope>,
 
-    // parent element I think?
     pub(crate) container: ElementId,
 
     pub(crate) our_arena_idx: ScopeId,
@@ -75,16 +83,8 @@ pub struct Scope {
 pub struct SelfReferentialItems<'a> {
     pub(crate) listeners: Vec<&'a Listener<'a>>,
     pub(crate) borrowed_props: Vec<&'a VComponent<'a>>,
-    pub(crate) tasks: Vec<BumpBox<'a, dyn Future<Output = ()>>>,
+    pub(crate) tasks: Vec<Pin<BumpBox<'a, dyn Future<Output = ()>>>>,
 }
-
-/// A component's unique identifier.
-///
-/// `ScopeId` is a `usize` that is unique across the entire VirtualDOM and across time. ScopeIDs will never be reused
-/// once a component has been unmounted.
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ScopeId(pub usize);
 
 // Public methods exposed to libraries and components
 impl Scope {
@@ -227,11 +227,11 @@ impl Scope {
         let _ = self.sender.unbounded_send(SchedulerMsg::Immediate(id));
     }
 
-    /// Get the [`ScopeId`] of a mounted component.
-    ///
-    /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
-    pub fn bump(&self) -> &Bump {
-        &self.wip_frame().bump
+    /// Get the Root Node of this scope
+    pub fn root_node(&self) -> &VNode {
+        todo!("Portals have changed how we address nodes. Still fixing this, sorry.");
+        // let node = *self.wip_frame().nodes.borrow().get(0).unwrap();
+        // unsafe { std::mem::transmute(&*node) }
     }
 
     /// This method enables the ability to expose state to children further down the VirtualDOM Tree.
@@ -287,15 +287,10 @@ impl Scope {
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     ///
-    ///
-    ///
-    ///
     /// The future is forcibly dropped if the component is not ready by the next render
-    pub fn push_task<'src, F: Future<Output = ()>>(
-        &'src self,
-        fut: impl FnOnce() -> F + 'src,
-    ) -> usize
+    pub fn push_task<'src, F>(&'src self, fut: impl FnOnce() -> F + 'src) -> usize
     where
+        F: Future<Output = ()>,
         F::Output: 'src,
         F: 'src,
     {
@@ -303,18 +298,20 @@ impl Scope {
             .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
             .unwrap();
 
-        // allocate the future
-        let fut = fut();
-        let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut);
-
         // wrap it in a type that will actually drop the contents
+        //
+        // Safety: we just made the pointer above and will promise not to alias it!
+        // The main reason we do this through from_raw is because Bumpalo's box does
+        // not support unsized coercion
+        let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut());
         let boxed_fut: BumpBox<dyn Future<Output = ()>> = unsafe { BumpBox::from_raw(fut) };
+        let pinned_fut: Pin<BumpBox<_>> = boxed_fut.into();
 
         // erase the 'src lifetime for self-referential storage
-        let self_ref_fut = unsafe { std::mem::transmute(boxed_fut) };
+        let self_ref_fut = unsafe { std::mem::transmute(pinned_fut) };
 
+        // Push the future into the tasks
         let mut items = self.items.borrow_mut();
-
         items.tasks.push(self_ref_fut);
         items.tasks.len() - 1
     }
@@ -335,22 +332,19 @@ impl Scope {
     /// }
     ///```
     pub fn render<'src>(&'src self, rsx: Option<LazyNodes<'src, '_>>) -> Option<VPortal> {
-        let frame = self.wip_frame();
-        let bump = &frame.bump;
-        let factory = NodeFactory { bump };
-        let node = rsx.map(|f| f.call(factory))?;
-        let node = bump.alloc(node);
+        let bump = &self.wip_frame().bump;
 
-        let node_ptr = node as *mut _;
-        let node_ptr = unsafe { std::mem::transmute(node_ptr) };
+        let owned_node: VNode<'src> = rsx.map(|f| f.call(NodeFactory { bump }))?;
+        let alloced_vnode: &'src mut VNode<'src> = bump.alloc(owned_node);
+        let node_ptr: *mut VNode<'src> = alloced_vnode as *mut _;
 
-        let link = VPortal {
+        let node: *mut VNode<'static> = unsafe { std::mem::transmute(node_ptr) };
+
+        Some(VPortal {
             scope_id: Cell::new(Some(self.our_arena_idx)),
             link_idx: Cell::new(0),
-            node: node_ptr,
-        };
-
-        Some(link)
+            node,
+        })
     }
 
     /// Store a value between renders
@@ -380,12 +374,12 @@ impl Scope {
         runner: impl FnOnce(&'src mut State) -> Output,
     ) -> Output {
         let mut vals = self.hook_vals.borrow_mut();
+
         let hook_len = vals.len();
         let cur_idx = self.hook_idx.get();
 
         if cur_idx >= hook_len {
-            let val = self.hook_arena.alloc(initializer(hook_len));
-            vals.push(val);
+            vals.push(self.hook_arena.alloc(initializer(hook_len)));
         }
 
         let state = vals
@@ -416,6 +410,7 @@ impl Scope {
         }
     }
 
+    /// Mutable access to the "work in progress frame" - used to clear it
     pub(crate) fn wip_frame_mut(&mut self) -> &mut BumpFrame {
         match self.generation.get() & 1 == 0 {
             true => &mut self.frames[0],
@@ -423,6 +418,7 @@ impl Scope {
         }
     }
 
+    /// Access to the frame where finalized nodes existed
     pub(crate) fn fin_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 1 {
             true => &self.frames[0],
@@ -433,20 +429,23 @@ impl Scope {
     /// Reset this component's frame
     ///
     /// # Safety:
+    ///
     /// This method breaks every reference of VNodes in the current frame.
+    ///
+    /// Calling reset itself is not usually a big deal, but we consider it important
+    /// due to the complex safety guarantees we need to uphold.
     pub(crate) unsafe fn reset_wip_frame(&mut self) {
-        // todo: unsafecell or something
-        let bump = self.wip_frame_mut();
-        bump.bump.reset();
+        self.wip_frame_mut().bump.reset();
     }
 
+    /// Cycle to the next generation
     pub(crate) fn cycle_frame(&self) {
         self.generation.set(self.generation.get() + 1);
     }
 
-    pub fn root_node(&self) -> &VNode {
-        let node = *self.wip_frame().nodes.borrow().get(0).unwrap();
-        unsafe { std::mem::transmute(&*node) }
+    /// Get the [`Bump`] of the WIP frame.
+    pub(crate) fn bump(&self) -> &Bump {
+        &self.wip_frame().bump
     }
 }
 
@@ -455,7 +454,7 @@ pub(crate) struct BumpFrame {
     pub nodes: RefCell<Vec<*const VNode<'static>>>,
 }
 impl BumpFrame {
-    pub fn new(capacity: usize) -> Self {
+    pub(crate) fn new(capacity: usize) -> Self {
         let bump = Bump::with_capacity(capacity);
 
         let node = &*bump.alloc(VText {
@@ -468,7 +467,7 @@ impl BumpFrame {
         Self { bump, nodes }
     }
 
-    pub fn assign_nodelink(&self, node: &VPortal) {
+    pub(crate) fn assign_nodelink(&self, node: &VPortal) {
         let mut nodes = self.nodes.borrow_mut();
 
         let len = nodes.len();

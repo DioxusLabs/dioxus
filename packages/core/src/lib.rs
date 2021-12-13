@@ -1,17 +1,6 @@
 #![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
 
-/*
-Navigating this crate:
-- virtual_dom: the primary entrypoint for the crate
-- scheduler: the core interior logic called by the [`VirtualDom`]
-- nodes: the definition of VNodes, listeners, etc.
-- diff: the stackmachine-based diffing algorithm
-- hooks: foundational hooks that require crate-private APIs
-- mutations: DomEdits/NodeRefs and internal API to create them
-
-Some utilities
-*/
 pub(crate) mod component;
 pub(crate) mod diff;
 pub(crate) mod lazynodes;
@@ -23,7 +12,7 @@ pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub use crate::component::*;
-    pub use crate::diff::*;
+    pub(crate) use crate::diff::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
@@ -37,7 +26,7 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     Attribute, Component, Context, DioxusElement, DomEdit, Element, ElementId, EventHandler,
-    EventPriority, IntoVNode, LazyNodes, Listener, MountType, Mutations, NodeFactory, Properties,
+    EventPriority, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, Properties,
     SchedulerMsg, ScopeId, UserEvent, VElement, VFragment, VNode, VirtualDom,
 };
 

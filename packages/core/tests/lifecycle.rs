@@ -69,7 +69,7 @@ fn events_generate() {
 
     let mut dom = VirtualDom::new(App);
     let mut channel = dom.get_scheduler_channel();
-    assert!(dom.has_any_work());
+    assert!(dom.has_work());
 
     let edits = dom.rebuild();
     assert_eq!(

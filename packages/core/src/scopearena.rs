@@ -92,15 +92,8 @@ impl ScopeArena {
         let new_scope_id = ScopeId(self.scope_counter.get());
         self.scope_counter.set(self.scope_counter.get() + 1);
 
-        // log::debug!("new scope {:?} with parent {:?}", new_scope_id, container);
-
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             let scope = unsafe { &mut *old_scope };
-            // log::debug!(
-            //     "reusing scope {:?} as {:?}",
-            //     scope.our_arena_idx,
-            //     new_scope_id
-            // );
 
             scope.caller = caller;
             scope.parent_scope = parent_scope;

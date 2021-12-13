@@ -54,18 +54,26 @@ pub fn use_state<'a, T: 'static>(
     initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
     cx.use_hook(
-        move |_| UseStateInner {
-            current_val: initial_state_fn(),
-            update_callback: cx.schedule_update(),
-            wip: Rc::new(RefCell::new(None)),
-            update_scheuled: Cell::new(false),
+        move |_| {
+            let first_val = initial_state_fn();
+            UseStateInner {
+                current_val: Rc::new(first_val),
+                update_callback: cx.schedule_update(),
+                wip: Rc::new(RefCell::new(None)),
+                update_scheuled: Cell::new(false),
+            }
         },
         move |hook| {
             hook.update_scheuled.set(false);
 
             let mut new_val = hook.wip.borrow_mut();
             if new_val.is_some() {
-                hook.current_val = new_val.take().unwrap();
+                // if there's only one reference (weak or otherwise), we can just swap the values
+                if let Some(val) = Rc::get_mut(&mut hook.current_val) {
+                    *val = new_val.take().unwrap();
+                } else {
+                    hook.current_val = Rc::new(new_val.take().unwrap());
+                }
             }
 
             UseState { inner: &*hook }
@@ -73,7 +81,7 @@ pub fn use_state<'a, T: 'static>(
     )
 }
 struct UseStateInner<T: 'static> {
-    current_val: T,
+    current_val: Rc<T>,
     update_scheuled: Cell<bool>,
     update_callback: Rc<dyn Fn()>,
     wip: Rc<RefCell<Option<T>>>,
@@ -115,6 +123,10 @@ impl<'a, T: 'static> UseState<'a, T> {
         &self.inner.current_val
     }
 
+    pub fn get_rc(&self) -> &'a Rc<T> {
+        &self.inner.current_val
+    }
+
     /// Get the current status of the work-in-progress data
     pub fn get_wip(&self) -> Ref<Option<T>> {
         self.inner.wip.borrow()
@@ -140,6 +152,7 @@ impl<'a, T: 'static> UseState<'a, T> {
         AsyncUseState {
             re_render: self.inner.update_callback.clone(),
             wip: self.inner.wip.clone(),
+            inner: self.inner.current_val.clone(),
         }
     }
 
@@ -162,14 +175,14 @@ impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
         // "get_mut" is locked behind "ToOwned" to make it explicit that cloning occurs to use this
         RefMut::map(self.inner.wip.borrow_mut(), |slot| {
             if slot.is_none() {
-                *slot = Some(self.inner.current_val.to_owned());
+                *slot = Some(self.inner.current_val.as_ref().to_owned());
             }
             slot.as_mut().unwrap()
         })
     }
 
     pub fn inner(self) -> T {
-        self.inner.current_val.to_owned()
+        self.inner.current_val.as_ref().to_owned()
     }
 }
 
@@ -256,6 +269,7 @@ impl<'a, T: 'static + Display> std::fmt::Display for UseState<'a, T> {
 
 /// A less ergonmic but still capable form of use_state that's valid for `static lifetime
 pub struct AsyncUseState<T: 'static> {
+    inner: Rc<T>,
     re_render: Rc<dyn Fn()>,
     wip: Rc<RefCell<Option<T>>>,
 }
@@ -277,5 +291,12 @@ impl<T> AsyncUseState<T> {
     pub fn set(&mut self, val: T) {
         (self.re_render)();
         *self.wip.borrow_mut() = Some(val);
+    }
+    pub fn get(&self) -> &T {
+        self.inner.as_ref()
+    }
+
+    pub fn get_rc(&self) -> &Rc<T> {
+        &self.inner
     }
 }

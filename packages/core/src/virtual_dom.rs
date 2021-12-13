@@ -183,6 +183,11 @@ impl VirtualDom {
     ///
     /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
     /// VirtualDom to be created just to retrieve its channel receiver.
+    ///
+    /// ```rust
+    /// let (sender, receiver) = futures_channel::mpsc::unbounded();
+    /// let dom = VirtualDom::new_with_scheduler(Example, (), sender, receiver);
+    /// ```
     pub fn new_with_props_and_scheduler<P: 'static>(
         root: Component<P>,
         root_props: P,
@@ -235,11 +240,26 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```rust, ignore
-    ///
-    ///
+    /// let dom = VirtualDom::new(App);
+    /// let sender = dom.get_scheduler_channel();
     /// ```
     pub fn get_scheduler_channel(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
         self.sender.clone()
+    }
+
+    /// Add a new message to the scheduler queue directly.
+    ///
+    ///
+    /// This method makes it possible to send messages to the scheduler from outside the VirtualDom without having to
+    /// call `get_schedule_channel` and then `send`.
+    ///
+    /// # Example
+    /// ```rust, ignore
+    /// let dom = VirtualDom::new(App);
+    /// dom.insert_scheduler_message(SchedulerMsg::Immediate(ScopeId(0)));
+    /// ```
+    pub fn insert_scheduler_message(&self, msg: SchedulerMsg) {
+        self.sender.unbounded_send(msg).unwrap()
     }
 
     /// Check if the [`VirtualDom`] has any pending updates or work to be done.
@@ -247,15 +267,28 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```rust, ignore
+    /// let dom = VirtualDom::new(App);
     ///
-    ///
+    /// // the dom is "dirty" when it is started and must be rebuilt to get the first render
+    /// assert!(dom.has_any_work());
     /// ```
-    pub fn has_any_work(&self) -> bool {
+    pub fn has_work(&self) -> bool {
         !(self.dirty_scopes.is_empty() && self.pending_messages.is_empty())
     }
 
-    /// Waits for the scheduler to have work
+    /// Wait for the scheduler to have any work.
+    ///
+    /// This method polls the internal future queue *and* the scheduler channel.
+    /// To add work to the VirtualDom, insert a message via the scheduler channel.
+    ///
     /// This lets us poll async tasks during idle periods without blocking the main thread.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let dom = VirtualDom::new(App);
+    /// let sender = dom.get_scheduler_channel();
+    /// ```
     pub async fn wait_for_work(&mut self) {
         loop {
             if !self.dirty_scopes.is_empty() && self.pending_messages.is_empty() {
@@ -390,9 +423,10 @@ impl VirtualDom {
 
                 committed_mutations.push(mutations);
             } else {
-                log::debug!("Could not finish work in time");
-
                 // leave the work in an incomplete state
+                //
+                // todo: we should store the edits and re-apply them later
+                // for now, we just dump the work completely (threadsafe)
                 return committed_mutations;
             }
         }
@@ -400,7 +434,7 @@ impl VirtualDom {
         committed_mutations
     }
 
-    /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch
+    /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
     ///
     /// The diff machine expects the RealDom's stack to be the root of the application.
     ///
@@ -475,6 +509,15 @@ impl VirtualDom {
     /// Renders an `rsx` call into the Base Scope's allocator.
     ///
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    ///
+    /// ```rust
+    /// fn Base(cx: Context, props: &()) -> Element {
+    ///     rsx!(cx, div {})
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Base);
+    /// let nodes = dom.render_nodes(rsx!("div"));
+    /// ```
     pub fn render_vnodes<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> &'a VNode<'a> {
         let scope = self.scopes.get_scope(&self.base_scope).unwrap();
         let frame = scope.wip_frame();
@@ -485,7 +528,16 @@ impl VirtualDom {
 
     /// Renders an `rsx` call into the Base Scope's allocator.
     ///
-    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.    
+    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    ///
+    /// ```rust
+    /// fn Base(cx: Context, props: &()) -> Element {
+    ///     rsx!(cx, div {})
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Base);
+    /// let nodes = dom.render_nodes(rsx!("div"));
+    /// ```   
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.stack.push(DiffInstruction::Diff { new, old });
@@ -498,6 +550,16 @@ impl VirtualDom {
     /// Renders an `rsx` call into the Base Scope's allocator.
     ///
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    ///
+    ///
+    /// ```rust
+    /// fn Base(cx: Context, props: &()) -> Element {
+    ///     rsx!(cx, div {})
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Base);
+    /// let nodes = dom.render_nodes(rsx!("div"));
+    /// ```
     pub fn create_vnodes<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
         let nodes = self.render_vnodes(left);
         let mut machine = DiffState::new(&self.scopes);
@@ -507,9 +569,19 @@ impl VirtualDom {
         machine.mutations
     }
 
-    /// Renders an `rsx` call into the Base Scope's allocator.
+    /// Renders an `rsx` call into the Base Scopes's arena.
     ///
-    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    /// Useful when needing to diff two rsx! calls from outside the VirtualDom, such as in a test.
+    ///
+    ///
+    /// ```rust
+    /// fn Base(cx: Context, props: &()) -> Element {
+    ///     rsx!(cx, div {})
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Base);
+    /// let nodes = dom.render_nodes(rsx!("div"));
+    /// ```
     pub fn diff_lazynodes<'a>(
         &'a self,
         left: Option<LazyNodes<'a, '_>>,
@@ -666,14 +738,7 @@ impl<'a> Future for PollTasks<'a> {
 
             // really this should just be retain_mut but that doesn't exist yet
             while let Some(mut task) = items.tasks.pop() {
-                // todo: does this make sense?
-                // I don't usually write futures by hand
-                // I think the futures neeed to be pinned using bumpbox or something
-                // right now, they're bump allocated so this shouldn't matter anyway - they're not going to move
-                let task_mut = task.as_mut();
-                let pinned = unsafe { Pin::new_unchecked(task_mut) };
-
-                if pinned.poll(cx).is_ready() {
+                if task.as_mut().poll(cx).is_ready() {
                     all_pending = false
                 } else {
                     unfinished_tasks.push(task);
