@@ -1,17 +1,6 @@
 #![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
 
-/*
-Navigating this crate:
-- virtual_dom: the primary entrypoint for the crate
-- scheduler: the core interior logic called by the [`VirtualDom`]
-- nodes: the definition of VNodes, listeners, etc.
-- diff: the stackmachine-based diffing algorithm
-- hooks: foundational hooks that require crate-private APIs
-- mutations: DomEdits/NodeRefs and internal API to create them
-
-Some utilities
-*/
 pub(crate) mod component;
 pub(crate) mod diff;
 pub(crate) mod lazynodes;
@@ -23,7 +12,7 @@ pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub use crate::component::*;
-    pub use crate::diff::*;
+    pub(crate) use crate::diff::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
@@ -32,19 +21,21 @@ pub(crate) mod innerlude {
     pub use crate::virtual_dom::*;
 
     pub type Element = Option<VPortal>;
-    pub type FC<P> = for<'a> fn(Context<'a>, &'a P) -> Element;
+    pub type Component<P> = for<'a> fn(Context<'a>, &'a P) -> Element;
 }
 
 pub use crate::innerlude::{
-    Attribute, Context, DioxusElement, DomEdit, Element, ElementId, EventPriority, IntoVNode,
-    LazyNodes, Listener, MountType, Mutations, NodeFactory, Properties, SchedulerMsg, ScopeId,
-    UserEvent, VElement, VFragment, VNode, VirtualDom, FC,
+    Attribute, Component, Context, DioxusElement, DomEdit, Element, ElementId, EventHandler,
+    EventPriority, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, Properties,
+    SchedulerMsg, ScopeId, UserEvent, VElement, VFragment, VNode, VirtualDom,
 };
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::innerlude::Context;
-    pub use crate::innerlude::{DioxusElement, Element, LazyNodes, NodeFactory, Scope, FC};
+    pub use crate::innerlude::{
+        Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory, Scope,
+    };
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;
 }

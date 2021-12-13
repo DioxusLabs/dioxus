@@ -105,11 +105,11 @@ use DomEdit::*;
 ///
 /// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
 /// stack machines all the way down!
-pub struct DiffState<'bump> {
-    scopes: &'bump ScopeArena,
-    pub mutations: Mutations<'bump>,
+pub(crate) struct DiffState<'bump> {
+    pub(crate) scopes: &'bump ScopeArena,
+    pub(crate) mutations: Mutations<'bump>,
     pub(crate) stack: DiffStack<'bump>,
-    pub force_diff: bool,
+    pub(crate) force_diff: bool,
 }
 
 impl<'bump> DiffState<'bump> {
@@ -149,7 +149,7 @@ pub(crate) enum DiffInstruction<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum MountType<'a> {
+pub(crate) enum MountType<'a> {
     Absorb,
     Append,
     Replace { old: &'a VNode<'a> },
@@ -159,9 +159,9 @@ pub enum MountType<'a> {
 
 pub(crate) struct DiffStack<'bump> {
     pub(crate) instructions: Vec<DiffInstruction<'bump>>,
-    nodes_created_stack: SmallVec<[usize; 10]>,
-    pub scope_stack: SmallVec<[ScopeId; 5]>,
-    pub element_stack: SmallVec<[ElementId; 10]>,
+    pub(crate) nodes_created_stack: SmallVec<[usize; 10]>,
+    pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
+    pub(crate) element_stack: SmallVec<[ElementId; 10]>,
 }
 
 impl<'bump> DiffStack<'bump> {

@@ -10,7 +10,7 @@ fn test_borrowed_state() {
     let _ = VirtualDom::new(Parent);
 }
 
-fn Parent(cx: Context, props: &()) -> Element {
+fn Parent(cx: Context, _props: &()) -> Element {
     let value = cx.use_hook(|_| String::new(), |f| &*f);
 
     cx.render(rsx! {

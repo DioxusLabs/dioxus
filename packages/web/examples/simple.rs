@@ -15,7 +15,7 @@ fn main() {
     dioxus_web::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx, props| {
     let show = use_state(cx, || true);
 
     let inner = match *show {

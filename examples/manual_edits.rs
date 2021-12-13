@@ -36,7 +36,7 @@ fn main() {
     dioxus_desktop::run(APP, (), |c| c.with_edits(edits));
 }
 
-const APP: FC<()> = |(cx, _props)| {
+const APP: Component<()> = |(cx, _props)| {
     rsx!(cx, div {
         "some app"
     })

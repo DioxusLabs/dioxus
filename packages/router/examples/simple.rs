@@ -9,7 +9,7 @@ fn main() {
     dioxus_web::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx, props| {
     #[derive(Clone, Debug, PartialEq)]
     enum Route {
         Home,

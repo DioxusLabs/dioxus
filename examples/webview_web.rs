@@ -16,7 +16,7 @@ fn main() {
     dioxus::web::launch(App, |c| c);
 }
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx, props| {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {

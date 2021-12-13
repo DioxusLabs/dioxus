@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
@@ -7,8 +9,8 @@ fn main() {
     let _ = VirtualDom::new(Parent);
 }
 
-fn Parent(cx: Context, props: &()) -> Element {
-    let value = cx.use_hook(|_| String::new(), |f| &*f);
+fn Parent(cx: Context, _props: &()) -> Element {
+    let value = cx.use_hook(|_| String::new(), |f| f);
 
     cx.render(rsx! {
         div {

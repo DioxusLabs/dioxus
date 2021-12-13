@@ -301,13 +301,13 @@ mod tests {
     use dioxus_core_macro::*;
     use dioxus_html as dioxus_elements;
 
-    static SIMPLE_APP: FC<()> = |cx, _| {
+    static SIMPLE_APP: Component<()> = |cx, _| {
         cx.render(rsx!(div {
             "hello world!"
         }))
     };
 
-    static SLIGHTLY_MORE_COMPLEX: FC<()> = |cx, _| {
+    static SLIGHTLY_MORE_COMPLEX: Component<()> = |cx, _| {
         cx.render(rsx! {
             div {
                 title: "About W3Schools"
@@ -326,14 +326,14 @@ mod tests {
         })
     };
 
-    static NESTED_APP: FC<()> = |cx, _| {
+    static NESTED_APP: Component<()> = |cx, _| {
         cx.render(rsx!(
             div {
                 SIMPLE_APP {}
             }
         ))
     };
-    static FRAGMENT_APP: FC<()> = |cx, _| {
+    static FRAGMENT_APP: Component<()> = |cx, _| {
         cx.render(rsx!(
             div { "f1" }
             div { "f2" }
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn styles() {
-        static STLYE_APP: FC<()> = |cx, _| {
+        static STLYE_APP: Component<()> = |cx, _| {
             cx.render(rsx! {
                 div { color: "blue", font_size: "46px"  }
             })

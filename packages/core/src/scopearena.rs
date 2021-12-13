@@ -9,9 +9,9 @@ use std::{
 
 use crate::innerlude::*;
 
-pub type FcSlot = *const ();
+pub(crate) type FcSlot = *const ();
 
-pub struct Heuristic {
+pub(crate) struct Heuristic {
     hook_arena_size: usize,
     node_arena_size: usize,
 }
@@ -92,15 +92,8 @@ impl ScopeArena {
         let new_scope_id = ScopeId(self.scope_counter.get());
         self.scope_counter.set(self.scope_counter.get() + 1);
 
-        // log::debug!("new scope {:?} with parent {:?}", new_scope_id, container);
-
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             let scope = unsafe { &mut *old_scope };
-            // log::debug!(
-            //     "reusing scope {:?} as {:?}",
-            //     scope.our_arena_idx,
-            //     new_scope_id
-            // );
 
             scope.caller = caller;
             scope.parent_scope = parent_scope;
@@ -203,8 +196,6 @@ impl ScopeArena {
     pub fn try_remove(&self, id: &ScopeId) -> Option<()> {
         self.ensure_drop_safety(id);
 
-        // log::debug!("removing scope {:?}", id);
-
         // Safety:
         // - ensure_drop_safety ensures that no references to this scope are in use
         // - this raw pointer is removed from the map
@@ -281,30 +272,30 @@ impl ScopeArena {
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
     pub(crate) fn ensure_drop_safety(&self, scope_id: &ScopeId) {
-        let scope = self.get_scope(scope_id).unwrap();
+        if let Some(scope) = self.get_scope(scope_id) {
+            let mut items = scope.items.borrow_mut();
 
-        let mut items = scope.items.borrow_mut();
+            // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+            // run the hooks (which hold an &mut Reference)
+            // recursively call ensure_drop_safety on all children
+            items.borrowed_props.drain(..).for_each(|comp| {
+                let scope_id = comp
+                    .associated_scope
+                    .get()
+                    .expect("VComponents should be associated with a valid Scope");
 
-        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
-        // run the hooks (which hold an &mut Reference)
-        // recursively call ensure_drop_safety on all children
-        items.borrowed_props.drain(..).for_each(|comp| {
-            let scope_id = comp
-                .associated_scope
-                .get()
-                .expect("VComponents should be associated with a valid Scope");
+                self.ensure_drop_safety(&scope_id);
 
-            self.ensure_drop_safety(&scope_id);
+                let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
+                drop_props();
+            });
 
-            let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
-            drop_props();
-        });
-
-        // Now that all the references are gone, we can safely drop our own references in our listeners.
-        items
-            .listeners
-            .drain(..)
-            .for_each(|listener| drop(listener.callback.borrow_mut().take()));
+            // Now that all the references are gone, we can safely drop our own references in our listeners.
+            items
+                .listeners
+                .drain(..)
+                .for_each(|listener| drop(listener.callback.callback.borrow_mut().take()));
+        }
     }
 
     pub(crate) fn run_scope(&self, id: &ScopeId) -> bool {
@@ -375,7 +366,7 @@ impl ScopeArena {
                     //
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
-                            let mut cb = listener.callback.borrow_mut();
+                            let mut cb = listener.callback.callback.borrow_mut();
                             if let Some(cb) = cb.as_mut() {
                                 (cb)(event.data.clone());
                             }

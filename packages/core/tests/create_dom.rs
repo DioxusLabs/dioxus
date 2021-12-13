@@ -1,4 +1,4 @@
-#![allow(unused, non_upper_case_globals)]
+#![allow(unused, non_upper_case_globals, non_snake_case)]
 
 //! Prove that the dom works normally through virtualdom methods.
 //!
@@ -13,7 +13,7 @@ use dioxus_html as dioxus_elements;
 mod test_logging;
 use DomEdit::*;
 
-fn new_dom<P: 'static + Send>(app: FC<P>, props: P) -> VirtualDom {
+fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
     const IS_LOGGING_ENABLED: bool = false;
     test_logging::set_up_logging(IS_LOGGING_ENABLED);
     VirtualDom::new_with_props(app, props)
@@ -21,7 +21,7 @@ fn new_dom<P: 'static + Send>(app: FC<P>, props: P) -> VirtualDom {
 
 #[test]
 fn test_original_diff() {
-    static APP: FC<()> = |cx, props| {
+    static APP: Component<()> = |cx, props| {
         cx.render(rsx! {
             div {
                 div {
@@ -57,7 +57,7 @@ fn test_original_diff() {
 
 #[test]
 fn create() {
-    static APP: FC<()> = |cx, props| {
+    static APP: Component<()> = |cx, props| {
         cx.render(rsx! {
             div {
                 div {
@@ -120,7 +120,7 @@ fn create() {
 
 #[test]
 fn create_list() {
-    static APP: FC<()> = |cx, props| {
+    static APP: Component<()> = |cx, props| {
         cx.render(rsx! {
             {(0..3).map(|f| rsx!{ div {
                 "hello"
@@ -169,7 +169,7 @@ fn create_list() {
 
 #[test]
 fn create_simple() {
-    static APP: FC<()> = |cx, props| {
+    static APP: Component<()> = |cx, props| {
         cx.render(rsx! {
             div {}
             div {}
@@ -207,7 +207,7 @@ fn create_simple() {
 }
 #[test]
 fn create_components() {
-    static App: FC<()> = |cx, props| {
+    static App: Component<()> = |cx, props| {
         cx.render(rsx! {
             Child { "abc1" }
             Child { "abc2" }
@@ -273,7 +273,7 @@ fn create_components() {
 }
 #[test]
 fn anchors() {
-    static App: FC<()> = |cx, props| {
+    static App: Component<()> = |cx, props| {
         cx.render(rsx! {
             {true.then(|| rsx!{ div { "hello" } })}
             {false.then(|| rsx!{ div { "goodbye" } })}

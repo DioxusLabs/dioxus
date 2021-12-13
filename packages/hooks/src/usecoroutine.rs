@@ -6,9 +6,9 @@ use std::{
     rc::Rc,
 };
 
-pub fn use_coroutine<'a, F: Future<Output = ()> + 'a>(
+pub fn use_coroutine<'a, F: Future<Output = ()> + 'static>(
     cx: Context<'a>,
-    f: impl FnOnce() -> F + 'a,
+    mut f: impl FnMut() -> F + 'a,
 ) -> CoroutineHandle {
     //
     cx.use_hook(
@@ -59,10 +59,19 @@ pub struct CoroutineHandle<'a> {
     cx: Context<'a>,
     inner: &'a State,
 }
+impl Clone for CoroutineHandle<'_> {
+    fn clone(&self) -> Self {
+        CoroutineHandle {
+            cx: self.cx,
+            inner: self.inner,
+        }
+    }
+}
+impl Copy for CoroutineHandle<'_> {}
 
 impl<'a> CoroutineHandle<'a> {
     pub fn start(&self) {
-        if self.inner.running.get() {
+        if self.is_running() {
             return;
         }
         if let Some(submit) = self.inner.submit.borrow_mut().take() {
@@ -71,5 +80,10 @@ impl<'a> CoroutineHandle<'a> {
             self.cx.push_task(|| fut.as_mut().unwrap().as_mut());
         }
     }
+
+    pub fn is_running(&self) -> bool {
+        self.inner.running.get()
+    }
+
     pub fn resume(&self) {}
 }

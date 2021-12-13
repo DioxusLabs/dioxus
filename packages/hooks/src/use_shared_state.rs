@@ -8,7 +8,7 @@ use std::{
 type ProvidedState<T> = RefCell<ProvidedStateInner<T>>;
 
 // Tracks all the subscribers to a shared State
-pub(crate) struct ProvidedStateInner<T> {
+pub struct ProvidedStateInner<T> {
     value: Rc<RefCell<T>>,
     notify_any: Rc<dyn Fn(ScopeId)>,
     consumers: HashSet<ScopeId>,
@@ -19,6 +19,14 @@ impl<T> ProvidedStateInner<T> {
         for consumer in self.consumers.iter() {
             (self.notify_any)(*consumer);
         }
+    }
+
+    pub fn write(&self) -> RefMut<T> {
+        self.value.borrow_mut()
+    }
+
+    pub fn read(&self) -> Ref<T> {
+        self.value.borrow()
     }
 }
 
@@ -114,10 +122,10 @@ impl<'a, T: 'static> UseSharedState<'a, T> {
     }
 
     pub fn notify_consumers(self) {
-        // if !self.needs_notification.get() {
-        self.root.borrow_mut().notify_consumers();
-        //     self.needs_notification.set(true);
-        // }
+        if !self.needs_notification.get() {
+            self.root.borrow_mut().notify_consumers();
+            self.needs_notification.set(true);
+        }
     }
 
     pub fn read_write(&self) -> (Ref<'_, T>, &Self) {
@@ -137,6 +145,10 @@ impl<'a, T: 'static> UseSharedState<'a, T> {
     /// Allows the ability to write the value without forcing a re-render
     pub fn write_silent(&self) -> RefMut<'_, T> {
         self.value.borrow_mut()
+    }
+
+    pub fn inner(&self) -> Rc<RefCell<ProvidedStateInner<T>>> {
+        self.root.clone()
     }
 }
 

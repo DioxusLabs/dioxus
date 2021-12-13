@@ -8,12 +8,12 @@ use dioxus_core::Context;
 pub fn use_ref<T: 'static>(cx: Context, f: impl FnOnce() -> T) -> UseRef<T> {
     cx.use_hook(
         |_| UseRefInner {
-            update_scheuled: Cell::new(false),
+            update_scheduled: Cell::new(false),
             update_callback: cx.schedule_update(),
             value: RefCell::new(f()),
         },
         |inner| {
-            inner.update_scheuled.set(false);
+            inner.update_scheduled.set(false);
             UseRef { inner }
         },
     )
@@ -23,7 +23,7 @@ pub struct UseRef<'a, T> {
     inner: &'a UseRefInner<T>,
 }
 struct UseRefInner<T> {
-    update_scheuled: Cell<bool>,
+    update_scheduled: Cell<bool>,
     update_callback: Rc<dyn Fn()>,
     value: RefCell<T>,
 }
@@ -54,8 +54,8 @@ impl<'a, T> UseRef<'a, T> {
     }
 
     pub fn needs_update(&self) {
-        if !self.inner.update_scheuled.get() {
-            self.inner.update_scheuled.set(true);
+        if !self.inner.update_scheduled.get() {
+            self.inner.update_scheduled.set(true);
             (self.inner.update_callback)();
         }
     }
