@@ -1,4 +1,4 @@
-use dioxus_core::{AnyContext, Context, Scope};
+use dioxus_core::{AnyContext, Scope};
 use futures::Future;
 use std::{
     cell::{Cell, RefCell},
