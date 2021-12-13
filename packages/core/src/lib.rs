@@ -25,16 +25,16 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    Attribute, Component, Context, DioxusElement, DomEdit, Element, ElementId, EventHandler,
-    EventPriority, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, Properties,
-    SchedulerMsg, ScopeId, UserEvent, VElement, VFragment, VNode, VirtualDom,
+    AnyContext, Attribute, Component, Context, DioxusElement, DomEdit, Element, ElementId,
+    EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory,
+    Properties, SchedulerMsg, Scope, ScopeId, UserEvent, VElement, VFragment, VNode, VirtualDom,
 };
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::innerlude::Context;
     pub use crate::innerlude::{
-        Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory, Scope,
+        AnyContext, Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory, Scope,
     };
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;

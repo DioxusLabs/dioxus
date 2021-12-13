@@ -1,4 +1,4 @@
-use dioxus_core::prelude::Context;
+use dioxus_core::prelude::*;
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     fmt::{Debug, Display},
@@ -50,9 +50,10 @@ use std::{
 /// }
 /// ```
 pub fn use_state<'a, T: 'static>(
-    cx: Context<'a>,
+    cx: &dyn AnyContext<'a>,
     initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
+    let cx = cx.get_scope();
     cx.use_hook(
         move |_| {
             let first_val = initial_state_fn();
