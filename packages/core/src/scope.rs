@@ -31,7 +31,33 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 ///     cx.render(rsx!{ div {"Hello, {props.name}"} })
 /// }
 /// ```
-pub type Context<'a> = &'a Scope;
+pub struct Context<'a, P: 'static> {
+    pub scope: &'a Scope,
+    pub props: &'a P,
+}
+impl<P> Clone for Context<'_, P> {
+    fn clone(&self) -> Self {
+        Self {
+            scope: self.scope,
+            props: self.props,
+        }
+    }
+}
+impl<P> Copy for Context<'_, P> {}
+impl<P> std::ops::Deref for Context<'_, P> {
+    type Target = Scope;
+    fn deref(&self) -> &Self::Target {
+        &self.scope
+    }
+}
+pub trait AnyContext<'a> {
+    fn get_scope(&self) -> &'a Scope;
+}
+impl<'a, P> AnyContext<'a> for Context<'a, P> {
+    fn get_scope(&self) -> &'a Scope {
+        &self.scope
+    }
+}
 
 /// A component's unique identifier.
 ///

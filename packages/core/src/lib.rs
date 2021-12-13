@@ -17,11 +17,11 @@ pub(crate) mod innerlude {
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::scope::*;
-    pub use crate::scopearena::*;
+    pub(crate) use crate::scopearena::*;
     pub use crate::virtual_dom::*;
 
     pub type Element = Option<VPortal>;
-    pub type Component<P> = for<'a> fn(Context<'a>, &'a P) -> Element;
+    pub type Component<P> = for<'a> fn(Context<'a, P>) -> Element;
 }
 
 pub use crate::innerlude::{

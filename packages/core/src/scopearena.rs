@@ -9,9 +9,9 @@ use std::{
 
 use crate::innerlude::*;
 
-pub type FcSlot = *const ();
+pub(crate) type FcSlot = *const ();
 
-pub struct Heuristic {
+pub(crate) struct Heuristic {
     hook_arena_size: usize,
     node_arena_size: usize,
 }
@@ -195,8 +195,6 @@ impl ScopeArena {
 
     pub fn try_remove(&self, id: &ScopeId) -> Option<()> {
         self.ensure_drop_safety(id);
-
-        // log::debug!("removing scope {:?}", id);
 
         // Safety:
         // - ensure_drop_safety ensures that no references to this scope are in use

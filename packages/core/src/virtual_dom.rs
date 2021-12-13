@@ -196,7 +196,12 @@ impl VirtualDom {
     ) -> Self {
         let scopes = ScopeArena::new(sender.clone());
 
-        let mut caller = Box::new(move |scp: &Scope| -> Element { root(scp, &root_props) });
+        let mut caller = Box::new(move |scp: &Scope| -> Element {
+            root(Context {
+                scope: scp,
+                props: &root_props,
+            })
+        });
         let caller_ref: *mut dyn Fn(&Scope) -> Element = caller.as_mut() as *mut _;
         let base_scope = scopes.new_with_key(root as _, caller_ref, None, ElementId(0), 0, 0);
 

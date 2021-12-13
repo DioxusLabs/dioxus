@@ -341,6 +341,7 @@ pub struct Listener<'bump> {
     pub(crate) callback: EventHandler<'bump>,
 }
 
+/// The callback based into element event listeners.
 pub struct EventHandler<'bump> {
     pub callback: &'bump RefCell<Option<ListenerCallback<'bump>>>,
 }
@@ -355,6 +356,7 @@ impl EventHandler<'_> {
         self.callback.replace(None);
     }
 }
+
 type ListenerCallback<'bump> = BumpBox<'bump, dyn FnMut(Arc<dyn Any + Send + Sync>) + 'bump>;
 
 impl Copy for EventHandler<'_> {}
@@ -552,7 +554,7 @@ impl<'a> NodeFactory<'a> {
 
     pub fn component<P>(
         &self,
-        component: fn(Context<'a>, &'a P) -> Element,
+        component: fn(Context<'a, P>) -> Element,
         props: P,
         key: Option<Arguments>,
     ) -> VNode<'a>
@@ -613,7 +615,7 @@ impl<'a> NodeFactory<'a> {
         let caller: &'a mut dyn Fn(&'a Scope) -> Element =
             bump.alloc(move |scope: &Scope| -> Element {
                 let props: &'_ P = unsafe { &*(bump_props as *const P) };
-                component(scope, props)
+                component(Context { scope, props })
             });
 
         let can_memoize = P::IS_STATIC;
@@ -723,22 +725,6 @@ impl<'a> NodeFactory<'a> {
 
         // TODO
         // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
-        //
-        // if cfg!(debug_assertions) {
-        //     if children.len() > 1 {
-        //         if children.last().unwrap().key().is_none() {
-        //             log::error!(
-        //                 r#"
-        // Warning: Each child in an array or iterator should have a unique "key" prop.
-        // Not providing a key will lead to poor performance with lists.
-        // See docs.rs/dioxus for more information.
-        // ---
-        // To help you identify where this error is coming from, we've generated a backtrace.
-        //                         "#,
-        //             );
-        //         }
-        //     }
-        // }
 
         let frag = VNode::Fragment(VFragment {
             children,

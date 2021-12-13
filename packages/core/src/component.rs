@@ -97,8 +97,8 @@ impl Properties for FragmentProps {
 ///
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment(cx: Context, props: &FragmentProps) -> Element {
-    cx.render(Some(LazyNodes::new(|f| f.fragment_from_iter(&props.0))))
+pub fn Fragment(cx: Context<FragmentProps>) -> Element {
+    cx.render(Some(LazyNodes::new(|f| f.fragment_from_iter(&cx.props.0))))
 }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
@@ -165,6 +165,6 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Context<'a>, &'a T) -> Element) -> T::Builder {
+pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Context<'a, T>) -> Element) -> T::Builder {
     T::builder()
 }
