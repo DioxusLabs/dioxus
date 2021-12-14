@@ -1,4 +1,4 @@
-use dioxus_core::{AnyContext, Scope};
+use dioxus_core::ScopeState;
 use futures::Future;
 use std::{
     cell::{Cell, RefCell},
@@ -7,10 +7,9 @@ use std::{
 };
 
 pub fn use_coroutine<'a, F: Future<Output = ()> + 'static>(
-    cx: &dyn AnyContext<'a>,
+    cx: &'a ScopeState,
     mut f: impl FnMut() -> F + 'a,
 ) -> CoroutineHandle<'a> {
-    let cx = cx.get_scope();
     cx.use_hook(
         move |_| State {
             running: Default::default(),
@@ -56,7 +55,7 @@ struct State {
 }
 
 pub struct CoroutineHandle<'a> {
-    cx: &'a Scope,
+    cx: &'a ScopeState,
     inner: &'a State,
 }
 impl Clone for CoroutineHandle<'_> {

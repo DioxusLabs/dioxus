@@ -31,11 +31,39 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 ///     cx.render(rsx!{ div {"Hello, {props.name}"} })
 /// }
 /// ```
-pub struct Context<'a, P: 'static> {
-    pub scope: &'a Scope,
+pub struct Scope<'a, P> {
+    pub scope: &'a ScopeState,
     pub props: &'a P,
 }
-impl<P> Clone for Context<'_, P> {
+
+impl<'a, P> Scope<'a, P> {
+    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
+    ///
+    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
+    ///
+    /// ## Example
+    ///
+    /// ```ignore
+    /// fn Component(cx: Scope, props: &Props) -> Element {
+    ///     // Lazy assemble the VNode tree
+    ///     let lazy_nodes = rsx!("hello world");
+    ///
+    ///     // Actually build the tree and allocate it
+    ///     cx.render(lazy_tree)
+    /// }
+    ///```
+    pub fn render(self, rsx: Option<LazyNodes<'a, '_>>) -> Option<VNode<'a>> {
+        let fac = NodeFactory {
+            bump: &self.scope.wip_frame().bump,
+        };
+        match rsx {
+            Some(s) => Some(s.call(fac)),
+            None => todo!(),
+        }
+    }
+}
+
+impl<P> Clone for Scope<'_, P> {
     fn clone(&self) -> Self {
         Self {
             scope: self.scope,
@@ -43,18 +71,10 @@ impl<P> Clone for Context<'_, P> {
         }
     }
 }
-impl<P> Copy for Context<'_, P> {}
-impl<P> std::ops::Deref for Context<'_, P> {
-    type Target = Scope;
+impl<P> Copy for Scope<'_, P> {}
+impl<P> std::ops::Deref for Scope<'_, P> {
+    type Target = ScopeState;
     fn deref(&self) -> &Self::Target {
-        &self.scope
-    }
-}
-pub trait AnyContext<'a> {
-    fn get_scope(&self) -> &'a Scope;
-}
-impl<'a, P> AnyContext<'a> for Context<'a, P> {
-    fn get_scope(&self) -> &'a Scope {
         &self.scope
     }
 }
@@ -76,8 +96,8 @@ pub struct ScopeId(pub usize);
 ///
 /// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
 /// use case they might have.
-pub struct Scope {
-    pub(crate) parent_scope: Option<*mut Scope>,
+pub struct ScopeState {
+    pub(crate) parent_scope: Option<*mut ScopeState>,
 
     pub(crate) container: ElementId,
 
@@ -93,7 +113,7 @@ pub struct Scope {
 
     pub(crate) frames: [BumpFrame; 2],
 
-    pub(crate) caller: *const dyn Fn(&Scope) -> Element,
+    pub(crate) caller: *const dyn Fn(&ScopeState) -> Element,
 
     pub(crate) items: RefCell<SelfReferentialItems<'static>>,
 
@@ -113,7 +133,7 @@ pub struct SelfReferentialItems<'a> {
 }
 
 // Public methods exposed to libraries and components
-impl Scope {
+impl ScopeState {
     /// Get the subtree ID that this scope belongs to.
     ///
     /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
@@ -342,36 +362,31 @@ impl Scope {
         items.tasks.len() - 1
     }
 
-    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
-    ///
-    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
-    ///
-    /// ## Example
-    ///
-    /// ```ignore
-    /// fn Component(cx: Scope, props: &Props) -> Element {
-    ///     // Lazy assemble the VNode tree
-    ///     let lazy_nodes = rsx!("hello world");
-    ///
-    ///     // Actually build the tree and allocate it
-    ///     cx.render(lazy_tree)
-    /// }
-    ///```
-    pub fn render<'src>(&'src self, rsx: Option<LazyNodes<'src, '_>>) -> Option<VPortal> {
-        let bump = &self.wip_frame().bump;
-
-        let owned_node: VNode<'src> = rsx.map(|f| f.call(NodeFactory { bump }))?;
-        let alloced_vnode: &'src mut VNode<'src> = bump.alloc(owned_node);
-        let node_ptr: *mut VNode<'src> = alloced_vnode as *mut _;
-
-        let node: *mut VNode<'static> = unsafe { std::mem::transmute(node_ptr) };
-
-        Some(VPortal {
-            scope_id: Cell::new(Some(self.our_arena_idx)),
-            link_idx: Cell::new(0),
-            node,
-        })
-    }
+    // /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
+    // ///
+    // /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
+    // ///
+    // /// ## Example
+    // ///
+    // /// ```ignore
+    // /// fn Component(cx: Scope, props: &Props) -> Element {
+    // ///     // Lazy assemble the VNode tree
+    // ///     let lazy_nodes = rsx!("hello world");
+    // ///
+    // ///     // Actually build the tree and allocate it
+    // ///     cx.render(lazy_tree)
+    // /// }
+    // ///```
+    // pub fn render<'src>(&self, rsx: Option<LazyNodes<'src, '_>>) -> Option<VNode<'src>> {
+    //     let fac = NodeFactory {
+    //         bump: &self.wip_frame().bump,
+    //     };
+    //     match rsx {
+    //         Some(s) => Some(s.call(fac)),
+    //         None => todo!(),
+    //     }
+    //     // rsx.map(|f| f.call(fac))
+    // }
 
     /// Store a value between renders
     ///
@@ -505,5 +520,5 @@ impl BumpFrame {
 
 #[test]
 fn sizeof() {
-    dbg!(std::mem::size_of::<Scope>());
+    dbg!(std::mem::size_of::<ScopeState>());
 }

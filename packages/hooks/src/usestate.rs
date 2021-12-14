@@ -50,10 +50,9 @@ use std::{
 /// }
 /// ```
 pub fn use_state<'a, T: 'static>(
-    cx: &dyn AnyContext<'a>,
+    cx: &'a ScopeState,
     initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
-    let cx = cx.get_scope();
     cx.use_hook(
         move |_| {
             let first_val = initial_state_fn();

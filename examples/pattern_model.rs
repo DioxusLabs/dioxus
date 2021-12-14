@@ -77,7 +77,7 @@ struct CalculatorKeyProps<'a> {
     children: ScopeChildren<'a>,
 }
 
-fn CalculatorKey<'a>((cx, props): Scope<'a, CalculatorKeyProps<'a>>) -> Element<'a> {
+fn CalculatorKey<'a>((cx, props): ScopeState<'a, CalculatorKeyProps<'a>>) -> Element<'a> {
     cx.render(rsx! {
         button {
             class: "calculator-key {props.name}"

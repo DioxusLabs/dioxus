@@ -24,9 +24,9 @@ pub(crate) struct ScopeArena {
     bump: Bump,
     pub pending_futures: RefCell<FxHashSet<ScopeId>>,
     scope_counter: Cell<usize>,
-    pub scopes: RefCell<FxHashMap<ScopeId, *mut Scope>>,
+    pub scopes: RefCell<FxHashMap<ScopeId, *mut ScopeState>>,
     pub heuristics: RefCell<FxHashMap<FcSlot, Heuristic>>,
-    free_scopes: RefCell<Vec<*mut Scope>>,
+    free_scopes: RefCell<Vec<*mut ScopeState>>,
     nodes: RefCell<Slab<*const VNode<'static>>>,
     pub(crate) sender: UnboundedSender<SchedulerMsg>,
 }
@@ -68,23 +68,23 @@ impl ScopeArena {
     /// Safety:
     /// - Obtaining a mutable refernece to any Scope is unsafe
     /// - Scopes use interior mutability when sharing data into components
-    pub(crate) fn get_scope(&self, id: &ScopeId) -> Option<&Scope> {
+    pub(crate) fn get_scope(&self, id: &ScopeId) -> Option<&ScopeState> {
         unsafe { self.scopes.borrow().get(id).map(|f| &**f) }
     }
 
-    pub(crate) unsafe fn get_scope_raw(&self, id: &ScopeId) -> Option<*mut Scope> {
+    pub(crate) unsafe fn get_scope_raw(&self, id: &ScopeId) -> Option<*mut ScopeState> {
         self.scopes.borrow().get(id).copied()
     }
 
-    pub(crate) unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<&mut Scope> {
+    pub(crate) unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<&mut ScopeState> {
         self.scopes.borrow().get(id).map(|s| &mut **s)
     }
 
     pub(crate) fn new_with_key(
         &self,
         fc_ptr: *const (),
-        caller: *const dyn Fn(&Scope) -> Element,
-        parent_scope: Option<*mut Scope>,
+        caller: *const dyn Fn(&ScopeState) -> Element,
+        parent_scope: Option<*mut ScopeState>,
         container: ElementId,
         height: u32,
         subtree: u32,
@@ -160,7 +160,7 @@ impl ScopeArena {
                 unsafe { std::mem::transmute(vnode as *mut VNode) }
             });
 
-            let scope = self.bump.alloc(Scope {
+            let scope = self.bump.alloc(ScopeState {
                 sender: self.sender.clone(),
                 container,
                 our_arena_idx: new_scope_id,
@@ -330,18 +330,9 @@ impl ScopeArena {
             scope.wip_frame().nodes.borrow_mut().clear();
         }
 
-        let render: &dyn Fn(&Scope) -> Element = unsafe { &*scope.caller };
+        let render: &dyn Fn(&ScopeState) -> Element = unsafe { &*scope.caller };
 
         if let Some(link) = render(scope) {
-            // right now, it's a panic to render a nodelink from another scope
-            // todo: enable this. it should (reasonably) work even if it doesnt make much sense
-            assert_eq!(link.scope_id.get(), Some(*id));
-
-            // nodelinks are not assigned when called and must be done so through the create/diff phase
-            // however, we need to link this one up since it will never be used in diffing
-            scope.wip_frame().assign_nodelink(&link);
-            debug_assert_eq!(scope.wip_frame().nodes.borrow().len(), 1);
-
             if !scope.items.borrow().tasks.is_empty() {
                 self.pending_futures.borrow_mut().insert(*id);
             }

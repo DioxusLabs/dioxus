@@ -3,10 +3,9 @@ use std::{
     rc::Rc,
 };
 
-use dioxus_core::AnyContext;
+use dioxus_core::ScopeState;
 
-pub fn use_ref<'a, T: 'static>(cx: &dyn AnyContext<'a>, f: impl FnOnce() -> T) -> UseRef<'a, T> {
-    let cx = cx.get_scope();
+pub fn use_ref<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) -> UseRef<'a, T> {
     cx.use_hook(
         |_| UseRefInner {
             update_scheduled: Cell::new(false),

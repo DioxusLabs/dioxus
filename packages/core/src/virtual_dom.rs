@@ -196,13 +196,18 @@ impl VirtualDom {
     ) -> Self {
         let scopes = ScopeArena::new(sender.clone());
 
-        let mut caller = Box::new(move |scp: &Scope| -> Element {
-            root(Context {
-                scope: scp,
-                props: &root_props,
-            })
-        });
-        let caller_ref: *mut dyn Fn(&Scope) -> Element = caller.as_mut() as *mut _;
+        let root_props = Box::new(root_props);
+        let props_ref: *const P = root_props.as_ref();
+        let mut caller: Box<dyn Fn(&ScopeState) -> Element> =
+            Box::new(move |scp: &ScopeState| -> Element {
+                let p = unsafe { &*props_ref };
+                todo!()
+                // root(Context {
+                //     scope: scp,
+                //     props: p,
+                // })
+            });
+        let caller_ref: *mut dyn Fn(&ScopeState) -> Element = caller.as_mut();
         let base_scope = scopes.new_with_key(root as _, caller_ref, None, ElementId(0), 0, 0);
 
         let pending_messages = VecDeque::new();
@@ -213,7 +218,7 @@ impl VirtualDom {
             scopes: Box::new(scopes),
             base_scope,
             receiver,
-            _root_props: caller,
+            _root_props: root_props,
             pending_messages,
             dirty_scopes,
             sender,
@@ -226,7 +231,7 @@ impl VirtualDom {
     /// directly.
     ///
     /// # Example
-    pub fn base_scope(&self) -> &Scope {
+    pub fn base_scope(&self) -> &ScopeState {
         self.get_scope(&self.base_scope).unwrap()
     }
 
@@ -236,7 +241,7 @@ impl VirtualDom {
     ///
     ///
     ///
-    pub fn get_scope<'a>(&'a self, id: &ScopeId) -> Option<&'a Scope> {
+    pub fn get_scope<'a>(&'a self, id: &ScopeId) -> Option<&'a ScopeState> {
         self.scopes.get_scope(id)
     }
 

@@ -1370,7 +1370,7 @@ impl<'bump> DiffState<'bump> {
     }
 
     /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope(&mut self, listener: &'bump Listener<'bump>, scope: &Scope) {
+    fn attach_listener_to_scope(&mut self, listener: &'bump Listener<'bump>, scope: &ScopeState) {
         let long_listener = unsafe { std::mem::transmute(listener) };
         scope.items.borrow_mut().listeners.push(long_listener)
     }

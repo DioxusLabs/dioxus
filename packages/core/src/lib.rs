@@ -20,21 +20,21 @@ pub(crate) mod innerlude {
     pub(crate) use crate::scopearena::*;
     pub use crate::virtual_dom::*;
 
-    pub type Element = Option<VPortal>;
-    pub type Component<P> = for<'a> fn(Context<'a, P>) -> Element;
+    pub type Element<'a> = Option<VNode<'a>>;
+    pub type Component<P> = for<'a> fn(Scope<'a, P>) -> Element<'a>;
 }
 
 pub use crate::innerlude::{
-    AnyContext, Attribute, Component, Context, DioxusElement, DomEdit, Element, ElementId,
-    EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory,
-    Properties, SchedulerMsg, Scope, ScopeId, UserEvent, VElement, VFragment, VNode, VirtualDom,
+    Attribute, Component, DioxusElement, DomEdit, Element, ElementId, EventHandler, EventPriority,
+    IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, Properties, SchedulerMsg, Scope,
+    ScopeId, ScopeState, UserEvent, VElement, VFragment, VNode, VirtualDom,
 };
 
 pub mod prelude {
     pub use crate::component::{fc_to_builder, Fragment, Properties};
-    pub use crate::innerlude::Context;
+    pub use crate::innerlude::Scope;
     pub use crate::innerlude::{
-        AnyContext, Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory, Scope,
+        Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory, ScopeState,
     };
     pub use crate::nodes::VNode;
     pub use crate::VirtualDom;

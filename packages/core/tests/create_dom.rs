@@ -220,7 +220,7 @@ fn create_components() {
         children: Element,
     }
 
-    fn Child(cx: Context, props: &ChildProps) -> Element {
+    fn Child(cx: Scope, props: &ChildProps) -> Element {
         cx.render(rsx! {
             h1 {}
             div { {&props.children} }

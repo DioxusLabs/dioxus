@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{Context, Element, Properties, Scope, ScopeId},
+    innerlude::{Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -412,7 +412,7 @@ pub struct VComponent<'src> {
     pub(crate) bump_props: *const (),
 
     // during the "teardown" process we'll take the caller out so it can be dropped properly
-    pub(crate) caller: &'src dyn Fn(&'src Scope) -> Element,
+    pub(crate) caller: &'src dyn Fn(&'src ScopeState) -> Element,
 
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
@@ -554,7 +554,7 @@ impl<'a> NodeFactory<'a> {
 
     pub fn component<P>(
         &self,
-        component: fn(Context<'a, P>) -> Element,
+        component: fn(Scope<'a, P>) -> Element,
         props: P,
         key: Option<Arguments>,
     ) -> VNode<'a>
@@ -612,10 +612,10 @@ impl<'a> NodeFactory<'a> {
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller: &'a mut dyn Fn(&'a Scope) -> Element =
-            bump.alloc(move |scope: &Scope| -> Element {
+        let caller: &'a mut dyn Fn(&'a ScopeState) -> Element =
+            bump.alloc(move |scope: &ScopeState| -> Element {
                 let props: &'_ P = unsafe { &*(bump_props as *const P) };
-                component(Context { scope, props })
+                component(Scope { scope, props })
             });
 
         let can_memoize = P::IS_STATIC;
@@ -707,7 +707,7 @@ impl<'a> NodeFactory<'a> {
     pub fn create_children(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
-    ) -> Element {
+    ) -> Element<'a> {
         let bump = self.bump;
         let mut nodes = bumpalo::collections::Vec::new_in(bump);
 
@@ -726,16 +726,10 @@ impl<'a> NodeFactory<'a> {
         // TODO
         // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
 
-        let frag = VNode::Fragment(VFragment {
+        Some(VNode::Fragment(VFragment {
             children,
             key: None,
-        });
-        let ptr = self.bump.alloc(frag) as *const _;
-        Some(VPortal {
-            link_idx: Default::default(),
-            scope_id: Default::default(),
-            node: unsafe { std::mem::transmute(ptr) },
-        })
+        }))
     }
 }
 

@@ -4,7 +4,7 @@
 //!
 //! In these cases, we provide `use_model` - a convenient way of abstracting over some state and async functions.
 
-use dioxus_core::prelude::AnyContext;
+use dioxus_core::prelude::ScopeState;
 use futures::Future;
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
@@ -13,11 +13,7 @@ use std::{
     rc::Rc,
 };
 
-pub fn use_model<'a, T: 'static>(
-    cx: &dyn AnyContext<'a>,
-    f: impl FnOnce() -> T,
-) -> UseModel<'a, T> {
-    let cx = cx.get_scope();
+pub fn use_model<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) -> UseModel<'a, T> {
     cx.use_hook(
         |_| UseModelInner {
             update_scheduled: Cell::new(false),
@@ -81,11 +77,10 @@ impl<'a, T: 'static> UseModel<'a, T> {
 
 // keep a coroutine going
 pub fn use_model_coroutine<'a, T, F: Future<Output = ()> + 'static>(
-    cx: &dyn AnyContext<'a>,
+    cx: &'a ScopeState,
     _model: UseModel<T>,
     _f: impl FnOnce(AppModels) -> F,
 ) -> UseModelCoroutine {
-    let cx = cx.get_scope();
     cx.use_hook(
         |_| {
             //

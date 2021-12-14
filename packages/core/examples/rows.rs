@@ -50,7 +50,7 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row(cx: Context, props: &RowProps) -> Element {
+fn Row(cx: Scope, props: &RowProps) -> Element {
     let [adj, col, noun] = props.label.0;
     cx.render(rsx! {
         tr {

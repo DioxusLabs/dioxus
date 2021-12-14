@@ -1,4 +1,4 @@
-use dioxus_core::{AnyContext, Scope, ScopeId};
+use dioxus_core::{ScopeId, ScopeState};
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     collections::HashSet,
@@ -59,8 +59,7 @@ impl<T> ProvidedStateInner<T> {
 ///
 ///
 ///
-pub fn use_shared_state<'a, T: 'static>(cx: &dyn AnyContext<'a>) -> Option<UseSharedState<'a, T>> {
-    let cx = cx.get_scope();
+pub fn use_shared_state<'a, T: 'static>(cx: &'a ScopeState) -> Option<UseSharedState<'a, T>> {
     cx.use_hook(
         |_| {
             let scope_id = cx.scope_id();
@@ -111,7 +110,7 @@ impl<T> Drop for SharedStateInner<T> {
 }
 
 pub struct UseSharedState<'a, T: 'static> {
-    pub(crate) cx: &'a Scope,
+    pub(crate) cx: &'a ScopeState,
     pub(crate) value: &'a Rc<RefCell<T>>,
     pub(crate) root: &'a Rc<RefCell<ProvidedStateInner<T>>>,
     pub(crate) needs_notification: &'a Cell<bool>,
@@ -176,8 +175,7 @@ where
 ///
 ///
 ///
-pub fn use_provide_state<'a, T: 'static>(cx: &dyn AnyContext<'a>, f: impl FnOnce() -> T) {
-    let cx = cx.get_scope();
+pub fn use_provide_state<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) {
     cx.use_hook(
         |_| {
             let state: ProvidedState<T> = RefCell::new(ProvidedStateInner {

@@ -120,7 +120,7 @@ struct CalculatorKeyProps<'a> {
     children: Element,
 }
 
-fn CalculatorKey<'a>(cx: Context, props: &CalculatorKeyProps) -> Element {
+fn CalculatorKey<'a>(cx: Scope, props: &CalculatorKeyProps) -> Element {
     rsx!(cx, button {
         class: "calculator-key {props.name}"
         onclick: {props.onclick}

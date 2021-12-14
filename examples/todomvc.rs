@@ -85,7 +85,7 @@ pub struct TodoEntryProps {
     todo: Rc<TodoItem>,
 }
 
-pub fn TodoEntry(cx: Context, props: &TodoEntryProps) -> Element {
+pub fn TodoEntry(cx: Scope, props: &TodoEntryProps) -> Element {
     let mut is_editing = use_state(cx, || false);
     let mut contents = use_state(cx, || String::from(""));
     let todo = &props.todo;
