@@ -21,7 +21,7 @@ fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
 
 #[test]
 fn test_original_diff() {
-    static APP: Component<()> = |cx, props| {
+    static APP: Component<()> = |cx| {
         cx.render(rsx! {
             div {
                 div {
@@ -57,7 +57,7 @@ fn test_original_diff() {
 
 #[test]
 fn create() {
-    static APP: Component<()> = |cx, props| {
+    static APP: Component<()> = |cx| {
         cx.render(rsx! {
             div {
                 div {
@@ -120,7 +120,7 @@ fn create() {
 
 #[test]
 fn create_list() {
-    static APP: Component<()> = |cx, props| {
+    static APP: Component<()> = |cx| {
         cx.render(rsx! {
             {(0..3).map(|f| rsx!{ div {
                 "hello"
@@ -169,7 +169,7 @@ fn create_list() {
 
 #[test]
 fn create_simple() {
-    static APP: Component<()> = |cx, props| {
+    static APP: Component<()> = |cx| {
         cx.render(rsx! {
             div {}
             div {}
@@ -207,7 +207,7 @@ fn create_simple() {
 }
 #[test]
 fn create_components() {
-    static App: Component<()> = |cx, props| {
+    static App: Component<()> = |cx| {
         cx.render(rsx! {
             Child { "abc1" }
             Child { "abc2" }
@@ -215,15 +215,16 @@ fn create_components() {
         })
     };
 
-    #[derive(Props, PartialEq)]
-    struct ChildProps {
-        children: Element,
+    #[derive(Props)]
+    struct ChildProps<'a> {
+        children: Element<'a>,
     }
 
-    fn Child(cx: Scope, props: &ChildProps) -> Element {
+    fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
+        todo!();
         cx.render(rsx! {
             h1 {}
-            div { {&props.children} }
+            // div { {&cx.props.children} }
             p {}
         })
     }
@@ -273,7 +274,7 @@ fn create_components() {
 }
 #[test]
 fn anchors() {
-    static App: Component<()> = |cx, props| {
+    static App: Component<()> = |cx| {
         cx.render(rsx! {
             {true.then(|| rsx!{ div { "hello" } })}
             {false.then(|| rsx!{ div { "goodbye" } })}

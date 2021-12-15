@@ -5,7 +5,7 @@
 //! if the type supports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
-use crate::innerlude::{Element, LazyNodes, Scope, VPortal};
+use crate::innerlude::{Element, LazyNodes, Scope};
 
 pub struct FragmentProps<'a>(Element<'a>);
 pub struct FragmentBuilder<'a, const BUILT: bool>(Element<'a>);

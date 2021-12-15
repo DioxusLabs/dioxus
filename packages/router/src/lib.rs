@@ -66,7 +66,7 @@ impl<R: Routable> RouterService<R> {
 /// This hould only be used once per app
 ///
 /// You can manually parse the route if you want, but the derived `parse` method on `Routable` will also work just fine
-pub fn use_router<R: Routable>(cx: Scope, mut parse: impl FnMut(&str) -> R + 'static) -> &R {
+pub fn use_router<R: Routable>(cx: &ScopeState, mut parse: impl FnMut(&str) -> R + 'static) -> &R {
     // for the web, attach to the history api
     cx.use_hook(
         |f| {
@@ -133,12 +133,12 @@ pub fn use_router<R: Routable>(cx: Scope, mut parse: impl FnMut(&str) -> R + 'st
     )
 }
 
-pub fn use_router_service<R: Routable>(cx: Scope) -> Option<&Rc<RouterService<R>>> {
+pub fn use_router_service<R: Routable>(cx: &ScopeState) -> Option<&Rc<RouterService<R>>> {
     cx.use_hook(|_| cx.consume_state::<RouterService<R>>(), |f| f.as_ref())
 }
 
 #[derive(Props)]
-pub struct LinkProps<R: Routable> {
+pub struct LinkProps<'a, R: Routable> {
     to: R,
 
     /// The url that gets pushed to the history stack
@@ -157,16 +157,16 @@ pub struct LinkProps<R: Routable> {
     href: fn(&R) -> String,
 
     #[builder(default)]
-    children: Element,
+    children: Element<'a>,
 }
 
-pub fn Link<R: Routable>(cx: Scope, props: &LinkProps<R>) -> Element {
-    let service = use_router_service::<R>(cx)?;
+pub fn Link<'a, R: Routable>(cx: Scope<'a, LinkProps<'a, R>>) -> Element {
+    let service = use_router_service::<R>(&cx)?;
     cx.render(rsx! {
         a {
-            href: format_args!("{}", (props.href)(&props.to)),
-            onclick: move |_| service.push_route(props.to.clone()),
-            {&props.children},
+            href: format_args!("{}", (cx.props.href)(&cx.props.to)),
+            onclick: move |_| service.push_route(cx.props.to.clone()),
+            // todo!() {&cx.props.children},
         }
     })
 }

@@ -239,10 +239,10 @@ impl<'bump> DiffStack<'bump> {
 }
 
 impl<'bump> DiffState<'bump> {
-    pub fn diff_scope(&mut self, id: &ScopeId) {
+    pub fn diff_scope(&mut self, id: ScopeId) {
         let (old, new) = (self.scopes.wip_head(id), self.scopes.fin_head(id));
         self.stack.push(DiffInstruction::Diff { old, new });
-        self.stack.scope_stack.push(*id);
+        self.stack.scope_stack.push(id);
         let scope = self.scopes.get_scope(id).unwrap();
         self.stack.element_stack.push(scope.container);
         self.work(|| false);
@@ -286,12 +286,6 @@ impl<'bump> DiffState<'bump> {
             VNode::Text(_) | VNode::Placeholder(_) => {
                 self.mutations.push_root(node.mounted_id());
                 1
-            }
-
-            VNode::Portal(linked) => {
-                let node = unsafe { &*linked.node };
-                let node: &VNode = unsafe { std::mem::transmute(node) };
-                self.push_all_nodes(node)
             }
 
             VNode::Fragment(_) | VNode::Component(_) => {
@@ -357,7 +351,6 @@ impl<'bump> DiffState<'bump> {
             VNode::Element(element) => self.create_element_node(element, node),
             VNode::Fragment(frag) => self.create_fragment_node(frag),
             VNode::Component(component) => self.create_component_node(*component),
-            VNode::Portal(linked) => self.create_linked_node(linked),
         }
     }
 
@@ -406,7 +399,7 @@ impl<'bump> DiffState<'bump> {
         self.stack.add_child_count(1);
 
         if let Some(cur_scope_id) = self.stack.current_scope() {
-            let scope = self.scopes.get_scope(&cur_scope_id).unwrap();
+            let scope = self.scopes.get_scope(cur_scope_id).unwrap();
 
             for listener in *listeners {
                 self.attach_listener_to_scope(listener, scope);
@@ -443,11 +436,11 @@ impl<'bump> DiffState<'bump> {
         let parent_idx = self.stack.current_scope().unwrap();
 
         // Insert a new scope into our component list
-        let parent_scope = self.scopes.get_scope(&parent_idx).unwrap();
+        let parent_scope = self.scopes.get_scope(parent_idx).unwrap();
         let height = parent_scope.height + 1;
         let subtree = parent_scope.subtree.get();
 
-        let parent_scope = unsafe { self.scopes.get_scope_raw(&parent_idx) };
+        let parent_scope = unsafe { self.scopes.get_scope_raw(parent_idx) };
         let caller = unsafe { std::mem::transmute(vcomponent.caller as *const _) };
         let fc_ptr = vcomponent.user_fc;
 
@@ -461,7 +454,7 @@ impl<'bump> DiffState<'bump> {
         vcomponent.associated_scope.set(Some(new_idx));
 
         if !vcomponent.can_memoize {
-            let cur_scope = self.scopes.get_scope(&parent_idx).unwrap();
+            let cur_scope = self.scopes.get_scope(parent_idx).unwrap();
             let extended = unsafe { std::mem::transmute(vcomponent) };
             cur_scope.items.borrow_mut().borrowed_props.push(extended);
         } else {
@@ -469,7 +462,7 @@ impl<'bump> DiffState<'bump> {
         }
 
         // TODO: add noderefs to current noderef list Noderefs
-        let _new_component = self.scopes.get_scope(&new_idx).unwrap();
+        let _new_component = self.scopes.get_scope(new_idx).unwrap();
 
         log::debug!(
             "initializing component {:?} with height {:?}",
@@ -478,9 +471,9 @@ impl<'bump> DiffState<'bump> {
         );
 
         // Run the scope for one iteration to initialize it
-        if self.scopes.run_scope(&new_idx) {
+        if self.scopes.run_scope(new_idx) {
             // Take the node that was just generated from running the component
-            let nextnode = self.scopes.fin_head(&new_idx);
+            let nextnode = self.scopes.fin_head(new_idx);
             self.stack.create_component(new_idx, nextnode);
 
             // todo: subtrees
@@ -491,16 +484,6 @@ impl<'bump> DiffState<'bump> {
 
         // Finally, insert this scope as a seen node.
         self.mutations.dirty_scopes.insert(new_idx);
-    }
-
-    fn create_linked_node(&mut self, link: &'bump VPortal) {
-        if link.scope_id.get().is_none() {
-            if let Some(cur_scope) = self.stack.current_scope() {
-                link.scope_id.set(Some(cur_scope));
-            }
-        }
-        let node: &'bump VNode<'static> = unsafe { &*link.node };
-        self.create_node(unsafe { std::mem::transmute(node) });
     }
 
     // =================================
@@ -520,12 +503,11 @@ impl<'bump> DiffState<'bump> {
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
             (Placeholder(old), Placeholder(new)) => new.dom_id.set(old.dom_id.get()),
             (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
-            (Portal(old), Portal(new)) => self.diff_linked_nodes(old, new),
 
             // Anything else is just a basic replace and create
             (
-                Portal(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
-                Portal(_) | Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
+                Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
+                Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
             ) => self
                 .stack
                 .create_node(new_node, MountType::Replace { old: old_node }),
@@ -613,7 +595,7 @@ impl<'bump> DiffState<'bump> {
         //
         // TODO: take a more efficient path than this
         if let Some(cur_scope_id) = self.stack.current_scope() {
-            let scope = self.scopes.get_scope(&cur_scope_id).unwrap();
+            let scope = self.scopes.get_scope(cur_scope_id).unwrap();
 
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
@@ -736,7 +718,7 @@ impl<'bump> DiffState<'bump> {
             // make sure the component's caller function is up to date
             let scope = unsafe {
                 self.scopes
-                    .get_scope_mut(&scope_addr)
+                    .get_scope_mut(scope_addr)
                     .unwrap_or_else(|| panic!("could not find {:?}", scope_addr))
             };
 
@@ -745,10 +727,10 @@ impl<'bump> DiffState<'bump> {
             // React doesn't automatically memoize, but we do.
             let props_are_the_same = old.comparator.unwrap();
 
-            if (self.force_diff || !props_are_the_same(new)) && self.scopes.run_scope(&scope_addr) {
+            if (self.force_diff || !props_are_the_same(new)) && self.scopes.run_scope(scope_addr) {
                 self.diff_node(
-                    self.scopes.wip_head(&scope_addr),
-                    self.scopes.fin_head(&scope_addr),
+                    self.scopes.wip_head(scope_addr),
+                    self.scopes.fin_head(scope_addr),
                 );
             }
 
@@ -771,19 +753,6 @@ impl<'bump> DiffState<'bump> {
         debug_assert!(!new.children.is_empty());
 
         self.diff_children(old.children, new.children);
-    }
-
-    fn diff_linked_nodes(&mut self, old: &'bump VPortal, new: &'bump VPortal) {
-        if !std::ptr::eq(old.node, new.node) {
-            // if the ptrs are the same then theyr're the same
-            let old: &VNode = unsafe { std::mem::transmute(&*old.node) };
-            let new: &VNode = unsafe { std::mem::transmute(&*new.node) };
-            self.diff_node(old, new);
-        }
-
-        if new.scope_id.get().is_none() {
-            todo!("attach the link to the scope - when children are not created");
-        }
     }
 
     // =============================================
@@ -1226,16 +1195,12 @@ impl<'bump> DiffState<'bump> {
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
                 VNode::Placeholder(t) => break t.dom_id.get(),
-                VNode::Portal(l) => {
-                    let node: &VNode = unsafe { std::mem::transmute(&*l.node) };
-                    self.find_last_element(node);
-                }
                 VNode::Fragment(frag) => {
                     search_node = frag.children.last();
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    search_node = Some(self.scopes.root_node(&scope_id));
+                    search_node = Some(self.scopes.root_node(scope_id));
                 }
             }
         }
@@ -1252,11 +1217,7 @@ impl<'bump> DiffState<'bump> {
                 }
                 VNode::Component(el) => {
                     let scope_id = el.associated_scope.get().unwrap();
-                    search_node = Some(self.scopes.root_node(&scope_id));
-                }
-                VNode::Portal(link) => {
-                    let node = unsafe { std::mem::transmute(&*link.node) };
-                    search_node = Some(node);
+                    search_node = Some(self.scopes.root_node(scope_id));
                 }
                 VNode::Text(t) => break t.dom_id.get(),
                 VNode::Element(t) => break t.dom_id.get(),
@@ -1292,17 +1253,12 @@ impl<'bump> DiffState<'bump> {
             }
 
             VNode::Component(c) => {
-                let node = self.scopes.fin_head(&c.associated_scope.get().unwrap());
+                let node = self.scopes.fin_head(c.associated_scope.get().unwrap());
                 self.replace_node(node, nodes_created);
 
                 let scope_id = c.associated_scope.get().unwrap();
                 log::debug!("Destroying scope {:?}", scope_id);
-                self.scopes.try_remove(&scope_id).unwrap();
-            }
-
-            VNode::Portal(l) => {
-                let node: &'bump VNode<'bump> = unsafe { std::mem::transmute(&*l.node) };
-                self.replace_node(node, nodes_created);
+                self.scopes.try_remove(scope_id).unwrap();
             }
         }
     }
@@ -1349,11 +1305,6 @@ impl<'bump> DiffState<'bump> {
                     self.remove_nodes(f.children, gen_muts);
                 }
 
-                VNode::Portal(l) => {
-                    let node = unsafe { std::mem::transmute(&*l.node) };
-                    self.remove_nodes(Some(node), gen_muts);
-                }
-
                 VNode::Component(c) => {
                     self.destroy_vomponent(c, gen_muts);
                 }
@@ -1363,10 +1314,10 @@ impl<'bump> DiffState<'bump> {
 
     fn destroy_vomponent(&mut self, vc: &VComponent, gen_muts: bool) {
         let scope_id = vc.associated_scope.get().unwrap();
-        let root = self.scopes.root_node(&scope_id);
+        let root = self.scopes.root_node(scope_id);
         self.remove_nodes(Some(root), gen_muts);
         log::debug!("Destroying scope {:?}", scope_id);
-        self.scopes.try_remove(&scope_id).unwrap();
+        self.scopes.try_remove(scope_id).unwrap();
     }
 
     /// Adds a listener closure to a scope during diff.

@@ -68,16 +68,16 @@ impl ScopeArena {
     /// Safety:
     /// - Obtaining a mutable refernece to any Scope is unsafe
     /// - Scopes use interior mutability when sharing data into components
-    pub(crate) fn get_scope(&self, id: &ScopeId) -> Option<&ScopeState> {
-        unsafe { self.scopes.borrow().get(id).map(|f| &**f) }
+    pub(crate) fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
+        unsafe { self.scopes.borrow().get(&id).map(|f| &**f) }
     }
 
-    pub(crate) unsafe fn get_scope_raw(&self, id: &ScopeId) -> Option<*mut ScopeState> {
-        self.scopes.borrow().get(id).copied()
+    pub(crate) unsafe fn get_scope_raw(&self, id: ScopeId) -> Option<*mut ScopeState> {
+        self.scopes.borrow().get(&id).copied()
     }
 
-    pub(crate) unsafe fn get_scope_mut(&self, id: &ScopeId) -> Option<&mut ScopeState> {
-        self.scopes.borrow().get(id).map(|s| &mut **s)
+    pub(crate) unsafe fn get_scope_mut(&self, id: ScopeId) -> Option<&mut ScopeState> {
+        self.scopes.borrow().get(&id).map(|s| &mut **s)
     }
 
     pub(crate) fn new_with_key(
@@ -102,27 +102,27 @@ impl ScopeArena {
             scope.our_arena_idx = new_scope_id;
             scope.container = container;
 
-            scope.frames[0].nodes.get_mut().push({
-                let vnode = scope.frames[0]
-                    .bump
-                    .alloc(VNode::Text(scope.frames[0].bump.alloc(VText {
-                        dom_id: Default::default(),
-                        is_static: false,
-                        text: "",
-                    })));
-                unsafe { std::mem::transmute(vnode as *mut VNode) }
-            });
+            // scope.frames[0].nodes.get_mut().push({
+            //     let vnode = scope.frames[0]
+            //         .bump
+            //         .alloc(VNode::Text(scope.frames[0].bump.alloc(VText {
+            //             dom_id: Default::default(),
+            //             is_static: false,
+            //             text: "",
+            //         })));
+            //     unsafe { std::mem::transmute(vnode as *mut VNode) }
+            // });
 
-            scope.frames[1].nodes.get_mut().push({
-                let vnode = scope.frames[1]
-                    .bump
-                    .alloc(VNode::Text(scope.frames[1].bump.alloc(VText {
-                        dom_id: Default::default(),
-                        is_static: false,
-                        text: "",
-                    })));
-                unsafe { std::mem::transmute(vnode as *mut VNode) }
-            });
+            // scope.frames[1].nodes.get_mut().push({
+            //     let vnode = scope.frames[1]
+            //         .bump
+            //         .alloc(VNode::Text(scope.frames[1].bump.alloc(VText {
+            //             dom_id: Default::default(),
+            //             is_static: false,
+            //             text: "",
+            //         })));
+            //     unsafe { std::mem::transmute(vnode as *mut VNode) }
+            // });
 
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
             debug_assert!(any_item.is_none());
@@ -138,27 +138,28 @@ impl ScopeArena {
 
             let mut frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
 
-            frames[0].nodes.get_mut().push({
-                let vnode = frames[0]
-                    .bump
-                    .alloc(VNode::Text(frames[0].bump.alloc(VText {
-                        dom_id: Default::default(),
-                        is_static: false,
-                        text: "",
-                    })));
-                unsafe { std::mem::transmute(vnode as *mut VNode) }
-            });
+            // todo - add the node
+            // frames[0].nodes.get_mut().push({
+            //     let vnode = frames[0]
+            //         .bump
+            //         .alloc(VNode::Text(frames[0].bump.alloc(VText {
+            //             dom_id: Default::default(),
+            //             is_static: false,
+            //             text: "",
+            //         })));
+            //     unsafe { std::mem::transmute(vnode as *mut VNode) }
+            // });
 
-            frames[1].nodes.get_mut().push({
-                let vnode = frames[1]
-                    .bump
-                    .alloc(VNode::Text(frames[1].bump.alloc(VText {
-                        dom_id: Default::default(),
-                        is_static: false,
-                        text: "",
-                    })));
-                unsafe { std::mem::transmute(vnode as *mut VNode) }
-            });
+            // frames[1].nodes.get_mut().push({
+            //     let vnode = frames[1]
+            //         .bump
+            //         .alloc(VNode::Text(frames[1].bump.alloc(VText {
+            //             dom_id: Default::default(),
+            //             is_static: false,
+            //             text: "",
+            //         })));
+            //     unsafe { std::mem::transmute(vnode as *mut VNode) }
+            // });
 
             let scope = self.bump.alloc(ScopeState {
                 sender: self.sender.clone(),
@@ -193,13 +194,13 @@ impl ScopeArena {
         new_scope_id
     }
 
-    pub fn try_remove(&self, id: &ScopeId) -> Option<()> {
+    pub fn try_remove(&self, id: ScopeId) -> Option<()> {
         self.ensure_drop_safety(id);
 
         // Safety:
         // - ensure_drop_safety ensures that no references to this scope are in use
         // - this raw pointer is removed from the map
-        let scope = unsafe { &mut *self.scopes.borrow_mut().remove(id).unwrap() };
+        let scope = unsafe { &mut *self.scopes.borrow_mut().remove(&id).unwrap() };
 
         // we're just reusing scopes so we need to clear it out
         scope.hook_vals.get_mut().drain(..).for_each(|state| {
@@ -216,8 +217,8 @@ impl ScopeArena {
         scope.is_subtree_root.set(false);
         scope.subtree.set(0);
 
-        scope.frames[0].nodes.get_mut().clear();
-        scope.frames[1].nodes.get_mut().clear();
+        // scope.frames[0].nodes.get_mut().clear();
+        // scope.frames[1].nodes.get_mut().clear();
 
         scope.frames[0].bump.reset();
         scope.frames[1].bump.reset();
@@ -271,7 +272,7 @@ impl ScopeArena {
     ///
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
-    pub(crate) fn ensure_drop_safety(&self, scope_id: &ScopeId) {
+    pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
         if let Some(scope) = self.get_scope(scope_id) {
             let mut items = scope.items.borrow_mut();
 
@@ -284,7 +285,7 @@ impl ScopeArena {
                     .get()
                     .expect("VComponents should be associated with a valid Scope");
 
-                self.ensure_drop_safety(&scope_id);
+                self.ensure_drop_safety(scope_id);
 
                 let mut drop_props = comp.drop_props.borrow_mut().take().unwrap();
                 drop_props();
@@ -298,7 +299,7 @@ impl ScopeArena {
         }
     }
 
-    pub(crate) fn run_scope(&self, id: &ScopeId) -> bool {
+    pub(crate) fn run_scope(&self, id: ScopeId) -> bool {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
@@ -327,15 +328,19 @@ impl ScopeArena {
             debug_assert!(items.tasks.is_empty());
 
             // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
-            scope.wip_frame().nodes.borrow_mut().clear();
+            // scope.wip_frame().nodes
         }
 
         let render: &dyn Fn(&ScopeState) -> Element = unsafe { &*scope.caller };
 
-        if let Some(link) = render(scope) {
+        if let Some(node) = render(scope) {
             if !scope.items.borrow().tasks.is_empty() {
-                self.pending_futures.borrow_mut().insert(*id);
+                self.pending_futures.borrow_mut().insert(id);
             }
+
+            let frame = scope.wip_frame();
+            let node = frame.bump.alloc(node);
+            frame.nodes.set(unsafe { std::mem::transmute(node) });
 
             // make the "wip frame" contents the "finished frame"
             // any future dipping into completed nodes after "render" will go through "fin head"
@@ -371,24 +376,23 @@ impl ScopeArena {
     }
 
     // The head of the bumpframe is the first linked NodeLink
-    pub fn wip_head(&self, id: &ScopeId) -> &VNode {
+    pub fn wip_head(&self, id: ScopeId) -> &VNode {
         let scope = self.get_scope(id).unwrap();
         let frame = scope.wip_frame();
         let nodes = frame.nodes.borrow();
-        let node: &VNode = unsafe { &**nodes.get(0).unwrap() };
+        let node = unsafe { &*frame.nodes.get() };
         unsafe { std::mem::transmute::<&VNode, &VNode>(node) }
     }
 
     // The head of the bumpframe is the first linked NodeLink
-    pub fn fin_head(&self, id: &ScopeId) -> &VNode {
+    pub fn fin_head(&self, id: ScopeId) -> &VNode {
         let scope = self.get_scope(id).unwrap();
         let frame = scope.fin_frame();
-        let nodes = frame.nodes.borrow();
-        let node: &VNode = unsafe { &**nodes.get(0).unwrap() };
+        let node = unsafe { &*frame.nodes.get() };
         unsafe { std::mem::transmute::<&VNode, &VNode>(node) }
     }
 
-    pub fn root_node(&self, id: &ScopeId) -> &VNode {
+    pub fn root_node(&self, id: ScopeId) -> &VNode {
         self.fin_head(id)
     }
 }

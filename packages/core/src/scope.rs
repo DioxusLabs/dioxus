@@ -36,33 +36,7 @@ pub struct Scope<'a, P> {
     pub props: &'a P,
 }
 
-impl<'a, P> Scope<'a, P> {
-    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
-    ///
-    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
-    ///
-    /// ## Example
-    ///
-    /// ```ignore
-    /// fn Component(cx: Scope, props: &Props) -> Element {
-    ///     // Lazy assemble the VNode tree
-    ///     let lazy_nodes = rsx!("hello world");
-    ///
-    ///     // Actually build the tree and allocate it
-    ///     cx.render(lazy_tree)
-    /// }
-    ///```
-    pub fn render(self, rsx: Option<LazyNodes<'a, '_>>) -> Option<VNode<'a>> {
-        let fac = NodeFactory {
-            bump: &self.scope.wip_frame().bump,
-        };
-        match rsx {
-            Some(s) => Some(s.call(fac)),
-            None => todo!(),
-        }
-    }
-}
-
+impl<P> Copy for Scope<'_, P> {}
 impl<P> Clone for Scope<'_, P> {
     fn clone(&self) -> Self {
         Self {
@@ -71,9 +45,10 @@ impl<P> Clone for Scope<'_, P> {
         }
     }
 }
-impl<P> Copy for Scope<'_, P> {}
-impl<P> std::ops::Deref for Scope<'_, P> {
-    type Target = ScopeState;
+
+impl<'a, P> std::ops::Deref for Scope<'a, P> {
+    // rust will auto deref again to the original 'a lifetime at the call site
+    type Target = &'a ScopeState;
     fn deref(&self) -> &Self::Target {
         &self.scope
     }
@@ -362,31 +337,31 @@ impl ScopeState {
         items.tasks.len() - 1
     }
 
-    // /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
-    // ///
-    // /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
-    // ///
-    // /// ## Example
-    // ///
-    // /// ```ignore
-    // /// fn Component(cx: Scope, props: &Props) -> Element {
-    // ///     // Lazy assemble the VNode tree
-    // ///     let lazy_nodes = rsx!("hello world");
-    // ///
-    // ///     // Actually build the tree and allocate it
-    // ///     cx.render(lazy_tree)
-    // /// }
-    // ///```
-    // pub fn render<'src>(&self, rsx: Option<LazyNodes<'src, '_>>) -> Option<VNode<'src>> {
-    //     let fac = NodeFactory {
-    //         bump: &self.wip_frame().bump,
-    //     };
-    //     match rsx {
-    //         Some(s) => Some(s.call(fac)),
-    //         None => todo!(),
-    //     }
-    //     // rsx.map(|f| f.call(fac))
-    // }
+    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
+    ///
+    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
+    ///
+    /// ## Example
+    ///
+    /// ```ignore
+    /// fn Component(cx: Scope, props: &Props) -> Element {
+    ///     // Lazy assemble the VNode tree
+    ///     let lazy_nodes = rsx!("hello world");
+    ///
+    ///     // Actually build the tree and allocate it
+    ///     cx.render(lazy_tree)
+    /// }
+    ///```
+    pub fn render<'src>(&'src self, rsx: Option<LazyNodes<'src, '_>>) -> Option<VNode<'src>> {
+        let fac = NodeFactory {
+            bump: &self.wip_frame().bump,
+        };
+        match rsx {
+            Some(s) => Some(s.call(fac)),
+            None => todo!(),
+        }
+        // rsx.map(|f| f.call(fac))
+    }
 
     /// Store a value between renders
     ///
@@ -492,7 +467,7 @@ impl ScopeState {
 
 pub(crate) struct BumpFrame {
     pub bump: Bump,
-    pub nodes: RefCell<Vec<*const VNode<'static>>>,
+    pub nodes: Cell<*const VNode<'static>>,
 }
 impl BumpFrame {
     pub(crate) fn new(capacity: usize) -> Self {
@@ -504,17 +479,8 @@ impl BumpFrame {
             is_static: false,
         });
         let node = bump.alloc(VNode::Text(unsafe { std::mem::transmute(node) }));
-        let nodes = RefCell::new(vec![node as *const _]);
+        let nodes = Cell::new(node as *const _);
         Self { bump, nodes }
-    }
-
-    pub(crate) fn assign_nodelink(&self, node: &VPortal) {
-        let mut nodes = self.nodes.borrow_mut();
-
-        let len = nodes.len();
-        nodes.push(node.node);
-
-        node.link_idx.set(len);
     }
 }
 
