@@ -8,7 +8,7 @@ documentation = "https://dioxuslabs.com"
 keywords = [
     "dom",
     "ui",
-    "user interface",
+    "userinterface",
     "gui",
     "react",
     "state",

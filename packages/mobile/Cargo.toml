@@ -9,7 +9,7 @@ documentation = "https://dioxuslabs.com"
 keywords = [
     "dom",
     "ui",
-    "user interface",
+    "userinterface",
     "gui",
     "react",
     "state",
@@ -23,7 +23,7 @@ keywords = [
 [dependencies]
 anyhow = "1.0"
 # cacao = { git = "https://github.com/ryanmcgrath/cacao" }
-dioxus-core = { path = "../core", version ="^0.1.3"}
+dioxus-core = { path = "../core", version = "^0.1.3" }
 log = "0.4.14"
 serde = "1.0.126"
 serde_json = "1.0.64"
