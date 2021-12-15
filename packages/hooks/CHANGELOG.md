@@ -35,13 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-52c7154897111b570918127ffe3285bb1d5951a0/> really big bug around hooks
  - <csr-id-601078f9cf78a58d7502a377676ac94f3cf037bf/> desktop and mobile
  - <csr-id-478255f40d4de1d2e3f3cc9b6d758b30ff394b39/> all the bugs!
+ - <csr-id-a33f7701fcf5f917fea8719253650b5ad92554fd/> tags
 
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 60 commits contributed to the release over the course of 335 calendar days.
- - 58 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 62 commits contributed to the release over the course of 335 calendar days.
+ - 59 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -51,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - tags ([`a33f770`](https://github.comgit//DioxusLabs/dioxus/commit/a33f7701fcf5f917fea8719253650b5ad92554fd))
+    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`3a706ac`](https://github.comgit//DioxusLabs/dioxus/commit/3a706ac4168db137723bea90d7a0058190adfc3c))
     - update cargo tomls ([`e4c06ce`](https://github.comgit//DioxusLabs/dioxus/commit/e4c06ce8e893779d2aad0883a1bb27d193bc5985))
     - update local examples and docs to support new syntaxes ([`4de16c4`](https://github.comgit//DioxusLabs/dioxus/commit/4de16c4779648e591b3869b5df31271ae603c812))
     - docs ([`3ddf395`](https://github.comgit//DioxusLabs/dioxus/commit/3ddf395772aa24d04cf4e35bbb3a0027c8f1c7dd))
