@@ -1,10 +1,25 @@
 [package]
 name = "dioxus-core"
 version = "0.1.3"
-authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
+authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
-"license" = "MIT/Apache-2.0"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = [
+    "dom",
+    "ui",
+    "user interface",
+    "gui",
+    "react",
+    "state",
+    "management",
+    "wasm",
+    "web",
+    "ssr",
+]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -47,7 +62,7 @@ dioxus-html = { path = "../html" }
 fern = { version = "0.6.0", features = ["colored"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
 simple_logger = "1.13.0"
-dioxus-core-macro = { path = "../core-macro", version ="^0.1.2"}
+dioxus-core-macro = { path = "../core-macro", version = "^0.1.2" }
 # dioxus-hooks = { path = "../hooks" }
 criterion = "0.3.5"
 
