@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v0.1.0 (2021-12-15)
+## v0.1.1 (2021-12-15)
 
 ### Documentation
 
@@ -78,4 +78,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - more examples and docs ([`7fbaf69`](https://github.comgit//DioxusLabs/dioxus/commit/7fbaf69cabbdde712bb3fd9e4b2a5dc18b9390e9))
     - docs ([`f5683a2`](https://github.comgit//DioxusLabs/dioxus/commit/f5683a23464992ecace463a61414795b5a2c58c8))
 </details>
+
+## v0.1.0 (2021-12-15)
+
+### Documentation
+
+ - <csr-id-4de16c4779648e591b3869b5df31271ae603c812/> update local examples and docs to support new syntaxes
+ - <csr-id-78007445f944f259170307d840e0f16242b7b4b6/> improve docs
+ - <csr-id-583fdfa5618e11d660985b97e570d4503be2ff49/> big updates to the reference
+ - <csr-id-bf21c82de04e25daee60a06232b9a16b640508f2/> lib.rs docs
+ - <csr-id-70cd46dbb2a689ae2d512e142b8aee9c80798430/> move around examples
+
+### New Features
+
+ - <csr-id-8acdd2ea830b995b608d8bac2ef527db8d40e662/> it compiles once more
+ - <csr-id-9726a065b0d4fb1ede5b53a2ddd58c855e51539f/> massage lifetimes
+ - <csr-id-4a72b3140bd244da602deada1eeecded65ff5848/> amazingly awesome error handling
+ - <csr-id-3bedcb93cacec5bdf134adc38ff02eadbf96c1c6/> svgs working in webview
+ - <csr-id-a2c7d17b0595769f60bc1c2bbf7cbe32cec37486/> mvoe away from compound context
+ - <csr-id-de9f61bcf48c0d6e35e46c337b72a713c9f9f7d2/> more suspended nodes!
+ - <csr-id-4091846934b4b3b2bc03d3ca8aaf7712aebd4e36/> add aria
+ - <csr-id-7aec40d57e78ec13ff3a90ca8149521cbf1d9ff2/> enable arbitrary body in rsx! macro
 
