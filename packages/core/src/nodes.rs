@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{Context, Element, Properties, Scope, ScopeId},
+    innerlude::{Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -114,22 +114,6 @@ pub enum VNode<'src> {
     /// }
     /// ```
     Placeholder(&'src VPlaceholder),
-
-    /// A VNode that is actually a pointer to some nodes rather than the nodes directly. Useful when rendering portals
-    /// or eliding lifetimes on VNodes through runtime checks.
-    ///
-    /// Linked VNodes can only be made through the [`Context::render`] method
-    ///
-    /// Typically, linked nodes are found *not* in a VNode. When NodeLinks are in a VNode, the NodeLink was passed into
-    /// an `rsx!` call.
-    ///
-    /// # Example
-    /// ```rust, ignore
-    /// let mut vdom = VirtualDom::new();
-    ///
-    /// let node: NodeLink = vdom.render_vnode(rsx!( "hello" ));
-    /// ```
-    Portal(VPortal),
 }
 
 impl<'src> VNode<'src> {
@@ -141,7 +125,6 @@ impl<'src> VNode<'src> {
             VNode::Fragment(f) => f.key,
             VNode::Text(_t) => None,
             VNode::Placeholder(_f) => None,
-            VNode::Portal(_c) => None,
         }
     }
 
@@ -160,7 +143,6 @@ impl<'src> VNode<'src> {
             VNode::Text(el) => el.dom_id.get(),
             VNode::Element(el) => el.dom_id.get(),
             VNode::Placeholder(el) => el.dom_id.get(),
-            VNode::Portal(_) => None,
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
         }
@@ -184,11 +166,6 @@ impl<'src> VNode<'src> {
                 children: f.children,
                 key: f.key,
             }),
-            VNode::Portal(c) => VNode::Portal(VPortal {
-                scope_id: c.scope_id.clone(),
-                link_idx: c.link_idx.clone(),
-                node: c.node,
-            }),
         }
     }
 }
@@ -207,7 +184,6 @@ impl Debug for VNode<'_> {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
             VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
-            VNode::Portal(c) => write!(s, "VNode::VCached {{ scope_id: {:?} }}", c.scope_id.get()),
         }
     }
 }
@@ -341,6 +317,7 @@ pub struct Listener<'bump> {
     pub(crate) callback: EventHandler<'bump>,
 }
 
+/// The callback based into element event listeners.
 pub struct EventHandler<'bump> {
     pub callback: &'bump RefCell<Option<ListenerCallback<'bump>>>,
 }
@@ -355,6 +332,7 @@ impl EventHandler<'_> {
         self.callback.replace(None);
     }
 }
+
 type ListenerCallback<'bump> = BumpBox<'bump, dyn FnMut(Arc<dyn Any + Send + Sync>) + 'bump>;
 
 impl Copy for EventHandler<'_> {}
@@ -363,32 +341,6 @@ impl Clone for EventHandler<'_> {
         Self {
             callback: self.callback,
         }
-    }
-}
-
-/// A cached node is a "pointer" to a "rendered" node in a particular scope
-///
-/// It does not provide direct access to the node, so it doesn't carry any lifetime information with it
-///
-/// It is used during the diffing/rendering process as a runtime key into an existing set of nodes. The "render" key
-/// is essentially a unique key to guarantee safe usage of the Node.
-///
-/// Linked VNodes can only be made through the [`Context::render`] method
-///
-/// Typically, NodeLinks are found *not* in a VNode. When NodeLinks are in a VNode, the NodeLink was passed into
-/// an `rsx!` call.
-///
-/// todo: remove the raw pointer and use runtime checks instead
-#[derive(Debug)]
-pub struct VPortal {
-    pub(crate) link_idx: Cell<usize>,
-    pub(crate) scope_id: Cell<Option<ScopeId>>,
-    pub(crate) node: *const VNode<'static>,
-}
-
-impl PartialEq for VPortal {
-    fn eq(&self, other: &Self) -> bool {
-        self.node == other.node
     }
 }
 
@@ -410,7 +362,7 @@ pub struct VComponent<'src> {
     pub(crate) bump_props: *const (),
 
     // during the "teardown" process we'll take the caller out so it can be dropped properly
-    pub(crate) caller: &'src dyn Fn(&'src Scope) -> Element,
+    pub(crate) caller: &'src dyn Fn(&'src ScopeState) -> Element,
 
     pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
 
@@ -552,7 +504,7 @@ impl<'a> NodeFactory<'a> {
 
     pub fn component<P>(
         &self,
-        component: fn(Context<'a>, &'a P) -> Element,
+        component: fn(Scope<'a, P>) -> Element,
         props: P,
         key: Option<Arguments>,
     ) -> VNode<'a>
@@ -610,10 +562,10 @@ impl<'a> NodeFactory<'a> {
 
         let key = key.map(|f| self.raw_text(f).0);
 
-        let caller: &'a mut dyn Fn(&'a Scope) -> Element =
-            bump.alloc(move |scope: &Scope| -> Element {
+        let caller: &'a mut dyn Fn(&'a ScopeState) -> Element =
+            bump.alloc(move |scope: &ScopeState| -> Element {
                 let props: &'_ P = unsafe { &*(bump_props as *const P) };
-                component(scope, props)
+                component(Scope { scope, props })
             });
 
         let can_memoize = P::IS_STATIC;
@@ -705,7 +657,7 @@ impl<'a> NodeFactory<'a> {
     pub fn create_children(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
-    ) -> Element {
+    ) -> Element<'a> {
         let bump = self.bump;
         let mut nodes = bumpalo::collections::Vec::new_in(bump);
 
@@ -723,33 +675,11 @@ impl<'a> NodeFactory<'a> {
 
         // TODO
         // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
-        //
-        // if cfg!(debug_assertions) {
-        //     if children.len() > 1 {
-        //         if children.last().unwrap().key().is_none() {
-        //             log::error!(
-        //                 r#"
-        // Warning: Each child in an array or iterator should have a unique "key" prop.
-        // Not providing a key will lead to poor performance with lists.
-        // See docs.rs/dioxus for more information.
-        // ---
-        // To help you identify where this error is coming from, we've generated a backtrace.
-        //                         "#,
-        //             );
-        //         }
-        //     }
-        // }
 
-        let frag = VNode::Fragment(VFragment {
+        Some(VNode::Fragment(VFragment {
             children,
             key: None,
-        });
-        let ptr = self.bump.alloc(frag) as *const _;
-        Some(VPortal {
-            link_idx: Default::default(),
-            scope_id: Default::default(),
-            node: unsafe { std::mem::transmute(ptr) },
-        })
+        }))
     }
 }
 
@@ -845,48 +775,15 @@ impl IntoVNode<'_> for Arguments<'_> {
     }
 }
 
-// called cx.render from a helper function
-impl IntoVNode<'_> for Option<VPortal> {
-    fn into_vnode(self, _cx: NodeFactory) -> VNode {
-        match self {
-            Some(node) => VNode::Portal(node),
-            None => {
-                todo!()
-            }
-        }
+impl<'a> IntoVNode<'a> for &Option<VNode<'a>> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        let r = self.as_ref().map(|f| f.decouple());
+        cx.fragment_from_iter(r)
     }
 }
 
-// essentially passing elements through props
-// just build a new element in place
-impl IntoVNode<'_> for &Option<VPortal> {
-    fn into_vnode(self, _cx: NodeFactory) -> VNode {
-        match self {
-            Some(node) => VNode::Portal(VPortal {
-                link_idx: node.link_idx.clone(),
-                scope_id: node.scope_id.clone(),
-                node: node.node,
-            }),
-            None => {
-                //
-                todo!()
-            }
-        }
-    }
-}
-
-impl IntoVNode<'_> for VPortal {
-    fn into_vnode(self, _cx: NodeFactory) -> VNode {
-        VNode::Portal(self)
-    }
-}
-
-impl IntoVNode<'_> for &VPortal {
-    fn into_vnode(self, _cx: NodeFactory) -> VNode {
-        VNode::Portal(VPortal {
-            link_idx: self.link_idx.clone(),
-            scope_id: self.scope_id.clone(),
-            node: self.node,
-        })
+impl<'a> IntoVNode<'a> for &VNode<'a> {
+    fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
+        self.decouple()
     }
 }

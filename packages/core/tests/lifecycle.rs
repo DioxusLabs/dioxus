@@ -22,8 +22,8 @@ fn manual_diffing() {
         value: Shared<&'static str>,
     }
 
-    static App: Component<AppProps> = |cx, props| {
-        let val = props.value.lock().unwrap();
+    static App: Component<AppProps> = |cx| {
+        let val = cx.props.value.lock().unwrap();
         cx.render(rsx! { div { "{val}" } })
     };
 
@@ -46,8 +46,8 @@ fn manual_diffing() {
 
 #[test]
 fn events_generate() {
-    static App: Component<()> = |cx, _| {
-        let mut count = use_state(cx, || 0);
+    static App: Component<()> = |cx| {
+        let mut count = use_state(&cx, || 0);
 
         let inner = match *count {
             0 => {
@@ -105,8 +105,8 @@ fn events_generate() {
 
 #[test]
 fn components_generate() {
-    static App: Component<()> = |cx, _| {
-        let mut render_phase = use_state(cx, || 0);
+    static App: Component<()> = |cx| {
+        let mut render_phase = use_state(&cx, || 0);
         render_phase += 1;
 
         cx.render(match *render_phase {
@@ -122,7 +122,7 @@ fn components_generate() {
         })
     };
 
-    static Child: Component<()> = |cx, _| {
+    static Child: Component<()> = |cx| {
         cx.render(rsx! {
             h1 {}
         })
@@ -141,7 +141,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -153,7 +153,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -165,7 +165,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -174,13 +174,13 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [CreatePlaceholder { root: 5 }, ReplaceWith { root: 4, m: 1 },]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -192,7 +192,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -208,7 +208,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -222,8 +222,8 @@ fn components_generate() {
 #[test]
 fn component_swap() {
     // simple_logger::init();
-    static App: Component<()> = |cx, _| {
-        let mut render_phase = use_state(cx, || 0);
+    static App: Component<()> = |cx| {
+        let mut render_phase = use_state(&cx, || 0);
         render_phase += 1;
 
         cx.render(match *render_phase {
@@ -261,7 +261,7 @@ fn component_swap() {
         })
     };
 
-    static NavBar: Component<()> = |cx, _| {
+    static NavBar: Component<()> = |cx| {
         println!("running navbar");
         cx.render(rsx! {
             h1 {
@@ -271,7 +271,7 @@ fn component_swap() {
         })
     };
 
-    static NavLink: Component<()> = |cx, _| {
+    static NavLink: Component<()> = |cx| {
         println!("running navlink");
         cx.render(rsx! {
             h1 {
@@ -280,7 +280,7 @@ fn component_swap() {
         })
     };
 
-    static Dashboard: Component<()> = |cx, _| {
+    static Dashboard: Component<()> = |cx| {
         println!("running dashboard");
         cx.render(rsx! {
             div {
@@ -289,7 +289,7 @@ fn component_swap() {
         })
     };
 
-    static Results: Component<()> = |cx, _| {
+    static Results: Component<()> = |cx| {
         println!("running results");
         cx.render(rsx! {
             div {

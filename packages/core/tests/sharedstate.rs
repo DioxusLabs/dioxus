@@ -13,12 +13,12 @@ mod test_logging;
 fn shared_state_test() {
     struct MySharedState(&'static str);
 
-    static App: Component<()> = |cx, props| {
+    static App: Component<()> = |cx| {
         cx.provide_state(MySharedState("world!"));
         cx.render(rsx!(Child {}))
     };
 
-    static Child: Component<()> = |cx, props| {
+    static Child: Component<()> = |cx| {
         let shared = cx.consume_state::<MySharedState>()?;
         cx.render(rsx!("Hello, {shared.0}"))
     };

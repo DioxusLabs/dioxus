@@ -105,7 +105,8 @@ use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 pub struct VirtualDom {
     base_scope: ScopeId,
 
-    _root_props: Box<dyn Any>,
+    // it's stored here so the props are dropped when the VirtualDom is dropped
+    _root_caller: Box<dyn for<'r> Fn(&'r ScopeState) -> Element<'r> + 'static>,
 
     scopes: Box<ScopeArena>,
 
@@ -132,7 +133,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// fn Example(cx: Context, props: &()) -> Element  {
+    /// fn Example(cx: Scope<()>) -> Element  {
     ///     cx.render(rsx!( div { "hello world" } ))
     /// }
     ///
@@ -161,8 +162,8 @@ impl VirtualDom {
     ///     name: &'static str
     /// }
     ///
-    /// fn Example(cx: Context, props: &SomeProps) -> Element  {
-    ///     cx.render(rsx!{ div{ "hello {cx.name}" } })
+    /// fn Example(cx: Scope<SomeProps>) -> Element  {
+    ///     cx.render(rsx!{ div{ "hello {cx.props.name}" } })
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
@@ -194,21 +195,36 @@ impl VirtualDom {
         sender: UnboundedSender<SchedulerMsg>,
         receiver: UnboundedReceiver<SchedulerMsg>,
     ) -> Self {
-        let scopes = ScopeArena::new(sender.clone());
+        // move these two things onto the heap so we have stable ptrs
+        let scopes = Box::new(ScopeArena::new(sender.clone()));
+        let root_props = Box::new(root_props);
 
-        let mut caller = Box::new(move |scp: &Scope| -> Element { root(scp, &root_props) });
-        let caller_ref: *mut dyn Fn(&Scope) -> Element = caller.as_mut() as *mut _;
-        let base_scope = scopes.new_with_key(root as _, caller_ref, None, ElementId(0), 0, 0);
+        // create the root caller which will properly drop its props when the VirtualDom is dropped
+        let mut _root_caller: Box<dyn for<'r> Fn(&'r ScopeState) -> Element<'r> + 'static> =
+            Box::new(move |scope: &ScopeState| -> Element {
+                // Safety: The props at this pointer can never be moved.
+                // Also, this closure will never be ran when the VirtualDom is destroyed.
+                // This is where the root lifetime of the VirtualDom originates.
+                let props: *const P = root_props.as_ref();
+                let props = unsafe { &*props };
+                root(Scope { scope, props })
+            });
 
-        let pending_messages = VecDeque::new();
+        // safety: the raw pointer is aliased or used after this point.
+        let caller: *mut dyn Fn(&ScopeState) -> Element = _root_caller.as_mut();
+        let base_scope = scopes.new_with_key(root as _, caller, None, ElementId(0), 0, 0);
+
         let mut dirty_scopes = IndexSet::new();
         dirty_scopes.insert(base_scope);
 
+        // todo: add a pending message to the scheduler to start the scheduler?
+        let pending_messages = VecDeque::new();
+
         Self {
-            scopes: Box::new(scopes),
+            scopes,
             base_scope,
             receiver,
-            _root_props: caller,
+            _root_caller,
             pending_messages,
             dirty_scopes,
             sender,
@@ -221,17 +237,17 @@ impl VirtualDom {
     /// directly.
     ///
     /// # Example
-    pub fn base_scope(&self) -> &Scope {
-        self.get_scope(&self.base_scope).unwrap()
+    pub fn base_scope(&self) -> &ScopeState {
+        self.get_scope(self.base_scope).unwrap()
     }
 
-    /// Get the [`Scope`] for a component given its [`ScopeId`]
+    /// Get the [`ScopeState`] for a component given its [`ScopeId`]
     ///
     /// # Example
     ///
     ///
     ///
-    pub fn get_scope<'a>(&'a self, id: &ScopeId) -> Option<&'a Scope> {
+    pub fn get_scope<'a>(&'a self, id: ScopeId) -> Option<&'a ScopeState> {
         self.scopes.get_scope(id)
     }
 
@@ -388,11 +404,11 @@ impl VirtualDom {
 
             // Sort the scopes by height. Theoretically, we'll de-duplicate scopes by height
             self.dirty_scopes
-                .retain(|id| scopes.get_scope(id).is_some());
+                .retain(|id| scopes.get_scope(*id).is_some());
 
             self.dirty_scopes.sort_by(|a, b| {
-                let h1 = scopes.get_scope(a).unwrap().height;
-                let h2 = scopes.get_scope(b).unwrap().height;
+                let h1 = scopes.get_scope(*a).unwrap().height;
+                let h2 = scopes.get_scope(*b).unwrap().height;
                 h1.cmp(&h2).reverse()
             });
 
@@ -400,15 +416,13 @@ impl VirtualDom {
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
 
-                    if self.scopes.run_scope(&scopeid) {
-                        let (old, new) = (
-                            self.scopes.wip_head(&scopeid),
-                            self.scopes.fin_head(&scopeid),
-                        );
+                    if self.scopes.run_scope(scopeid) {
+                        let (old, new) =
+                            (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
                         diff_state.stack.push(DiffInstruction::Diff { new, old });
                         diff_state.stack.scope_stack.push(scopeid);
 
-                        let scope = scopes.get_scope(&scopeid).unwrap();
+                        let scope = scopes.get_scope(scopeid).unwrap();
                         diff_state.stack.element_stack.push(scope.container);
                     }
                 }
@@ -455,10 +469,10 @@ impl VirtualDom {
         let mut diff_state = DiffState::new(&self.scopes);
 
         let scope_id = self.base_scope;
-        if self.scopes.run_scope(&scope_id) {
+        if self.scopes.run_scope(scope_id) {
             diff_state
                 .stack
-                .create_node(self.scopes.fin_head(&scope_id), MountType::Append);
+                .create_node(self.scopes.fin_head(scope_id), MountType::Append);
 
             diff_state.stack.element_stack.push(ElementId(0));
             diff_state.stack.scope_stack.push(scope_id);
@@ -497,7 +511,7 @@ impl VirtualDom {
     ///
     /// let edits = dom.diff();
     /// ```
-    pub fn hard_diff<'a>(&'a mut self, scope_id: &ScopeId) -> Option<Mutations<'a>> {
+    pub fn hard_diff<'a>(&'a mut self, scope_id: ScopeId) -> Option<Mutations<'a>> {
         let mut diff_machine = DiffState::new(&self.scopes);
         if self.scopes.run_scope(scope_id) {
             diff_machine.force_diff = true;
@@ -519,7 +533,7 @@ impl VirtualDom {
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
     pub fn render_vnodes<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> &'a VNode<'a> {
-        let scope = self.scopes.get_scope(&self.base_scope).unwrap();
+        let scope = self.scopes.get_scope(self.base_scope).unwrap();
         let frame = scope.wip_frame();
         let factory = NodeFactory { bump: &frame.bump };
         let node = lazy_nodes.unwrap().call(factory);
@@ -731,7 +745,7 @@ impl<'a> Future for PollTasks<'a> {
         let mut scopes_to_clear: SmallVec<[_; 10]> = smallvec::smallvec![];
 
         // Poll every scope manually
-        for fut in self.0.pending_futures.borrow().iter() {
+        for fut in self.0.pending_futures.borrow().iter().copied() {
             let scope = self.0.get_scope(fut).expect("Scope should never be moved");
 
             let mut items = scope.items.borrow_mut();
@@ -746,7 +760,7 @@ impl<'a> Future for PollTasks<'a> {
             }
 
             if unfinished_tasks.is_empty() {
-                scopes_to_clear.push(*fut);
+                scopes_to_clear.push(fut);
             }
 
             items.tasks.extend(unfinished_tasks.drain(..));

@@ -9,7 +9,7 @@ fn main() {
     let _ = VirtualDom::new(App);
 }
 
-fn App(cx: Context, _props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
     //
     cx.render(rsx!(
         div {
@@ -18,11 +18,7 @@ fn App(cx: Context, _props: &()) -> Element {
     ))
 }
 
-struct ChildProps<'a> {
-    click_handler: EventHandler<'a>,
-}
-
-fn Child(cx: Context, _props: &()) -> Element {
+fn Child(cx: Scope<()>) -> Element {
     //
     cx.render(rsx!(
         div {

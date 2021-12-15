@@ -61,7 +61,7 @@ struct HorseyProps<'a> {
     children: ScopeChildren<'a>,
 }
 
-fn Horsey<'a>((cx, props): Scope<'a, HorseyProps<'a>>) -> Element {
+fn Horsey<'a>((cx, props): ScopeState<'a, HorseyProps<'a>>) -> Element {
     cx.render(rsx! {
         div {
             button { "pause" }

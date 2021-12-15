@@ -5,17 +5,20 @@
 //! if the type supports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
-use crate::innerlude::{Context, Element, LazyNodes, VPortal};
+use crate::{
+    innerlude::{Element, Scope},
+    LazyNodes,
+};
 
-pub struct FragmentProps(Element);
-pub struct FragmentBuilder<const BUILT: bool>(Element);
-impl FragmentBuilder<false> {
-    pub fn children(self, children: Option<VPortal>) -> FragmentBuilder<true> {
+pub struct FragmentProps<'a>(Element<'a>);
+pub struct FragmentBuilder<'a, const BUILT: bool>(Element<'a>);
+impl<'a> FragmentBuilder<'a, false> {
+    pub fn children(self, children: Element<'a>) -> FragmentBuilder<'a, true> {
         FragmentBuilder(children)
     }
 }
-impl<const A: bool> FragmentBuilder<A> {
-    pub fn build(self) -> FragmentProps {
+impl<'a, const A: bool> FragmentBuilder<'a, A> {
+    pub fn build(self) -> FragmentProps<'a> {
         FragmentProps(self.0)
     }
 }
@@ -60,8 +63,8 @@ impl<const A: bool> FragmentBuilder<A> {
 ///     })
 /// }
 /// ```
-impl Properties for FragmentProps {
-    type Builder = FragmentBuilder<false>;
+impl<'a> Properties for FragmentProps<'a> {
+    type Builder = FragmentBuilder<'a, false>;
     const IS_STATIC: bool = false;
     fn builder() -> Self::Builder {
         FragmentBuilder(None)
@@ -97,8 +100,9 @@ impl Properties for FragmentProps {
 ///
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment(cx: Context, props: &FragmentProps) -> Element {
-    cx.render(Some(LazyNodes::new(|f| f.fragment_from_iter(&props.0))))
+pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
+    let i = cx.props.0.as_ref().map(|f| f.decouple());
+    cx.render(Some(LazyNodes::new(|f| f.fragment_from_iter(i))))
 }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
@@ -165,6 +169,6 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Context<'a>, &'a T) -> Element) -> T::Builder {
+pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
     T::builder()
 }

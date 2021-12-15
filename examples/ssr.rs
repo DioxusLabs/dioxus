@@ -21,6 +21,6 @@ static App: Component<()> = |cx, props| {
 struct MyProps<'a> {
     text: &'a str,
 }
-fn App2(cx: Context, props: &MyProps) -> Element {
+fn App2(cx: Scope, props: &MyProps) -> Element {
     None
 }

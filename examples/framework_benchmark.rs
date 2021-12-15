@@ -95,7 +95,7 @@ struct ActionButtonProps<'a> {
     onclick: &'a dyn Fn(),
 }
 
-fn ActionButton(cx: Context, props: &ActionButtonProps) -> Element {
+fn ActionButton(cx: Scope, props: &ActionButtonProps) -> Element {
     rsx!(cx, div { class: "col-sm-6 smallpad"
         button { class:"btn btn-primary btn-block", r#type: "button", id: "{props.id}",  onclick: move |_| (props.onclick)(),
             "{props.name}"

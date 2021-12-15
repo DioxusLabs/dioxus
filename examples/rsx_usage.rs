@@ -178,7 +178,7 @@ pub static Example: Component<()> = |cx, props| {
     })
 };
 
-fn helper(cx: Context, text: &str) -> Element {
+fn helper(cx: Scope, text: &str) -> Element {
     rsx!(cx, p { "{text}" })
 }
 
@@ -188,7 +188,7 @@ mod baller {
     pub struct BallerProps {}
 
     /// This component totally balls
-    pub fn Baller(_: Scope<BallerProps>) -> Element {
+    pub fn Baller(_: ScopeState<BallerProps>) -> Element {
         todo!()
     }
 }
@@ -202,7 +202,7 @@ pub struct TallerProps<'a> {
 }
 
 /// This component is taller than most :)
-pub fn Taller<'a>(_: Scope<'a, TallerProps<'a>>) -> Element {
+pub fn Taller<'a>(_: ScopeState<'a, TallerProps<'a>>) -> Element {
     let b = true;
     todo!()
 }

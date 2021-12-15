@@ -1,4 +1,4 @@
-use dioxus_core::prelude::Context;
+use dioxus_core::prelude::*;
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     fmt::{Debug, Display},
@@ -6,11 +6,21 @@ use std::{
     rc::Rc,
 };
 
+pub trait UseStateA<'a, T> {
+    fn use_state(&self, initial_state_fn: impl FnOnce() -> T) -> UseState<'a, T>;
+}
+
+impl<'a, P, T> UseStateA<'a, T> for Scope<'a, P> {
+    fn use_state(&self, initial_state_fn: impl FnOnce() -> T) -> UseState<'a, T> {
+        use_state(self.scope, initial_state_fn)
+    }
+}
+
 /// Store state between component renders!
 ///
 /// ## Dioxus equivalent of useState, designed for Rust
 ///
-/// The Dioxus version of `useState` is the "king daddy" of state management. It allows you to ergonomically store and
+/// The Dioxus version of `useState` for state management inside components. It allows you to ergonomically store and
 /// modify state between component renders. When the state is updated, the component will re-render.
 ///
 /// Dioxus' use_state basically wraps a RefCell with helper methods and integrates it with the VirtualDOM update system.
@@ -34,23 +44,22 @@ use std::{
 ///
 ///
 /// Usage:
-/// ```ignore
-/// const Example: FC<()> = |cx, props|{
-///     let counter = use_state(cx, || 0);
-///     let increment = |_| counter += 1;
-///     let decrement = |_| counter += 1;
 ///
-///     html! {
-///         <div>
-///             <h1>"Counter: {counter}" </h1>
-///             <button onclick={increment}> "Increment" </button>
-///             <button onclick={decrement}> "Decrement" </button>
-///         </div>  
-///     }
+/// ```ignore
+/// const Example: Component<()> = |cx| {
+///     let counter = use_state(&cx, || 0);
+///
+///     cx.render(rsx! {
+///         div {
+///             h1 { "Counter: {counter}" }
+///             button { onclick: move |_| counter += 1, "Increment" }
+///             button { onclick: move |_| counter -= 1, "Decrement" }
+///         }
+///     ))
 /// }
 /// ```
 pub fn use_state<'a, T: 'static>(
-    cx: Context<'a>,
+    cx: &'a ScopeState,
     initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
     cx.use_hook(
