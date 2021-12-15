@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-70cd46dbb2a689ae2d512e142b8aee9c80798430/> move around examples
  - <csr-id-69f5cc3802af136729bc73e5c3d209270d41b184/> move into a fromjs tutorial
  - <csr-id-7102fe5f984fe8692cf977ea3a43e2973eed4f45/> add some more sources in the core implementation
+ - <csr-id-e4c06ce8e893779d2aad0883a1bb27d193bc5985/> update cargo tomls
 
 ### New Features
 
@@ -120,8 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 393 commits contributed to the release over the course of 335 calendar days.
- - 380 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 395 commits contributed to the release over the course of 335 calendar days.
+ - 381 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -131,6 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - update cargo tomls ([`e4c06ce`](https://github.comgit//DioxusLabs/dioxus/commit/e4c06ce8e893779d2aad0883a1bb27d193bc5985))
+    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`270dfc9`](https://github.comgit//DioxusLabs/dioxus/commit/270dfc9590b2354d083ea8da5cc0e1a1497d30e0))
     - update local examples and docs to support new syntaxes ([`4de16c4`](https://github.comgit//DioxusLabs/dioxus/commit/4de16c4779648e591b3869b5df31271ae603c812))
     - fix table ([`e495b09`](https://github.comgit//DioxusLabs/dioxus/commit/e495b09bf1c99950b5ea8647b371f296dc64afbe))
     - fix ssr ([`ded9696`](https://github.comgit//DioxusLabs/dioxus/commit/ded9696930ec825e0aba990494790e8be43a73e5))

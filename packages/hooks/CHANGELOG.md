@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-583fdfa5618e11d660985b97e570d4503be2ff49/> big updates to the reference
  - <csr-id-70cd46dbb2a689ae2d512e142b8aee9c80798430/> move around examples
  - <csr-id-69f5cc3802af136729bc73e5c3d209270d41b184/> move into a fromjs tutorial
+ - <csr-id-e4c06ce8e893779d2aad0883a1bb27d193bc5985/> update cargo tomls
 
 ### New Features
 
@@ -39,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 59 commits contributed to the release over the course of 335 calendar days.
- - 57 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 60 commits contributed to the release over the course of 335 calendar days.
+ - 58 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -50,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - update cargo tomls ([`e4c06ce`](https://github.comgit//DioxusLabs/dioxus/commit/e4c06ce8e893779d2aad0883a1bb27d193bc5985))
     - update local examples and docs to support new syntaxes ([`4de16c4`](https://github.comgit//DioxusLabs/dioxus/commit/4de16c4779648e591b3869b5df31271ae603c812))
     - docs ([`3ddf395`](https://github.comgit//DioxusLabs/dioxus/commit/3ddf395772aa24d04cf4e35bbb3a0027c8f1c7dd))
     - remove portals completely ([`2fd56e7`](https://github.comgit//DioxusLabs/dioxus/commit/2fd56e76192bc70d5503bfcd6b4127d383dd082c))
