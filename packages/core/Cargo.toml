@@ -47,7 +47,7 @@ dioxus-html = { path = "../html" }
 fern = { version = "0.6.0", features = ["colored"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
 simple_logger = "1.13.0"
-dioxus-core-macro = { path = "../core-macro", version = "0.1.2" }
+dioxus-core-macro = { path = "../core-macro", version ="^0.1.2"}
 # dioxus-hooks = { path = "../hooks" }
 criterion = "0.3.5"
 
