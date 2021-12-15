@@ -5,18 +5,7 @@ edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
-keywords = [
-    "dom",
-    "ui",
-    "userinterface",
-    "gui",
-    "react",
-    "state",
-    "management",
-    "wasm",
-    "web",
-    "ssr",
-]
+keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
