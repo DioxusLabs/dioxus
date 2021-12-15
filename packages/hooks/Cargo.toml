@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 dioxus-core = { path = "../../packages/core", version = "0.1.3" }
-futures = "0.3.18"
+futures = "0.3"

@@ -49,8 +49,8 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn App(cx: Scope, props: &()) -> Element {
-    let mut count = use_state(cx, || 0);
+fn App(cx: Scope<()>) -> Element {
+    let mut count = use_state(&cx, || 0);
 
     cx.render(rsx!(
         h1 { "High-Five counter: {count}" }
@@ -87,9 +87,11 @@ If you know React, then you already know Dioxus.
 
 ## Examples:
 
-| File Navigator (Desktop)                                                                                                                | Bluetooth scanner (Desktop)                                      | TodoMVC (All platforms)                                                                                         | Widget Gallery                                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | [![asd](https://github.com/DioxusLabs/todomvc/blob/master/example.png)](https://github.com/dioxusLabs/todomvc/) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
+| File Navigator (Desktop)                                                                                                                | Bluetooth scanner (Desktop)                                                                                                             | TodoMVC (All platforms)                                                                                                                 | Widget Gallery                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) | [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) | [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) | [![asd](https://github.com/DioxusLabs/todomvc/raw/master/example.png)](https://github.com/dioxusLabs/todomvc/) | [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) |
+
+<!-- | ![asd](https://github.com/DioxusLabs/todomvc/blob/master/example.png) | [![asd](https://github.com/DioxusLabs/todomvc/blob/master/example.png)](https://github.com/dioxusLabs/todomvc/) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | -->
 
 
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
@@ -159,6 +161,7 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Re-hydration              | ✅      | ✅     | Pre-render to HTML to speed up first contentful paint                |
 | Jank-Free Rendering       | ✅      | ✅     | Large diffs are segmented across frames for silky-smooth transitions |
 | Effects                   | ✅      | ✅     | Run effects after a component has been committed to render           |
+| Portals                   | 🛠      | ✅     | Render nodes outside of the traditional tree structure               |
 | Cooperative Scheduling    | 🛠      | ✅     | Prioritize important events over non-important events                |
 | Server Components         | 🛠      | ✅     | Hybrid components for SPA and Server                                 |
 | Bundle Splitting          | 👀      | ✅     | Efficiently and asynchronously load the app                          |
@@ -185,5 +188,5 @@ This project is licensed under the [MIT license].
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Pipette by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
 terms or conditions.
