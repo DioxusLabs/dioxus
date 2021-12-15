@@ -221,10 +221,9 @@ fn create_components() {
     }
 
     fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
-        todo!();
         cx.render(rsx! {
             h1 {}
-            // div { {&cx.props.children} }
+            div { {&cx.props.children} }
             p {}
         })
     }

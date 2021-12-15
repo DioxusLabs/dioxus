@@ -774,3 +774,16 @@ impl IntoVNode<'_> for Arguments<'_> {
         cx.text(self)
     }
 }
+
+impl<'a> IntoVNode<'a> for &Option<VNode<'a>> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        let r = self.as_ref().map(|f| f.decouple());
+        cx.fragment_from_iter(r)
+    }
+}
+
+impl<'a> IntoVNode<'a> for &VNode<'a> {
+    fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
+        self.decouple()
+    }
+}

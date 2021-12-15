@@ -141,7 +141,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -153,7 +153,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -165,7 +165,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -174,13 +174,13 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [CreatePlaceholder { root: 5 }, ReplaceWith { root: 4, m: 1 },]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -192,7 +192,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [
@@ -208,7 +208,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(&ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0)).unwrap();
     assert_eq!(
         edits.edits,
         [

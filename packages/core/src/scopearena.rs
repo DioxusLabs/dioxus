@@ -136,30 +136,7 @@ impl ScopeArena {
                 }
             };
 
-            let mut frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
-
-            // todo - add the node
-            // frames[0].nodes.get_mut().push({
-            //     let vnode = frames[0]
-            //         .bump
-            //         .alloc(VNode::Text(frames[0].bump.alloc(VText {
-            //             dom_id: Default::default(),
-            //             is_static: false,
-            //             text: "",
-            //         })));
-            //     unsafe { std::mem::transmute(vnode as *mut VNode) }
-            // });
-
-            // frames[1].nodes.get_mut().push({
-            //     let vnode = frames[1]
-            //         .bump
-            //         .alloc(VNode::Text(frames[1].bump.alloc(VText {
-            //             dom_id: Default::default(),
-            //             is_static: false,
-            //             text: "",
-            //         })));
-            //     unsafe { std::mem::transmute(vnode as *mut VNode) }
-            // });
+            let frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
 
             let scope = self.bump.alloc(ScopeState {
                 sender: self.sender.clone(),
@@ -217,9 +194,6 @@ impl ScopeArena {
         scope.is_subtree_root.set(false);
         scope.subtree.set(0);
 
-        // scope.frames[0].nodes.get_mut().clear();
-        // scope.frames[1].nodes.get_mut().clear();
-
         scope.frames[0].bump.reset();
         scope.frames[1].bump.reset();
 
@@ -257,8 +231,6 @@ impl ScopeArena {
     pub fn collect_garbage(&self, id: ElementId) {
         self.nodes.borrow_mut().remove(id.0);
     }
-
-    // These methods would normally exist on `scope` but they need access to *all* of the scopes
 
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
     /// causing UB in our tree.
@@ -379,7 +351,6 @@ impl ScopeArena {
     pub fn wip_head(&self, id: ScopeId) -> &VNode {
         let scope = self.get_scope(id).unwrap();
         let frame = scope.wip_frame();
-        let nodes = frame.nodes.borrow();
         let node = unsafe { &*frame.nodes.get() };
         unsafe { std::mem::transmute::<&VNode, &VNode>(node) }
     }

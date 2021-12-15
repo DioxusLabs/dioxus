@@ -94,7 +94,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
         "{:}",
         TextRenderer {
             cfg: SsrConfig::default(),
-            root: vdom.get_scope(&scope).unwrap().root_node(),
+            root: vdom.get_scope(scope).unwrap().root_node(),
             vdom: Some(vdom)
         }
     ))
@@ -157,9 +157,6 @@ impl<'a> TextRenderer<'a, '_> {
                     }
                 }
                 write!(f, "<!-- -->")?;
-            }
-            VNode::Portal(link) => {
-                todo!();
             }
             VNode::Element(el) => {
                 if self.cfg.indent {
@@ -247,7 +244,7 @@ impl<'a> TextRenderer<'a, '_> {
                 let idx = vcomp.associated_scope.get().unwrap();
 
                 if let (Some(vdom), false) = (self.vdom, self.cfg.skip_components) {
-                    let new_node = vdom.get_scope(&idx).unwrap().root_node();
+                    let new_node = vdom.get_scope(idx).unwrap().root_node();
                     self.html_render(new_node, f, il + 1)?;
                 } else {
                 }
@@ -301,13 +298,13 @@ mod tests {
     use dioxus_core_macro::*;
     use dioxus_html as dioxus_elements;
 
-    static SIMPLE_APP: Component<()> = |cx, _| {
+    static SIMPLE_APP: Component<()> = |cx| {
         cx.render(rsx!(div {
             "hello world!"
         }))
     };
 
-    static SLIGHTLY_MORE_COMPLEX: Component<()> = |cx, _| {
+    static SLIGHTLY_MORE_COMPLEX: Component<()> = |cx| {
         cx.render(rsx! {
             div {
                 title: "About W3Schools"
@@ -326,14 +323,14 @@ mod tests {
         })
     };
 
-    static NESTED_APP: Component<()> = |cx, _| {
+    static NESTED_APP: Component<()> = |cx| {
         cx.render(rsx!(
             div {
                 SIMPLE_APP {}
             }
         ))
     };
-    static FRAGMENT_APP: Component<()> = |cx, _| {
+    static FRAGMENT_APP: Component<()> = |cx| {
         cx.render(rsx!(
             div { "f1" }
             div { "f2" }
@@ -389,7 +386,7 @@ mod tests {
 
     #[test]
     fn styles() {
-        static STLYE_APP: Component<()> = |cx, _| {
+        static STLYE_APP: Component<()> = |cx| {
             cx.render(rsx! {
                 div { color: "blue", font_size: "46px"  }
             })

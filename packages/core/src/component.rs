@@ -5,14 +5,16 @@
 //! if the type supports PartialEq. The Properties trait is used by the rsx! and html! macros to generate the type-safe builder
 //! that ensures compile-time required and optional fields on cx.
 
-use crate::innerlude::{Element, LazyNodes, Scope};
+use crate::{
+    innerlude::{Element, Scope},
+    LazyNodes,
+};
 
 pub struct FragmentProps<'a>(Element<'a>);
 pub struct FragmentBuilder<'a, const BUILT: bool>(Element<'a>);
 impl<'a> FragmentBuilder<'a, false> {
     pub fn children(self, children: Element<'a>) -> FragmentBuilder<'a, true> {
-        todo!()
-        // FragmentBuilder(children)
+        FragmentBuilder(children)
     }
 }
 impl<'a, const A: bool> FragmentBuilder<'a, A> {
@@ -99,8 +101,8 @@ impl<'a> Properties for FragmentProps<'a> {
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
-    todo!()
-    // cx.render(Some(LazyNodes::new(|f| f.fragment_from_iter(&cx.props.0))))
+    let i = cx.props.0.as_ref().map(|f| f.decouple());
+    cx.render(Some(LazyNodes::new(|f| f.fragment_from_iter(i))))
 }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
