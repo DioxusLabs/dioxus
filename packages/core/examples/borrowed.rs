@@ -31,21 +31,3 @@ fn bleat() {
     let blah = String::from("asd");
     eat(&blah);
 }
-
-// struct Lower {}
-
-// #[derive(Clone, Copy)]
-// struct Upper {}
-// impl std::ops::Deref for Upper {
-//     type Target = Lower;
-
-//     fn deref(&self) -> &Self::Target {
-//         todo!()
-//     }
-// }
-
-// fn mark(f: &Lower) {}
-// fn bark() {
-//     let up = Upper {};
-//     mark(&up);
-// }

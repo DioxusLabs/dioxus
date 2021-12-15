@@ -10,13 +10,13 @@ use dioxus::prelude::*;
 use separator::Separatable;
 
 fn main() {
-    dioxus::desktop::launch(APP, |cfg| cfg);
+    dioxus::desktop::launch(APP);
 }
 
-const APP: Component<()> = |cx, _| {
-    let cur_val = use_state(cx, || 0.0_f64);
-    let operator = use_state(cx, || None as Option<&'static str>);
-    let display_value = use_state(cx, || String::from(""));
+static APP: Component<()> = |cx| {
+    let cur_val = use_state(&cx, || 0.0_f64);
+    let operator = use_state(&cx, || None as Option<&'static str>);
+    let display_value = use_state(&cx, || String::from(""));
 
     let toggle_percent = move |_| todo!();
     let input_digit = move |num: u8| display_value.modify().push_str(num.to_string().as_str());
@@ -117,13 +117,13 @@ const APP: Component<()> = |cx, _| {
 struct CalculatorKeyProps<'a> {
     name: &'static str,
     onclick: &'a dyn Fn(Arc<MouseEvent>),
-    children: Element,
+    children: Element<'a>,
 }
 
-fn CalculatorKey<'a>(cx: Scope, props: &CalculatorKeyProps) -> Element {
+fn CalculatorKey<'a>(cx: Scope<'a, CalculatorKeyProps<'a>>) -> Element {
     rsx!(cx, button {
-        class: "calculator-key {props.name}"
-        onclick: {props.onclick}
+        class: "calculator-key {cx.props.name}"
+        onclick: {cx.props.onclick}
         {&props.children}
     })
 }

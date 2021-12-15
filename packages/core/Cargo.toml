@@ -22,7 +22,7 @@ longest-increasing-subsequence = "0.1.0"
 # internall used
 log = { version = "0.4", features = ["release_max_level_off"] }
 
-futures-util = { version = "0.3.15", default-features = false }
+futures-util = { version = "0.3", default-features = false }
 
 smallvec = "1.6"
 
@@ -48,7 +48,7 @@ fern = { version = "0.6.0", features = ["colored"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
 simple_logger = "1.13.0"
 dioxus-core-macro = { path = "../core-macro", version = "0.1.2" }
-dioxus-hooks = { path = "../hooks" }
+# dioxus-hooks = { path = "../hooks" }
 criterion = "0.3.5"
 
 [features]

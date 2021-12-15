@@ -39,7 +39,7 @@
 //! - Allow top-level fragments
 //!
 fn main() {
-    dioxus::desktop::launch(Example, |c| c);
+    dioxus::desktop::launch(Example);
 }
 
 /// When trying to return "nothing" to Dioxus, you'll need to specify the type parameter or Rust will be sad.
@@ -49,7 +49,7 @@ const NONE_ELEMENT: Option<()> = None;
 use baller::Baller;
 use dioxus::prelude::*;
 
-pub static Example: Component<()> = |cx, props| {
+pub static Example: Component<()> = |cx| {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");

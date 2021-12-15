@@ -26,7 +26,7 @@ fn main() {}
 //         dom.rebuild();
 
 //         Ok(Response::builder(200)
-//             .body(format!("{}", dioxus_ssr::render_vdom(&dom, |c| c)))
+//             .body(format!("{}", dioxus_ssr::render_vdom(&dom)))
 //             .content_type(tide::http::mime::HTML)
 //             .build())
 //     });
@@ -42,8 +42,8 @@ fn main() {}
 //     initial_name: String,
 // }
 
-// static Example: FC<ExampleProps> = |cx, props| {
-//     let dispaly_name = use_state(cx, move || props.initial_name.clone());
+// static Example: Component<ExampleProps> = |cx| {
+//     let dispaly_name = use_state(&cx, move || props.initial_name.clone());
 
 //     cx.render(rsx! {
 //         div { class: "py-12 px-4 text-center w-full max-w-2xl mx-auto",

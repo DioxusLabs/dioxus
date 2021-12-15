@@ -30,7 +30,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 ///
 /// ## Complete Reference Guide:
 /// ```
-/// const Example: FC<()> = |cx, props|{
+/// const Example: Component<()> = |cx, props|{
 ///     let formatting = "formatting!";
 ///     let formatting_tuple = ("a", "b");
 ///     let lazy_fmt = format_args!("lazily formatted text");

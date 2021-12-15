@@ -64,7 +64,7 @@ The most common hook you'll use for storing state is `use_state`. `use_state` pr
 
 ```rust
 fn App(cx: Context, props: &())-> Element {
-    let post = use_state(cx, || {
+    let post = use_state(&cx, || {
         PostData {
             id: Uuid::new_v4(),
             score: 10,
@@ -112,7 +112,7 @@ For example, let's say we provide a button to generate a new post. Whenever the 
 
 ```rust
 fn App(cx: Context, props: &())-> Element {
-    let post = use_state(cx, || PostData::new());
+    let post = use_state(&cx, || PostData::new());
 
     cx.render(rsx!{
         button {
@@ -135,7 +135,7 @@ We can use tasks in our components to build a tiny stopwatch that ticks every se
 ```rust
 
 fn App(cx: Context, props: &())-> Element {
-    let mut sec_elapsed = use_state(cx, || 0);
+    let mut sec_elapsed = use_state(&cx, || 0);
 
     cx.spawn_task(async move {
         TimeoutFuture::from_ms(1000).await;

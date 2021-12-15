@@ -8,12 +8,12 @@ use gloo_timers::future::TimeoutFuture;
 
 #[tokio::main]
 async fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
-pub static App: Component<()> = |cx, _| {
-    let count = use_state(cx, || 0);
-    let mut direction = use_state(cx, || 1);
+pub static App: Component<()> = |cx| {
+    let count = use_state(&cx, || 0);
+    let mut direction = use_state(&cx, || 1);
 
     let (async_count, dir) = (count.for_async(), *direction);
 

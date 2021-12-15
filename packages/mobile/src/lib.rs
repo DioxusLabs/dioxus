@@ -69,7 +69,7 @@ impl<T: 'static + Send> WebviewRenderer<T> {
         redits: Option<Vec<DomEdit<'static>>>,
     ) -> anyhow::Result<()> {
         // pub fn run_with_edits(
-        //     root: FC<T>,
+        //     root: Component<T>,
         //     props: T,
         //     user_builder: fn(WindowBuilder) -> WindowBuilder,
         //     redits: Option<Vec<DomEdit<'static>>>,

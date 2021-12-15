@@ -2,8 +2,8 @@ use dioxus::prelude::*;
 use rand::prelude::*;
 
 fn main() {
-    dioxus::web::launch(App, |c| c);
-    // dioxus::desktop::launch(App, |c| c);
+    dioxus::web::launch(App);
+    // dioxus::desktop::launch(App);
 }
 
 #[derive(Clone, PartialEq)]
@@ -30,9 +30,9 @@ impl Label {
     }
 }
 
-static App: Component<()> = |cx, _props| {
-    let mut items = use_ref(cx, || vec![]);
-    let mut selected = use_state(cx, || None);
+static App: Component<()> = |cx| {
+    let mut items = use_ref(&cx, || vec![]);
+    let mut selected = use_state(&cx, || None);
 
     cx.render(rsx! {
         div { class: "container"
@@ -95,10 +95,10 @@ struct ActionButtonProps<'a> {
     onclick: &'a dyn Fn(),
 }
 
-fn ActionButton(cx: Scope, props: &ActionButtonProps) -> Element {
+fn ActionButton<'a>(cx: Scope<'a, ActionButtonProps<'a>>) -> Element {
     rsx!(cx, div { class: "col-sm-6 smallpad"
-        button { class:"btn btn-primary btn-block", r#type: "button", id: "{props.id}",  onclick: move |_| (props.onclick)(),
-            "{props.name}"
+        button { class:"btn btn-primary btn-block", r#type: "button", id: "{cx.props.id}",  onclick: move |_| (props.onclick)(),
+            "{cx.props.name}"
         }
     })
 }
@@ -149,9 +149,9 @@ static NOUNS: &[&str] = &[
 
 // fn Row(cx: Context, props: &RowProps) -> Element {
 //     rsx!(cx, tr {
-//         td { class:"col-md-1", "{props.row_id}" }
+//         td { class:"col-md-1", "{cx.props.row_id}" }
 //         td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
-//             a { class: "lbl", {props.label.labels} }
+//             a { class: "lbl", {cx.props.label.labels} }
 //         }
 //         td { class: "col-md-1"
 //             a { class: "remove", onclick: move |_| {/* remove */}

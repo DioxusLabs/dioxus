@@ -440,7 +440,7 @@ impl<'bump> DiffState<'bump> {
         let height = parent_scope.height + 1;
         let subtree = parent_scope.subtree.get();
 
-        let parent_scope = unsafe { self.scopes.get_scope_raw(parent_idx) };
+        let parent_scope = self.scopes.get_scope_raw(parent_idx);
         let caller = unsafe { std::mem::transmute(vcomponent.caller as *const _) };
         let fc_ptr = vcomponent.user_fc;
 
@@ -716,13 +716,12 @@ impl<'bump> DiffState<'bump> {
             new.associated_scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
-            let scope = unsafe {
-                self.scopes
-                    .get_scope_mut(scope_addr)
-                    .unwrap_or_else(|| panic!("could not find {:?}", scope_addr))
-            };
+            let scope = self
+                .scopes
+                .get_scope(scope_addr)
+                .unwrap_or_else(|| panic!("could not find {:?}", scope_addr));
 
-            scope.caller = unsafe { std::mem::transmute(new.caller) };
+            scope.caller.set(unsafe { std::mem::transmute(new.caller) });
 
             // React doesn't automatically memoize, but we do.
             let props_are_the_same = old.comparator.unwrap();

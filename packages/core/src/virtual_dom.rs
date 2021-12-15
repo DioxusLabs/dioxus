@@ -25,7 +25,7 @@ use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 ///
 /// fn App(cx: Context, props: &AppProps) -> Element {
 ///     cx.render(rsx!(
-///         div {"hello, {props.title}"}
+///         div {"hello, {cx.props.title}"}
 ///     ))
 /// }
 /// ```
@@ -36,7 +36,7 @@ use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 /// fn App(cx: Context, props: &AppProps) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
-///         Title { "{props.title}" }
+///         Title { "{cx.props.title}" }
 ///         Footer {}
 ///     ))
 /// }
@@ -459,7 +459,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// static App: FC<()> = |cx, props| cx.render(rsx!{ "hello world" });
+    /// static App: Component<()> = |cx, props| cx.render(rsx!{ "hello world" });
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();
     ///
@@ -497,7 +497,7 @@ impl VirtualDom {
     ///     value: Shared<&'static str>,
     /// }
     ///
-    /// static App: FC<AppProps> = |cx, props|{
+    /// static App: Component<AppProps> = |cx, props|{
     ///     let val = cx.value.borrow();
     ///     cx.render(rsx! { div { "{val}" } })
     /// };

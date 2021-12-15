@@ -12,11 +12,11 @@ use dioxus_html as dioxus_elements;
 
 fn main() {
     simple_logger::init().unwrap();
-    dioxus_desktop::launch(App, |c| c);
+    dioxus_desktop::launch(app);
 }
 
-static App: Component<()> = |cx, props| {
-    let mut count = use_state(cx, || 0);
+fn app(cx: Scope<()>) -> Element {
+    let mut count = use_state(&cx, || 0);
     log::debug!("count is {:?}", count);
 
     cx.push_task(|| async move {

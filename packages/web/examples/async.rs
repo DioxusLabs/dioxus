@@ -11,11 +11,11 @@ use dioxus_web;
 use gloo_timers::future::TimeoutFuture;
 
 fn main() {
-    dioxus_web::launch(App, |c| c);
+    dioxus_web::launch(App);
 }
 
-static App: Component<()> = |cx, props| {
-    let mut count = use_state(cx, || 0);
+static App: Component<()> = |cx| {
+    let mut count = use_state(&cx, || 0);
 
     cx.push_task(|| async move {
         TimeoutFuture::new(100).await;

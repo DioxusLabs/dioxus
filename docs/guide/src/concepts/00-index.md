@@ -45,7 +45,7 @@ As the UI grows in scale, our logic to keep each element in the proper state wou
 Instead, with Dioxus, we *declare* what we want our UI to look like:
 
 ```rust
-let mut state = use_state(cx, || "red");
+let mut state = use_state(&cx, || "red");
 
 cx.render(rsx!(
     Container {

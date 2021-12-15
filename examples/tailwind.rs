@@ -14,7 +14,7 @@ fn main() {
 
 const STYLE: &str = "body {overflow:hidden;}";
 
-pub static App: Component<()> = |cx, props| {
+pub static App: Component<()> = |cx| {
     cx.render(rsx!(
         div { class: "overflow-hidden"
         style { "{STYLE}" }
@@ -30,7 +30,7 @@ pub static App: Component<()> = |cx, props| {
     ))
 };
 
-pub static Header: Component<()> = |cx, props| {
+pub static Header: Component<()> = |cx| {
     cx.render(rsx! {
         div {
             header { class: "text-gray-400 bg-gray-900 body-font"
@@ -56,7 +56,7 @@ pub static Header: Component<()> = |cx, props| {
     })
 };
 
-pub static Hero: Component<()> = |cx, props| {
+pub static Hero: Component<()> = |cx| {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -94,7 +94,7 @@ pub static Hero: Component<()> = |cx, props| {
         }
     })
 };
-pub static Entry: Component<()> = |cx, props| {
+pub static Entry: Component<()> = |cx| {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -107,7 +107,7 @@ pub static Entry: Component<()> = |cx, props| {
     })
 };
 
-pub static StacksIcon: Component<()> = |cx, props| {
+pub static StacksIcon: Component<()> = |cx| {
     cx.render(rsx!(
         svg {
             // xmlns: "http://www.w3.org/2000/svg"
@@ -122,7 +122,7 @@ pub static StacksIcon: Component<()> = |cx, props| {
         }
     ))
 };
-pub static RightArrowIcon: Component<()> = |cx, props| {
+pub static RightArrowIcon: Component<()> = |cx| {
     cx.render(rsx!(
         svg {
             fill: "none"

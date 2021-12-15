@@ -1,5 +1,7 @@
 # Dioxus Core Architecture:
 
+This document is mostly a brain-dump on how things work. A lot of this information might be outdated. Certain features (priority queues, swim lanes) might not be implemented yet.
+
 Main topics covered here:
 - Fiber, Concurrency, and Cooperative Scheduling
 - Suspense

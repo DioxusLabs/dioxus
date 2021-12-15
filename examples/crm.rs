@@ -4,7 +4,7 @@ Tiny CRM: A port of the Yew CRM example to Dioxus.
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::web::launch(App, |c| c);
+    dioxus::web::launch(App);
 }
 enum Scene {
     ClientsList,
@@ -19,13 +19,13 @@ pub struct Client {
     pub description: String,
 }
 
-static App: Component<()> = |cx, _| {
-    let mut clients = use_ref(cx, || vec![] as Vec<Client>);
-    let mut scene = use_state(cx, || Scene::ClientsList);
+static App: Component<()> = |cx| {
+    let mut clients = use_ref(&cx, || vec![] as Vec<Client>);
+    let mut scene = use_state(&cx, || Scene::ClientsList);
 
-    let mut firstname = use_state(cx, || String::new());
-    let mut lastname = use_state(cx, || String::new());
-    let mut description = use_state(cx, || String::new());
+    let mut firstname = use_state(&cx, || String::new());
+    let mut lastname = use_state(&cx, || String::new());
+    let mut description = use_state(&cx, || String::new());
 
     let scene = match *scene {
         Scene::ClientsList => {

@@ -8,7 +8,7 @@ use dioxus_html as dioxus_elements;
 fn main() {
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    dioxus_web::launch(APP, |c| c)
+    dioxus_web::launch(APP)
 }
 
 #[derive(serde::Deserialize)]
@@ -16,8 +16,8 @@ struct DogApi {
     message: String,
 }
 
-static APP: FC<()> = |(cx, _props)| {
-    let state = use_state(cx, || 0);
+static APP: Component<()> = |(cx, _props)| {
+    let state = use_state(&cx, || 0);
 
     const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random/";
     let doggo = use_suspense(

@@ -17,10 +17,10 @@ and is proven to be safe with MIRI.
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
-fn App(cx: Scope, props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
     let text: &mut Vec<String> = cx.use_hook(|_| vec![String::from("abc=def")], |f| f);
 
     let first = text.get_mut(0).unwrap();
@@ -39,7 +39,7 @@ struct C1Props<'a> {
     text: &'a mut String,
 }
 
-fn Child1(cx: Scope, props: &C1Props) -> Element {
+fn Child1<'a>(cx: Scope<'a, C1Props<'a>>) -> Element {
     let (left, right) = props.text.split_once("=").unwrap();
 
     cx.render(rsx! {
@@ -55,7 +55,7 @@ struct C2Props<'a> {
     text: &'a str,
 }
 
-fn Child2(cx: Scope, props: &C2Props) -> Element {
+fn Child2<'a>(cx: Scope<'a, C2Props<'a>>) -> Element {
     cx.render(rsx! {
         Child3 {
             text: props.text
@@ -68,8 +68,8 @@ struct C3Props<'a> {
     text: &'a str,
 }
 
-fn Child3(cx: Scope, props: &C3Props) -> Element {
+fn Child3<'a>(cx: Scope<'a, C3Props<'a>>) -> Element {
     cx.render(rsx! {
-        div { "{props.text}"}
+        div { "{cx.props.text}"}
     })
 }

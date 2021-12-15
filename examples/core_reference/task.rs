@@ -24,9 +24,9 @@
 
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |cx, props| {
-    let count = use_state(cx, || 0);
-    let mut direction = use_state(cx, || 1);
+pub static Example: Component<()> = |cx| {
+    let count = use_state(&cx, || 0);
+    let mut direction = use_state(&cx, || 1);
 
     // Tasks are 'static, so we need to copy relevant items in
     let (async_count, dir) = (count.for_async(), *direction);

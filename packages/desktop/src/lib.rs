@@ -6,6 +6,9 @@
 mod cfg;
 mod escape;
 mod events;
+pub use wry;
+pub use wry::application as tao;
+
 // mod desktop_context;
 
 use cfg::DesktopConfig;
@@ -28,7 +31,10 @@ use wry::{
     webview::{WebView, WebViewBuilder},
 };
 
-pub fn launch(
+pub fn launch(root: Component<()>) {
+    launch_with_props(root, (), |c| c)
+}
+pub fn launch_cfg(
     root: Component<()>,
     config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) {

@@ -14,7 +14,7 @@ fn main() {
         SimpleLogger::new().init().unwrap();
     }
 
-    dioxus_desktop::launch(App, |c| c)
+    dioxus_desktop::launch(App)
 }
 
 #[derive(PartialEq)]
@@ -32,14 +32,14 @@ pub struct TodoItem {
 }
 pub type Todos = HashMap<u32, TodoItem>;
 
-pub static App: FC<()> = |cx, _| {
+pub static App: Component<()> = |cx| {
     // Share our TodoList to the todos themselves
     use_provide_state(cx, Todos::new);
 
     // Save state for the draft, filter
-    let draft = use_state(cx, || "".to_string());
-    let filter = use_state(cx, || FilterState::All);
-    let mut todo_id = use_state(cx, || 0);
+    let draft = use_state(&cx, || "".to_string());
+    let filter = use_state(&cx, || FilterState::All);
+    let mut todo_id = use_state(&cx, || 0);
 
     // Consume the todos
     let todos = use_shared_state::<Todos>(cx)?;
@@ -142,7 +142,7 @@ pub fn TodoEntry((cx, props): Scope<TodoEntryProps>) -> Element {
     let _todos = todos.read();
     let todo = _todos.get(&props.id)?;
 
-    let is_editing = use_state(cx, || false);
+    let is_editing = use_state(&cx, || false);
     let completed = if todo.checked { "completed" } else { "" };
 
     cx.render(rsx!{

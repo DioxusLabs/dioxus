@@ -4,11 +4,11 @@
 
 use dioxus::prelude::*;
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
-static App: Component<()> = |cx, props| {
-    let mut count = use_state(cx, || 0);
+static App: Component<()> = |cx| {
+    let mut count = use_state(&cx, || 0);
 
     cx.render(rsx! {
         div {

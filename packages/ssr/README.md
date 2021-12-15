@@ -5,7 +5,7 @@ Render a Dioxus VirtualDOM to a string.
 
 ```rust
 // Our app:
-const App: FC<()> = |cx, props| rsx!(cx, div {"hello world!"});
+const App: Component<()> = |cx, props| rsx!(cx, div {"hello world!"});
 
 // Build the virtualdom from our app
 let mut vdom = VirtualDOM::new(App);
@@ -14,7 +14,7 @@ let mut vdom = VirtualDOM::new(App);
 let _ = vdom.rebuild();
 
 // Render the entire virtualdom from the root
-let text = dioxus::ssr::render_vdom(&vdom, |c| c);
+let text = dioxus::ssr::render_vdom(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
 ```
 
@@ -30,7 +30,7 @@ With pre-rendering enabled, this crate will generate element nodes with Element 
 To enable pre-rendering, simply configure the `SsrConfig` with pre-rendering enabled.
 
 ```rust
-let dom = VirtualDom::new(App, |c| c);
+let dom = VirtualDom::new(App);
 
 let text = dioxus::ssr::render_vdom(App, |cfg| cfg.pre_render(true));
 ```
@@ -40,7 +40,7 @@ let text = dioxus::ssr::render_vdom(App, |cfg| cfg.pre_render(true));
 Dioxus SSR can also be to render on the server. Obviously, you can just render the VirtualDOM to a string and send that down.
 
 ```rust
-let text = dioxus::ssr::render_vdom(&vdom, |c| c);
+let text = dioxus::ssr::render_vdom(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
 ```
 

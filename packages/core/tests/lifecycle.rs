@@ -7,7 +7,6 @@ use dioxus_core::DomEdit::*;
 use dioxus_core::ScopeId;
 
 use dioxus_core_macro::*;
-use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use std::sync::{Arc, Mutex};
 

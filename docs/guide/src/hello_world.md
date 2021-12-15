@@ -92,7 +92,7 @@ use dioxus::prelude::*;
 
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
 fn App(cx: Context, props: &()) -> Element {
@@ -118,7 +118,7 @@ This initialization code launches a Tokio runtime on a helper thread where your 
 
 ```rust
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 ```
 
@@ -135,7 +135,7 @@ fn App(cx: Context, props: &()) -> Element {
 Writing `fn App(cx: Context, props: &()) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
 
 ```rust
-static App: FC<()> = |cx, props| cx.render(rsx!(div { "Hello, world!" }));
+static App: Component<()> = |cx, props| cx.render(rsx!(div { "Hello, world!" }));
 ```
 
 ### What is this `Context` object?

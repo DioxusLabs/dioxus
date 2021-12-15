@@ -5,9 +5,9 @@
 //! In these cases, we provide `use_model` - a convenient way of abstracting over some state and async functions.
 
 use dioxus_core::prelude::ScopeState;
-use futures::Future;
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
+    future::Future,
     marker::PhantomData,
     pin::Pin,
     rc::Rc,

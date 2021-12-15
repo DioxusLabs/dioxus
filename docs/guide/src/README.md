@@ -6,7 +6,7 @@
 
 ```rust
 fn App(cx: Context, props: &()) -> Element {
-    let mut count = use_state(cx, || 0);
+    let mut count = use_state(&cx, || 0);
 
     cx.render(rsx!(
         h1 { "High-Five counter: {count}" }
@@ -53,7 +53,7 @@ Dioxus supports server-side rendering!
 For rendering statically to an `.html` file or from a WebServer, then you'll want to make sure the `ssr` feature is enabled in the `dioxus` crate and use the `dioxus::ssr` API. We don't expect the SSR API to change drastically in the future.
 
 ```rust
-let contents = dioxus::ssr::render_vdom(&dom, |c| c);
+let contents = dioxus::ssr::render_vdom(&dom);
 ```
 
 [Jump to the getting started guide for SSR.]()

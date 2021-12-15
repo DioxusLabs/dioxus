@@ -39,7 +39,14 @@ impl Parse for Component {
 
         // parse the guts
         let content: ParseBuffer;
-        syn::braced!(content in stream);
+
+        // if we see a `{` then we have a block
+        // else parse as a function-like call
+        if stream.peek(token::Brace) {
+            syn::braced!(content in stream);
+        } else {
+            syn::parenthesized!(content in stream);
+        }
 
         let cfg: BodyConfig = BodyConfig {
             allow_children: true,

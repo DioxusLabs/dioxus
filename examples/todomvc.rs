@@ -4,7 +4,7 @@ use im_rc::HashMap;
 use std::rc::Rc;
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
 #[derive(PartialEq)]
@@ -22,10 +22,10 @@ pub struct TodoItem {
 }
 
 const STYLE: &str = include_str!("./assets/todomvc.css");
-const App: Component<()> = |cx, props| {
-    let mut draft = use_state(cx, || "".to_string());
-    let mut todos = use_state(cx, || HashMap::<u32, Rc<TodoItem>>::new());
-    let mut filter = use_state(cx, || FilterState::All);
+const App: Component<()> = |cx| {
+    let mut draft = use_state(&cx, || "".to_string());
+    let mut todos = use_state(&cx, || HashMap::<u32, Rc<TodoItem>>::new());
+    let mut filter = use_state(&cx, || FilterState::All);
 
     let todolist = todos
         .iter()
@@ -85,9 +85,9 @@ pub struct TodoEntryProps {
     todo: Rc<TodoItem>,
 }
 
-pub fn TodoEntry(cx: Scope, props: &TodoEntryProps) -> Element {
-    let mut is_editing = use_state(cx, || false);
-    let mut contents = use_state(cx, || String::from(""));
+pub fn TodoEntry(cx: Scope<TodoEntryProps>) -> Element {
+    let mut is_editing = use_state(&cx, || false);
+    let mut contents = use_state(&cx, || String::from(""));
     let todo = &props.todo;
 
     rsx!(cx, li {

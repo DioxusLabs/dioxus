@@ -58,7 +58,7 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 ///     cx.render(rsx!{
 ///         div {
 ///             h1 {"Title card"}
-///             {props.children}
+///             {cx.props.children}
 ///         }
 ///     })
 /// }

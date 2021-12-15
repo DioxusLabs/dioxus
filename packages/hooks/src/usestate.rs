@@ -39,7 +39,7 @@ impl<'a, P, T> UseStateA<'a, T> for Scope<'a, P> {
 /// On top of the methods to set/get state, `use_state` also supports fancy combinators to extend its functionality:
 /// - `.classic()` and `.split()`  convert the hook into the classic React-style hook
 ///     ```rust
-///     let (state, set_state) = use_state(cx, || 10).split()
+///     let (state, set_state) = use_state(&cx, || 10).split()
 ///     ```
 ///
 ///

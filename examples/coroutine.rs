@@ -22,14 +22,14 @@
 //! the coroutine was initiated. `use_state` always returns the same setter, so you don't need to worry about
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
 use dioxus::prelude::*;
 
-static App: Component<()> = |cx, props| {
-    let p1 = use_state(cx, || 0);
-    let p2 = use_state(cx, || 0);
+static App: Component<()> = |cx| {
+    let p1 = use_state(&cx, || 0);
+    let p2 = use_state(&cx, || 0);
 
     let (mut p1_async, mut p2_async) = (p1.for_async(), p2.for_async());
     let (p1_handle, _) = use_coroutine(cx, || async move {

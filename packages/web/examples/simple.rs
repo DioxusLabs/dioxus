@@ -7,16 +7,14 @@ use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_hooks::use_state;
 use dioxus_html as dioxus_elements;
-use dioxus_web;
-use gloo_timers::future::TimeoutFuture;
 
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    dioxus_web::launch(App, |c| c);
+    dioxus_web::launch(App);
 }
 
-static App: Component<()> = |cx, props| {
-    let show = use_state(cx, || true);
+static App: Component<()> = |cx| {
+    let show = use_state(&cx, || true);
 
     let inner = match *show {
         true => {

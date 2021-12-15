@@ -4,7 +4,7 @@ use dioxus_core::{lazynodes::LazyNodes, prelude::*};
 
 // #[async_std::main]
 fn main() {
-    static App: FC<()> =
+    static App: Component<()> =
         |cx, props| cx.render(Some(LazyNodes::new(move |f| f.text(format_args!("hello")))));
 
     let mut dom = VirtualDom::new(App);

@@ -520,8 +520,8 @@ impl<'a> NodeFactory<'a> {
             move |other: &VComponent| {
                 if user_fc == other.user_fc {
                     // Safety
-                    // - We guarantee that FC<P> is the same by function pointer
-                    // - Because FC<P> is the same, then P must be the same (even with generics)
+                    // - We guarantee that Component<P> is the same by function pointer
+                    // - Because Component<P> is the same, then P must be the same (even with generics)
                     // - Non-static P are autoderived to memoize as false
                     // - This comparator is only called on a corresponding set of bumpframes
                     //

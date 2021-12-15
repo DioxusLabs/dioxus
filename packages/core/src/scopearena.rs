@@ -72,12 +72,8 @@ impl ScopeArena {
         unsafe { self.scopes.borrow().get(&id).map(|f| &**f) }
     }
 
-    pub(crate) unsafe fn get_scope_raw(&self, id: ScopeId) -> Option<*mut ScopeState> {
+    pub(crate) fn get_scope_raw(&self, id: ScopeId) -> Option<*mut ScopeState> {
         self.scopes.borrow().get(&id).copied()
-    }
-
-    pub(crate) unsafe fn get_scope_mut(&self, id: ScopeId) -> Option<&mut ScopeState> {
-        self.scopes.borrow().get(&id).map(|s| &mut **s)
     }
 
     pub(crate) fn new_with_key(
@@ -95,34 +91,12 @@ impl ScopeArena {
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             let scope = unsafe { &mut *old_scope };
 
-            scope.caller = caller;
+            scope.caller.set(caller);
             scope.parent_scope = parent_scope;
             scope.height = height;
             scope.subtree = Cell::new(subtree);
             scope.our_arena_idx = new_scope_id;
             scope.container = container;
-
-            // scope.frames[0].nodes.get_mut().push({
-            //     let vnode = scope.frames[0]
-            //         .bump
-            //         .alloc(VNode::Text(scope.frames[0].bump.alloc(VText {
-            //             dom_id: Default::default(),
-            //             is_static: false,
-            //             text: "",
-            //         })));
-            //     unsafe { std::mem::transmute(vnode as *mut VNode) }
-            // });
-
-            // scope.frames[1].nodes.get_mut().push({
-            //     let vnode = scope.frames[1]
-            //         .bump
-            //         .alloc(VNode::Text(scope.frames[1].bump.alloc(VText {
-            //             dom_id: Default::default(),
-            //             is_static: false,
-            //             text: "",
-            //         })));
-            //     unsafe { std::mem::transmute(vnode as *mut VNode) }
-            // });
 
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
             debug_assert!(any_item.is_none());
@@ -148,7 +122,7 @@ impl ScopeArena {
                 subtree: Cell::new(subtree),
                 is_subtree_root: Cell::new(false),
 
-                caller,
+                caller: Cell::new(caller),
                 generation: 0.into(),
 
                 shared_contexts: Default::default(),
@@ -277,18 +251,20 @@ impl ScopeArena {
         // Remove all the outdated listeners
         self.ensure_drop_safety(id);
 
-        let scope = unsafe { &mut *self.get_scope_mut(id).expect("could not find scope") };
+        // todo: we *know* that this is aliased by the contents of the scope itself
+        let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
         // - All children nodes that rely on &mut T are replaced with a new reference
         scope.hook_idx.set(0);
 
-        // Safety:
-        // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
-        unsafe { scope.reset_wip_frame() };
-
+        // book keeping to ensure safety around the borrowed data
         {
+            // Safety:
+            // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
+            unsafe { scope.reset_wip_frame() };
+
             let mut items = scope.items.borrow_mut();
 
             // just forget about our suspended nodes while we're at it
@@ -298,12 +274,9 @@ impl ScopeArena {
             debug_assert!(items.listeners.is_empty());
             debug_assert!(items.borrowed_props.is_empty());
             debug_assert!(items.tasks.is_empty());
-
-            // Todo: see if we can add stronger guarantees around internal bookkeeping and failed component renders.
-            // scope.wip_frame().nodes
         }
 
-        let render: &dyn Fn(&ScopeState) -> Element = unsafe { &*scope.caller };
+        let render: &dyn Fn(&ScopeState) -> Element = unsafe { &*scope.caller.get() };
 
         if let Some(node) = render(scope) {
             if !scope.items.borrow().tasks.is_empty() {
@@ -319,6 +292,10 @@ impl ScopeArena {
             scope.cycle_frame();
             true
         } else {
+            // the component bailed out early
+            // this leaves the wip frame and all descendents in a state where
+            // their WIP frames are invalid
+            // todo: descendents should not cause the app to crash
             false
         }
     }

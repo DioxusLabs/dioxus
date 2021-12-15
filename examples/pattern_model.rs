@@ -16,13 +16,13 @@
 //! RefMuts at the same time.
 
 use dioxus::desktop::wry::application::dpi::LogicalSize;
-use dioxus::events::{on::*, KeyCode};
+use dioxus::events::*;
 use dioxus::prelude::*;
 
 const STYLE: &str = include_str!("./assets/calculator.css");
 fn main() {
     env_logger::init();
-    dioxus::desktop::launch(App, |cfg| {
+    dioxus::desktop::launch_cfg(App, |cfg| {
         cfg.with_window(|w| {
             w.with_title("Calculator Demo")
                 .with_resizable(false)
@@ -31,8 +31,8 @@ fn main() {
     });
 }
 
-static App: Component<()> = |cx, props| {
-    let state = use_ref(cx, || Calculator::new());
+static App: Component<()> = |cx| {
+    let state = use_ref(&cx, || Calculator::new());
 
     let clear_display = state.read().display_value.eq("0");
     let clear_text = if clear_display { "C" } else { "AC" };
@@ -80,8 +80,8 @@ struct CalculatorKeyProps<'a> {
 fn CalculatorKey<'a>((cx, props): ScopeState<'a, CalculatorKeyProps<'a>>) -> Element<'a> {
     cx.render(rsx! {
         button {
-            class: "calculator-key {props.name}"
-            onclick: {props.onclick}
+            class: "calculator-key {cx.props.name}"
+            onclick: {cx.props.onclick}
             {&props.children}
         }
     })

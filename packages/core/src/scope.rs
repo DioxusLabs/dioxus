@@ -28,7 +28,7 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 /// }
 ///
 /// fn Example(cx: Context, props: &ExampleProps) -> Element {
-///     cx.render(rsx!{ div {"Hello, {props.name}"} })
+///     cx.render(rsx!{ div {"Hello, {cx.props.name}"} })
 /// }
 /// ```
 pub struct Scope<'a, P> {
@@ -88,7 +88,7 @@ pub struct ScopeState {
 
     pub(crate) frames: [BumpFrame; 2],
 
-    pub(crate) caller: *const dyn Fn(&ScopeState) -> Element,
+    pub(crate) caller: Cell<*const dyn Fn(&ScopeState) -> Element>,
 
     pub(crate) items: RefCell<SelfReferentialItems<'static>>,
 
@@ -269,12 +269,12 @@ impl ScopeState {
     /// ```rust, ignore
     /// struct SharedState(&'static str);
     ///
-    /// static App: FC<()> = |cx, props|{
+    /// static App: Component<()> = |cx, props|{
     ///     cx.use_hook(|_| cx.provide_state(SharedState("world")), |_| {}, |_| {});
     ///     rsx!(cx, Child {})
     /// }
     ///
-    /// static Child: FC<()> = |cx, props| {
+    /// static Child: Component<()> = |cx| {
     ///     let state = cx.consume_state::<SharedState>();
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
@@ -344,7 +344,7 @@ impl ScopeState {
     /// ## Example
     ///
     /// ```ignore
-    /// fn Component(cx: Scope, props: &Props) -> Element {
+    /// fn Component(cx: Scope<Props>) -> Element {
     ///     // Lazy assemble the VNode tree
     ///     let lazy_nodes = rsx!("hello world");
     ///
