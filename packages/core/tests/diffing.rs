@@ -184,12 +184,13 @@ fn empty_fragments_create_anchors_with_many_children() {
         create.edits,
         [CreatePlaceholder { root: 1 }, AppendChildren { many: 1 }]
     );
+
     assert_eq!(
         change.edits,
         [
             CreateElement {
+                tag: "div",
                 root: 2,
-                tag: "div"
             },
             CreateTextNode {
                 text: "hello: 0",
@@ -197,8 +198,8 @@ fn empty_fragments_create_anchors_with_many_children() {
             },
             AppendChildren { many: 1 },
             CreateElement {
+                tag: "div",
                 root: 4,
-                tag: "div"
             },
             CreateTextNode {
                 text: "hello: 1",
@@ -206,15 +207,15 @@ fn empty_fragments_create_anchors_with_many_children() {
             },
             AppendChildren { many: 1 },
             CreateElement {
+                tag: "div",
                 root: 6,
-                tag: "div"
             },
             CreateTextNode {
                 text: "hello: 2",
                 root: 7
             },
             AppendChildren { many: 1 },
-            ReplaceWith { m: 3, root: 1 }
+            ReplaceWith { root: 1, m: 3 }
         ]
     );
 }
@@ -257,13 +258,12 @@ fn many_items_become_fragment() {
         ]
     );
 
-    // note: the ID gets reused
     assert_eq!(
         change.edits,
         [
-            Remove { root: 3 },
-            CreatePlaceholder { root: 4 },
+            CreatePlaceholder { root: 5 },
             ReplaceWith { root: 1, m: 1 },
+            Remove { root: 3 },
         ]
     );
 }

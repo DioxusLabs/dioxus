@@ -501,8 +501,15 @@ impl<'bump> DiffState<'bump> {
                 self.diff_component_nodes(old_node, new_node, *old, *new)
             }
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
-            (Placeholder(old), Placeholder(new)) => new.dom_id.set(old.dom_id.get()),
+            (Placeholder(old), Placeholder(new)) => self.diff_placeholder_nodes(old, new),
             (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
+
+            // The normal pathway still works, but generates slightly weird instructions
+            // This pathway just ensures we get create and replace
+            (Placeholder(_), Fragment(new)) => {
+                self.stack
+                    .create_children(new.children, MountType::Replace { old: old_node });
+            }
 
             // Anything else is just a basic replace and create
             (
@@ -634,7 +641,9 @@ impl<'bump> DiffState<'bump> {
         }
 
         // todo: this is for the "settext" optimization
-        // it works, but i'm not sure if it's the direction we want to take
+        // it works, but i'm not sure if it's the direction we want to take right away
+        // I haven't benchmarked the performance imporvemenet yet. Perhaps
+        // we can make it a config?
 
         // match (old.children.len(), new.children.len()) {
         //     (0, 0) => {}
@@ -754,6 +763,11 @@ impl<'bump> DiffState<'bump> {
         self.diff_children(old.children, new.children);
     }
 
+    // probably will get inlined
+    fn diff_placeholder_nodes(&mut self, old: &'bump VPlaceholder, new: &'bump VPlaceholder) {
+        new.dom_id.set(old.dom_id.get())
+    }
+
     // =============================================
     //  Utilities for creating new diff instructions
     // =============================================
@@ -784,23 +798,26 @@ impl<'bump> DiffState<'bump> {
             (_, []) => {
                 self.remove_nodes(old, true);
             }
-            ([VNode::Placeholder(old_anchor)], [VNode::Placeholder(new_anchor)]) => {
-                old_anchor.dom_id.set(new_anchor.dom_id.get());
-            }
-            ([VNode::Placeholder(_)], _) => {
-                self.stack
-                    .create_children(new, MountType::Replace { old: &old[0] });
-            }
-            (_, [VNode::Placeholder(_)]) => {
-                let new: &'bump VNode<'bump> = &new[0];
-                if let Some(first_old) = old.get(0) {
-                    self.remove_nodes(&old[1..], true);
-                    self.stack
-                        .create_node(new, MountType::Replace { old: first_old });
-                } else {
-                    self.stack.create_node(new, MountType::Append {});
-                }
-            }
+
+            // todo: placeholders explicitly replace fragments
+            //
+            // ([VNode::Placeholder(old_anchor)], [VNode::Placeholder(new_anchor)]) => {
+            //     old_anchor.dom_id.set(new_anchor.dom_id.get());
+            // }
+            // ([VNode::Placeholder(_)], _) => {
+            //     self.stack
+            //         .create_children(new, MountType::Replace { old: &old[0] });
+            // }
+            // (_, [VNode::Placeholder(_)]) => {
+            //     let new: &'bump VNode<'bump> = &new[0];
+            //     if let Some(first_old) = old.get(0) {
+            //         self.remove_nodes(&old[1..], true);
+            //         self.stack
+            //             .create_node(new, MountType::Replace { old: first_old });
+            //     } else {
+            //         self.stack.create_node(new, MountType::Append {});
+            //     }
+            // }
             _ => {
                 let new_is_keyed = new[0].key().is_some();
                 let old_is_keyed = old[0].key().is_some();

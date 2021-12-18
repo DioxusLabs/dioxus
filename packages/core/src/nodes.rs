@@ -177,9 +177,11 @@ impl Debug for VNode<'_> {
                 .debug_struct("VNode::VElement")
                 .field("name", &el.tag_name)
                 .field("key", &el.key)
+                .field("attrs", &el.attributes)
+                .field("children", &el.children)
                 .finish(),
             VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
-            VNode::Placeholder(_) => write!(s, "VNode::VAnchor"),
+            VNode::Placeholder(_) => write!(s, "VNode::VPlaceholder"),
             VNode::Fragment(frag) => {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
@@ -225,6 +227,10 @@ pub struct VText<'src> {
 /// A list of VNodes with no single root.
 pub struct VFragment<'src> {
     pub key: Option<&'src str>,
+
+    /// Fragments can never have zero children. Enforced by NodeFactory.
+    ///
+    /// You *can* make a fragment with no children, but it's not a valid fragment and your VDom will panic.
     pub children: &'src [VNode<'src>],
 }
 
@@ -602,15 +608,15 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Placeholder(self.bump.alloc(VPlaceholder {
+            VNode::Placeholder(self.bump.alloc(VPlaceholder {
                 dom_id: empty_cell(),
-            })));
+            }))
+        } else {
+            VNode::Fragment(VFragment {
+                children: nodes.into_bump_slice(),
+                key: None,
+            })
         }
-
-        VNode::Fragment(VFragment {
-            children: nodes.into_bump_slice(),
-            key: None,
-        })
     }
 
     pub fn fragment_from_iter<'b, 'c>(
@@ -624,32 +630,34 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Placeholder(self.bump.alloc(VPlaceholder {
+            VNode::Placeholder(self.bump.alloc(VPlaceholder {
                 dom_id: empty_cell(),
-            })));
-        }
+            }))
+        } else {
+            let children = nodes.into_bump_slice();
 
-        let children = nodes.into_bump_slice();
-
-        if cfg!(debug_assertions) && children.len() > 1 && children.last().unwrap().key().is_none()
-        {
-            // todo: make the backtrace prettier or remove it altogether
-            log::error!(
-                r#"
+            if cfg!(debug_assertions)
+                && children.len() > 1
+                && children.last().unwrap().key().is_none()
+            {
+                // todo: make the backtrace prettier or remove it altogether
+                log::error!(
+                    r#"
                 Warning: Each child in an array or iterator should have a unique "key" prop.
                 Not providing a key will lead to poor performance with lists.
                 See docs.rs/dioxus for more information.
                 -------------
                 {:?}
                 "#,
-                backtrace::Backtrace::new()
-            );
-        }
+                    backtrace::Backtrace::new()
+                );
+            }
 
-        VNode::Fragment(VFragment {
-            children,
-            key: None,
-        })
+            VNode::Fragment(VFragment {
+                children,
+                key: None,
+            })
+        }
     }
 
     // this isn't quite feasible yet
@@ -658,28 +666,24 @@ impl<'a> NodeFactory<'a> {
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
     ) -> Element<'a> {
-        let bump = self.bump;
-        let mut nodes = bumpalo::collections::Vec::new_in(bump);
+        let mut nodes = bumpalo::collections::Vec::new_in(self.bump);
 
         for node in node_iter {
             nodes.push(node.into_vnode(self));
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Placeholder(bump.alloc(VPlaceholder {
+            Some(VNode::Placeholder(self.bump.alloc(VPlaceholder {
                 dom_id: empty_cell(),
-            })));
+            })))
+        } else {
+            let children = nodes.into_bump_slice();
+
+            Some(VNode::Fragment(VFragment {
+                children,
+                key: None,
+            }))
         }
-
-        let children = nodes.into_bump_slice();
-
-        // TODO
-        // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
-
-        Some(VNode::Fragment(VFragment {
-            children,
-            key: None,
-        }))
     }
 }
 
@@ -749,10 +753,9 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
             Some(lazy) => lazy.call(cx),
-            None => VNode::Fragment(VFragment {
-                children: &[],
-                key: None,
-            }),
+            None => VNode::Placeholder(cx.bump.alloc(VPlaceholder {
+                dom_id: empty_cell(),
+            })),
         }
     }
 }
