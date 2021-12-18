@@ -20,7 +20,47 @@ pub(crate) mod innerlude {
     pub(crate) use crate::scopearena::*;
     pub use crate::virtual_dom::*;
 
+    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
+    ///
+    /// Any [`None`] [`Element`] will automatically be coerced into a placeholder [`VNode`] with the [`VNode::Placeholder`] variant.
     pub type Element<'a> = Option<VNode<'a>>;
+
+    /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
+    ///
+    /// Components can be used in other components with two syntax options:
+    /// - lowercase as a function call with named arguments (rust style)
+    /// - uppercase as an element (react style)
+    ///
+    /// ## Rust-Style
+    ///
+    /// ```rust
+    /// fn example(cx: Scope<Props>) -> Element {
+    ///     // ...
+    /// }
+    ///
+    /// rsx!(
+    ///     example()
+    /// )
+    /// ```
+    /// ## React-Style
+    /// ```rust
+    /// fn Example(cx: Scope<Props>) -> Element {
+    ///     // ...
+    /// }
+    ///
+    /// rsx!(
+    ///     Example {}
+    /// )
+    /// ```
+    ///
+    /// ## As a closure
+    /// This particular type alias lets you even use static closures for pure/static components:
+    ///
+    /// ```rust
+    /// static Example: Component<Props> = |cx| {
+    ///     // ...
+    /// };
+    /// ```
     pub type Component<P> = for<'a> fn(Scope<'a, P>) -> Element<'a>;
 }
 

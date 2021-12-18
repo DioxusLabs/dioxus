@@ -1,16 +1,10 @@
 //! Dioxus Desktop Renderer
 //!
 //! Render the Dioxus VirtualDom using the platform's native WebView implementation.
-//!
 
 mod cfg;
 mod escape;
 mod events;
-pub use wry;
-pub use wry::application as tao;
-
-// mod desktop_context;
-
 use cfg::DesktopConfig;
 use dioxus_core::*;
 use std::{
@@ -18,15 +12,17 @@ use std::{
     sync::atomic::AtomicBool,
     sync::{Arc, RwLock},
 };
+use tao::{
+    accelerator::{Accelerator, SysMods},
+    event::{Event, StartCause, WindowEvent},
+    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
+    keyboard::{KeyCode, ModifiersState},
+    menu::{MenuBar, MenuItem},
+    window::{Window, WindowId},
+};
+pub use wry;
+pub use wry::application as tao;
 use wry::{
-    application::{
-        accelerator::{Accelerator, SysMods},
-        event::{Event, StartCause, WindowEvent},
-        event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
-        keyboard::{KeyCode, ModifiersState},
-        menu::{MenuBar, MenuItem},
-        window::{Window, WindowId},
-    },
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };

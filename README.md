@@ -85,6 +85,18 @@ If you know React, then you already know Dioxus.
     <tr>
 </table>
 
+Available cargo features:
+- default: core (macro, hooks, html)
+- macro: support for `Props` and `rsx` macros
+- hooks: foundational hooks like `use_state`, `use_ref`, etc.
+- html: the entire namespace of `html` elements, their listeners, and attributes
+- router: a cross-platform (web and desktop) solution for global app routing 
+- liveview: a threadpool to spawn new VirtualDoms and their handles in
+- ssr: render the virtualdom to a string
+- web: render the your app on the web
+- desktop: render your app locally rendered with webview 
+- mobile: render your app on your device rendered with webview
+
 ## Examples:
 
 | File Navigator (Desktop)                                                                                                                | Bluetooth scanner (Desktop)                                                                                                             | TodoMVC (All platforms)                                                                                        | Tailwind (Liveview)                                                                                                                     |

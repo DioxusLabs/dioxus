@@ -182,9 +182,6 @@
 //! We've put a lot of work into making Dioxus ergonomic and *familiar*.
 //! Our target audience is TypeSrcipt developers looking to switch to Rust for the web - so we need to be comparabale to React.
 
-// Just a heads-up, the core functionality of dioxus rests in Dioxus-Core. This crate just wraps a bunch of utilities
-// together and exports their namespaces to something predicatble.
-#[cfg(feature = "core")]
 pub use dioxus_core as core;
 
 #[cfg(feature = "hooks")]
