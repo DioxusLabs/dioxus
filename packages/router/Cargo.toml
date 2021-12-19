@@ -15,6 +15,11 @@ dioxus-core = { path = "../core", version = "^0.1.3", default-features = false }
 dioxus-html = { path = "../html", version = "^0.1.0", default-features = false }
 dioxus-core-macro = { path = "../core-macro", version = "^0.1.2" }
 
+serde = "1.0.130"
+url = "2.2.2"
+url_serde = "0.2.0"
+serde_urlencoded = "0.7"
+
 web-sys = { version = "0.3", features = [
     "Attr",
     "Document",
@@ -26,21 +31,13 @@ web-sys = { version = "0.3", features = [
     "UrlSearchParams",
     "Window",
 ], optional = true }
-
-serde = "1.0.130"
-
-serde_urlencoded = "0.7"
-
-wasm-bindgen = "0.2"
-js-sys = "0.3"
-gloo = "0.4"
-route-recognizer = "0.3.1"
-url = "2.2.2"
-url_serde = "0.2.0"
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+gloo = { version = "0.4", optional = true }
 
 
 [features]
-default = ["web", "derive"]
+default = ["derive"]
 web = ["web-sys"]
 desktop = []
 mobile = []

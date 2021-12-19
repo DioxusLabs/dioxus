@@ -471,16 +471,16 @@ impl<'bump> DiffState<'bump> {
         );
 
         // Run the scope for one iteration to initialize it
-        if self.scopes.run_scope(new_idx) {
-            // Take the node that was just generated from running the component
-            let nextnode = self.scopes.fin_head(new_idx);
-            self.stack.create_component(new_idx, nextnode);
+        self.scopes.run_scope(new_idx);
 
-            // todo: subtrees
-            // if new_component.is_subtree_root.get() {
-            //     self.stack.push_subtree();
-            // }
-        }
+        // Take the node that was just generated from running the component
+        let nextnode = self.scopes.fin_head(new_idx);
+        self.stack.create_component(new_idx, nextnode);
+
+        // todo: subtrees
+        // if new_component.is_subtree_root.get() {
+        //     self.stack.push_subtree();
+        // }
 
         // Finally, insert this scope as a seen node.
         self.mutations.dirty_scopes.insert(new_idx);
@@ -735,7 +735,8 @@ impl<'bump> DiffState<'bump> {
             // React doesn't automatically memoize, but we do.
             let props_are_the_same = old.comparator.unwrap();
 
-            if (self.force_diff || !props_are_the_same(new)) && self.scopes.run_scope(scope_addr) {
+            if self.force_diff || !props_are_the_same(new) {
+                self.scopes.run_scope(scope_addr);
                 self.diff_node(
                     self.scopes.wip_head(scope_addr),
                     self.scopes.fin_head(scope_addr),

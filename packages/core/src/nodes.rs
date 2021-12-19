@@ -83,7 +83,7 @@ pub enum VNode<'src> {
     /// # Example
     ///
     /// ```rust, ignore
-    /// fn Example(cx: Context, props: &()) -> Element {
+    /// fn Example(cx: Scope<()>) -> Element {
     ///     todo!()
     /// }
     ///

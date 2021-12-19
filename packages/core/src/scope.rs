@@ -1,7 +1,6 @@
 use crate::innerlude::*;
 
 use futures_channel::mpsc::UnboundedSender;
-use smallvec::SmallVec;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -27,7 +26,7 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 ///     name: String
 /// }
 ///
-/// fn Example(cx: Context, props: &ExampleProps) -> Element {
+/// fn Example(cx: Scope<ExampleProps>) -> Element {
 ///     cx.render(rsx!{ div {"Hello, {cx.props.name}"} })
 /// }
 /// ```
@@ -62,7 +61,7 @@ impl<'a, P> std::ops::Deref for Scope<'a, P> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ScopeId(pub usize);
 
-/// Every component in Dioxus is represented by a `Scope`.
+/// Every component in Dioxus is represented by a `ScopeState`.
 ///
 /// Scopes contain the state for hooks, the component's props, and other lifecycle information.
 ///
@@ -93,7 +92,9 @@ pub struct ScopeState {
     pub(crate) items: RefCell<SelfReferentialItems<'static>>,
 
     pub(crate) hook_arena: Bump,
-    pub(crate) hook_vals: RefCell<SmallVec<[*mut dyn Any; 5]>>,
+
+    pub(crate) hook_vals: RefCell<Vec<*mut dyn Any>>,
+
     pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
@@ -141,7 +142,7 @@ impl ScopeState {
     /// # Example
     ///
     /// ```rust, ignore
-    /// fn App(cx: Context, props: &()) -> Element {
+    /// fn App(cx: Scope<()>) -> Element {
     ///     todo!();
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
@@ -250,9 +251,8 @@ impl ScopeState {
 
     /// Get the Root Node of this scope
     pub fn root_node(&self) -> &VNode {
-        todo!("Portals have changed how we address nodes. Still fixing this, sorry.");
-        // let node = *self.wip_frame().nodes.borrow().get(0).unwrap();
-        // unsafe { std::mem::transmute(&*node) }
+        let node = unsafe { &*self.wip_frame().node.get() };
+        unsafe { std::mem::transmute(node) }
     }
 
     /// This method enables the ability to expose state to children further down the VirtualDOM Tree.
@@ -329,6 +329,8 @@ impl ScopeState {
         let pinned_fut: Pin<BumpBox<_>> = boxed_fut.into();
 
         // erase the 'src lifetime for self-referential storage
+        // todo: provide a miri test around this
+        // concerned about segfaulting
         let self_ref_fut = unsafe { std::mem::transmute(pinned_fut) };
 
         // Push the future into the tasks
@@ -358,9 +360,8 @@ impl ScopeState {
         };
         match rsx {
             Some(s) => Some(s.call(fac)),
-            None => todo!(),
+            None => todo!("oh no no nodes"),
         }
-        // rsx.map(|f| f.call(fac))
     }
 
     /// Store a value between renders
@@ -463,24 +464,78 @@ impl ScopeState {
     pub(crate) fn bump(&self) -> &Bump {
         &self.wip_frame().bump
     }
+
+    pub(crate) fn drop_hooks(&mut self) {
+        self.hook_vals.get_mut().drain(..).for_each(|state| {
+            let as_mut = unsafe { &mut *state };
+            let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
+            drop(boxed);
+        });
+    }
+
+    pub(crate) fn reset(&mut self) {
+        // we're just reusing scopes so we need to clear it out
+        self.drop_hooks();
+
+        self.hook_idx.set(0);
+
+        self.hook_arena.reset();
+        self.shared_contexts.get_mut().clear();
+        self.parent_scope = None;
+        self.generation.set(0);
+        self.is_subtree_root.set(false);
+        self.subtree.set(0);
+
+        self.frames[0].reset();
+        self.frames[1].reset();
+
+        let SelfReferentialItems {
+            borrowed_props,
+            listeners,
+            tasks,
+        } = self.items.get_mut();
+
+        borrowed_props.clear();
+        listeners.clear();
+        tasks.clear();
+    }
+}
+
+impl Drop for ScopeState {
+    fn drop(&mut self) {
+        self.drop_hooks();
+    }
 }
 
 pub(crate) struct BumpFrame {
     pub bump: Bump,
-    pub nodes: Cell<*const VNode<'static>>,
+    pub node: Cell<*const VNode<'static>>,
 }
 impl BumpFrame {
     pub(crate) fn new(capacity: usize) -> Self {
         let bump = Bump::with_capacity(capacity);
 
         let node = &*bump.alloc(VText {
-            text: "asd",
+            text: "placeholdertext",
             dom_id: Default::default(),
             is_static: false,
         });
         let node = bump.alloc(VNode::Text(unsafe { std::mem::transmute(node) }));
         let nodes = Cell::new(node as *const _);
-        Self { bump, nodes }
+        Self { bump, node: nodes }
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.bump.reset();
+        let node = self.bump.alloc(VText {
+            text: "placeholdertext",
+            dom_id: Default::default(),
+            is_static: false,
+        });
+        let node = self
+            .bump
+            .alloc(VNode::Text(unsafe { std::mem::transmute(node) }));
+        self.node.set(node as *const _);
     }
 }
 

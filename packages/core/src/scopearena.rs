@@ -21,14 +21,15 @@ pub(crate) struct Heuristic {
 //
 // has an internal heuristics engine to pre-allocate arenas to the right size
 pub(crate) struct ScopeArena {
-    bump: Bump,
     pub pending_futures: RefCell<FxHashSet<ScopeId>>,
     scope_counter: Cell<usize>,
+    pub(crate) sender: UnboundedSender<SchedulerMsg>,
+    bump: Bump,
+
     pub scopes: RefCell<FxHashMap<ScopeId, *mut ScopeState>>,
     pub heuristics: RefCell<FxHashMap<FcSlot, Heuristic>>,
     free_scopes: RefCell<Vec<*mut ScopeState>>,
     nodes: RefCell<Slab<*const VNode<'static>>>,
-    pub(crate) sender: UnboundedSender<SchedulerMsg>,
 }
 
 impl ScopeArena {
@@ -51,6 +52,7 @@ impl ScopeArena {
         let node = bump.alloc(VNode::Element(el));
         let mut nodes = Slab::new();
         let root_id = nodes.insert(unsafe { std::mem::transmute(node as *const _) });
+
         debug_assert_eq!(root_id, 0);
 
         Self {
@@ -88,63 +90,73 @@ impl ScopeArena {
         let new_scope_id = ScopeId(self.scope_counter.get());
         self.scope_counter.set(self.scope_counter.get() + 1);
 
-        if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
-            let scope = unsafe { &mut *old_scope };
+        /*
+        This scopearena aggressively reuse old scopes when possible.
+        We try to minimize the new allocations for props/arenas.
 
-            scope.caller.set(caller);
-            scope.parent_scope = parent_scope;
-            scope.height = height;
-            scope.subtree = Cell::new(subtree);
-            scope.our_arena_idx = new_scope_id;
-            scope.container = container;
+        However, this will probably lead to some sort of fragmentation.
+        I'm not exactly sure how to improve this today.
+        */
+        match self.free_scopes.borrow_mut().pop() {
+            // No free scope, make a new scope
+            None => {
+                let (node_capacity, hook_capacity) = self
+                    .heuristics
+                    .borrow()
+                    .get(&fc_ptr)
+                    .map(|h| (h.node_arena_size, h.hook_arena_size))
+                    .unwrap_or_default();
 
-            let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
-            debug_assert!(any_item.is_none());
-        } else {
-            let (node_capacity, hook_capacity) = {
-                let heuristics = self.heuristics.borrow();
-                if let Some(heuristic) = heuristics.get(&fc_ptr) {
-                    (heuristic.node_arena_size, heuristic.hook_arena_size)
-                } else {
-                    (0, 0)
-                }
-            };
+                let frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
 
-            let frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
+                let scope = self.bump.alloc(ScopeState {
+                    sender: self.sender.clone(),
+                    container,
+                    our_arena_idx: new_scope_id,
+                    parent_scope,
+                    height,
+                    frames,
+                    subtree: Cell::new(subtree),
+                    is_subtree_root: Cell::new(false),
 
-            let scope = self.bump.alloc(ScopeState {
-                sender: self.sender.clone(),
-                container,
-                our_arena_idx: new_scope_id,
-                parent_scope,
-                height,
-                frames,
-                subtree: Cell::new(subtree),
-                is_subtree_root: Cell::new(false),
+                    caller: Cell::new(caller),
+                    generation: 0.into(),
 
-                caller: Cell::new(caller),
-                generation: 0.into(),
+                    shared_contexts: Default::default(),
 
-                shared_contexts: Default::default(),
+                    items: RefCell::new(SelfReferentialItems {
+                        listeners: Default::default(),
+                        borrowed_props: Default::default(),
+                        tasks: Default::default(),
+                    }),
 
-                items: RefCell::new(SelfReferentialItems {
-                    listeners: Default::default(),
-                    borrowed_props: Default::default(),
-                    tasks: Default::default(),
-                }),
+                    hook_arena: Bump::new(),
+                    hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
+                    hook_idx: Default::default(),
+                });
 
-                hook_arena: Bump::new(),
-                hook_vals: RefCell::new(smallvec::SmallVec::with_capacity(hook_capacity)),
-                hook_idx: Default::default(),
-            });
+                let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
+                debug_assert!(any_item.is_none());
+            }
 
-            let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
-            debug_assert!(any_item.is_none());
+            // Reuse a free scope
+            Some(old_scope) => {
+                let scope = unsafe { &mut *old_scope };
+                scope.caller.set(caller);
+                scope.parent_scope = parent_scope;
+                scope.height = height;
+                scope.subtree = Cell::new(subtree);
+                scope.our_arena_idx = new_scope_id;
+                scope.container = container;
+                let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
+                debug_assert!(any_item.is_none());
+            }
         }
 
         new_scope_id
     }
 
+    // Removes a scope and its descendents from the arena
     pub fn try_remove(&self, id: ScopeId) -> Option<()> {
         self.ensure_drop_safety(id);
 
@@ -152,34 +164,7 @@ impl ScopeArena {
         // - ensure_drop_safety ensures that no references to this scope are in use
         // - this raw pointer is removed from the map
         let scope = unsafe { &mut *self.scopes.borrow_mut().remove(&id).unwrap() };
-
-        // we're just reusing scopes so we need to clear it out
-        scope.hook_vals.get_mut().drain(..).for_each(|state| {
-            let as_mut = unsafe { &mut *state };
-            let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
-            drop(boxed);
-        });
-        scope.hook_idx.set(0);
-        scope.hook_arena.reset();
-
-        scope.shared_contexts.get_mut().clear();
-        scope.parent_scope = None;
-        scope.generation.set(0);
-        scope.is_subtree_root.set(false);
-        scope.subtree.set(0);
-
-        scope.frames[0].bump.reset();
-        scope.frames[1].bump.reset();
-
-        let SelfReferentialItems {
-            borrowed_props,
-            listeners,
-            tasks,
-        } = scope.items.get_mut();
-
-        borrowed_props.clear();
-        listeners.clear();
-        tasks.clear();
+        scope.reset();
 
         self.free_scopes.borrow_mut().push(scope);
 
@@ -245,7 +230,9 @@ impl ScopeArena {
         }
     }
 
-    pub(crate) fn run_scope(&self, id: ScopeId) -> bool {
+    // pub(crate) fn run_scope(&self, id: ScopeId) -> bool {
+
+    pub(crate) fn run_scope(&self, id: ScopeId) {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
@@ -278,6 +265,11 @@ impl ScopeArena {
 
         let render: &dyn Fn(&ScopeState) -> Element = unsafe { &*scope.caller.get() };
 
+        /*
+        If the component returns None, then we fill in a placeholder node. This will wipe what was there.
+
+        An alternate approach is to leave the Real Dom the same, but that can lead to safety issues and a lot more checks.
+        */
         if let Some(node) = render(scope) {
             if !scope.items.borrow().tasks.is_empty() {
                 self.pending_futures.borrow_mut().insert(id);
@@ -285,19 +277,20 @@ impl ScopeArena {
 
             let frame = scope.wip_frame();
             let node = frame.bump.alloc(node);
-            frame.nodes.set(unsafe { std::mem::transmute(node) });
-
-            // make the "wip frame" contents the "finished frame"
-            // any future dipping into completed nodes after "render" will go through "fin head"
-            scope.cycle_frame();
-            true
+            frame.node.set(unsafe { std::mem::transmute(node) });
         } else {
-            // the component bailed out early
-            // this leaves the wip frame and all descendents in a state where
-            // their WIP frames are invalid
-            // todo: descendents should not cause the app to crash
-            false
+            let frame = scope.wip_frame();
+            let node = frame
+                .bump
+                .alloc(VNode::Placeholder(frame.bump.alloc(VPlaceholder {
+                    dom_id: Default::default(),
+                })));
+            frame.node.set(unsafe { std::mem::transmute(node) });
         }
+
+        // make the "wip frame" contents the "finished frame"
+        // any future dipping into completed nodes after "render" will go through "fin head"
+        scope.cycle_frame();
     }
 
     pub fn call_listener_with_bubbling(&self, event: UserEvent, element: ElementId) {
@@ -328,7 +321,7 @@ impl ScopeArena {
     pub fn wip_head(&self, id: ScopeId) -> &VNode {
         let scope = self.get_scope(id).unwrap();
         let frame = scope.wip_frame();
-        let node = unsafe { &*frame.nodes.get() };
+        let node = unsafe { &*frame.node.get() };
         unsafe { std::mem::transmute::<&VNode, &VNode>(node) }
     }
 
@@ -336,11 +329,27 @@ impl ScopeArena {
     pub fn fin_head(&self, id: ScopeId) -> &VNode {
         let scope = self.get_scope(id).unwrap();
         let frame = scope.fin_frame();
-        let node = unsafe { &*frame.nodes.get() };
+        let node = unsafe { &*frame.node.get() };
         unsafe { std::mem::transmute::<&VNode, &VNode>(node) }
     }
 
     pub fn root_node(&self, id: ScopeId) -> &VNode {
         self.fin_head(id)
+    }
+}
+
+// when dropping the virtualdom, we need to make sure and drop everything important
+impl Drop for ScopeArena {
+    fn drop(&mut self) {
+        for (_, scopeptr) in self.scopes.get_mut().drain() {
+            let scope = unsafe { bumpalo::boxed::Box::from_raw(scopeptr) };
+            drop(scope);
+        }
+
+        // these are probably complete invalid unfortunately ?
+        for scopeptr in self.free_scopes.get_mut().drain(..) {
+            let scope = unsafe { bumpalo::boxed::Box::from_raw(scopeptr) };
+            drop(scope);
+        }
     }
 }

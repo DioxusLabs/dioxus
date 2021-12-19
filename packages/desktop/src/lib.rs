@@ -64,6 +64,8 @@ pub fn run<T: 'static + Send + Sync>(
     let modifiers = ModifiersState::default();
     let event_loop = EventLoop::new();
 
+    log::debug!("Starting event loop");
+
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
