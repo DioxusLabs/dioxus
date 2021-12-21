@@ -8,10 +8,7 @@ use futures_util::{Future, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use smallvec::SmallVec;
-use std::{
-    any::Any, cell::RefCell, collections::VecDeque, iter::FromIterator, pin::Pin, sync::Arc,
-    task::Poll,
-};
+use std::{any::Any, collections::VecDeque, iter::FromIterator, pin::Pin, sync::Arc, task::Poll};
 
 /// A virtual node s ystem that progresses user events and diffs UI trees.
 ///
@@ -207,8 +204,8 @@ impl VirtualDom {
             root as *const _,
             Box::new(VComponentProps {
                 props: root_props,
-                memo: |_a, _b| false,
-                render_fn: unsafe { std::mem::transmute(root) },
+                memo: |_a, _b| unreachable!("memo on root will neve be run"),
+                render_fn: root,
             }),
             None,
             ElementId(0),

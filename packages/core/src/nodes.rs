@@ -359,7 +359,7 @@ pub struct VComponent<'src> {
     pub scope: Cell<Option<ScopeId>>,
     pub can_memoize: bool,
     pub user_fc: *const (),
-    pub props: Option<RefCell<Box<dyn AnyProps + 'src>>>,
+    pub props: RefCell<Option<Box<dyn AnyProps + 'src>>>,
 }
 
 pub(crate) struct VComponentProps<P> {
@@ -587,7 +587,7 @@ impl<'a> NodeFactory<'a> {
             scope: Default::default(),
             can_memoize: P::IS_STATIC,
             user_fc: component as *const (),
-            props: Some(RefCell::new(Box::new(VComponentProps {
+            props: RefCell::new(Some(Box::new(VComponentProps {
                 // local_props: RefCell::new(Some(props)),
                 // heap_props: RefCell::new(None),
                 props,

@@ -88,6 +88,8 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
+use std::borrow::BorrowMut;
+
 use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
@@ -427,10 +429,11 @@ impl<'bump> DiffState<'bump> {
         let parent_idx = self.stack.current_scope().unwrap();
 
         // Insert a new scope into our component list
-        let caller = unsafe { std::mem::transmute(vcomponent.props as *const _) };
+        let props: Box<dyn AnyProps + 'bump> = vcomponent.props.borrow_mut().take().unwrap();
+        let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
         let new_idx = self.scopes.new_with_key(
             vcomponent.user_fc,
-            caller,
+            props,
             Some(parent_idx),
             self.stack.element_stack.last().copied().unwrap(),
             0,
@@ -441,9 +444,7 @@ impl<'bump> DiffState<'bump> {
 
         match vcomponent.can_memoize {
             true => {
-                // promote the props onto the heap
-                // when we diff these nodes, we'll want to move it over
-                vcomponent.props.promote();
+                // todo: implement promotion logic. save us from boxing props that we don't need
             }
             false => {
                 // track this component internally so we know the right drop order
@@ -709,43 +710,30 @@ impl<'bump> DiffState<'bump> {
                 .get_scope(scope_addr)
                 .unwrap_or_else(|| panic!("could not find {:?}", scope_addr));
 
-            /*
-            old.props is the previous vcomponent
-            existing_props is the current ScopeState's
-            */
-            let existing_props = unsafe { &*scope.render.get() };
-            if old.can_memoize {
-                // let props_are_the_same = unsafe { existing_props.memoize(new.props) };
+            // take the new props out regardless
+            // when memoizing, push to the existing scope if memoization happens
+            let new_props = new.props.borrow_mut().take().unwrap();
 
-                if !props_are_the_same || self.force_diff {
-                    // release the old props since they will be overwritten next frame
-                    // existing_props.release();
-
-                    // move the old props onto the heap
-                    // todo: maybe we can reuse the old props box?
-                    new.props.promote();
-
-                    scope
-                        .render
-                        .set(unsafe { std::mem::transmute(new.props as *const dyn AnyProps) });
-
-                    // this should auto drop the previous props
-                    self.scopes.run_scope(scope_addr);
-
-                    self.diff_node(
-                        self.scopes.wip_head(scope_addr),
-                        self.scopes.fin_head(scope_addr),
-                    );
+            let should_run = {
+                if old.can_memoize {
+                    let props_are_the_same = unsafe {
+                        scope
+                            .props
+                            .borrow()
+                            .as_ref()
+                            .unwrap()
+                            .memoize(new_props.as_ref())
+                    };
+                    !props_are_the_same || self.force_diff
                 } else {
-                    // release the old props since they will be overwritten next frame
-                    if existing_props.as_ptr() != old.props.as_ptr() {
-                        old.props.release();
-                    }
+                    true
                 }
-            } else {
-                scope
-                    .render
-                    .set(unsafe { std::mem::transmute(new.props as *const dyn AnyProps) });
+            };
+
+            if should_run {
+                let _old_props = scope
+                    .props
+                    .replace(unsafe { std::mem::transmute(Some(new_props)) });
 
                 // this should auto drop the previous props
                 self.scopes.run_scope(scope_addr);
@@ -753,7 +741,10 @@ impl<'bump> DiffState<'bump> {
                     self.scopes.wip_head(scope_addr),
                     self.scopes.fin_head(scope_addr),
                 );
-            }
+            } else {
+                // memoization has taken place
+                drop(new_props);
+            };
 
             self.stack.scope_stack.pop();
         } else {

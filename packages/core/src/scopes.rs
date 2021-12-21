@@ -91,14 +91,17 @@ impl ScopeArena {
         container: ElementId,
         subtree: u32,
     ) -> ScopeId {
+        // Increment the ScopeId system. ScopeIDs are never reused
         let new_scope_id = ScopeId(self.scope_counter.get());
         self.scope_counter.set(self.scope_counter.get() + 1);
-        let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
+
+        // Get the height of the scope
         let height = parent_scope
-            .as_ref()
-            .map(|f| unsafe { &**f })
-            .map(|f| f.height + 1)
+            .map(|id| self.get_scope(id).map(|scope| scope.height))
+            .flatten()
             .unwrap_or_default();
+
+        let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
 
         /*
         This scopearena aggressively reuse old scopes when possible.
@@ -107,60 +110,39 @@ impl ScopeArena {
         However, this will probably lead to some sort of fragmentation.
         I'm not exactly sure how to improve this today.
         */
-        match self.free_scopes.borrow_mut().pop() {
-            // No free scope, make a new scope
-            None => {
-                let (node_capacity, hook_capacity) = self
-                    .heuristics
-                    .borrow()
-                    .get(&fc_ptr)
-                    .map(|h| (h.node_arena_size, h.hook_arena_size))
-                    .unwrap_or_default();
+        if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
+            // reuse the old scope
+            let scope = unsafe { &mut *old_scope };
+            scope.props.get_mut().replace(vcomp);
+            scope.parent_scope = parent_scope;
+            scope.height = height;
+            scope.subtree.set(subtree);
+            scope.our_arena_idx = new_scope_id;
+            scope.container = container;
+            let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
+            debug_assert!(any_item.is_none());
+        } else {
+            // else create a new scope
+            let (node_capacity, hook_capacity) = self
+                .heuristics
+                .borrow()
+                .get(&fc_ptr)
+                .map(|h| (h.node_arena_size, h.hook_arena_size))
+                .unwrap_or_default();
 
-                let frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
-
-                let scope = self.bump.alloc(ScopeState {
-                    sender: self.sender.clone(),
-                    container,
-                    our_arena_idx: new_scope_id,
-                    parent_scope,
+            self.scopes.borrow_mut().insert(
+                new_scope_id,
+                self.bump.alloc(ScopeState::new(
                     height,
-                    frames,
-                    subtree: Cell::new(subtree),
-                    is_subtree_root: Cell::new(false),
-
-                    props: vcomp,
-                    generation: 0.into(),
-
-                    shared_contexts: Default::default(),
-
-                    items: RefCell::new(SelfReferentialItems {
-                        listeners: Default::default(),
-                        borrowed_props: Default::default(),
-                        tasks: Default::default(),
-                    }),
-
-                    hook_arena: Bump::new(),
-                    hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
-                    hook_idx: Default::default(),
-                });
-
-                let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
-                debug_assert!(any_item.is_none());
-            }
-
-            // Reuse a free scope
-            Some(old_scope) => {
-                let scope = unsafe { &mut *old_scope };
-                scope.props.set(vcomp);
-                scope.parent_scope = parent_scope;
-                scope.height = height;
-                scope.subtree = Cell::new(subtree);
-                scope.our_arena_idx = new_scope_id;
-                scope.container = container;
-                let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
-                debug_assert!(any_item.is_none());
-            }
+                    container,
+                    new_scope_id,
+                    self.sender.clone(),
+                    parent_scope,
+                    vcomp,
+                    node_capacity,
+                    hook_capacity,
+                )),
+            );
         }
 
         new_scope_id
@@ -175,9 +157,6 @@ impl ScopeArena {
         // - this raw pointer is removed from the map
         let scope = unsafe { &mut *self.scopes.borrow_mut().remove(&id).unwrap() };
         scope.reset();
-
-        todo!("drop");
-        // unsafe { &*scope.render.get() }.release();
 
         self.free_scopes.borrow_mut().push(scope);
 
@@ -230,8 +209,7 @@ impl ScopeArena {
 
                 self.ensure_drop_safety(scope_id);
 
-                let g = comp.props.take();
-                // comp.props.release();
+                drop(comp.props.take());
             });
 
             // Now that all the references are gone, we can safely drop our own references in our listeners.
@@ -285,7 +263,10 @@ impl ScopeArena {
         Also, the way we implement hooks allows us to cut rendering short before the next hook is recalled.
         I'm not sure if React lets you abort the component early, but we let you do that.
         */
-        if let Some(node) = scope.props.render(scope) {
+
+        let props = scope.props.borrow();
+        let render = props.as_ref().unwrap();
+        if let Some(node) = render.render(scope) {
             if !scope.items.borrow().tasks.is_empty() {
                 self.pending_futures.borrow_mut().insert(id);
             }
@@ -425,7 +406,7 @@ pub struct ScopeState {
     pub(crate) is_subtree_root: Cell<bool>,
     pub(crate) subtree: Cell<u32>,
 
-    pub(crate) props: Option<RefCell<Box<dyn AnyProps>>>,
+    pub(crate) props: RefCell<Option<Box<dyn AnyProps>>>,
 
     // nodes, items
     pub(crate) frames: [BumpFrame; 2],
@@ -449,6 +430,47 @@ pub struct SelfReferentialItems<'a> {
 
 // Public methods exposed to libraries and components
 impl ScopeState {
+    fn new(
+        height: u32,
+        container: ElementId,
+        our_arena_idx: ScopeId,
+        sender: UnboundedSender<SchedulerMsg>,
+        parent_scope: Option<*mut ScopeState>,
+        vcomp: Box<dyn AnyProps>,
+        node_capacity: usize,
+        hook_capacity: usize,
+    ) -> Self {
+        let frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
+
+        ScopeState {
+            sender,
+            container,
+            our_arena_idx,
+            parent_scope,
+            props: RefCell::new(Some(vcomp)),
+            height,
+            frames,
+
+            // todo: subtrees
+            subtree: Cell::new(0),
+            is_subtree_root: Cell::new(false),
+
+            generation: 0.into(),
+
+            shared_contexts: Default::default(),
+
+            items: RefCell::new(SelfReferentialItems {
+                listeners: Default::default(),
+                borrowed_props: Default::default(),
+                tasks: Default::default(),
+            }),
+
+            hook_arena: Bump::new(),
+            hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
+            hook_idx: Default::default(),
+        }
+    }
+
     /// Get the subtree ID that this scope belongs to.
     ///
     /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
