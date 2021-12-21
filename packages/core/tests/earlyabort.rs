@@ -55,13 +55,13 @@ fn test_early_abort() {
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [CreatePlaceholder { root: 3 }, ReplaceWith { root: 1, m: 1 },],
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [

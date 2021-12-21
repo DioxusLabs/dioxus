@@ -4,7 +4,3 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
 fn main() {}
-
-fn App(cx: Scope<()>) -> Element {
-    todo!()
-}

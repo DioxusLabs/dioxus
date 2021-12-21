@@ -20,7 +20,7 @@ struct Borrowed<'a> {
 
 fn App2<'a>(cx: Scope<'a, Borrowed<'a>>) -> Element {
     let g = eat2(&cx);
-    todo!()
+    rsx!(cx, "")
 }
 
 fn eat2(s: &ScopeState) {}

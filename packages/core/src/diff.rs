@@ -88,6 +88,8 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
+use std::borrow::BorrowMut;
+
 use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
@@ -239,15 +241,6 @@ impl<'bump> DiffStack<'bump> {
 }
 
 impl<'bump> DiffState<'bump> {
-    pub fn diff_scope(&mut self, id: ScopeId) {
-        let (old, new) = (self.scopes.wip_head(id), self.scopes.fin_head(id));
-        self.stack.push(DiffInstruction::Diff { old, new });
-        self.stack.scope_stack.push(id);
-        let scope = self.scopes.get_scope(id).unwrap();
-        self.stack.element_stack.push(scope.container);
-        self.work(|| false);
-    }
-
     /// Progress the diffing for this "fiber"
     ///
     /// This method implements a depth-first iterative tree traversal.
@@ -415,7 +408,7 @@ impl<'bump> DiffState<'bump> {
         }
 
         // todo: the settext optimization
-
+        //
         // if children.len() == 1 {
         //     if let VNode::Text(vtext) = children[0] {
         //         self.mutations.set_text(vtext.text, real_id.as_u64());
@@ -436,39 +429,30 @@ impl<'bump> DiffState<'bump> {
         let parent_idx = self.stack.current_scope().unwrap();
 
         // Insert a new scope into our component list
-        let parent_scope = self.scopes.get_scope(parent_idx).unwrap();
-        let height = parent_scope.height + 1;
-        let subtree = parent_scope.subtree.get();
-
-        let parent_scope = self.scopes.get_scope_raw(parent_idx);
-        let caller = unsafe { std::mem::transmute(vcomponent.caller as *const _) };
-        let fc_ptr = vcomponent.user_fc;
-
-        let container = *self.stack.element_stack.last().unwrap();
-
-        let new_idx =
-            self.scopes
-                .new_with_key(fc_ptr, caller, parent_scope, container, height, subtree);
+        let props: Box<dyn AnyProps + 'bump> = vcomponent.props.borrow_mut().take().unwrap();
+        let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
+        let new_idx = self.scopes.new_with_key(
+            vcomponent.user_fc,
+            props,
+            Some(parent_idx),
+            self.stack.element_stack.last().copied().unwrap(),
+            0,
+        );
 
         // Actually initialize the caller's slot with the right address
-        vcomponent.associated_scope.set(Some(new_idx));
+        vcomponent.scope.set(Some(new_idx));
 
-        if !vcomponent.can_memoize {
-            let cur_scope = self.scopes.get_scope(parent_idx).unwrap();
-            let extended = unsafe { std::mem::transmute(vcomponent) };
-            cur_scope.items.borrow_mut().borrowed_props.push(extended);
-        } else {
-            // the props are currently bump allocated but we need to move them to the heap
+        match vcomponent.can_memoize {
+            true => {
+                // todo: implement promotion logic. save us from boxing props that we don't need
+            }
+            false => {
+                // track this component internally so we know the right drop order
+                let cur_scope = self.scopes.get_scope(parent_idx).unwrap();
+                let extended = unsafe { std::mem::transmute(vcomponent) };
+                cur_scope.items.borrow_mut().borrowed_props.push(extended);
+            }
         }
-
-        // TODO: add noderefs to current noderef list Noderefs
-        let _new_component = self.scopes.get_scope(new_idx).unwrap();
-
-        log::debug!(
-            "initializing component {:?} with height {:?}",
-            new_idx,
-            height + 1
-        );
 
         // Run the scope for one iteration to initialize it
         self.scopes.run_scope(new_idx);
@@ -476,11 +460,6 @@ impl<'bump> DiffState<'bump> {
         // Take the node that was just generated from running the component
         let nextnode = self.scopes.fin_head(new_idx);
         self.stack.create_component(new_idx, nextnode);
-
-        // todo: subtrees
-        // if new_component.is_subtree_root.get() {
-        //     self.stack.push_subtree();
-        // }
 
         // Finally, insert this scope as a seen node.
         self.mutations.dirty_scopes.insert(new_idx);
@@ -494,15 +473,23 @@ impl<'bump> DiffState<'bump> {
         use VNode::*;
         match (old_node, new_node) {
             // Check the most common cases first
+            // these are *actual* elements, not wrappers around lists
             (Text(old), Text(new)) => {
                 self.diff_text_nodes(old, new, old_node, new_node);
             }
+            (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
+            (Placeholder(old), Placeholder(new)) => {
+                if let Some(root) = old.dom_id.get() {
+                    self.scopes.update_node(new_node, root);
+                    new.dom_id.set(Some(root))
+                }
+            }
+
+            // These two sets are pointers to nodes but are not actually nodes themselves
             (Component(old), Component(new)) => {
                 self.diff_component_nodes(old_node, new_node, *old, *new)
             }
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
-            (Placeholder(old), Placeholder(new)) => self.diff_placeholder_nodes(old, new),
-            (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
 
             // The normal pathway still works, but generates slightly weird instructions
             // This pathway just ensures we get create and replace
@@ -708,21 +695,14 @@ impl<'bump> DiffState<'bump> {
         old: &'bump VComponent<'bump>,
         new: &'bump VComponent<'bump>,
     ) {
-        let scope_addr = old.associated_scope.get().unwrap();
-
-        log::debug!(
-            "Diffing components. old_scope: {:?}, old_addr: {:?}, new_addr: {:?}",
-            scope_addr,
-            old.user_fc,
-            new.user_fc
-        );
+        let scope_addr = old.scope.get().unwrap();
 
         // Make sure we're dealing with the same component (by function pointer)
         if old.user_fc == new.user_fc {
             self.stack.scope_stack.push(scope_addr);
 
             // Make sure the new component vnode is referencing the right scope id
-            new.associated_scope.set(Some(scope_addr));
+            new.scope.set(Some(scope_addr));
 
             // make sure the component's caller function is up to date
             let scope = self
@@ -730,18 +710,41 @@ impl<'bump> DiffState<'bump> {
                 .get_scope(scope_addr)
                 .unwrap_or_else(|| panic!("could not find {:?}", scope_addr));
 
-            scope.caller.set(unsafe { std::mem::transmute(new.caller) });
+            // take the new props out regardless
+            // when memoizing, push to the existing scope if memoization happens
+            let new_props = new.props.borrow_mut().take().unwrap();
 
-            // React doesn't automatically memoize, but we do.
-            let props_are_the_same = old.comparator.unwrap();
+            let should_run = {
+                if old.can_memoize {
+                    let props_are_the_same = unsafe {
+                        scope
+                            .props
+                            .borrow()
+                            .as_ref()
+                            .unwrap()
+                            .memoize(new_props.as_ref())
+                    };
+                    !props_are_the_same || self.force_diff
+                } else {
+                    true
+                }
+            };
 
-            if self.force_diff || !props_are_the_same(new) {
+            if should_run {
+                let _old_props = scope
+                    .props
+                    .replace(unsafe { std::mem::transmute(Some(new_props)) });
+
+                // this should auto drop the previous props
                 self.scopes.run_scope(scope_addr);
                 self.diff_node(
                     self.scopes.wip_head(scope_addr),
                     self.scopes.fin_head(scope_addr),
                 );
-            }
+            } else {
+                // memoization has taken place
+                drop(new_props);
+            };
 
             self.stack.scope_stack.pop();
         } else {
@@ -762,11 +765,6 @@ impl<'bump> DiffState<'bump> {
         debug_assert!(!new.children.is_empty());
 
         self.diff_children(old.children, new.children);
-    }
-
-    // probably will get inlined
-    fn diff_placeholder_nodes(&mut self, old: &'bump VPlaceholder, new: &'bump VPlaceholder) {
-        new.dom_id.set(old.dom_id.get())
     }
 
     // =============================================
@@ -792,33 +790,8 @@ impl<'bump> DiffState<'bump> {
         // Remember, fragments can never be empty (they always have a single child)
         match (old, new) {
             ([], []) => {}
-            ([], _) => {
-                // we need to push the
-                self.stack.create_children(new, MountType::Append);
-            }
-            (_, []) => {
-                self.remove_nodes(old, true);
-            }
-
-            // todo: placeholders explicitly replace fragments
-            //
-            // ([VNode::Placeholder(old_anchor)], [VNode::Placeholder(new_anchor)]) => {
-            //     old_anchor.dom_id.set(new_anchor.dom_id.get());
-            // }
-            // ([VNode::Placeholder(_)], _) => {
-            //     self.stack
-            //         .create_children(new, MountType::Replace { old: &old[0] });
-            // }
-            // (_, [VNode::Placeholder(_)]) => {
-            //     let new: &'bump VNode<'bump> = &new[0];
-            //     if let Some(first_old) = old.get(0) {
-            //         self.remove_nodes(&old[1..], true);
-            //         self.stack
-            //             .create_node(new, MountType::Replace { old: first_old });
-            //     } else {
-            //         self.stack.create_node(new, MountType::Append {});
-            //     }
-            // }
+            ([], _) => self.stack.create_children(new, MountType::Append),
+            (_, []) => self.remove_nodes(old, true),
             _ => {
                 let new_is_keyed = new[0].key().is_some();
                 let old_is_keyed = old[0].key().is_some();
@@ -1216,7 +1189,7 @@ impl<'bump> DiffState<'bump> {
                     search_node = frag.children.last();
                 }
                 VNode::Component(el) => {
-                    let scope_id = el.associated_scope.get().unwrap();
+                    let scope_id = el.scope.get().unwrap();
                     search_node = Some(self.scopes.root_node(scope_id));
                 }
             }
@@ -1233,7 +1206,7 @@ impl<'bump> DiffState<'bump> {
                     search_node = Some(&frag.children[0]);
                 }
                 VNode::Component(el) => {
-                    let scope_id = el.associated_scope.get().unwrap();
+                    let scope_id = el.scope.get().unwrap();
                     search_node = Some(self.scopes.root_node(scope_id));
                 }
                 VNode::Text(t) => break t.dom_id.get(),
@@ -1249,8 +1222,6 @@ impl<'bump> DiffState<'bump> {
                 let id = old
                     .try_mounted_id()
                     .unwrap_or_else(|| panic!("broke on {:?}", old));
-
-                log::debug!("element parent is {:?}", el.parent_id.get());
 
                 self.mutations.replace_with(id, nodes_created as u32);
                 self.remove_nodes(el.children, false);
@@ -1270,11 +1241,11 @@ impl<'bump> DiffState<'bump> {
             }
 
             VNode::Component(c) => {
-                let node = self.scopes.fin_head(c.associated_scope.get().unwrap());
+                let node = self.scopes.fin_head(c.scope.get().unwrap());
                 self.replace_node(node, nodes_created);
 
-                let scope_id = c.associated_scope.get().unwrap();
-                log::debug!("Destroying scope {:?}", scope_id);
+                let scope_id = c.scope.get().unwrap();
+
                 self.scopes.try_remove(scope_id).unwrap();
             }
         }
@@ -1282,7 +1253,7 @@ impl<'bump> DiffState<'bump> {
 
     /// schedules nodes for garbage collection and pushes "remove" to the mutation stack
     /// remove can happen whenever
-    fn remove_nodes(
+    pub(crate) fn remove_nodes(
         &mut self,
         nodes: impl IntoIterator<Item = &'bump VNode<'bump>>,
         gen_muts: bool,
@@ -1323,18 +1294,15 @@ impl<'bump> DiffState<'bump> {
                 }
 
                 VNode::Component(c) => {
-                    self.destroy_vomponent(c, gen_muts);
+                    let scope_id = c.scope.get().unwrap();
+                    let root = self.scopes.root_node(scope_id);
+                    self.remove_nodes(Some(root), gen_muts);
+
+                    log::debug!("Destroying scope {:?}", scope_id);
+                    self.scopes.try_remove(scope_id).unwrap();
                 }
             }
         }
-    }
-
-    fn destroy_vomponent(&mut self, vc: &VComponent, gen_muts: bool) {
-        let scope_id = vc.associated_scope.get().unwrap();
-        let root = self.scopes.root_node(scope_id);
-        self.remove_nodes(Some(root), gen_muts);
-        log::debug!("Destroying scope {:?}", scope_id);
-        self.scopes.try_remove(scope_id).unwrap();
     }
 
     /// Adds a listener closure to a scope during diff.
