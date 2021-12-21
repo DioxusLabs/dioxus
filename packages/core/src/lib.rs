@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
 
-pub(crate) mod component;
 pub(crate) mod diff;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
@@ -10,7 +9,6 @@ pub(crate) mod scopes;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
-    pub use crate::component::*;
     pub(crate) use crate::diff::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
@@ -69,12 +67,12 @@ pub use crate::innerlude::{
 };
 
 pub mod prelude {
-    pub use crate::component::{fc_to_builder, Fragment, Properties};
     pub use crate::innerlude::Scope;
     pub use crate::innerlude::{
         Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory, ScopeState,
     };
     pub use crate::nodes::VNode;
+    pub use crate::virtual_dom::{fc_to_builder, Fragment, Properties};
     pub use crate::VirtualDom;
 }
 

@@ -7,15 +7,11 @@ To build new apps with Dioxus or to extend the ecosystem with new hooks or compo
 
 ```rust
 fn app(cx: Scope<()>) -> Element {
-    cx.render(rsx!(
-        div { "hello world" }
-    ))
+    rsx!(cx, div { "hello world" })
 }
-
 
 fn main() {
     let mut renderer = SomeRenderer::new();
-
 
     // Creating a new virtualdom from a component
     let mut dom = VirtualDom::new(app);
@@ -25,21 +21,33 @@ fn main() {
     renderer.apply(edits);
 
     // Injecting events
-    dom.handle_message(SchedulerMsg::UserEvent());
+    dom.handle_message(SchedulerMsg::Event(UserEvent {
+        scope_id: None,
+        priority: EventPriority::High,
+        element: ElementId(0),
+        name: "onclick",
+        data: Arc::new(()),
+    }));
+
+    // polling asynchronously
+    dom.wait_for_work().await;
+
+    // working with a deadline
+    if let Some(edits) = dom.work_with_deadline(|| false) {
+        renderer.apply(edits);
+    }
+
+    // getting state of scopes
+    let scope = dom.get_scope(ScopeId(0)).unwrap();
+
+    // iterating through the tree
+    match scope.root_node() {
+        VNodes::Text(vtext) => dbg!(vtext),
+        VNodes::Element(vel) => dbg!(vel),
+        _ => todo!()
+    }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 ```
