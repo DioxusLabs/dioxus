@@ -168,7 +168,7 @@ impl<'a> TextRenderer<'a, '_> {
                     }
                 }
 
-                write!(f, "<{}", el.tag_name)?;
+                write!(f, "<{}", el.tag)?;
 
                 let mut inner_html = None;
                 let mut attr_iter = el.attributes.iter().peekable();
@@ -233,7 +233,7 @@ impl<'a> TextRenderer<'a, '_> {
                     }
                 }
 
-                write!(f, "</{}>", el.tag_name)?;
+                write!(f, "</{}>", el.tag)?;
                 if self.cfg.newline {
                     writeln!(f)?;
                 }

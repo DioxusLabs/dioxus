@@ -3,8 +3,8 @@
 //! However, it has been adopted to fit the Dioxus Props builder pattern.
 //!
 //! For dioxus, we make a few changes:
-//! - automatically implement Into<Option> on the setters (IE the strip setter option)
-//! - automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
+//! - [ ] automatically implement Into<Option> on the setters (IE the strip setter option)
+//! - [ ] automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
 
 use proc_macro2::TokenStream;
 
@@ -194,6 +194,14 @@ mod field_info {
             field_defaults: FieldBuilderAttr,
         ) -> Result<FieldInfo, Error> {
             if let Some(ref name) = field.ident {
+                let mut builder_attr = field_defaults.with(&field.attrs)?;
+
+                // children field is automatically defaulted to None
+                if name == "children" {
+                    builder_attr.default =
+                        Some(syn::parse(quote!(Default::default()).into()).unwrap());
+                }
+
                 Ok(FieldInfo {
                     ordinal,
                     name,
@@ -202,7 +210,7 @@ mod field_info {
                         proc_macro2::Span::call_site(),
                     ),
                     ty: &field.ty,
-                    builder_attr: field_defaults.with(&field.attrs)?,
+                    builder_attr,
                 })
             } else {
                 Err(Error::new(field.span(), "Nameless field in struct"))
@@ -285,7 +293,7 @@ mod field_info {
         pub fn with(mut self, attrs: &[syn::Attribute]) -> Result<Self, Error> {
             let mut skip_tokens = None;
             for attr in attrs {
-                if path_to_single_string(&attr.path).as_deref() != Some("builder") {
+                if path_to_single_string(&attr.path).as_deref() != Some("props") {
                     continue;
                 }
 
@@ -316,7 +324,7 @@ mod field_info {
             if self.setter.skip && self.default.is_none() {
                 return Err(Error::new_spanned(
                     skip_tokens.unwrap(),
-                    "#[builder(skip)] must be accompanied by default or default_code",
+                    "#[props(skip)] must be accompanied by default or default_code",
                 ));
             }
 
@@ -325,6 +333,7 @@ mod field_info {
 
         pub fn apply_meta(&mut self, expr: syn::Expr) -> Result<(), Error> {
             match expr {
+                // #[props(default = "...")]
                 syn::Expr::Assign(assign) => {
                     let name = expr_to_single_string(&assign.left)
                         .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
@@ -356,6 +365,8 @@ mod field_info {
                         )),
                     }
                 }
+
+                // uh not sure
                 syn::Expr::Path(path) => {
                     let name = path_to_single_string(&path.path)
                         .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
@@ -371,6 +382,8 @@ mod field_info {
                         )),
                     }
                 }
+
+                //
                 syn::Expr::Call(call) => {
                     let subsetting_name = if let syn::Expr::Path(path) = &*call.func {
                         path_to_single_string(&path.path)
@@ -398,6 +411,7 @@ mod field_info {
                         )),
                     }
                 }
+
                 syn::Expr::Unary(syn::ExprUnary {
                     op: syn::UnOp::Not(_),
                     expr,

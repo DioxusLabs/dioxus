@@ -141,9 +141,9 @@ impl<'src> VNode<'src> {
     /// Returns None if the VNode is not mounted, or if the VNode cannot be presented by a mounted ID (Fragment/Component)
     pub fn try_mounted_id(&self) -> Option<ElementId> {
         match &self {
-            VNode::Text(el) => el.dom_id.get(),
-            VNode::Element(el) => el.dom_id.get(),
-            VNode::Placeholder(el) => el.dom_id.get(),
+            VNode::Text(el) => el.id.get(),
+            VNode::Element(el) => el.id.get(),
+            VNode::Placeholder(el) => el.id.get(),
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
         }
@@ -176,7 +176,7 @@ impl Debug for VNode<'_> {
         match &self {
             VNode::Element(el) => s
                 .debug_struct("VNode::VElement")
-                .field("name", &el.tag_name)
+                .field("name", &el.tag)
                 .field("key", &el.key)
                 .field("attrs", &el.attributes)
                 .field("children", &el.children)
@@ -187,7 +187,6 @@ impl Debug for VNode<'_> {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
             VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
-            // VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
         }
     }
 }
@@ -216,13 +215,13 @@ fn empty_cell() -> Cell<Option<ElementId>> {
 
 /// A placeholder node only generated when Fragments don't have any children.
 pub struct VPlaceholder {
-    pub dom_id: Cell<Option<ElementId>>,
+    pub id: Cell<Option<ElementId>>,
 }
 
 /// A bump-allocated string slice and metadata.
 pub struct VText<'src> {
     pub text: &'src str,
-    pub dom_id: Cell<Option<ElementId>>,
+    pub id: Cell<Option<ElementId>>,
     pub is_static: bool,
 }
 
@@ -238,11 +237,11 @@ pub struct VFragment<'src> {
 
 /// An element like a "div" with children, listeners, and attributes.
 pub struct VElement<'a> {
-    pub tag_name: &'static str,
+    pub tag: &'static str,
     pub namespace: Option<&'static str>,
     pub key: Option<&'a str>,
-    pub dom_id: Cell<Option<ElementId>>,
-    pub parent_id: Cell<Option<ElementId>>,
+    pub id: Cell<Option<ElementId>>,
+    pub parent: Cell<Option<ElementId>>,
     pub listeners: &'a [Listener<'a>],
     pub attributes: &'a [Attribute<'a>],
     pub children: &'a [VNode<'a>],
@@ -251,11 +250,11 @@ pub struct VElement<'a> {
 impl Debug for VElement<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VElement")
-            .field("tag_name", &self.tag_name)
+            .field("tag_name", &self.tag)
             .field("namespace", &self.namespace)
             .field("key", &self.key)
-            .field("dom_id", &self.dom_id)
-            .field("parent_id", &self.parent_id)
+            .field("id", &self.id)
+            .field("parent", &self.parent)
             .field("listeners", &self.listeners.len())
             .field("attributes", &self.attributes)
             .field("children", &self.children)
@@ -363,20 +362,13 @@ pub struct VComponent<'src> {
 }
 
 pub(crate) struct VComponentProps<P> {
-    // Props start local
-    // If they are static, then they can get promoted onto the heap
     pub render_fn: Component<P>,
-    pub props: P,
     pub memo: unsafe fn(&P, &P) -> bool,
+    pub props: P,
 }
 
 pub trait AnyProps {
     fn as_ptr(&self) -> *const ();
-    fn release(&self);
-    fn replace_heap(&self, new: Box<dyn Any>);
-
-    // move the props from the bump arena onto the heap
-    fn promote(&self);
     fn render<'a>(&'a self, bump: &'a ScopeState) -> Element<'a>;
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
@@ -384,16 +376,9 @@ pub trait AnyProps {
 impl<P> AnyProps for VComponentProps<P> {
     fn as_ptr(&self) -> *const () {
         &self.props as *const _ as *const ()
-        // // todo: maybe move this into an enum
-        // let heap_props = self.heap_props.borrow();
-        // if let Some(b) = heap_props.as_ref() {
-        //     b.as_ref() as *const _ as *const ()
-        // } else {
-        //     let local_props = self.local_props.borrow();
-        //     local_props.as_ref().unwrap() as *const _ as *const ()
-        // }
     }
 
+    // Safety:
     // this will downcat the other ptr as our swallowed type!
     // you *must* make this check *before* calling this method
     // if your functions are not the same, then you will downcast a pointer into a different type (UB)
@@ -403,41 +388,9 @@ impl<P> AnyProps for VComponentProps<P> {
         (self.memo)(real_us, real_other)
     }
 
-    fn release(&self) {
-        panic!("don't release props anymore");
-        // if let Some(heap_props) = self.heap_props.borrow_mut().take() {
-        //     dbg!("releasing heap");
-        //     drop(heap_props)
-        // } else if let Some(local_props) = self.local_props.borrow_mut().take() {
-        //     dbg!("releasing local");
-        //     drop(local_props)
-        // } else {
-        //     dbg!("trying to do a double release");
-        // }
-    }
-
-    fn promote(&self) {
-        panic!("don't promote props anymore");
-        // dbg!("promoting props");
-        // if let Some(props) = self.local_props.borrow_mut().take() {
-        //     let mut heap_slot = self.heap_props.borrow_mut();
-        //     *heap_slot = Some(Box::new(props));
-        // }
-    }
-
     fn render<'a>(&'a self, scope: &'a ScopeState) -> Element<'a> {
-        let props: &P = &self.props;
-        let inline_props = unsafe { std::mem::transmute::<&P, &P>(props) };
-
-        (self.render_fn)(Scope {
-            scope,
-            props: inline_props,
-        })
-    }
-
-    fn replace_heap(&self, new: Box<dyn Any>) {
-        // let new = new.downcast::<P>().unwrap();
-        // self.heap_props.borrow_mut().replace(new);
+        let props = unsafe { std::mem::transmute::<&P, &P>(&self.props) };
+        (self.render_fn)(Scope { scope, props })
     }
 }
 
@@ -463,7 +416,7 @@ impl<'a> NodeFactory<'a> {
     /// Directly pass in text blocks without the need to use the format_args macro.
     pub fn static_text(&self, text: &'static str) -> VNode<'a> {
         VNode::Text(self.bump.alloc(VText {
-            dom_id: empty_cell(),
+            id: empty_cell(),
             text,
             is_static: true,
         }))
@@ -492,7 +445,7 @@ impl<'a> NodeFactory<'a> {
         VNode::Text(self.bump.alloc(VText {
             text,
             is_static,
-            dom_id: empty_cell(),
+            id: empty_cell(),
         }))
     }
 
@@ -545,14 +498,14 @@ impl<'a> NodeFactory<'a> {
         let key = key.map(|f| self.raw_text(f).0);
 
         VNode::Element(self.bump.alloc(VElement {
-            tag_name,
+            tag: tag_name,
             key,
             namespace,
             listeners,
             attributes,
             children,
-            dom_id: empty_cell(),
-            parent_id: empty_cell(),
+            id: empty_cell(),
+            parent: empty_cell(),
         }))
     }
 
@@ -621,9 +574,7 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            VNode::Placeholder(self.bump.alloc(VPlaceholder {
-                dom_id: empty_cell(),
-            }))
+            VNode::Placeholder(self.bump.alloc(VPlaceholder { id: empty_cell() }))
         } else {
             VNode::Fragment(VFragment {
                 children: nodes.into_bump_slice(),
@@ -643,9 +594,7 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            VNode::Placeholder(self.bump.alloc(VPlaceholder {
-                dom_id: empty_cell(),
-            }))
+            VNode::Placeholder(self.bump.alloc(VPlaceholder { id: empty_cell() }))
         } else {
             let children = nodes.into_bump_slice();
 
@@ -686,9 +635,9 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            Some(VNode::Placeholder(self.bump.alloc(VPlaceholder {
-                dom_id: empty_cell(),
-            })))
+            Some(VNode::Placeholder(
+                self.bump.alloc(VPlaceholder { id: empty_cell() }),
+            ))
         } else {
             let children = nodes.into_bump_slice();
 
@@ -766,9 +715,7 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
             Some(lazy) => lazy.call(cx),
-            None => VNode::Placeholder(cx.bump.alloc(VPlaceholder {
-                dom_id: empty_cell(),
-            })),
+            None => VNode::Placeholder(cx.bump.alloc(VPlaceholder { id: empty_cell() })),
         }
     }
 }

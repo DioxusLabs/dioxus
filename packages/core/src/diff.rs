@@ -88,8 +88,6 @@
 //! More info on how to improve this diffing algorithm:
 //!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
 
-use std::borrow::BorrowMut;
-
 use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
@@ -295,7 +293,7 @@ impl<'bump> DiffState<'bump> {
                 for child in el.children.iter() {
                     num_on_stack += self.push_all_nodes(child);
                 }
-                self.mutations.push_root(el.dom_id.get().unwrap());
+                self.mutations.push_root(el.id.get().unwrap());
 
                 num_on_stack + 1
             }
@@ -351,7 +349,7 @@ impl<'bump> DiffState<'bump> {
         let real_id = self.scopes.reserve_node(node);
 
         self.mutations.create_text_node(vtext.text, real_id);
-        vtext.dom_id.set(Some(real_id));
+        vtext.id.set(Some(real_id));
         self.stack.add_child_count(1);
     }
 
@@ -359,20 +357,20 @@ impl<'bump> DiffState<'bump> {
         let real_id = self.scopes.reserve_node(node);
 
         self.mutations.create_placeholder(real_id);
-        anchor.dom_id.set(Some(real_id));
+        anchor.id.set(Some(real_id));
 
         self.stack.add_child_count(1);
     }
 
     fn create_element_node(&mut self, element: &'bump VElement<'bump>, node: &'bump VNode<'bump>) {
         let VElement {
-            tag_name,
+            tag: tag_name,
             listeners,
             attributes,
             children,
             namespace,
-            dom_id,
-            parent_id,
+            id: dom_id,
+            parent: parent_id,
             ..
         } = element;
 
@@ -479,9 +477,9 @@ impl<'bump> DiffState<'bump> {
             }
             (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
             (Placeholder(old), Placeholder(new)) => {
-                if let Some(root) = old.dom_id.get() {
+                if let Some(root) = old.id.get() {
                     self.scopes.update_node(new_node, root);
-                    new.dom_id.set(Some(root))
+                    new.id.set(Some(root))
                 }
             }
 
@@ -515,13 +513,13 @@ impl<'bump> DiffState<'bump> {
         _old_node: &'bump VNode<'bump>,
         new_node: &'bump VNode<'bump>,
     ) {
-        if let Some(root) = old.dom_id.get() {
+        if let Some(root) = old.id.get() {
             if old.text != new.text {
                 self.mutations.set_text(new.text, root.as_u64());
             }
             self.scopes.update_node(new_node, root);
 
-            new.dom_id.set(Some(root));
+            new.id.set(Some(root));
         }
     }
 
@@ -532,13 +530,13 @@ impl<'bump> DiffState<'bump> {
         old_node: &'bump VNode<'bump>,
         new_node: &'bump VNode<'bump>,
     ) {
-        let root = old.dom_id.get().unwrap();
+        let root = old.id.get().unwrap();
 
         // If the element type is completely different, the element needs to be re-rendered completely
         // This is an optimization React makes due to how users structure their code
         //
         // This case is rather rare (typically only in non-keyed lists)
-        if new.tag_name != old.tag_name || new.namespace != old.namespace {
+        if new.tag != old.tag || new.namespace != old.namespace {
             // maybe make this an instruction?
             // issue is that we need the "vnode" but this method only has the velement
             self.stack.push_nodes_created(0);
@@ -551,8 +549,8 @@ impl<'bump> DiffState<'bump> {
 
         self.scopes.update_node(new_node, root);
 
-        new.dom_id.set(Some(root));
-        new.parent_id.set(old.parent_id.get());
+        new.id.set(Some(root));
+        new.parent.set(old.parent.get());
 
         // todo: attributes currently rely on the element on top of the stack, but in theory, we only need the id of the
         // element to modify its attributes.
@@ -1182,9 +1180,9 @@ impl<'bump> DiffState<'bump> {
 
         loop {
             match &search_node.take().unwrap() {
-                VNode::Text(t) => break t.dom_id.get(),
-                VNode::Element(t) => break t.dom_id.get(),
-                VNode::Placeholder(t) => break t.dom_id.get(),
+                VNode::Text(t) => break t.id.get(),
+                VNode::Element(t) => break t.id.get(),
+                VNode::Placeholder(t) => break t.id.get(),
                 VNode::Fragment(frag) => {
                     search_node = frag.children.last();
                 }
@@ -1209,9 +1207,9 @@ impl<'bump> DiffState<'bump> {
                     let scope_id = el.scope.get().unwrap();
                     search_node = Some(self.scopes.root_node(scope_id));
                 }
-                VNode::Text(t) => break t.dom_id.get(),
-                VNode::Element(t) => break t.dom_id.get(),
-                VNode::Placeholder(t) => break t.dom_id.get(),
+                VNode::Text(t) => break t.id.get(),
+                VNode::Element(t) => break t.id.get(),
+                VNode::Placeholder(t) => break t.id.get(),
             }
         }
     }
@@ -1263,7 +1261,7 @@ impl<'bump> DiffState<'bump> {
             match node {
                 VNode::Text(t) => {
                     // this check exists because our null node will be removed but does not have an ID
-                    if let Some(id) = t.dom_id.get() {
+                    if let Some(id) = t.id.get() {
                         self.scopes.collect_garbage(id);
 
                         if gen_muts {
@@ -1272,7 +1270,7 @@ impl<'bump> DiffState<'bump> {
                     }
                 }
                 VNode::Placeholder(a) => {
-                    let id = a.dom_id.get().unwrap();
+                    let id = a.id.get().unwrap();
                     self.scopes.collect_garbage(id);
 
                     if gen_muts {
@@ -1280,7 +1278,7 @@ impl<'bump> DiffState<'bump> {
                     }
                 }
                 VNode::Element(e) => {
-                    let id = e.dom_id.get().unwrap();
+                    let id = e.id.get().unwrap();
 
                     if gen_muts {
                         self.mutations.remove(id.as_u64());

@@ -17,7 +17,7 @@ pub fn format_args_f(input: TokenStream) -> TokenStream {
         .into()
 }
 
-#[proc_macro_derive(Props, attributes(builder))]
+#[proc_macro_derive(Props, attributes(props))]
 pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     match props::impl_my_derive(&input) {

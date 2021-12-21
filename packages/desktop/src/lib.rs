@@ -132,7 +132,7 @@ impl DesktopController {
             runtime.block_on(async move {
                 // LocalSet::new().block_on(&runtime, async move {
                 let mut dom =
-                    VirtualDom::new_with_props_and_scheduler(root, props, sender, receiver);
+                    VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
 
                 let edits = dom.rebuild();
 

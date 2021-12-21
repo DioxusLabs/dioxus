@@ -16,7 +16,6 @@ pub(crate) mod innerlude {
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::scopes::*;
-    pub(crate) use crate::scopes::*;
     pub use crate::virtual_dom::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].

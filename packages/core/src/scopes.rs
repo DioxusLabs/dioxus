@@ -44,11 +44,11 @@ impl ScopeArena {
         // this will *never* show up in the diffing process
         // todo: figure out why this is necessary. i forgot. whoops.
         let el = bump.alloc(VElement {
-            tag_name: "root",
+            tag: "root",
             namespace: None,
             key: None,
-            dom_id: Cell::new(Some(ElementId(0))),
-            parent_id: Default::default(),
+            id: Cell::new(Some(ElementId(0))),
+            parent: Default::default(),
             listeners: &[],
             attributes: &[],
             children: &[],
@@ -279,7 +279,7 @@ impl ScopeArena {
             let node = frame
                 .bump
                 .alloc(VNode::Placeholder(frame.bump.alloc(VPlaceholder {
-                    dom_id: Default::default(),
+                    id: Default::default(),
                 })));
             frame.node.set(unsafe { extend_vnode(node) });
         }
@@ -310,7 +310,7 @@ impl ScopeArena {
                         }
                     }
 
-                    cur_el = real_el.parent_id.get();
+                    cur_el = real_el.parent.get();
                 }
             }
         }
@@ -869,7 +869,7 @@ impl BumpFrame {
 
         let node = &*bump.alloc(VText {
             text: "placeholdertext",
-            dom_id: Default::default(),
+            id: Default::default(),
             is_static: false,
         });
         let node = bump.alloc(VNode::Text(unsafe { std::mem::transmute(node) }));
@@ -881,7 +881,7 @@ impl BumpFrame {
         self.bump.reset();
         let node = self.bump.alloc(VText {
             text: "placeholdertext",
-            dom_id: Default::default(),
+            id: Default::default(),
             is_static: false,
         });
         let node = self
