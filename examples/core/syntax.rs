@@ -31,9 +31,9 @@ fn html_usage() {
     // let p = rsx!(div { {f} });
 }
 
-static App2: FC<()> = |cx, _| cx.render(rsx!("hello world!"));
+static App2: Component<()> = |cx, _| cx.render(rsx!("hello world!"));
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx| {
     let name = cx.use_state(|| 0);
 
     cx.render(rsx!(div {
@@ -71,7 +71,7 @@ struct ChildProps {
 
 fn Child<'a>((cx, props): Scope<'a, ChildProps>) -> Element<'a> {
     cx.render(rsx!(div {
-        // {props.children}
+        // {cx.props.children}
     }))
 }
 
@@ -99,7 +99,7 @@ impl<'a> Children<'a> {
     }
 }
 
-static Bapp: FC<()> = |cx, props| {
+static Bapp: Component<()> = |cx| {
     let name = cx.use_state(|| 0);
 
     cx.render(rsx!(
@@ -114,7 +114,7 @@ static Bapp: FC<()> = |cx, props| {
     ))
 };
 
-static Match: FC<()> = |cx, props| {
+static Match: Component<()> = |cx| {
     //
     let b: Box<dyn Fn(NodeFactory) -> VNode> = Box::new(|f| todo!());
 

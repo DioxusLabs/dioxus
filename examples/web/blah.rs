@@ -21,11 +21,11 @@ fn main() {
     console_error_panic_hook::set_once();
 
     // Run the app
-    dioxus_web::launch(App, |c| c)
+    dioxus_web::launch(App)
 }
 
-static App: FC<()> = |cx, props| {
-    let mut state = use_state(cx, || 0);
+static App: Component<()> = |cx| {
+    let mut state = use_state(&cx, || 0);
     cx.render(rsx! {
         div {
             style: {

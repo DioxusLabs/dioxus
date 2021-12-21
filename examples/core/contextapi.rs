@@ -6,7 +6,7 @@ struct SomeContext {
 }
 
 #[allow(unused)]
-static Example: FC<()> = |cx, props| {
+static Example: Component<()> = |cx| {
     todo!()
 
     // let value = cx.use_context(|c: &SomeContext| c.items.last().unwrap());

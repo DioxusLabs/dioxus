@@ -11,13 +11,13 @@ fn main() {
     console_error_panic_hook::set_once();
 
     // Run the app
-    dioxus_web::launch(APP, |c| c)
+    dioxus_web::launch(APP)
 }
 
-static APP: FC<()> = |cx, _| {
-    let mut count = use_state(cx, || 3);
-    let content = use_state(cx, || String::from("h1"));
-    let text_content = use_state(cx, || String::from("Hello, world!"));
+static APP: Component<()> = |cx| {
+    let mut count = use_state(&cx, || 3);
+    let content = use_state(&cx, || String::from("h1"));
+    let text_content = use_state(&cx, || String::from("Hello, world!"));
 
     cx.render(rsx! {
         div {
@@ -86,4 +86,4 @@ fn render_list(cx: Context, count: usize) -> Element {
     rsx!(cx, ul { {items} })
 }
 
-static CHILD: FC<()> = |cx, _| rsx!(cx, div {"hello child"});
+static CHILD: Component<()> = |cx, _| rsx!(cx, div {"hello child"});

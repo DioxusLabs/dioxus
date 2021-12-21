@@ -72,7 +72,7 @@ fn App(cx: Context, props: &()) -> Element {
 struct ToggleProps { children: Element }
 
 fn Toggle(cx: Context, props: &ToggleProps) -> Element {
-  let mut toggled = use_state(cx, || false);
+  let mut toggled = use_state(&cx, || false);
   cx.render(rsx!{
     div {
       {&props.children}
@@ -87,7 +87,7 @@ fn Toggle(cx: Context, props: &ToggleProps) -> Element {
 Controlled inputs:
 ```rust
 fn App(cx: Context, props: &()) -> Element {
-  let value = use_state(cx, String::new);
+  let value = use_state(&cx, String::new);
   cx.render(rsx!( 
     input {
       "type": "text",
@@ -123,13 +123,13 @@ fn App(cx: Context, props: &()) -> Element {
 
 Tiny components:
 ```rust
-static App: FC<()> = |cx, _| rsx!(cx, div {"hello world!"});
+static App: Component<()> = |cx, _| rsx!(cx, div {"hello world!"});
 ```
 
 Borrowed prop contents:
 ```rust
 fn App(cx: Context, props: &()) -> Element {
-  let name = use_state(cx, || String::from("example"));
+  let name = use_state(&cx, || String::from("example"));
   rsx!(cx, Child { title: name.as_str() })
 }
 
@@ -137,7 +137,7 @@ fn App(cx: Context, props: &()) -> Element {
 struct ChildProps<'a> { title: &'a str }
 
 fn Child(cx: Context, props: &ChildProps) -> Element {
-  rsx!(cx, "Hello {props.title}")
+  rsx!(cx, "Hello {cx.props.title}")
 }
 ```
 

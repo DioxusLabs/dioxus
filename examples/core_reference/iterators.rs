@@ -12,8 +12,8 @@
 
 use dioxus::prelude::*;
 
-pub static Example: FC<()> = |cx, props| {
-    let example_data = use_state(cx, || 0);
+pub static Example: Component<()> = |cx| {
+    let example_data = use_state(&cx, || 0);
 
     let v = (0..10).map(|f| {
         rsx! {

@@ -1,13 +1,10 @@
 //! Dioxus Desktop Renderer
 //!
 //! Render the Dioxus VirtualDom using the platform's native WebView implementation.
-//!
 
 mod cfg;
 mod escape;
 mod events;
-// mod desktop_context;
-
 use cfg::DesktopConfig;
 use dioxus_core::*;
 use std::{
@@ -15,20 +12,25 @@ use std::{
     sync::atomic::AtomicBool,
     sync::{Arc, RwLock},
 };
+use tao::{
+    accelerator::{Accelerator, SysMods},
+    event::{Event, StartCause, WindowEvent},
+    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
+    keyboard::{KeyCode, ModifiersState},
+    menu::{MenuBar, MenuItem},
+    window::{Window, WindowId},
+};
+pub use wry;
+pub use wry::application as tao;
 use wry::{
-    application::{
-        accelerator::{Accelerator, SysMods},
-        event::{Event, StartCause, WindowEvent},
-        event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
-        keyboard::{KeyCode, ModifiersState},
-        menu::{MenuBar, MenuItem},
-        window::{Window, WindowId},
-    },
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
 
-pub fn launch(
+pub fn launch(root: Component<()>) {
+    launch_with_props(root, (), |c| c)
+}
+pub fn launch_cfg(
     root: Component<()>,
     config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) {
@@ -61,6 +63,8 @@ pub fn run<T: 'static + Send + Sync>(
     let quit_hotkey = Accelerator::new(SysMods::Cmd, KeyCode::KeyQ);
     let modifiers = ModifiersState::default();
     let event_loop = EventLoop::new();
+
+    log::debug!("Starting event loop");
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -128,7 +132,7 @@ impl DesktopController {
             runtime.block_on(async move {
                 // LocalSet::new().block_on(&runtime, async move {
                 let mut dom =
-                    VirtualDom::new_with_props_and_scheduler(root, props, sender, receiver);
+                    VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
 
                 let edits = dom.rebuild();
 
@@ -206,7 +210,7 @@ impl DesktopController {
                     "user_event" => {
                         let event = events::trigger_from_serialized(req.params.unwrap());
                         log::debug!("User event: {:?}", event);
-                        sender.unbounded_send(SchedulerMsg::UiEvent(event)).unwrap();
+                        sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
                     }
                     "initialize" => {
                         is_ready.store(true, std::sync::atomic::Ordering::Relaxed);

@@ -5,11 +5,11 @@ use dioxus::ssr;
 
 fn main() {
     let mut vdom = VirtualDom::new(App);
-    // vdom.rebuild_in_place().expect("Rebuilding failed");
-    println!("{}", ssr::render_vdom(&vdom, |c| c));
+    vdom.rebuild_in_place().expect("Rebuilding failed");
+    println!("{}", ssr::render_vdom(&vdom));
 }
 
-static App: Component<()> = |cx, props| {
+static App: Component<()> = |cx| {
     cx.render(rsx!(
         div {
             h1 { "Title" }
@@ -21,6 +21,6 @@ static App: Component<()> = |cx, props| {
 struct MyProps<'a> {
     text: &'a str,
 }
-fn App2(cx: Scope, props: &MyProps) -> Element {
+fn App2<'a>(cx: Scope<'a, MyProps<'a>>) -> Element {
     None
 }

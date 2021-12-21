@@ -1,9 +1,6 @@
 mod usestate;
 pub use usestate::{use_state, AsyncUseState, UseState};
 
-mod usestate2;
-// pub use usestate2::use_state2;
-
 mod useref;
 pub use useref::*;
 

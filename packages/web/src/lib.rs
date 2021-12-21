@@ -84,12 +84,12 @@ mod ric_raf;
 ///     dioxus_web::launch(App);
 /// }
 ///
-/// static App: Component<()> = |cx, props| {
+/// static App: Component<()> = |cx| {
 ///     rsx!(cx, div {"hello world"})
 /// }
 /// ```
 pub fn launch(root_component: Component<()>) {
-    launch_with_props(root_component, (), |c| c);
+    launch_with_props(root_component, ());
 }
 
 /// Launches the VirtualDOM from the specified component function and props.
@@ -100,7 +100,7 @@ pub fn launch(root_component: Component<()>) {
 ///
 /// ```rust
 /// fn main() {
-///     dioxus_web::launch_with_props(App, RootProps { name: String::from("joe") }, |c| c);
+///     dioxus_web::launch_with_props(App, RootProps { name: String::from("joe") });
 /// }
 ///
 /// #[derive(ParitalEq, Props)]
@@ -108,8 +108,8 @@ pub fn launch(root_component: Component<()>) {
 ///     name: String
 /// }
 ///
-/// static App: Component<RootProps> = |cx, props| {
-///     rsx!(cx, div {"hello {props.name}"})
+/// static App: Component<RootProps> = |cx| {
+///     rsx!(cx, div {"hello {cx.props.name}"})
 /// }
 /// ```
 pub fn launch_with_props<T, F>(
@@ -132,7 +132,7 @@ pub fn launch_with_props<T, F>(
 ///
 /// ```ignore
 /// fn main() {
-///     let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("joe") }, |c| c);
+///     let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("joe") });
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```

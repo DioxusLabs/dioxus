@@ -40,7 +40,7 @@ fn t() {
 //     let a = rsx! {
 //         div {
 //             "asd"
-//             "{props.foo}"
+//             "{cx.props.foo}"
 //         }
 //     };
 

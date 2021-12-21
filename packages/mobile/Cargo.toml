@@ -1,15 +1,18 @@
 [package]
 name = "dioxus-mobile"
 version = "0.0.0"
-authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
+authors = ["Jonathan Kelley"]
 edition = "2018"
-
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0"
 # cacao = { git = "https://github.com/ryanmcgrath/cacao" }
-dioxus-core = { path = "../core", version = "0.1.2" }
+dioxus-core = { path = "../core", version ="^0.1.3"}
 log = "0.4.14"
 serde = "1.0.126"
 serde_json = "1.0.64"

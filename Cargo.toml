@@ -1,74 +1,41 @@
 [package]
 name = "dioxus"
-version = "0.1.0"
-authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
+version = "0.1.2"
+authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
-"license" = "MIT/Apache-2.0"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "./packages/core", version = "0.1.3" }
-dioxus-router = { path = "./packages/router", optional = true }
-dioxus-core-macro = { path = "./packages/core-macro", optional = true }
+dioxus-core = { path = "./packages/core", version = "^0.1.3" }
 dioxus-html = { path = "./packages/html", optional = true }
+dioxus-core-macro = { path = "./packages/core-macro", optional = true }
+dioxus-hooks = { path = "./packages/hooks", optional = true }
+
+dioxus-ssr = { path = "./packages/ssr", optional = true }
 dioxus-web = { path = "./packages/web", optional = true }
 dioxus-desktop = { path = "./packages/desktop", optional = true }
-dioxus-hooks = { path = "./packages/hooks", optional = true }
-dioxus-ssr = { path = "./packages/ssr", optional = true }
+dioxus-router = { path = "./packages/router", optional = true }
+
 dioxus-mobile = { path = "./packages/mobile", optional = true }
 dioxus-liveview = { path = "./packages/liveview", optional = true }
 
 [features]
-# core
-default = ["core"]
-core = ["macro", "hooks", "html"]
+default = ["macro", "hooks", "html"]
+
 macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
 router = ["dioxus-router"]
 liveview = ["dioxus-liveview"]
-
-# utilities
-atoms = []
-
-# targets
 ssr = ["dioxus-ssr"]
-web = ["dioxus-web"]
-desktop = ["dioxus-desktop"]
+web = ["dioxus-web", "dioxus-router/web"]
+desktop = ["dioxus-desktop", "dioxus-router/desktop"]
 mobile = ["dioxus-mobile"]
-
-
-[dev-dependencies]
-futures-util = "0.3.16"
-log = "0.4.14"
-num-format = "0.4.0"
-separator = "0.4.1"
-serde = { version = "1.0.130", features = ["derive"] }
-im-rc = "15.0.0"
-fxhash = "0.2.1"
-anyhow = "1.0.42"
-# reqwest = "0.11.4"
-serde_json = "1.0.68"
-simple_logger = "1.13.0"
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-argh = "0.1.5"
-env_logger = "0.9.0"
-tokio = { version = "1.12.0", features = ["full"] }
-rand = { version = "0.8.4", features = ["small_rng"] }
-gloo-timers = "0.2.1"
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-gloo-timers = "0.2.1"
-wasm-logger = "0.2.0"
-console_error_panic_hook = "0.1.6"
-rand = { version = "0.8.4", features = ["small_rng"] }
-wasm-bindgen = { version = "0.2.71", features = ["enable-interning"] }
-
-[dev-dependencies.getrandom]
-version = "0.2"
-features = ["js"]
 
 
 [workspace]
@@ -83,17 +50,32 @@ members = [
     "packages/mobile",
 ]
 
+[dev-dependencies]
+futures-util = "0.3.17"
+log = "0.4.14"
+num-format = "0.4.0"
+separator = "0.4.1"
+serde = { version = "1.0.131", features = ["derive"] }
+im-rc = "15.0.0"
+fxhash = "0.2.1"
+anyhow = "1.0.51"
+serde_json = "1.0.73"
+simple_logger = "1.16.0"
 
-[[example]]
-required-features = ["desktop"]
-name = "webview"
-path = "./examples/webview.rs"
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+argh = "0.1.7"
+env_logger = "0.9.0"
+tokio = { version = "1.14.0", features = ["full"] }
+rand = { version = "0.8.4", features = ["small_rng"] }
+gloo-timers = "0.2.2"
 
-[[example]]
-required-features = ["desktop"]
-name = "tailwind"
-path = "./examples/tailwind.rs"
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+gloo-timers = "0.2.2"
+wasm-logger = "0.2.0"
+console_error_panic_hook = "0.1.7"
+rand = { version = "0.8.4", features = ["small_rng"] }
+wasm-bindgen = { version = "0.2.78", features = ["enable-interning"] }
 
-
-# [patch.crates-io]
-# wasm-bindgen = { path = "../Tinkering/wasm-bindgen" }
+[dev-dependencies.getrandom]
+version = "0.2.3"
+features = ["js"]

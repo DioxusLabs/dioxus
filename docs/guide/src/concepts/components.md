@@ -124,7 +124,7 @@ fn VoteButton(cx: Context, props: &VoteButtonProps) -> Element {
     cx.render(rsx!{
         div { class: "votebutton"
             div { class: "arrow up" }
-            div { class: "score", "{props.score}"}
+            div { class: "score", "{cx.props.score}"}
             div { class: "arrow down" }
         }
     })
@@ -147,7 +147,7 @@ struct TitleCardProps<'a> {
 
 fn TitleCard(cx: Context, props: &TitleCardProps) -> Element {
     cx.render(rsx!{
-        h1 { "{props.title}" }
+        h1 { "{cx.props.title}" }
     })
 }   
 ```

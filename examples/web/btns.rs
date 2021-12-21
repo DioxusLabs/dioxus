@@ -18,12 +18,12 @@ use dioxus_html as dioxus_elements;
 // #[cfg]
 fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    dioxus_web::launch(App, |c| c);
+    dioxus_web::launch(App);
     // env_logger::init();
-    // dioxus::web::launch(App, |c| c);
+    // dioxus::web::launch(App);
 }
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx| {
     dbg!("rednering parent");
     cx.render(rsx! {
         div {
@@ -40,8 +40,8 @@ static App: FC<()> = |cx, props| {
     })
 };
 
-static But: FC<()> = |cx, props| {
-    let mut count = use_state(cx, || 0);
+static But: Component<()> = |cx| {
+    let mut count = use_state(&cx, || 0);
 
     // let d = Dropper { name: "asd" };
     // let handler = move |_| {

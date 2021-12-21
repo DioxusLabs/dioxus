@@ -6,6 +6,7 @@
 use crate::{
     innerlude::{Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
+    Component,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -83,8 +84,8 @@ pub enum VNode<'src> {
     /// # Example
     ///
     /// ```rust, ignore
-    /// fn Example(cx: Context, props: &()) -> Element {
-    ///     todo!()
+    /// fn Example(cx: Scope<()>) -> Element {
+    ///     ...
     /// }
     ///
     /// let mut vdom = VirtualDom::new();
@@ -140,9 +141,9 @@ impl<'src> VNode<'src> {
     /// Returns None if the VNode is not mounted, or if the VNode cannot be presented by a mounted ID (Fragment/Component)
     pub fn try_mounted_id(&self) -> Option<ElementId> {
         match &self {
-            VNode::Text(el) => el.dom_id.get(),
-            VNode::Element(el) => el.dom_id.get(),
-            VNode::Placeholder(el) => el.dom_id.get(),
+            VNode::Text(el) => el.id.get(),
+            VNode::Element(el) => el.id.get(),
+            VNode::Placeholder(el) => el.id.get(),
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
         }
@@ -175,11 +176,13 @@ impl Debug for VNode<'_> {
         match &self {
             VNode::Element(el) => s
                 .debug_struct("VNode::VElement")
-                .field("name", &el.tag_name)
+                .field("name", &el.tag)
                 .field("key", &el.key)
+                .field("attrs", &el.attributes)
+                .field("children", &el.children)
                 .finish(),
             VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
-            VNode::Placeholder(_) => write!(s, "VNode::VAnchor"),
+            VNode::Placeholder(_) => write!(s, "VNode::VPlaceholder"),
             VNode::Fragment(frag) => {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
@@ -212,29 +215,33 @@ fn empty_cell() -> Cell<Option<ElementId>> {
 
 /// A placeholder node only generated when Fragments don't have any children.
 pub struct VPlaceholder {
-    pub dom_id: Cell<Option<ElementId>>,
+    pub id: Cell<Option<ElementId>>,
 }
 
 /// A bump-allocated string slice and metadata.
 pub struct VText<'src> {
     pub text: &'src str,
-    pub dom_id: Cell<Option<ElementId>>,
+    pub id: Cell<Option<ElementId>>,
     pub is_static: bool,
 }
 
 /// A list of VNodes with no single root.
 pub struct VFragment<'src> {
     pub key: Option<&'src str>,
+
+    /// Fragments can never have zero children. Enforced by NodeFactory.
+    ///
+    /// You *can* make a fragment with no children, but it's not a valid fragment and your VDom will panic.
     pub children: &'src [VNode<'src>],
 }
 
 /// An element like a "div" with children, listeners, and attributes.
 pub struct VElement<'a> {
-    pub tag_name: &'static str,
+    pub tag: &'static str,
     pub namespace: Option<&'static str>,
     pub key: Option<&'a str>,
-    pub dom_id: Cell<Option<ElementId>>,
-    pub parent_id: Cell<Option<ElementId>>,
+    pub id: Cell<Option<ElementId>>,
+    pub parent: Cell<Option<ElementId>>,
     pub listeners: &'a [Listener<'a>],
     pub attributes: &'a [Attribute<'a>],
     pub children: &'a [VNode<'a>],
@@ -243,11 +250,11 @@ pub struct VElement<'a> {
 impl Debug for VElement<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VElement")
-            .field("tag_name", &self.tag_name)
+            .field("tag_name", &self.tag)
             .field("namespace", &self.namespace)
             .field("key", &self.key)
-            .field("dom_id", &self.dom_id)
-            .field("parent_id", &self.parent_id)
+            .field("id", &self.id)
+            .field("parent", &self.parent)
             .field("listeners", &self.listeners.len())
             .field("attributes", &self.attributes)
             .field("children", &self.children)
@@ -348,26 +355,43 @@ impl Clone for EventHandler<'_> {
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
     pub key: Option<&'src str>,
-
-    pub associated_scope: Cell<Option<ScopeId>>,
-
-    // Function pointer to the FC that was used to generate this component
+    pub scope: Cell<Option<ScopeId>>,
+    pub can_memoize: bool,
     pub user_fc: *const (),
+    pub props: RefCell<Option<Box<dyn AnyProps + 'src>>>,
+}
 
-    pub(crate) can_memoize: bool,
+pub(crate) struct VComponentProps<P> {
+    pub render_fn: Component<P>,
+    pub memo: unsafe fn(&P, &P) -> bool,
+    pub props: P,
+}
 
-    pub(crate) _hard_allocation: Cell<Option<*const ()>>,
+pub trait AnyProps {
+    fn as_ptr(&self) -> *const ();
+    fn render<'a>(&'a self, bump: &'a ScopeState) -> Element<'a>;
+    unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
+}
 
-    // Raw pointer into the bump arena for the props of the component
-    pub(crate) bump_props: *const (),
+impl<P> AnyProps for VComponentProps<P> {
+    fn as_ptr(&self) -> *const () {
+        &self.props as *const _ as *const ()
+    }
 
-    // during the "teardown" process we'll take the caller out so it can be dropped properly
-    pub(crate) caller: &'src dyn Fn(&'src ScopeState) -> Element,
+    // Safety:
+    // this will downcat the other ptr as our swallowed type!
+    // you *must* make this check *before* calling this method
+    // if your functions are not the same, then you will downcast a pointer into a different type (UB)
+    unsafe fn memoize(&self, other: &dyn AnyProps) -> bool {
+        let real_other: &P = &*(other.as_ptr() as *const _ as *const P);
+        let real_us: &P = &*(self.as_ptr() as *const _ as *const P);
+        (self.memo)(real_us, real_other)
+    }
 
-    pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
-
-    // todo: re-add this
-    pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
+    fn render<'a>(&'a self, scope: &'a ScopeState) -> Element<'a> {
+        let props = unsafe { std::mem::transmute::<&P, &P>(&self.props) };
+        (self.render_fn)(Scope { scope, props })
+    }
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -392,7 +416,7 @@ impl<'a> NodeFactory<'a> {
     /// Directly pass in text blocks without the need to use the format_args macro.
     pub fn static_text(&self, text: &'static str) -> VNode<'a> {
         VNode::Text(self.bump.alloc(VText {
-            dom_id: empty_cell(),
+            id: empty_cell(),
             text,
             is_static: true,
         }))
@@ -421,7 +445,7 @@ impl<'a> NodeFactory<'a> {
         VNode::Text(self.bump.alloc(VText {
             text,
             is_static,
-            dom_id: empty_cell(),
+            id: empty_cell(),
         }))
     }
 
@@ -474,14 +498,14 @@ impl<'a> NodeFactory<'a> {
         let key = key.map(|f| self.raw_text(f).0);
 
         VNode::Element(self.bump.alloc(VElement {
-            tag_name,
+            tag: tag_name,
             key,
             namespace,
             listeners,
             attributes,
             children,
-            dom_id: empty_cell(),
-            parent_id: empty_cell(),
+            id: empty_cell(),
+            parent: empty_cell(),
         }))
     }
 
@@ -511,75 +535,23 @@ impl<'a> NodeFactory<'a> {
     where
         P: Properties + 'a,
     {
-        let bump = self.bump;
-        let props = bump.alloc(props);
-        let bump_props = props as *mut P as *mut ();
-        let user_fc = component as *const ();
+        VNode::Component(self.bump.alloc(VComponent {
+            key: key.map(|f| self.raw_text(f).0),
+            scope: Default::default(),
+            can_memoize: P::IS_STATIC,
+            user_fc: component as *const (),
+            props: RefCell::new(Some(Box::new(VComponentProps {
+                // local_props: RefCell::new(Some(props)),
+                // heap_props: RefCell::new(None),
+                props,
+                memo: P::memoize, // smuggle the memoization function across borders
 
-        let comparator: &mut dyn Fn(&VComponent) -> bool = bump.alloc_with(|| {
-            move |other: &VComponent| {
-                if user_fc == other.user_fc {
-                    // Safety
-                    // - We guarantee that FC<P> is the same by function pointer
-                    // - Because FC<P> is the same, then P must be the same (even with generics)
-                    // - Non-static P are autoderived to memoize as false
-                    // - This comparator is only called on a corresponding set of bumpframes
-                    //
-                    // It's only okay to memoize if there are no children and the props can be memoized
-                    // Implementing memoize is unsafe and done automatically with the props trait
-                    unsafe {
-                        let real_other: &P = &*(other.bump_props as *const _ as *const P);
-                        props.memoize(real_other)
-                    }
-                } else {
-                    false
-                }
-            }
-        });
-
-        let drop_props = {
-            // create a closure to drop the props
-            let mut has_dropped = false;
-
-            let drop_props: &mut dyn FnMut() = bump.alloc_with(|| {
-                move || unsafe {
-                    if !has_dropped {
-                        let real_other = bump_props as *mut _ as *mut P;
-                        let b = BumpBox::from_raw(real_other);
-                        std::mem::drop(b);
-
-                        has_dropped = true;
-                    } else {
-                        panic!("Drop props called twice - this is an internal failure of Dioxus");
-                    }
-                }
-            });
-
-            let drop_props = unsafe { BumpBox::from_raw(drop_props) };
-
-            RefCell::new(Some(drop_props))
-        };
-
-        let key = key.map(|f| self.raw_text(f).0);
-
-        let caller: &'a mut dyn Fn(&'a ScopeState) -> Element =
-            bump.alloc(move |scope: &ScopeState| -> Element {
-                let props: &'_ P = unsafe { &*(bump_props as *const P) };
-                component(Scope { scope, props })
-            });
-
-        let can_memoize = P::IS_STATIC;
-
-        VNode::Component(bump.alloc(VComponent {
-            user_fc,
-            comparator: Some(comparator),
-            bump_props,
-            caller,
-            key,
-            can_memoize,
-            drop_props,
-            associated_scope: Cell::new(None),
-            _hard_allocation: Cell::new(None),
+                // i'm sorry but I just need to bludgeon the lifetimes into place here
+                // this is safe because we're managing all lifetimes to originate from previous calls
+                // the intricacies of Rust's lifetime system make it difficult to properly express
+                // the transformation from this specific lifetime to the for<'a> lifetime
+                render_fn: unsafe { std::mem::transmute(component) },
+            }))),
         }))
     }
 
@@ -602,15 +574,13 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Placeholder(self.bump.alloc(VPlaceholder {
-                dom_id: empty_cell(),
-            })));
+            VNode::Placeholder(self.bump.alloc(VPlaceholder { id: empty_cell() }))
+        } else {
+            VNode::Fragment(VFragment {
+                children: nodes.into_bump_slice(),
+                key: None,
+            })
         }
-
-        VNode::Fragment(VFragment {
-            children: nodes.into_bump_slice(),
-            key: None,
-        })
     }
 
     pub fn fragment_from_iter<'b, 'c>(
@@ -624,32 +594,32 @@ impl<'a> NodeFactory<'a> {
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Placeholder(self.bump.alloc(VPlaceholder {
-                dom_id: empty_cell(),
-            })));
-        }
+            VNode::Placeholder(self.bump.alloc(VPlaceholder { id: empty_cell() }))
+        } else {
+            let children = nodes.into_bump_slice();
 
-        let children = nodes.into_bump_slice();
-
-        if cfg!(debug_assertions) && children.len() > 1 && children.last().unwrap().key().is_none()
-        {
-            // todo: make the backtrace prettier or remove it altogether
-            log::error!(
-                r#"
+            if cfg!(debug_assertions)
+                && children.len() > 1
+                && children.last().unwrap().key().is_none()
+            {
+                // todo: make the backtrace prettier or remove it altogether
+                log::error!(
+                    r#"
                 Warning: Each child in an array or iterator should have a unique "key" prop.
                 Not providing a key will lead to poor performance with lists.
                 See docs.rs/dioxus for more information.
                 -------------
                 {:?}
                 "#,
-                backtrace::Backtrace::new()
-            );
-        }
+                    backtrace::Backtrace::new()
+                );
+            }
 
-        VNode::Fragment(VFragment {
-            children,
-            key: None,
-        })
+            VNode::Fragment(VFragment {
+                children,
+                key: None,
+            })
+        }
     }
 
     // this isn't quite feasible yet
@@ -658,28 +628,24 @@ impl<'a> NodeFactory<'a> {
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
     ) -> Element<'a> {
-        let bump = self.bump;
-        let mut nodes = bumpalo::collections::Vec::new_in(bump);
+        let mut nodes = bumpalo::collections::Vec::new_in(self.bump);
 
         for node in node_iter {
             nodes.push(node.into_vnode(self));
         }
 
         if nodes.is_empty() {
-            nodes.push(VNode::Placeholder(bump.alloc(VPlaceholder {
-                dom_id: empty_cell(),
-            })));
+            Some(VNode::Placeholder(
+                self.bump.alloc(VPlaceholder { id: empty_cell() }),
+            ))
+        } else {
+            let children = nodes.into_bump_slice();
+
+            Some(VNode::Fragment(VFragment {
+                children,
+                key: None,
+            }))
         }
-
-        let children = nodes.into_bump_slice();
-
-        // TODO
-        // We need a dedicated path in the rsx! macro that will trigger the "you need keys" warning
-
-        Some(VNode::Fragment(VFragment {
-            children,
-            key: None,
-        }))
     }
 }
 
@@ -749,10 +715,7 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         match self {
             Some(lazy) => lazy.call(cx),
-            None => VNode::Fragment(VFragment {
-                children: &[],
-                key: None,
-            }),
+            None => VNode::Placeholder(cx.bump.alloc(VPlaceholder { id: empty_cell() })),
         }
     }
 }

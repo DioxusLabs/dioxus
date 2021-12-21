@@ -6,10 +6,10 @@ use dioxus_router::*;
 fn main() {
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    dioxus_web::launch(App, |c| c);
+    dioxus_web::launch(APP);
 }
 
-static App: Component<()> = |cx, props| {
+static APP: Component<()> = |cx| {
     #[derive(Clone, Debug, PartialEq)]
     enum Route {
         Home,
@@ -17,7 +17,7 @@ static App: Component<()> = |cx, props| {
         NotFound,
     }
 
-    let route = use_router(cx, |s| match s {
+    let route = use_router(&cx, |s| match s {
         "/" => Route::Home,
         "/about" => Route::About,
         _ => Route::NotFound,

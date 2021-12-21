@@ -35,12 +35,29 @@ enum StackNodeStorage<'a, 'b> {
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
-    
     pub fn new_some<F>(_val: F) -> Option<Self>
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
     {
         Some(Self::new(_val))
+    }
+
+    /// force this call onto the stack
+    pub fn new_boxed<F>(_val: F) -> Option<Self>
+    where
+        F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
+    {
+        // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
+        let mut slot = Some(_val);
+
+        let val = move |fac: Option<NodeFactory<'a>>| {
+            let inner = slot.take().unwrap();
+            fac.map(inner)
+        };
+
+        Some(Self {
+            inner: StackNodeStorage::Heap(Box::new(val)),
+        })
     }
 
     pub fn new<F>(_val: F) -> Self

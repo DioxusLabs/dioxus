@@ -20,7 +20,7 @@ struct Borrowed<'a> {
 
 fn App2<'a>(cx: Scope<'a, Borrowed<'a>>) -> Element {
     let g = eat2(&cx);
-    todo!()
+    rsx!(cx, "")
 }
 
 fn eat2(s: &ScopeState) {}
@@ -31,21 +31,3 @@ fn bleat() {
     let blah = String::from("asd");
     eat(&blah);
 }
-
-// struct Lower {}
-
-// #[derive(Clone, Copy)]
-// struct Upper {}
-// impl std::ops::Deref for Upper {
-//     type Target = Lower;
-
-//     fn deref(&self) -> &Self::Target {
-//         todo!()
-//     }
-// }
-
-// fn mark(f: &Lower) {}
-// fn bark() {
-//     let up = Upper {};
-//     mark(&up);
-// }

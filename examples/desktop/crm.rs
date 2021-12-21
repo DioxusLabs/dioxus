@@ -5,7 +5,7 @@ use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 
 fn main() {
-    dioxus_desktop::launch(App, |c| c)
+    dioxus_desktop::launch(App)
 }
 
 enum Scene {
@@ -21,13 +21,13 @@ pub struct Client {
     pub description: String,
 }
 
-static App: FC<()> = |cx, _| {
-    let mut scene = use_state(cx, || Scene::ClientsList);
-    let clients = use_ref(cx, || vec![] as Vec<Client>);
+static App: Component<()> = |cx| {
+    let mut scene = use_state(&cx, || Scene::ClientsList);
+    let clients = use_ref(&cx, || vec![] as Vec<Client>);
 
-    let mut firstname = use_state(cx, String::new);
-    let mut lastname = use_state(cx, String::new);
-    let mut description = use_state(cx, String::new);
+    let mut firstname = use_state(&cx, String::new);
+    let mut lastname = use_state(&cx, String::new);
+    let mut description = use_state(&cx, String::new);
 
     let scene = match scene.get() {
         Scene::ClientsList => {

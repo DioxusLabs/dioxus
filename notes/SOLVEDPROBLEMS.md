@@ -153,13 +153,13 @@ Notice that LiveComponent receivers (the client-side interpretation of a LiveCom
 The `VNodeTree` type is a very special type that allows VNodes to be created using a pluggable allocator. The html! macro creates something that looks like:
 
 ```rust
-pub static Example: FC<()> = |cx, props|{
+pub static Example: Component<()> = |cx, props|{
     html! { <div> "blah" </div> }
 };
 
 // expands to...
 
-pub static Example: FC<()> = |cx, props|{
+pub static Example: Component<()> = |cx, props|{
     // This function converts a Fn(allocator) -> DomTree closure to a VNode struct that will later be evaluated.
     html_macro_to_vnodetree(move |allocator| {
         let mut node0 = allocator.alloc(VElement::div);
@@ -313,7 +313,7 @@ Here's how react does it:
 Any "dirty" node causes an entire subtree render. Calling "setState" at the very top will cascade all the way down. This is particularly bad for this component design:
 
 ```rust
-static APP: FC<()> = |cx, props|{
+static APP: Component<()> = |cx, props|{
     let title = use_context(Title);
     cx.render(html!{
         <div>
@@ -334,7 +334,7 @@ static APP: FC<()> = |cx, props|{
         </div>
     })
 };
-static HEAVY_LIST: FC<()> = |cx, props|{
+static HEAVY_LIST: Component<()> = |cx, props|{
     cx.render({
         {0.100.map(i => <BigElement >)}
     })
@@ -378,7 +378,7 @@ struct Props {
 
 }
 
-static Component: FC<Props> = |cx, props|{
+static Component: Component<Props> = |cx, props|{
 
 }
 ```

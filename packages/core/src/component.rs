@@ -40,7 +40,7 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 /// ## Example
 ///
 /// ```rust, ignore
-/// fn App(cx: Context, props: &()) -> Element {
+/// fn App(cx: Scope<()>) -> Element {
 ///     cx.render(rsx!{
 ///         CustomCard {
 ///             h1 {}2
@@ -54,11 +54,11 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 ///     children: Element
 /// }
 ///
-/// fn CustomCard(cx: Context, props: &CardProps) -> Element {
+/// fn CustomCard(cx: Scope<CardProps>) -> Element {
 ///     cx.render(rsx!{
 ///         div {
 ///             h1 {"Title card"}
-///             {props.children}
+///             {cx.props.children}
 ///         }
 ///     })
 /// }

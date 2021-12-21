@@ -300,7 +300,7 @@ impl WebsysDom {
                 // "Result" cannot be received from JS
                 // Instead, we just build and immediately execute a closure that returns result
                 match decode_trigger(event) {
-                    Ok(synthetic_event) => trigger.as_ref()(SchedulerMsg::UiEvent(synthetic_event)),
+                    Ok(synthetic_event) => trigger.as_ref()(SchedulerMsg::Event(synthetic_event)),
                     Err(e) => log::error!("Error decoding Dioxus event attribute. {:#?}", e),
                 };
             });

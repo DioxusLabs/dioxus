@@ -12,7 +12,7 @@ Your component today might look something like this:
 
 ```rust
 fn Comp(cx: Context<()>) -> DomTree {
-    let (title, set_title) = use_state(cx, || "Title".to_string());
+    let (title, set_title) = use_state(&cx, || "Title".to_string());
     cx.render(rsx!{
         input {
             value: title,
@@ -26,7 +26,7 @@ This component is fairly straightforward - the input updates its own value on ev
 
 ```rust
 fn Comp(cx: Context<()>) -> DomTree {
-    let (title, set_title) = use_state(cx, || "Title".to_string());
+    let (title, set_title) = use_state(&cx, || "Title".to_string());
     cx.render(rsx!{
         div {
             input {
@@ -96,7 +96,7 @@ Sometimes you want a signal to propagate across your app, either through far-awa
 
 ```rust
 const TITLE: Atom<String> = || "".to_string();
-const Provider: FC<()> = |cx, props|{
+const Provider: Component<()> = |cx, props|{
     let title = use_signal(&cx, &TITLE);
     rsx!(cx, input { value: title })
 };
@@ -105,7 +105,7 @@ const Provider: FC<()> = |cx, props|{
 If we use the `TITLE` atom in another component, we can cause updates to flow between components without calling render or diffing either component trees:
 
 ```rust
-const Receiver: FC<()> = |cx, props|{
+const Receiver: Component<()> = |cx, props|{
     let title = use_signal(&cx, &TITLE);
     log::info!("This will only be called once!");
     rsx!(cx,
@@ -132,7 +132,7 @@ Dioxus automatically understands how to use your signals when mixed with iterato
 
 ```rust
 const DICT: AtomFamily<String, String> = |_| {};
-const List: FC<()> = |cx, props|{
+const List: Component<()> = |cx, props|{
     let dict = use_signal(&cx, &DICT);
     cx.render(rsx!(
         ul {

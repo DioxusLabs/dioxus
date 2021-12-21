@@ -16,10 +16,10 @@ You can always use it "normally" with the `split` method:
 
 ```rust
 // Normal usage:
-let value = use_state(cx, || 10);
+let value = use_state(&cx, || 10);
 
 // "Classic" usage:
-let (value, set_value) = use_state(cx, || 0).split();
+let (value, set_value) = use_state(&cx, || 0).split();
 ```
 
 ## use_ref

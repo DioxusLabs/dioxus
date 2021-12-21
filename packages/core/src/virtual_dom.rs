@@ -1,4 +1,4 @@
-//! # VirtualDOM Implementation for Rust
+//! # VirtualDom Implementation for Rust
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
@@ -8,7 +8,7 @@ use futures_util::{Future, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use smallvec::SmallVec;
-use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
+use std::{any::Any, collections::VecDeque, iter::FromIterator, pin::Pin, sync::Arc, task::Poll};
 
 /// A virtual node s ystem that progresses user events and diffs UI trees.
 ///
@@ -23,9 +23,9 @@ use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 ///     title: String
 /// }
 ///
-/// fn App(cx: Context, props: &AppProps) -> Element {
+/// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
-///         div {"hello, {props.title}"}
+///         div {"hello, {cx.props.title}"}
 ///     ))
 /// }
 /// ```
@@ -33,10 +33,10 @@ use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 /// Components may be composed to make complex apps.
 ///
 /// ```rust, ignore
-/// fn App(cx: Context, props: &AppProps) -> Element {
+/// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
-///         Title { "{props.title}" }
+///         Title { "{cx.props.title}" }
 ///         Footer {}
 ///     ))
 /// }
@@ -81,7 +81,7 @@ use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 ///
 /// ```rust, ignore
-/// fn App(cx: Context, props: &()) -> Element {
+/// fn App(cx: Scope<()>) -> Element {
 ///     cx.render(rsx!{
 ///         div { "Hello World" }
 ///     })
@@ -103,25 +103,20 @@ use std::{any::Any, collections::VecDeque, pin::Pin, sync::Arc, task::Poll};
 /// }
 /// ```
 pub struct VirtualDom {
-    base_scope: ScopeId,
-
-    // it's stored here so the props are dropped when the VirtualDom is dropped
-    _root_caller: Box<dyn for<'r> Fn(&'r ScopeState) -> Element<'r> + 'static>,
-
-    scopes: Box<ScopeArena>,
-
-    receiver: UnboundedReceiver<SchedulerMsg>,
-
-    sender: UnboundedSender<SchedulerMsg>,
+    scopes: ScopeArena,
 
     pending_messages: VecDeque<SchedulerMsg>,
-
     dirty_scopes: IndexSet<ScopeId>,
+
+    channel: (
+        UnboundedSender<SchedulerMsg>,
+        UnboundedReceiver<SchedulerMsg>,
+    ),
 }
 
 // Methods to create the VirtualDom
 impl VirtualDom {
-    /// Create a new VirtualDOM with a component that does not have special props.
+    /// Create a new VirtualDom with a component that does not have special props.
     ///
     /// # Description
     ///
@@ -140,12 +135,12 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Example);
     /// ```
     ///
-    /// Note: the VirtualDOM is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
+    /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new(root: Component<()>) -> Self {
         Self::new_with_props(root, ())
     }
 
-    /// Create a new VirtualDOM with the given properties for the root component.
+    /// Create a new VirtualDom with the given properties for the root component.
     ///
     /// # Description
     ///
@@ -169,15 +164,21 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Example);
     /// ```
     ///
-    /// Note: the VirtualDOM is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
+    /// Note: the VirtualDom is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
     ///
     /// ```rust, ignore
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P: 'static>(root: Component<P>, root_props: P) -> Self {
-        let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
-        Self::new_with_props_and_scheduler(root, root_props, sender, receiver)
+    pub fn new_with_props<P>(root: Component<P>, root_props: P) -> Self
+    where
+        P: 'static,
+    {
+        Self::new_with_props_and_scheduler(
+            root,
+            root_props,
+            futures_channel::mpsc::unbounded::<SchedulerMsg>(),
+        )
     }
 
     /// Launch the VirtualDom, but provide your own channel for receiving and sending messages into the scheduler
@@ -186,48 +187,36 @@ impl VirtualDom {
     /// VirtualDom to be created just to retrieve its channel receiver.
     ///
     /// ```rust
-    /// let (sender, receiver) = futures_channel::mpsc::unbounded();
-    /// let dom = VirtualDom::new_with_scheduler(Example, (), sender, receiver);
+    /// let channel = futures_channel::mpsc::unbounded();
+    /// let dom = VirtualDom::new_with_scheduler(Example, (), channel);
     /// ```
     pub fn new_with_props_and_scheduler<P: 'static>(
         root: Component<P>,
         root_props: P,
-        sender: UnboundedSender<SchedulerMsg>,
-        receiver: UnboundedReceiver<SchedulerMsg>,
+        channel: (
+            UnboundedSender<SchedulerMsg>,
+            UnboundedReceiver<SchedulerMsg>,
+        ),
     ) -> Self {
-        // move these two things onto the heap so we have stable ptrs
-        let scopes = Box::new(ScopeArena::new(sender.clone()));
-        let root_props = Box::new(root_props);
+        let scopes = ScopeArena::new(channel.0.clone());
 
-        // create the root caller which will properly drop its props when the VirtualDom is dropped
-        let mut _root_caller: Box<dyn for<'r> Fn(&'r ScopeState) -> Element<'r> + 'static> =
-            Box::new(move |scope: &ScopeState| -> Element {
-                // Safety: The props at this pointer can never be moved.
-                // Also, this closure will never be ran when the VirtualDom is destroyed.
-                // This is where the root lifetime of the VirtualDom originates.
-                let props: *const P = root_props.as_ref();
-                let props = unsafe { &*props };
-                root(Scope { scope, props })
-            });
-
-        // safety: the raw pointer is aliased or used after this point.
-        let caller: *mut dyn Fn(&ScopeState) -> Element = _root_caller.as_mut();
-        let base_scope = scopes.new_with_key(root as _, caller, None, ElementId(0), 0, 0);
-
-        let mut dirty_scopes = IndexSet::new();
-        dirty_scopes.insert(base_scope);
-
-        // todo: add a pending message to the scheduler to start the scheduler?
-        let pending_messages = VecDeque::new();
+        scopes.new_with_key(
+            root as *const _,
+            Box::new(VComponentProps {
+                props: root_props,
+                memo: |_a, _b| unreachable!("memo on root will neve be run"),
+                render_fn: root,
+            }),
+            None,
+            ElementId(0),
+            0,
+        );
 
         Self {
             scopes,
-            base_scope,
-            receiver,
-            _root_caller,
-            pending_messages,
-            dirty_scopes,
-            sender,
+            channel,
+            dirty_scopes: IndexSet::from_iter([ScopeId(0)]),
+            pending_messages: VecDeque::new(),
         }
     }
 
@@ -236,9 +225,18 @@ impl VirtualDom {
     /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
     /// directly.
     ///
+    /// This method is equivalent to calling `get_scope(ScopeId(0))`
+    ///
     /// # Example
+    ///
+    /// ```rust
+    /// let mut dom = VirtualDom::new(example);
+    /// dom.rebuild();
+    ///
+    ///
+    /// ```
     pub fn base_scope(&self) -> &ScopeState {
-        self.get_scope(self.base_scope).unwrap()
+        self.get_scope(ScopeId(0)).unwrap()
     }
 
     /// Get the [`ScopeState`] for a component given its [`ScopeId`]
@@ -247,7 +245,7 @@ impl VirtualDom {
     ///
     ///
     ///
-    pub fn get_scope<'a>(&'a self, id: ScopeId) -> Option<&'a ScopeState> {
+    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
         self.scopes.get_scope(id)
     }
 
@@ -259,8 +257,8 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(App);
     /// let sender = dom.get_scheduler_channel();
     /// ```
-    pub fn get_scheduler_channel(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        self.sender.clone()
+    pub fn get_scheduler_channel(&self) -> UnboundedSender<SchedulerMsg> {
+        self.channel.0.clone()
     }
 
     /// Add a new message to the scheduler queue directly.
@@ -272,10 +270,12 @@ impl VirtualDom {
     /// # Example
     /// ```rust, ignore
     /// let dom = VirtualDom::new(App);
-    /// dom.insert_scheduler_message(SchedulerMsg::Immediate(ScopeId(0)));
+    /// dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
     /// ```
-    pub fn insert_scheduler_message(&self, msg: SchedulerMsg) {
-        self.sender.unbounded_send(msg).unwrap()
+    pub fn handle_message(&mut self, msg: SchedulerMsg) {
+        if self.channel.0.unbounded_send(msg).is_ok() {
+            self.process_all_messages();
+        }
     }
 
     /// Check if the [`VirtualDom`] has any pending updates or work to be done.
@@ -314,36 +314,47 @@ impl VirtualDom {
             if self.pending_messages.is_empty() {
                 if self.scopes.pending_futures.borrow().is_empty() {
                     self.pending_messages
-                        .push_front(self.receiver.next().await.unwrap());
+                        .push_front(self.channel.1.next().await.unwrap());
                 } else {
                     use futures_util::future::{select, Either};
 
-                    match select(PollTasks(&mut self.scopes), self.receiver.next()).await {
+                    match select(PollTasks(&mut self.scopes), self.channel.1.next()).await {
                         Either::Left((_, _)) => {}
                         Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
                     }
                 }
             }
 
-            while let Ok(Some(msg)) = self.receiver.try_next() {
-                self.pending_messages.push_front(msg);
-            }
+            // Move all the messages into the queue
+            self.process_all_messages();
+        }
+    }
 
-            if let Some(msg) = self.pending_messages.pop_back() {
-                match msg {
-                    // just keep looping, the task is now saved but we should actually poll it
-                    SchedulerMsg::NewTask(id) => {
-                        self.scopes.pending_futures.borrow_mut().insert(id);
-                    }
-                    SchedulerMsg::UiEvent(event) => {
-                        if let Some(element) = event.element {
-                            self.scopes.call_listener_with_bubbling(event, element);
-                        }
-                    }
-                    SchedulerMsg::Immediate(s) => {
-                        self.dirty_scopes.insert(s);
-                    }
+    /// Manually kick the VirtualDom to process any
+    pub fn process_all_messages(&mut self) {
+        // clear out the scheduler queue
+        while let Ok(Some(msg)) = self.channel.1.try_next() {
+            self.pending_messages.push_front(msg);
+        }
+
+        // process all the messages pulled from the queue
+        while let Some(msg) = self.pending_messages.pop_back() {
+            self.process_message(msg);
+        }
+    }
+
+    pub fn process_message(&mut self, msg: SchedulerMsg) {
+        match msg {
+            SchedulerMsg::NewTask(id) => {
+                self.scopes.pending_futures.borrow_mut().insert(id);
+            }
+            SchedulerMsg::Event(event) => {
+                if let Some(element) = event.element {
+                    self.scopes.call_listener_with_bubbling(event, element);
                 }
+            }
+            SchedulerMsg::Immediate(s) => {
+                self.dirty_scopes.insert(s);
             }
         }
     }
@@ -378,7 +389,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```rust, ignore
-    /// fn App(cx: Context, props: &()) -> Element {
+    /// fn App(cx: Scope<()>) -> Element {
     ///     cx.render(rsx!( div {"hello"} ))
     /// }
     ///
@@ -416,15 +427,14 @@ impl VirtualDom {
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
 
-                    if self.scopes.run_scope(scopeid) {
-                        let (old, new) =
-                            (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
-                        diff_state.stack.push(DiffInstruction::Diff { new, old });
-                        diff_state.stack.scope_stack.push(scopeid);
+                    self.scopes.run_scope(scopeid);
 
-                        let scope = scopes.get_scope(scopeid).unwrap();
-                        diff_state.stack.element_stack.push(scope.container);
-                    }
+                    let (old, new) = (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
+                    diff_state.stack.push(DiffInstruction::Diff { new, old });
+                    diff_state.stack.scope_stack.push(scopeid);
+
+                    let scope = scopes.get_scope(scopeid).unwrap();
+                    diff_state.stack.element_stack.push(scope.container);
                 }
             }
 
@@ -459,36 +469,35 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// static App: FC<()> = |cx, props| cx.render(rsx!{ "hello world" });
+    /// static App: Component<()> = |cx, props| cx.render(rsx!{ "hello world" });
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();
     ///
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
+        let scope_id = ScopeId(0);
         let mut diff_state = DiffState::new(&self.scopes);
 
-        let scope_id = self.base_scope;
-        if self.scopes.run_scope(scope_id) {
-            diff_state
-                .stack
-                .create_node(self.scopes.fin_head(scope_id), MountType::Append);
+        self.scopes.run_scope(scope_id);
+        diff_state
+            .stack
+            .create_node(self.scopes.fin_head(scope_id), MountType::Append);
 
-            diff_state.stack.element_stack.push(ElementId(0));
-            diff_state.stack.scope_stack.push(scope_id);
-
-            diff_state.work(|| false);
-        }
-
+        diff_state.stack.element_stack.push(ElementId(0));
+        diff_state.stack.scope_stack.push(scope_id);
+        diff_state.work(|| false);
         diff_state.mutations
     }
 
-    /// Compute a manual diff of the VirtualDOM between states.
+    /// Compute a manual diff of the VirtualDom between states.
     ///
     /// This can be useful when state inside the DOM is remotely changed from the outside, but not propagated as an event.
     ///
     /// In this case, every component will be diffed, even if their props are memoized. This method is intended to be used
     /// to force an update of the DOM when the state of the app is changed outside of the app.
+    ///
+    /// To force a reflow of the entire VirtualDom, use `ScopeId(0)` as the scope_id.
     ///
     /// # Example
     /// ```rust, ignore
@@ -497,7 +506,7 @@ impl VirtualDom {
     ///     value: Shared<&'static str>,
     /// }
     ///
-    /// static App: FC<AppProps> = |cx, props|{
+    /// static App: Component<AppProps> = |cx, props|{
     ///     let val = cx.value.borrow();
     ///     cx.render(rsx! { div { "{val}" } })
     /// };
@@ -511,13 +520,24 @@ impl VirtualDom {
     ///
     /// let edits = dom.diff();
     /// ```
-    pub fn hard_diff<'a>(&'a mut self, scope_id: ScopeId) -> Option<Mutations<'a>> {
+    pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
         let mut diff_machine = DiffState::new(&self.scopes);
-        if self.scopes.run_scope(scope_id) {
-            diff_machine.force_diff = true;
-            diff_machine.diff_scope(scope_id);
-        }
-        Some(diff_machine.mutations)
+        self.scopes.run_scope(scope_id);
+
+        let (old, new) = (
+            diff_machine.scopes.wip_head(scope_id),
+            diff_machine.scopes.fin_head(scope_id),
+        );
+
+        diff_machine.force_diff = true;
+        diff_machine.stack.push(DiffInstruction::Diff { old, new });
+        diff_machine.stack.scope_stack.push(scope_id);
+
+        let scope = diff_machine.scopes.get_scope(scope_id).unwrap();
+        diff_machine.stack.element_stack.push(scope.container);
+        diff_machine.work(|| false);
+
+        diff_machine.mutations
     }
 
     /// Renders an `rsx` call into the Base Scope's allocator.
@@ -525,7 +545,7 @@ impl VirtualDom {
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
     /// ```rust
-    /// fn Base(cx: Context, props: &()) -> Element {
+    /// fn Base(cx: Scope<()>) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -533,7 +553,7 @@ impl VirtualDom {
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
     pub fn render_vnodes<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> &'a VNode<'a> {
-        let scope = self.scopes.get_scope(self.base_scope).unwrap();
+        let scope = self.scopes.get_scope(ScopeId(0)).unwrap();
         let frame = scope.wip_frame();
         let factory = NodeFactory { bump: &frame.bump };
         let node = lazy_nodes.unwrap().call(factory);
@@ -545,7 +565,7 @@ impl VirtualDom {
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
     /// ```rust
-    /// fn Base(cx: Context, props: &()) -> Element {
+    /// fn Base(cx: Scope<()>) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -556,7 +576,7 @@ impl VirtualDom {
         let mut machine = DiffState::new(&self.scopes);
         machine.stack.push(DiffInstruction::Diff { new, old });
         machine.stack.element_stack.push(ElementId(0));
-        machine.stack.scope_stack.push(self.base_scope);
+        machine.stack.scope_stack.push(ScopeId(0));
         machine.work(|| false);
         machine.mutations
     }
@@ -567,18 +587,19 @@ impl VirtualDom {
     ///
     ///
     /// ```rust
-    /// fn Base(cx: Context, props: &()) -> Element {
+    /// fn Base(cx: Scope<()>) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
-    pub fn create_vnodes<'a>(&'a self, left: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
-        let nodes = self.render_vnodes(left);
+    pub fn create_vnodes<'a>(&'a self, nodes: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.stack.element_stack.push(ElementId(0));
-        machine.stack.create_node(nodes, MountType::Append);
+        machine
+            .stack
+            .create_node(self.render_vnodes(nodes), MountType::Append);
         machine.work(|| false);
         machine.mutations
     }
@@ -589,7 +610,7 @@ impl VirtualDom {
     ///
     ///
     /// ```rust
-    /// fn Base(cx: Context, props: &()) -> Element {
+    /// fn Base(cx: Scope<()>) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -604,25 +625,82 @@ impl VirtualDom {
         let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
 
         let mut create = DiffState::new(&self.scopes);
-        create.stack.scope_stack.push(self.base_scope);
+        create.stack.scope_stack.push(ScopeId(0));
         create.stack.element_stack.push(ElementId(0));
         create.stack.create_node(old, MountType::Append);
         create.work(|| false);
 
         let mut edit = DiffState::new(&self.scopes);
-        edit.stack.scope_stack.push(self.base_scope);
+        edit.stack.scope_stack.push(ScopeId(0));
         edit.stack.element_stack.push(ElementId(0));
         edit.stack.push(DiffInstruction::Diff { old, new });
-        edit.work(&mut || false);
+        edit.work(|| false);
 
         (create.mutations, edit.mutations)
+    }
+}
+
+/*
+Scopes and ScopeArenas are never dropped internally.
+An app will always occupy as much memory as its biggest form.
+
+This means we need to handle all specifics of drop *here*. It's easier
+to reason about centralizing all the drop logic in one spot rather than scattered in each module.
+
+Broadly speaking, we want to use the remove_nodes method to clean up *everything*
+This will drop listeners, borrowed props, and hooks for all components.
+We need to do this in the correct order - nodes at the very bottom must be dropped first to release
+the borrow chain.
+
+Once the contents of the tree have been cleaned up, we can finally clean up the
+memory used by ScopeState itself.
+
+questions:
+should we build a vcomponent for the root?
+- probably - yes?
+- store the vcomponent in the root dom
+
+- 1: Use remove_nodes to use the ensure_drop_safety pathway to safely drop the tree
+- 2: Drop the ScopeState itself
+*/
+impl Drop for VirtualDom {
+    fn drop(&mut self) {
+        // the best way to drop the dom is to replace the root scope with a dud
+        // the diff infrastructure will then finish the rest
+        let scope = self.scopes.get_scope(ScopeId(0)).unwrap();
+
+        // todo: move the remove nodes method onto scopearena
+        // this will clear *all* scopes *except* the root scope
+        let mut machine = DiffState::new(&self.scopes);
+        machine.remove_nodes([scope.root_node()], false);
+
+        // Now, clean up the root scope
+        // safety: there are no more references to the root scope
+        let scope = unsafe { &mut *self.scopes.get_scope_raw(ScopeId(0)).unwrap() };
+        scope.reset();
+
+        // make sure there are no "live" components
+        for (_, scopeptr) in self.scopes.scopes.get_mut().drain() {
+            // safety: all scopes were made in the bump's allocator
+            // They are never dropped until now. The only way to drop is through Box.
+            let scope = unsafe { bumpalo::boxed::Box::from_raw(scopeptr) };
+            drop(scope);
+        }
+
+        for scopeptr in self.scopes.free_scopes.get_mut().drain(..) {
+            // safety: all scopes were made in the bump's allocator
+            // They are never dropped until now. The only way to drop is through Box.
+            let mut scope = unsafe { bumpalo::boxed::Box::from_raw(scopeptr) };
+            scope.reset();
+            drop(scope);
+        }
     }
 }
 
 #[derive(Debug)]
 pub enum SchedulerMsg {
     // events from the host
-    UiEvent(UserEvent),
+    Event(UserEvent),
 
     // setstate
     Immediate(ScopeId),
@@ -644,7 +722,7 @@ pub enum SchedulerMsg {
 ///
 /// # Example
 /// ```rust
-/// fn App(cx: Context, props: &()) -> Element {
+/// fn App(cx: Scope<()>) -> Element {
 ///     rsx!(cx, div {
 ///         onclick: move |_| println!("Clicked!")
 ///     })
@@ -664,20 +742,19 @@ pub enum SchedulerMsg {
 /// ```
 #[derive(Debug)]
 pub struct UserEvent {
-    /// The originator of the event trigger
+    /// The originator of the event trigger if available
     pub scope_id: Option<ScopeId>,
 
+    /// The priority of the event to be scheduled around ongoing work
     pub priority: EventPriority,
 
     /// The optional real node associated with the trigger
     pub element: Option<ElementId>,
 
     /// The event type IE "onclick" or "onmouseover"
-    ///
-    /// The name that the renderer will use to mount the listener.
     pub name: &'static str,
 
-    /// Event Data
+    /// The event data to be passed onto the event handler
     pub data: Arc<dyn Any + Send + Sync>,
 }
 

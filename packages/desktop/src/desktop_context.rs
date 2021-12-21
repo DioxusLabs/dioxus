@@ -90,7 +90,7 @@ fn syntax_works() {
     use dioxus_hooks::*;
     use dioxus_html as dioxus_elements;
 
-    static App: FC<()> = |cx, props| {
+    static App: Component<()> = |cx| {
         cx.render(rsx! {
             // left window
             WebviewWindow {

@@ -1,5 +1,5 @@
 use dioxus_core::ScopeState;
-use futures::Future;
+use std::future::Future;
 use std::{
     cell::{Cell, RefCell},
     pin::Pin,

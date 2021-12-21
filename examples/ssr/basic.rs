@@ -12,7 +12,7 @@ fn main() {
     )
 }
 
-pub static App: FC<()> = |cx, props| {
+pub static App: Component<()> = |cx| {
     cx.render(rsx!(
         div {
             class: "overflow-hidden"

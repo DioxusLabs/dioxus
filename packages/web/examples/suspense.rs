@@ -11,10 +11,10 @@ use dioxus_html as dioxus_elements;
 use dioxus_web;
 
 fn main() {
-    dioxus_web::launch(App, |c| c);
+    dioxus_web::launch(App);
 }
 
-static App: Component<()> = |cx, _| {
+static App: Component<()> = |cx| {
     let doggo = cx.suspend(|| async move {
         #[derive(serde::Deserialize)]
         struct Doggo {

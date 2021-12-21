@@ -82,7 +82,10 @@ pub fn render_lazy<'a>(f: Option<LazyNodes<'a, '_>>) -> String {
     )
 }
 
-pub fn render_vdom(dom: &VirtualDom, cfg: impl FnOnce(SsrConfig) -> SsrConfig) -> String {
+pub fn render_vdom(dom: &VirtualDom) -> String {
+    format!("{:}", TextRenderer::from_vdom(dom, SsrConfig::default()))
+}
+pub fn render_vdom_cfg(dom: &VirtualDom, cfg: impl FnOnce(SsrConfig) -> SsrConfig) -> String {
     format!(
         "{:}",
         TextRenderer::from_vdom(dom, cfg(SsrConfig::default()))
@@ -110,7 +113,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
 ///
 /// ## Example
 /// ```ignore
-/// static App: FC<()> = |cx, props|cx.render(rsx!(div { "hello world" }));
+/// static App: Component<()> = |cx, props|cx.render(rsx!(div { "hello world" }));
 /// let mut vdom = VirtualDom::new(App);
 /// vdom.rebuild();
 ///
@@ -165,7 +168,7 @@ impl<'a> TextRenderer<'a, '_> {
                     }
                 }
 
-                write!(f, "<{}", el.tag_name)?;
+                write!(f, "<{}", el.tag)?;
 
                 let mut inner_html = None;
                 let mut attr_iter = el.attributes.iter().peekable();
@@ -230,7 +233,7 @@ impl<'a> TextRenderer<'a, '_> {
                     }
                 }
 
-                write!(f, "</{}>", el.tag_name)?;
+                write!(f, "</{}>", el.tag)?;
                 if self.cfg.newline {
                     writeln!(f)?;
                 }
@@ -241,7 +244,7 @@ impl<'a> TextRenderer<'a, '_> {
                 }
             }
             VNode::Component(vcomp) => {
-                let idx = vcomp.associated_scope.get().unwrap();
+                let idx = vcomp.scope.get().unwrap();
 
                 if let (Some(vdom), false) = (self.vdom, self.cfg.skip_components) {
                     let new_node = vdom.get_scope(idx).unwrap().root_node();
@@ -343,28 +346,28 @@ mod tests {
     fn to_string_works() {
         let mut dom = VirtualDom::new(SIMPLE_APP);
         dom.rebuild();
-        dbg!(render_vdom(&dom, |c| c));
+        dbg!(render_vdom(&dom));
     }
 
     #[test]
     fn hydration() {
         let mut dom = VirtualDom::new(NESTED_APP);
         dom.rebuild();
-        dbg!(render_vdom(&dom, |c| c.pre_render(true)));
+        dbg!(render_vdom_cfg(&dom, |c| c.pre_render(true)));
     }
 
     #[test]
     fn nested() {
         let mut dom = VirtualDom::new(NESTED_APP);
         dom.rebuild();
-        dbg!(render_vdom(&dom, |c| c));
+        dbg!(render_vdom(&dom));
     }
 
     #[test]
     fn fragment_app() {
         let mut dom = VirtualDom::new(FRAGMENT_APP);
         dom.rebuild();
-        dbg!(render_vdom(&dom, |c| c));
+        dbg!(render_vdom(&dom));
     }
 
     #[test]
@@ -394,7 +397,7 @@ mod tests {
 
         let mut dom = VirtualDom::new(STLYE_APP);
         dom.rebuild();
-        dbg!(render_vdom(&dom, |c| c));
+        dbg!(render_vdom(&dom));
     }
 
     #[test]

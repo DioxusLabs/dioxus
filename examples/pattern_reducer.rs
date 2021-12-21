@@ -8,11 +8,11 @@
 use dioxus::prelude::*;
 fn main() {
     env_logger::init();
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
-pub static App: Component<()> = |cx, _| {
-    let state = use_state(cx, PlayerState::new);
+pub static App: Component<()> = |cx| {
+    let state = use_state(&cx, PlayerState::new);
 
     let is_playing = state.is_playing();
 

@@ -45,6 +45,11 @@ pub enum DomEdit<'bump> {
         many: u32,
     },
 
+    // // save a possibly-fragment node as a template
+    // SaveAsTemplate {
+    //     many: u32,
+    // },
+
     // "Root" refers to the item directly
     // it's a waste of an instruction to push the root directly
     ReplaceWith {

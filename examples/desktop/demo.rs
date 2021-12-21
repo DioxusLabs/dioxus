@@ -5,10 +5,10 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
 fn main() {
-    dioxus_desktop::launch(App, |c| c);
+    dioxus_desktop::launch(App);
 }
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx| {
     cx.render(rsx!(
         div {
             "hello world!"

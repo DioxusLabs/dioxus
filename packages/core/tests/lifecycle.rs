@@ -7,7 +7,6 @@ use dioxus_core::DomEdit::*;
 use dioxus_core::ScopeId;
 
 use dioxus_core_macro::*;
-use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use std::sync::{Arc, Mutex};
 
@@ -47,13 +46,13 @@ fn manual_diffing() {
 #[test]
 fn events_generate() {
     static App: Component<()> = |cx| {
-        let mut count = use_state(&cx, || 0);
+        let count = cx.use_hook(|_| 0, |f| f);
 
         let inner = match *count {
             0 => {
                 rsx! {
                     div {
-                        onclick: move |_| count += 1,
+                        onclick: move |_| *count += 1,
                         div {
                             "nested"
                         }
@@ -106,18 +105,18 @@ fn events_generate() {
 #[test]
 fn components_generate() {
     static App: Component<()> = |cx| {
-        let mut render_phase = use_state(&cx, || 0);
-        render_phase += 1;
+        let render_phase = cx.use_hook(|_| 0, |f| f);
+        *render_phase += 1;
 
         cx.render(match *render_phase {
-            0 => rsx!("Text0"),
-            1 => rsx!(div {}),
-            2 => rsx!("Text2"),
-            3 => rsx!(Child {}),
-            4 => rsx!({ None as Option<()> }),
-            5 => rsx!("text 3"),
-            6 => rsx!({ (0..2).map(|f| rsx!("text {f}")) }),
-            7 => rsx!(Child {}),
+            1 => rsx!("Text0"),
+            2 => rsx!(div {}),
+            3 => rsx!("Text2"),
+            4 => rsx!(Child {}),
+            5 => rsx!({ None as Option<()> }),
+            6 => rsx!("text 3"),
+            7 => rsx!({ (0..2).map(|f| rsx!("text {f}")) }),
+            8 => rsx!(Child {}),
             _ => todo!(),
         })
     };
@@ -141,7 +140,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [
@@ -153,7 +152,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [
@@ -165,7 +164,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [
@@ -174,13 +173,13 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [CreatePlaceholder { root: 5 }, ReplaceWith { root: 4, m: 1 },]
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [
@@ -192,7 +191,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [
@@ -208,7 +207,7 @@ fn components_generate() {
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0)).unwrap();
+    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [
@@ -221,10 +220,9 @@ fn components_generate() {
 
 #[test]
 fn component_swap() {
-    // simple_logger::init();
     static App: Component<()> = |cx| {
-        let mut render_phase = use_state(&cx, || 0);
-        render_phase += 1;
+        let render_phase = cx.use_hook(|_| 0, |f| f);
+        *render_phase += 1;
 
         cx.render(match *render_phase {
             0 => rsx!(

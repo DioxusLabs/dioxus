@@ -12,7 +12,7 @@ fn main() {
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
 
-    dioxus_web::launch(App, |c| c)
+    dioxus_web::launch(App)
 }
 
 enum Scene {
@@ -28,13 +28,13 @@ pub struct Client {
     pub description: String,
 }
 
-static App: FC<()> = |cx, _| {
-    let scene = use_state(cx, || Scene::ClientsList);
-    let clients = use_ref(cx, || vec![] as Vec<Client>);
+static App: Component<()> = |cx| {
+    let scene = use_state(&cx, || Scene::ClientsList);
+    let clients = use_ref(&cx, || vec![] as Vec<Client>);
 
-    let firstname = use_state(cx, || String::new());
-    let lastname = use_state(cx, || String::new());
-    let description = use_state(cx, || String::new());
+    let firstname = use_state(&cx, || String::new());
+    let lastname = use_state(&cx, || String::new());
+    let description = use_state(&cx, || String::new());
 
     let scene = match *scene {
         Scene::ClientsList => {

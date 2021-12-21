@@ -7,12 +7,12 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
 const ENDPOINT: &str = "https://api.openweathermap.org/data/2.5/weather";
 
-static App: Component<()> = |cx, props| {
+static App: Component<()> = |cx| {
     //
     let body = use_suspense(
         cx,
@@ -40,7 +40,7 @@ static App: Component<()> = |cx, props| {
 #[derive(PartialEq, Props)]
 struct WeatherProps {}
 
-static WeatherDisplay: Component<WeatherProps> = |cx, props| {
+static WeatherDisplay: Component<WeatherProps> = |cx| {
     //
     cx.render(rsx!(
         div { class: "flex items-center justify-center flex-col"

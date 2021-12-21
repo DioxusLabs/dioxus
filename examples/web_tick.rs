@@ -16,10 +16,10 @@ fn main() {
     #[cfg(target_arch = "wasm32")]
     intern_strings();
 
-    dioxus::web::launch(App, |c| c);
+    dioxus::web::launch(App);
 }
 
-static App: Component<()> = |cx, props| {
+static App: Component<()> = |cx| {
     let mut rng = SmallRng::from_entropy();
     let rows = (0..1_000).map(|f| {
         let label = Label::new(&mut rng);
@@ -49,7 +49,7 @@ fn Row((cx, props): ScopeState<RowProps>) -> Element {
     let [adj, col, noun] = props.label.0;
     cx.render(rsx! {
         tr {
-            td { class:"col-md-1", "{props.row_id}" }
+            td { class:"col-md-1", "{cx.props.row_id}" }
             td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
                 a { class: "lbl", "{adj}" "{col}" "{noun}" }
             }

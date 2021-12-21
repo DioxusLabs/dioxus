@@ -16,7 +16,7 @@ enum AppRoute {
     NotFound
 }
 
-static App: FC<()> = |cx, props| {
+static App: Component<()> = |cx| {
     let route = use_router(cx, AppRoute::parse);
     
     match route {
@@ -30,7 +30,7 @@ static App: FC<()> = |cx, props| {
 Adding links into your app:
 
 ```rust
-static Leaf: FC<()> = |cx, props| {
+static Leaf: Component<()> = |cx| {
     rsx!(cx, div { 
         Link { to: AppRoute::Home } 
     })

@@ -43,7 +43,11 @@ impl Parse for AmbiguousElement {
             if first_char.is_ascii_uppercase() {
                 input.parse::<Component>().map(AmbiguousElement::Component)
             } else {
-                input.parse::<Element>().map(AmbiguousElement::Element)
+                if input.peek2(syn::token::Paren) {
+                    input.parse::<Component>().map(AmbiguousElement::Component)
+                } else {
+                    input.parse::<Element>().map(AmbiguousElement::Element)
+                }
             }
         } else {
             Err(Error::new(input.span(), "Not a valid Html tag"))

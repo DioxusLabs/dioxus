@@ -47,9 +47,9 @@ fn Row<'a>((cx, props): Scope<'a, RowProps>) -> Element<'a> {
     };
     cx.render(rsx! {
         tr {
-            // td { class:"col-md-1", "{props.row_id}" }
+            // td { class:"col-md-1", "{cx.props.row_id}" }
             // td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
-            //     a { class: "lbl", "{props.label}" }
+            //     a { class: "lbl", "{cx.props.label}" }
             // }
             // td { class: "col-md-1"
             //     a { class: "remove", onclick: {handler}

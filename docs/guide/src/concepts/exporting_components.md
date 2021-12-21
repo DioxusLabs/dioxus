@@ -22,7 +22,7 @@ Let's say our app looks something like this:
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
 fn App((cx, props): Component<()>) -> Element {} 
@@ -87,7 +87,7 @@ In our `main.rs`, we'll want to declare the `post` module so we can access our `
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
 mod post;
@@ -186,7 +186,7 @@ Ultimately, including and exporting components is governed by Rust's module syst
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App, |c| c);
+    dioxus::desktop::launch(App);
 }
 
 mod post;

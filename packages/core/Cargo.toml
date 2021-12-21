@@ -1,20 +1,24 @@
 [package]
 name = "dioxus-core"
 version = "0.1.3"
-authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
+authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
-"license" = "MIT/Apache-2.0"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # Bumpalo is used as a micro heap backing each component
-bumpalo = { version = "3.6.0", features = ["collections", "boxed"] }
+bumpalo = { version = "3.6", features = ["collections", "boxed"] }
 
 # faster hashmaps
-fxhash = "0.2.1"
+fxhash = "0.2"
 
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
@@ -22,24 +26,24 @@ longest-increasing-subsequence = "0.1.0"
 # internall used
 log = { version = "0.4", features = ["release_max_level_off"] }
 
-futures-util = { version = "0.3.15", default-features = false }
+futures-util = { version = "0.3", default-features = false }
 
-smallvec = "1.6.1"
+smallvec = "1.6"
 
-slab = "0.4.3"
+slab = "0.4"
 
-futures-channel = "0.3.18"
+futures-channel = "0.3"
 
 # used for noderefs
-once_cell = "1.8.0"
+once_cell = "1.8"
 
-indexmap = "1.7.0"
+indexmap = "1.7"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
 # todo: I want to get rid of this
-backtrace = "0.3.63"
+backtrace = "0.3"
 
 [dev-dependencies]
 anyhow = "1.0.42"
@@ -47,9 +51,10 @@ dioxus-html = { path = "../html" }
 fern = { version = "0.6.0", features = ["colored"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
 simple_logger = "1.13.0"
-dioxus-core-macro = { path = "../core-macro", version = "0.1.2" }
-dioxus-hooks = { path = "../hooks" }
+dioxus-core-macro = { path = "../core-macro", version = "^0.1.2" }
+# dioxus-hooks = { path = "../hooks" }
 criterion = "0.3.5"
+thiserror = "1.0.30"
 
 [features]
 default = []

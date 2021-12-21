@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 
 fn main() {
     simple_logger::init_with_level(log::Level::Debug);
-    dioxus::desktop::launch(App, |c| {
+    dioxus::desktop::launch_cfg(App, |c| {
         c.with_window(|w| {
             w.with_resizable(true).with_inner_size(
                 dioxus::desktop::wry::application::dpi::LogicalSize::new(400.0, 800.0),
@@ -18,8 +18,8 @@ fn main() {
     });
 }
 
-static App: Component<()> = |cx, props| {
-    let file_manager = use_ref(cx, || Files::new());
+static App: Component<()> = |cx| {
+    let file_manager = use_ref(&cx, Files::new);
     let files = file_manager.read();
 
     let file_list = files.path_names.iter().enumerate().map(|(dir_id, path)| {
@@ -39,13 +39,15 @@ static App: Component<()> = |cx, props| {
 
     let current_dir = files.current();
 
-    rsx!(cx, div {
-        h1 {"Files: "}
-        h3 {"Cur dir: {current_dir}"}
-        button { "go up", onclick: move |_| file_manager.write().go_up() }
-        ol { {file_list} }
-        {err_disp}
-    })
+    cx.render(rsx!(
+        div {
+            h1 {"Files: "}
+            h3 {"Cur dir: {current_dir}"}
+            button { "go up", onclick: move |_| file_manager.write().go_up() }
+            ol { {file_list} }
+            {err_disp}
+        }
+    ))
 };
 
 struct Files {

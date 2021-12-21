@@ -49,8 +49,8 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn App(cx: Scope, props: &()) -> Element {
-    let mut count = use_state(cx, || 0);
+fn app(cx: Scope<()>) -> Element {
+    let mut count = use_state(&cx, || 0);
 
     cx.render(rsx!(
         h1 { "High-Five counter: {count}" }
@@ -76,20 +76,32 @@ If you know React, then you already know Dioxus.
 
 <table style="width:100%" align="center">
     <tr >
-        <th><a href="http://github.com/jkelleyrtp/dioxus">Web</a></th>
-        <th><a href="http://github.com/jkelleyrtp/dioxus">Desktop</a></th>
-        <th><a href="http://github.com/jkelleyrtp/dioxus">Mobile</a></th>
-        <th><a href="http://github.com/jkelleyrtp/dioxus">State</a></th>
-        <th><a href="http://github.com/jkelleyrtp/dioxus">Docs</a></th>
-        <th><a href="http://github.com/jkelleyrtp/dioxus">Tools</a></th>
+        <th><a href="https://dioxuslabs.com/book/">Web</a></th>
+        <th><a href="https://dioxuslabs.com/book/">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/book/">Mobile</a></th>
+        <th><a href="https://dioxuslabs.com/book/">State</a></th>
+        <th><a href="https://dioxuslabs.com/book/">Docs</a></th>
+        <th><a href="https://dioxuslabs.com/book/">Tools</a></th>
     <tr>
 </table>
 
+Available cargo features:
+- default: core (macro, hooks, html)
+- macro: support for `Props` and `rsx` macros
+- hooks: foundational hooks like `use_state`, `use_ref`, etc.
+- html: the entire namespace of `html` elements, their listeners, and attributes
+- router: a cross-platform (web and desktop) solution for global app routing 
+- liveview: a threadpool to spawn new VirtualDoms and their handles in
+- ssr: render the virtualdom to a string
+- web: render the your app on the web
+- desktop: render your app locally rendered with webview 
+- mobile: render your app on your device rendered with webview
+
 ## Examples:
 
-| File Navigator (Desktop)                                                                                                                | Bluetooth scanner (Desktop)                                      | TodoMVC (All platforms)                                                                                         | Widget Gallery                                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) | [![asd](https://github.com/DioxusLabs/todomvc/blob/master/example.png)](https://github.com/dioxusLabs/todomvc/) | ![asd](https://sixtyfps.io/resources/printerdemo_screenshot.png) |
+| File Navigator (Desktop)                                                                                                                | Bluetooth scanner (Desktop)                                                                                                             | TodoMVC (All platforms)                                                                                        | Tailwind (Liveview)                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) | [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) | [![asd](https://github.com/DioxusLabs/todomvc/raw/master/example.png)](https://github.com/dioxusLabs/todomvc/) | [![asd](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/DioxusLabs/file-explorer-example) |
 
 
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
@@ -159,6 +171,7 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | Re-hydration              | ✅      | ✅     | Pre-render to HTML to speed up first contentful paint                |
 | Jank-Free Rendering       | ✅      | ✅     | Large diffs are segmented across frames for silky-smooth transitions |
 | Effects                   | ✅      | ✅     | Run effects after a component has been committed to render           |
+| Portals                   | 🛠      | ✅     | Render nodes outside of the traditional tree structure               |
 | Cooperative Scheduling    | 🛠      | ✅     | Prioritize important events over non-important events                |
 | Server Components         | 🛠      | ✅     | Hybrid components for SPA and Server                                 |
 | Bundle Splitting          | 👀      | ✅     | Efficiently and asynchronously load the app                          |
@@ -166,6 +179,7 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 | 1st class global state    | ✅      | ✅     | redux/recoil/mobx on top of context                                  |
 | Runs natively             | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)                       |
 | Subtree Memoization       | ✅      | ❓     | skip diffing static element subtrees                                 |
+| High-efficiency templates | 🛠      | ❓     | rsx! calls are translated to templates on the DOM's side             |
 | Compile-time correct      | ✅      | ❓     | Throw errors on invalid template layouts                             |
 | Heuristic Engine          | ✅      | ❓     | track component memory usage to minimize future allocations          |
 | Fine-grained reactivity   | 👀      | ❓     | Skip diffing for fine-grain updates                                  |
@@ -185,5 +199,5 @@ This project is licensed under the [MIT license].
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Pipette by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
 terms or conditions.
