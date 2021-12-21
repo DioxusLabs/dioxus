@@ -4,6 +4,45 @@ This is the core crate for the Dioxus Virtual DOM. This README will focus on the
 
 To build new apps with Dioxus or to extend the ecosystem with new hooks or components, use the higher-level `dioxus` crate with the appropriate feature flags.
 
+
+```rust
+fn app(cx: Scope<()>) -> Element {
+    cx.render(rsx!(
+        div { "hello world" }
+    ))
+}
+
+
+fn main() {
+    let mut renderer = SomeRenderer::new();
+
+
+    // Creating a new virtualdom from a component
+    let mut dom = VirtualDom::new(app);
+
+    // Patching the renderer with the changes to draw the screen
+    let edits = dom.rebuild();
+    renderer.apply(edits);
+
+    // Injecting events
+    dom.handle_message(SchedulerMsg::UserEvent());
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```
 ## Internals
 
 Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus borrows these concepts:

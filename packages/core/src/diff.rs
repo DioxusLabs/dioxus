@@ -1295,8 +1295,6 @@ impl<'bump> DiffState<'bump> {
                     let scope_id = c.scope.get().unwrap();
                     let root = self.scopes.root_node(scope_id);
                     self.remove_nodes(Some(root), gen_muts);
-
-                    log::debug!("Destroying scope {:?}", scope_id);
                     self.scopes.try_remove(scope_id).unwrap();
                 }
             }

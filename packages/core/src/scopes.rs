@@ -123,13 +123,6 @@ impl ScopeArena {
             debug_assert!(any_item.is_none());
         } else {
             // else create a new scope
-            let (node_capacity, hook_capacity) = self
-                .heuristics
-                .borrow()
-                .get(&fc_ptr)
-                .map(|h| (h.node_arena_size, h.hook_arena_size))
-                .unwrap_or_default();
-
             self.scopes.borrow_mut().insert(
                 new_scope_id,
                 self.bump.alloc(ScopeState::new(
@@ -139,8 +132,11 @@ impl ScopeArena {
                     self.sender.clone(),
                     parent_scope,
                     vcomp,
-                    node_capacity,
-                    hook_capacity,
+                    self.heuristics
+                        .borrow()
+                        .get(&fc_ptr)
+                        .map(|h| (h.node_arena_size, h.hook_arena_size))
+                        .unwrap_or_default(),
                 )),
             );
         }
@@ -437,19 +433,16 @@ impl ScopeState {
         sender: UnboundedSender<SchedulerMsg>,
         parent_scope: Option<*mut ScopeState>,
         vcomp: Box<dyn AnyProps>,
-        node_capacity: usize,
-        hook_capacity: usize,
+        (node_capacity, hook_capacity): (usize, usize),
     ) -> Self {
-        let frames = [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)];
-
         ScopeState {
             sender,
             container,
             our_arena_idx,
             parent_scope,
-            props: RefCell::new(Some(vcomp)),
             height,
-            frames,
+            props: RefCell::new(Some(vcomp)),
+            frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
 
             // todo: subtrees
             subtree: Cell::new(0),

@@ -210,7 +210,7 @@ impl DesktopController {
                     "user_event" => {
                         let event = events::trigger_from_serialized(req.params.unwrap());
                         log::debug!("User event: {:?}", event);
-                        sender.unbounded_send(SchedulerMsg::UiEvent(event)).unwrap();
+                        sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
                     }
                     "initialize" => {
                         is_ready.store(true, std::sync::atomic::Ordering::Relaxed);

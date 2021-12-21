@@ -345,11 +345,10 @@ impl VirtualDom {
 
     pub fn process_message(&mut self, msg: SchedulerMsg) {
         match msg {
-            // just keep looping, the task is now saved but we should actually poll it
             SchedulerMsg::NewTask(id) => {
                 self.scopes.pending_futures.borrow_mut().insert(id);
             }
-            SchedulerMsg::UiEvent(event) => {
+            SchedulerMsg::Event(event) => {
                 if let Some(element) = event.element {
                     self.scopes.call_listener_with_bubbling(event, element);
                 }
@@ -640,6 +639,7 @@ impl VirtualDom {
         (create.mutations, edit.mutations)
     }
 }
+
 /*
 Scopes and ScopeArenas are never dropped internally.
 An app will always occupy as much memory as its biggest form.
@@ -662,9 +662,6 @@ should we build a vcomponent for the root?
 
 - 1: Use remove_nodes to use the ensure_drop_safety pathway to safely drop the tree
 - 2: Drop the ScopeState itself
-
-
-
 */
 impl Drop for VirtualDom {
     fn drop(&mut self) {
@@ -684,27 +681,26 @@ impl Drop for VirtualDom {
 
         // make sure there are no "live" components
         for (_, scopeptr) in self.scopes.scopes.get_mut().drain() {
+            // safety: all scopes were made in the bump's allocator
+            // They are never dropped until now. The only way to drop is through Box.
             let scope = unsafe { bumpalo::boxed::Box::from_raw(scopeptr) };
             drop(scope);
         }
 
         for scopeptr in self.scopes.free_scopes.get_mut().drain(..) {
+            // safety: all scopes were made in the bump's allocator
+            // They are never dropped until now. The only way to drop is through Box.
             let mut scope = unsafe { bumpalo::boxed::Box::from_raw(scopeptr) };
             scope.reset();
             drop(scope);
         }
-
-        // Safety: all refereneces to this caller have been dropped
-        // the pointer is still valid since we haven't moved it since the virtualdom was created
-        // ensure the root component's caller is dropped
-        // drop(unsafe { Box::from_raw(self.caller) });
     }
 }
 
 #[derive(Debug)]
 pub enum SchedulerMsg {
     // events from the host
-    UiEvent(UserEvent),
+    Event(UserEvent),
 
     // setstate
     Immediate(ScopeId),
@@ -746,20 +742,19 @@ pub enum SchedulerMsg {
 /// ```
 #[derive(Debug)]
 pub struct UserEvent {
-    /// The originator of the event trigger
+    /// The originator of the event trigger if available
     pub scope_id: Option<ScopeId>,
 
+    /// The priority of the event to be scheduled around ongoing work
     pub priority: EventPriority,
 
     /// The optional real node associated with the trigger
     pub element: Option<ElementId>,
 
     /// The event type IE "onclick" or "onmouseover"
-    ///
-    /// The name that the renderer will use to mount the listener.
     pub name: &'static str,
 
-    /// Event Data
+    /// The event data to be passed onto the event handler
     pub data: Arc<dyn Any + Send + Sync>,
 }
 
