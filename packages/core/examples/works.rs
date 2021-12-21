@@ -6,16 +6,15 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
 fn main() {
-    let _ = VirtualDom::new(Parent);
+    let _ = VirtualDom::new(parent);
 }
 
-fn Parent(cx: Scope<()>) -> Element {
+fn parent(cx: Scope<()>) -> Element {
     let value = cx.use_hook(|_| String::new(), |f| f);
 
     cx.render(rsx! {
         div {
-            Child { name: value }
-            Fragment { "asd" }
+            child( name: value )
         }
     })
 }
@@ -25,11 +24,11 @@ struct ChildProps<'a> {
     name: &'a str,
 }
 
-fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
+fn child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
     cx.render(rsx! {
         div {
             h1 { "it's nested" }
-            Child2 { name: cx.props.name }
+            grandchild( name: cx.props.name )
         }
     })
 }
@@ -39,8 +38,26 @@ struct Grandchild<'a> {
     name: &'a str,
 }
 
-fn Child2<'a>(cx: Scope<'a, Grandchild<'a>>) -> Element {
+fn grandchild<'a>(cx: Scope<'a, Grandchild>) -> Element<'a> {
     cx.render(rsx! {
         div { "Hello {cx.props.name}!" }
+        great_grandchild( name: cx.props.name )
     })
 }
+
+fn great_grandchild<'a>(cx: Scope<'a, Grandchild>) -> Element<'a> {
+    cx.render(rsx! {
+        div {
+            h1 { "it's nested" }
+        }
+    })
+}
+
+/*
+can we implement memoization as a wrapper or something? Like we just intercept the
+render function?
+
+
+
+
+*/

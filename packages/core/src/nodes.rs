@@ -6,6 +6,7 @@
 use crate::{
     innerlude::{Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
+    Component,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -84,7 +85,7 @@ pub enum VNode<'src> {
     ///
     /// ```rust, ignore
     /// fn Example(cx: Scope<()>) -> Element {
-    ///     todo!()
+    ///     ...
     /// }
     ///
     /// let mut vdom = VirtualDom::new();
@@ -186,6 +187,7 @@ impl Debug for VNode<'_> {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
             VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
+            // VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
         }
     }
 }
@@ -354,26 +356,89 @@ impl Clone for EventHandler<'_> {
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
     pub key: Option<&'src str>,
-
-    pub associated_scope: Cell<Option<ScopeId>>,
-
-    // Function pointer to the FC that was used to generate this component
+    pub scope: Cell<Option<ScopeId>>,
+    pub can_memoize: bool,
     pub user_fc: *const (),
+    pub props: Option<RefCell<Box<dyn AnyProps + 'src>>>,
+}
 
-    pub(crate) can_memoize: bool,
+pub(crate) struct VComponentProps<P> {
+    // Props start local
+    // If they are static, then they can get promoted onto the heap
+    pub render_fn: Component<P>,
+    pub props: P,
+    pub memo: unsafe fn(&P, &P) -> bool,
+}
 
-    pub(crate) _hard_allocation: Cell<Option<*const ()>>,
+pub trait AnyProps {
+    fn as_ptr(&self) -> *const ();
+    fn release(&self);
+    fn replace_heap(&self, new: Box<dyn Any>);
 
-    // Raw pointer into the bump arena for the props of the component
-    pub(crate) bump_props: *const (),
+    // move the props from the bump arena onto the heap
+    fn promote(&self);
+    fn render<'a>(&'a self, bump: &'a ScopeState) -> Element<'a>;
+    unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
+}
 
-    // during the "teardown" process we'll take the caller out so it can be dropped properly
-    pub(crate) caller: &'src dyn Fn(&'src ScopeState) -> Element,
+impl<P> AnyProps for VComponentProps<P> {
+    fn as_ptr(&self) -> *const () {
+        &self.props as *const _ as *const ()
+        // // todo: maybe move this into an enum
+        // let heap_props = self.heap_props.borrow();
+        // if let Some(b) = heap_props.as_ref() {
+        //     b.as_ref() as *const _ as *const ()
+        // } else {
+        //     let local_props = self.local_props.borrow();
+        //     local_props.as_ref().unwrap() as *const _ as *const ()
+        // }
+    }
 
-    pub(crate) comparator: Option<&'src dyn Fn(&VComponent) -> bool>,
+    // this will downcat the other ptr as our swallowed type!
+    // you *must* make this check *before* calling this method
+    // if your functions are not the same, then you will downcast a pointer into a different type (UB)
+    unsafe fn memoize(&self, other: &dyn AnyProps) -> bool {
+        let real_other: &P = &*(other.as_ptr() as *const _ as *const P);
+        let real_us: &P = &*(self.as_ptr() as *const _ as *const P);
+        (self.memo)(real_us, real_other)
+    }
 
-    // todo: re-add this
-    pub(crate) drop_props: RefCell<Option<BumpBox<'src, dyn FnMut()>>>,
+    fn release(&self) {
+        panic!("don't release props anymore");
+        // if let Some(heap_props) = self.heap_props.borrow_mut().take() {
+        //     dbg!("releasing heap");
+        //     drop(heap_props)
+        // } else if let Some(local_props) = self.local_props.borrow_mut().take() {
+        //     dbg!("releasing local");
+        //     drop(local_props)
+        // } else {
+        //     dbg!("trying to do a double release");
+        // }
+    }
+
+    fn promote(&self) {
+        panic!("don't promote props anymore");
+        // dbg!("promoting props");
+        // if let Some(props) = self.local_props.borrow_mut().take() {
+        //     let mut heap_slot = self.heap_props.borrow_mut();
+        //     *heap_slot = Some(Box::new(props));
+        // }
+    }
+
+    fn render<'a>(&'a self, scope: &'a ScopeState) -> Element<'a> {
+        let props: &P = &self.props;
+        let inline_props = unsafe { std::mem::transmute::<&P, &P>(props) };
+
+        (self.render_fn)(Scope {
+            scope,
+            props: inline_props,
+        })
+    }
+
+    fn replace_heap(&self, new: Box<dyn Any>) {
+        // let new = new.downcast::<P>().unwrap();
+        // self.heap_props.borrow_mut().replace(new);
+    }
 }
 
 /// This struct provides an ergonomic API to quickly build VNodes.
@@ -517,75 +582,23 @@ impl<'a> NodeFactory<'a> {
     where
         P: Properties + 'a,
     {
-        let bump = self.bump;
-        let props = bump.alloc(props);
-        let bump_props = props as *mut P as *mut ();
-        let user_fc = component as *const ();
+        VNode::Component(self.bump.alloc(VComponent {
+            key: key.map(|f| self.raw_text(f).0),
+            scope: Default::default(),
+            can_memoize: P::IS_STATIC,
+            user_fc: component as *const (),
+            props: Some(RefCell::new(Box::new(VComponentProps {
+                // local_props: RefCell::new(Some(props)),
+                // heap_props: RefCell::new(None),
+                props,
+                memo: P::memoize, // smuggle the memoization function across borders
 
-        let comparator: &mut dyn Fn(&VComponent) -> bool = bump.alloc_with(|| {
-            move |other: &VComponent| {
-                if user_fc == other.user_fc {
-                    // Safety
-                    // - We guarantee that Component<P> is the same by function pointer
-                    // - Because Component<P> is the same, then P must be the same (even with generics)
-                    // - Non-static P are autoderived to memoize as false
-                    // - This comparator is only called on a corresponding set of bumpframes
-                    //
-                    // It's only okay to memoize if there are no children and the props can be memoized
-                    // Implementing memoize is unsafe and done automatically with the props trait
-                    unsafe {
-                        let real_other: &P = &*(other.bump_props as *const _ as *const P);
-                        props.memoize(real_other)
-                    }
-                } else {
-                    false
-                }
-            }
-        });
-
-        let drop_props = {
-            // create a closure to drop the props
-            let mut has_dropped = false;
-
-            let drop_props: &mut dyn FnMut() = bump.alloc_with(|| {
-                move || unsafe {
-                    if !has_dropped {
-                        let real_other = bump_props as *mut _ as *mut P;
-                        let b = BumpBox::from_raw(real_other);
-                        std::mem::drop(b);
-
-                        has_dropped = true;
-                    } else {
-                        panic!("Drop props called twice - this is an internal failure of Dioxus");
-                    }
-                }
-            });
-
-            let drop_props = unsafe { BumpBox::from_raw(drop_props) };
-
-            RefCell::new(Some(drop_props))
-        };
-
-        let key = key.map(|f| self.raw_text(f).0);
-
-        let caller: &'a mut dyn Fn(&'a ScopeState) -> Element =
-            bump.alloc(move |scope: &ScopeState| -> Element {
-                let props: &'_ P = unsafe { &*(bump_props as *const P) };
-                component(Scope { scope, props })
-            });
-
-        let can_memoize = P::IS_STATIC;
-
-        VNode::Component(bump.alloc(VComponent {
-            user_fc,
-            comparator: Some(comparator),
-            bump_props,
-            caller,
-            key,
-            can_memoize,
-            drop_props,
-            associated_scope: Cell::new(None),
-            _hard_allocation: Cell::new(None),
+                // i'm sorry but I just need to bludgeon the lifetimes into place here
+                // this is safe because we're managing all lifetimes to originate from previous calls
+                // the intricacies of Rust's lifetime system make it difficult to properly express
+                // the transformation from this specific lifetime to the for<'a> lifetime
+                render_fn: unsafe { std::mem::transmute(component) },
+            }))),
         }))
     }
 

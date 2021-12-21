@@ -6,8 +6,7 @@ pub(crate) mod diff;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
 pub(crate) mod nodes;
-pub(crate) mod scope;
-pub(crate) mod scopearena;
+pub(crate) mod scopes;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
@@ -16,8 +15,8 @@ pub(crate) mod innerlude {
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
-    pub use crate::scope::*;
-    pub(crate) use crate::scopearena::*;
+    pub use crate::scopes::*;
+    pub(crate) use crate::scopes::*;
     pub use crate::virtual_dom::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
@@ -61,7 +60,7 @@ pub(crate) mod innerlude {
     ///     // ...
     /// };
     /// ```
-    pub type Component<P> = for<'a> fn(Scope<'a, P>) -> Element<'a>;
+    pub type Component<P> = fn(Scope<P>) -> Element;
 }
 
 pub use crate::innerlude::{
@@ -85,4 +84,13 @@ pub mod exports {
     //! Feel free to just add the dependencies in your own Crates.toml
     pub use bumpalo;
     pub use futures_channel;
+}
+
+/// Functions that wrap unsafe functionality to prevent us from misusing it at the callsite
+pub(crate) mod unsafe_utils {
+    use crate::VNode;
+
+    pub unsafe fn extend_vnode<'a, 'b>(node: &'a VNode<'a>) -> &'b VNode<'b> {
+        std::mem::transmute(node)
+    }
 }
