@@ -1,15 +1,13 @@
-#![allow(non_upper_case_globals)]
-
 use dioxus::prelude::*;
 use dioxus::ssr;
 
 fn main() {
-    let mut vdom = VirtualDom::new(App);
-    vdom.rebuild_in_place().expect("Rebuilding failed");
+    let mut vdom = VirtualDom::new(APP);
+    let _ = vdom.rebuild();
     println!("{}", ssr::render_vdom(&vdom));
 }
 
-static App: Component<()> = |cx| {
+static APP: Component<()> = |cx| {
     cx.render(rsx!(
         div {
             h1 { "Title" }
@@ -17,10 +15,3 @@ static App: Component<()> = |cx| {
         }
     ))
 };
-
-struct MyProps<'a> {
-    text: &'a str,
-}
-fn App2<'a>(cx: Scope<'a, MyProps<'a>>) -> Element {
-    None
-}

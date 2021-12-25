@@ -5,11 +5,11 @@ use dioxus_html as dioxus_elements;
 
 fn main() {}
 
-fn App(cx: Scope<()>) -> Element {
+fn app(cx: Scope) -> Element {
     cx.render(rsx!(div {
-        App2 {
+        app2 (
             p: "asd"
-        }
+        )
     }))
 }
 
@@ -18,7 +18,7 @@ struct Borrowed<'a> {
     p: &'a str,
 }
 
-fn App2<'a>(cx: Scope<'a, Borrowed<'a>>) -> Element {
+fn app2<'a>(cx: Scope<'a, Borrowed<'a>>) -> Element {
     let g = eat2(&cx);
     rsx!(cx, "")
 }

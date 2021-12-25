@@ -89,7 +89,7 @@ mod ric_raf;
 /// }
 /// ```
 pub fn launch(root_component: Component<()>) {
-    launch_with_props(root_component, ());
+    launch_with_props(root_component, (), |c| c);
 }
 
 /// Launches the VirtualDOM from the specified component function and props.

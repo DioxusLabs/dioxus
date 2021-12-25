@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus::router::Router;
+use dioxus_router::{use_router, Link};
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Route {
@@ -24,7 +24,7 @@ pub enum Route {
 }
 
 static App: Component<()> = |cx| {
-    let route = use_router(cx, Route::parse)?;
+    let route = use_router(&cx, Route::parse);
 
     cx.render(rsx! {
         nav {
@@ -58,28 +58,6 @@ impl Route {
             "/blog/:page/:id" => BlogPost { post_id: 1 },
             _ => NotFound,
         }
-    }
-}
-
-impl Routable for Route {
-    fn from_path(path: &str, params: &std::collections::HashMap<&str, &str>) -> Option<Self> {
-        todo!()
-    }
-
-    fn to_path(&self) -> String {
-        todo!()
-    }
-
-    fn routes() -> Vec<&'static str> {
-        todo!()
-    }
-
-    fn not_found_route() -> Option<Self> {
-        todo!()
-    }
-
-    fn recognize(pathname: &str) -> Option<Self> {
-        todo!()
     }
 }
 

@@ -8,10 +8,10 @@
 //! This can be done either through boxing directly, or by using dynamic-sized-types and a custom allocator. In our case,
 //! we build a tiny alloactor in the stack and allocate the closure into that.
 //!
-//! The logic for this was borrowed from https://docs.rs/stack_dst/0.6.1/stack_dst/. Unfortunately, this crate does not
+//! The logic for this was borrowed from <https://docs.rs/stack_dst/0.6.1/stack_dst/>. Unfortunately, this crate does not
 //! support non-static closures, so we've implemented the core logic of `ValueA` in this module.
 
-use crate::prelude::{NodeFactory, VNode};
+use crate::innerlude::{NodeFactory, VNode};
 use std::mem;
 
 /// A concrete type provider for closures that build VNode structures.
@@ -35,15 +35,15 @@ enum StackNodeStorage<'a, 'b> {
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
-    pub fn new_some<F>(_val: F) -> Option<Self>
+    pub fn new_some<F>(_val: F) -> Self
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
     {
-        Some(Self::new(_val))
+        Self::new(_val)
     }
 
     /// force this call onto the stack
-    pub fn new_boxed<F>(_val: F) -> Option<Self>
+    pub fn new_boxed<F>(_val: F) -> Self
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
     {
@@ -55,9 +55,9 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
             fac.map(inner)
         };
 
-        Some(Self {
+        Self {
             inner: StackNodeStorage::Heap(Box::new(val)),
-        })
+        }
     }
 
     pub fn new<F>(_val: F) -> Self
@@ -249,9 +249,7 @@ fn it_works() {
     let caller = LazyNodes::new_some(|f| {
         //
         f.text(format_args!("hello world!"))
-    })
-    .unwrap();
-
+    });
     let g = caller.call(factory);
 
     dbg!(g);
@@ -291,7 +289,6 @@ fn it_drops() {
             log::debug!("main closure");
             f.fragment_from_iter(it)
         })
-        .unwrap()
     };
 
     let _ = caller.call(factory);

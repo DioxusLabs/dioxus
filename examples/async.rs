@@ -17,7 +17,7 @@ pub static App: Component<()> = |cx| {
 
     let (async_count, dir) = (count.for_async(), *direction);
 
-    let (task, _) = use_coroutine(cx, move || async move {
+    let task = use_coroutine(&cx, move || async move {
         loop {
             TimeoutFuture::new(250).await;
             *async_count.get_mut() += dir;

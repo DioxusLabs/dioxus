@@ -89,9 +89,9 @@ pub fn use_model_coroutine<'a, T, F: Future<Output = ()> + 'static>(
             }
         },
         |inner| {
-            if let Some(task) = inner.task.get_mut() {
-                cx.push_task(|| task);
-            }
+            // if let Some(task) = inner.task.get_mut() {
+            //     cx.push_task(|| task);
+            // }
             //
             todo!()
         },

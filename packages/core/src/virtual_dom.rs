@@ -15,7 +15,7 @@ use std::{any::Any, collections::VecDeque, iter::FromIterator, pin::Pin, sync::A
 ///
 /// ## Guide
 ///
-/// Components are defined as simple functions that take [`Context`] and a [`Properties`] type and return an [`Element`].  
+/// Components are defined as simple functions that take [`Scope`] and return an [`Element`].  
 ///
 /// ```rust, ignore
 /// #[derive(Props, PartialEq)]
@@ -552,11 +552,11 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Base);
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
-    pub fn render_vnodes<'a>(&'a self, lazy_nodes: Option<LazyNodes<'a, '_>>) -> &'a VNode<'a> {
+    pub fn render_vnodes<'a>(&'a self, lazy_nodes: LazyNodes<'a, '_>) -> &'a VNode<'a> {
         let scope = self.scopes.get_scope(ScopeId(0)).unwrap();
         let frame = scope.wip_frame();
         let factory = NodeFactory { bump: &frame.bump };
-        let node = lazy_nodes.unwrap().call(factory);
+        let node = lazy_nodes.call(factory);
         frame.bump.alloc(node)
     }
 
@@ -594,7 +594,7 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Base);
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
-    pub fn create_vnodes<'a>(&'a self, nodes: Option<LazyNodes<'a, '_>>) -> Mutations<'a> {
+    pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.stack.element_stack.push(ElementId(0));
         machine
@@ -619,8 +619,8 @@ impl VirtualDom {
     /// ```
     pub fn diff_lazynodes<'a>(
         &'a self,
-        left: Option<LazyNodes<'a, '_>>,
-        right: Option<LazyNodes<'a, '_>>,
+        left: LazyNodes<'a, '_>,
+        right: LazyNodes<'a, '_>,
     ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
 
@@ -947,7 +947,7 @@ impl<'a> Properties for FragmentProps<'a> {
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
     let i = cx.props.0.as_ref().map(|f| f.decouple());
-    cx.render(Some(LazyNodes::new(|f| f.fragment_from_iter(i))))
+    cx.render(LazyNodes::new(|f| f.fragment_from_iter(i)))
 }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus

@@ -15,26 +15,27 @@ fn main() {
 }
 
 static App: Component<()> = |cx| {
-    let doggo = cx.suspend(|| async move {
-        #[derive(serde::Deserialize)]
-        struct Doggo {
-            message: String,
-        }
+    todo!("suspense is broken")
+    // let doggo = suspend(|| async move {
+    //     #[derive(serde::Deserialize)]
+    //     struct Doggo {
+    //         message: String,
+    //     }
 
-        let src = reqwest::get("https://dog.ceo/api/breeds/image/random")
-            .await
-            .expect("Failed to fetch doggo")
-            .json::<Doggo>()
-            .await
-            .expect("Failed to parse doggo")
-            .message;
+    //     let src = reqwest::get("https://dog.ceo/api/breeds/image/random")
+    //         .await
+    //         .expect("Failed to fetch doggo")
+    //         .json::<Doggo>()
+    //         .await
+    //         .expect("Failed to parse doggo")
+    //         .message;
 
-        rsx!(cx, img { src: "{src}" })
-    });
+    //     rsx!(cx, img { src: "{src}" })
+    // });
 
-    rsx!(cx, div {
-        h1 {"One doggo coming right up"}
-        button { onclick: move |_| cx.needs_update(), "Get a new doggo" }
-        {doggo}
-    })
+    // rsx!(cx, div {
+    //     h1 {"One doggo coming right up"}
+    //     button { onclick: move |_| cx.needs_update(), "Get a new doggo" }
+    //     {doggo}
+    // })
 };

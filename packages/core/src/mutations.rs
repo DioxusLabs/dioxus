@@ -1,6 +1,9 @@
 //! Instructions returned by the VirtualDOM on how to modify the Real DOM.
 //!
 //! This module contains an internal API to generate these instructions.
+//!
+//! Beware that changing code in this module will break compatibility with
+//! interpreters for these types of DomEdits.
 
 use crate::innerlude::*;
 use std::{any::Any, fmt::Debug};

@@ -45,8 +45,8 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row((cx, props): ScopeState<RowProps>) -> Element {
-    let [adj, col, noun] = props.label.0;
+fn Row(cx: Scope<RowProps>) -> Element {
+    let [adj, col, noun] = cx.props.label.0;
     cx.render(rsx! {
         tr {
             td { class:"col-md-1", "{cx.props.row_id}" }

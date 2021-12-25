@@ -97,7 +97,7 @@ struct ActionButtonProps<'a> {
 
 fn ActionButton<'a>(cx: Scope<'a, ActionButtonProps<'a>>) -> Element {
     rsx!(cx, div { class: "col-sm-6 smallpad"
-        button { class:"btn btn-primary btn-block", r#type: "button", id: "{cx.props.id}",  onclick: move |_| (props.onclick)(),
+        button { class:"btn btn-primary btn-block", r#type: "button", id: "{cx.props.id}",  onclick: move |_| (cx.props.onclick)(),
             "{cx.props.name}"
         }
     })

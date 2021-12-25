@@ -171,7 +171,11 @@ impl<'a, T: 'static> UseState<'a, T> {
 }
 
 impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
-    /// Gain mutable access to the new value. This method is only available when the value is a `ToOwned` type.
+    /// Gain mutable access to the new value via RefMut.
+    ///
+    /// If `modify` is called, then the component will re-render.
+    ///
+    /// This method is only available when the value is a `ToOwned` type.
     ///
     /// Mutable access is derived by calling "ToOwned" (IE cloning) on the current value.
     ///

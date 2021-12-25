@@ -23,9 +23,9 @@ pub struct TodoItem {
 
 const STYLE: &str = include_str!("./assets/todomvc.css");
 const App: Component<()> = |cx| {
-    let mut draft = use_state(&cx, || "".to_string());
-    let mut todos = use_state(&cx, || HashMap::<u32, Rc<TodoItem>>::new());
-    let mut filter = use_state(&cx, || FilterState::All);
+    let draft = use_state(&cx, || "".to_string());
+    let todos = use_state(&cx, || HashMap::<u32, Rc<TodoItem>>::new());
+    let filter = use_state(&cx, || FilterState::All);
 
     let todolist = todos
         .iter()
@@ -86,9 +86,9 @@ pub struct TodoEntryProps {
 }
 
 pub fn TodoEntry(cx: Scope<TodoEntryProps>) -> Element {
-    let mut is_editing = use_state(&cx, || false);
-    let mut contents = use_state(&cx, || String::from(""));
-    let todo = &props.todo;
+    let is_editing = use_state(&cx, || false);
+    let contents = use_state(&cx, || String::from(""));
+    let todo = &cx.props.todo;
 
     rsx!(cx, li {
         "{todo.id}"

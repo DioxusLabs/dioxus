@@ -11,7 +11,7 @@ use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 
 fn main() {
-    simple_logger::init().unwrap();
+    // simple_logger::init().unwrap();
     dioxus_desktop::launch(app);
 }
 
@@ -21,6 +21,7 @@ fn app(cx: Scope<()>) -> Element {
 
     cx.push_task(|| async move {
         tokio::time::sleep(Duration::from_millis(1000)).await;
+        println!("count is now {:?}", count);
         count += 1;
     });
 
@@ -33,4 +34,4 @@ fn app(cx: Scope<()>) -> Element {
             }
         }
     })
-};
+}

@@ -351,7 +351,7 @@ impl ScopeArena {
 ///     cx.render(rsx!{ div {"Hello, {cx.props.name}"} })
 /// }
 /// ```
-pub struct Scope<'a, P> {
+pub struct Scope<'a, P = ()> {
     pub scope: &'a ScopeState,
     pub props: &'a P,
 }
@@ -363,6 +363,26 @@ impl<P> Clone for Scope<'_, P> {
             scope: self.scope,
             props: self.props,
         }
+    }
+}
+
+impl<'src, P> Scope<'src, P> {
+    pub fn register_task(self, task: impl Future<Output = ()> + 'src) {
+        let fut: &'src mut dyn Future<Output = ()> = self.scope.bump().alloc(task);
+        let boxed_fut: BumpBox<'src, dyn Future<Output = ()> + 'src> =
+            unsafe { BumpBox::from_raw(fut) };
+        let pinned_fut: Pin<BumpBox<'src, _>> = boxed_fut.into();
+
+        // erase the 'src lifetime for self-referential storage
+        // todo: provide a miri test around this
+        // concerned about segfaulting
+        let self_ref_fut = unsafe { std::mem::transmute(pinned_fut) };
+
+        self.sender
+            .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
+            .unwrap();
+
+        self.scope.items.borrow_mut().tasks.push(self_ref_fut);
     }
 }
 
@@ -578,7 +598,7 @@ impl ScopeState {
 
     /// Schedule an update for any component given its ScopeId.
     ///
-    /// A component's ScopeId can be obtained from `use_hook` or the [`Context::scope_id`] method.
+    /// A component's ScopeId can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
     ///
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Rc<dyn Fn(ScopeId)> {
@@ -662,29 +682,33 @@ impl ScopeState {
     /// Pushes the future onto the poll queue to be polled after the component renders.
     ///
     /// The future is forcibly dropped if the component is not ready by the next render
-    pub fn push_task<'src, F>(&'src self, fut: impl FnOnce() -> F + 'src) -> usize
+    pub fn push_task<'src, F>(&'src self, fut: F) -> usize
     where
         F: Future<Output = ()>,
         F::Output: 'src,
         F: 'src,
     {
-        self.sender
-            .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
-            .unwrap();
-
         // wrap it in a type that will actually drop the contents
         //
         // Safety: we just made the pointer above and will promise not to alias it!
         // The main reason we do this through from_raw is because Bumpalo's box does
         // not support unsized coercion
-        let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut());
-        let boxed_fut: BumpBox<dyn Future<Output = ()>> = unsafe { BumpBox::from_raw(fut) };
-        let pinned_fut: Pin<BumpBox<_>> = boxed_fut.into();
+
+        let fut: &'src mut dyn Future<Output = ()> = self.bump().alloc(fut);
+        let boxed_fut: BumpBox<'src, dyn Future<Output = ()> + 'src> =
+            unsafe { BumpBox::from_raw(fut) };
+        let pinned_fut: Pin<BumpBox<'src, _>> = boxed_fut.into();
 
         // erase the 'src lifetime for self-referential storage
         // todo: provide a miri test around this
         // concerned about segfaulting
-        let self_ref_fut = unsafe { std::mem::transmute(pinned_fut) };
+        let self_ref_fut = unsafe {
+            std::mem::transmute::<Pin<BumpBox<'src, _>>, Pin<BumpBox<'static, _>>>(pinned_fut)
+        };
+
+        self.sender
+            .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
+            .unwrap();
 
         // Push the future into the tasks
         let mut items = self.items.borrow_mut();
@@ -707,14 +731,11 @@ impl ScopeState {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(&'src self, rsx: Option<LazyNodes<'src, '_>>) -> Option<VNode<'src>> {
+    pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Option<VNode<'src>> {
         let fac = NodeFactory {
             bump: &self.wip_frame().bump,
         };
-        match rsx {
-            Some(s) => Some(s.call(fac)),
-            None => todo!("oh no no nodes"),
-        }
+        Some(rsx.call(fac))
     }
 
     /// Store a value between renders

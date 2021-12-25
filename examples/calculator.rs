@@ -124,6 +124,6 @@ fn CalculatorKey<'a>(cx: Scope<'a, CalculatorKeyProps<'a>>) -> Element {
     rsx!(cx, button {
         class: "calculator-key {cx.props.name}"
         onclick: {cx.props.onclick}
-        {&props.children}
+        {&cx.props.children}
     })
 }

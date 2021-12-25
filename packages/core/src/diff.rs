@@ -1,6 +1,6 @@
-//! This module contains the stateful DiffMachine and all methods to diff VNodes, their properties, and their children.
+//! This module contains the stateful DiffState and all methods to diff VNodes, their properties, and their children.
 //!
-//! The [`DiffMachine`] calculates the diffs between the old and new frames, updates the new nodes, and generates a set
+//! The [`DiffState`] calculates the diffs between the old and new frames, updates the new nodes, and generates a set
 //! of mutations for the RealDom to apply.
 //!
 //! ## Notice:
@@ -86,14 +86,14 @@
 //! - Certain web-dom-specific optimizations.
 //!
 //! More info on how to improve this diffing algorithm:
-//!  - https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/
+//!  - <https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/>
 
 use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 use DomEdit::*;
 
-/// Our DiffMachine is an iterative tree differ.
+/// Our DiffState is an iterative tree differ.
 ///
 /// It uses techniques of a stack machine to allow pausing and restarting of the diff algorithm. This
 /// was originally implemented using recursive techniques, but Rust lacks the ability to call async functions recursively,
@@ -490,7 +490,7 @@ impl<'bump> DiffState<'bump> {
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
 
             // The normal pathway still works, but generates slightly weird instructions
-            // This pathway just ensures we get create and replace
+            // This pathway ensures uses the ReplaceAll, not the InsertAfter and remove
             (Placeholder(_), Fragment(new)) => {
                 self.stack
                     .create_children(new.children, MountType::Replace { old: old_node });

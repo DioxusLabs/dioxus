@@ -58,15 +58,15 @@ static App: Component<()> = |cx| {
 #[derive(Props)]
 struct HorseyProps<'a> {
     pos: i32,
-    children: ScopeChildren<'a>,
+    children: Element<'a>,
 }
 
-fn Horsey<'a>((cx, props): ScopeState<'a, HorseyProps<'a>>) -> Element {
+fn Horsey<'a>(cx: Scope<'a, HorseyProps<'a>>) -> Element {
     cx.render(rsx! {
         div {
             button { "pause" }
             div {
-                {&props.children}
+                {&cx.props.children}
             }
         }
     })
