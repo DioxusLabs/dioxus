@@ -12,7 +12,7 @@ fn main() {
 fn app(cx: Scope<()>) -> Element {
     let mut count = use_state(&cx, || 0);
 
-    cx.push_task(|| async move {
+    cx.push_future(|| async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         count += 1;
     });

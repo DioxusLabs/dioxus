@@ -7,7 +7,6 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{Future, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
-use smallvec::SmallVec;
 use std::{any::Any, collections::VecDeque, iter::FromIterator, pin::Pin, sync::Arc, task::Poll};
 
 /// A virtual node s ystem that progresses user events and diffs UI trees.
@@ -312,16 +311,16 @@ impl VirtualDom {
             }
 
             if self.pending_messages.is_empty() {
-                if self.scopes.pending_futures.borrow().is_empty() {
-                    self.pending_messages
-                        .push_front(self.channel.1.next().await.unwrap());
-                } else {
+                if self.scopes.tasks.has_tasks() {
                     use futures_util::future::{select, Either};
 
                     match select(PollTasks(&mut self.scopes), self.channel.1.next()).await {
                         Either::Left((_, _)) => {}
                         Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
                     }
+                } else {
+                    self.pending_messages
+                        .push_front(self.channel.1.next().await.unwrap());
                 }
             }
 
@@ -345,8 +344,8 @@ impl VirtualDom {
 
     pub fn process_message(&mut self, msg: SchedulerMsg) {
         match msg {
-            SchedulerMsg::NewTask(id) => {
-                self.scopes.pending_futures.borrow_mut().insert(id);
+            SchedulerMsg::NewTask(_id) => {
+                // uh, not sure? I think end up re-polling it anyways
             }
             SchedulerMsg::Event(event) => {
                 if let Some(element) = event.element {
@@ -705,33 +704,20 @@ impl<'a> Future for PollTasks<'a> {
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         let mut all_pending = true;
 
-        let mut unfinished_tasks: SmallVec<[_; 10]> = smallvec::smallvec![];
-        let mut scopes_to_clear: SmallVec<[_; 10]> = smallvec::smallvec![];
+        let mut tasks = self.0.tasks.tasks.borrow_mut();
+        let mut to_remove = vec![];
 
-        // Poll every scope manually
-        for fut in self.0.pending_futures.borrow().iter().copied() {
-            let scope = self.0.get_scope(fut).expect("Scope should never be moved");
-
-            let mut items = scope.items.borrow_mut();
-
-            // really this should just be retain_mut but that doesn't exist yet
-            while let Some(mut task) = items.tasks.pop() {
-                if task.as_mut().poll(cx).is_ready() {
-                    all_pending = false
-                } else {
-                    unfinished_tasks.push(task);
-                }
+        // this would be better served by retain
+        for (id, task) in tasks.iter_mut() {
+            if task.as_mut().poll(cx).is_ready() {
+                to_remove.push(*id);
+            } else {
+                all_pending = false;
             }
-
-            if unfinished_tasks.is_empty() {
-                scopes_to_clear.push(fut);
-            }
-
-            items.tasks.extend(unfinished_tasks.drain(..));
         }
 
-        for scope in scopes_to_clear {
-            self.0.pending_futures.borrow_mut().remove(&scope);
+        for id in to_remove {
+            tasks.remove(&id);
         }
 
         // Resolve the future if any singular task is ready

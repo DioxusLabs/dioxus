@@ -67,8 +67,8 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     Attribute, Component, DioxusElement, DomEdit, Element, ElementId, EventHandler, EventPriority,
     IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, Properties, SchedulerMsg, Scope,
-    ScopeId, ScopeState, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
-    VirtualDom,
+    ScopeId, ScopeState, TaskId, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder,
+    VText, VirtualDom,
 };
 
 pub mod prelude {

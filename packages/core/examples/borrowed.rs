@@ -7,7 +7,7 @@ fn main() {}
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx!(div {
-        app2 (
+        app2(
             p: "asd"
         )
     }))

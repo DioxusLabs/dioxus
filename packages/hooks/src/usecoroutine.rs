@@ -1,10 +1,6 @@
 use dioxus_core::ScopeState;
 use std::future::Future;
-use std::{
-    cell::{Cell, RefCell},
-    pin::Pin,
-    rc::Rc,
-};
+use std::{cell::Cell, pin::Pin, rc::Rc};
 /*
 
 
@@ -24,8 +20,7 @@ pub fn use_coroutine<'a, F>(
     create_future: impl FnOnce() -> F,
 ) -> CoroutineHandle<'a>
 where
-    F: Future<Output = ()>,
-    F: 'static,
+    F: Future<Output = ()> + 'static,
 {
     cx.use_hook(
         move |_| State {
@@ -35,11 +30,13 @@ where
         },
         |state| {
             let f = create_future();
-            state.pending_fut.set(Some(Box::pin(f)));
+            let id = cx.push_future(f);
 
-            if let Some(fut) = state.running_fut.as_mut() {
-                cx.push_task(fut);
-            }
+            // state.pending_fut.set(Some(Box::pin(f)));
+
+            // if let Some(fut) = state.running_fut.as_mut() {
+            //     cx.push_future(fut);
+            // }
 
             // if let Some(fut) = state.running_fut.take() {
             // state.running.set(true);
