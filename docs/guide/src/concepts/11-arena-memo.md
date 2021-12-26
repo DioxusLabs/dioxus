@@ -21,17 +21,19 @@ fn test() -> DomTree {
     }
 }
 
-static TestComponent: Component<()> = |cx, props|html!{<div>"Hello world"</div>};
+static TestComponent: Component<()> = |cx| html!{<div>"Hello world"</div>};
 
-static TestComponent: Component<()> = |cx, props|{
+static TestComponent: Component<()> = |cx|{
     let g = "BLAH";
     html! {
         <div> "Hello world" </div>
     }
 };
 
-#[functional_component]
-static TestComponent: Component<{ name: String }> = |cx, props|html! { <div> "Hello {name}" </div> };
+#[inline_props]
+fn test_component(cx: Scope, name: String) -> Element {
+    rsx!(cx, "Hello, {name}")
+}
 ```
 
 ## Why this behavior?
@@ -41,7 +43,7 @@ static TestComponent: Component<{ name: String }> = |cx, props|html! { <div> "He
 Take a component likes this:
 
 ```rust
-fn test(cx: Context<()>) -> DomTree {
+fn test(cx: Scope) -> DomTree {
     let Bundle { alpha, beta, gamma } = use_context::<SomeContext>(cx);
     html! {
         <div>

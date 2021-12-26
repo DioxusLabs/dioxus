@@ -35,10 +35,10 @@ fn main() {
 When Dioxus renders your app, it will pass an immutable reference of `PostProps` to your `Post` component. Here, you can pass the state down into children.
 
 ```rust
-fn App(cx: Context, props: &PostProps) -> Element {
+fn App(cx: Scope<PostProps>) -> Element {
     cx.render(rsx!{
-        Title { title: &props.title }
-        Score { score: &props.score }
+        Title { title: &cx.props.title }
+        Score { score: &cx.props.score }
         // etc
     })
 }
@@ -63,7 +63,7 @@ Instead, you'll want to store state internally in your components and let *that*
 The most common hook you'll use for storing state is `use_state`. `use_state` provides a slot for some data that allows you to read and update the value without accidentally mutating it.
 
 ```rust
-fn App(cx: Context, props: &())-> Element {
+fn App(cx: Scope)-> Element {
     let post = use_state(&cx, || {
         PostData {
             id: Uuid::new_v4(),
@@ -111,7 +111,7 @@ When responding to user-triggered events, we'll want to "listen" for an event on
 For example, let's say we provide a button to generate a new post. Whenever the user clicks the button, they get a new post. To achieve this functionality, we'll want to attach a function to the `on_click` method of `button`. Whenever the button is clicked, our function will run, and we'll get new Post data to work with.
 
 ```rust
-fn App(cx: Context, props: &())-> Element {
+fn App(cx: Scope)-> Element {
     let post = use_state(&cx, || PostData::new());
 
     cx.render(rsx!{
@@ -128,24 +128,27 @@ We'll dive much deeper into event listeners later.
 
 ### Updating state asynchronously
 
-We can also update our state outside of event listeners with `tasks`. `Tasks` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component. `Tasks` are one-shot - if they don't complete before the component is updated by another `.set` call, then they won't finish.
+We can also update our state outside of event listeners with `coroutines`. `Coroutines` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component. Since coroutines stick around between renders, the data in them must be valid for the `'static` lifetime. We must explicitly declare which values our task will rely on to avoid the `stale props` problem common in React.
 
 We can use tasks in our components to build a tiny stopwatch that ticks every second.
 
-```rust
+> Note: The `use_future` hook will start our coroutine immediately. The `use_coroutine` hook provides more flexibility over starting and stopping futures on the fly.
 
-fn App(cx: Context, props: &())-> Element {
+```rust
+fn App(cx: Scope)-> Element {
     let mut sec_elapsed = use_state(&cx, || 0);
 
-    cx.spawn_task(async move {
-        TimeoutFuture::from_ms(1000).await;
-        sec_elapsed += 1;
+    use_future(&cx, || {
+        let mut sec_elapsed = sec_elapsed.to_owned();
+        async move {
+            loop {
+                TimeoutFuture::from_ms(1000).await;
+                sec_elapsed += 1;
+            }
+        }
     });
 
-    cx.render(rsx!{
-        div { "Current stopwatch time: {sec_elapsed}" }
-    })
-
+    rsx!(cx, div { "Current stopwatch time: {sec_elapsed}" })
 }
 ```
 

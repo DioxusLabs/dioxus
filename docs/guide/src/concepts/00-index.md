@@ -49,9 +49,9 @@ let mut state = use_state(&cx, || "red");
 
 cx.render(rsx!(
     Container {
-        Light { color: "red", enabled: format_args!("{}", state == "red")  }
-        Light { color: "yellow", enabled: format_args!("{}", state == "yellow") }
-        Light { color: "green", enabled: format_args!("{}", state == "green") }
+        Light { color: "red", enabled: state == "red", }
+        Light { color: "yellow", enabled: state == "yellow", }
+        Light { color: "green", enabled: state == "green", }
 
         onclick: move |_| {
             state.set(match *state {

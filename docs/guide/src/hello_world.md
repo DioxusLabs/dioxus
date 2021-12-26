@@ -95,7 +95,7 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope) -> Element {
     cx.render(rsx! (
         div { "Hello, world!" }
     ))
@@ -125,17 +125,17 @@ fn main() {
 Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Element`.
 
 ```rust
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         div { "Hello, world!" }
     })    
 }
 ```
 
-Writing `fn App(cx: Context, props: &()) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
+Writing `fn App(cx: Scope) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
 
 ```rust
-static App: Component<()> = |cx, props| cx.render(rsx!(div { "Hello, world!" }));
+static App: Component<()> = |cx| cx.render(rsx!(div { "Hello, world!" }));
 ```
 
 ### What is this `Context` object?

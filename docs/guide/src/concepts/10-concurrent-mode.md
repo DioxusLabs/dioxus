@@ -5,7 +5,7 @@ Concurrent mode provides a mechanism for building efficient asynchronous compone
 To make a component asynchronous, simply change its function signature to async.
 
 ```rust
-fn Example(cx: Context<()>) -> Vnode {
+fn Example(cx: Scope) -> Vnode {
     rsx!{ <div> "Hello world!" </div> }
 }
 ```
@@ -13,7 +13,7 @@ fn Example(cx: Context<()>) -> Vnode {
 becomes
 
 ```rust
-async fn Example(cx: Context<()>) -> Vnode {
+async fn Example(cx: Scope) -> Vnode {
     rsx!{ <div> "Hello world!" </div> }
 }
 ```
@@ -21,7 +21,7 @@ async fn Example(cx: Context<()>) -> Vnode {
 Now, logic in components can be awaited to delay updates of the component and its children. Like so:
 
 ```rust
-async fn Example(cx: Context<()>) -> Vnode {
+async fn Example(cx: Scope) -> Vnode {
     let name = fetch_name().await;
     rsx!{ <div> "Hello {name}" </div> }
 }
@@ -40,7 +40,7 @@ Instead, we suggest using hooks and future combinators that can safely utilize t
 As part of our Dioxus hooks crate, we provide a data loader hook which pauses a component until its async dependencies are ready. This caches requests, reruns the fetch if dependencies have changed, and provides the option to render something else while the component is loading.
 
 ```rust
-async fn ExampleLoader(cx: Context<()>) -> Vnode {
+async fn ExampleLoader(cx: Scope) -> Vnode {
     /*
     Fetch, pause the component from rendering at all.
 
@@ -50,8 +50,8 @@ async fn ExampleLoader(cx: Context<()>) -> Vnode {
     This API stores the result on the Context object, so the loaded data is taken as reference.
     */
     let name: &Result<SomeStructure> = use_fetch_data("http://example.com/json", ())
-                                        .place_holder(|cx, props|rsx!{<div> "loading..." </div>})
-                                        .delayed_place_holder(1000, |cx, props|rsx!{ <div> "still loading..." </div>})
+                                        .place_holder(|cx| rsx!{<div> "loading..." </div>})
+                                        .delayed_place_holder(1000, |cx| rsx!{ <div> "still loading..." </div>})
                                         .await;
 
     match name {
@@ -62,7 +62,7 @@ async fn ExampleLoader(cx: Context<()>) -> Vnode {
 ```
 
 ```rust
-async fn Example(cx: Context<()>) -> DomTree {
+async fn Example(cx: Scope) -> DomTree {
     // Diff this set between the last set
     // Check if we have any outstanding tasks?
     //

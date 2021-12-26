@@ -98,36 +98,6 @@ pub fn use_model_coroutine<'a, T, F: Future<Output = ()> + 'static>(
     )
 }
 
-pub struct UseModelCoroutine {}
-
-struct UseModelTaskInner {
-    task: RefCell<Option<ModelTask>>,
-}
-
-impl UseModelCoroutine {
-    pub fn start(&self) {}
-}
-
-pub struct ModelAsync<T> {
-    _p: PhantomData<T>,
-}
-impl<T> ModelAsync<T> {
-    pub fn write(&self) -> RefMut<'_, T> {
-        todo!()
-    }
-    pub fn read(&self) -> Ref<'_, T> {
-        todo!()
-    }
-}
-
-pub struct AppModels {}
-
-impl AppModels {
-    pub fn get<T: 'static>(&self) -> ModelAsync<T> {
-        unimplemented!()
-    }
-}
-
 impl<T> Copy for UseModel<'_, T> {}
 impl<'a, T> Clone for UseModel<'a, T> {
     fn clone(&self) -> Self {

@@ -1,4 +1,4 @@
-# Event handlers
+# Handling Events
 
 In the overview for this section, we mentioned how we can modify the state of our component by responding to user-generated events inside of event listeners.
 

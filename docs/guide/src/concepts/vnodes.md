@@ -11,7 +11,6 @@ In this chapter, we'll cover:
 Because Dioxus is mostly used with HTML/CSS renderers, the default Element "collection" is HTML. Provided the `html` feature is not disabled, we can declare Elements using the `rsx!` macro:
 
 ```rust
-#use dioxus::prelude::*;
 rsx!(
     div {}
 )
@@ -19,7 +18,6 @@ rsx!(
 As you might expect, we can render this call using Dioxus-SSR to produce valid HTML:
 
 ```rust
-#use dioxus::prelude::*;
 dioxus::ssr::render_lazy(rsx!(
     div {}
 ))
