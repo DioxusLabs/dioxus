@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 fn main() {
     use dioxus::desktop::wry::application::platform::macos::*;
-    dioxus::desktop::launch(App, |c| {
+    dioxus::desktop::launch_cfg(App, |c| {
         c.with_window(|w| {
             w.with_fullsize_content_view(true)
                 .with_titlebar_buttons_hidden(false)

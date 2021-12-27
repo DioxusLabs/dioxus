@@ -84,22 +84,22 @@ struct PostProps {
 
 And our render function:
 ```rust
-fn Post(cx: Context, props: &PostProps) -> Element {
+fn Post(cx: Scope<PostProps>) -> Element {
     cx.render(rsx!{
         div { class: "post-container"
             VoteButton {
-                score: props.score,
+                score: cx.props.score,
             }
             TitleCard {
-                title: props.title,
-                url: props.url,
+                title: cx.props.title,
+                url: cx.props.url,
             }
             MetaCard {
-                original_poster: props.original_poster,
-                post_time: props.post_time,
+                original_poster: cx.props.original_poster,
+                post_time: cx.props.post_time,
             }
             ActionCard {
-                post_id: props.id
+                post_id: cx.props.id
             }
         }
     })
@@ -110,7 +110,7 @@ When declaring a component in `rsx!`, we can pass in properties using the tradit
 
 Let's take a look at the `VoteButton` component. For now, we won't include any interactivity - just the rendering the score and buttons to the screen.
 
-Most of your Components will look exactly like this: a Props struct and a render function. Every component must take a tuple of `Context` and `&Props` and return an `Element`.
+Most of your Components will look exactly like this: a Props struct and a render function. Every component must take a tuple of `Scope` and `&Props` and return an `Element`.
 
 As covered before, we'll build our User Interface with the `rsx!` macro and HTML tags. However, with components, we must actually "render" our HTML markup. Calling `cx.render` converts our "lazy" `rsx!` structure into an `Element`. 
 
@@ -120,7 +120,7 @@ struct VoteButtonProps {
     score: i32
 }
 
-fn VoteButton(cx: Context, props: &VoteButtonProps) -> Element {
+fn VoteButton(cx: Scope<VoteButtonProps>) -> Element {
     cx.render(rsx!{
         div { class: "votebutton"
             div { class: "arrow up" }
@@ -145,7 +145,7 @@ struct TitleCardProps<'a> {
     title: &'a str,
 }
 
-fn TitleCard(cx: Context, props: &TitleCardProps) -> Element {
+fn TitleCard(cx: Scope<TitleCardProps>) -> Element {
     cx.render(rsx!{
         h1 { "{cx.props.title}" }
     })
@@ -156,9 +156,9 @@ For users of React: Dioxus knows *not* to memoize components that borrow propert
 
 This means that during the render process, a newer version of `TitleCardProps` will never be compared with a previous version, saving some clock cycles.
 
-## The `Context` object
+## The `Scope` object
 
-Though very similar to React, Dioxus is different in a few ways. Most notably, React components will not have a `Context` parameter in the component declaration. 
+Though very similar to React, Dioxus is different in a few ways. Most notably, React components will not have a `Scope` parameter in the component declaration. 
 
 Have you ever wondered how the `useState()` call works in React without a `this` object to actually store the state? 
 
@@ -171,10 +171,10 @@ function Component(props) {
 ```
 
 
-Because Dioxus needs to work with the rules of Rust it uses the `Context` object to maintain some internal bookkeeping. That's what the `Context` object is: a place for the component to store state, manage listeners, and allocate elements. Advanced users of Dioxus will want to learn how to properly leverage the `Context` object to build robust and performant extensions for Dioxus.
+Because Dioxus needs to work with the rules of Rust it uses the `Scope` object to maintain some internal bookkeeping. That's what the `Scope` object is: a place for the component to store state, manage listeners, and allocate elements. Advanced users of Dioxus will want to learn how to properly leverage the `Scope` object to build robust and performant extensions for Dioxus.
 
 ```rust
-fn Post(cx: Context, props: &PostProps) -> Element {
+fn Post(cx: Scope<PostProps>) -> Element {
     cx.render(rsx!("hello"))
 }
 ```
@@ -186,6 +186,6 @@ For more references on components, make sure to check out:
 
 - [Components in depth]()
 - [Lifecycles]()
-- [The Context object]()
+- [The Scope object]()
 - [Optional Prop fields]()
 

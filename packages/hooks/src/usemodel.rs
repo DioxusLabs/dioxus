@@ -89,43 +89,13 @@ pub fn use_model_coroutine<'a, T, F: Future<Output = ()> + 'static>(
             }
         },
         |inner| {
-            if let Some(task) = inner.task.get_mut() {
-                cx.push_task(|| task);
-            }
+            // if let Some(task) = inner.task.get_mut() {
+            //     cx.push_task(|| task);
+            // }
             //
             todo!()
         },
     )
-}
-
-pub struct UseModelCoroutine {}
-
-struct UseModelTaskInner {
-    task: RefCell<Option<ModelTask>>,
-}
-
-impl UseModelCoroutine {
-    pub fn start(&self) {}
-}
-
-pub struct ModelAsync<T> {
-    _p: PhantomData<T>,
-}
-impl<T> ModelAsync<T> {
-    pub fn write(&self) -> RefMut<'_, T> {
-        todo!()
-    }
-    pub fn read(&self) -> Ref<'_, T> {
-        todo!()
-    }
-}
-
-pub struct AppModels {}
-
-impl AppModels {
-    pub fn get<T: 'static>(&self) -> ModelAsync<T> {
-        unimplemented!()
-    }
 }
 
 impl<T> Copy for UseModel<'_, T> {}

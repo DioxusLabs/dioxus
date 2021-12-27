@@ -39,7 +39,7 @@
 //! - Allow top-level fragments
 //!
 fn main() {
-    dioxus::desktop::launch(Example);
+    dioxus::desktop::launch(EXAMPLE);
 }
 
 /// When trying to return "nothing" to Dioxus, you'll need to specify the type parameter or Rust will be sad.
@@ -49,7 +49,7 @@ const NONE_ELEMENT: Option<()> = None;
 use baller::Baller;
 use dioxus::prelude::*;
 
-pub static Example: Component<()> = |cx| {
+pub static EXAMPLE: Component<()> = |cx| {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
@@ -173,12 +173,12 @@ pub static Example: Component<()> = |cx| {
             Taller { a: "asd", div {"hello world!"} }
 
             // helper functions
-            {helper(cx, "hello world!")}
+            {helper(&cx, "hello world!")}
         }
     })
 };
 
-fn helper(cx: Scope, text: &str) -> Element {
+fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {
     rsx!(cx, p { "{text}" })
 }
 
@@ -188,7 +188,7 @@ mod baller {
     pub struct BallerProps {}
 
     /// This component totally balls
-    pub fn Baller(_: ScopeState<BallerProps>) -> Element {
+    pub fn Baller(_: Scope<BallerProps>) -> Element {
         todo!()
     }
 }
@@ -196,13 +196,11 @@ mod baller {
 #[derive(Props)]
 pub struct TallerProps<'a> {
     a: &'static str,
-
-    #[builder(default)]
-    children: ScopeChildren<'a>,
+    children: Element<'a>,
 }
 
 /// This component is taller than most :)
-pub fn Taller<'a>(_: ScopeState<'a, TallerProps<'a>>) -> Element {
+pub fn Taller<'a>(_: Scope<'a, TallerProps<'a>>) -> Element {
     let b = true;
     todo!()
 }

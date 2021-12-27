@@ -1,5 +1,7 @@
+use crate::{innerlude::*, unsafe_utils::extend_vnode};
+use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
-use fxhash::{FxHashMap, FxHashSet};
+use fxhash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
@@ -10,9 +12,6 @@ use std::{
     pin::Pin,
     rc::Rc,
 };
-
-use crate::{innerlude::*, unsafe_utils::extend_vnode};
-use bumpalo::{boxed::Box as BumpBox, Bump};
 
 pub(crate) type FcSlot = *const ();
 
@@ -26,14 +25,13 @@ pub(crate) struct Heuristic {
 //
 // has an internal heuristics engine to pre-allocate arenas to the right size
 pub(crate) struct ScopeArena {
-    pub pending_futures: RefCell<FxHashSet<ScopeId>>,
-    pub scope_counter: Cell<usize>,
-    pub sender: UnboundedSender<SchedulerMsg>,
+    pub scope_gen: Cell<usize>,
     pub bump: Bump,
     pub scopes: RefCell<FxHashMap<ScopeId, *mut ScopeState>>,
     pub heuristics: RefCell<FxHashMap<FcSlot, Heuristic>>,
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
+    pub tasks: Rc<TaskQueue>,
 }
 
 impl ScopeArena {
@@ -61,14 +59,13 @@ impl ScopeArena {
         debug_assert_eq!(root_id, 0);
 
         Self {
-            scope_counter: Cell::new(0),
+            scope_gen: Cell::new(0),
             bump,
-            pending_futures: RefCell::new(FxHashSet::default()),
             scopes: RefCell::new(FxHashMap::default()),
             heuristics: RefCell::new(FxHashMap::default()),
             free_scopes: RefCell::new(Vec::new()),
             nodes: RefCell::new(nodes),
-            sender,
+            tasks: TaskQueue::new(sender),
         }
     }
 
@@ -92,8 +89,8 @@ impl ScopeArena {
         subtree: u32,
     ) -> ScopeId {
         // Increment the ScopeId system. ScopeIDs are never reused
-        let new_scope_id = ScopeId(self.scope_counter.get());
-        self.scope_counter.set(self.scope_counter.get() + 1);
+        let new_scope_id = ScopeId(self.scope_gen.get());
+        self.scope_gen.set(self.scope_gen.get() + 1);
 
         // Get the height of the scope
         let height = parent_scope
@@ -129,9 +126,9 @@ impl ScopeArena {
                     height,
                     container,
                     new_scope_id,
-                    self.sender.clone(),
                     parent_scope,
                     vcomp,
+                    self.tasks.clone(),
                     self.heuristics
                         .borrow()
                         .get(&fc_ptr)
@@ -236,15 +233,11 @@ impl ScopeArena {
             // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
             unsafe { scope.reset_wip_frame() };
 
-            let mut items = scope.items.borrow_mut();
-
-            // just forget about our suspended nodes while we're at it
-            items.tasks.clear();
+            let items = scope.items.borrow();
 
             // guarantee that we haven't screwed up - there should be no latent references anywhere
             debug_assert!(items.listeners.is_empty());
             debug_assert!(items.borrowed_props.is_empty());
-            debug_assert!(items.tasks.is_empty());
         }
 
         // safety: this is definitely not dropped
@@ -263,10 +256,6 @@ impl ScopeArena {
         let props = scope.props.borrow();
         let render = props.as_ref().unwrap();
         if let Some(node) = render.render(scope) {
-            if !scope.items.borrow().tasks.is_empty() {
-                self.pending_futures.borrow_mut().insert(id);
-            }
-
             let frame = scope.wip_frame();
             let node = frame.bump.alloc(node);
             frame.node.set(unsafe { extend_vnode(node) });
@@ -351,7 +340,7 @@ impl ScopeArena {
 ///     cx.render(rsx!{ div {"Hello, {cx.props.name}"} })
 /// }
 /// ```
-pub struct Scope<'a, P> {
+pub struct Scope<'a, P = ()> {
     pub scope: &'a ScopeState,
     pub props: &'a P,
 }
@@ -382,6 +371,14 @@ impl<'a, P> std::ops::Deref for Scope<'a, P> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ScopeId(pub usize);
 
+/// A task's unique identifier.
+///
+/// `TaskId` is a `usize` that is unique across the entire VirtualDOM and across time. TaskIDs will never be reused
+/// once a Task has been completed.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct TaskId(pub usize);
+
 /// Every component in Dioxus is represented by a `ScopeState`.
 ///
 /// Scopes contain the state for hooks, the component's props, and other lifecycle information.
@@ -396,12 +393,10 @@ pub struct ScopeState {
     pub(crate) container: ElementId,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
-    pub(crate) sender: UnboundedSender<SchedulerMsg>,
 
     // todo: subtrees
     pub(crate) is_subtree_root: Cell<bool>,
     pub(crate) subtree: Cell<u32>,
-
     pub(crate) props: RefCell<Option<Box<dyn AnyProps>>>,
 
     // nodes, items
@@ -416,12 +411,12 @@ pub struct ScopeState {
 
     // shared state -> todo: move this out of scopestate
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
+    pub(crate) tasks: Rc<TaskQueue>,
 }
 
 pub struct SelfReferentialItems<'a> {
     pub(crate) listeners: Vec<&'a Listener<'a>>,
     pub(crate) borrowed_props: Vec<&'a VComponent<'a>>,
-    pub(crate) tasks: Vec<Pin<BumpBox<'a, dyn Future<Output = ()>>>>,
 }
 
 // Public methods exposed to libraries and components
@@ -430,13 +425,12 @@ impl ScopeState {
         height: u32,
         container: ElementId,
         our_arena_idx: ScopeId,
-        sender: UnboundedSender<SchedulerMsg>,
         parent_scope: Option<*mut ScopeState>,
         vcomp: Box<dyn AnyProps>,
+        tasks: Rc<TaskQueue>,
         (node_capacity, hook_capacity): (usize, usize),
     ) -> Self {
         ScopeState {
-            sender,
             container,
             our_arena_idx,
             parent_scope,
@@ -450,12 +444,12 @@ impl ScopeState {
 
             generation: 0.into(),
 
+            tasks,
             shared_contexts: Default::default(),
 
             items: RefCell::new(SelfReferentialItems {
                 listeners: Default::default(),
                 borrowed_props: Default::default(),
-                tasks: Default::default(),
             }),
 
             hook_arena: Bump::new(),
@@ -570,7 +564,7 @@ impl ScopeState {
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
     pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
-        let (chan, id) = (self.sender.clone(), self.scope_id());
+        let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
         Rc::new(move || {
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
@@ -578,11 +572,11 @@ impl ScopeState {
 
     /// Schedule an update for any component given its ScopeId.
     ///
-    /// A component's ScopeId can be obtained from `use_hook` or the [`Context::scope_id`] method.
+    /// A component's ScopeId can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
     ///
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Rc<dyn Fn(ScopeId)> {
-        let chan = self.sender.clone();
+        let chan = self.tasks.sender.clone();
         Rc::new(move |id| {
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
@@ -599,7 +593,10 @@ impl ScopeState {
     ///
     /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
     pub fn needs_update_any(&self, id: ScopeId) {
-        let _ = self.sender.unbounded_send(SchedulerMsg::Immediate(id));
+        let _ = self
+            .tasks
+            .sender
+            .unbounded_send(SchedulerMsg::Immediate(id));
     }
 
     /// Get the Root Node of this scope
@@ -662,34 +659,19 @@ impl ScopeState {
     /// Pushes the future onto the poll queue to be polled after the component renders.
     ///
     /// The future is forcibly dropped if the component is not ready by the next render
-    pub fn push_task<'src, F>(&'src self, fut: impl FnOnce() -> F + 'src) -> usize
-    where
-        F: Future<Output = ()>,
-        F::Output: 'src,
-        F: 'src,
-    {
-        self.sender
+    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+        // wake up the scheduler if it is sleeping
+        self.tasks
+            .sender
             .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
             .unwrap();
 
-        // wrap it in a type that will actually drop the contents
-        //
-        // Safety: we just made the pointer above and will promise not to alias it!
-        // The main reason we do this through from_raw is because Bumpalo's box does
-        // not support unsized coercion
-        let fut: &mut dyn Future<Output = ()> = self.bump().alloc(fut());
-        let boxed_fut: BumpBox<dyn Future<Output = ()>> = unsafe { BumpBox::from_raw(fut) };
-        let pinned_fut: Pin<BumpBox<_>> = boxed_fut.into();
+        self.tasks.push_fut(fut)
+    }
 
-        // erase the 'src lifetime for self-referential storage
-        // todo: provide a miri test around this
-        // concerned about segfaulting
-        let self_ref_fut = unsafe { std::mem::transmute(pinned_fut) };
-
-        // Push the future into the tasks
-        let mut items = self.items.borrow_mut();
-        items.tasks.push(self_ref_fut);
-        items.tasks.len() - 1
+    // todo: attach some state to the future to know if we should poll it
+    pub fn remove_future(&self, id: TaskId) {
+        self.tasks.remove_fut(id);
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -707,14 +689,11 @@ impl ScopeState {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(&'src self, rsx: Option<LazyNodes<'src, '_>>) -> Option<VNode<'src>> {
+    pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Option<VNode<'src>> {
         let fac = NodeFactory {
             bump: &self.wip_frame().bump,
         };
-        match rsx {
-            Some(s) => Some(s.call(fac)),
-            None => todo!("oh no no nodes"),
-        }
+        Some(rsx.call(fac))
     }
 
     /// Store a value between renders
@@ -813,11 +792,6 @@ impl ScopeState {
         self.generation.set(self.generation.get() + 1);
     }
 
-    /// Get the [`Bump`] of the WIP frame.
-    pub(crate) fn bump(&self) -> &Bump {
-        &self.wip_frame().bump
-    }
-
     // todo: disable bookkeeping on drop (unncessary)
     pub(crate) fn reset(&mut self) {
         // first: book keaping
@@ -834,11 +808,9 @@ impl ScopeState {
         let SelfReferentialItems {
             borrowed_props,
             listeners,
-            tasks,
         } = self.items.get_mut();
         borrowed_props.clear();
         listeners.clear();
-        tasks.clear();
         self.frames[0].reset();
         self.frames[1].reset();
 
@@ -881,6 +853,43 @@ impl BumpFrame {
             .bump
             .alloc(VNode::Text(unsafe { std::mem::transmute(node) }));
         self.node.set(node as *const _);
+    }
+}
+
+pub(crate) struct TaskQueue {
+    pub(crate) tasks: RefCell<FxHashMap<TaskId, InnerTask>>,
+    gen: Cell<usize>,
+    sender: UnboundedSender<SchedulerMsg>,
+}
+pub(crate) type InnerTask = Pin<Box<dyn Future<Output = ()>>>;
+impl TaskQueue {
+    fn new(sender: UnboundedSender<SchedulerMsg>) -> Rc<Self> {
+        Rc::new(Self {
+            tasks: RefCell::new(FxHashMap::default()),
+            gen: Cell::new(0),
+            sender,
+        })
+    }
+    fn push_fut(&self, task: impl Future<Output = ()> + 'static) -> TaskId {
+        let pinned = Box::pin(task);
+        let id = self.gen.get();
+        self.gen.set(id + 1);
+        let tid = TaskId(id);
+
+        self.tasks.borrow_mut().insert(tid, pinned);
+        tid
+    }
+    fn remove_fut(&self, id: TaskId) {
+        if let Ok(mut tasks) = self.tasks.try_borrow_mut() {
+            let _ = tasks.remove(&id);
+        } else {
+            // todo: it should be okay to remote a fut while the queue is being polled
+            // However, it's not currently possible to do that.
+            log::debug!("Unable to remove task from task queue. This is probably a bug.");
+        }
+    }
+    pub(crate) fn has_tasks(&self) -> bool {
+        !self.tasks.borrow().is_empty()
     }
 }
 

@@ -40,7 +40,7 @@ struct C1Props<'a> {
 }
 
 fn Child1<'a>(cx: Scope<'a, C1Props<'a>>) -> Element {
-    let (left, right) = props.text.split_once("=").unwrap();
+    let (left, right) = cx.props.text.split_once("=").unwrap();
 
     cx.render(rsx! {
         div {
@@ -58,7 +58,7 @@ struct C2Props<'a> {
 fn Child2<'a>(cx: Scope<'a, C2Props<'a>>) -> Element {
     cx.render(rsx! {
         Child3 {
-            text: props.text
+            text: cx.props.text
         }
     })
 }

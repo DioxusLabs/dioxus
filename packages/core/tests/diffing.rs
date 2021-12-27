@@ -802,3 +802,68 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
         ]
     );
 }
+
+// noticed some weird behavior in the desktop interpreter
+// just making sure it doesnt happen in the core implementation
+#[test]
+fn remove_list() {
+    let dom = new_dom();
+
+    let left = rsx!({
+        (0..10).rev().take(5).map(|i| {
+            rsx! { Fragment { key: "{i}", "{i}" }}
+        })
+    });
+
+    let right = rsx!({
+        (0..10).rev().take(2).map(|i| {
+            rsx! { Fragment { key: "{i}", "{i}" }}
+        })
+    });
+
+    let (create, changes) = dom.diff_lazynodes(left, right);
+
+    // dbg!(create);
+    // dbg!(changes);
+
+    assert_eq!(
+        changes.edits,
+        [
+            // remove 5, 4, 3
+            Remove { root: 3 },
+            Remove { root: 4 },
+            Remove { root: 5 },
+        ]
+    );
+}
+
+// noticed some weird behavior in the desktop interpreter
+// just making sure it doesnt happen in the core implementation
+#[test]
+fn remove_list_nokeyed() {
+    let dom = new_dom();
+
+    let left = rsx!({
+        (0..10).rev().take(5).map(|i| {
+            rsx! { Fragment { "{i}" }}
+        })
+    });
+
+    let right = rsx!({
+        (0..10).rev().take(2).map(|i| {
+            rsx! { Fragment { "{i}" }}
+        })
+    });
+
+    let (create, changes) = dom.diff_lazynodes(left, right);
+
+    assert_eq!(
+        changes.edits,
+        [
+            // remove 5, 4, 3
+            Remove { root: 3 },
+            Remove { root: 4 },
+            Remove { root: 5 },
+        ]
+    );
+}

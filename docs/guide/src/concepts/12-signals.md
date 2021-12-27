@@ -11,7 +11,7 @@ By default, Dioxus will only try to diff subtrees of components with dynamic con
 Your component today might look something like this:
 
 ```rust
-fn Comp(cx: Context<()>) -> DomTree {
+fn Comp(cx: Scope) -> DomTree {
     let (title, set_title) = use_state(&cx, || "Title".to_string());
     cx.render(rsx!{
         input {
@@ -25,7 +25,7 @@ fn Comp(cx: Context<()>) -> DomTree {
 This component is fairly straightforward - the input updates its own value on every change. However, every call to set_title will re-render the component. If we add a large list, then every time we update the title input, Dioxus will need to diff the entire list, over, and over, and over. This is **a lot** of wasted clock-cycles!
 
 ```rust
-fn Comp(cx: Context<()>) -> DomTree {
+fn Comp(cx: Scope) -> DomTree {
     let (title, set_title) = use_state(&cx, || "Title".to_string());
     cx.render(rsx!{
         div {
@@ -48,7 +48,7 @@ Many experienced React developers will just say "this is bad design" - but we co
 We can use signals to generate a two-way binding between data and the input box. Our text input is now just a two-line component!
 
 ```rust
-fn Comp(cx: Context<()>) -> DomTree {
+fn Comp(cx: Scope) -> DomTree {
     let mut title = use_signal(&cx, || String::from("Title"));
     cx.render(rsx!(input { value: title }))
 }
@@ -57,7 +57,7 @@ fn Comp(cx: Context<()>) -> DomTree {
 For a slightly more interesting example, this component calculates the sum between two numbers, but totally skips the diffing process.
 
 ```rust
-fn Calculator(cx: Context<()>) -> DomTree {
+fn Calculator(cx: Scope) -> DomTree {
     let mut a = use_signal(&cx, || 0);
     let mut b = use_signal(&cx, || 0);
     let mut c = a + b;
@@ -96,7 +96,7 @@ Sometimes you want a signal to propagate across your app, either through far-awa
 
 ```rust
 const TITLE: Atom<String> = || "".to_string();
-const Provider: Component<()> = |cx, props|{
+const Provider: Component<()> = |cx|{
     let title = use_signal(&cx, &TITLE);
     rsx!(cx, input { value: title })
 };
@@ -105,7 +105,7 @@ const Provider: Component<()> = |cx, props|{
 If we use the `TITLE` atom in another component, we can cause updates to flow between components without calling render or diffing either component trees:
 
 ```rust
-const Receiver: Component<()> = |cx, props|{
+const Receiver: Component<()> = |cx|{
     let title = use_signal(&cx, &TITLE);
     log::info!("This will only be called once!");
     rsx!(cx,
@@ -132,7 +132,7 @@ Dioxus automatically understands how to use your signals when mixed with iterato
 
 ```rust
 const DICT: AtomFamily<String, String> = |_| {};
-const List: Component<()> = |cx, props|{
+const List: Component<()> = |cx|{
     let dict = use_signal(&cx, &DICT);
     cx.render(rsx!(
         ul {

@@ -2,10 +2,10 @@
 
 ![dioxuslogo](./images/dioxuslogo_full.png)
 
-**Dioxus** is a framework and ecosystem for building fast, scalable, and robust user interfaces with the Rust programming language. This guide will help you get up-and-running with Dioxus running on the Web, Desktop, Mobile, and more.
+**Dioxus** is a framework and ecosystem for building fast, scalable, and robust user interfaces with the Rust programming language. This guide will help you get started with Dioxus running on the Web, Desktop, Mobile, and more.
 
 ```rust
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope) -> Element {
     let mut count = use_state(&cx, || 0);
 
     cx.render(rsx!(
@@ -18,7 +18,7 @@ fn App(cx: Context, props: &()) -> Element {
 
 In general, Dioxus and React share many functional similarities. If this guide is lacking in any general concept or an error message is confusing, React's documentation might be more helpful. We are dedicated to providing a *familiar* toolkit for UI in Rust, so we've chosen to follow in the footsteps of popular UI frameworks (React, Redux, etc). If you know React, then you already know Dioxus. If you don't know either, this guide will still help you!
 
-> This is introduction book! For advanced topics, check out the [Reference Guide]() instead.
+> This is introduction book! For advanced topics, check out the [Reference](https://dioxuslabs.com/reference) instead.
 
 ## Multiplatform
 
@@ -76,7 +76,7 @@ Examples:
 - [Bluetooth scanner]()
 - [Device Viewer]()
 
-[![FileExplorerExample](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/dioxusLabs/file-explorer/)
+[![File ExplorerExample](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/dioxusLabs/file-explorer/)
 
 ### Mobile Support
 ---

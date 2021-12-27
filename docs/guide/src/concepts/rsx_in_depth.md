@@ -138,7 +138,7 @@ However, with lists, Dioxus does not exactly know how to determine which element
 In these cases, it is vitally important to specify a "key" alongside the element. Keys should be persistent between renders.
 
 ```rust
-fn render_list(cx: Context, items: HashMap<String, Todo>) -> DomTree {
+fn render_list(cx: Scope, items: HashMap<String, Todo>) -> DomTree {
     rsx!(cx, ul {
         {items.iter().map(|key, item| {
             li {
@@ -219,7 +219,7 @@ cx.render(rsx!{
             {true.and_then(|f| rsx!( h1 {"Conditional Rendering"} ))}
 
             // Child nodes
-            {cx.children()}
+            {cx.props.children}
 
             // Any expression that is `IntoVNode`
             {expr}

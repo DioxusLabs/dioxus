@@ -46,11 +46,9 @@ fn main() {
         VNodes::Element(vel) => dbg!(vel),
         _ => todo!()
     }
-
 }
-
-
 ```
+
 ## Internals
 
 Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus borrows these concepts:

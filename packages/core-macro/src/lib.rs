@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::parse_macro_input;
 
-pub(crate) mod htm;
 pub(crate) mod ifmt;
+pub(crate) mod inlineprops;
 pub(crate) mod props;
 pub(crate) mod router;
 pub(crate) mod rsx;
@@ -213,4 +213,38 @@ pub fn routable_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     use router::{routable_derive_impl, Routable};
     let input = parse_macro_input!(input as Routable);
     routable_derive_impl(input).into()
+}
+
+/// Derive props for a component within the component definition.
+///
+/// This macro provides a simple transformation from `Scope<{}>` to `Scope<P>`,
+/// removing some boilerplate when defining props.
+///
+/// You don't *need* to use this macro at all, but it can be helpful in cases where
+/// you would be repeating a lot of the usual Rust boilerplate.
+///
+/// # Example
+/// ```
+/// #[inline_props]
+/// fn app(cx: Scope<{ bob: String }>) -> Element {
+///     cx.render(rsx!("hello, {bob}"))
+/// }  
+///
+/// // is equivalent to
+///
+/// #[derive(PartialEq, Props)]
+/// struct AppProps {
+///     bob: String,
+/// }  
+///
+/// fn app(cx: Scope<AppProps>) -> Element {
+///     cx.render(rsx!("hello, {bob}"))
+/// }  
+/// ```
+#[proc_macro_attribute]
+pub fn inline_props(_args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
+    match syn::parse::<inlineprops::InlinePropsBody>(s) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.to_token_stream().into(),
+    }
 }

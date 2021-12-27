@@ -7,13 +7,13 @@
   - [Intro to Elements](concepts/vnodes.md)
   - [Intro to Components](concepts/components.md)
   - [Reusing, Importing, and Exporting Components](concepts/exporting_components.md)
+  - [Passing children and attributes](concepts/component_children.md)
   - [Conditional Rendering](concepts/conditional_rendering.md)
   - [Lists](concepts/lists.md)
 - [Adding Interactivity](concepts/interactivity.md)
-  - [Event handlers](concepts/event_handlers.md)
   - [Hooks and Internal State](concepts/hooks.md)
-  - [Fundamental Hooks and `use_hook`](concepts/usestate.md)
-  - [User Input and Controlled Components](concepts/errorhandling.md)
+  - [Event handlers](concepts/event_handlers.md)
+  - [User Input and Controlled Components](concepts/user_input.md)
   - [Lifecycle, updates, and effects](concepts/lifecycles.md)
 
 <!-- Responding to Events

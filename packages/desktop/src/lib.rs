@@ -23,6 +23,7 @@ use tao::{
 pub use wry;
 pub use wry::application as tao;
 use wry::{
+    application::event_loop::EventLoopProxy,
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
@@ -37,7 +38,7 @@ pub fn launch_cfg(
     launch_with_props(root, (), config_builder)
 }
 
-pub fn launch_with_props<P: Properties + 'static + Send + Sync>(
+pub fn launch_with_props<P: 'static + Send>(
     root: Component<P>,
     props: P,
     builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
@@ -51,7 +52,7 @@ struct Response<'a> {
     edits: Vec<DomEdit<'a>>,
 }
 
-pub fn run<T: 'static + Send + Sync>(
+pub fn run<T: 'static + Send>(
     root: Component<T>,
     props: T,
     user_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
@@ -59,49 +60,59 @@ pub fn run<T: 'static + Send + Sync>(
     let mut desktop_cfg = DesktopConfig::new();
     user_builder(&mut desktop_cfg);
 
-    let mut state = DesktopController::new_on_tokio(root, props);
+    let event_loop = EventLoop::with_user_event();
+    let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
     let quit_hotkey = Accelerator::new(SysMods::Cmd, KeyCode::KeyQ);
     let modifiers = ModifiersState::default();
-    let event_loop = EventLoop::new();
-
-    log::debug!("Starting event loop");
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
         match window_event {
-            Event::NewEvents(StartCause::Init) => state.new_window(&desktop_cfg, event_loop),
+            Event::NewEvents(StartCause::Init) => desktop.new_window(&desktop_cfg, event_loop),
 
             Event::WindowEvent {
                 event, window_id, ..
-            } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::Destroyed { .. } => state.close_window(window_id, control_flow),
+            } => {
+                match event {
+                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
 
-                WindowEvent::KeyboardInput { event, .. } => {
-                    if quit_hotkey.matches(&modifiers, &event.physical_key) {
-                        state.close_window(window_id, control_flow);
+                    WindowEvent::KeyboardInput { event, .. } => {
+                        if quit_hotkey.matches(&modifiers, &event.physical_key) {
+                            desktop.close_window(window_id, control_flow);
+                        }
                     }
-                }
 
-                WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                    if let Some(view) = state.webviews.get_mut(&window_id) {
-                        let _ = view.resize();
+                    WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
+                        if let Some(view) = desktop.webviews.get_mut(&window_id) {
+                            let _ = view.resize();
+                        }
                     }
+
+                    // TODO: we want to shuttle all of these events into the user's app or provide some handler
+                    _ => {}
                 }
+            }
 
-                // TODO: we want to shuttle all of these events into the user's app or provide some handler
-                _ => {}
-            },
-
-            Event::MainEventsCleared => state.try_load_ready_webviews(),
+            Event::UserEvent(_evt) => {
+                desktop.try_load_ready_webviews();
+            }
+            Event::MainEventsCleared => {
+                desktop.try_load_ready_webviews();
+            }
             Event::Resumed => {}
             Event::Suspended => {}
             Event::LoopDestroyed => {}
-
+            Event::RedrawRequested(_id) => {}
             _ => {}
         }
     })
+}
+
+pub enum UserWindowEvent {
+    Start,
+    Update,
 }
 
 pub struct DesktopController {
@@ -115,7 +126,11 @@ pub struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub fn new_on_tokio<P: Send + 'static>(root: Component<P>, props: P) -> Self {
+    pub fn new_on_tokio<P: Send + 'static>(
+        root: Component<P>,
+        props: P,
+        evt: EventLoopProxy<UserWindowEvent>,
+    ) -> Self {
         let edit_queue = Arc::new(RwLock::new(VecDeque::new()));
         let pending_edits = edit_queue.clone();
 
@@ -130,7 +145,6 @@ impl DesktopController {
                 .unwrap();
 
             runtime.block_on(async move {
-                // LocalSet::new().block_on(&runtime, async move {
                 let mut dom =
                     VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
 
@@ -150,6 +164,7 @@ impl DesktopController {
                             .unwrap()
                             .push_front(serde_json::to_string(&edit.edits).unwrap());
                     }
+                    let _ = evt.send_event(UserWindowEvent::Update);
                 }
             })
         });
@@ -164,7 +179,11 @@ impl DesktopController {
         }
     }
 
-    pub fn new_window(&mut self, cfg: &DesktopConfig, event_loop: &EventLoopWindowTarget<()>) {
+    pub fn new_window(
+        &mut self,
+        cfg: &DesktopConfig,
+        event_loop: &EventLoopWindowTarget<UserWindowEvent>,
+    ) {
         let builder = cfg.window.clone().with_menu({
             // create main menubar menu
             let mut menu_bar_menu = MenuBar::new();

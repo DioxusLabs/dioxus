@@ -15,6 +15,8 @@
 //! the RefCell will panic and crash. You can use `try_get_mut` or `.modify` to avoid this problem, or just not hold two
 //! RefMuts at the same time.
 
+use std::sync::Arc;
+
 use dioxus::desktop::wry::application::dpi::LogicalSize;
 use dioxus::events::*;
 use dioxus::prelude::*;
@@ -73,16 +75,16 @@ static App: Component<()> = |cx| {
 #[derive(Props)]
 struct CalculatorKeyProps<'a> {
     name: &'static str,
-    onclick: &'a dyn Fn(MouseEvent),
-    children: ScopeChildren<'a>,
+    onclick: &'a dyn Fn(Arc<MouseEvent>),
+    children: Element<'a>,
 }
 
-fn CalculatorKey<'a>((cx, props): ScopeState<'a, CalculatorKeyProps<'a>>) -> Element<'a> {
+fn CalculatorKey<'a>(cx: Scope<'a, CalculatorKeyProps<'a>>) -> Element {
     cx.render(rsx! {
         button {
             class: "calculator-key {cx.props.name}"
-            onclick: {cx.props.onclick}
-            {&props.children}
+            onclick: move |e| (cx.props.onclick)(e)
+            {&cx.props.children}
         }
     })
 }
@@ -168,7 +170,7 @@ impl Calculator {
         self.cur_val = self.display_value.parse::<f64>().unwrap();
         self.waiting_for_operand = true;
     }
-    fn handle_keydown(&mut self, evt: KeyboardEvent) {
+    fn handle_keydown(&mut self, evt: Arc<KeyboardEvent>) {
         match evt.key_code {
             KeyCode::Backspace => self.backspace(),
             KeyCode::Num0 => self.input_digit(0),

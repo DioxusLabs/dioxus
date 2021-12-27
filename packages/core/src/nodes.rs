@@ -20,7 +20,7 @@ use std::{
 ///
 /// VNodes are designed to be lightweight and used with with a bump allocator. To create a VNode, you can use either of:
 ///
-/// - the [`rsx`] macro
+/// - the `rsx!` macro
 /// - the [`NodeFactory`] API
 pub enum VNode<'src> {
     /// Text VNodes simply bump-allocated (or static) string slices
@@ -51,7 +51,7 @@ pub enum VNode<'src> {
     ///         key: "a",
     ///         onclick: |e| log::info!("clicked"),
     ///         hidden: "true",
-    ///         style: { background_color: "red" }
+    ///         style: { background_color: "red" },
     ///         "hello"
     ///     }
     /// });
@@ -59,7 +59,7 @@ pub enum VNode<'src> {
     /// if let VNode::Element(velement) = node {
     ///     assert_eq!(velement.tag_name, "div");
     ///     assert_eq!(velement.namespace, None);
-    ///     assert_eq!(velement.key, Some("a));
+    ///     assert_eq!(velement.key, Some("a"));
     /// }
     /// ```
     Element(&'src VElement<'src>),
@@ -717,6 +717,14 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
             Some(lazy) => lazy.call(cx),
             None => VNode::Placeholder(cx.bump.alloc(VPlaceholder { id: empty_cell() })),
         }
+    }
+}
+
+impl<'a, 'b> IntoIterator for LazyNodes<'a, 'b> {
+    type Item = LazyNodes<'a, 'b>;
+    type IntoIter = std::iter::Once<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(self)
     }
 }
 

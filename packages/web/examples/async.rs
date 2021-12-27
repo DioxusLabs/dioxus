@@ -17,7 +17,7 @@ fn main() {
 static App: Component<()> = |cx| {
     let mut count = use_state(&cx, || 0);
 
-    cx.push_task(|| async move {
+    cx.push_future(|| async move {
         TimeoutFuture::new(100).await;
         count += 1;
     });

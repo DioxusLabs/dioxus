@@ -20,7 +20,7 @@ some state or event occurs outside of the component. For instance, the `use_cont
 particular context.
 
 ```rust
-fn use_context<I>(cx: Context<T>) -> I {
+fn use_context<I>(cx: Scope<T>) -> I {
 
 }
 

@@ -30,7 +30,7 @@ Due to their importance in the hierarchy, Components - not nodes - are treated a
 
 ```rust
 
-fn Subtree<P>(cx: Context, props: P) -> DomTree {
+fn Subtree<P>(cx: Scope<P>) -> DomTree {
 
 }
 

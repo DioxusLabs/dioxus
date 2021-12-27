@@ -33,11 +33,7 @@ fn main() {
         AppendChildren { many: 1 },
     ];
 
-    dioxus_desktop::run(APP, (), |c| c.with_edits(edits));
-}
+    let app: Component<()> = |cx| rsx!(cx, div { "some app" });
 
-const APP: Component<()> = |(cx, _props)| {
-    rsx!(cx, div {
-        "some app"
-    })
-};
+    dioxus_desktop::run(app, (), |c| c.with_edits(edits));
+}

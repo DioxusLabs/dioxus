@@ -94,6 +94,8 @@ pub trait GlobalAttributes {
         title;
         translate;
 
+        role;
+
         /// dangerous_inner_html is Dioxus's replacement for using innerHTML in the browser DOM. In general, setting
         /// HTML from code is risky because it’s easy to inadvertently expose your users to a cross-site scripting (XSS)
         /// attack. So, you can set HTML directly from Dioxus, but you have to type out dangerous_inner_html to remind
@@ -838,6 +840,7 @@ pub trait SvgAttributes {
         requiredFeatures: "requiredFeatures",
         restart: "restart",
         result: "result",
+        role: "role",
         rotate: "rotate",
         rx: "rx",
         ry: "ry",

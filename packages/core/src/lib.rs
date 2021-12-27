@@ -57,19 +57,25 @@ pub(crate) mod innerlude {
     ///     // ...
     /// };
     /// ```
-    pub type Component<P> = fn(Scope<P>) -> Element;
+    pub type Component<P = ()> = fn(Scope<P>) -> Element;
+
+    /// A list of attributes
+    ///
+    pub type Attributes<'a> = Option<&'a [Attribute<'a>]>;
 }
 
 pub use crate::innerlude::{
     Attribute, Component, DioxusElement, DomEdit, Element, ElementId, EventHandler, EventPriority,
     IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, Properties, SchedulerMsg, Scope,
-    ScopeId, ScopeState, UserEvent, VElement, VFragment, VNode, VirtualDom,
+    ScopeId, ScopeState, TaskId, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder,
+    VText, VirtualDom,
 };
 
 pub mod prelude {
     pub use crate::innerlude::Scope;
     pub use crate::innerlude::{
-        Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory, ScopeState,
+        Attributes, Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory,
+        ScopeState,
     };
     pub use crate::nodes::VNode;
     pub use crate::virtual_dom::{fc_to_builder, Fragment, Properties};
