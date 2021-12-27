@@ -1,4 +1,4 @@
-use dioxus_core::ScopeState;
+use dioxus_core::{ScopeState, TaskId};
 use std::future::Future;
 use std::{cell::Cell, pin::Pin, rc::Rc};
 /*
@@ -23,15 +23,17 @@ where
     F: Future<Output = ()> + 'static,
 {
     cx.use_hook(
-        move |_| State {
-            running: Default::default(),
-            pending_fut: Default::default(),
-            running_fut: Default::default(),
-        },
-        |state| {
+        move |_| {
             let f = create_future();
             let id = cx.push_future(f);
-
+            State {
+                running: Default::default(),
+                id
+                // pending_fut: Default::default(),
+                // running_fut: Default::default(),
+            }
+        },
+        |state| {
             // state.pending_fut.set(Some(Box::pin(f)));
 
             // if let Some(fut) = state.running_fut.as_mut() {
@@ -74,13 +76,13 @@ where
 
 struct State {
     running: Rc<Cell<bool>>,
-
+    id: TaskId,
     // the way this is structure, you can toggle the coroutine without re-rendering the comppnent
     // this means every render *generates* the future, which is a bit of a waste
     // todo: allocate pending futures in the bump allocator and then have a true promotion
-    pending_fut: Cell<Option<Pin<Box<dyn Future<Output = ()> + 'static>>>>,
-    running_fut: Option<Pin<Box<dyn Future<Output = ()> + 'static>>>,
-    // running_fut: Rc<RefCell<Option<Pin<Box<dyn Future<Output = ()> + 'static>>>>>,
+    // pending_fut: Cell<Option<Pin<Box<dyn Future<Output = ()> + 'static>>>>,
+    // running_fut: Option<Pin<Box<dyn Future<Output = ()> + 'static>>>,
+    // running_fut: Rc<RefCell<Option<Pin<Box<dyn Future<Output = ()> + 'static>>>>>
 }
 
 pub struct CoroutineHandle<'a> {
@@ -104,11 +106,11 @@ impl<'a> CoroutineHandle<'a> {
             return;
         }
 
-        if let Some(submit) = self.inner.pending_fut.take() {
-            // submit();
-            // let inner = self.inner;
-            // self.cx.push_task(submit());
-        }
+        // if let Some(submit) = self.inner.pending_fut.take() {
+        // submit();
+        // let inner = self.inner;
+        // self.cx.push_task(submit());
+        // }
     }
 
     pub fn is_running(&self) -> bool {

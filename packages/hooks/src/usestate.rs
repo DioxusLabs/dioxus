@@ -287,11 +287,16 @@ pub struct AsyncUseState<T: 'static> {
     wip: Rc<RefCell<Option<T>>>,
 }
 
-impl<T: ToOwned> AsyncUseState<T> {
+impl<T: ToOwned<Owned = T>> AsyncUseState<T> {
     pub fn get_mut<'a>(&'a self) -> RefMut<'a, T> {
         // make sure we get processed
-        // self.needs_update();
-
+        {
+            let mut wip = self.wip.borrow_mut();
+            if wip.is_none() {
+                *wip = Some(self.inner.as_ref().to_owned());
+            }
+            (self.re_render)();
+        }
         // Bring out the new value, cloning if it we need to
         // "get_mut" is locked behind "ToOwned" to make it explicit that cloning occurs to use this
         RefMut::map(self.wip.borrow_mut(), |slot| {
@@ -305,9 +310,10 @@ impl<T> AsyncUseState<T> {
         (self.re_render)();
         *self.wip.borrow_mut() = Some(val);
     }
-    pub fn get(&self) -> &T {
-        self.inner.as_ref()
-    }
+
+    // pub fn get(&self) -> Ref<'_, T> {
+    //     self.wip.borrow
+    // }
 
     pub fn get_rc(&self) -> &Rc<T> {
         &self.inner

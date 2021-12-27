@@ -32,3 +32,24 @@ or use `cargo-edit` to add it via the CLI:
 ```shell
 $ cargo add dioxus --features desktop
 ```
+
+## Setting up a hello world
+
+Let's edit the project's `main.rs` and add the skeleton of 
+
+```rust
+use dioxus::prelude::*;
+
+fn main() {
+    dioxus::desktop::launch(app);
+}
+
+fn app(cx: Scope) -> Element {
+    cx.render(rsx!(
+        div { "hello world!" }
+    ))
+}
+```
+
+
+## Making sure things run

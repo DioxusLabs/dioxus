@@ -3,14 +3,14 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    token, Block, FnArg, Generics, Ident, Result, ReturnType, Token, Visibility,
+    token, Block, FnArg, Generics, Ident, Pat, Result, ReturnType, Token, Visibility,
 };
 
 pub struct InlinePropsBody {
     pub vis: syn::Visibility,
     pub fn_token: Token![fn],
     pub ident: Ident,
-    pub cx_token: Ident,
+    pub cx_token: Box<Pat>,
     pub generics: Generics,
     pub paren_token: token::Paren,
     pub inputs: Punctuated<FnArg, Token![,]>,
@@ -31,9 +31,14 @@ impl Parse for InlinePropsBody {
         let content;
         let paren_token = syn::parenthesized!(content in input);
 
-        let cx_token: Ident = content.parse()?;
-        let _: Token![:] = content.parse()?;
-        let _: Ident = content.parse()?;
+        let first_arg: FnArg = content.parse()?;
+        let cx_token = {
+            match first_arg {
+                FnArg::Receiver(_) => panic!("first argument must not be  a reciver argument"),
+                FnArg::Typed(f) => f.pat,
+            }
+        };
+
         let _: Result<Token![,]> = content.parse();
 
         let inputs = syn::punctuated::Punctuated::parse_terminated(&content)?;
@@ -84,7 +89,7 @@ impl ToTokens for InlinePropsBody {
         let modifiers = if generics.params.is_empty() {
             quote! { #[derive(Props, PartialEq)] }
         } else {
-            quote! { #[derive(PartialEq)] }
+            quote! { #[derive(Props)] }
         };
 
         out_tokens.append_all(quote! {
@@ -93,7 +98,7 @@ impl ToTokens for InlinePropsBody {
                 #(#fields),*
             }
 
-            #vis fn #ident #generics (#cx_token: Scope<#struct_name>) #output {
+            #vis fn #ident #generics (#cx_token: Scope<'a, #struct_name #generics>) #output {
                 let #struct_name { #(#field_names),* } = &cx.props;
                 #block
             }

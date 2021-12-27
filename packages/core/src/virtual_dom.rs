@@ -702,7 +702,7 @@ impl<'a> Future for PollTasks<'a> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        let mut all_pending = true;
+        let mut any_pending = false;
 
         let mut tasks = self.0.tasks.tasks.borrow_mut();
         let mut to_remove = vec![];
@@ -712,7 +712,7 @@ impl<'a> Future for PollTasks<'a> {
             if task.as_mut().poll(cx).is_ready() {
                 to_remove.push(*id);
             } else {
-                all_pending = false;
+                any_pending = true;
             }
         }
 
@@ -721,7 +721,7 @@ impl<'a> Future for PollTasks<'a> {
         }
 
         // Resolve the future if any singular task is ready
-        match all_pending {
+        match any_pending {
             true => Poll::Pending,
             false => Poll::Ready(()),
         }

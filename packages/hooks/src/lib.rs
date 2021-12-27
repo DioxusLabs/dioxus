@@ -13,5 +13,8 @@ pub use usecoroutine::*;
 mod usefuture;
 pub use usefuture::*;
 
+mod usesuspense;
+pub use usesuspense::*;
+
 // mod usemodel;
 // pub use usemodel::*;
