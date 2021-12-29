@@ -144,7 +144,7 @@ static App: Component<()> = |cx| {
                     {items.read().iter().enumerate().map(|(id, item)| {
                         let [adj, col, noun] = item.labels;
                         let is_in_danger = if (*selected).map(|s| s == id).unwrap_or(false) {"danger"} else {""};
-                        rsx!(tr { 
+                        rsx!(tr {
                             class: "{is_in_danger}",
                             key: "{id}",
                             td { class:"col-md-1" }

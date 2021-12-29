@@ -226,7 +226,7 @@ pub fn routable_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
 /// # Example
 /// ```
 /// #[inline_props]
-/// fn app(cx: Scope<{ bob: String }>) -> Element {
+/// fn app(cx: Scope, bob: String) -> Element {
 ///     cx.render(rsx!("hello, {bob}"))
 /// }  
 ///

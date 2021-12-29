@@ -59,11 +59,11 @@ impl<T> ProvidedStateInner<T> {
 ///
 ///
 ///
-pub fn use_shared_state<'a, T: 'static>(cx: &'a ScopeState) -> Option<UseSharedState<'a, T>> {
+pub fn use_context<'a, T: 'static>(cx: &'a ScopeState) -> Option<UseSharedState<'a, T>> {
     cx.use_hook(
         |_| {
             let scope_id = cx.scope_id();
-            let root = cx.consume_state::<ProvidedState<T>>();
+            let root = cx.consume_context::<ProvidedState<T>>();
 
             if let Some(root) = root.as_ref() {
                 root.borrow_mut().consumers.insert(scope_id);
@@ -175,7 +175,7 @@ where
 ///
 ///
 ///
-pub fn use_provide_state<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) {
+pub fn use_context_provider<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) {
     cx.use_hook(
         |_| {
             let state: ProvidedState<T> = RefCell::new(ProvidedStateInner {
@@ -183,7 +183,7 @@ pub fn use_provide_state<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() ->
                 notify_any: cx.schedule_update_any(),
                 consumers: HashSet::new(),
             });
-            cx.provide_state(state)
+            cx.provide_context(state)
         },
         |_inner| {},
     )

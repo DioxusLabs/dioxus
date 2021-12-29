@@ -246,7 +246,6 @@ impl WebsysDom {
                 .unwrap(),
         };
 
-        use smallstr;
         use smallstr::SmallString;
         use std::fmt::Write;
 
@@ -260,7 +259,7 @@ impl WebsysDom {
         self.nodes[(id as usize)] = Some(el);
     }
 
-    fn new_event_listener(&mut self, event: &'static str, scope: ScopeId, real_id: u64) {
+    fn new_event_listener(&mut self, event: &'static str, _scope: ScopeId, _real_id: u64) {
         let event = wasm_bindgen::intern(event);
 
         // attach the correct attributes to the element
@@ -271,23 +270,8 @@ impl WebsysDom {
         let el = self.stack.top();
 
         let el = el.dyn_ref::<Element>().unwrap();
-        // let el = el.dyn_ref::<Element>().unwrap();
-        // .expect(&format!("not an element: {:?}", el));
-
-        // let scope_id = scope.data().as_ffi();
-        // let scope_id = scope.0 as u64;
-        // "dioxus-event-click",
-        // "1.10"
-        // &format!("", scope_id, real_id),
-        // &format!("dioxus-event-{}", event),
-        // &format!("{}.{}", scope_id, real_id),
-        // &format!("dioxus-event-{}", event),
-        // &format!("{}.{}", scope_id, real_id),
 
         el.set_attribute("dioxus-event", event).unwrap();
-
-        // el.set_attribute(&format!("dioxus-event"), &format!("{}", event))
-        //     .unwrap();
 
         // Register the callback to decode
 
@@ -487,20 +471,17 @@ impl Stack {
 }
 
 pub struct DioxusWebsysEvent(web_sys::Event);
+
+// safety: currently the web is not multithreaded and our VirtualDom exists on the same thread
 unsafe impl Send for DioxusWebsysEvent {}
 unsafe impl Sync for DioxusWebsysEvent {}
-
-// trait MyTrait {}
-// impl MyTrait for web_sys::Event {}
 
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
 fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send + Sync> {
     use dioxus_html::on::*;
     use dioxus_html::KeyCode;
-    // event.prevent_default();
 
-    // use dioxus_core::events::on::*;
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => Arc::new(ClipboardEvent {}),
         "compositionend" | "compositionstart" | "compositionupdate" => {
@@ -525,11 +506,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 which: evt.which() as usize,
             })
         }
-        "focus" | "blur" => {
-            //
-            Arc::new(FocusEvent {})
-        }
-        // "change" => SyntheticEvent::GenericEvent(DioxusEvent::new((), DioxusWebsysEvent(event))),
+        "focus" | "blur" => Arc::new(FocusEvent {}),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
@@ -623,7 +600,6 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
             })
         }
         "select" => Arc::new(SelectionEvent {}),
-
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
             let evt: &web_sys::TouchEvent = event.dyn_ref().unwrap();
             Arc::new(TouchEvent {
@@ -633,9 +609,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 shift_key: evt.shift_key(),
             })
         }
-
         "scroll" => Arc::new(()),
-
         "wheel" => {
             let evt: &web_sys::WheelEvent = event.dyn_ref().unwrap();
             Arc::new(WheelEvent {
@@ -645,7 +619,6 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 delta_mode: evt.delta_mode(),
             })
         }
-
         "animationstart" | "animationend" | "animationiteration" => {
             let evt: &web_sys::AnimationEvent = event.dyn_ref().unwrap();
             Arc::new(AnimationEvent {
@@ -654,7 +627,6 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 pseudo_element: evt.pseudo_element(),
             })
         }
-
         "transitionend" => {
             let evt: &web_sys::TransitionEvent = event.dyn_ref().unwrap();
             Arc::new(TransitionEvent {
@@ -663,20 +635,11 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 pseudo_element: evt.pseudo_element(),
             })
         }
-
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => {
-            //
-            Arc::new(MediaEvent {})
-        }
-
-        "toggle" => {
-            //
-            Arc::new(ToggleEvent {})
-        }
-
+        | "timeupdate" | "volumechange" | "waiting" => Arc::new(MediaEvent {}),
+        "toggle" => Arc::new(ToggleEvent {}),
         _ => Arc::new(()),
     }
 }
@@ -684,6 +647,8 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
 /// This function decodes a websys event and produces an EventTrigger
 /// With the websys implementation, we attach a unique key to the nodes
 fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
+    use anyhow::Context;
+
     let target = event
         .target()
         .expect("missing target")
@@ -692,42 +657,16 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     let typ = event.type_();
 
-    use anyhow::Context;
-
     let element_id = target
         .get_attribute("dioxus-id")
         .context("Could not find element id on event target")?
         .parse()?;
-
-    // The error handling here is not very descriptive and needs to be replaced with a zero-cost error system
-    let val: String = target
-        .get_attribute("dioxus-event")
-        .context(format!("wrong format - received {:#?}", typ))?;
-    // .get_attribute(&format!("dioxus-event-{}", typ))
-    // .context(format!("wrong format - received {:#?}", typ))?;
-
-    let mut fields = val.splitn(3, ".");
-
-    // let gi_id = fields
-    //     .next()
-    //     .and_then(|f| f.parse::<u64>().ok())
-    //     .context("failed to parse gi id")?;
-
-    // let real_id = fields
-    //     .next()
-    //     .and_then(|raw_id| raw_id.parse::<u64>().ok())
-    //     .context("failed to parse real id")?;
-
-    // let triggered_scope = gi_id;
 
     Ok(UserEvent {
         name: event_name_from_typ(&typ),
         data: virtual_event_from_websys_event(event.clone()),
         element: Some(ElementId(element_id)),
         scope_id: None,
-        // scope_id: Some(ScopeId(triggered_scope as usize)),
-        // element: Some(ElementId(real_id as usize)),
-        // scope_id: Some(ScopeId(triggered_scope as usize)),
         priority: dioxus_core::EventPriority::Medium,
     })
 }
