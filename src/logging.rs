@@ -1,5 +1,4 @@
 use fern::colors::{Color, ColoredLevelConfig};
-use log::debug;
 
 pub fn set_up_logging() {
     // configure colors for the whole line
@@ -29,18 +28,7 @@ pub fn set_up_logging() {
                 message = message,
             ));
         })
-        // set the default log level. to filter out verbose log messages from dependencies, set
-        // this to Warn and overwrite the log level for your crate.
         .level(log::LevelFilter::Info)
-        // .level(log::LevelFilter::Warn)
-        // change log levels for individual modules. Note: This looks for the record's target
-        // field which defaults to the module path but can be overwritten with the `target`
-        // parameter:
-        // `info!(target="special_target", "This log message is about special_target");`
-        // .level_for("dioxus", log::LevelFilter::Debug)
-        // .level_for("dioxus", log::LevelFilter::Info)
-        // .level_for("pretty_colored", log::LevelFilter::Trace)
-        // output to stdout
         .chain(std::io::stdout())
         .apply()
         .unwrap();

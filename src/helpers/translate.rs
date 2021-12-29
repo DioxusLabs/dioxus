@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Display, Formatter};
 
 use anyhow::Result;
 
@@ -33,13 +33,25 @@ impl Display for RsxRenderer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.as_call {
             writeln!(f, r##"use dioxus::prelude::*;"##)?;
-            writeln!(f, r##"const Component: FC<()> = |cx| cx.render(rsx!{{"##)?;
+            writeln!(
+                f,
+                r##"
+fn component(cx: Scope) -> Element {{
+    cx.render(rsx!(
+"##
+            )?;
         }
         for child in &self.dom.children {
             render_child(f, child, 1)?;
         }
         if self.as_call {
-            write!(f, r##"}});"##)?;
+            write!(
+                f,
+                r##"
+    )
+)            
+            "##
+            )?;
         }
         Ok(())
     }
@@ -74,9 +86,24 @@ fn render_child(f: &mut Formatter<'_>, child: &Node, il: u32) -> std::fmt::Resul
 
             for (name, value) in &el.attributes {
                 write_tabs(f, il + 1)?;
-                match value {
-                    Some(val) => writeln!(f, "{}: \"{}\",", name, val)?,
-                    None => writeln!(f, "{}: \"\",", name)?,
+
+                use convert_case::{Case, Casing};
+                if name.chars().any(|ch| ch.is_ascii_uppercase() || ch == '-') {
+                    let new_name = name.to_case(Case::Snake);
+                    match value {
+                        Some(val) => writeln!(f, "{}: \"{}\",", new_name, val)?,
+                        None => writeln!(f, "{}: \"\",", new_name)?,
+                    }
+                } else {
+                    match name.as_str() {
+                        "for" | "async" | "type" | "as" => write!(f, "r#")?,
+                        _ => {}
+                    }
+
+                    match value {
+                        Some(val) => writeln!(f, "{}: \"{}\",", name, val)?,
+                        None => writeln!(f, "{}: \"\",", name)?,
+                    }
                 }
             }
 

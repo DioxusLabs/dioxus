@@ -90,6 +90,10 @@ pub struct TranslateOptions {
     /// an example in the crate
     #[argh(option, short = 't')]
     pub text: Option<String>,
+
+    /// whether or not to jump
+    #[argh(switch, short = 'c')]
+    pub component: bool,
 }
 /// 🛠 Translate some 3rd party template into rsx
 #[derive(FromArgs, PartialEq, Debug, Clone)]

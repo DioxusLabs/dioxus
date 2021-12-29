@@ -1,86 +1,7 @@
 //! It's better to store all the configuration in one spot
-//!
-use tui_template::tuiapp::TuiApp;
-
-use crate::*;
-use std::{any::Any, io::Write, path::PathBuf, process::Command};
-
-pub struct Studio {
-    command: LaunchOptions,
-    headless: bool,
-    example: Option<String>,
-    outdir: Option<String>,
-    release: bool,
-    hydrate: Option<String>,
-    template: Option<String>,
-    translate_file: Option<String>,
-    crate_config: Option<CrateConfig>,
-}
-
-impl Studio {
-    pub fn new(command: LaunchOptions) -> Self {
-        let headless = true;
-        let release = false;
-        let example = None;
-        let outdir = None;
-        let hydrate = None;
-        let template = None;
-        let translate_file = None;
-        let crate_config = None;
-
-        match command.command {
-            LaunchCommand::Translate(_) => todo!(),
-            LaunchCommand::Develop(_) => todo!(),
-            LaunchCommand::Build(_) => todo!(),
-            LaunchCommand::Test(_) => todo!(),
-            LaunchCommand::Publish(_) => todo!(),
-            LaunchCommand::Studio(StudioOptions { .. }) => {
-                //
-            }
-        };
-
-        Self {
-            command,
-            headless,
-            example,
-            outdir,
-            release,
-            hydrate,
-            template,
-            translate_file,
-            crate_config,
-        }
-    }
-
-    pub async fn start(self) -> Result<()> {
-        match self.command.command {
-            LaunchCommand::Develop(_) => todo!(),
-            LaunchCommand::Build(_) => todo!(),
-            LaunchCommand::Translate(_) => todo!(),
-            LaunchCommand::Test(_) => todo!(),
-            LaunchCommand::Publish(_) => todo!(),
-            LaunchCommand::Studio(_) => self.launch_studio().await?,
-        }
-        Ok(())
-    }
-
-    pub async fn launch_studio(mut self) -> Result<()> {
-        let task = async_std::task::spawn_blocking(|| async move {
-            let mut app = TuiStudio {
-                cfg: self,
-                hooks: vec![],
-                hook_idx: 0,
-            };
-            app.launch(250).expect("tui app crashed :(");
-        });
-        let r = task.await.await;
-
-        Ok(())
-    }
-}
 
 use tui::{
-    backend::Backend,
+    backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     symbols,
@@ -90,12 +11,61 @@ use tui::{
         Axis, BarChart, Block, BorderType, Borders, Cell, Chart, Dataset, Gauge, LineGauge, List,
         ListItem, Paragraph, Row, Sparkline, Table, Tabs, Wrap,
     },
-    Frame,
+    Frame, Terminal,
 };
 
-struct TuiStudio {
-    cfg: Studio,
+use crate::*;
+use std::{any::Any, io::Write, path::PathBuf, process::Command};
 
+pub struct Cfg {
+    command: LaunchOptions,
+    headless: bool,
+    example: Option<String>,
+    outdir: Option<String>,
+    release: bool,
+    hydrate: Option<String>,
+    template: Option<String>,
+    translate_file: Option<String>,
+    crate_config: Option<CrateConfig>,
+    should_quit: bool,
+}
+
+pub async fn start(options: DevelopOptions) -> Result<()> {
+    let mut state = Cfg {
+        command: todo!(),
+        headless: todo!(),
+        example: todo!(),
+        outdir: todo!(),
+        release: todo!(),
+        hydrate: todo!(),
+        template: todo!(),
+        translate_file: todo!(),
+        crate_config: todo!(),
+        should_quit: false,
+    };
+
+    crossterm::terminal::enable_raw_mode()?;
+
+    let backend = CrosstermBackend::new(std::io::stdout());
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    // Setup input handling
+    // let (tx, rx) = futures::channel::mpsc::unbounded();
+    let tick_rate = std::time::Duration::from_millis(100);
+
+    let mut prev_time = std::time::Instant::now();
+    while !state.should_quit {
+        let next_time = prev_time + tick_rate;
+        let now = std::time::Instant::now();
+
+        let diff = next_time - std::time::Instant::now();
+    }
+
+    Ok(())
+}
+
+struct TuiStudio {
+    cfg: Cfg,
     hook_idx: usize,
     hooks: Vec<Box<dyn Any>>,
 }
@@ -112,7 +82,7 @@ impl TuiStudio {
     }
 }
 
-impl TuiApp for TuiStudio {
+impl TuiStudio {
     fn event_handler(&self, action: crossterm::event::Event) -> anyhow::Result<()> {
         match action {
             crossterm::event::Event::Key(_) => {}

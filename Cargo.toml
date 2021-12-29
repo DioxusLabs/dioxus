@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-studio"
 version = "0.1.0"
-authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
+authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
 "license" = "MIT/Apache-2.0"
@@ -14,25 +14,22 @@ log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }
 wasm-bindgen-cli-support = "0.2.78"
 anyhow = "1.0.38"
-argh = "0.1.4"
-serde = "1.0.120"
-serde_json = "1.0.61"
-async-std = { version = "1.9.0", features = ["attributes"] }
-tide = "0.16.0"
-fs_extra = "1.2.0"
 
+serde = "1"
+serde_json = "1"
+
+fs_extra = "1.2.0"
 cargo_toml = "0.10.0"
 futures = "0.3.12"
 notify = "5.0.0-pre.4"
-rjdebounce = "0.2.1"
-tempfile = "3.2.0"
 html_parser = "0.6.2"
-
-tui = { version = "0.15.0", features = ["crossterm"] }
-crossterm = "0.19.0"
-tui-template = { git = "https://github.com/jkelleyrtp/tui-builder.git" }
+tui = { version = "0.16.0", features = ["crossterm"] }
+crossterm = "0.22.1"
+binary-install = "0.0.2"
+convert_case = "0.5.0"
+structopt = "0.3.25"
+cargo_metadata = "0.14.1"
 
 [[bin]]
-
 path = "src/main.rs"
 name = "dioxus"
