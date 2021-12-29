@@ -1,25 +1,15 @@
 use crate::{
     cli::BuildOptions,
-    config::{Config, ExecutableType},
-    error::Result,
+    config::{CrateConfig, ExecutableType},
+    error::{Error, Result},
 };
-use log::{info, warn};
-use std::{io::Write, process::Command};
+use std::{
+    io::{Read, Write},
+    process::Command,
+};
 use wasm_bindgen_cli_support::Bindgen;
 
-pub struct BuildConfig {}
-impl Into<BuildConfig> for BuildOptions {
-    fn into(self) -> BuildConfig {
-        BuildConfig {}
-    }
-}
-impl Default for BuildConfig {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
-pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
+pub fn build(config: &CrateConfig) -> Result<()> {
     /*
     [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     [2] Generate the appropriate build folders
@@ -28,7 +18,7 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     [5] Link up the html page to the wasm module
     */
 
-    let Config {
+    let CrateConfig {
         out_dir,
         crate_dir,
         target_dir,
@@ -40,7 +30,7 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     let t_start = std::time::Instant::now();
 
     // [1] Build the .wasm module
-    info!("Running build commands...");
+    log::info!("Running build commands...");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&crate_dir)
         .arg("build")
@@ -60,9 +50,16 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     };
 
     let mut child = cmd.spawn()?;
-    let _err_code = child.wait()?;
+    let output = child.wait()?;
 
-    info!("Build complete!");
+    if output.success() {
+        log::info!("Build complete!");
+    } else {
+        log::error!("Build failed!");
+        let mut reason = String::new();
+        child.stderr.unwrap().read_to_string(&mut reason)?;
+        return Err(Error::BuildFailed(reason));
+    }
 
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("wasm");
@@ -77,12 +74,10 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
 
     let input_path = match executable {
         ExecutableType::Binary(name) | ExecutableType::Lib(name) => target_dir
-            // .join("wasm32-unknown-unknown/release")
             .join(format!("wasm32-unknown-unknown/{}", release_type))
             .join(format!("{}.wasm", name)),
 
         ExecutableType::Example(name) => target_dir
-            // .join("wasm32-unknown-unknown/release/examples")
             .join(format!("wasm32-unknown-unknown/{}/examples", release_type))
             .join(format!("{}.wasm", name)),
     };
@@ -103,7 +98,7 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
 
     // [5] Generate the html file with the module name
     // TODO: support names via options
-    info!("Writing to '{:#?}' directory...", out_dir);
+    log::info!("Writing to '{:#?}' directory...", out_dir);
     let mut file = std::fs::File::create(out_dir.join("index.html"))?;
     file.write_all(gen_page("./wasm/module.js").as_str().as_bytes())?;
 
@@ -111,7 +106,7 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     match fs_extra::dir::copy(static_dir, out_dir, &copy_options) {
         Ok(_) => {}
         Err(_e) => {
-            warn!("Error copying dir");
+            log::warn!("Error copying dir");
         }
     }
 
@@ -129,6 +124,8 @@ fn gen_page(module: &str) -> String {
     <meta charset="UTF-8" />
   </head>
   <body>
+    <div id="main">
+    </div>
     <!-- Note the usage of `type=module` here as this is an ES6 module -->
     <script type="module">
       import init from "{}";
@@ -141,3 +138,35 @@ fn gen_page(module: &str) -> String {
         module
     )
 }
+
+// use binary_install::{Cache, Download};
+
+// /// Attempts to find `wasm-opt` in `PATH` locally, or failing that downloads a
+// /// precompiled binary.
+// ///
+// /// Returns `Some` if a binary was found or it was successfully downloaded.
+// /// Returns `None` if a binary wasn't found in `PATH` and this platform doesn't
+// /// have precompiled binaries. Returns an error if we failed to download the
+// /// binary.
+// pub fn find_wasm_opt(
+//     cache: &Cache,
+//     install_permitted: bool,
+// ) -> Result<install::Status, failure::Error> {
+//     // First attempt to look up in PATH. If found assume it works.
+//     if let Ok(path) = which::which("wasm-opt") {
+//         PBAR.info(&format!("found wasm-opt at {:?}", path));
+
+//         match path.as_path().parent() {
+//             Some(path) => return Ok(install::Status::Found(Download::at(path))),
+//             None => {}
+//         }
+//     }
+
+//     let version = "version_78";
+//     Ok(install::download_prebuilt(
+//         &install::Tool::WasmOpt,
+//         cache,
+//         version,
+//         install_permitted,
+//     )?)
+// }
