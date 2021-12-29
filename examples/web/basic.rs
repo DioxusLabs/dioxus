@@ -14,7 +14,7 @@ fn main() {
     dioxus_web::launch(APP)
 }
 
-static APP: Component<()> = |cx| {
+static APP: Component = |cx| {
     let mut count = use_state(&cx, || 3);
     let content = use_state(&cx, || String::from("h1"));
     let text_content = use_state(&cx, || String::from("Hello, world!"));
@@ -68,13 +68,13 @@ static APP: Component<()> = |cx| {
     })
 };
 
-fn render_bullets(cx: Context) -> Element {
+fn render_bullets(cx: Scope) -> Element {
     rsx!(cx, div {
         "bite me"
     })
 }
 
-fn render_list(cx: Context, count: usize) -> Element {
+fn render_list(cx: Scope, count: usize) -> Element {
     let items = (0..count).map(|f| {
         rsx! {
             li { "a - {f}" }
@@ -86,4 +86,4 @@ fn render_list(cx: Context, count: usize) -> Element {
     rsx!(cx, ul { {items} })
 }
 
-static CHILD: Component<()> = |cx, _| rsx!(cx, div {"hello child"});
+static CHILD: Component = |cx, _| rsx!(cx, div {"hello child"});

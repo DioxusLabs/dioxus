@@ -7,7 +7,7 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let mut count = use_state(&cx, || 0);
 
     cx.render(rsx! {

@@ -8,7 +8,7 @@ fn main() {
     dioxus_desktop::launch(App);
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     cx.render(rsx!(
         div {
             "hello world!"

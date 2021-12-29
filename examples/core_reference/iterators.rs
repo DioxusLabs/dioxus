@@ -12,7 +12,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     let example_data = use_state(&cx, || 0);
 
     let v = (0..10).map(|f| {

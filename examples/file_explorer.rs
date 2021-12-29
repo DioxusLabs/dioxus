@@ -18,7 +18,7 @@ fn main() {
     });
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let file_manager = use_ref(&cx, Files::new);
     let files = file_manager.read();
 

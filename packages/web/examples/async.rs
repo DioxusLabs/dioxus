@@ -14,7 +14,7 @@ fn main() {
     dioxus_web::launch(App);
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let mut count = use_state(&cx, || 0);
 
     cx.push_future(|| async move {

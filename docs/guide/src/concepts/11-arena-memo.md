@@ -21,9 +21,9 @@ fn test() -> DomTree {
     }
 }
 
-static TestComponent: Component<()> = |cx| html!{<div>"Hello world"</div>};
+static TestComponent: Component = |cx| html!{<div>"Hello world"</div>};
 
-static TestComponent: Component<()> = |cx|{
+static TestComponent: Component = |cx|{
     let g = "BLAH";
     html! {
         <div> "Hello world" </div>

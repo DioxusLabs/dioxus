@@ -24,7 +24,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     let count = use_state(&cx, || 0);
     let mut direction = use_state(&cx, || 1);
 

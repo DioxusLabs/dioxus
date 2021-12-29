@@ -467,7 +467,7 @@ impl ScopeState {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx, props|cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx| cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -511,7 +511,7 @@ impl ScopeState {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx, props| cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx|  cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -531,7 +531,7 @@ impl ScopeState {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx, props| cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx|  cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     ///
     /// let base = dom.base_scope();
@@ -550,7 +550,7 @@ impl ScopeState {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx, props| cx.render(rsx!{ div {} }));
+    /// let mut dom = VirtualDom::new(|cx|  cx.render(rsx!{ div {} }));
     /// dom.rebuild();
     /// let base = dom.base_scope();
     ///
@@ -619,12 +619,12 @@ impl ScopeState {
     /// ```rust, ignore
     /// struct SharedState(&'static str);
     ///
-    /// static App: Component<()> = |cx, props|{
+    /// static App: Component = |cx| {
     ///     cx.use_hook(|_| cx.provide_context(SharedState("world")), |_| {}, |_| {});
     ///     rsx!(cx, Child {})
     /// }
     ///
-    /// static Child: Component<()> = |cx| {
+    /// static Child: Component = |cx| {
     ///     let state = cx.consume_state::<SharedState>();
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }

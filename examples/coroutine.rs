@@ -27,7 +27,7 @@ fn main() {
 
 use dioxus::prelude::*;
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let p1 = use_state(&cx, || 0);
     let p2 = use_state(&cx, || 0);
 

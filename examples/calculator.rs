@@ -13,7 +13,7 @@ fn main() {
     dioxus::desktop::launch(APP);
 }
 
-static APP: Component<()> = |cx| {
+static APP: Component = |cx| {
     let cur_val = use_state(&cx, || 0.0_f64);
     let operator = use_state(&cx, || None as Option<&'static str>);
     let display_value = use_state(&cx, || String::from(""));

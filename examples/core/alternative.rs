@@ -9,13 +9,12 @@ fn main() {
     println!("{}", dom);
 }
 
-pub static EXAMPLE: Component<()> = |cx| {
+pub static EXAMPLE: Component = |cx| {
     let list = (0..10).map(|_f| {
         rsx! {
             "{_f}"
         }
     });
-    // let list = (0..10).map(|_f| Some(Box::new(move |_f| todo!())));
 
     cx.render(Some(LazyNodes::new(move |cx| {
         cx.raw_element(

@@ -54,7 +54,7 @@ static AntipatternNoKeys: Component<NoKeysProps> = |cx| {
 ///
 /// Only Component and Fragment nodes are susceptible to this issue. Dioxus mitigates this with components by providing
 /// an API for registering shared state without the ContextProvider pattern.
-static AntipatternNestedFragments: Component<()> = |cx| {
+static AntipatternNestedFragments: Component = |cx| {
     // Try to avoid heavily nesting fragments
     rsx!(cx,
         Fragment {
@@ -82,7 +82,7 @@ static AntipatternNestedFragments: Component<()> = |cx| {
 /// However, calling set_state will *not* update the current version of state in the component. This should be easy to
 /// recognize from the function signature, but Dioxus will not update the "live" version of state. Calling `set_state`
 /// merely places a new value in the queue and schedules the component for a future update.
-static AntipatternRelyingOnSetState: Component<()> = |cx| {
+static AntipatternRelyingOnSetState: Component = |cx| {
     let (state, set_state) = use_state(&cx, || "Hello world").classic();
     set_state("New state");
     // This will return false! `state` will *still* be "Hello world"
@@ -99,7 +99,7 @@ static AntipatternRelyingOnSetState: Component<()> = |cx| {
 /// - All components must start with an uppercase character
 ///
 /// i.e.: the following component will be rejected when attempted to be used in the rsx! macro
-static antipattern_component: Component<()> = |cx, props| todo!();
+static antipattern_component: Component = |cx| todo!();
 
 /// Antipattern: Misusing hooks
 /// ---------------------------
@@ -153,7 +153,7 @@ static AntipatternMisusedHooks: Component<MisuedHooksProps> = |cx| {
 ///         }
 ///     }
 /// })
-static _example: Component<()> = |cx, props| todo!();
+static _example: Component = |cx| todo!();
 
 /// Antipattern: publishing components and hooks with all features enabled
 /// ----------------------------------------------------------------------
@@ -171,9 +171,9 @@ static _example: Component<()> = |cx, props| todo!();
 ///
 /// This will only include the `core` dioxus crate which is relatively slim and fast to compile and avoids target-specific
 /// libraries.
-static __example: Component<()> = |cx, props| todo!();
+static __example: Component = |cx| todo!();
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     cx.render(rsx! {
         AntipatternNoKeys { data: std::collections::HashMap::new() }
         AntipatternNestedFragments {}

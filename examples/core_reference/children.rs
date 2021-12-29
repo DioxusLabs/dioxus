@@ -18,7 +18,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     cx.render(rsx! {
         div {
             Banner {
@@ -31,7 +31,7 @@ pub static Example: Component<()> = |cx| {
     })
 };
 
-pub static Banner: Component<()> = |cx| {
+pub static Banner: Component = |cx| {
     cx.render(rsx! {
         div {
             h1 { "This is a great banner!" }

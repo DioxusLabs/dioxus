@@ -14,7 +14,7 @@ fn main() {
     dioxus_web::launch(App);
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     todo!("suspense is broken")
     // let doggo = suspend(|| async move {
     //     #[derive(serde::Deserialize)]

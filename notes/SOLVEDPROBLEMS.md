@@ -153,13 +153,13 @@ Notice that LiveComponent receivers (the client-side interpretation of a LiveCom
 The `VNodeTree` type is a very special type that allows VNodes to be created using a pluggable allocator. The html! macro creates something that looks like:
 
 ```rust
-pub static Example: Component<()> = |cx, props|{
+pub static Example: Component = |cx| {
     html! { <div> "blah" </div> }
 };
 
 // expands to...
 
-pub static Example: Component<()> = |cx, props|{
+pub static Example: Component = |cx| {
     // This function converts a Fn(allocator) -> DomTree closure to a VNode struct that will later be evaluated.
     html_macro_to_vnodetree(move |allocator| {
         let mut node0 = allocator.alloc(VElement::div);
@@ -216,7 +216,7 @@ struct ExampleContext {
     items: Vec<String>
 }
 
-fn Example<'src>(cx: Context<'src, ()>) -> DomTree<'src> {
+fn Example<'src>(cx: Scope<'src, ()>) -> DomTree<'src> {
     let val: &'b ContextGuard<ExampleContext> = (&'b cx).use_context(|context: &'other ExampleContext| {
         // always select the last element
         context.items.last()
@@ -313,7 +313,7 @@ Here's how react does it:
 Any "dirty" node causes an entire subtree render. Calling "setState" at the very top will cascade all the way down. This is particularly bad for this component design:
 
 ```rust
-static APP: Component<()> = |cx, props|{
+static APP: Component = |cx| {
     let title = use_context(Title);
     cx.render(html!{
         <div>
@@ -334,7 +334,7 @@ static APP: Component<()> = |cx, props|{
         </div>
     })
 };
-static HEAVY_LIST: Component<()> = |cx, props|{
+static HEAVY_LIST: Component = |cx| {
     cx.render({
         {0.100.map(i => <BigElement >)}
     })
@@ -348,7 +348,7 @@ An update to the use_context subscription will mark the node as dirty. The node 
 The FC layout was altered to make life easier for us inside the VirtualDom. The "view" function returns an unbounded VNode object. Calling the "view" function is unsafe under the hood, but prevents lifetimes from leaking out of the function call. Plus, it's easier to write. Because there are no lifetimes on the output (occur purely under the hood), we can escape needing to annotate them.
 
 ```rust
-fn component(cx: Context, props: &Props) -> DomTree {
+fn component(cx: Scope<Props>) -> DomTree {
 
 }
 ```
@@ -378,7 +378,7 @@ struct Props {
 
 }
 
-static Component: Component<Props> = |cx, props|{
+static Component: Component<Props> = |cx| {
 
 }
 ```

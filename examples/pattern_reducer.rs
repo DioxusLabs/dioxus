@@ -11,7 +11,7 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
-pub static App: Component<()> = |cx| {
+pub static App: Component = |cx| {
     let state = use_state(&cx, PlayerState::new);
 
     let is_playing = state.is_playing();

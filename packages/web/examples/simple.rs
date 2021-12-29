@@ -13,7 +13,7 @@ fn main() {
     dioxus_web::launch(App);
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let show = use_state(&cx, || true);
 
     let inner = match *show {

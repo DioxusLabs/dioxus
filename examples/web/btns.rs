@@ -23,7 +23,7 @@ fn main() {
     // dioxus::web::launch(App);
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     dbg!("rednering parent");
     cx.render(rsx! {
         div {
@@ -40,7 +40,7 @@ static App: Component<()> = |cx| {
     })
 };
 
-static But: Component<()> = |cx| {
+static But: Component = |cx| {
     let mut count = use_state(&cx, || 0);
 
     // let d = Dropper { name: "asd" };

@@ -9,7 +9,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     let props = MyProps {
         count: 0,
         live: true,

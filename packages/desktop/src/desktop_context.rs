@@ -56,7 +56,7 @@ pub struct WebviewWindowProps<'a> {
 ///
 ///
 ///
-pub fn WebviewWindow(cx: Context, props: &WebviewWindowProps) -> Element {
+pub fn WebviewWindow(cx: Scope<WebviewWindowProps>) -> Element {
     let dtcx = cx.consume_state::<RefCell<DesktopContext>>()?;
 
     cx.use_hook(
@@ -78,7 +78,7 @@ pub fn WebviewWindow(cx: Context, props: &WebviewWindowProps) -> Element {
 pub struct WindowHandle {}
 
 /// Get a handle to the current window from inside a component
-pub fn use_current_window(cx: Context) -> Option<WindowHandle> {
+pub fn use_current_window(cx: Scope) -> Option<WindowHandle> {
     todo!()
 }
 
@@ -90,7 +90,7 @@ fn syntax_works() {
     use dioxus_hooks::*;
     use dioxus_html as dioxus_elements;
 
-    static App: Component<()> = |cx| {
+    static App: Component = |cx| {
         cx.render(rsx! {
             // left window
             WebviewWindow {

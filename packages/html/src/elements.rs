@@ -1165,4 +1165,11 @@ builder_constructors! {
 
     };
 
+    /// Build a
+    /// [`<g>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/g)
+    /// element.
+    g <> "http://www.w3.org/2000/svg" {
+
+    };
+
 }

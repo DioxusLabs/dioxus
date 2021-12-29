@@ -33,7 +33,7 @@ fn main() {
     });
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let state = use_ref(&cx, || Calculator::new());
 
     let clear_display = state.read().display_value.eq("0");
