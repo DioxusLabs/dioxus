@@ -44,6 +44,4 @@ pub fn set_up_logging() {
         .chain(std::io::stdout())
         .apply()
         .unwrap();
-
-    debug!("finished setting up logging! yay!");
 }

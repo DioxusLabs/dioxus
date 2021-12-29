@@ -14,6 +14,9 @@ pub enum Error {
     #[error("Failed to write error")]
     FailedToWrite,
 
+    #[error("Building project failed")]
+    BuildFailed(String),
+
     #[error("Failed to write error")]
     CargoError(String),
 

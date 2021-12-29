@@ -1,10 +1,13 @@
 use crate::{
     cli::BuildOptions,
-    config::{Config, ExecutableType},
-    error::Result,
+    config::{CrateConfig, ExecutableType},
+    error::{Error, Result},
 };
 use log::{info, warn};
-use std::{io::Write, process::Command};
+use std::{
+    io::{Read, Write},
+    process::Command,
+};
 use wasm_bindgen_cli_support::Bindgen;
 
 pub struct BuildConfig {}
@@ -19,7 +22,7 @@ impl Default for BuildConfig {
     }
 }
 
-pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
+pub fn build(config: &CrateConfig, _build_config: &BuildConfig) -> Result<()> {
     /*
     [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     [2] Generate the appropriate build folders
@@ -28,7 +31,7 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     [5] Link up the html page to the wasm module
     */
 
-    let Config {
+    let CrateConfig {
         out_dir,
         crate_dir,
         target_dir,
@@ -60,9 +63,16 @@ pub fn build(config: &Config, _build_config: &BuildConfig) -> Result<()> {
     };
 
     let mut child = cmd.spawn()?;
-    let _err_code = child.wait()?;
+    let output = child.wait()?;
 
-    info!("Build complete!");
+    if output.success() {
+        info!("Build complete!");
+    } else {
+        log::error!("Build failed!");
+        let mut reason = String::new();
+        child.stderr.unwrap().read_to_string(&mut reason)?;
+        return Err(Error::BuildFailed(reason));
+    }
 
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("wasm");
@@ -129,6 +139,8 @@ fn gen_page(module: &str) -> String {
     <meta charset="UTF-8" />
   </head>
   <body>
+    <div id="dioxusroot">
+    </div>
     <!-- Note the usage of `type=module` here as this is an ES6 module -->
     <script type="module">
       import init from "{}";

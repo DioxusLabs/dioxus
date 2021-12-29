@@ -1,11 +1,12 @@
 use crate::{
     cli::{BuildOptions, DevelopOptions},
     error::Result,
+    LaunchCommand,
 };
 use std::{io::Write, path::PathBuf, process::Command};
 
 #[derive(Debug, Clone)]
-pub struct Config {
+pub struct CrateConfig {
     pub out_dir: PathBuf,
     pub crate_dir: PathBuf,
     pub workspace_dir: PathBuf,
@@ -23,7 +24,7 @@ pub enum ExecutableType {
     Example(String),
 }
 
-impl Config {
+impl CrateConfig {
     pub fn new() -> Result<Self> {
         let crate_dir = crate::cargo::crate_root()?;
         let workspace_dir = crate::cargo::workspace_root()?;
