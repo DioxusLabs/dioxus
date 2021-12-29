@@ -19,7 +19,7 @@ fn main() {
     dioxus::desktop::launch_cfg(App, |c| c.with_prerendered(content));
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let mut val = use_state(&cx, || 0);
 
     cx.render(rsx! {

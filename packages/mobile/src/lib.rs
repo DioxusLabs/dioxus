@@ -26,10 +26,7 @@ fn init_logging() {
 
 static HTML_CONTENT: &'static str = include_str!("../../desktop/src/index.html");
 
-pub fn launch(
-    root: Component<()>,
-    builder: fn(WindowBuilder) -> WindowBuilder,
-) -> anyhow::Result<()> {
+pub fn launch(root: Component, builder: fn(WindowBuilder) -> WindowBuilder) -> anyhow::Result<()> {
     launch_with_props(root, (), builder)
 }
 pub fn launch_with_props<P: 'static + Send>(

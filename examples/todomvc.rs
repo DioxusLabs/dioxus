@@ -22,7 +22,7 @@ pub struct TodoItem {
 }
 
 const STYLE: &str = include_str!("./assets/todomvc.css");
-const App: Component<()> = |cx| {
+const App: Component = |cx| {
     let draft = use_state(&cx, || "".to_string());
     let todos = use_state(&cx, || HashMap::<u32, Rc<TodoItem>>::new());
     let filter = use_state(&cx, || FilterState::All);

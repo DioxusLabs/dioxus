@@ -12,7 +12,7 @@ fn main() {
 
 const ENDPOINT: &str = "https://api.openweathermap.org/data/2.5/weather";
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     //
     let body = use_suspense(
         cx,

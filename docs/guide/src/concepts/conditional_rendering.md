@@ -83,7 +83,7 @@ fn App(cx: Scope)-> Element {
 
 This syntax even enables us to write a one-line component:
 ```rust
-static App: Component<()> = |cx| rsx!(cx, "hello world!");
+static App: Component = |cx| rsx!(cx, "hello world!");
 ```
 
 Alternatively, for match statements, we can just return the builder itself and pass it into a final, single call to `cx.render`:

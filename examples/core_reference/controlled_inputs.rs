@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 fn main() {}
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     cx.render(rsx! {
         div {
 
@@ -10,7 +10,7 @@ pub static Example: Component<()> = |cx| {
 };
 
 // A controlled component:
-static ControlledSelect: Component<()> = |cx| {
+static ControlledSelect: Component = |cx| {
     let value = use_state(&cx, || String::from("Grapefruit"));
     cx.render(rsx! {
         select { value: "{value}", onchange: move |evt| value.set(evt.value()),
@@ -23,7 +23,7 @@ static ControlledSelect: Component<()> = |cx| {
 };
 
 // TODO - how do uncontrolled things work?
-static UncontrolledSelect: Component<()> = |cx| {
+static UncontrolledSelect: Component = |cx| {
     let value = use_state(&cx, || String::new());
 
     cx.render(rsx! {

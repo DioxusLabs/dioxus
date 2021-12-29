@@ -24,7 +24,7 @@ fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
 /// In debug, this should also toss a warning.
 #[test]
 fn test_early_abort() {
-    const app: Component<()> = |cx| {
+    const app: Component = |cx| {
         let val = cx.use_hook(|_| 0, |f| f);
 
         *val += 1;

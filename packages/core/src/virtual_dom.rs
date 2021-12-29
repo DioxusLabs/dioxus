@@ -135,7 +135,7 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
-    pub fn new(root: Component<()>) -> Self {
+    pub fn new(root: Component) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -468,7 +468,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// static App: Component<()> = |cx, props| cx.render(rsx!{ "hello world" });
+    /// static App: Component = |cx|  cx.render(rsx!{ "hello world" });
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();
     ///
@@ -505,7 +505,7 @@ impl VirtualDom {
     ///     value: Shared<&'static str>,
     /// }
     ///
-    /// static App: Component<AppProps> = |cx, props|{
+    /// static App: Component<AppProps> = |cx| {
     ///     let val = cx.value.borrow();
     ///     cx.render(rsx! { div { "{val}" } })
     /// };

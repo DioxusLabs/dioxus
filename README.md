@@ -23,30 +23,24 @@
   </a>
   <!-- CI -->
   <a href="https://github.com/jkelleyrtp/dioxus/actions">
-    <img src="https://github.com/jkelleyrtp/dioxus/workflows/CI/badge.svg"
+    <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
       alt="CI status" />
   </a>
 </div>
 
 <div align="center">
   <h3>
-    <a href="https://docs.rs/dioxus">
-      API Docs
-    </a>
+    <a href="https://dioxuslabs.com/guide"> Guide </a>
     <span> | </span>
-    <a href="https://docs.rs/dioxus">
-      Website
-    </a>
+    <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
-    <a href="https://docs.rs/dioxus">
-      Examples
-    </a>
+    <a href="https://github.com/DioxusLabs/awesome-dioxus"> Examples </a>
   </h3>
 </div>
 
 <br/>
 
-Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
+Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust.
 
 ```rust
 fn app(cx: Scope) -> Element {
@@ -67,21 +61,21 @@ If you know React, then you already know Dioxus.
 ### Unique features:
 - Desktop apps running natively (no Electron!) in less than 10 lines of code.
 - Incredibly ergonomic and powerful state management.
-- Incredible inline documentation - hover and guides for all HTML elements, listeners, and events.
+- Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
 - Extremely memory efficient - 0 global allocations for steady-state components.
-- Multithreaded asynchronous coroutine scheduler for first-class async support.
-- And more! Read the full release post here.
+- Multi-channel asynchronous scheduler for first-class async support.
+- And more! Read the [full release post here](https://dioxuslabs.com/).
 
 ## Get Started with...
 
 <table style="width:100%" align="center">
     <tr >
-        <th><a href="https://dioxuslabs.com/book/">Web</a></th>
-        <th><a href="https://dioxuslabs.com/book/">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/book/">Mobile</a></th>
-        <th><a href="https://dioxuslabs.com/book/">State</a></th>
-        <th><a href="https://dioxuslabs.com/book/">Docs</a></th>
-        <th><a href="https://dioxuslabs.com/book/">Tools</a></th>
+        <th><a href="https://dioxuslabs.com/guide/">Web</a></th>
+        <th><a href="https://dioxuslabs.com/guide/">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/guide/">Mobile</a></th>
+        <th><a href="https://dioxuslabs.com/guide/">State</a></th>
+        <th><a href="https://dioxuslabs.com/guide/">Docs</a></th>
+        <th><a href="https://dioxuslabs.com/guide/">Tools</a></th>
     <tr>
 </table>
 
@@ -182,7 +176,7 @@ Dioxus is heavily inspired by React, but we want your transition to feel like an
 
 This project is licensed under the [MIT license].
 
-[MIT license]: https://github.com/tokio-rs/tokio/blob/master/LICENSE
+[MIT license]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
 
 ### Contribution
 

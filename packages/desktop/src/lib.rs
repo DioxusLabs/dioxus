@@ -28,11 +28,11 @@ use wry::{
     webview::{WebView, WebViewBuilder},
 };
 
-pub fn launch(root: Component<()>) {
+pub fn launch(root: Component) {
     launch_with_props(root, (), |c| c)
 }
 pub fn launch_cfg(
-    root: Component<()>,
+    root: Component,
     config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) {
     launch_with_props(root, (), config_builder)

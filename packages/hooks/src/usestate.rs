@@ -46,7 +46,7 @@ impl<'a, P, T> UseStateA<'a, T> for Scope<'a, P> {
 /// Usage:
 ///
 /// ```ignore
-/// const Example: Component<()> = |cx| {
+/// const Example: Component = |cx| {
 ///     let counter = use_state(&cx, || 0);
 ///
 ///     cx.render(rsx! {

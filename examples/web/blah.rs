@@ -24,7 +24,7 @@ fn main() {
     dioxus_web::launch(App)
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let mut state = use_state(&cx, || 0);
     cx.render(rsx! {
         div {

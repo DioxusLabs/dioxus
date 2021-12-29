@@ -5,4 +5,4 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component<()> = |cx, props| cx.render(rsx! { Fragment {} });
+pub static Example: Component = |cx| cx.render(rsx! { Fragment {} });

@@ -64,18 +64,18 @@ Here's what a few common tasks look like in Dioxus:
 
 Nested components with children and internal state:
 ```rust
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
   cx.render(rsx!( Toggle { "Toggle me" } ))
 }
 
 #[derive(PartialEq, Props)]
 struct ToggleProps { children: Element }
 
-fn Toggle(cx: Context, props: &ToggleProps) -> Element {
+fn Toggle(cx: Scope<ToggleProps>) -> Element {
   let mut toggled = use_state(&cx, || false);
   cx.render(rsx!{
     div {
-      {&props.children}
+      {&cx.props.children}
       button { onclick: move |_| toggled.set(true),
         {toggled.and_then(|| "On").or_else(|| "Off")}
       }
@@ -86,7 +86,7 @@ fn Toggle(cx: Context, props: &ToggleProps) -> Element {
 
 Controlled inputs:
 ```rust
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
   let value = use_state(&cx, String::new);
   cx.render(rsx!( 
     input {
@@ -100,7 +100,7 @@ fn App(cx: Context, props: &()) -> Element {
 
 Lists and Conditional rendering:
 ```rust
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
   let list = (0..10).map(|i| {
     rsx!(li { key: "{i}", "Value: {i}" })
   });
@@ -123,12 +123,12 @@ fn App(cx: Context, props: &()) -> Element {
 
 Tiny components:
 ```rust
-static App: Component<()> = |cx, _| rsx!(cx, div {"hello world!"});
+static App: Component = |cx, _| rsx!(cx, div {"hello world!"});
 ```
 
 Borrowed prop contents:
 ```rust
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
   let name = use_state(&cx, || String::from("example"));
   rsx!(cx, Child { title: name.as_str() })
 }
@@ -136,7 +136,7 @@ fn App(cx: Context, props: &()) -> Element {
 #[derive(Props)]
 struct ChildProps<'a> { title: &'a str }
 
-fn Child(cx: Context, props: &ChildProps) -> Element {
+fn Child(cx: Scope<ChildProps>) -> Element {
   rsx!(cx, "Hello {cx.props.title}")
 }
 ```
@@ -145,12 +145,12 @@ Global State
 ```rust
 struct GlobalState { name: String }
 
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
   use_provide_shared_state(cx, || GlobalState { name: String::from("Toby") })
   rsx!(cx, Leaf {})
 }
 
-fn Leaf(cx: Context, props: &()) -> Element {
+fn Leaf(cx: Scope<()>) -> Element {
   let state = use_consume_shared_state::<GlobalState>(cx)?;
   rsx!(cx, "Hello {state.name}")
 }
@@ -166,7 +166,7 @@ enum Route {
   Post(id)
 }
 
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
   let route = use_router(cx, Route::parse);
   cx.render(rsx!(div {
     {match route {
@@ -179,7 +179,7 @@ fn App(cx: Context, props: &()) -> Element {
 
 Suspense 
 ```rust
-fn App(cx: Context, props: &()) -> Element {
+fn App(cx: Scope<()>) -> Element {
   let doggo = use_suspense(cx,
     || async { reqwest::get("https://dog.ceo/api/breeds/image/random").await.unwrap().json::<Response>().await.unwrap() },
     |response| cx.render(rsx!( img { src: "{response.message}" }))

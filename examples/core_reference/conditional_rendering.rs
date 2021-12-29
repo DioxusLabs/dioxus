@@ -89,7 +89,7 @@ pub static Example2: Component<MyProps2> = |cx| {
     })
 };
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     let should_show = use_state(&cx, || false);
     let mut color_index = use_state(&cx, || 0);
     let color = match *color_index % 2 {

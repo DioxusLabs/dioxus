@@ -21,7 +21,7 @@ use dioxus::prelude::*;
 
 // By default, components with no props are always memoized.
 // A props of () is considered empty.
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     cx.render(rsx! {
         div { "100% memoized!" }
     })
@@ -61,9 +61,9 @@ pub struct MyProps3<'a> {
     name: &'a str,
 }
 // We need to manually specify a lifetime that ensures props and scope (the component's state) share the same lifetime.
-// Using the `pub static Example: Component<()>` pattern _will_ specify a lifetime, but that lifetime will be static which might
+// Using the `pub static Example: Component` pattern _will_ specify a lifetime, but that lifetime will be static which might
 // not exactly be what you want
-fn Example3<'a>(cx: Context<'a>, props: &'a MyProps3) -> DomTree<'a> {
+fn Example3(cx: Scope<'a, MyProps3<'a>>) -> DomTree {
     cx.render(rsx! {
         div { "Not memoized! {cx.props.name}" }
     })
@@ -77,7 +77,7 @@ pub struct MyProps4<'a> {
 }
 
 // We need to manually specify a lifetime that ensures props and scope (the component's state) share the same lifetime.
-fn Example4<'a>(cx: Context<'a>, props: &'a MyProps4) -> DomTree<'a> {
+fn Example4<'a>(cx: Scope<'a, MyProps4<'a>>) -> DomTree {
     cx.render(rsx! {
         div { "Not memoized!", onclick: move |_| (props.onhandle)() }
     })

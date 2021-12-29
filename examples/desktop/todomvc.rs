@@ -32,7 +32,7 @@ pub struct TodoItem {
 }
 pub type Todos = HashMap<u32, TodoItem>;
 
-pub static App: Component<()> = |cx| {
+pub static App: Component = |cx| {
     // Share our TodoList to the todos themselves
     use_provide_state(cx, Todos::new);
 
@@ -140,7 +140,7 @@ pub fn TodoEntry((cx, props): Scope<TodoEntryProps>) -> Element {
     let todos = use_shared_state::<Todos>(cx)?;
 
     let _todos = todos.read();
-    let todo = _todos.get(&props.id)?;
+    let todo = _todos.get(&cx.props.id)?;
 
     let is_editing = use_state(&cx, || false);
     let completed = if todo.checked { "completed" } else { "" };
@@ -150,7 +150,7 @@ pub fn TodoEntry((cx, props): Scope<TodoEntryProps>) -> Element {
             div { class: "view"
                 input { class: "toggle" r#type: "checkbox" id: "cbg-{todo.id}" checked: "{todo.checked}"
                     onchange: move |evt| {
-                        if let Some(todo) = todos.write().get_mut(&props.id) { 
+                        if let Some(todo) = todos.write().get_mut(&cx.props.id) { 
                             todo.checked = evt.value.parse().unwrap()
                         }
                     }
@@ -163,7 +163,7 @@ pub fn TodoEntry((cx, props): Scope<TodoEntryProps>) -> Element {
                {is_editing.then(|| rsx!{
                     input { value: "{todo.contents}"
                         oninput: move |evt| {
-                            if let Some(todo) = todos.write().get_mut(&props.id) { 
+                            if let Some(todo) = todos.write().get_mut(&cx.props.id) { 
                                 todo.contents = evt.value
                             }
                         },

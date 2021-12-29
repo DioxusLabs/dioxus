@@ -84,11 +84,11 @@ mod ric_raf;
 ///     dioxus_web::launch(App);
 /// }
 ///
-/// static App: Component<()> = |cx| {
+/// static App: Component = |cx| {
 ///     rsx!(cx, div {"hello world"})
 /// }
 /// ```
-pub fn launch(root_component: Component<()>) {
+pub fn launch(root_component: Component) {
     launch_with_props(root_component, (), |c| c);
 }
 

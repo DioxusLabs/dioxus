@@ -7,7 +7,7 @@ fn main() {
     println!("{}", ssr::render_vdom(&vdom));
 }
 
-static APP: Component<()> = |cx| {
+static APP: Component = |cx| {
     cx.render(rsx!(
         div {
             h1 { "Title" }

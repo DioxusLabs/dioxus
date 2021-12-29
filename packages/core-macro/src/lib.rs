@@ -30,7 +30,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 ///
 /// ## Complete Reference Guide:
 /// ```
-/// const Example: Component<()> = |cx, props|{
+/// const Example: Component = |cx| {
 ///     let formatting = "formatting!";
 ///     let formatting_tuple = ("a", "b");
 ///     let lazy_fmt = format_args!("lazily formatted text");
@@ -161,7 +161,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 ///     pub struct BallerProps {}
 ///
 ///     /// This component totally balls
-///     pub fn Baller(cx: Context<()>) -> DomTree {
+///     pub fn Baller(cx: Scope<()>) -> DomTree {
 ///         todo!()
 ///     }
 /// }
@@ -172,7 +172,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 /// }
 ///
 /// /// This component is taller than most :)
-/// pub fn Taller(cx: Context<TallerProps>) -> DomTree {
+/// pub fn Taller(cx: Scope<TallerProps>) -> DomTree {
 ///     let b = true;
 ///     todo!()
 /// }

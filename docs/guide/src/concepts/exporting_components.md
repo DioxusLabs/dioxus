@@ -25,7 +25,7 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
-fn App((cx, props): Component<()>) -> Element {} 
+fn App((cx, props): Component) -> Element {} 
 
 #[derive(PartialEq, Props)]
 struct PostProps{}
@@ -92,7 +92,7 @@ fn main() {
 
 mod post;
 
-fn App((cx, props): Component<()>) -> Element {
+fn App((cx, props): Component) -> Element {
     cx.render(rsx!{
         post::Post {
             id: Uuid::new_v4(),
@@ -191,7 +191,7 @@ fn main() {
 
 mod post;
 
-fn App((cx, props): Component<()>) -> Element {
+fn App((cx, props): Component) -> Element {
     cx.render(rsx!{
         post::Post {
             id: Uuid::new_v4(),

@@ -24,7 +24,7 @@ fn main() {
     .unwrap();
 }
 
-pub static App: Component<()> = |cx| {
+pub static App: Component = |cx| {
     cx.render(rsx!(
         div { class: "overflow-hidden"
             link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel:"stylesheet" }
@@ -39,7 +39,7 @@ pub static App: Component<()> = |cx| {
     ))
 };
 
-pub static Header: Component<()> = |cx| {
+pub static Header: Component = |cx| {
     cx.render(rsx! {
         div {
             header { class: "text-gray-400 bg-gray-900 body-font"
@@ -65,7 +65,7 @@ pub static Header: Component<()> = |cx| {
     })
 };
 
-pub static Hero: Component<()> = |cx| {
+pub static Hero: Component = |cx| {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -103,7 +103,7 @@ pub static Hero: Component<()> = |cx| {
         }
     })
 };
-pub static Entry: Component<()> = |cx| {
+pub static Entry: Component = |cx| {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -116,7 +116,7 @@ pub static Entry: Component<()> = |cx| {
     })
 };
 
-pub static StacksIcon: Component<()> = |cx| {
+pub static StacksIcon: Component = |cx| {
     cx.render(rsx!(
         svg {
             xmlns: "http://www.w3.org/2000/svg"
@@ -131,7 +131,7 @@ pub static StacksIcon: Component<()> = |cx| {
         }
     ))
 };
-pub static RightArrowIcon: Component<()> = |cx| {
+pub static RightArrowIcon: Component = |cx| {
     cx.render(rsx!(
         svg {
             fill: "none"

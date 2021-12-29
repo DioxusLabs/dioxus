@@ -31,7 +31,7 @@ impl SsrRenderer {
         }
     }
 
-    pub fn render_lazy<'a>(&'a mut self, f: Option<LazyNodes<'a, '_>>) -> String {
+    pub fn render_lazy<'a>(&'a mut self, f: LazyNodes<'a, '_>) -> String {
         let bump = &mut self.inner as *mut _;
         let s = self.render_inner(f);
         // reuse the bump's memory
@@ -39,7 +39,7 @@ impl SsrRenderer {
         s
     }
 
-    fn render_inner<'a>(&'a self, f: Option<LazyNodes<'a, '_>>) -> String {
+    fn render_inner<'a>(&'a self, f: LazyNodes<'a, '_>) -> String {
         let factory = NodeFactory::new(&self.inner);
         let root = f.into_vnode(factory);
         format!(
@@ -53,7 +53,7 @@ impl SsrRenderer {
     }
 }
 
-pub fn render_lazy<'a>(f: Option<LazyNodes<'a, '_>>) -> String {
+pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     let bump = bumpalo::Bump::new();
     let borrowed = &bump;
 
@@ -113,7 +113,7 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
 ///
 /// ## Example
 /// ```ignore
-/// static App: Component<()> = |cx, props|cx.render(rsx!(div { "hello world" }));
+/// static App: Component = |cx| cx.render(rsx!(div { "hello world" }));
 /// let mut vdom = VirtualDom::new(App);
 /// vdom.rebuild();
 ///
@@ -301,13 +301,13 @@ mod tests {
     use dioxus_core_macro::*;
     use dioxus_html as dioxus_elements;
 
-    static SIMPLE_APP: Component<()> = |cx| {
+    static SIMPLE_APP: Component = |cx| {
         cx.render(rsx!(div {
             "hello world!"
         }))
     };
 
-    static SLIGHTLY_MORE_COMPLEX: Component<()> = |cx| {
+    static SLIGHTLY_MORE_COMPLEX: Component = |cx| {
         cx.render(rsx! {
             div {
                 title: "About W3Schools"
@@ -326,14 +326,14 @@ mod tests {
         })
     };
 
-    static NESTED_APP: Component<()> = |cx| {
+    static NESTED_APP: Component = |cx| {
         cx.render(rsx!(
             div {
                 SIMPLE_APP {}
             }
         ))
     };
-    static FRAGMENT_APP: Component<()> = |cx| {
+    static FRAGMENT_APP: Component = |cx| {
         cx.render(rsx!(
             div { "f1" }
             div { "f2" }
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn styles() {
-        static STLYE_APP: Component<()> = |cx| {
+        static STLYE_APP: Component = |cx| {
             cx.render(rsx! {
                 div { color: "blue", font_size: "46px"  }
             })

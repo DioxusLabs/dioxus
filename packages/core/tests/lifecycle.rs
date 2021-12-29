@@ -45,7 +45,7 @@ fn manual_diffing() {
 
 #[test]
 fn events_generate() {
-    static App: Component<()> = |cx| {
+    static App: Component = |cx| {
         let count = cx.use_hook(|_| 0, |f| f);
 
         let inner = match *count {
@@ -104,7 +104,7 @@ fn events_generate() {
 
 #[test]
 fn components_generate() {
-    static App: Component<()> = |cx| {
+    static App: Component = |cx| {
         let render_phase = cx.use_hook(|_| 0, |f| f);
         *render_phase += 1;
 
@@ -121,7 +121,7 @@ fn components_generate() {
         })
     };
 
-    static Child: Component<()> = |cx| {
+    static Child: Component = |cx| {
         cx.render(rsx! {
             h1 {}
         })
@@ -220,7 +220,7 @@ fn components_generate() {
 
 #[test]
 fn component_swap() {
-    static App: Component<()> = |cx| {
+    static App: Component = |cx| {
         let render_phase = cx.use_hook(|_| 0, |f| f);
         *render_phase += 1;
 
@@ -259,7 +259,7 @@ fn component_swap() {
         })
     };
 
-    static NavBar: Component<()> = |cx| {
+    static NavBar: Component = |cx| {
         println!("running navbar");
         cx.render(rsx! {
             h1 {
@@ -269,7 +269,7 @@ fn component_swap() {
         })
     };
 
-    static NavLink: Component<()> = |cx| {
+    static NavLink: Component = |cx| {
         println!("running navlink");
         cx.render(rsx! {
             h1 {
@@ -278,7 +278,7 @@ fn component_swap() {
         })
     };
 
-    static Dashboard: Component<()> = |cx| {
+    static Dashboard: Component = |cx| {
         println!("running dashboard");
         cx.render(rsx! {
             div {
@@ -287,7 +287,7 @@ fn component_swap() {
         })
     };
 
-    static Results: Component<()> = |cx| {
+    static Results: Component = |cx| {
         println!("running results");
         cx.render(rsx! {
             div {

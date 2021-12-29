@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     cx.render(rsx! {
         ButtonList {}
         NonUpdatingEvents {}
@@ -16,7 +16,7 @@ pub static Example: Component<()> = |cx| {
 };
 
 /// We can use `set_name` in multiple closures; the closures automatically *copy* the reference to set_name.
-static ButtonList: Component<()> = |cx| {
+static ButtonList: Component = |cx| {
     let name = use_state(&cx, || "...?");
 
     let names = ["jack", "jill", "john", "jane"]
@@ -33,7 +33,7 @@ static ButtonList: Component<()> = |cx| {
 
 /// This shows how listeners may be without a visible change in the display.
 /// Check the console.
-static NonUpdatingEvents: Component<()> = |cx| {
+static NonUpdatingEvents: Component = |cx| {
     rsx!(cx, div {
         button {
             onclick: move |_| log::info!("Did not cause any updates!")
@@ -42,7 +42,7 @@ static NonUpdatingEvents: Component<()> = |cx| {
     })
 };
 
-static DisablePropagation: Component<()> = |cx| {
+static DisablePropagation: Component = |cx| {
     rsx!(cx,
         div {
             onclick: move |_| log::info!("event propagated to the div!")

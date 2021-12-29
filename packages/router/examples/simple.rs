@@ -10,7 +10,7 @@ fn main() {
     dioxus_web::launch(APP);
 }
 
-static APP: Component<()> = |cx| {
+static APP: Component = |cx| {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     enum Route {
         Home,

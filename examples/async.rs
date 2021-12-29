@@ -11,7 +11,7 @@ async fn main() {
     dioxus::desktop::launch(App);
 }
 
-pub static App: Component<()> = |cx| {
+pub static App: Component = |cx| {
     let count = use_state(&cx, || 0);
     let mut direction = use_state(&cx, || 1);
 

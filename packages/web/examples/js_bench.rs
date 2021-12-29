@@ -106,7 +106,7 @@ impl Label {
     }
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let mut items = use_ref(&cx, || vec![]);
     let mut selected = use_state(&cx, || None);
 
@@ -219,24 +219,3 @@ static NOUNS: &[&str] = &[
     "table", "chair", "house", "bbq", "desk", "car", "pony", "cookie", "sandwich", "burger",
     "pizza", "mouse", "keyboard",
 ];
-
-// #[derive(PartialEq, Props)]
-// struct RowProps<'a> {
-//     row_id: usize,
-//     label: &'a Label,
-// }
-
-// fn Row(cx: Context, props: &RowProps) -> Element {
-//     rsx!(cx, tr {
-//         td { class:"col-md-1", "{cx.props.row_id}" }
-//         td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
-//             a { class: "lbl", {cx.props.label.labels} }
-//         }
-//         td { class: "col-md-1"
-//             a { class: "remove", onclick: move |_| {/* remove */}
-//                 span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
-//             }
-//         }
-//         td { class: "col-md-6" }
-//     })
-// }

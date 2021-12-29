@@ -19,7 +19,7 @@ h1   {color: blue;}
 p    {color: red;}
 "#;
 
-pub static Example: Component<()> = |cx| {
+pub static Example: Component = |cx| {
     cx.render(rsx! {
         head { style { "{STYLE}" } }
         body {

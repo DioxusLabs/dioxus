@@ -20,7 +20,7 @@ use dioxus_html as dioxus_elements;
 use rand::prelude::*;
 
 fn main() {
-    static App: Component<()> = |cx| {
+    static App: Component = |cx| {
         let mut rng = SmallRng::from_entropy();
         let rows = (0..10_000_usize).map(|f| {
             let label = Label::new(&mut rng);

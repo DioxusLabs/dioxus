@@ -19,7 +19,7 @@ pub struct Client {
     pub description: String,
 }
 
-static App: Component<()> = |cx| {
+static App: Component = |cx| {
     let mut clients = use_ref(&cx, || vec![] as Vec<Client>);
     let mut scene = use_state(&cx, || Scene::ClientsList);
 
