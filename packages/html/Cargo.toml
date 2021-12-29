@@ -7,7 +7,7 @@ description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Vir
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
+documentation = "https://docs.rs/dioxus"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
