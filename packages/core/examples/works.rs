@@ -52,12 +52,3 @@ fn great_grandchild<'a>(cx: Scope<'a, Grandchild>) -> Element<'a> {
         }
     })
 }
-
-/*
-can we implement memoization as a wrapper or something? Like we just intercept the
-render function?
-
-
-
-
-*/
