@@ -92,13 +92,19 @@ impl ToTokens for InlinePropsBody {
             quote! { #[derive(Props)] }
         };
 
+        let lifetime = if generics.params.is_empty() {
+            quote! {}
+        } else {
+            quote! { 'a, }
+        };
+
         out_tokens.append_all(quote! {
             #modifiers
             #vis struct #struct_name #generics {
                 #(#fields),*
             }
 
-            #vis fn #ident #generics (#cx_token: Scope<'a, #struct_name #generics>) #output {
+            #vis fn #ident #generics (#cx_token: Scope<#lifetime #struct_name #generics>) #output {
                 let #struct_name { #(#field_names),* } = &cx.props;
                 #block
             }

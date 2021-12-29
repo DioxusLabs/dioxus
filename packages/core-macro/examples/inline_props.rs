@@ -4,19 +4,19 @@ fn main() {}
 
 type Element<'a> = ();
 
-pub struct Scope<'a, T> {
+pub struct Scope<'a, T = ()> {
     props: &'a T,
 }
 
-#[inline_props]
-pub fn component(
-    cx: Scope,
+// #[inline_props]
+pub fn component<'a>(
+    cx: Scope<'a>,
     chkk: String,
     chkk2: String,
     r: u32,
     cat: &'a str,
     drd: String,
     e: String,
-) -> Element {
+) -> Element<'a> {
     let r = chkk.len();
 }

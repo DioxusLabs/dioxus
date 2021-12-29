@@ -49,7 +49,7 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user experiences in Rust.
 
 ```rust
-fn app(cx: Scope<()>) -> Element {
+fn app(cx: Scope) -> Element {
     let mut count = use_state(&cx, || 0);
 
     cx.render(rsx!(
@@ -84,18 +84,6 @@ If you know React, then you already know Dioxus.
         <th><a href="https://dioxuslabs.com/book/">Tools</a></th>
     <tr>
 </table>
-
-Available cargo features:
-- default: core (macro, hooks, html)
-- macro: support for `Props` and `rsx` macros
-- hooks: foundational hooks like `use_state`, `use_ref`, etc.
-- html: the entire namespace of `html` elements, their listeners, and attributes
-- router: a cross-platform (web and desktop) solution for global app routing 
-- liveview: a threadpool to spawn new VirtualDoms and their handles in
-- ssr: render the virtualdom to a string
-- web: render the your app on the web
-- desktop: render your app locally rendered with webview 
-- mobile: render your app on your device rendered with webview
 
 ## Examples:
 

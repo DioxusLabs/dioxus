@@ -2,6 +2,7 @@ use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_router::*;
+use serde::{Deserialize, Serialize};
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -10,18 +11,19 @@ fn main() {
 }
 
 static APP: Component<()> = |cx| {
-    #[derive(Clone, Debug, PartialEq)]
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     enum Route {
         Home,
         About,
         NotFound,
     }
+    impl Default for Route {
+        fn default() -> Self {
+            Route::Home
+        }
+    }
 
-    let route = use_router(&cx, |s| match s {
-        "/" => Route::Home,
-        "/about" => Route::About,
-        _ => Route::NotFound,
-    });
+    let route = use_router(&cx, |c| {});
 
     cx.render(rsx! {
         div {
@@ -31,8 +33,8 @@ static APP: Component<()> = |cx| {
                 Route::NotFound => rsx!(h1 { "NotFound" }),
             }}
             nav {
-                Link { to: Route::Home, href: |_| "/".to_string() }
-                Link { to: Route::About, href: |_| "/about".to_string() }
+                Link { to: Route::Home, href: "/" }
+                Link { to: Route::About, href: "/about" }
             }
         }
     })

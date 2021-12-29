@@ -609,7 +609,7 @@ impl ScopeState {
     ///
     /// This is a "fundamental" operation and should only be called during initialization of a hook.
     ///
-    /// For a hook that provides the same functionality, use `use_provide_state` and `use_consume_state` instead.
+    /// For a hook that provides the same functionality, use `use_provide_context` and `use_consume_context` instead.
     ///
     /// When the component is dropped, so is the context. Be aware of this behavior when consuming
     /// the context via Rc/Weak.
@@ -620,7 +620,7 @@ impl ScopeState {
     /// struct SharedState(&'static str);
     ///
     /// static App: Component<()> = |cx, props|{
-    ///     cx.use_hook(|_| cx.provide_state(SharedState("world")), |_| {}, |_| {});
+    ///     cx.use_hook(|_| cx.provide_context(SharedState("world")), |_| {}, |_| {});
     ///     rsx!(cx, Child {})
     /// }
     ///
@@ -629,7 +629,7 @@ impl ScopeState {
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_state<T: 'static>(&self, value: T) {
+    pub fn provide_context<T: 'static>(&self, value: T) {
         self.shared_contexts
             .borrow_mut()
             .insert(TypeId::of::<T>(), Rc::new(value))
@@ -638,7 +638,7 @@ impl ScopeState {
     }
 
     /// Try to retrieve a SharedState with type T from the any parent Scope.
-    pub fn consume_state<T: 'static>(&self) -> Option<Rc<T>> {
+    pub fn consume_context<T: 'static>(&self) -> Option<Rc<T>> {
         if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
             Some(shared.clone().downcast::<T>().unwrap())
         } else {

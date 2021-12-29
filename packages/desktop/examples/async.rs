@@ -1,29 +1,30 @@
-//! Example: README.md showcase
-//!
-//! The example from the README.md.
-
-use std::time::Duration;
-
 use dioxus::prelude::*;
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
+use std::time::Duration;
 
 fn main() {
-    // simple_logger::init().unwrap();
     dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope<()>) -> Element {
-    let mut count = use_state(&cx, || 0);
-    log::debug!("count is {:?}", count);
+    let count = use_state(&cx, || 0);
 
-    cx.push_future(|| async move {
-        tokio::time::sleep(Duration::from_millis(1000)).await;
-        println!("count is now {:?}", count);
-        count += 1;
-    });
+    // push the futureo on initialization
+    cx.use_hook(
+        |_| {
+            cx.push_future({
+                let count = count.for_async();
+                async move {
+                    tokio::time::sleep(Duration::from_millis(1000)).await;
+                    *count.get_mut() += 1;
+                }
+            });
+        },
+        |_| {},
+    );
 
     cx.render(rsx! {
         div {
