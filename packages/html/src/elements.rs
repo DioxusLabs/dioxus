@@ -1109,67 +1109,336 @@ builder_constructors! {
     /// element.
     svg <> "http://www.w3.org/2000/svg" { };
 
-    /// Build a
-    /// [`<path>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/path)
-    /// element.
-    path <> "http://www.w3.org/2000/svg" {
 
-    };
+    // /// Build a
+    // /// [`<a>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/a)
+    // /// element.
+    // a <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<animate>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animate)
+    /// element.
+    animate <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<animateMotion>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animateMotion)
+    /// element.
+    animateMotion <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<animateTransform>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animateTransform)
+    /// element.
+    animateTransform <> "http://www.w3.org/2000/svg" {};
 
     /// Build a
     /// [`<circle>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/circle)
     /// element.
-    circle <>  "http://www.w3.org/2000/svg" {
+    circle <> "http://www.w3.org/2000/svg" {};
 
-    };
+    /// Build a
+    /// [`<clipPath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/clipPath)
+    /// element.
+    clipPath <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<defs>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/defs)
+    /// element.
+    defs <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<desc>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/desc)
+    /// element.
+    desc <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<discard>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/discard)
+    /// element.
+    discard <> "http://www.w3.org/2000/svg" {};
 
     /// Build a
     /// [`<ellipse>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/ellipse)
     /// element.
-    ellipse <> "http://www.w3.org/2000/svg" {
-
-    };
+    ellipse <> "http://www.w3.org/2000/svg" {};
 
     /// Build a
-    /// [`<line>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/line)
+    /// [`<feBlend>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feBlend)
     /// element.
-    line <> "http://www.w3.org/2000/svg" {
-
-    };
+    feBlend <> "http://www.w3.org/2000/svg" {};
 
     /// Build a
-    /// [`<polygon>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polygon)
+    /// [`<feColorMatrix>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feColorMatrix)
     /// element.
-    polygon <> "http://www.w3.org/2000/svg" {
-
-    };
+    feColorMatrix <> "http://www.w3.org/2000/svg" {};
 
     /// Build a
-    /// [`<polyline>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polyline)
+    /// [`<feComponentTransfer>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feComponentTransfer)
     /// element.
-    polyline <> "http://www.w3.org/2000/svg" {
-
-    };
+    feComponentTransfer <> "http://www.w3.org/2000/svg" {};
 
     /// Build a
-    /// [`<rect>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/rect)
+    /// [`<feComposite>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feComposite)
     /// element.
-    rect <> "http://www.w3.org/2000/svg" {
-
-    };
+    feComposite <> "http://www.w3.org/2000/svg" {};
 
     /// Build a
-    /// [`<image>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/image)
+    /// [`<feConvolveMatrix>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feConvolveMatrix)
     /// element.
-    image <> "http://www.w3.org/2000/svg" {
+    feConvolveMatrix <> "http://www.w3.org/2000/svg" {};
 
-    };
+    /// Build a
+    /// [`<feDiffuseLighting>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDiffuseLighting)
+    /// element.
+    feDiffuseLighting <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feDisplacementMap>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDisplacementMap)
+    /// element.
+    feDisplacementMap <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feDistantLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDistantLight)
+    /// element.
+    feDistantLight <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feDropShadow>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDropShadow)
+    /// element.
+    feDropShadow <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feFlood>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFlood)
+    /// element.
+    feFlood <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feFuncA>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncA)
+    /// element.
+    feFuncA <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feFuncB>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncB)
+    /// element.
+    feFuncB <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feFuncG>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncG)
+    /// element.
+    feFuncG <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feFuncR>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncR)
+    /// element.
+    feFuncR <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feGaussianBlur>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feGaussianBlur)
+    /// element.
+    feGaussianBlur <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feImage>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feImage)
+    /// element.
+    feImage <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feMerge>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMerge)
+    /// element.
+    feMerge <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feMergeNode>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMergeNode)
+    /// element.
+    feMergeNode <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feMorphology>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMorphology)
+    /// element.
+    feMorphology <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feOffset>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feOffset)
+    /// element.
+    feOffset <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<fePointLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/fePointLight)
+    /// element.
+    fePointLight <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feSpecularLighting>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feSpecularLighting)
+    /// element.
+    feSpecularLighting <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feSpotLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feSpotLight)
+    /// element.
+    feSpotLight <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feTile>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feTile)
+    /// element.
+    feTile <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<feTurbulence>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feTurbulence)
+    /// element.
+    feTurbulence <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<filter>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/filter)
+    /// element.
+    filter <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<foreignObject>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/foreignObject)
+    /// element.
+    foreignObject <> "http://www.w3.org/2000/svg" {};
 
     /// Build a
     /// [`<g>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/g)
     /// element.
-    g <> "http://www.w3.org/2000/svg" {
+    g <> "http://www.w3.org/2000/svg" {};
 
-    };
+    /// Build a
+    /// [`<hatch>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/hatch)
+    /// element.
+    hatch <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<hatchpath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/hatchpath)
+    /// element.
+    hatchpath <> "http://www.w3.org/2000/svg" {};
+
+    // /// Build a
+    // /// [`<image>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/image)
+    // /// element.
+    // image <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<line>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/line)
+    /// element.
+    line <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<linearGradient>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/linearGradient)
+    /// element.
+    linearGradient <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<marker>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/marker)
+    /// element.
+    marker <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<mask>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/mask)
+    /// element.
+    mask <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<metadata>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/metadata)
+    /// element.
+    metadata <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<mpath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/mpath)
+    /// element.
+    mpath <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<path>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/path)
+    /// element.
+    path <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<pattern>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/pattern)
+    /// element.
+    pattern <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<polygon>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polygon)
+    /// element.
+    polygon <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<polyline>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polyline)
+    /// element.
+    polyline <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<radialGradient>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/radialGradient)
+    /// element.
+    radialGradient <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<rect>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/rect)
+    /// element.
+    rect <> "http://www.w3.org/2000/svg" {};
+
+    // /// Build a
+    // /// [`<script>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/script)
+    // /// element.
+    // script <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<set>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/set)
+    /// element.
+    set <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<stop>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/stop)
+    /// element.
+    stop <> "http://www.w3.org/2000/svg" {};
+
+    // /// Build a
+    // /// [`<style>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/style)
+    // /// element.
+    // style <> "http://www.w3.org/2000/svg" {};
+
+    // /// Build a
+    // /// [`<svg>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg)
+    // /// element.
+    // svg <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<switch>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/switch)
+    /// element.
+    switch <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<symbol>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/symbol)
+    /// element.
+    symbol <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<text>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/text)
+    /// element.
+    text <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<textPath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/textPath)
+    /// element.
+    textPath <> "http://www.w3.org/2000/svg" {};
+
+    // /// Build a
+    // /// [`<title>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/title)
+    // /// element.
+    // title <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<tspan>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/tspan)
+    /// element.
+    tspan <> "http://www.w3.org/2000/svg" {};
+
+    /// Build a
+    /// [`<view>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/view)
+    /// element.
+    view <> "http://www.w3.org/2000/svg" {};
+
+    // /// Build a
+    // /// [`<use>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/use)
+    // /// element.
+    // use <> "http://www.w3.org/2000/svg" {};
+
 
 }
