@@ -2,26 +2,30 @@
 //!
 //! The example from the README.md.
 
+use dioxus::prelude::*;
 use std::time::Duration;
 
-use dioxus::prelude::*;
 fn main() {
     dioxus::desktop::launch(app);
 }
 
-fn app(cx: Scope<()>) -> Element {
-    let mut count = use_state(&cx, || 0);
+fn app(cx: Scope) -> Element {
+    let count = use_state(&cx, || 0);
 
-    cx.push_future(|| async move {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        count += 1;
+    use_future(&cx, || {
+        for_async![count];
+        async move {
+            while let _ = tokio::time::sleep(Duration::from_millis(1000)).await {
+                *count.modify() += 1;
+            }
+        }
     });
 
     cx.render(rsx! {
         div {
             h1 { "High-Five counter: {count}" }
             button {
-                onclick: move |_| count +=1 ,
+                onclick: move |_| *count.modify() += 1,
                 "Click me!"
             }
         }

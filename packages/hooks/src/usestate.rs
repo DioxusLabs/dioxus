@@ -2,19 +2,8 @@ use dioxus_core::prelude::*;
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     fmt::{Debug, Display},
-    ops::Not,
     rc::Rc,
 };
-
-pub trait UseStateA<'a, T> {
-    fn use_state(&self, initial_state_fn: impl FnOnce() -> T) -> UseState<'a, T>;
-}
-
-impl<'a, P, T> UseStateA<'a, T> for Scope<'a, P> {
-    fn use_state(&self, initial_state_fn: impl FnOnce() -> T) -> UseState<'a, T> {
-        use_state(self.scope, initial_state_fn)
-    }
-}
 
 /// Store state between component renders!
 ///
@@ -109,6 +98,7 @@ where
         UseState { inner: self.inner }
     }
 }
+
 impl<T: Debug> Debug for UseState<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.inner.current_val)
@@ -157,21 +147,21 @@ impl<'a, T: 'static> UseState<'a, T> {
         })
     }
 
-    pub fn for_async(&self) -> AsyncUseState<T> {
-        AsyncUseState {
-            re_render: self.inner.update_callback.clone(),
-            wip: self.inner.wip.clone(),
-            inner: self.inner.current_val.clone(),
-        }
+    pub fn for_async(self) -> UseState<'static, T> {
+        todo!()
     }
 
-    pub fn split_for_async(&'a self) -> (&'a Self, AsyncUseState<T>) {
-        (self, self.for_async())
+    pub fn wtih(self, f: impl FnOnce(&mut T)) {
+        let mut val = self.inner.wip.borrow_mut();
+
+        if let Some(inner) = val.as_mut() {
+            f(inner);
+        }
     }
 }
 
 impl<'a, T: 'static + ToOwned<Owned = T>> UseState<'a, T> {
-    /// Gain mutable access to the new value via RefMut.
+    /// Gain mutable access to the new value via [`RefMut`].
     ///
     /// If `modify` is called, then the component will re-render.
     ///
@@ -207,57 +197,10 @@ impl<'a, T> std::ops::Deref for UseState<'a, T> {
     }
 }
 
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
-
-impl<'a, T: Copy + Add<T, Output = T>> Add<T> for UseState<'a, T> {
-    type Output = T;
-
-    fn add(self, rhs: T) -> Self::Output {
-        self.inner.current_val.add(rhs)
-    }
-}
-impl<'a, T: Copy + Add<T, Output = T>> AddAssign<T> for UseState<'a, T> {
-    fn add_assign(&mut self, rhs: T) {
-        self.set(self.inner.current_val.add(rhs));
-    }
-}
-impl<'a, T: Copy + Sub<T, Output = T>> Sub<T> for UseState<'a, T> {
-    type Output = T;
-
-    fn sub(self, rhs: T) -> Self::Output {
-        self.inner.current_val.sub(rhs)
-    }
-}
-impl<'a, T: Copy + Sub<T, Output = T>> SubAssign<T> for UseState<'a, T> {
-    fn sub_assign(&mut self, rhs: T) {
-        self.set(self.inner.current_val.sub(rhs));
-    }
-}
-
-/// MUL
-impl<'a, T: Copy + Mul<T, Output = T>> Mul<T> for UseState<'a, T> {
-    type Output = T;
-
-    fn mul(self, rhs: T) -> Self::Output {
-        self.inner.current_val.mul(rhs)
-    }
-}
-impl<'a, T: Copy + Mul<T, Output = T>> MulAssign<T> for UseState<'a, T> {
-    fn mul_assign(&mut self, rhs: T) {
-        self.set(self.inner.current_val.mul(rhs));
-    }
-}
-/// DIV
-impl<'a, T: Copy + Div<T, Output = T>> Div<T> for UseState<'a, T> {
-    type Output = T;
-
-    fn div(self, rhs: T) -> Self::Output {
-        self.inner.current_val.div(rhs)
-    }
-}
-impl<'a, T: Copy + Div<T, Output = T>> DivAssign<T> for UseState<'a, T> {
-    fn div_assign(&mut self, rhs: T) {
-        self.set(self.inner.current_val.div(rhs));
+// enable displaty for the handle
+impl<'a, T: 'static + Display> std::fmt::Display for UseState<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner.current_val)
     }
 }
 impl<'a, V, T: PartialEq<V>> PartialEq<V> for UseState<'a, T> {
@@ -265,57 +208,10 @@ impl<'a, V, T: PartialEq<V>> PartialEq<V> for UseState<'a, T> {
         self.get() == other
     }
 }
-impl<'a, O, T: Not<Output = O> + Copy> Not for UseState<'a, T> {
+impl<'a, O, T: std::ops::Not<Output = O> + Copy> std::ops::Not for UseState<'a, T> {
     type Output = O;
 
     fn not(self) -> Self::Output {
         !*self.get()
-    }
-}
-
-// enable displaty for the handle
-impl<'a, T: 'static + Display> std::fmt::Display for UseState<'a, T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner.current_val)
-    }
-}
-
-/// A less ergonmic but still capable form of use_state that's valid for `static lifetime
-pub struct AsyncUseState<T: 'static> {
-    inner: Rc<T>,
-    re_render: Rc<dyn Fn()>,
-    wip: Rc<RefCell<Option<T>>>,
-}
-
-impl<T: ToOwned<Owned = T>> AsyncUseState<T> {
-    pub fn get_mut<'a>(&'a self) -> RefMut<'a, T> {
-        // make sure we get processed
-        {
-            let mut wip = self.wip.borrow_mut();
-            if wip.is_none() {
-                *wip = Some(self.inner.as_ref().to_owned());
-            }
-            (self.re_render)();
-        }
-        // Bring out the new value, cloning if it we need to
-        // "get_mut" is locked behind "ToOwned" to make it explicit that cloning occurs to use this
-        RefMut::map(self.wip.borrow_mut(), |slot| {
-            //
-            slot.as_mut().unwrap()
-        })
-    }
-}
-impl<T> AsyncUseState<T> {
-    pub fn set(&mut self, val: T) {
-        (self.re_render)();
-        *self.wip.borrow_mut() = Some(val);
-    }
-
-    // pub fn get(&self) -> Ref<'_, T> {
-    //     self.wip.borrow
-    // }
-
-    pub fn get_rc(&self) -> &Rc<T> {
-        &self.inner
     }
 }

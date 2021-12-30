@@ -37,4 +37,3 @@ tokio_runtime = ["tokio"]
 
 [dev-dependencies]
 dioxus-hooks = { path = "../hooks" }
-simple_logger = "1.13.0"

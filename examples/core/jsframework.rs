@@ -15,7 +15,7 @@ fn main() {
     assert!(g.edits.len() > 1);
 }
 
-fn App((cx, props): Scope<()>) -> Element {
+fn App((cx, props): Scope) -> Element {
     let mut rng = SmallRng::from_entropy();
     let rows = (0..10_000_usize).map(|f| {
         let label = Label::new(&mut rng);

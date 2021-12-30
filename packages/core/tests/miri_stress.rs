@@ -28,7 +28,7 @@ fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
 /// In debug, this should also toss a warning.
 #[test]
 fn test_memory_leak() {
-    fn app(cx: Scope<()>) -> Element {
+    fn app(cx: Scope) -> Element {
         let val = cx.use_hook(|_| 0, |f| f);
 
         *val += 1;
@@ -68,7 +68,7 @@ fn test_memory_leak() {
         })
     }
 
-    fn child(cx: Scope<()>) -> Element {
+    fn child(cx: Scope) -> Element {
         rsx!(cx, div { "goodbye world" })
     }
 
@@ -85,7 +85,7 @@ fn test_memory_leak() {
 
 #[test]
 fn memo_works_properly() {
-    fn app(cx: Scope<()>) -> Element {
+    fn app(cx: Scope) -> Element {
         let val = cx.use_hook(|_| 0, |f| f);
 
         *val += 1;
@@ -164,7 +164,7 @@ fn free_works_on_root_props() {
 
 #[test]
 fn free_works_on_borrowed() {
-    fn app(cx: Scope<()>) -> Element {
+    fn app(cx: Scope) -> Element {
         cx.render(rsx! {
             child(a: "alpha", b: "asd".to_string())
         })
@@ -203,7 +203,7 @@ fn free_works_on_root_hooks() {
         }
     }
 
-    fn app(cx: Scope<()>) -> Element {
+    fn app(cx: Scope) -> Element {
         let name = cx.use_hook(|_| Droppable(String::from("asd")), |f| f);
         rsx!(cx, div { "{name.0}" })
     }
@@ -214,7 +214,7 @@ fn free_works_on_root_hooks() {
 
 #[test]
 fn old_props_arent_stale() {
-    fn app(cx: Scope<()>) -> Element {
+    fn app(cx: Scope) -> Element {
         dbg!("rendering parent");
         let cnt = cx.use_hook(|_| 0, |f| f);
         *cnt += 1;
@@ -261,7 +261,7 @@ fn old_props_arent_stale() {
 
 #[test]
 fn basic() {
-    fn app(cx: Scope<()>) -> Element {
+    fn app(cx: Scope) -> Element {
         rsx!(cx, div {
             child(a: "abcdef".to_string())
         })

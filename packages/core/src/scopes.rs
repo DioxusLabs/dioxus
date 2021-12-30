@@ -490,7 +490,7 @@ impl ScopeState {
     /// # Example
     ///
     /// ```rust, ignore
-    /// fn App(cx: Scope<()>) -> Element {
+    /// fn App(cx: Scope) -> Element {
     ///     rsx!(cx, div { "Subtree {id}"})
     /// };
     /// ```

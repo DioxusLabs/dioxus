@@ -5,15 +5,10 @@ use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
-use simple_logger::SimpleLogger;
 
 use std::collections::HashMap;
 
 fn main() {
-    if cfg!(debug_assertions) {
-        SimpleLogger::new().init().unwrap();
-    }
-
     dioxus_desktop::launch(App)
 }
 

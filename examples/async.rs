@@ -8,19 +8,19 @@ use gloo_timers::future::TimeoutFuture;
 
 #[tokio::main]
 async fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
-pub static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let count = use_state(&cx, || 0);
-    let mut direction = use_state(&cx, || 1);
+    let direction = use_state(&cx, || 1);
 
     let (async_count, dir) = (count.for_async(), *direction);
 
     let task = use_coroutine(&cx, move || async move {
         loop {
             TimeoutFuture::new(250).await;
-            *async_count.get_mut() += dir;
+            *async_count.modify() += dir;
         }
     });
 
@@ -37,9 +37,9 @@ pub static App: Component = |cx| {
         button {
             "Switch counting direcion"
             onclick: move |_| {
-                direction *= -1;
+                *direction.modify() *= -1;
                 task.restart();
             }
         }
     })
-};
+}

@@ -8,7 +8,6 @@
 use dioxus::prelude::*;
 
 fn main() {
-    // simple_logger::init_with_level(log::Level::Debug);
     dioxus::desktop::launch_cfg(App, |c| {
         c.with_window(|w| {
             w.with_resizable(true).with_inner_size(

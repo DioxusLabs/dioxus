@@ -20,7 +20,7 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
-fn App(cx: Scope<()>) -> Element {
+fn App(cx: Scope) -> Element {
     let text: &mut Vec<String> = cx.use_hook(|_| vec![String::from("abc=def")], |f| f);
 
     let first = text.get_mut(0).unwrap();

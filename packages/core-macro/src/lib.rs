@@ -161,7 +161,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 ///     pub struct BallerProps {}
 ///
 ///     /// This component totally balls
-///     pub fn Baller(cx: Scope<()>) -> DomTree {
+///     pub fn Baller(cx: Scope) -> DomTree {
 ///         todo!()
 ///     }
 /// }

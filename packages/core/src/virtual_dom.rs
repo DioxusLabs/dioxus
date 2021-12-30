@@ -80,7 +80,7 @@ use std::{any::Any, collections::VecDeque, iter::FromIterator, pin::Pin, sync::A
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 ///
 /// ```rust, ignore
-/// fn App(cx: Scope<()>) -> Element {
+/// fn App(cx: Scope) -> Element {
 ///     cx.render(rsx!{
 ///         div { "Hello World" }
 ///     })
@@ -127,7 +127,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// fn Example(cx: Scope<()>) -> Element  {
+    /// fn Example(cx: Scope) -> Element  {
     ///     cx.render(rsx!( div { "hello world" } ))
     /// }
     ///
@@ -388,7 +388,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```rust, ignore
-    /// fn App(cx: Scope<()>) -> Element {
+    /// fn App(cx: Scope) -> Element {
     ///     cx.render(rsx!( div {"hello"} ))
     /// }
     ///
@@ -544,7 +544,7 @@ impl VirtualDom {
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
     /// ```rust
-    /// fn Base(cx: Scope<()>) -> Element {
+    /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -564,7 +564,7 @@ impl VirtualDom {
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
     /// ```rust
-    /// fn Base(cx: Scope<()>) -> Element {
+    /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -586,7 +586,7 @@ impl VirtualDom {
     ///
     ///
     /// ```rust
-    /// fn Base(cx: Scope<()>) -> Element {
+    /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -609,7 +609,7 @@ impl VirtualDom {
     ///
     ///
     /// ```rust
-    /// fn Base(cx: Scope<()>) -> Element {
+    /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -753,7 +753,7 @@ pub enum SchedulerMsg {
 ///
 /// # Example
 /// ```rust
-/// fn App(cx: Scope<()>) -> Element {
+/// fn App(cx: Scope) -> Element {
 ///     rsx!(cx, div {
 ///         onclick: move |_| println!("Clicked!")
 ///     })
@@ -871,7 +871,7 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 /// ## Example
 ///
 /// ```rust, ignore
-/// fn App(cx: Scope<()>) -> Element {
+/// fn App(cx: Scope) -> Element {
 ///     cx.render(rsx!{
 ///         CustomCard {
 ///             h1 {}2

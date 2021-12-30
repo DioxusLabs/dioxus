@@ -84,7 +84,7 @@ pub enum VNode<'src> {
     /// # Example
     ///
     /// ```rust, ignore
-    /// fn Example(cx: Scope<()>) -> Element {
+    /// fn Example(cx: Scope) -> Element {
     ///     ...
     /// }
     ///
@@ -740,6 +740,12 @@ impl IntoVNode<'_> for &'static str {
     }
 }
 
+impl IntoVNode<'_> for String {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        cx.text(format_args!("{}", self))
+    }
+}
+
 impl IntoVNode<'_> for Arguments<'_> {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.text(self)
@@ -757,4 +763,8 @@ impl<'a> IntoVNode<'a> for &VNode<'a> {
     fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
         self.decouple()
     }
+}
+
+trait IntoAcceptedVnode<'a> {
+    fn into_accepted_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }

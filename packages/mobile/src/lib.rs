@@ -20,10 +20,6 @@ use wry::{
 mod dom;
 use dom::*;
 
-fn init_logging() {
-    simple_logger::SimpleLogger::new().init().unwrap();
-}
-
 static HTML_CONTENT: &'static str = include_str!("../../desktop/src/index.html");
 
 pub fn launch(root: Component, builder: fn(WindowBuilder) -> WindowBuilder) -> anyhow::Result<()> {
@@ -187,7 +183,6 @@ impl<T: 'static + Send> WebviewRenderer<T> {
 }
 
 fn main() {
-    init_logging();
     let event_loop = EventLoop::new();
 
     let mut weviews = HashMap::new();

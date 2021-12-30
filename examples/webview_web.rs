@@ -1,4 +1,3 @@
-#![allow(non_upper_case_globals, non_snake_case)]
 //! Example: Webview Renderer
 //! -------------------------
 //!
@@ -13,17 +12,17 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::web::launch(App);
+    dioxus::desktop::launch(app);
 }
 
-static App: Component = |cx| {
-    let mut count = use_state(&cx, || 0);
+fn app(cx: Scope) -> Element {
+    let count = use_state(&cx, || 0);
 
     cx.render(rsx! {
         div {
             h1 { "Hifive counter: {count}" }
-            button { onclick: move |_| count += 1, "Up high!" }
-            button { onclick: move |_| count -= 1, "Down low!" }
+            button { onclick: move |_| *count.modify() += 1, "Up high!" }
+            button { onclick: move |_| *count.modify() -= 1, "Down low!" }
         }
     })
-};
+}
