@@ -44,7 +44,7 @@ fn lists_work() {
     static App: Component = |cx| {
         cx.render(rsx!(
             h1 {"hello"}
-            {(0..6).map(|f| rsx!(span{ "{f}" }))}
+            (0..6).map(|f| rsx!(span{ "{f}" }))
         ))
     };
     let mut vdom = VirtualDom::new(App);

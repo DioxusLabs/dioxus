@@ -46,7 +46,7 @@
 //!     dioxus::desktop::launch(app);
 //! }
 //!
-//! fn app(cx: Scope<()>) -> Element {
+//! fn app(cx: Scope) -> Element {
 //!     cx.render(rsx!("hello world!"))
 //! }
 //! ```
@@ -57,7 +57,7 @@
 //! For components with no explicit properties, we can use the `()` type. In Dioxus, all properties are memoized by default!
 //!
 //! ```rust
-//! fn App(cx: Scope<()>) -> Element {
+//! fn App(cx: Scope) -> Element {
 //!     cx.render(rsx!(
 //!         Header {
 //!             title: "My App",
@@ -91,7 +91,7 @@
 //! While components are reusable forms of UI elements, hooks are reusable forms of logic. All hooks start with `use_`. We can use hooks to declare state.
 //!
 //! ```rust
-//! fn app(cx: Scope<()>) -> Element {
+//! fn app(cx: Scope) -> Element {
 //!     let name = use_state(&cx, || "world");
 //!
 //!     rsx!(cx, "hello {name}!")
@@ -137,7 +137,7 @@
 //!     dioxus::desktop::launch(App);
 //! }
 //!
-//! fn App(cx: Scope<()>) -> Element {
+//! fn App(cx: Scope) -> Element {
 //!     let mut count = use_state(&cx, || 0);
 //!
 //!     cx.render(rsx!(
@@ -187,20 +187,20 @@ pub use dioxus_core as core;
 #[cfg(feature = "hooks")]
 pub use dioxus_hooks as hooks;
 
+#[cfg(feature = "router")]
+pub use dioxus_router as router;
+
 #[cfg(feature = "ssr")]
 pub use dioxus_ssr as ssr;
 
 #[cfg(feature = "web")]
 pub use dioxus_web as web;
 
-#[cfg(feature = "mobile")]
-pub use dioxus_mobile as mobile;
-
 #[cfg(feature = "desktop")]
 pub use dioxus_desktop as desktop;
 
-#[cfg(feature = "router")]
-pub use dioxus_router as router;
+// #[cfg(feature = "mobile")]
+// pub use dioxus_mobile as mobile;
 
 pub mod events {
     #[cfg(feature = "html")]

@@ -3,6 +3,7 @@
 //! The example from the README.md.
 
 use dioxus::prelude::*;
+
 fn main() {
     dioxus::desktop::launch(App);
 }

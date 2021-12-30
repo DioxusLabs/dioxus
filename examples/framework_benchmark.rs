@@ -2,8 +2,8 @@ use dioxus::prelude::*;
 use rand::prelude::*;
 
 fn main() {
-    dioxus::web::launch(App);
-    // dioxus::desktop::launch(App);
+    // dioxus::web::launch(App);
+    dioxus::desktop::launch(App);
 }
 
 #[derive(Clone, PartialEq)]
@@ -31,16 +31,16 @@ impl Label {
 }
 
 static App: Component = |cx| {
-    let mut items = use_ref(&cx, || vec![]);
-    let mut selected = use_state(&cx, || None);
+    let items = use_ref(&cx, || vec![]);
+    let selected = use_state(&cx, || None);
 
     cx.render(rsx! {
-        div { class: "container"
-            div { class: "jumbotron"
-                div { class: "row"
+        div { class: "container",
+            div { class: "jumbotron",
+                div { class: "row",
                     div { class: "col-md-6", h1 { "Dioxus" } }
-                    div { class: "col-md-6"
-                        div { class: "row"
+                    div { class: "col-md-6",
+                        div { class: "row",
                             ActionButton { name: "Create 1,000 rows", id: "run",
                                 onclick: move || items.set(Label::new_list(1_000)),
                             }
@@ -67,15 +67,15 @@ static App: Component = |cx| {
                 tbody {
                     {items.read().iter().enumerate().map(|(id, item)| {
                         let is_in_danger = if (*selected).map(|s| s == id).unwrap_or(false) {"danger"} else {""};
-                        rsx!(tr { class: "{is_in_danger}"
+                        rsx!(tr { class: "{is_in_danger}",
                             td { class:"col-md-1" }
                             td { class:"col-md-1", "{item.key}" }
                             td { class:"col-md-1", onclick: move |_| selected.set(Some(id)),
-                                a { class: "lbl", {item.labels} }
+                                a { class: "lbl", item.labels }
                             }
-                            td { class: "col-md-1"
+                            td { class: "col-md-1",
                                 a { class: "remove", onclick: move |_| { items.write().remove(id); },
-                                    span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
+                                    span { class: "glyphicon glyphicon-remove remove", aria_hidden: "true" }
                                 }
                             }
                             td { class: "col-md-6" }
@@ -83,7 +83,7 @@ static App: Component = |cx| {
                     })}
                 }
              }
-            // span { class: "preloadicon glyphicon glyphicon-remove" aria_hidden: "true" }
+            span { class: "preloadicon glyphicon glyphicon-remove", aria_hidden: "true" }
         }
     })
 };
@@ -96,7 +96,7 @@ struct ActionButtonProps<'a> {
 }
 
 fn ActionButton<'a>(cx: Scope<'a, ActionButtonProps<'a>>) -> Element {
-    rsx!(cx, div { class: "col-sm-6 smallpad"
+    rsx!(cx, div { class: "col-sm-6 smallpad",
         button { class:"btn btn-primary btn-block", r#type: "button", id: "{cx.props.id}",  onclick: move |_| (cx.props.onclick)(),
             "{cx.props.name}"
         }

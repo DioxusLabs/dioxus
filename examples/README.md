@@ -42,14 +42,6 @@ These examples are not necessarily meant to be run, but rather serve as a refere
 | [Complete rsx reference](./rsx_usage.rs)            | A complete reference for all rsx! usage         | ✅      |
 | [Event Listeners](./listener.rs)                    | Attach closures to events on elements           | ✅      |
 
-These web-specific examples must be run with `dioxus-cli` using `dioxus develop --example XYZ`
-
-| Example | What it does |
-| ------- | ------------ |
-| asd     | this does    |
-| asd     | this does    |
-
-
 
 ## Show me some examples!
 
@@ -64,7 +56,7 @@ Here's what a few common tasks look like in Dioxus:
 
 Nested components with children and internal state:
 ```rust
-fn App(cx: Scope<()>) -> Element {
+fn App(cx: Scope) -> Element {
   cx.render(rsx!( Toggle { "Toggle me" } ))
 }
 
@@ -75,9 +67,9 @@ fn Toggle(cx: Scope<ToggleProps>) -> Element {
   let mut toggled = use_state(&cx, || false);
   cx.render(rsx!{
     div {
-      {&cx.props.children}
+      &cx.props.children
       button { onclick: move |_| toggled.set(true),
-        {toggled.and_then(|| "On").or_else(|| "Off")}
+        toggled.and_then(|| "On").or_else(|| "Off")
       }
     }
   })
@@ -86,7 +78,7 @@ fn Toggle(cx: Scope<ToggleProps>) -> Element {
 
 Controlled inputs:
 ```rust
-fn App(cx: Scope<()>) -> Element {
+fn App(cx: Scope) -> Element {
   let value = use_state(&cx, String::new);
   cx.render(rsx!( 
     input {
@@ -100,7 +92,7 @@ fn App(cx: Scope<()>) -> Element {
 
 Lists and Conditional rendering:
 ```rust
-fn App(cx: Scope<()>) -> Element {
+fn App(cx: Scope) -> Element {
   let list = (0..10).map(|i| {
     rsx!(li { key: "{i}", "Value: {i}" })
   });
@@ -112,8 +104,8 @@ fn App(cx: Scope<()>) -> Element {
 
   if should_show {
     cx.render(rsx!( 
-      {title}
-      ul { {list} } 
+      title,
+      ul { list } 
     ))
   } else {
     None
@@ -128,7 +120,7 @@ static App: Component = |cx, _| rsx!(cx, div {"hello world!"});
 
 Borrowed prop contents:
 ```rust
-fn App(cx: Scope<()>) -> Element {
+fn App(cx: Scope) -> Element {
   let name = use_state(&cx, || String::from("example"));
   rsx!(cx, Child { title: name.as_str() })
 }
@@ -145,12 +137,12 @@ Global State
 ```rust
 struct GlobalState { name: String }
 
-fn App(cx: Scope<()>) -> Element {
+fn App(cx: Scope) -> Element {
   use_provide_shared_state(cx, || GlobalState { name: String::from("Toby") })
   rsx!(cx, Leaf {})
 }
 
-fn Leaf(cx: Scope<()>) -> Element {
+fn Leaf(cx: Scope) -> Element {
   let state = use_consume_shared_state::<GlobalState>(cx)?;
   rsx!(cx, "Hello {state.name}")
 }
@@ -166,20 +158,20 @@ enum Route {
   Post(id)
 }
 
-fn App(cx: Scope<()>) -> Element {
+fn App(cx: Scope) -> Element {
   let route = use_router(cx, Route::parse);
   cx.render(rsx!(div {
-    {match route {
+    match route {
       Route::Home => rsx!( Home {} ),
       Route::Post(id) => rsx!( Post { id: id })
-    }}
+    }
   }))  
 }
 ```
 
 Suspense 
 ```rust
-fn App(cx: Scope<()>) -> Element {
+fn App(cx: Scope) -> Element {
   let doggo = use_suspense(cx,
     || async { reqwest::get("https://dog.ceo/api/breeds/image/random").await.unwrap().json::<Response>().await.unwrap() },
     |response| cx.render(rsx!( img { src: "{response.message}" }))
@@ -187,8 +179,8 @@ fn App(cx: Scope<()>) -> Element {
   
   cx.render(rsx!{
     div {
-      "One doggo coming right up:"
-      {doggo}
+      "One doggo coming right up:",
+      doggo
     }
   })
 }

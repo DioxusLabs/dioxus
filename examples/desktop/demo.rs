@@ -13,6 +13,6 @@ static App: Component = |cx| {
         div {
             "hello world!"
         }
-        {(0..10).map(|f| rsx!( div {"abc {f}"}))}
+        (0..10).map(|f| rsx!( div {"abc {f}"}))
     ))
 };

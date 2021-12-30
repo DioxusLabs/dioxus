@@ -11,18 +11,19 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "./packages/core", version = "^0.1.3" }
-dioxus-html = { path = "./packages/html", optional = true }
-dioxus-core-macro = { path = "./packages/core-macro", optional = true }
+dioxus-core = { path = "./packages/core", version = "^0.1.4" }
+dioxus-html = { path = "./packages/html", version = "^0.1.1", optional = true }
+dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.3", optional = true }
 dioxus-hooks = { path = "./packages/hooks", optional = true }
 
-dioxus-ssr = { path = "./packages/ssr", optional = true }
-dioxus-web = { path = "./packages/web", optional = true }
+dioxus-web = { path = "./packages/web", version = "^0.0.1", optional = true }
 dioxus-desktop = { path = "./packages/desktop", optional = true }
+dioxus-ssr = { path = "./packages/ssr", optional = true }
+
 dioxus-router = { path = "./packages/router", optional = true }
 
-dioxus-mobile = { path = "./packages/mobile", optional = true }
-dioxus-liveview = { path = "./packages/liveview", optional = true }
+# dioxus-mobile = { path = "./packages/mobile", optional = true }
+# dioxus-liveview = { path = "./packages/liveview", optional = true }
 
 [features]
 default = ["macro", "hooks", "html"]
@@ -31,11 +32,13 @@ macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
 router = ["dioxus-router"]
-liveview = ["dioxus-liveview"]
 ssr = ["dioxus-ssr"]
 web = ["dioxus-web", "dioxus-router/web"]
 desktop = ["dioxus-desktop", "dioxus-router/desktop"]
-mobile = ["dioxus-mobile"]
+
+
+# mobile = ["dioxus-mobile"]
+# liveview = ["dioxus-liveview"]
 
 
 [workspace]
@@ -60,7 +63,6 @@ im-rc = "15.0.0"
 fxhash = "0.2.1"
 anyhow = "1.0.51"
 serde_json = "1.0.73"
-simple_logger = "1.16.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 argh = "0.1.7"

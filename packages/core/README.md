@@ -6,7 +6,7 @@ To build new apps with Dioxus or to extend the ecosystem with new hooks or compo
 
 
 ```rust
-fn app(cx: Scope<()>) -> Element {
+fn app(cx: Scope) -> Element {
     rsx!(cx, div { "hello world" })
 }
 

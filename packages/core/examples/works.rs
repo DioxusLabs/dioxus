@@ -9,7 +9,7 @@ fn main() {
     let _ = VirtualDom::new(parent);
 }
 
-fn parent(cx: Scope<()>) -> Element {
+fn parent(cx: Scope) -> Element {
     let value = cx.use_hook(|_| String::new(), |f| f);
 
     cx.render(rsx! {

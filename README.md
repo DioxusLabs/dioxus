@@ -79,7 +79,9 @@ If you know React, then you already know Dioxus.
     <tr>
 </table>
 
-## Examples:
+
+
+## Examples Projects:
 
 | File Navigator (Desktop)                                                                                                                                                        | WiFi scanner (Desktop)                                                                                                                                                                 | TodoMVC (All platforms)                                                                                                                                                 | Ecommerce w/ Tailwind (Liveview)                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -87,6 +89,10 @@ If you know React, then you already know Dioxus.
 
 
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
+
+## Running examples locally
+
+All local examples are built for the desktop renderer. This means you can simply clone this repo and call `cargo run --example EXAMPLE_NAME`. To run non-desktop examples, checkout the example projects shown above.
 
 ## Why Dioxus and why Rust?
 

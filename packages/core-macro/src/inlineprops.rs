@@ -99,6 +99,7 @@ impl ToTokens for InlinePropsBody {
         };
 
         out_tokens.append_all(quote! {
+            #[allow(non_camel_case)]
             #modifiers
             #vis struct #struct_name #generics {
                 #(#fields),*
