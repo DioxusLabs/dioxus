@@ -26,20 +26,18 @@ fn app(cx: Scope) -> Element {
 
     rsx!(cx, div {
         h1 {"count is {count}"}
-        button {
+        button { onclick: move |_| task.stop(),
             "Stop counting"
-            onclick: move |_| task.stop()
         }
-        button {
+        button { onclick: move |_| task.resume(),
             "Start counting"
-            onclick: move |_| task.resume()
         }
         button {
-            "Switch counting direcion"
             onclick: move |_| {
                 *direction.modify() *= -1;
                 task.restart();
-            }
+            },
+            "Switch counting direcion"
         }
     })
 }

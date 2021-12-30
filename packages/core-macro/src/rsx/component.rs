@@ -19,11 +19,10 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
-    token, Error, Expr, ExprClosure, Ident, Result, Token,
+    token, Expr, ExprClosure, Ident, Result, Token,
 };
 
 pub struct Component {
-    // accept any path-like argument
     name: syn::Path,
     body: Vec<ComponentField>,
     children: Vec<BodyNode>,
@@ -32,12 +31,8 @@ pub struct Component {
 
 impl Parse for Component {
     fn parse(stream: ParseStream) -> Result<Self> {
-        // let name = s.parse::<syn::ExprPath>()?;
-        // todo: look into somehow getting the crate/super/etc
-
         let name = syn::Path::parse_mod_style(stream)?;
 
-        // parse the guts
         let content: ParseBuffer;
 
         // if we see a `{` then we have a block
@@ -48,13 +43,25 @@ impl Parse for Component {
             syn::parenthesized!(content in stream);
         }
 
-        let cfg: BodyConfig = BodyConfig {
-            allow_children: true,
-            allow_fields: true,
-            allow_manual_props: true,
-        };
+        let mut body = Vec::new();
+        let mut children = Vec::new();
+        let mut manual_props = None;
 
-        let (body, children, manual_props) = cfg.parse_component_body(&content)?;
+        while !content.is_empty() {
+            // if we splat into a component then we're merging properties
+            if content.peek(Token![..]) {
+                content.parse::<Token![..]>()?;
+                manual_props = Some(content.parse::<Expr>()?);
+            } else if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
+                body.push(content.parse::<ComponentField>()?);
+            } else {
+                children.push(content.parse::<BodyNode>()?);
+            }
+
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>();
+            }
+        }
 
         Ok(Self {
             name,
@@ -62,77 +69,6 @@ impl Parse for Component {
             children,
             manual_props,
         })
-    }
-}
-
-pub struct BodyConfig {
-    pub allow_fields: bool,
-    pub allow_children: bool,
-    pub allow_manual_props: bool,
-}
-
-impl BodyConfig {
-    /// The configuration to parse the root
-    pub fn new_call_body() -> Self {
-        Self {
-            allow_children: true,
-            allow_fields: false,
-            allow_manual_props: false,
-        }
-    }
-}
-
-impl BodyConfig {
-    // todo: unify this body parsing for both elements and components
-    // both are style rather ad-hoc, though components are currently more configured
-    pub fn parse_component_body(
-        &self,
-        content: &ParseBuffer,
-    ) -> Result<(Vec<ComponentField>, Vec<BodyNode>, Option<Expr>)> {
-        let mut body = Vec::new();
-        let mut children = Vec::new();
-        let mut manual_props = None;
-
-        'parsing: loop {
-            // [1] Break if empty
-            if content.is_empty() {
-                break 'parsing;
-            }
-
-            if content.peek(Token![..]) {
-                if !self.allow_manual_props {
-                    return Err(Error::new(
-                        content.span(),
-                        "Props spread syntax is not allowed in this context. \nMake to only use the elipsis `..` in Components.",
-                    ));
-                }
-                content.parse::<Token![..]>()?;
-                manual_props = Some(content.parse::<Expr>()?);
-            } else if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                if !self.allow_fields {
-                    return Err(Error::new(
-                        content.span(),
-                        "Property fields is not allowed in this context. \nMake to only use fields in Components or Elements.",
-                    ));
-                }
-                body.push(content.parse::<ComponentField>()?);
-            } else {
-                if !self.allow_children {
-                    return Err(Error::new(
-                        content.span(),
-                        "This item is not allowed to accept children.",
-                    ));
-                }
-                children.push(content.parse::<BodyNode>()?);
-            }
-
-            // consume comma if it exists
-            // we don't actually care if there *are* commas between attrs
-            if content.peek(Token![,]) {
-                let _ = content.parse::<Token![,]>();
-            }
-        }
-        Ok((body, children, manual_props))
     }
 }
 
@@ -219,9 +155,7 @@ pub struct ComponentField {
 
 enum ContentField {
     ManExpr(Expr),
-    OnHandler(ExprClosure),
 
-    // A handler was provided in {} tokens
     OnHandlerRaw(Expr),
 }
 
@@ -229,9 +163,6 @@ impl ToTokens for ContentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             ContentField::ManExpr(e) => e.to_tokens(tokens),
-            ContentField::OnHandler(e) => tokens.append_all(quote! {
-                __cx.bump().alloc(#e)
-            }),
             ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
                 __cx.bump().alloc(#e)
             }),
@@ -246,13 +177,7 @@ impl Parse for ComponentField {
 
         let name_str = name.to_string();
         let content = if name_str.starts_with("on") {
-            if input.peek(token::Brace) {
-                let content;
-                syn::braced!(content in input);
-                ContentField::OnHandlerRaw(content.parse()?)
-            } else {
-                ContentField::OnHandler(input.parse()?)
-            }
+            ContentField::OnHandlerRaw(input.parse()?)
         } else {
             ContentField::ManExpr(input.parse::<Expr>()?)
         };

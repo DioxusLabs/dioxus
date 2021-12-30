@@ -734,9 +734,9 @@ impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
     }
 }
 
-impl IntoVNode<'_> for &'static str {
+impl<'b> IntoVNode<'_> for &'b str {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
-        cx.static_text(self)
+        cx.text(format_args!("{}", self))
     }
 }
 

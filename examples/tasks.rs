@@ -15,8 +15,9 @@ fn app(cx: Scope) -> Element {
     use_future(&cx, || {
         for_async![count];
         async move {
-            while let _ = tokio::time::sleep(Duration::from_millis(1000)).await {
-                *count.modify() += 1;
+            loop {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+                count += 1;
             }
         }
     });

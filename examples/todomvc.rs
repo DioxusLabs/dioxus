@@ -29,7 +29,7 @@ const App: Component = |cx| {
 
     let todolist = todos
         .iter()
-        .filter(|(id, item)| match *filter {
+        .filter(|(_id, item)| match *filter {
             FilterState::All => true,
             FilterState::Active => !item.checked,
             FilterState::Completed => item.checked,
@@ -48,34 +48,37 @@ const App: Component = |cx| {
         _ => "items",
     };
 
-    rsx!(cx, div { id: "app"
+    rsx!(cx, div { id: "app",
         style {"{STYLE}"}
         div {
-            header { class: "header"
+            header { class: "header",
                 h1 {"todos"}
                 input {
-                    class: "new-todo"
-                    placeholder: "What needs to be done?"
-                    value: "{draft}"
-                    oninput: move |evt| draft.set(evt.value.clone())
+                    class: "new-todo",
+                    placeholder: "What needs to be done?",
+                    value: "{draft}",
+                    oninput: move |evt| draft.set(evt.value.clone()),
                 }
             }
-            {todolist}
-            {(!todos.is_empty()).then(|| rsx!(
+            todolist,
+            (!todos.is_empty()).then(|| rsx!(
                 footer {
-                    span { strong {"{items_left}"} span {"{item_text} left"} }
-                    ul { class: "filters"
+                    span {
+                        strong {"{items_left}"}
+                        span {"{item_text} left"}
+                    }
+                    ul { class: "filters",
                         li { class: "All", a { href: "", onclick: move |_| filter.set(FilterState::All), "All" }}
                         li { class: "Active", a { href: "active", onclick: move |_| filter.set(FilterState::Active), "Active" }}
                         li { class: "Completed", a { href: "completed", onclick: move |_| filter.set(FilterState::Completed), "Completed" }}
                     }
                 }
-            ))}
+            ))
         }
-        footer { class: "info"
+        footer { class: "info",
             p {"Double-click to edit a todo"}
-            p { "Created by ", a { "jkelleyrtp", href: "http://github.com/jkelleyrtp/" }}
-            p { "Part of ", a { "TodoMVC", href: "http://todomvc.com" }}
+            p { "Created by ", a {  href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }}
+            p { "Part of ", a { href: "http://todomvc.com", "TodoMVC" }}
         }
     })
 };
@@ -93,13 +96,13 @@ pub fn TodoEntry(cx: Scope<TodoEntryProps>) -> Element {
     rsx!(cx, li {
         "{todo.id}"
         input {
-            class: "toggle"
-            r#type: "checkbox"
+            class: "toggle",
+            r#type: "checkbox",
             "{todo.checked}"
         }
        {is_editing.then(|| rsx!{
             input {
-                value: "{contents}"
+                value: "{contents}",
                 oninput: move |evt| contents.set(evt.value.clone())
             }
         })}

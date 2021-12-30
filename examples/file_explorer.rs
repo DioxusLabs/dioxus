@@ -4,50 +4,45 @@
 //! This is a fun little desktop application that lets you explore the file system.
 //!
 //! This example is interesting because it's mixing filesystem operations and GUI, which is typically hard for UI to do.
+//!
+//! It also uses `use_ref` to maintain a model, rather than `use_state`. That way,
+//! we dont need to clutter our code with `read` commands.
 
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch_cfg(App, |c| {
+    dioxus::desktop::launch_cfg(app, |c| {
         c.with_window(|w| {
-            w.with_resizable(true).with_inner_size(
-                dioxus::desktop::wry::application::dpi::LogicalSize::new(400.0, 800.0),
-            )
+            w.with_resizable(true)
+                .with_inner_size(dioxus::desktop::tao::dpi::LogicalSize::new(400.0, 800.0))
         })
     });
 }
 
-static App: Component = |cx| {
-    let file_manager = use_ref(&cx, Files::new);
-    let files = file_manager.read();
-
-    let file_list = files.path_names.iter().enumerate().map(|(dir_id, path)| {
-        rsx! (
-            li { a {"{path}", onclick: move |_| file_manager.write().enter_dir(dir_id), href: "#"} }
-        )
-    });
-
-    let err_disp = files.err.as_ref().map(|err| {
-        rsx! (
-            div {
-                code {"{err}"}
-                button {"x", onclick: move |_| file_manager.write().clear_err() }
-            }
-        )
-    });
-
-    let current_dir = files.current();
+fn app(cx: Scope) -> Element {
+    let files = use_ref(&cx, Files::new);
 
     cx.render(rsx!(
-        div {
-            h1 {"Files: "}
-            h3 {"Cur dir: {current_dir}"}
-            button { "go up", onclick: move |_| file_manager.write().go_up() }
-            ol { {file_list} }
-            {err_disp}
+        h1 { "Files: " }
+        h3 { "Cur dir: " [files.read().current()] }
+        button { onclick: move |_| files.write().go_up(), "go up" }
+        ol {
+            files.read().path_names.iter().enumerate().map(|(dir_id, path)| rsx!(
+                li { key: "{path}",
+                    a { href: "#", onclick: move |_| files.write().enter_dir(dir_id),
+                        "{path}",
+                    }
+                }
+            ))
         }
+        files.read().err.as_ref().map(|err| rsx!(
+            div {
+                code { "{err}" }
+                button { onclick: move |_| files.write().clear_err(), "x" }
+            }
+        ))
     ))
-};
+}
 
 struct Files {
     path_stack: Vec<String>,
@@ -69,29 +64,21 @@ impl Files {
     }
 
     fn reload_path_list(&mut self) {
-        let cur_path = self.path_stack.last().unwrap();
-        log::info!("Reloading path list for {:?}", cur_path);
-        let paths = match std::fs::read_dir(cur_path) {
+        let paths = match std::fs::read_dir(self.path_stack.last().unwrap()) {
             Ok(e) => e,
             Err(err) => {
-                let err = format!("An error occured: {:?}", err);
-                self.err = Some(err);
+                self.err = Some(format!("An error occured: {:?}", err));
                 self.path_stack.pop();
                 return;
             }
         };
-        let collected = paths.collect::<Vec<_>>();
-        log::info!("Path list reloaded {:#?}", collected);
 
         // clear the current state
         self.clear_err();
         self.path_names.clear();
 
-        for path in collected {
-            self.path_names
-                .push(path.unwrap().path().display().to_string());
-        }
-        log::info!("path namees are {:#?}", self.path_names);
+        self.path_names
+            .extend(paths.map(|path| path.unwrap().path().display().to_string()));
     }
 
     fn go_up(&mut self) {

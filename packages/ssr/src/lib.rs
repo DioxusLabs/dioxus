@@ -309,19 +309,18 @@ mod tests {
 
     static SLIGHTLY_MORE_COMPLEX: Component = |cx| {
         cx.render(rsx! {
-            div {
-                title: "About W3Schools"
-                {(0..20).map(|f| rsx!{
+            div { title: "About W3Schools",
+                (0..20).map(|f| rsx!{
                     div {
-                        title: "About W3Schools"
-                        style: "color:blue;text-align:center"
-                        class: "About W3Schools"
+                        title: "About W3Schools",
+                        style: "color:blue;text-align:center",
+                        class: "About W3Schools",
                         p {
-                            title: "About W3Schools"
+                            title: "About W3Schools",
                             "Hello world!: {f}"
                         }
                     }
-                })}
+                })
             }
         })
     };

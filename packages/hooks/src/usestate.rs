@@ -215,3 +215,67 @@ impl<'a, O, T: std::ops::Not<Output = O> + Copy> std::ops::Not for UseState<'a, 
         !*self.get()
     }
 }
+
+/*
+
+Convenience methods for UseState.
+
+Note!
+
+This is not comprehensive.
+This is *just* meant to make common operations easier.
+*/
+
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+
+impl<'a, T: Copy + Add<T, Output = T>> Add<T> for UseState<'a, T> {
+    type Output = T;
+
+    fn add(self, rhs: T) -> Self::Output {
+        self.inner.current_val.add(rhs)
+    }
+}
+impl<'a, T: Copy + Add<T, Output = T>> AddAssign<T> for UseState<'a, T> {
+    fn add_assign(&mut self, rhs: T) {
+        self.set(self.inner.current_val.add(rhs));
+    }
+}
+impl<'a, T: Copy + Sub<T, Output = T>> Sub<T> for UseState<'a, T> {
+    type Output = T;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        self.inner.current_val.sub(rhs)
+    }
+}
+impl<'a, T: Copy + Sub<T, Output = T>> SubAssign<T> for UseState<'a, T> {
+    fn sub_assign(&mut self, rhs: T) {
+        self.set(self.inner.current_val.sub(rhs));
+    }
+}
+
+/// MUL
+impl<'a, T: Copy + Mul<T, Output = T>> Mul<T> for UseState<'a, T> {
+    type Output = T;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        self.inner.current_val.mul(rhs)
+    }
+}
+impl<'a, T: Copy + Mul<T, Output = T>> MulAssign<T> for UseState<'a, T> {
+    fn mul_assign(&mut self, rhs: T) {
+        self.set(self.inner.current_val.mul(rhs));
+    }
+}
+/// DIV
+impl<'a, T: Copy + Div<T, Output = T>> Div<T> for UseState<'a, T> {
+    type Output = T;
+
+    fn div(self, rhs: T) -> Self::Output {
+        self.inner.current_val.div(rhs)
+    }
+}
+impl<'a, T: Copy + Div<T, Output = T>> DivAssign<T> for UseState<'a, T> {
+    fn div_assign(&mut self, rhs: T) {
+        self.set(self.inner.current_val.div(rhs));
+    }
+}

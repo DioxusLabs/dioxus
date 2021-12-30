@@ -98,24 +98,24 @@ pub static App: Component = |cx| {
                         }
                     }
                 }
-                ul { class: "todo-list"
-                    {filtered_todos.iter().map(|id| rsx!(TodoEntry { key: "{id}", id: *id }))}
+                ul { class: "todo-list",
+                    filtered_todos.iter().map(|id| rsx!(TodoEntry { key: "{id}", id: *id }))
                 }
-                {(!todos.read().is_empty()).then(|| rsx!(
-                    footer { class: "footer"
+                (!todos.read().is_empty()).then(|| rsx!(
+                    footer { class: "footer",
                         span { class: "todo-count" strong {"{items_left} "} span {"{item_text} left"} }
                         ul { class: "filters"
                             li { class: "All", a { onclick: move |_| filter.set(FilterState::All), "All" }}
                             li { class: "Active", a { onclick: move |_| filter.set(FilterState::Active), "Active" }}
                             li { class: "Completed", a { onclick: move |_| filter.set(FilterState::Completed), "Completed" }}
                         }
-                        {(show_clear_completed).then(|| rsx!(
+                        (show_clear_completed).then(|| rsx!(
                             button { class: "clear-completed", onclick: move |_| clear_completed(),
                                 "Clear completed"
                             }
-                        ))}
+                        ))
                     }
-                ))}
+                ))
             }
         }
         footer { class: "info"

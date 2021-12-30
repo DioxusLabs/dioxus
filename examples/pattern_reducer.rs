@@ -14,20 +14,18 @@ fn main() {
 pub static App: Component = |cx| {
     let state = use_state(&cx, PlayerState::new);
 
-    let is_playing = state.is_playing();
-
-    rsx!(cx, div {
-        h1 {"Select an option"}
-        h3 {"The radio is... {is_playing}!"}
-        button {
-            "Pause"
-            onclick: move |_| state.modify().reduce(PlayerAction::Pause)
+    cx.render(rsx!(
+        div {
+            h1 {"Select an option"}
+            h3 { "The radio is... " [state.is_playing()], "!" }
+            button { onclick: move |_| state.modify().reduce(PlayerAction::Pause),
+                "Pause"
+            }
+            button { onclick: move |_| state.modify().reduce(PlayerAction::Play),
+                "Play"
+            }
         }
-        button {
-            "Play"
-            onclick: move |_| state.modify().reduce(PlayerAction::Play)
-        }
-    })
+    ))
 };
 
 enum PlayerAction {

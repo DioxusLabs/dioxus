@@ -60,6 +60,7 @@ pub static EXAMPLE: Component = |cx| {
             h1 {"Some text"}
             h1 {"Some text with {formatting}"}
             h1 {"Formatting basic expressions {formatting_tuple.0} and {formatting_tuple.1}"}
+            h1 {"Formatting without interpolation " [formatting_tuple.0] "and" [formatting_tuple.1] }
             h2 {
                 "Multiple"
                 "Text"
@@ -72,7 +73,7 @@ pub static EXAMPLE: Component = |cx| {
                 h3 {"elements"}
             }
             div {
-                class: "my special div"
+                class: "my special div",
                 h1 {"Headers and attributes!"}
             }
             div {
@@ -88,42 +89,51 @@ pub static EXAMPLE: Component = |cx| {
             }
 
             // Expressions can be used in element position too:
-            {rsx!(p { "More templating!" })}
-            // {html!(<p>"Even HTML templating!!"</p>)}
+            rsx!(p { "More templating!" }),
 
             // Iterators
-            {(0..10).map(|i| rsx!(li { "{i}" }))}
-            {{
+            (0..10).map(|i| rsx!(li { "{i}" })),
+
+            // Iterators within expressions
+            {
                 let data = std::collections::HashMap::<&'static str, &'static str>::new();
                 // Iterators *should* have keys when you can provide them.
                 // Keys make your app run faster. Make sure your keys are stable, unique, and predictable.
                 // Using an "ID" associated with your data is a good idea.
-                data.into_iter().map(|(k, v)| rsx!(li { key: "{k}" "{v}" }))
-            }}
+                data.into_iter().map(|(k, v)| rsx!(li { key: "{k}", "{v}" }))
+            }
 
             // Matching
-            {match true {
+            match true {
                 true => rsx!( h1 {"Top text"}),
                 false => rsx!( h1 {"Bottom text"})
-            }}
+            }
 
             // Conditional rendering
             // Dioxus conditional rendering is based around None/Some. We have no special syntax for conditionals.
             // You can convert a bool condition to rsx! with .then and .or
-            {true.then(|| rsx!(div {}))}
+            true.then(|| rsx!(div {})),
 
-            // True conditions need to be rendered (same reasons as matching)
-            {if true {
-                rsx!(cx, h1 {"Top text"})
+            // Alternatively, you can use the "if" syntax - but both branches must be resolve to Element
+            if false {
+                rsx!(h1 {"Top text"})
             } else {
-                rsx!(cx, h1 {"Bottom text"})
-            }}
+                rsx!(h1 {"Bottom text"})
+            }
 
-            // returning "None" is a bit noisy... but rare in practice
-            {None as Option<()>}
+            // Using optionals for diverging branches
+            if true {
+                Some(rsx!(h1 {"Top text"}))
+            } else {
+                None
+            }
+
+
+            // returning "None" without a diverging branch is a bit noisy... but rare in practice
+            None as Option<()>,
 
             // Use the Dioxus type-alias for less noise
-            {NONE_ELEMENT}
+            NONE_ELEMENT,
 
             // can also just use empty fragments
             Fragment {}
@@ -137,9 +147,8 @@ pub static EXAMPLE: Component = |cx| {
                 Fragment {
                     "D"
                     Fragment {
-                        "heavily nested fragments is an antipattern"
-                        "they cause Dioxus to do unnecessary work"
-                        "don't use them carelessly if you can help it"
+                        "E"
+                        "F"
                     }
                 }
             }
@@ -158,22 +167,29 @@ pub static EXAMPLE: Component = |cx| {
             Taller { a: "asd" }
 
             // Can pass in props directly as an expression
-            {{
+            {
                 let props = TallerProps {a: "hello", children: Default::default()};
                 rsx!(Taller { ..props })
-            }}
+            }
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: Default::default() }
+                ..TallerProps { a: "ballin!", children: Default::default() },
                 a: "not ballin!"
             }
 
             // Can take children too!
             Taller { a: "asd", div {"hello world!"} }
 
+            // Components can be used with the `call` syntax
+            // This component's props are defined *inline* with the `inline_props` macro
+            with_inline(
+                text: "using functionc all syntax"
+            )
+
             // helper functions
-            {helper(&cx, "hello world!")}
+            // Single values must be wrapped in braces or `Some` to satisfy `IntoIterator`
+            [helper(&cx, "hello world!")]
         }
     })
 };
@@ -187,6 +203,7 @@ mod baller {
     #[derive(Props, PartialEq)]
     pub struct BallerProps {}
 
+    #[allow(non_snake_case)]
     /// This component totally balls
     pub fn Baller(_: Scope<BallerProps>) -> Element {
         todo!()
@@ -195,12 +212,20 @@ mod baller {
 
 #[derive(Props)]
 pub struct TallerProps<'a> {
+    /// Fields are documented and accessible in rsx!
     a: &'static str,
     children: Element<'a>,
 }
 
-/// This component is taller than most :)
-pub fn Taller<'a>(_: Scope<'a, TallerProps<'a>>) -> Element {
-    let b = true;
-    todo!()
+/// Documention for this component is visible within the rsx macro
+#[allow(non_snake_case)]
+pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
+    cx.render(rsx! {
+        &cx.props.children
+    })
+}
+
+#[inline_props]
+fn with_inline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
+    rsx!(cx, p { "{text}" })
 }

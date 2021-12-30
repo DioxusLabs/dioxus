@@ -24,7 +24,9 @@ fn app(cx: Scope) -> Element {
     let input_digit = move |num: u8| display_value.modify().push_str(num.to_string().as_str());
 
     cx.render(rsx!(
-        div { class: "calculator",
+        style { [include_str!("./assets/calculator.css")] }
+        div {
+            class: "calculator",
             onkeydown: move |evt| match evt.key_code {
                 KeyCode::Add => operator.set(Some("+")),
                 KeyCode::Subtract => operator.set(Some("-")),
@@ -46,12 +48,11 @@ fn app(cx: Scope) -> Element {
                     }
                 }
                 _ => {}
-            }
-            div { class: "calculator-display", {[cur_val.separated_string()]} }
-            div { class: "input-keys"
-                div { class: "function-keys"
+            },
+            div { class: "calculator-display", [cur_val.separated_string()] }
+            div { class: "input-keys",
+                div { class: "function-keys",
                     CalculatorKey {
-                        {[if display_value == "0" { "C" } else { "AC" }]}
                         name: "key-clear",
                         onclick: move |_| {
                             display_value.set("0".to_string());
@@ -59,10 +60,10 @@ fn app(cx: Scope) -> Element {
                                 operator.set(None);
                                 cur_val.set(0.0);
                             }
-                        }
+                        },
+                        [if display_value == "0" { "C" } else { "AC" }]
                     }
                     CalculatorKey {
-                        "±"
                         name: "key-sign",
                         onclick: move |_| {
                             if display_value.starts_with("-") {
@@ -71,28 +72,53 @@ fn app(cx: Scope) -> Element {
                                 display_value.set(format!("-{}", *display_value))
                             }
                         },
+                        "±"
                     }
                     CalculatorKey {
-                        "%"
-                        onclick: {toggle_percent}
+                        onclick: toggle_percent,
                         name: "key-percent",
+                        "%"
                     }
                 }
-                div { class: "digit-keys"
-                    CalculatorKey { name: "key-0", onclick: move |_| input_digit(0), "0" }
-                    CalculatorKey { name: "key-dot", onclick: move |_| display_value.modify().push_str("."), "●" }
-
-                    {(1..9).map(|k| rsx!{
-                        CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_| input_digit(k), "{k}" }
-                    })}
+                div { class: "digit-keys",
+                    CalculatorKey { name: "key-0", onclick: move |_| input_digit(0),
+                        "0"
+                    }
+                    CalculatorKey { name: "key-dot", onclick: move |_| display_value.modify().push_str("."),
+                        "●"
+                    }
+                    (1..9).map(|k| rsx!{
+                        CalculatorKey {
+                            key: "{k}",
+                            name: "key-{k}",
+                            onclick: move |_| input_digit(k),
+                            "{k}"
+                        }
+                    }),
                 }
-                div { class: "operator-keys"
-                    CalculatorKey { name: "key-divide", onclick: move |_| operator.set(Some("/")) "÷" }
-                    CalculatorKey { name: "key-multiply", onclick: move |_| operator.set(Some("*")) "×" }
-                    CalculatorKey { name: "key-subtract", onclick: move |_| operator.set(Some("-")) "−" }
-                    CalculatorKey { name: "key-add", onclick: move |_| operator.set(Some("+")) "+" }
+
+                div { class: "operator-keys",
                     CalculatorKey {
-                        "="
+                        name: "key-divide",
+                        onclick: move |_| operator.set(Some("/")),
+                        "÷"
+                    }
+                    CalculatorKey {
+                        name: "key-multiply",
+                        onclick: move |_| operator.set(Some("*")),
+                        "×"
+                    }
+                    CalculatorKey {
+                        name: "key-subtract",
+                        onclick: move |_| operator.set(Some("-")),
+                        "−"
+                    }
+                    CalculatorKey {
+                        name: "key-add",
+                        onclick: move |_| operator.set(Some("+")),
+                        "+"
+                    }
+                    CalculatorKey {
                         name: "key-equals",
                         onclick: move |_| {
                             if let Some(op) = operator.as_ref() {
@@ -109,6 +135,7 @@ fn app(cx: Scope) -> Element {
                                 operator.set(None);
                             }
                         },
+                        "="
                     }
                 }
             }
@@ -125,9 +152,9 @@ fn CalculatorKey<'a>(
 ) -> Element {
     cx.render(rsx! {
         button {
-            class: "calculator-key {name}"
-            onclick: {onclick}
-            {children}
+            class: "calculator-key {name}",
+            onclick: onclick,
+            children
         }
     })
 }

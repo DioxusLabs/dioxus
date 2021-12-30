@@ -42,14 +42,6 @@ These examples are not necessarily meant to be run, but rather serve as a refere
 | [Complete rsx reference](./rsx_usage.rs)            | A complete reference for all rsx! usage         | ✅      |
 | [Event Listeners](./listener.rs)                    | Attach closures to events on elements           | ✅      |
 
-These web-specific examples must be run with `dioxus-cli` using `dioxus develop --example XYZ`
-
-| Example | What it does |
-| ------- | ------------ |
-| asd     | this does    |
-| asd     | this does    |
-
-
 
 ## Show me some examples!
 
@@ -75,9 +67,9 @@ fn Toggle(cx: Scope<ToggleProps>) -> Element {
   let mut toggled = use_state(&cx, || false);
   cx.render(rsx!{
     div {
-      {&cx.props.children}
+      &cx.props.children
       button { onclick: move |_| toggled.set(true),
-        {toggled.and_then(|| "On").or_else(|| "Off")}
+        toggled.and_then(|| "On").or_else(|| "Off")
       }
     }
   })
@@ -112,8 +104,8 @@ fn App(cx: Scope) -> Element {
 
   if should_show {
     cx.render(rsx!( 
-      {title}
-      ul { {list} } 
+      title,
+      ul { list } 
     ))
   } else {
     None
@@ -169,10 +161,10 @@ enum Route {
 fn App(cx: Scope) -> Element {
   let route = use_router(cx, Route::parse);
   cx.render(rsx!(div {
-    {match route {
+    match route {
       Route::Home => rsx!( Home {} ),
       Route::Post(id) => rsx!( Post { id: id })
-    }}
+    }
   }))  
 }
 ```
@@ -187,8 +179,8 @@ fn App(cx: Scope) -> Element {
   
   cx.render(rsx!{
     div {
-      "One doggo coming right up:"
-      {doggo}
+      "One doggo coming right up:",
+      doggo
     }
   })
 }
