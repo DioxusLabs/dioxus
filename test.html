@@ -14,16 +14,36 @@
             height: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            background-color: black;
+            /* justify-content: center;
+            align-items: center; */
             /* margin: auto; */
         }
         
         .smaller {
-            height: 50%;
+            height: 70%;
+            width: 70%;
+            background-color: green;
+            /* justify-content: center; */
+            /* align-items: center; */
+        }
+        
+        .superinner {
+            height: 100%;
+            width: 100%;
+            /* display: flex; */
+            /*  */
+            margin-top: 20px;
+            margin-bottom: 20px;
+            margin-left: 20px;
+            margin-right: 20px;
+            /*  */
+            background-color: red;
             justify-content: center;
             align-items: center;
-            color: violet;
+            flex-direction: column;
+            /* margin: 20px; */
+            /* margin: 20px; */
         }
     </style>
 </head>
@@ -31,15 +51,23 @@
 <body>
     <div class="container">
         <div class="smaller">
+            <div class="superinner">
+                <h1>Hello World</h1>
+                <p>This is a test</p>
+            </div>
+        </div>
+    </div>
+    <!-- <div class="container">
+        <div class="smaller">
             hello world
-            <div style="color: red;">
+            <div style="color: green; margin: 40px;">
                 goodbye
-                <div>
+                <div style="color:red;">
                     asdasdasd
                 </div>
             </div>
         </div>
-    </div>
+    </div> -->
 </body>
 
 </html>

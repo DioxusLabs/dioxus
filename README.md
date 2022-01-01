@@ -12,15 +12,21 @@ You can use html-esque semantics with stylesheets, inline styles, tree hierarchy
 
 static App: FC<()> = |cx| {
     cx.render(rsx!{
-        div { width: "100%", height: "3px", border_style: "solid",
-            h1 { "Hello world!" }
-            p  { "This is a paragraph." }
+        div { 
+            width: "100%", 
+            height: "10px",
+            background_color: "red",
+            justify_content: "center",
+            align_items: "center",
+
+
+            "Hello world!"
         }
     })
 }
 ```
 
-an image should go here
+![demo app](examples/example.png)
 
 
 Rink is basically a port of [Ink]() but for Rust and Dioxus. Rink doesn't depend on Node.js or any other JavaScript runtime, so your binaries are portable and beautiful.

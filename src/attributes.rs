@@ -1,6 +1,6 @@
 /*
 - [ ] pub display: Display,
-- [ ] pub position_type: PositionType,
+- [x] pub position_type: PositionType,  --> kinda, stretch doesnt support everything
 - [ ] pub direction: Direction,
 
 - [x] pub flex_direction: FlexDirection,
@@ -9,26 +9,27 @@
 - [x] pub flex_shrink: f32,
 - [x] pub flex_basis: Dimension,
 
-- [ ] pub overflow: Overflow,
+- [x] pub overflow: Overflow, ---> kinda implemented... stretch doesnt have support for directional overflow
 
 - [x] pub align_items: AlignItems,
 - [x] pub align_self: AlignSelf,
 - [x] pub align_content: AlignContent,
 
-- [ ] pub margin: Rect<Dimension>,
-- [ ] pub padding: Rect<Dimension>,
+- [x] pub margin: Rect<Dimension>,
+- [x] pub padding: Rect<Dimension>,
 
 - [x] pub justify_content: JustifyContent,
 - [ ] pub position: Rect<Dimension>,
 - [ ] pub border: Rect<Dimension>,
-- [ ] pub size: Size<Dimension>,
 
+- [ ] pub size: Size<Dimension>, ----> ??? seems to only be relevant for input?
 - [ ] pub min_size: Size<Dimension>,
 - [ ] pub max_size: Size<Dimension>,
+
 - [ ] pub aspect_ratio: Number,
 */
 
-use stretch2::{prelude::*, style::Style};
+use stretch2::{prelude::*, style::PositionType, style::Style};
 use tui::style::Style as TuiStyle;
 
 pub struct StyleModifer {
@@ -137,7 +138,13 @@ pub fn apply_attributes(
         "counter-reset" => {}
 
         "cursor" => {}
-        "direction" => {}
+        "direction" => {
+            match value {
+                "ltr" => style.style.direction = Direction::LTR,
+                "rtl" => style.style.direction = Direction::RTL,
+                _ => {}
+            }
+        }
 
         "display" => apply_display(name, value, style),
 
@@ -231,8 +238,20 @@ pub fn apply_attributes(
         "perspective"
         | "perspective-origin" => {}
 
-        "position" => {}
+        "position" => {
+            match value {
+                "static" => {}
+                "relative" => style.style.position_type = PositionType::Relative,
+                "fixed" => {}
+                "absolute" => style.style.position_type = PositionType::Absolute,
+                "sticky" => {}
+                _ => {}
+            }
+
+        }
+
         "pointer-events" => {}
+
         "quotes" => {}
         "resize" => {}
         "right" => {}
@@ -282,6 +301,29 @@ pub fn apply_attributes(
         "word-wrap" => {}
         "z-index" => {}
         _ => {}
+    }
+}
+
+enum UnitSystem {
+    Percent(f32),
+    Point(f32),
+}
+
+fn parse_value(value: &str) -> Option<UnitSystem> {
+    if value.ends_with("px") {
+        if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
+            Some(UnitSystem::Point(px))
+        } else {
+            None
+        }
+    } else if value.ends_with("%") {
+        if let Ok(pct) = value.trim_end_matches("%").parse::<f32>() {
+            Some(UnitSystem::Percent(pct))
+        } else {
+            None
+        }
+    } else {
+        None
     }
 }
 
@@ -491,54 +533,35 @@ fn apply_font(name: &str, value: &str, style: &mut StyleModifer) {
 }
 
 fn apply_padding(name: &str, value: &str, style: &mut StyleModifer) {
-    // // left
-    // start: stretch::style::Dimension::Points(10f32),
-
-    // // right?
-    // end: stretch::style::Dimension::Points(10f32),
-
-    // // top?
-    // // top: stretch::style::Dimension::Points(10f32),
-
-    // // bottom?
-    // // bottom: stretch::style::Dimension::Points(10f32),
-
-    match name {
-        "padding" => {
-            if name.ends_with("px") {
-                if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-                    style.style.padding.bottom = Dimension::Points(px);
-                    style.style.padding.top = Dimension::Points(px);
-                    style.style.padding.start = Dimension::Points(px);
-                    style.style.padding.end = Dimension::Points(px);
-                }
-            } else if name.ends_with("%") {
-                if let Ok(pct) = value.trim_end_matches("%").parse::<f32>() {
-                    //
-                }
+    match parse_value(value) {
+        Some(UnitSystem::Percent(v)) => match name {
+            "padding" => {
+                let v = Dimension::Percent(v / 100.0);
+                style.style.padding.top = v;
+                style.style.padding.bottom = v;
+                style.style.padding.start = v;
+                style.style.padding.end = v;
             }
-        }
-        "padding-bottom" => {
-            if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-                style.style.padding.bottom = Dimension::Points(px);
+            "padding-bottom" => style.style.padding.bottom = Dimension::Percent(v / 100.0),
+            "padding-left" => style.style.padding.start = Dimension::Percent(v / 100.0),
+            "padding-right" => style.style.padding.end = Dimension::Percent(v / 100.0),
+            "padding-top" => style.style.padding.top = Dimension::Percent(v / 100.0),
+            _ => {}
+        },
+        Some(UnitSystem::Point(v)) => match name {
+            "padding" => {
+                style.style.padding.top = Dimension::Points(v);
+                style.style.padding.bottom = Dimension::Points(v);
+                style.style.padding.start = Dimension::Points(v);
+                style.style.padding.end = Dimension::Points(v);
             }
-        }
-        "padding-left" => {
-            if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-                style.style.padding.start = Dimension::Points(px);
-            }
-        }
-        "padding-right" => {
-            if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-                style.style.padding.end = Dimension::Points(px);
-            }
-        }
-        "padding-top" => {
-            if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-                style.style.padding.top = Dimension::Points(px);
-            }
-        }
-        _ => {}
+            "padding-bottom" => style.style.padding.bottom = Dimension::Points(v),
+            "padding-left" => style.style.padding.start = Dimension::Points(v),
+            "padding-right" => style.style.padding.end = Dimension::Points(v),
+            "padding-top" => style.style.padding.top = Dimension::Points(v),
+            _ => {}
+        },
+        None => {}
     }
 }
 
@@ -599,12 +622,34 @@ pub fn apply_size(name: &str, value: &str, style: &mut StyleModifer) {
 }
 
 pub fn apply_margin(name: &str, value: &str, style: &mut StyleModifer) {
-    match name {
-        "margin" => {}
-        "margin-bottom" => {}
-        "margin-left" => {}
-        "margin-right" => {}
-        "margin-top" => {}
-        _ => {}
+    match parse_value(value) {
+        Some(UnitSystem::Percent(v)) => match name {
+            "margin" => {
+                let v = Dimension::Percent(v / 100.0);
+                style.style.margin.top = v;
+                style.style.margin.bottom = v;
+                style.style.margin.start = v;
+                style.style.margin.end = v;
+            }
+            "margin-top" => style.style.margin.top = Dimension::Percent(v / 100.0),
+            "margin-bottom" => style.style.margin.bottom = Dimension::Percent(v / 100.0),
+            "margin-left" => style.style.margin.start = Dimension::Percent(v / 100.0),
+            "margin-right" => style.style.margin.end = Dimension::Percent(v / 100.0),
+            _ => {}
+        },
+        Some(UnitSystem::Point(v)) => match name {
+            "margin" => {
+                style.style.margin.top = Dimension::Points(v);
+                style.style.margin.bottom = Dimension::Points(v);
+                style.style.margin.start = Dimension::Points(v);
+                style.style.margin.end = Dimension::Points(v);
+            }
+            "margin-top" => style.style.margin.top = Dimension::Points(v),
+            "margin-bottom" => style.style.margin.bottom = Dimension::Points(v),
+            "margin-left" => style.style.margin.start = Dimension::Points(v),
+            "margin-right" => style.style.margin.end = Dimension::Points(v),
+            _ => {}
+        },
+        None => {}
     }
 }

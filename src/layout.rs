@@ -7,6 +7,12 @@ use crate::{
     TuiNode,
 };
 
+/*
+The layout system uses the lineheight as one point.
+
+stretch uses fractional points, so we can rasterize if we need too, but not with characters
+this means anything thats "1px" is 1 lineheight. Unfortunately, text cannot be smaller or bigger
+*/
 pub fn collect_layout<'a>(
     layout: &mut stretch2::Stretch,
     nodes: &mut HashMap<ElementId, TuiNode<'a>>,
@@ -17,7 +23,6 @@ pub fn collect_layout<'a>(
 
     match node {
         VNode::Text(t) => {
-            //
             let id = t.id.get().unwrap();
             let char_len = t.text.chars().count();
 
@@ -29,7 +34,6 @@ pub fn collect_layout<'a>(
                     // text is as long as it is declared
                     width: Dimension::Points(char_len as f32),
                 },
-
                 ..Default::default()
             };
 
