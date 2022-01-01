@@ -31,19 +31,21 @@ static App: FC<()> = |cx| {
 
 Rink is basically a port of [Ink]() but for Rust and Dioxus. Rink doesn't depend on Node.js or any other JavaScript runtime, so your binaries are portable and beautiful.
 
+## Status
+
+
+Rink is currently under construction!
+
+Rendering a VirtualDom works fine, but the ecosystem of hooks is not yet ready. Additionally, some bugs in the flexbox implementation might be quirky at times.
+
 ## Features
 
 Rink features:
-- Flexbox based layout system
-- CSS selectors
-- inline css support
-- Built-in focusing system
-- high-quality keyboard support
-- Support for events, hooks, and callbacks
-- support for a very limited subset of HTML and CSS primitives
+- [x] Flexbox based layout system
+- [ ] CSS selectors
+- [x] inline css support
+- [ ] Built-in focusing system
+- [ ] high-quality keyboard support
+- [ ] Support for events, hooks, and callbacks
 
-HTML elements supported:
-- div, h1-h6, p, input, textarea, tables, nav
-
-CSS Supported:
-- Flex
+Currently, HTML tags don't translate into any meaning inside of rink. So an `input` won't really mean anything nor does it have any additional functionality.
