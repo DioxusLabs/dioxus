@@ -19,7 +19,6 @@ static App: FC<()> = |cx| {
             justify_content: "center",
             align_items: "center",
 
-
             "Hello world!"
         }
     })

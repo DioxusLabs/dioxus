@@ -4,7 +4,7 @@ fn main() {
     let mut dom = VirtualDom::new(app);
     dom.rebuild();
 
-    rink::render_vdom(&dom).unwrap();
+    rink::render_vdom(&mut dom).unwrap();
 }
 
 fn app(cx: Scope) -> Element {
