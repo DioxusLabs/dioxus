@@ -1,270 +1,152 @@
 use anyhow::Result;
+use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use dioxus::core::*;
-use tui::backend::CrosstermBackend;
-use tui::layout::{Layout, Rect};
-use tui::style::{Modifier, Style as TuiStyle};
-use tui::text::{Span, Spans};
-use tui::widgets::{Block, Paragraph};
-use tui_template::tuiapp::CrosstermFrame;
-struct RinkDom {
-    vdom: VirtualDom,
+use std::{collections::HashMap, io};
+use stretch2::{prelude::Size, Stretch};
+use tui::{backend::CrosstermBackend, style::Style as TuiStyle, Terminal};
+
+mod attributes;
+mod layout;
+mod render;
+
+pub use attributes::*;
+pub use layout::*;
+pub use render::*;
+
+pub struct TuiNode<'a> {
+    pub layout: stretch2::node::Node,
+    pub block_style: TuiStyle,
+    pub node: &'a VNode<'a>,
 }
 
-impl RinkDom {
-    pub fn new(app: FC<()>) -> Self {
-        Self {
-            vdom: VirtualDom::new(app),
-        }
-    }
+pub fn render_vdom(vdom: &VirtualDom) -> Result<()> {
+    /*
+     -> collect all the nodes with their layout
+     -> solve their layout
+     -> render the nodes in the right place with tui/crosstream
+     -> while rendering, apply styling
 
-    fn render_vnode<'a>(
-        &self,
-        f: &mut CrosstermFrame,
-        node: &'a VNode<'a>,
-        state: &mut RenderState<'a>,
-    ) -> Rect {
-        match &node.kind {
-            VNodeKind::Fragment(_) => todo!(),
-            VNodeKind::Component(_) => todo!(),
-            VNodeKind::Suspended { node } => todo!(),
+     use simd to compare lines for diffing?
 
-            VNodeKind::Text(te) => {
-                let span = Span::styled(te.text, TuiStyle::default());
+    */
+    let mut layout = Stretch::new();
+    let mut nodes = HashMap::new();
 
-                let mut m = Modifier::empty();
+    let root_node = vdom.base_scope().root_node();
+    layout::collect_layout(&mut layout, &mut nodes, vdom, root_node);
 
-                for style in &state.current_styles {
-                    match style {
-                        Styles::Bold => m = m | Modifier::BOLD,
-                        Styles::Italic => m = m | Modifier::ITALIC,
-                        Styles::Strikethrough => m = m | Modifier::CROSSED_OUT,
-                        Styles::Emphasis => m = m | Modifier::ITALIC,
-                        Styles::Underline => m = m | Modifier::UNDERLINED,
-                    }
-                }
+    /*
+    Get the terminal to calcualte the layout from
+    */
+    enable_raw_mode().unwrap();
+    ctrlc::set_handler(move || {
+        disable_raw_mode().unwrap();
+    })
+    .expect("Error setting Ctrl-C handler");
+    let mut stdout = std::io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
+    let backend = CrosstermBackend::new(io::stdout());
+    let mut terminal = Terminal::new(backend).unwrap();
 
-                let style = TuiStyle::default().add_modifier(m);
-                let span = span.styled_graphemes(style);
-                let cur_block = state.block_stack.last_mut().unwrap();
+    let dims = terminal.size().unwrap();
+    let width = dims.width;
+    let height = dims.height;
 
-                // Paragraph
+    /*
+    Compute the layout given th terminal size
+    */
+    let node_id = root_node.try_mounted_id().unwrap();
+    let root_layout = nodes[&node_id].layout;
+    layout.compute_layout(
+        root_layout,
+        Size {
+            width: stretch2::prelude::Number::Defined(width as f32),
+            height: stretch2::prelude::Number::Defined(height as f32),
+        },
+    )?;
 
-                // f.render_widget(span);
-            }
-            VNodeKind::Element(el) => {
-                //
-                let mut new_layout = false;
+    terminal.draw(|frame| {
+        //
+        render::render_vnode(frame, &layout, &mut nodes, vdom, root_node);
+        assert!(nodes.is_empty());
+    })?;
 
-                // all of our supported styles
+    std::thread::sleep(std::time::Duration::from_millis(5000));
 
-                match el.tag_name {
-                    // obviously semantically not really correct
-                    "div" => {
-                        state.layouts.push(Layout::default());
-                        new_layout = true;
-                    }
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
 
-                    "title" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
-                        let mut block = state.block_stack.pop().unwrap();
-                        let children = el.children;
-
-                        if let (1, Some(VNodeKind::Text(te))) =
-                            (children.len(), children.get(0).map(|f| &f.kind))
-                        {
-                            block = block.title(vec![Span::from(te.text)]);
-                        }
-
-                        state.block_stack.push(block);
-                    }
-
-                    "span" | "header" => {}
-
-                    "footer" => {}
-
-                    "p" => {
-                        state.layouts.push(Layout::default());
-                        new_layout = true;
-                    }
-
-                    // elements that style for whatever reason
-                    "em" => state.current_styles.push(Styles::Emphasis),
-                    "i" => state.current_styles.push(Styles::Italic),
-                    "b" => state.current_styles.push(Styles::Bold),
-                    "u" => state.current_styles.push(Styles::Underline),
-                    "strike" => state.current_styles.push(Styles::Strikethrough),
-
-                    "li" => {}
-                    "ul" => {}
-                    "ol" => {}
-                    "code" => {}
-                    "hr" => {}
-
-                    // Tables
-                    "table" => {}
-                    "tr" => {}
-                    "th" => {}
-                    "td" => {}
-
-                    // Inputs
-                    "input" => {}
-                    "label" => {}
-
-                    _ => {}
-                }
-
-                let cur_layout = state.layouts.last_mut().unwrap();
-                let cur_block = state.block_stack.last_mut().unwrap();
-                let mut cur_style = TuiStyle::default();
-
-                for attr in el.attributes {
-                    if attr.namespace == Some("style") {
-                        match attr.name {
-                            "width" => {}
-                            "height" => {}
-
-                            "background" => {
-                                //
-                                // cur_style.bg
-                                // cur_block.style()
-                            }
-                            "background-color" => {}
-
-                            "border" => {}
-                            "border-bottom" => {}
-                            "border-bottom-color" => {}
-                            "border-bottom-style" => {}
-                            "border-bottom-width" => {}
-                            "border-color" => {}
-                            "border-left" => {}
-                            "border-left-color" => {}
-                            "border-left-style" => {}
-                            "border-left-width" => {}
-                            "border-right" => {}
-                            "border-right-color" => {}
-                            "border-right-style" => {}
-                            "border-right-width" => {}
-                            "border-style" => {}
-                            "border-top" => {}
-                            "border-top-color" => {}
-                            "border-top-style" => {}
-                            "border-top-width" => {}
-                            "border-width" => {}
-
-                            "clear" => {}
-                            "clip" => {}
-                            "color" => {}
-                            "cursor" => {}
-                            "display" => {}
-                            "filter" => {}
-                            "float" => {}
-                            "font" => {}
-                            "font-family" => {}
-                            "font-size" => {}
-                            "font-variant" => {}
-                            "font-weight" => {}
-
-                            "left" => {}
-                            "letter-spacing" => {}
-                            "line-height" => {}
-                            "list-style" => {}
-                            "list-style-image" => {}
-                            "list-style-position" => {}
-                            "list-style-type" => {}
-                            "margin" => {}
-                            "margin-bottom" => {}
-                            "margin-left" => {}
-                            "margin-right" => {}
-                            "margin-top" => {}
-                            "overflow" => {}
-                            "padding" => {}
-                            "padding-bottom" => {}
-                            "padding-left" => {}
-                            "padding-right" => {}
-                            "padding-top" => {}
-                            "position" => {}
-                            "stroke-dasharray" => {}
-                            "stroke-dashoffset" => {}
-                            "text-align" => {}
-                            "text-decoration" => {}
-                            "text-indent" => {}
-                            "text-transform" => {}
-                            "top" => {}
-                            "vertical-align" => {}
-                            "visibility" => {}
-                            "z-index" => {}
-
-                            "page-break-after"
-                            | "page-break-before"
-                            | "background-position"
-                            | "background-attachment"
-                            | "background-image"
-                            | "background-repeat"
-                            | _ => {}
-                        }
-                    }
-                }
-
-                for child in el.children {}
-            }
-        }
-        Rect::new(0, 0, 0, 0)
-    }
-
-    fn render_text(&self, f: &mut CrosstermFrame, node: &VNode) {}
-
-    fn render_fragment(&self, f: &mut CrosstermFrame) {}
+    Ok(())
 }
 
-impl<'a> tui_template::tuiapp::TuiApp for RinkDom {
-    fn render(&mut self, frame: &mut CrosstermFrame) {
-        let base_scope = self.vdom.base_scope();
-        let root = base_scope.root();
+// enum InputEvent {
+//     UserInput(KeyEvent),
+//     Close,
+//     Tick,
+// }
 
-        let mut render_state = RenderState::new();
-        self.render_vnode(frame, root, &mut render_state);
-    }
+// // Setup input handling
+// let (tx, rx) = mpsc::channel();
+// let tick_rate = Duration::from_millis(100);
+// thread::spawn(move || {
+//     let mut last_tick = Instant::now();
+//     loop {
+//         // poll for tick rate duration, if no events, sent tick event.
+//         let timeout = tick_rate
+//             .checked_sub(last_tick.elapsed())
+//             .unwrap_or_else(|| Duration::from_secs(0));
 
-    fn event_handler(&self, action: tui_template::crossterm::event::Event) -> Result<()> {
-        todo!()
-    }
+//         if event::poll(timeout).unwrap() {
+//             if let TermEvent::Key(key) = event::read().unwrap() {
+//                 tx.send(InputEvent::UserInput(key)).unwrap();
+//             }
+//         }
 
-    fn handle_key(&mut self, key: tui_template::crossterm::event::KeyEvent) {
-        todo!()
-    }
+//         // if last_tick.elapsed() >= tick_rate {
+//         //     tx.send(InputEvent::Tick).unwrap();
+//         //     last_tick = Instant::now();
+//         // }
+//     }
+// });
 
-    fn tick(&mut self) {
-        todo!()
-    }
+// terminal.clear()?;
 
-    fn should_quit(&self) -> bool {
-        todo!()
-    }
-}
-struct RenderState<'a> {
-    block_stack: Vec<Block<'a>>,
+// // loop {
+// terminal.draw(|frame| {
+//     // draw the frame
+//     let size = frame.size();
+//     let root_node = vdom.base_scope().root_node();
+//     let block = render_vnode(frame, vdom, root_node);
 
-    layouts: Vec<Layout>,
+//     frame.render_widget(block, size);
+// })?;
 
-    /// All the current styles applied through the "style" tag
-    current_styles: Vec<Styles>,
-}
-
-// I don't think we can do any of these?
-enum Styles {
-    Bold,
-    Italic,
-    Strikethrough,
-    Emphasis,
-    Underline,
-}
-
-impl<'a> RenderState<'a> {
-    fn new() -> Self {
-        let block_stack = Vec::new();
-        Self {
-            block_stack,
-            current_styles: Vec::new(),
-            layouts: Vec::new(),
-        }
-    }
-}
+// // // terminal.draw(|f| ui::draw(f, &mut app))?;
+// match rx.recv()? {
+//     InputEvent::UserInput(event) => match event.code {
+//         KeyCode::Char('q') => {
+//             disable_raw_mode()?;
+//             execute!(
+//                 terminal.backend_mut(),
+//                 LeaveAlternateScreen,
+//                 DisableMouseCapture
+//             )?;
+//             terminal.show_cursor()?;
+//             // break;
+//         }
+//         _ => {} // handle event
+//     },
+//     InputEvent::Tick => {} // tick
+//     InputEvent::Close => {
+//         // break;
+//     }
+// };
