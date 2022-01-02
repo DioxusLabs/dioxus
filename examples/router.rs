@@ -32,14 +32,14 @@ static App: Component = |cx| {
             Link { to: Route::AllUsers { page: 0 }, "List all users" }
             Link { to: Route::BlogList { page: 0 }, "Blog posts" }
         }
-        {match route {
+        match route {
             Route::Home => rsx!("Home"),
             Route::AllUsers { page } => rsx!("All users - page {page}"),
             Route::User { id } => rsx!("User - id: {id}"),
             Route::BlogList { page } => rsx!("Blog posts - page {page}"),
             Route::BlogPost { post_id } => rsx!("Blog post - post {post_id}"),
             Route::NotFound => rsx!("Not found"),
-        }}
+        }
         footer {}
     })
 };

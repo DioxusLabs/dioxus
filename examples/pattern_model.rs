@@ -24,7 +24,7 @@ use dioxus::prelude::*;
 const STYLE: &str = include_str!("./assets/calculator.css");
 fn main() {
     env_logger::init();
-    dioxus::desktop::launch_cfg(App, |cfg| {
+    dioxus::desktop::launch_cfg(app, |cfg| {
         cfg.with_window(|w| {
             w.with_title("Calculator Demo")
                 .with_resizable(false)
@@ -33,33 +33,33 @@ fn main() {
     });
 }
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let state = use_ref(&cx, || Calculator::new());
 
     let clear_display = state.read().display_value.eq("0");
     let clear_text = if clear_display { "C" } else { "AC" };
     let formatted = state.read().formatted_display();
 
-    rsx!(cx, div { id: "wrapper"
+    rsx!(cx, div { id: "wrapper",
         div { class: "app", style { "{STYLE}" }
             div { class: "calculator", onkeypress: move |evt| state.write().handle_keydown(evt),
                 div { class: "calculator-display", "{formatted}"}
-                div { class: "calculator-keypad"
-                    div { class: "input-keys"
-                        div { class: "function-keys"
+                div { class: "calculator-keypad",
+                    div { class: "input-keys",
+                        div { class: "function-keys",
                             CalculatorKey { name: "key-clear", onclick: move |_| state.write().clear_display(), "{clear_text}" }
                             CalculatorKey { name: "key-sign", onclick: move |_| state.write().toggle_sign(), "±"}
                             CalculatorKey { name: "key-percent", onclick: move |_| state.write().toggle_percent(), "%"}
                         }
-                        div { class: "digit-keys"
+                        div { class: "digit-keys",
                             CalculatorKey { name: "key-0", onclick: move |_| state.write().input_digit(0), "0" }
                             CalculatorKey { name: "key-dot", onclick: move |_|  state.write().input_dot(), "●" }
-                            {(1..10).map(move |k| rsx!{
+                            (1..10).map(move |k| rsx!{
                                 CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  state.write().input_digit(k), "{k}" }
-                            })}
+                            })
                         }
                     }
-                    div { class: "operator-keys"
+                    div { class: "operator-keys",
                         CalculatorKey { name:"key-divide", onclick: move |_| state.write().set_operator(Operator::Div), "÷" }
                         CalculatorKey { name:"key-multiply", onclick: move |_| state.write().set_operator(Operator::Mul), "×" }
                         CalculatorKey { name:"key-subtract", onclick: move |_| state.write().set_operator(Operator::Sub), "−" }
@@ -70,7 +70,7 @@ static App: Component = |cx| {
             }
         }
     })
-};
+}
 
 #[derive(Props)]
 struct CalculatorKeyProps<'a> {
@@ -82,9 +82,9 @@ struct CalculatorKeyProps<'a> {
 fn CalculatorKey<'a>(cx: Scope<'a, CalculatorKeyProps<'a>>) -> Element {
     cx.render(rsx! {
         button {
-            class: "calculator-key {cx.props.name}"
-            onclick: move |e| (cx.props.onclick)(e)
-            {&cx.props.children}
+            class: "calculator-key {cx.props.name}",
+            onclick: move |e| (cx.props.onclick)(e),
+            &cx.props.children
         }
     })
 }

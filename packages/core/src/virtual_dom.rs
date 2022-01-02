@@ -80,7 +80,7 @@ use std::{any::Any, collections::VecDeque, iter::FromIterator, pin::Pin, sync::A
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 ///
 /// ```rust, ignore
-/// fn App(cx: Scope<()>) -> Element {
+/// fn App(cx: Scope) -> Element {
 ///     cx.render(rsx!{
 ///         div { "Hello World" }
 ///     })
@@ -127,7 +127,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// fn Example(cx: Scope<()>) -> Element  {
+    /// fn Example(cx: Scope) -> Element  {
     ///     cx.render(rsx!( div { "hello world" } ))
     /// }
     ///
@@ -260,6 +260,10 @@ impl VirtualDom {
         self.channel.0.clone()
     }
 
+    pub fn get_element(&self, id: ElementId) -> Option<&VNode> {
+        self.scopes.get_element(id)
+    }
+
     /// Add a new message to the scheduler queue directly.
     ///
     ///
@@ -388,7 +392,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```rust, ignore
-    /// fn App(cx: Scope<()>) -> Element {
+    /// fn App(cx: Scope) -> Element {
     ///     cx.render(rsx!( div {"hello"} ))
     /// }
     ///
@@ -544,7 +548,7 @@ impl VirtualDom {
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
     /// ```rust
-    /// fn Base(cx: Scope<()>) -> Element {
+    /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -564,7 +568,7 @@ impl VirtualDom {
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
     /// ```rust
-    /// fn Base(cx: Scope<()>) -> Element {
+    /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -586,7 +590,7 @@ impl VirtualDom {
     ///
     ///
     /// ```rust
-    /// fn Base(cx: Scope<()>) -> Element {
+    /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -609,7 +613,7 @@ impl VirtualDom {
     ///
     ///
     /// ```rust
-    /// fn Base(cx: Scope<()>) -> Element {
+    /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
     ///
@@ -753,7 +757,7 @@ pub enum SchedulerMsg {
 ///
 /// # Example
 /// ```rust
-/// fn App(cx: Scope<()>) -> Element {
+/// fn App(cx: Scope) -> Element {
 ///     rsx!(cx, div {
 ///         onclick: move |_| println!("Clicked!")
 ///     })
@@ -871,7 +875,7 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 /// ## Example
 ///
 /// ```rust, ignore
-/// fn App(cx: Scope<()>) -> Element {
+/// fn App(cx: Scope) -> Element {
 ///     cx.render(rsx!{
 ///         CustomCard {
 ///             h1 {}2
@@ -1002,4 +1006,104 @@ impl EmptyBuilder {
 /// to initialize a component's props.
 pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
     T::builder()
+}
+
+pub struct Event<T> {
+    data: Arc<T>,
+    _cancel: std::rc::Rc<std::cell::Cell<bool>>,
+}
+
+impl<T> std::ops::Deref for Event<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.data.as_ref()
+    }
+}
+
+impl<T> Event<T> {
+    pub fn cancel(&self) {}
+    pub fn timestamp(&self) {}
+    pub fn triggered_element(&self) -> Option<Element> {
+        None
+    }
+}
+
+pub struct ElementIdIterator<'a> {
+    vdom: &'a VirtualDom,
+
+    // Heuristcally we should never bleed into 5 completely nested fragments/components
+    // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
+    stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 5]>,
+}
+
+impl<'a> ElementIdIterator<'a> {
+    pub fn new(vdom: &'a VirtualDom, node: &'a VNode<'a>) -> Self {
+        Self {
+            vdom,
+            stack: smallvec::smallvec![(0, node)],
+        }
+    }
+}
+
+impl<'a> Iterator for ElementIdIterator<'a> {
+    type Item = &'a VNode<'a>;
+
+    fn next(&mut self) -> Option<&'a VNode<'a>> {
+        let mut should_pop = false;
+        let mut returned_node = None;
+        let mut should_push = None;
+
+        while returned_node.is_none() {
+            if let Some((count, node)) = self.stack.last_mut() {
+                match node {
+                    // We can only exit our looping when we get "real" nodes
+                    VNode::Element(_) | VNode::Text(_) | VNode::Placeholder(_) => {
+                        // We've recursed INTO an element/text
+                        // We need to recurse *out* of it and move forward to the next
+                        // println!("Found element! Returning it!");
+                        should_pop = true;
+                        returned_node = Some(&**node);
+                    }
+
+                    // If we get a fragment we push the next child
+                    VNode::Fragment(frag) => {
+                        let _count = *count as usize;
+                        if _count >= frag.children.len() {
+                            should_pop = true;
+                        } else {
+                            should_push = Some(&frag.children[_count]);
+                        }
+                    }
+
+                    // For components, we load their root and push them onto the stack
+                    VNode::Component(sc) => {
+                        // todo!();
+                        let scope = self.vdom.get_scope(sc.scope.get().unwrap()).unwrap();
+
+                        // Simply swap the current node on the stack with the root of the component
+                        *node = scope.root_node();
+                    }
+                }
+            } else {
+                // If there's no more items on the stack, we're done!
+                return None;
+            }
+
+            if should_pop {
+                self.stack.pop();
+                if let Some((id, _)) = self.stack.last_mut() {
+                    *id += 1;
+                }
+                should_pop = false;
+            }
+
+            if let Some(push) = should_push {
+                self.stack.push((0, push));
+                should_push = None;
+            }
+        }
+
+        returned_node
+    }
 }

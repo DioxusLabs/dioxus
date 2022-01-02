@@ -43,21 +43,21 @@ struct WeatherProps {}
 static WeatherDisplay: Component<WeatherProps> = |cx| {
     //
     cx.render(rsx!(
-        div { class: "flex items-center justify-center flex-col"
-            div { class: "flex items-center justify-center"
-                div { class: "flex flex-col bg-white rounded p-4 w-full max-w-xs"
-                    div{ class: "font-bold text-xl"
+        div { class: "flex items-center justify-center flex-col",
+            div { class: "flex items-center justify-center",
+                div { class: "flex flex-col bg-white rounded p-4 w-full max-w-xs",
+                    div{ class: "font-bold text-xl",
                         "Jon's awesome site!!"
                     }
-                    div{ class: "text-sm text-gray-500"
+                    div{ class: "text-sm text-gray-500",
                         "He worked so hard on it :)"
                     }
-                    div { class: "flex flex-row items-center justify-center mt-6"
-                        div { class: "font-medium text-6xl"
+                    div { class: "flex flex-row items-center justify-center mt-6",
+                        div { class: "font-medium text-6xl",
                             "1337"
                         }
                     }
-                    div { class: "flex flex-row justify-between mt-6"
+                    div { class: "flex flex-row justify-between mt-6",
                         "Legit made my own React"
                     }
                 }

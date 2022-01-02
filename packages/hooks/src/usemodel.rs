@@ -14,18 +14,15 @@ use std::{
 };
 
 pub fn use_model<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) -> UseModel<'a, T> {
-    cx.use_hook(
-        |_| UseModelInner {
-            update_scheduled: Cell::new(false),
-            update_callback: cx.schedule_update(),
-            value: RefCell::new(f()),
-            // tasks: RefCell::new(Vec::new()),
-        },
-        |inner| {
-            inner.update_scheduled.set(false);
-            UseModel { inner }
-        },
-    )
+    let inner = cx.use_hook(|_| UseModelInner {
+        update_scheduled: Cell::new(false),
+        update_callback: cx.schedule_update(),
+        value: RefCell::new(f()),
+        // tasks: RefCell::new(Vec::new()),
+    });
+
+    inner.update_scheduled.set(false);
+    UseModel { inner }
 }
 
 pub struct UseModel<'a, T> {
@@ -81,21 +78,10 @@ pub fn use_model_coroutine<'a, T, F: Future<Output = ()> + 'static>(
     _model: UseModel<T>,
     _f: impl FnOnce(AppModels) -> F,
 ) -> UseModelCoroutine {
-    cx.use_hook(
-        |_| {
-            //
-            UseModelTaskInner {
-                task: Default::default(),
-            }
-        },
-        |inner| {
-            // if let Some(task) = inner.task.get_mut() {
-            //     cx.push_task(|| task);
-            // }
-            //
-            todo!()
-        },
-    )
+    cx.use_hook(|_| UseModelTaskInner {
+        task: Default::default(),
+    });
+    todo!()
 }
 
 impl<T> Copy for UseModel<'_, T> {}

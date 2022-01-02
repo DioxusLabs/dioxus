@@ -11,17 +11,85 @@
 //!
 //! Any errors in using rsx! will likely occur when people start using it, so the first errors must be really helpful.
 
-mod ambiguous;
-mod body;
 mod component;
 mod element;
-mod fragment;
 mod node;
 
 // Re-export the namespaces into each other
-pub use ambiguous::*;
-pub use body::*;
 pub use component::*;
 pub use element::*;
-pub use fragment::*;
 pub use node::*;
+
+// imports
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{quote, ToTokens, TokenStreamExt};
+use syn::{
+    parse::{Parse, ParseStream},
+    Ident, Result, Token,
+};
+
+pub struct CallBody {
+    custom_context: Option<Ident>,
+    roots: Vec<BodyNode>,
+}
+
+impl Parse for CallBody {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let custom_context = if input.peek(Ident) && input.peek2(Token![,]) {
+            let name = input.parse::<Ident>()?;
+            input.parse::<Token![,]>()?;
+
+            Some(name)
+        } else {
+            None
+        };
+
+        let mut roots = Vec::new();
+
+        while !input.is_empty() {
+            let node = input.parse::<BodyNode>()?;
+
+            if input.peek(Token![,]) {
+                let _ = input.parse::<Token![,]>();
+            }
+
+            roots.push(node);
+        }
+
+        Ok(Self {
+            custom_context,
+            roots,
+        })
+    }
+}
+
+/// Serialize the same way, regardless of flavor
+impl ToTokens for CallBody {
+    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
+        let inner = if self.roots.len() == 1 {
+            let inner = &self.roots[0];
+            quote! { #inner }
+        } else {
+            let childs = &self.roots;
+            quote! { __cx.fragment_root([ #(#childs),* ]) }
+        };
+
+        match &self.custom_context {
+            // The `in cx` pattern allows directly rendering
+            Some(ident) => out_tokens.append_all(quote! {
+                #ident.render(LazyNodes::new_some(move |__cx: NodeFactory| -> VNode {
+                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
+                    #inner
+                }))
+            }),
+
+            // Otherwise we just build the LazyNode wrapper
+            None => out_tokens.append_all(quote! {
+                LazyNodes::new_some(move |__cx: NodeFactory| -> VNode {
+                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
+                    #inner
+                })
+            }),
+        };
+    }
+}

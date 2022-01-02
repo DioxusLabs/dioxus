@@ -59,14 +59,7 @@ pub struct WebviewWindowProps<'a> {
 pub fn WebviewWindow(cx: Scope<WebviewWindowProps>) -> Element {
     let dtcx = cx.consume_state::<RefCell<DesktopContext>>()?;
 
-    cx.use_hook(
-        |_| {
-            //
-        },
-        |state| {
-            //
-        },
-    );
+    cx.use_hook(|_| {});
 
     // render the children directly
     todo!()

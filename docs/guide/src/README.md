@@ -18,7 +18,7 @@ fn App(cx: Scope) -> Element {
 
 In general, Dioxus and React share many functional similarities. If this guide is lacking in any general concept or an error message is confusing, React's documentation might be more helpful. We are dedicated to providing a *familiar* toolkit for UI in Rust, so we've chosen to follow in the footsteps of popular UI frameworks (React, Redux, etc). If you know React, then you already know Dioxus. If you don't know either, this guide will still help you!
 
-> This is introduction book! For advanced topics, check out the [Reference](https://dioxuslabs.com/reference) instead.
+> This is an introduction book! For advanced topics, check out the [Reference](https://dioxuslabs.com/reference) instead.
 
 ## Multiplatform
 
@@ -29,6 +29,7 @@ Right now, we have several 1st-party renderers:
 - Tao/Tokio (for Desktop apps)
 - Tao/Tokio (for Mobile apps)
 - SSR (for generating static markup)
+- TUI/Rink (for terminal-based apps)
 
 ### Web Support
 ---
@@ -40,12 +41,10 @@ Because the web is a fairly mature platform, we expect there to be very little A
 [Jump to the getting started guide for the web.]()
 
 Examples:
-- [TodoMVC](https://github.com/dioxusLabs/todomvc/)
-- [ECommerce]()
-- [Photo Editor]()
+- [TodoMVC](https://github.com/DioxusLabs/example-projects/tree/master/todomvc)
+- [ECommerce](https://github.com/DioxusLabs/example-projects/tree/master/ecommerce-site)
 
-[![TODOMVC](https://github.com/DioxusLabs/todomvc/raw/master/example.png)](https://github.com/dioxusLabs/todomvc/)
-
+[![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc)
 ### SSR Support
 ---
 Dioxus supports server-side rendering! 
@@ -59,7 +58,7 @@ let contents = dioxus::ssr::render_vdom(&dom);
 [Jump to the getting started guide for SSR.]()
 
 Examples:
-- [Example DocSite]()
+- [Example DocSite](https://github.com/dioxusLabs/docsite)
 - [Tide WebServer]()
 - [Markdown to fancy HTML generator]()
 
@@ -72,9 +71,8 @@ Desktop APIs will likely be in flux as we figure out better patterns than our El
 [Jump to the getting started guide for Desktop.]()
 
 Examples:
-- [File explorer]()
-- [Bluetooth scanner]()
-- [Device Viewer]()
+- [File explorer](https://github.com/dioxusLabs/file-explorer/)
+- [WiFi scanner](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner)
 
 [![File ExplorerExample](https://github.com/DioxusLabs/file-explorer-example/raw/master/image.png)](https://github.com/dioxusLabs/file-explorer/)
 
@@ -87,8 +85,7 @@ Mobile support is currently best suited for CRUD-style apps, ideally for interna
 [Jump to the getting started guide for Mobile.]()
 
 Examples:
-- [Todo App]()
-- [Chat App]()
+- [Todo App](https://github.com/DioxusLabs/example-projects/blob/master/ios_demo)
 
 ### LiveView / Server Component Support
 ---

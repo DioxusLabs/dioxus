@@ -58,7 +58,7 @@ That's it! We won't need to touch NPM/WebPack/Babel/Parcel, etc. However, you _c
 
 ## Rust Knowledge
 
-With Rust, things like benchmarking, testing, and documentation are included in the language. We strongly recommend going through the official Rust book _completely_. However, our hope is that a Dioxus app can serve as a great first project. With Dioxus you'll learn about:
+With Rust, things like benchmarking, testing, and documentation are included in the language. We strongly recommend going through the official Rust book _completely_. However, our hope is that a Dioxus app can serve as a great first Rust project. With Dioxus you'll learn about:
 
 - Error handling
 - Structs, Functions, Enums

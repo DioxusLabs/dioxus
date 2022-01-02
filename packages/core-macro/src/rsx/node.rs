@@ -4,34 +4,67 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    token, Expr, LitStr, Result,
+    token, Expr, LitStr, Result, Token,
 };
 
-// ==============================================
-// Parse any div {} as a VElement
-// ==============================================
+/*
+Parse
+-> div {}
+-> Component {}
+-> component()
+-> "text {with_args}"
+-> (0..10).map(|f| rsx!("asd")),  // <--- notice the comma - must be a complete expr
+*/
 pub enum BodyNode {
-    Element(AmbiguousElement),
-    Text(TextNode),
+    Element(Element),
+    Component(Component),
+    Text(LitStr),
     RawExpr(Expr),
 }
 
 impl Parse for BodyNode {
     fn parse(stream: ParseStream) -> Result<Self> {
-        // Supposedly this approach is discouraged due to inability to return proper errors
-        // TODO: Rework this to provide more informative errors
-
-        if stream.peek(token::Brace) {
-            let content;
-            syn::braced!(content in stream);
-            return Ok(BodyNode::RawExpr(content.parse::<Expr>()?));
-        }
-
         if stream.peek(LitStr) {
-            return Ok(BodyNode::Text(stream.parse::<TextNode>()?));
+            return Ok(BodyNode::Text(stream.parse()?));
         }
 
-        Ok(BodyNode::Element(stream.parse::<AmbiguousElement>()?))
+        // div {} -> el
+        // Div {} -> comp
+        if stream.peek(syn::Ident) && stream.peek2(token::Brace) {
+            if stream
+                .fork()
+                .parse::<Ident>()?
+                .to_string()
+                .chars()
+                .next()
+                .unwrap()
+                .is_ascii_uppercase()
+            {
+                return Ok(BodyNode::Component(stream.parse()?));
+            } else {
+                return Ok(BodyNode::Element(stream.parse::<Element>()?));
+            }
+        }
+
+        // component() -> comp
+        // ::component {} -> comp
+        // ::component () -> comp
+        if (stream.peek(syn::Ident) && stream.peek2(token::Paren))
+            || (stream.peek(Token![::]))
+            || (stream.peek(Token![:]) && stream.peek2(Token![:]))
+        {
+            return Ok(BodyNode::Component(stream.parse::<Component>()?));
+        }
+
+        // crate::component{} -> comp
+        // crate::component() -> comp
+        if let Ok(pat) = stream.fork().parse::<syn::Path>() {
+            if pat.segments.len() > 1 {
+                return Ok(BodyNode::Component(stream.parse::<Component>()?));
+            }
+        }
+
+        Ok(BodyNode::RawExpr(stream.parse::<Expr>()?))
     }
 }
 
@@ -39,31 +72,13 @@ impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self {
             BodyNode::Element(el) => el.to_tokens(tokens),
-            BodyNode::Text(txt) => txt.to_tokens(tokens),
+            BodyNode::Component(comp) => comp.to_tokens(tokens),
+            BodyNode::Text(txt) => tokens.append_all(quote! {
+                __cx.text(format_args_f!(#txt))
+            }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)
             }),
         }
-    }
-}
-
-// =======================================
-// Parse just plain text
-// =======================================
-pub struct TextNode(LitStr);
-
-impl Parse for TextNode {
-    fn parse(s: ParseStream) -> Result<Self> {
-        Ok(Self(s.parse()?))
-    }
-}
-
-impl ToTokens for TextNode {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // todo: use heuristics to see if we can promote to &static str
-        let token_stream = &self.0.to_token_stream();
-        tokens.append_all(quote! {
-            __cx.text(format_args_f!(#token_stream))
-        });
     }
 }

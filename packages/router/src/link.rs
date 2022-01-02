@@ -41,8 +41,8 @@ pub fn Link<'a, R: Routable>(cx: Scope<'a, LinkProps<'a, R>>) -> Element {
         a {
             href: "#",
             class: format_args!("{}", cx.props.class.unwrap_or("")),
-            {&cx.props.children}
             onclick: move |_| service.push_route(cx.props.to.clone()),
+            {&cx.props.children}
         }
     })
 }

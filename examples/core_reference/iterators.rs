@@ -20,11 +20,11 @@ pub static Example: Component = |cx| {
             li { onclick: move |_| example_data.set(f)
                 "ID: {f}"
                 ul {
-                    {(0..10).map(|k| rsx!{
+                    (0..10).map(|k| rsx!{
                         li {
                             "Sub iterator: {f}.{k}"
                         }
-                    })}
+                    })
                 }
             }
         }

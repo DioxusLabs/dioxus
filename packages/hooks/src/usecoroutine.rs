@@ -1,6 +1,6 @@
 use dioxus_core::{ScopeState, TaskId};
 use std::future::Future;
-use std::{cell::Cell, pin::Pin, rc::Rc};
+use std::{cell::Cell, rc::Rc};
 /*
 
 
@@ -22,61 +22,58 @@ pub fn use_coroutine<'a, F>(
 where
     F: Future<Output = ()> + 'static,
 {
-    cx.use_hook(
-        move |_| {
-            let f = create_future();
-            let id = cx.push_future(f);
-            State {
+    let state = cx.use_hook(move |_| {
+        let f = create_future();
+        let id = cx.push_future(f);
+        State {
                 running: Default::default(),
-                id
+                _id: id
                 // pending_fut: Default::default(),
                 // running_fut: Default::default(),
             }
-        },
-        |state| {
-            // state.pending_fut.set(Some(Box::pin(f)));
+    });
 
-            // if let Some(fut) = state.running_fut.as_mut() {
-            //     cx.push_future(fut);
-            // }
+    // state.pending_fut.set(Some(Box::pin(f)));
 
-            // if let Some(fut) = state.running_fut.take() {
-            // state.running.set(true);
-            // fut.resume();
-            // }
+    // if let Some(fut) = state.running_fut.as_mut() {
+    //     cx.push_future(fut);
+    // }
 
-            // let submit: Box<dyn FnOnce() + 'a> = Box::new(move || {
-            //     let g = async move {
-            //         running.set(true);
-            //         create_future().await;
-            //         running.set(false);
-            //     };
-            //     let p: Pin<Box<dyn Future<Output = ()>>> = Box::pin(g);
-            //     fut_slot
-            //         .borrow_mut()
-            //         .replace(unsafe { std::mem::transmute(p) });
-            // });
+    // if let Some(fut) = state.running_fut.take() {
+    // state.running.set(true);
+    // fut.resume();
+    // }
 
-            // let submit = unsafe { std::mem::transmute(submit) };
-            // state.submit.get_mut().replace(submit);
+    // let submit: Box<dyn FnOnce() + 'a> = Box::new(move || {
+    //     let g = async move {
+    //         running.set(true);
+    //         create_future().await;
+    //         running.set(false);
+    //     };
+    //     let p: Pin<Box<dyn Future<Output = ()>>> = Box::pin(g);
+    //     fut_slot
+    //         .borrow_mut()
+    //         .replace(unsafe { std::mem::transmute(p) });
+    // });
 
-            // if state.running.get() {
-            //     // let mut fut = state.fut.borrow_mut();
-            //     // cx.push_task(|| fut.as_mut().unwrap().as_mut());
-            // } else {
-            //     // make sure to drop the old future
-            //     if let Some(fut) = state.fut.borrow_mut().take() {
-            //         drop(fut);
-            //     }
-            // }
-            CoroutineHandle { cx, inner: state }
-        },
-    )
+    // let submit = unsafe { std::mem::transmute(submit) };
+    // state.submit.get_mut().replace(submit);
+
+    // if state.running.get() {
+    //     // let mut fut = state.fut.borrow_mut();
+    //     // cx.push_task(|| fut.as_mut().unwrap().as_mut());
+    // } else {
+    //     // make sure to drop the old future
+    //     if let Some(fut) = state.fut.borrow_mut().take() {
+    //         drop(fut);
+    //     }
+    // }
+    CoroutineHandle { cx, inner: state }
 }
 
 struct State {
     running: Rc<Cell<bool>>,
-    id: TaskId,
+    _id: TaskId,
     // the way this is structure, you can toggle the coroutine without re-rendering the comppnent
     // this means every render *generates* the future, which is a bit of a waste
     // todo: allocate pending futures in the bump allocator and then have a true promotion

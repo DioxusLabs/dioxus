@@ -139,7 +139,7 @@ fn App(cx: Scope)-> Element {
     let mut sec_elapsed = use_state(&cx, || 0);
 
     use_future(&cx, || {
-        let mut sec_elapsed = sec_elapsed.to_owned();
+        let mut sec_elapsed = sec_elapsed.for_async();
         async move {
             loop {
                 TimeoutFuture::from_ms(1000).await;

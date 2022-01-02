@@ -51,7 +51,7 @@ fn app(cx: Scope) -> Element {
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
     ))
-};
+}
 ```
 
 Dioxus can be used to deliver webapps, desktop apps, static sites, liveview apps, mobile apps (WIP), and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
@@ -73,20 +73,26 @@ If you know React, then you already know Dioxus.
         <th><a href="https://dioxuslabs.com/guide/">Web</a></th>
         <th><a href="https://dioxuslabs.com/guide/">Desktop</a></th>
         <th><a href="https://dioxuslabs.com/guide/">Mobile</a></th>
+        <th><a href="https://dioxuslabs.com/guide/">TUI</a></th>
         <th><a href="https://dioxuslabs.com/guide/">State</a></th>
-        <th><a href="https://dioxuslabs.com/guide/">Docs</a></th>
         <th><a href="https://dioxuslabs.com/guide/">Tools</a></th>
     <tr>
 </table>
 
-## Examples:
 
-| File Navigator (Desktop)                                                                                                                                                        | WiFi scanner (Desktop)                                                                                                                                                                 | TodoMVC (All platforms)                                                                                                                                                 | Ecommerce w/ Tailwind (Liveview)                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [![File Explorer](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![Ecommerce Example](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
+
+## Examples Projects:
+
+| File Navigator (Desktop)                                                                                                                                                        | WiFi scanner (Desktop)                                                                                                                                                                 | TodoMVC (All platforms)                                                                                                                                                 | E-commerce w/ Tailwind (Liveview)                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [![File Explorer](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![E-commerce Example](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
 
 
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
+
+## Running examples locally
+
+All local examples are built for the desktop renderer. This means you can simply clone this repo and call `cargo run --example EXAMPLE_NAME`. To run non-desktop examples, checkout the example projects shown above.
 
 ## Why Dioxus and why Rust?
 

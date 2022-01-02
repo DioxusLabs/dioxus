@@ -15,19 +15,18 @@ use dioxus::ssr;
 fn main() {
     let vdom = VirtualDom::new(App);
     let content = ssr::render_vdom_cfg(&vdom, |f| f.pre_render(true));
-
     dioxus::desktop::launch_cfg(App, |c| c.with_prerendered(content));
 }
 
 static App: Component = |cx| {
-    let mut val = use_state(&cx, || 0);
+    let val = use_state(&cx, || 0);
 
     cx.render(rsx! {
         div {
-            h1 {"hello world. Count: {val}"}
+            h1 { "hello world. Count: {val}" }
             button {
+                onclick: move |_| *val.modify() += 1,
                 "click to increment"
-                onclick: move |_| val += 1
             }
         }
     })
