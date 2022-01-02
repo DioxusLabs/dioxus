@@ -22,19 +22,24 @@
       alt="docs.rs docs" />
   </a>
   <!-- CI -->
-  <a href="https://github.com/jkelleyrtp/dioxus/actions">
+  <!-- <a href="https://github.com/jkelleyrtp/dioxus/actions">
     <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
       alt="CI status" />
+  </a> -->
+  <!--Awesome -->
+  <a href="https://github.com/dioxuslabs/awesome-dioxus">
+    <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg"
+      alt="Awesome Page" />
   </a>
 </div>
 
 <div align="center">
   <h3>
-    <a href="https://dioxuslabs.com/guide"> Guide </a>
-    <span> | </span>
     <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/awesome-dioxus"> Examples </a>
+    <a href="https://dioxuslabs.com/guide"> Guide </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
   </h3>
 </div>
 
@@ -66,6 +71,15 @@ If you know React, then you already know Dioxus.
 - Multi-channel asynchronous scheduler for first-class async support.
 - And more! Read the [full release post here](https://dioxuslabs.com/).
 
+
+### Examples
+
+All examples in this repo are desktop apps. To run an example, simply clone this repo and use cargo with the `desktop` feature enabled. For SSR examples, you might need to enable SSR instead.
+
+```
+cargo run --features desktop --example EXAMPLE
+```
+
 ## Get Started with...
 
 <table style="width:100%" align="center">
@@ -80,8 +94,7 @@ If you know React, then you already know Dioxus.
 </table>
 
 
-
-## Examples Projects:
+## Example Projects:
 
 | File Navigator (Desktop)                                                                                                                                                        | WiFi scanner (Desktop)                                                                                                                                                                 | TodoMVC (All platforms)                                                                                                                                                 | E-commerce w/ Tailwind (Liveview)                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -90,9 +103,6 @@ If you know React, then you already know Dioxus.
 
 See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
 
-## Running examples locally
-
-All local examples are built for the desktop renderer. This means you can simply clone this repo and call `cargo run --example EXAMPLE_NAME`. To run non-desktop examples, checkout the example projects shown above.
 
 ## Why Dioxus and why Rust?
 

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use rand::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
 #[derive(Clone, PartialEq)]
@@ -29,7 +29,7 @@ impl Label {
     }
 }
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let items = use_ref(&cx, || vec![]);
     let selected = use_state(&cx, || None);
 
@@ -64,7 +64,7 @@ static App: Component = |cx| {
             }
             table {
                 tbody {
-                    {items.read().iter().enumerate().map(|(id, item)| {
+                    items.read().iter().enumerate().map(|(id, item)| {
                         let is_in_danger = if (*selected).map(|s| s == id).unwrap_or(false) {"danger"} else {""};
                         rsx!(tr { class: "{is_in_danger}",
                             td { class:"col-md-1" }
@@ -79,13 +79,13 @@ static App: Component = |cx| {
                             }
                             td { class: "col-md-6" }
                         })
-                    })}
+                    })
                 }
              }
             span { class: "preloadicon glyphicon glyphicon-remove", aria_hidden: "true" }
         }
     })
-};
+}
 
 #[derive(Props)]
 struct ActionButtonProps<'a> {
@@ -95,9 +95,17 @@ struct ActionButtonProps<'a> {
 }
 
 fn ActionButton<'a>(cx: Scope<'a, ActionButtonProps<'a>>) -> Element {
-    rsx!(cx, div { class: "col-sm-6 smallpad",
-        button { class:"btn btn-primary btn-block", r#type: "button", id: "{cx.props.id}",  onclick: move |_| (cx.props.onclick)(),
-            "{cx.props.name}"
+    cx.render(rsx! {
+        div {
+            class: "col-sm-6 smallpad",
+            button {
+                class:"btn btn-primary btn-block",
+                r#type: "button",
+                id: "{cx.props.id}",
+                onclick: move |_| (cx.props.onclick)(),
+
+                "{cx.props.name}"
+            }
         }
     })
 }

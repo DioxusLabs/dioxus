@@ -13,10 +13,10 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let mut rng = SmallRng::from_entropy();
 
     cx.render(rsx! {
@@ -29,7 +29,7 @@ static App: Component = |cx| {
             }
         }
     })
-};
+}
 
 #[derive(PartialEq, Props)]
 struct RowProps {

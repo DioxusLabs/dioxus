@@ -1,3 +1,6 @@
+//! This example just flexes the ability to use arbitrary expressions within RSX.
+//! It also proves that lifetimes work properly, especially when used with use_ref
+
 use dioxus::prelude::*;
 
 fn main() {

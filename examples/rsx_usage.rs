@@ -39,7 +39,7 @@
 //! - Allow top-level fragments
 //!
 fn main() {
-    dioxus::desktop::launch(EXAMPLE);
+    dioxus::desktop::launch(app);
 }
 
 /// When trying to return "nothing" to Dioxus, you'll need to specify the type parameter or Rust will be sad.
@@ -49,7 +49,7 @@ const NONE_ELEMENT: Option<()> = None;
 use baller::Baller;
 use dioxus::prelude::*;
 
-pub static EXAMPLE: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
@@ -192,10 +192,12 @@ pub static EXAMPLE: Component = |cx| {
             [helper(&cx, "hello world!")]
         }
     })
-};
+}
 
 fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {
-    rsx!(cx, p { "{text}" })
+    cx.render(rsx! {
+        p { "{text}" }
+    })
 }
 
 mod baller {
@@ -227,5 +229,7 @@ pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
 
 #[inline_props]
 fn with_inline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
-    rsx!(cx, p { "{text}" })
+    cx.render(rsx! {
+        p { "{text}" }
+    })
 }

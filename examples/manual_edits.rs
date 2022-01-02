@@ -33,7 +33,7 @@ fn main() {
         AppendChildren { many: 1 },
     ];
 
-    let app: Component = |cx| rsx!(cx, div { "some app" });
+    let app: Component = |cx| cx.render(rsx!(div { "some app" }));
 
     dioxus_desktop::run(app, (), |c| c.with_edits(edits));
 }

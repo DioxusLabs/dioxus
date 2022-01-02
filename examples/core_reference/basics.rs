@@ -9,7 +9,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             Greeting {
@@ -18,20 +18,21 @@ pub static Example: Component = |cx| {
             }
         }
     })
-};
-
-#[derive(PartialEq, Props)]
-struct GreetingProps {
-    name: &'static str,
 }
 
-static Greeting: Component<GreetingProps> = |cx| {
+#[derive(PartialEq, Props)]
+struct GreetingProps<'a> {
+    name: &'static str,
+    children: Element<'a>,
+}
+
+pub fn Greeting<'a>(cx: Scope<'a, GreetingProps<'a>>) -> Element {
     cx.render(rsx! {
         div {
             h1 { "Hello, {cx.props.name}!" }
             p { "Welcome to the Dioxus framework" }
             br {}
-            {cx.children()}
+            &cx.props.children
         }
     })
-};
+}

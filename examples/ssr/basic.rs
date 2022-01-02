@@ -3,8 +3,9 @@ use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
+
 fn main() {
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
     dom.rebuild();
     println!(
         "{}",
@@ -12,14 +13,14 @@ fn main() {
     )
 }
 
-pub static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     cx.render(rsx!(
         div {
             class: "overflow-hidden"
             ul {
-                {(0..10).map(|i| rsx!{ li { class: "flex flex-col", "entry: {i}"}})}
+                (0..10).map(|i| rsx!{ li { class: "flex flex-col", "entry: {i}"}})
             }
             "hello world!"
         }
     ))
-};
+}

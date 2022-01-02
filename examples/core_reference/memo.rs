@@ -21,11 +21,11 @@ use dioxus::prelude::*;
 
 // By default, components with no props are always memoized.
 // A props of () is considered empty.
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         div { "100% memoized!" }
     })
-};
+}
 
 // These props do not borrow any content, and therefore can be safely memoized.
 // However, the parent *must* create a new string on every render.
@@ -35,11 +35,11 @@ pub struct MyProps1 {
     name: String,
 }
 
-pub static Example1: Component<MyProps1> = |cx| {
+pub fn Example1(cx: Scope<MyProps1>) -> Element {
     cx.render(rsx! {
         div { "100% memoized! {cx.props.name}" }
     })
-};
+}
 
 // These props do not borrow any content, and therefore can be safely memoized.
 // In contrast with the `String` example, these props use `Rc<str>` which operates similar to strings in JavaScript.
@@ -49,11 +49,11 @@ pub struct MyProps2 {
     name: std::rc::Rc<str>,
 }
 
-pub static Example2: Component<MyProps2> = |cx| {
+pub fn Example2(cx: Scope<MyProps2>) -> Element {
     cx.render(rsx! {
         div { "100% memoized! {cx.props.name}" }
     })
-};
+}
 
 // These props *do* borrow any content, and therefore cannot be safely memoized!.
 #[derive(PartialEq, Props)]
@@ -61,7 +61,7 @@ pub struct MyProps3<'a> {
     name: &'a str,
 }
 // We need to manually specify a lifetime that ensures props and scope (the component's state) share the same lifetime.
-// Using the `pub static Example: Component` pattern _will_ specify a lifetime, but that lifetime will be static which might
+// Using the `pub fn Example(cx: Scope): Component` pattern _will_ specify a lifetime, but that lifetime will be static which might
 // not exactly be what you want
 fn Example3(cx: Scope<'a, MyProps3<'a>>) -> DomTree {
     cx.render(rsx! {

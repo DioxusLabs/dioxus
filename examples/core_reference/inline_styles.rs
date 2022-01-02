@@ -10,7 +10,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         head {
             style: { background_color: "powderblue" }
@@ -24,15 +24,15 @@ pub static Example: Component = |cx| {
             }
         }
     })
-};
+}
 
 // .... technically the rsx! macro is slightly broken at the moment and allows styles not wrapped in style {}
 // I haven't noticed any name collisions yet, and am tentatively leaving this behavior in..
 // Don't rely on it.
-static Example2: Component = |cx| {
+pub fn Example2(cx: Scope) -> Element {
     cx.render(rsx! {
         div { color: "red"
             "hello world!"
         }
     })
-};
+}

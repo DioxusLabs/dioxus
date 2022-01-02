@@ -22,12 +22,12 @@
 //! the coroutine was initiated. `use_state` always returns the same setter, so you don't need to worry about
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
 use dioxus::prelude::*;
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let p1 = use_state(&cx, || 0);
     let p2 = use_state(&cx, || 0);
 
@@ -53,7 +53,7 @@ static App: Component = |cx| {
             Horsey { pos: *p2, "horsey 2" }
         }
     })
-};
+}
 
 #[derive(Props)]
 struct HorseyProps<'a> {

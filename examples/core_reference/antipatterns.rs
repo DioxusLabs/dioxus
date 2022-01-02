@@ -32,16 +32,20 @@ use dioxus::prelude::*;
 struct NoKeysProps {
     data: std::collections::HashMap<u32, String>,
 }
-static AntipatternNoKeys: Component<NoKeysProps> = |cx| {
+fn AntipatternNoKeys(cx: Scope<NoKeysProps>) -> Element {
     // WRONG: Make sure to add keys!
-    rsx!(cx, ul {
-        {cx.props.data.iter().map(|(k, v)| rsx!(li { "List item: {v}" }))}
+    cx.render(rsx! {
+        ul {
+            cx.props.data.iter().map(|(k, v)| rsx!(li { "List item: {v}" }))
+        }
     });
     // RIGHT: Like this:
-    rsx!(cx, ul {
-        {cx.props.data.iter().map(|(k, v)| rsx!(li { key: "{k}", "List item: {v}" }))}
+    cx.render(rsx! {
+        ul {
+            cx.props.data.iter().map(|(k, v)| rsx!(li { key: "{k}", "List item: {v}" }))
+        }
     })
-};
+}
 
 /// Antipattern: Deeply nested fragments
 /// ------------------------------------
@@ -54,9 +58,9 @@ static AntipatternNoKeys: Component<NoKeysProps> = |cx| {
 ///
 /// Only Component and Fragment nodes are susceptible to this issue. Dioxus mitigates this with components by providing
 /// an API for registering shared state without the ContextProvider pattern.
-static AntipatternNestedFragments: Component = |cx| {
+fn AntipatternNestedFragments(cx: Scope<()>) -> Element {
     // Try to avoid heavily nesting fragments
-    rsx!(cx,
+    cx.render(rsx!(
         Fragment {
             Fragment {
                 Fragment {
@@ -68,8 +72,8 @@ static AntipatternNestedFragments: Component = |cx| {
                 }
             }
         }
-    )
-};
+    ))
+}
 
 /// Antipattern: Using state after it's been updated
 /// -----------------------------------------------
@@ -82,13 +86,13 @@ static AntipatternNestedFragments: Component = |cx| {
 /// However, calling set_state will *not* update the current version of state in the component. This should be easy to
 /// recognize from the function signature, but Dioxus will not update the "live" version of state. Calling `set_state`
 /// merely places a new value in the queue and schedules the component for a future update.
-static AntipatternRelyingOnSetState: Component = |cx| {
+fn AntipatternRelyingOnSetState(cx: Scope) -> Element {
     let (state, set_state) = use_state(&cx, || "Hello world").classic();
     set_state("New state");
     // This will return false! `state` will *still* be "Hello world"
     assert!(state == &"New state");
     todo!()
-};
+}
 
 /// Antipattern: Capitalization
 /// ---------------------------
@@ -120,16 +124,16 @@ static antipattern_component: Component = |cx| todo!();
 struct MisuedHooksProps {
     should_render_state: bool,
 }
-static AntipatternMisusedHooks: Component<MisuedHooksProps> = |cx| {
+fn AntipatternMisusedHooks(cx: Scope<MisuedHooksProps>) -> Element {
     if props.should_render_state {
         // do not place a hook in the conditional!
         // prefer to move it out of the conditional
         let (state, set_state) = use_state(&cx, || "hello world").classic();
-        rsx!(cx, div { "{state}" })
+        cx.render(rsx!(div { "{state}" }))
     } else {
-        rsx!(cx, div { "Not rendering state" })
+        cx.render(rsx!(div { "Not rendering state" }))
     }
-};
+}
 
 /// Antipattern: Downcasting refs and panicking
 /// ------------------------------------------
@@ -173,9 +177,9 @@ static _example: Component = |cx| todo!();
 /// libraries.
 static __example: Component = |cx| todo!();
 
-pub static Example: Component = |cx| {
+fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         AntipatternNoKeys { data: std::collections::HashMap::new() }
         AntipatternNestedFragments {}
     })
-};
+}

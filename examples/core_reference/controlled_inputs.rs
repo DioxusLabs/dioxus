@@ -1,16 +1,16 @@
 use dioxus::prelude::*;
 fn main() {}
 
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
 
         }
     })
-};
+}
 
 // A controlled component:
-static ControlledSelect: Component = |cx| {
+pub fn ControlledSelect(cx: Scope) -> Element {
     let value = use_state(&cx, || String::from("Grapefruit"));
     cx.render(rsx! {
         select { value: "{value}", onchange: move |evt| value.set(evt.value()),
@@ -20,10 +20,10 @@ static ControlledSelect: Component = |cx| {
             option { value: "Mango", "Mango"}
         }
     })
-};
+}
 
 // TODO - how do uncontrolled things work?
-static UncontrolledSelect: Component = |cx| {
+pub fn UncontrolledSelect(cx: Scope) -> Element {
     let value = use_state(&cx, || String::new());
 
     cx.render(rsx! {
@@ -34,4 +34,4 @@ static UncontrolledSelect: Component = |cx| {
             option { value: "Mango", "Mango"}
         }
     })
-};
+}

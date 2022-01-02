@@ -20,12 +20,11 @@ pub struct Client {
 }
 
 fn app(cx: Scope) -> Element {
-    let clients = use_ref(&cx, || vec![] as Vec<Client>);
-
     let scene = use_state(&cx, || Scene::ClientsList);
     let firstname = use_state(&cx, String::new);
     let lastname = use_state(&cx, String::new);
     let description = use_state(&cx, String::new);
+    let clients = use_ref(&cx, || vec![] as Vec<Client>);
 
     cx.render(rsx!(
         body { 

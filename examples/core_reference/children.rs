@@ -18,7 +18,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component = |cx| {
+fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             Banner {
@@ -29,16 +29,19 @@ pub static Example: Component = |cx| {
             }
         }
     })
-};
+}
 
-pub static Banner: Component = |cx| {
+#[derive(Props)]
+struct BannerProps {
+    children: Element<'a>,
+}
+
+fn Banner(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             h1 { "This is a great banner!" }
-            div { class: "content"
-                {cx.children()}
-            }
+            div { class: "content", &cx.props.children }
             footer { "Wow, what a great footer" }
         }
     })
-};
+}

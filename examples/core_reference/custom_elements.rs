@@ -11,7 +11,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             custom_element {
@@ -19,7 +19,7 @@ pub static Example: Component = |cx| {
             }
         }
     })
-};
+}
 
 mod dioxus_elements {
     use std::fmt::Arguments;

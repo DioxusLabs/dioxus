@@ -14,7 +14,7 @@ struct DogApi {
 }
 const ENDPOINT: &str = "https://dog.ceo/api/breeds/image/random";
 
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope) -> Element {
     let doggo = use_suspense(
         cx,
         || surf::get(ENDPOINT).recv_json::<DogApi>(),
@@ -35,4 +35,4 @@ pub static Example: Component = |cx| {
             {doggo}
         }
     ))
-};
+}

@@ -17,27 +17,32 @@ fn app(cx: Scope) -> Element {
 
     let (async_count, dir) = (count.for_async(), *direction);
 
-    let task = use_coroutine(&cx, move || async move {
-        loop {
-            TimeoutFuture::new(250).await;
-            *async_count.modify() += dir;
+    let task = use_coroutine(&cx, move || {
+        //
+        async move {
+            loop {
+                TimeoutFuture::new(250).await;
+                // *async_count.modify() += dir;
+            }
         }
     });
 
-    rsx!(cx, div {
-        h1 {"count is {count}"}
-        button { onclick: move |_| task.stop(),
-            "Stop counting"
-        }
-        button { onclick: move |_| task.resume(),
-            "Start counting"
-        }
-        button {
-            onclick: move |_| {
-                *direction.modify() *= -1;
-                task.restart();
-            },
-            "Switch counting direcion"
+    cx.render(rsx! {
+        div {
+            h1 {"count is {count}"}
+            button { onclick: move |_| task.stop(),
+                "Stop counting"
+            }
+            button { onclick: move |_| task.resume(),
+                "Start counting"
+            }
+            button {
+                onclick: move |_| {
+                    *direction.modify() *= -1;
+                    task.restart();
+                },
+                "Switch counting direcion"
+            }
         }
     })
 }

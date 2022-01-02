@@ -19,7 +19,7 @@ h1   {color: blue;}
 p    {color: red;}
 "#;
 
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         head { style { "{STYLE}" } }
         body {
@@ -27,4 +27,4 @@ pub static Example: Component = |cx| {
             p {"This is a paragraph"}
         }
     })
-};
+}

@@ -5,4 +5,6 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component = |cx| cx.render(rsx! { Fragment {} });
+pub fn Example(cx: Scope) -> Element {
+    None
+}

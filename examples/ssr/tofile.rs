@@ -24,7 +24,7 @@ fn main() {
     .unwrap();
 }
 
-pub static App: Component = |cx| {
+pub fn App(cx: Scope) -> Element {
     cx.render(rsx!(
         div { class: "overflow-hidden"
             link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel:"stylesheet" }
@@ -37,9 +37,9 @@ pub static App: Component = |cx| {
             Hero {}
         }
     ))
-};
+}
 
-pub static Header: Component = |cx| {
+pub fn Header(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             header { class: "text-gray-400 bg-gray-900 body-font"
@@ -63,9 +63,9 @@ pub static Header: Component = |cx| {
             }
         }
     })
-};
+}
 
-pub static Hero: Component = |cx| {
+pub fn Hero(cx: Scope) -> Element {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -102,8 +102,9 @@ pub static Hero: Component = |cx| {
             }
         }
     })
-};
-pub static Entry: Component = |cx| {
+}
+
+pub fn Entry(cx: Scope) -> Element {
     //
     cx.render(rsx! {
         section{ class: "text-gray-400 bg-gray-900 body-font"
@@ -114,9 +115,9 @@ pub static Entry: Component = |cx| {
             }
         }
     })
-};
+}
 
-pub static StacksIcon: Component = |cx| {
+pub fn StacksIcon(cx: Scope) -> Element {
     cx.render(rsx!(
         svg {
             xmlns: "http://www.w3.org/2000/svg"
@@ -130,8 +131,9 @@ pub static StacksIcon: Component = |cx| {
             path { d: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"}
         }
     ))
-};
-pub static RightArrowIcon: Component = |cx| {
+}
+
+pub fn RightArrowIcon(cx: Scope) -> Element {
     cx.render(rsx!(
         svg {
             fill: "none"
@@ -144,4 +146,4 @@ pub static RightArrowIcon: Component = |cx| {
             path { d: "M5 12h14M12 5l7 7-7 7"}
         }
     ))
-};
+}
