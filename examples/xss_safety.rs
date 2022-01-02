@@ -11,12 +11,9 @@ fn app(cx: Scope) -> Element {
         div {
             "hello world!"
 
-            h1 {
-                "{contents}"
-            }
-            h3 {
-                [contents.as_str()]
-            }
+            h1 { "{contents}" }
+
+            h3 { [contents.as_str()] }
 
             input {
                 value: "{contents}",

@@ -20,7 +20,7 @@ fn runs_in_browser() {
 
 Then, when you run
 
-```
+```console
 $ dioxus test --chrome
 ```
 

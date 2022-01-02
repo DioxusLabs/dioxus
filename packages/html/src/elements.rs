@@ -281,8 +281,8 @@ builder_constructors! {
     /// ```
     ///
     /// ## References:
-    /// - https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div
-    /// - https://www.w3schools.com/tags/tag_div.asp
+    /// - <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div>
+    /// - <https://www.w3schools.com/tags/tag_div.asp>
     div {};
 
     /// Build a
@@ -883,7 +883,6 @@ builder_constructors! {
         src: Uri,
         step: String,
         tabindex: usize,
-
         width: isize,
 
         // Manual implementations below...

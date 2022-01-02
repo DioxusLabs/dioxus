@@ -10,7 +10,7 @@ fn main() {
 }
 
 fn parent(cx: Scope) -> Element {
-    let value = cx.use_hook(|_| String::new(), |f| f);
+    let value = cx.use_hook(|_| String::new());
 
     cx.render(rsx! {
         div {

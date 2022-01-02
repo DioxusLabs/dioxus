@@ -24,13 +24,13 @@ use dioxus::prelude::*;
 const STYLE: &str = include_str!("./assets/calculator.css");
 fn main() {
     env_logger::init();
-    // dioxus::desktop::launch_cfg(App, |cfg| {
-    //     cfg.with_window(|w| {
-    //         w.with_title("Calculator Demo")
-    //             .with_resizable(false)
-    //             .with_inner_size(LogicalSize::new(320.0, 530.0))
-    //     })
-    // });
+    dioxus::desktop::launch_cfg(app, |cfg| {
+        cfg.with_window(|w| {
+            w.with_title("Calculator Demo")
+                .with_resizable(false)
+                .with_inner_size(LogicalSize::new(320.0, 530.0))
+        })
+    });
 }
 
 fn app(cx: Scope) -> Element {

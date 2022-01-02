@@ -17,11 +17,7 @@ for more general tasks, we need some way of submitting a future or task into som
 
 ```rust
 
-let task = use_hook(
-    || { /* */ }, 
-    || { /* update the future if it needs to be updated */ }, 
-    || {}
-);
+let task = use_hook(|| { /* */ });
 cx.poll_future()
 // let recoil_event_loop = cx.use_task(move |_| async move {
 //     loop {

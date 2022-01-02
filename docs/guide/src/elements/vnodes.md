@@ -87,9 +87,15 @@ Unfortunately, you cannot drop in arbitrary expressions directly into the string
 rsx!( {[format_args!("Hello {}", if enabled { "Jack" } else { "Bob" } )]} )
 ```
 
+Alternatively, `&str` can be included directly, though it must be inside of an array:
+
+```rust
+rsx!( "Hello ",  [if enabled { "Jack" } else { "Bob" }] )
+```
+
 This is different from React's way of generating arbitrary markup but fits within idiomatic Rust. 
 
-Typically, with Dioxus, you'll just want to compute your substrings outside of the `rsx!` call:
+Typically, with Dioxus, you'll just want to compute your substrings outside of the `rsx!` call and leverage the f-string formatting:
 
 ```rust
 let name = if enabled { "Jack" } else { "Bob" };
@@ -100,7 +106,7 @@ rsx! ( "hello {name}" )
 
 Every Element in your User Interface will have some sort of properties that the renderer will use when drawing to the screen. These might inform the renderer if the component should be hidden, what its background color should be, or to give it a specific name or ID.
 
-To do this, we use the familiar struct-style syntax that Rust provides. Commas are optional:
+To do this, we use the familiar struct-style syntax that Rust provides:
 
 ```rust
 rsx!(
@@ -127,19 +133,29 @@ rsx!(
 )
 ```
 
-Note: the name of the custom attribute must match exactly what you want the renderer to output. All attributes defined as methods in `dioxus-html` follow the snake_case naming convention. However, they internally translate their snake_case convention to HTML's camelCase convention. When using custom attributes, make sure the name of the attribute exactly matches what the renderer is expecting.
+> Note: the name of the custom attribute must match exactly what you want the renderer to output. All attributes defined as methods in `dioxus-html` follow the snake_case naming convention. However, they internally translate their snake_case convention to HTML's camelCase convention. When using custom attributes, make sure the name of the attribute **exactly** matches what the renderer is expecting.
+
+All element attributes must occur *before* child elements. The `rsx!` macro will throw an error if your child elements come before any of your attributes. If you don't see the error, try editing your Rust-Analyzer IDE setting to ignore macro-errors. This is a temporary workaround because Rust-Analyzer currently throws *two* errors instead of just the one we care about.
+
+```rust
+// settings.json 
+{
+  "rust-analyzer.diagnostics.disabled": [
+    "macro-error"
+  ],   
+}
+```
 
 ## Listeners
 
 Listeners are a special type of Attribute that only accept functions. Listeners let us attach functionality to our Elements by running a provided closure whenever the specified Listener is triggered.
 
-We'll cover listeners in more depth in the Listeners chapter, but for now, just know that every listener must start with the `on` keyword and can accept either a closure or an expression wrapped in curly braces.
+We'll cover listeners in more depth in the Listeners chapter, but for now, just know that every listener must start with the `on` keyword and accepts closures.
 
 ```rust
 rsx!(
     div {
-        onclick: move |_| {}
-        onmouseover: {handler},
+        onclick: move |_| log::debug!("div clicked!"),
     }
 )
 ```

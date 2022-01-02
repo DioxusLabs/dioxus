@@ -49,7 +49,8 @@ impl<R: Routable> RouterService<R> {
 }
 
 pub fn use_router_service<R: Routable>(cx: &ScopeState) -> Option<&Rc<RouterService<R>>> {
-    cx.use_hook(|_| cx.consume_state::<RouterService<R>>(), |f| f.as_ref())
+    cx.use_hook(|_| cx.consume_state::<RouterService<R>>())
+        .as_ref()
 }
 
 /// This hould only be used once per app
@@ -57,7 +58,7 @@ pub fn use_router_service<R: Routable>(cx: &ScopeState) -> Option<&Rc<RouterServ
 /// You can manually parse the route if you want, but the derived `parse` method on `Routable` will also work just fine
 pub fn use_router<R: Routable>(cx: &ScopeState, mut parse: impl FnMut(&str) -> R + 'static) -> &R {
     // for the web, attach to the history api
-    cx.use_hook(
+    let state = cx.use_hook(
         #[cfg(not(feature = "web"))]
         |_| {},
         #[cfg(feature = "web")]
@@ -112,15 +113,13 @@ pub fn use_router<R: Routable>(cx: &ScopeState, mut parse: impl FnMut(&str) -> R
 
             service
         },
-        |state| {
-            let base = state.base_ur.borrow();
-            if let Some(base) = base.as_ref() {
-                //
-                let path = format!("{}{}", base, state.get_current_route());
-            }
-            let history = state.history_service.borrow();
+    );
 
-            state.historic_routes.last().unwrap()
-        },
-    )
+    let base = state.base_ur.borrow();
+    if let Some(base) = base.as_ref() {
+        let path = format!("{}{}", base, state.get_current_route());
+    }
+
+    let history = state.history_service.borrow();
+    state.historic_routes.last().unwrap()
 }

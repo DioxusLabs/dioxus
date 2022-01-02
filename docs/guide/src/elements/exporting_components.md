@@ -25,27 +25,27 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
-fn App((cx, props): Component) -> Element {} 
+fn App(Scope) -> Element {} 
 
 #[derive(PartialEq, Props)]
 struct PostProps{}
-fn Post((cx, props): Component<PostProps>) -> Element {} 
+fn Post(Scope<PostProps>) -> Element {} 
 
 #[derive(PartialEq, Props)]
 struct VoteButtonsProps {}
-fn VoteButtons((cx, props): Component<VoteButtonsProps>) -> Element {} 
+fn VoteButtons(Scope<VoteButtonsProps>) -> Element {} 
 
 #[derive(PartialEq, Props)]
 struct TitleCardProps {}
-fn TitleCard((cx, props): Component<TitleCardProps>) -> Element {} 
+fn TitleCard(Scope<TitleCardProps>) -> Element {} 
 
 #[derive(PartialEq, Props)]
 struct MetaCardProps {}
-fn MetaCard((cx, props): Component<MetaCardProps>) -> Element {} 
+fn MetaCard(Scope<MetaCardProps>) -> Element {} 
 
 #[derive(PartialEq, Props)]
 struct ActionCardProps {}
-fn ActionCard((cx, props): Component<ActionCardProps>) -> Element {} 
+fn ActionCard(Scope<ActionCardProps>) -> Element {} 
 ```
 
 That's a lot of components for one file! We've successfully refactored our app into components, but we should probably start breaking it up into a file for each component.
@@ -61,7 +61,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 struct ActionCardProps {}
-fn ActionCard((cx, props): Component<ActionCardProps>) -> Element {} 
+fn ActionCard(Scope<ActionCardProps>) -> Element {} 
 ```
 
 We should also create a `mod.rs` file in the `post` folder so we can use it from our `main.rs`. Our `Post` component and its props will go into this file.
@@ -92,7 +92,7 @@ fn main() {
 
 mod post;
 
-fn App((cx, props): Component) -> Element {
+fn App(Scope) -> Element {
     cx.render(rsx!{
         post::Post {
             id: Uuid::new_v4(),
@@ -116,7 +116,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct PostProps {}
-pub fn Post((cx, props): Component<PostProps>) -> Element {} 
+pub fn Post(Scope<PostProps>) -> Element {} 
 ```
 
 While we're here, we also need to make sure each of our subcomponents are included as modules and exported.
@@ -142,7 +142,7 @@ pub struct PostProps {
     original_poster: String
 }
 
-pub fn Post((cx, props): Component<PostProps>) -> Element {
+pub fn Post(Scope<PostProps>) -> Element {
     cx.render(rsx!{
         div { class: "post-container"
             vote::VoteButtons {
@@ -191,7 +191,7 @@ fn main() {
 
 mod post;
 
-fn App((cx, props): Component) -> Element {
+fn App(Scope) -> Element {
     cx.render(rsx!{
         post::Post {
             id: Uuid::new_v4(),
@@ -227,7 +227,7 @@ pub struct PostProps {
     original_poster: String
 }
 
-pub fn Post((cx, props): Component<PostProps>) -> Element {
+pub fn Post(Scope<PostProps>) -> Element {
     cx.render(rsx!{
         div { class: "post-container"
             vote::VoteButtons {
@@ -255,7 +255,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct VoteButtonsProps {}
-pub fn VoteButtons((cx, props): Component<VoteButtonsProps>) -> Element {} 
+pub fn VoteButtons(Scope<VoteButtonsProps>) -> Element {} 
 ```
 
 ```rust
@@ -264,7 +264,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct TitleCardProps {}
-pub fn TitleCard((cx, props): Component<TitleCardProps>) -> Element {} 
+pub fn TitleCard(Scope<TitleCardProps>) -> Element {} 
 ```
 
 ```rust
@@ -273,7 +273,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct MetaCardProps {}
-pub fn MetaCard((cx, props): Component<MetaCardProps>) -> Element {} 
+pub fn MetaCard(Scope<MetaCardProps>) -> Element {} 
 ```
 
 ```rust
@@ -282,7 +282,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct ActionCardProps {}
-pub fn ActionCard((cx, props): Component<ActionCardProps>) -> Element {} 
+pub fn ActionCard(Scope<ActionCardProps>) -> Element {} 
 ```
 
 ## Moving forward

@@ -42,6 +42,7 @@ fn example(cx: Scope) -> Element {
                 things_list.iter().map(|f| rsx!{
                     div {
                         "{f.a}"
+                        "{f.b}"
                     }
                 })
 

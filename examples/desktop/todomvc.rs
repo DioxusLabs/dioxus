@@ -109,7 +109,7 @@ pub static App: Component = |cx| {
                             li { class: "Active", a { onclick: move |_| filter.set(FilterState::Active), "Active" }}
                             li { class: "Completed", a { onclick: move |_| filter.set(FilterState::Completed), "Completed" }}
                         }
-                        (show_clear_completed).then(|| rsx!(
+                        show_clear_completed.then(|| rsx!(
                             button { class: "clear-completed", onclick: move |_| clear_completed(),
                                 "Clear completed"
                             }

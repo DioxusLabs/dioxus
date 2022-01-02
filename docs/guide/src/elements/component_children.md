@@ -30,7 +30,7 @@ struct ClickableProps<'a> {
     title: &'a str
 }
 
-fn clickable(cx: Scope<ClickableProps>) -> Element {
+fn Clickable(cx: Scope<ClickableProps>) -> Element {
     cx.render(rsx!(
         a {
             href: "{cx.props.href}"
@@ -44,10 +44,10 @@ And then use it in our code like so:
 
 ```rust
 rsx!(
-    clickable(
+    Clickable {
         href: "https://google.com"
         title: "Link to Google"
-    )
+    }
 )
 ```
 
@@ -64,11 +64,11 @@ struct ClickableProps<'a> {
     body: Element<'a>
 }
 
-fn clickable(cx: Scope<ClickableProps>) -> Element {
+fn Clickable(cx: Scope<ClickableProps>) -> Element {
     cx.render(rsx!(
         a {
-            href: "{cx.props.href}"
-            {&cx.props.body}
+            href: "{cx.props.href}",
+            &cx.props.body
         }
     ))
 }
@@ -78,14 +78,16 @@ Then, at the call site, we can render some nodes and pass them in:
 
 ```rust
 rsx!(
-    clickable(
+    Clickable {
         href: "https://google.com"
         body: cx.render(rsx!(
-            img { src: "https://www.google.com/logos/doodles/2021/seasonal-holidays-2021-6753651837109324-6752733080595603-cst.gif" }
+            img { src: "https://www.google.com/logos/doodles/..." }
         ))
-    )
+    }
 )
 ```
+
+## Auto Conversion of the `Children` field
 
 This pattern can become tedious in some instances, so Dioxus actually performs an implicit conversion of any `rsx` calls inside components into `Elements` at the `children` field. This means you must explicitly declare if a component can take children.
 
@@ -99,26 +101,26 @@ struct ClickableProps<'a> {
 fn clickable(cx: Scope<ClickableProps>) -> Element {
     cx.render(rsx!(
         a {
-            href: "{cx.props.href}"
-            {&cx.props.children}
+            href: "{cx.props.href}",
+            &cx.props.children
         }
     ))
 }
 ```
 
-And to call `clickable`:
+Now, whenever we use `Clickable` in another component, we don't need to call `render` on child nodes - it will happen automatically!
 ```rust
 rsx!(
-    clickable(
+    Clickable {
         href: "https://google.com"
-        img { src: "https://www.google.com/logos/doodles/2021/seasonal-holidays-2021-6753651837109324-6752733080595603-cst.gif" }
-    )
+        img { src: "https://www.google.com/logos/doodles/...." }
+    }
 )
 ```
 
 > Note: Passing children into components will break any memoization due to the associated lifetime.
 
-While technically allowed, it's an antipattern to pass children more than once in a component and will probably break your app significantly.
+While technically allowed, it's an antipattern to pass children more than once in a component and will probably cause your app to crash.
 
 However, because the `Element` is transparently a `VNode`, we can actually match on it to extract the nodes themselves, in case we are expecting a specific format:
 
@@ -142,10 +144,10 @@ In the cases where you need to pass arbitrary element properties into a componen
 ```rust
 
 rsx!(
-    clickable(
+    Clickable {
         "class": "blue-button",
         "style": "background: red;"
-    )
+    }
 )
 
 ```
@@ -161,7 +163,7 @@ struct ClickableProps<'a> {
 fn clickable(cx: Scope<ClickableProps>) -> Element {
     cx.render(rsx!(
         a { 
-            ..{cx.props.attributes},
+            ..cx.props.attributes,
             "Any link, anywhere"
         }
     ))
@@ -195,9 +197,9 @@ Then, we can attach a listener at the call site:
 
 ```rust
 rsx!(
-    clickable(
+    Clickable {
         onclick: move |_| log::info!("Clicked"),
-    )
+    }
 )
 ```
 

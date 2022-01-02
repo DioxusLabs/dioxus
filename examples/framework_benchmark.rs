@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 use rand::prelude::*;
 
 fn main() {
-    // dioxus::web::launch(App);
     dioxus::desktop::launch(App);
 }
 

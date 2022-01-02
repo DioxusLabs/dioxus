@@ -101,14 +101,14 @@ fn App(cx: Scope)-> Element {
 
 ## Nesting RSX
 
-By looking at other examples, you might have noticed that it's possible to include `rsx!` calls inside other `rsx!` calls. With the curly-brace syntax, we can include anything in our `rsx!` that implements `IntoVnodeList`: a marker trait for iterators that produce Elements. `rsx!` itself implements this trait, so we can include it directly:
+By looking at other examples, you might have noticed that it's possible to include `rsx!` calls inside other `rsx!` calls. We can include anything in our `rsx!` that implements `IntoVnodeList`: a marker trait for iterators that produce Elements. `rsx!` itself implements this trait, so we can include it directly:
 
 ```rust
 rsx!(
     div {
-        {rsx!(
+        rsx!(
             "more rsx!"
-        )}
+        )
     }
 )
 ```
@@ -120,7 +120,7 @@ let title = rsx!( "more rsx!" );
 
 rsx!(
     div {
-        {title}
+        title
     }
 )
 ```
@@ -136,7 +136,7 @@ let screen = match logged_in {
 
 cx.render(rsx!{
     Navbar {}
-    {screen}
+    screen,
     Footer {}
 })
 ```
@@ -152,9 +152,9 @@ By default, Rust lets you convert any `boolean` into any other type by calling `
 let show_title = true;
 rsx!(
     div {
-        {show_title.and_then(|| rsx!{
+        show_title.and_then(|| rsx!{
             "This is the title"
-        })}
+        })
     }
 )
 ```
@@ -164,19 +164,22 @@ We can use this pattern for many things, including options:
 let user_name = Some("bob");
 rsx!(
     div {
-        {user_name.map(|name| rsx!("Hello {name}"))}
+        user_name.map(|name| rsx!("Hello {name}"))
     }
 )
 ```
 
 ## Rendering Nothing
 
-Sometimes, you don't want your component to return anything at all. In these cases, we can pass "None" into our bracket. However, Rust is not able to infer that our `None` corresponds to `Element` so we need to cast it appropriately:
+Sometimes, you don't want your component to return anything at all. Under the hood, the `Element` type is just an alias for `Option<VNode>`, so you can simply return `None`.
+
+This can be helpful in certain patterns where you need to perform some logical side-effects but don't want to render anything.
 
 ```rust
-rsx!(cx, {None as Element} )
+fn demo(cx: Scope) -> Element {
+    None
+}
 ```
-
 
 ## Moving Forward:
 

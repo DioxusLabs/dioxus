@@ -1,5 +1,5 @@
 //! <div align="center">
-//!   <h1>🌗🚀 📦 Dioxus</h1>
+//!   <h1>🌗🚀 Dioxus</h1>
 //!   <p>
 //!     <strong>A concurrent, functional, virtual DOM for Rust</strong>
 //!   </p>
@@ -37,7 +37,7 @@
 //! All Dioxus apps are built by composing functions that take in a `Scope` which is generic over some `Properties` and return an `Element`.
 //! A `Scope` holds relevant state data for the the currently-rendered component.
 //!
-//! To launch an app, we use the `launch` method for the specific renderer we want to use. In the launch function, was pass the app's `Component`.
+//! To launch an app, we use the `launch` method for the specific renderer we want to use. In the launch function, we pass the app's `Component`.
 //!
 //! ```rust
 //! use dioxus::prelude::*;
@@ -51,10 +51,89 @@
 //! }
 //! ```
 //!
+//! ## Elements & your first component
+//!
+//! To assemble UI trees with Diouxs, you need to use the `render` function on
+//! something called `LazyNodes`. To produce `LazyNodes`, you can use the `rsx!`
+//! macro or the NodeFactory API. For the most part, you want to use the `rsx!`
+//! macro.
+//!
+//! Any element in `rsx!` can have attributes, listeners, and children. For
+//! consistency, we force all attributes and listeners to be listed *before*
+//! children.
+//!
+//! ```rust
+//! let value = "123";
+//!
+//! rsx!(
+//!     div {
+//!         class: "my-class {value}",                  // <--- attribute
+//!         onclick: move |_| log::info!("clicked!"),   // <--- listener
+//!         h1 { "hello world" },                       // <--- child
+//!     }
+//! )
+//! ```
+//!
+//! The rsx macro accepts attributes in "struct form" and then will parse the rest
+//! of the body as child elements and rust expressions. Any rust expression that
+//! implements `IntoIterator<Item = impl IntoVNode>` will be parsed as a child.
+//!
+//! ```rust
+//! rsx!(
+//!     div {
+//!         (0..10).map(|_| rsx!(span { "hello world" }))
+//!     }
+//! )
+//!
+//! ```
+//!
+//! Used within components, the rsx! macro must be rendered into an `Element` with
+//! the `render` function on Scope.
+//!
+//! If we want to omit the boilerplate of `cx.render`, we can simply pass in
+//! `cx` as the first argument of rsx. This is sometimes useful when we need to
+//! render nodes in match statements.
+//!
+//! ```rust
+//! fn example(cx: Scope) -> Element {
+//!
+//!     // both of these are equivalent
+//!     cx.render(rsx!("hello world"))
+//!
+//!     rsx!(cx, "hello world!")
+//! }
+//! ```
+//!
+//! Putting everything together, we can write a simple component that a list of
+//! elements:
+//!
+//! ```rust
+//! fn app(cx: Scope) -> Element {
+//!     let name = "dave";
+//!     cx.render(rsx!(
+//!         h1 { "Hello, {name}!" }
+//!         div {
+//!             class: "my-class",
+//!             id: "my-id",
+//!
+//!             (0..5).map(|i| rsx!(
+//!                 div { key: "{i}"
+//!                     "FizzBuzz: {i}"
+//!                 }
+//!             ))
+//!
+//!         }
+//!     ))
+//! }
+//! ```
+//!
 //! ## Components
 //!
-//! We can compose these function components to build a complex app. Each new component we design must take some Properties.
-//! For components with no explicit properties, we can use the `()` type. In Dioxus, all properties are memoized by default!
+//! We can compose these function components to build a complex app. Each new
+//! component we design must take some Properties. For components with no explicit
+//! properties, we can use the `()` type or simply omit the type altogether.
+//!
+//! In Dioxus, all properties are memoized by default!
 //!
 //! ```rust
 //! fn App(cx: Scope) -> Element {
@@ -67,7 +146,9 @@
 //! }
 //! ```
 //!
-//! Our `Header` component takes in a `title` and a `color` property, which we delcare on an explicit `HeaderProps` struct.
+//! Our `Header` component takes in a `title` and a `color` property, which we
+//! delcare on an explicit `HeaderProps` struct.
+//!
 //! ```
 //! // The `Props` derive macro lets us add additional functionality to how props are interpreted.
 //! #[derive(Props, PartialEq)]
@@ -86,9 +167,68 @@
 //! }
 //! ```
 //!
+//! Components may use the `inline_props` macro to completely inline the props
+//! definition into the function arguments.
+//!
+//! ```rust
+//! #[inline_props]
+//! fn Header(cx: Scope, title: String, color: String) -> Element {
+//!     cx.render(rsx!(
+//!         div {
+//!             background_color: "{color}"
+//!             h1 { "{title}" }
+//!         }
+//!     ))
+//! }
+//! ```
+//!
+//! Components may also borrow data from their parent component. We just need to
+//! attach some lifetimes to the props struct.
+//! > Note: we don't need to derive `PartialEq` for borrowed props since they cannot be memoized.
+//!
+//! ```rust
+//! #[derive(Props)]
+//! struct HeaderProps<'a> {
+//!     title: &'a str,
+//!     color: &'a str,
+//! }
+//!
+//! fn Header<'a>(cx: Scope<'a, HeaderProps<'a>>) -> Element {
+//!     cx.render(rsx!(
+//!         div {
+//!             background_color: "{cx.props.color}"
+//!             h1 { "{cx.props.title}" }
+//!         }
+//!     ))
+//! }
+//! ```
+//!
+//! Components that beging with an uppercase letter may be called through
+//! traditional curly-brace syntax like so:
+//!
+//! ```rust
+//! rsx!(
+//!     Header { title: "My App" }
+//! )
+//! ```
+//!
+//! Alternatively, if your components begin with a lowercase letter, you can use
+//! the function call syntax:
+//!
+//! ```rust
+//! rsx!(
+//!     header( title: "My App" )
+//! )
+//! ```
+//!
 //! ## Hooks
 //!
-//! While components are reusable forms of UI elements, hooks are reusable forms of logic. All hooks start with `use_`. We can use hooks to declare state.
+//! While components are reusable forms of UI elements, hooks are reusable forms
+//! of logic. Hooks provide us a way of retrieving state from `Scope` and using
+//! it to render UI elements.
+//!
+//! By convention, all hooks are functions that should start with `use_`. We can
+//! use hooks to define state and modify it from within listeners.
 //!
 //! ```rust
 //! fn app(cx: Scope) -> Element {
@@ -98,10 +238,11 @@
 //! }
 //! ```
 //!
-//! Hooks are sensitive to how they are used. To use hooks, you must abide by the ["rules of hooks" (borrowed from react)](https://reactjs.org/docs/hooks-rules.html):
-//! - Hooks should not be called in callbacks
-//! - Hooks should not be called in out of order
-//! - Hooks should not be called in loops or conditionals
+//! Hooks are sensitive to how they are used. To use hooks, you must abide by the
+//! ["rules of hooks" (borrowed from react)](https://reactjs.org/docs/hooks-rules.html):
+//! - Functions with "use_" should not be called in callbacks
+//! - Functions with "use_" should not be called out of order
+//! - Functions with "use_" should not be called in loops or conditionals
 //!
 //! In a sense, hooks let us add a field of state to our component without declaring
 //! an explicit struct. However, this means we need to "load" the struct in the right
@@ -112,7 +253,7 @@
 //! ```rust
 //! fn use_username(cx: &ScopeState, id: Uuid) -> bool {
 //!     let users = use_context::<Users>(cx);
-//!     users.get(&id).is_some().map(|user| user.logged_in).ok_or(false)
+//!     users.get(&id).map(|user| user.logged_in).ok_or(false)
 //! }
 //! ```
 //!  
@@ -120,7 +261,7 @@
 //!
 //! ```rust
 //! fn use_mut_string(cx: &ScopeState) -> &mut String {
-//!     cx.use_hook(|_| "Hello".to_string(), |hook| hook)
+//!     cx.use_hook(|_| "Hello".to_string())
 //! }
 //! ```
 //!

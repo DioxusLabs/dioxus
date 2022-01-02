@@ -60,37 +60,33 @@ impl<T> ProvidedStateInner<T> {
 ///
 ///
 pub fn use_context<'a, T: 'static>(cx: &'a ScopeState) -> Option<UseSharedState<'a, T>> {
-    cx.use_hook(
-        |_| {
-            let scope_id = cx.scope_id();
-            let root = cx.consume_context::<ProvidedState<T>>();
+    let state = cx.use_hook(|_| {
+        let scope_id = cx.scope_id();
+        let root = cx.consume_context::<ProvidedState<T>>();
 
-            if let Some(root) = root.as_ref() {
-                root.borrow_mut().consumers.insert(scope_id);
-            }
+        if let Some(root) = root.as_ref() {
+            root.borrow_mut().consumers.insert(scope_id);
+        }
 
-            let value = root.as_ref().map(|f| f.borrow().value.clone());
-            SharedStateInner {
-                root,
-                value,
-                scope_id,
-                needs_notification: Cell::new(false),
-            }
-        },
-        |f| {
-            //
-            f.needs_notification.set(false);
-            match (&f.value, &f.root) {
-                (Some(value), Some(root)) => Some(UseSharedState {
-                    cx,
-                    value,
-                    root,
-                    needs_notification: &f.needs_notification,
-                }),
-                _ => None,
-            }
-        },
-    )
+        let value = root.as_ref().map(|f| f.borrow().value.clone());
+        SharedStateInner {
+            root,
+            value,
+            scope_id,
+            needs_notification: Cell::new(false),
+        }
+    });
+
+    state.needs_notification.set(false);
+    match (&state.value, &state.root) {
+        (Some(value), Some(root)) => Some(UseSharedState {
+            cx,
+            value,
+            root,
+            needs_notification: &state.needs_notification,
+        }),
+        _ => None,
+    }
 }
 
 struct SharedStateInner<T: 'static> {
@@ -176,15 +172,12 @@ where
 ///
 ///
 pub fn use_context_provider<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) {
-    cx.use_hook(
-        |_| {
-            let state: ProvidedState<T> = RefCell::new(ProvidedStateInner {
-                value: Rc::new(RefCell::new(f())),
-                notify_any: cx.schedule_update_any(),
-                consumers: HashSet::new(),
-            });
-            cx.provide_context(state)
-        },
-        |_inner| {},
-    )
+    cx.use_hook(|_| {
+        let state: ProvidedState<T> = RefCell::new(ProvidedStateInner {
+            value: Rc::new(RefCell::new(f())),
+            notify_any: cx.schedule_update_any(),
+            consumers: HashSet::new(),
+        });
+        cx.provide_context(state)
+    });
 }

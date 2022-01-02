@@ -46,7 +46,7 @@ fn manual_diffing() {
 #[test]
 fn events_generate() {
     static App: Component = |cx| {
-        let count = cx.use_hook(|_| 0, |f| f);
+        let count = cx.use_hook(|_| 0);
 
         let inner = match *count {
             0 => {
@@ -105,7 +105,7 @@ fn events_generate() {
 #[test]
 fn components_generate() {
     static App: Component = |cx| {
-        let render_phase = cx.use_hook(|_| 0, |f| f);
+        let render_phase = cx.use_hook(|_| 0);
         *render_phase += 1;
 
         cx.render(match *render_phase {
@@ -221,7 +221,7 @@ fn components_generate() {
 #[test]
 fn component_swap() {
     static App: Component = |cx| {
-        let render_phase = cx.use_hook(|_| 0, |f| f);
+        let render_phase = cx.use_hook(|_| 0);
         *render_phase += 1;
 
         cx.render(match *render_phase {

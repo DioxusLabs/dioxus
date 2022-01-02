@@ -25,16 +25,16 @@ criterion_main!(mbenches);
 fn create_rows(c: &mut Criterion) {
     static App: Component = |cx| {
         let mut rng = SmallRng::from_entropy();
-        let rows = (0..10_000_usize).map(|f| {
-            let label = Label::new(&mut rng);
-            rsx!(Row {
-                row_id: f,
-                label: label
-            })
-        });
+
         rsx!(cx, table {
             tbody {
-                {rows}
+                (0..10_000_usize).map(|f| {
+                    let label = Label::new(&mut rng);
+                    rsx!(Row {
+                        row_id: f,
+                        label: label
+                    })
+                })
             }
         })
     };
@@ -58,12 +58,12 @@ fn Row(cx: Scope<RowProps>) -> Element {
     cx.render(rsx! {
         tr {
             td { class:"col-md-1", "{cx.props.row_id}" }
-            td { class:"col-md-1", onclick: move |_| { /* run onselect */ }
+            td { class:"col-md-1", onclick: move |_| { /* run onselect */ },
                 a { class: "lbl", "{adj}" "{col}" "{noun}" }
             }
-            td { class: "col-md-1"
-                a { class: "remove", onclick: move |_| {/* remove */}
-                    span { class: "glyphicon glyphicon-remove remove" aria_hidden: "true" }
+            td { class: "col-md-1",
+                a { class: "remove", onclick: move |_| {/* remove */},
+                    span { class: "glyphicon glyphicon-remove remove", aria_hidden: "true" }
                 }
             }
             td { class: "col-md-6" }

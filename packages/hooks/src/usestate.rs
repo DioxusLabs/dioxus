@@ -51,32 +51,28 @@ pub fn use_state<'a, T: 'static>(
     cx: &'a ScopeState,
     initial_state_fn: impl FnOnce() -> T,
 ) -> UseState<'a, T> {
-    cx.use_hook(
-        move |_| {
-            let first_val = initial_state_fn();
-            UseStateInner {
-                current_val: Rc::new(first_val),
-                update_callback: cx.schedule_update(),
-                wip: Rc::new(RefCell::new(None)),
-                update_scheuled: Cell::new(false),
-            }
-        },
-        move |hook| {
-            hook.update_scheuled.set(false);
+    let hook = cx.use_hook(move |_| {
+        let first_val = initial_state_fn();
+        UseStateInner {
+            current_val: Rc::new(first_val),
+            update_callback: cx.schedule_update(),
+            wip: Rc::new(RefCell::new(None)),
+            update_scheuled: Cell::new(false),
+        }
+    });
 
-            let mut new_val = hook.wip.borrow_mut();
-            if new_val.is_some() {
-                // if there's only one reference (weak or otherwise), we can just swap the values
-                if let Some(val) = Rc::get_mut(&mut hook.current_val) {
-                    *val = new_val.take().unwrap();
-                } else {
-                    hook.current_val = Rc::new(new_val.take().unwrap());
-                }
-            }
+    hook.update_scheuled.set(false);
+    let mut new_val = hook.wip.borrow_mut();
+    if new_val.is_some() {
+        // if there's only one reference (weak or otherwise), we can just swap the values
+        if let Some(val) = Rc::get_mut(&mut hook.current_val) {
+            *val = new_val.take().unwrap();
+        } else {
+            hook.current_val = Rc::new(new_val.take().unwrap());
+        }
+    }
 
-            UseState { inner: &*hook }
-        },
-    )
+    UseState { inner: &*hook }
 }
 struct UseStateInner<T: 'static> {
     current_val: Rc<T>,

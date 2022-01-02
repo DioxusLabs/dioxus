@@ -19,16 +19,16 @@ Broadly, there are two types of GUI structures:
 
 Typically, immediate-mode GUIs are simpler to write but can slow down as more features, like styling, are added.
 
-Many GUIs today - including Dioxus - are written in *Retained mode* - your code changes the data of the user interface but the renderer is responsible for actually drawing to the screen. In these cases, our GUI's state sticks around as the UI is rendered.
+Many GUIs today are written in *Retained mode* - your code changes the data of the user interface but the renderer is responsible for actually drawing to the screen. In these cases, our GUI's state sticks around as the UI is rendered. To help accommodate retained mode GUIs, like the web browser, Dioxus provides a mechanism to keep state around.
 
-Dioxus, following in the footsteps of React, provides a "Reactive" model for you to design your UI. This model emphasizes one-way data flow and encapsulation. Essentially, your UI code should be as predictable as possible.
+> Note: Even though hooks are accessible, you should still prefer to one-way data flow and encapsulation. Your UI code should be as predictable as possible. Dioxus is plenty fast, even for the largest apps.
 
 ## Mechanics of Hooks
 In order to have state stick around between renders, Dioxus provides the `hook` through the `use_hook` API. This gives us a mutable reference to data returned from the initialization function.
 
 ```rust
 fn example(cx: Scope) -> Element {
-    let name: &mut String = cx.use_hook(|| "John Doe".to_string(), |hook| hook);
+    let name: &mut String = cx.use_hook(|| "John Doe".to_string());
 
     //
 }
@@ -38,7 +38,7 @@ We can even modify this value directly from an event handler:
 
 ```rust
 fn example(cx: Scope) -> Element {
-    let name: &mut String = cx.use_hook(|| "John Doe".to_string(), |hook| hook);
+    let name: &mut String = cx.use_hook(|| "John Doe".to_string());
 
     cx.render(rsx!(
         button {
@@ -52,9 +52,9 @@ Mechanically, each call to `use_hook` provides us with `&mut T` for a new value.
 
 ```rust
 fn example(cx: Scope) -> Element {
-    let name: &mut String = cx.use_hook(|| "John Doe".to_string(), |hook| hook);
-    let age: &mut u32 = cx.use_hook(|| 10, |hook| hook);
-    let friends: &mut Vec<String> = cx.use_hook(|| vec!["Jane Doe".to_string()], |hook| hook);
+    let name: &mut String = cx.use_hook(|| "John Doe".to_string());
+    let age: &mut u32 = cx.use_hook(|| 10);
+    let friends: &mut Vec<String> = cx.use_hook(|| vec!["Jane Doe".to_string()]);
 
     //
 }
@@ -84,7 +84,7 @@ Consider when we try to pass our `&mut String` into two different handlers:
 
 ```rust
 fn example(cx: Scope) -> Element {
-    let name: &mut String = cx.use_hook(|| "John Doe".to_string(), |hook| hook);
+    let name: &mut String = cx.use_hook(|| "John Doe".to_string());
 
     cx.render(rsx!(
         button { onclick: move |_| name.push_str("yes"), }
@@ -112,7 +112,7 @@ This example uses the `Cell` type to let us replace the value through interior m
 
 ```rust
 fn example(cx: Scope) -> Element {
-    let name: &Cell<&'static str> = cx.use_hook(|| "John Doe", |hook| hook);
+    let name: &Cell<&'static str> = cx.use_hook(|| Cell::new("John Doe"));
 
     cx.render(rsx!(
         button { onclick: move |_| name.set("John"), }
@@ -180,6 +180,8 @@ By default, we bundle a handful of hooks in the Dioxus-Hooks package. Feel free 
 - [use_callback](https://docs.rs/dioxus_hooks/use_callback) - store a callback that implements PartialEq for memoization
 - [use_provide_context](https://docs.rs/dioxus_hooks/use_provide_context) - expose state to descendent components
 - [use_context](https://docs.rs/dioxus_hooks/use_context) - consume state provided by `use_provide_context`
+
+For a more in-depth guide to building new hooks, checkout out the advanced hook building guide in the reference.
   
 ## Wrapping up
 

@@ -28,7 +28,8 @@ fn app(cx: Scope) -> Element {
     let description = use_state(&cx, String::new);
 
     cx.render(rsx!(
-        body { margin_left: "35%",
+        body { 
+            margin_left: "35%",
             link {
                 rel: "stylesheet",
                 href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css",

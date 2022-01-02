@@ -1,4 +1,4 @@
-# Hello, World desktop app
+# "Hello, World" desktop app
 
 Let's put together a simple "hello world" desktop application to get acquainted with Dioxus. 
 
@@ -138,11 +138,13 @@ Writing `fn App(cx: Scope) -> Element {` might become tedious. Rust will also le
 static App: Component = |cx| cx.render(rsx!(div { "Hello, world!" }));
 ```
 
-### What is this `Context` object?
+### What is this `Scope` object?
 
-Coming from React, the `Context` object might be confusing. In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. 
+Coming from React, the `Scope` object might be confusing. In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. 
 
-In Dioxus, you are given an explicit `Context` object to control how the component renders and stores data. The `Context` object provides a handful of useful APIs for features like suspense, rendering, and more.
+In Dioxus, you are given an explicit `Scope` object to control how the component renders and stores data. The `Scope` object provides a handful of useful APIs for features like suspense, rendering, and more.
+
+For now, just know that `Scope` lets you store state with hooks and render elements with `cx.render`.
 
 ## Moving on
 

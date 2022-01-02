@@ -110,7 +110,7 @@ When declaring a component in `rsx!`, we can pass in properties using the tradit
 
 Let's take a look at the `VoteButton` component. For now, we won't include any interactivity - just the rendering the score and buttons to the screen.
 
-Most of your Components will look exactly like this: a Props struct and a render function. Every component must take a tuple of `Scope` and `&Props` and return an `Element`.
+Most of your Components will look exactly like this: a Props struct and a render function. Every component must take a `Scope` generic over some `Props` and return an `Element`.
 
 As covered before, we'll build our User Interface with the `rsx!` macro and HTML tags. However, with components, we must actually "render" our HTML markup. Calling `cx.render` converts our "lazy" `rsx!` structure into an `Element`. 
 
@@ -145,7 +145,7 @@ struct TitleCardProps<'a> {
     title: &'a str,
 }
 
-fn TitleCard(cx: Scope<TitleCardProps>) -> Element {
+fn TitleCard<'a>(cx: Scope<'a, TitleCardProps<'a>>) -> Element {
     cx.render(rsx!{
         h1 { "{cx.props.title}" }
     })
@@ -155,6 +155,42 @@ fn TitleCard(cx: Scope<TitleCardProps>) -> Element {
 For users of React: Dioxus knows *not* to memoize components that borrow property fields. By default, every component in Dioxus is memoized. This can be disabled by the presence of a non-`'static` borrow.
 
 This means that during the render process, a newer version of `TitleCardProps` will never be compared with a previous version, saving some clock cycles.
+
+## The inline_props macro
+
+Yes - *another* macro! However, this one is entirely optional.
+
+For internal components, we provide the `inline_props` macro, which will let you embed your `Props` definition right into the function arguments of your component.
+
+Our title card above would be transformed from:
+
+```rust
+#[derive(Props, PartialEq)]
+struct TitleCardProps {
+    title: String,
+}
+
+fn TitleCard(cx: Scope<TitleCardProps>) -> Element {
+    cx.render(rsx!{
+        h1 { "{cx.props.title}" }
+    })
+}   
+```
+
+to:
+
+```rust
+#[inline_props]
+fn TitleCard(cx: Scope, title: String) -> Element {
+    cx.render(rsx!{
+        h1 { "{title}" }
+    })
+}   
+```
+
+Again, this macro is optional and should not be used by library authors since you have less fine-grained control over documentation and optionality.
+
+However, it's great for quickly throwing together an app without dealing with *any* extra boilerplate.
 
 ## The `Scope` object
 

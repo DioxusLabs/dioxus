@@ -320,6 +320,18 @@ impl ScopeArena {
     pub fn root_node(&self, id: ScopeId) -> &VNode {
         self.fin_head(id)
     }
+
+    // this is totally okay since all our nodes are always in a valid state
+    pub fn get_element(&self, id: ElementId) -> Option<&VNode> {
+        let ptr = self.nodes.borrow().get(id.0).cloned();
+        match ptr {
+            Some(ptr) => {
+                let node = unsafe { &*ptr };
+                Some(unsafe { extend_vnode(node) })
+            }
+            None => None,
+        }
+    }
 }
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
@@ -620,7 +632,7 @@ impl ScopeState {
     /// struct SharedState(&'static str);
     ///
     /// static App: Component = |cx| {
-    ///     cx.use_hook(|_| cx.provide_context(SharedState("world")), |_| {}, |_| {});
+    ///     cx.use_hook(|_| cx.provide_context(SharedState("world")));
     ///     rsx!(cx, Child {})
     /// }
     ///
@@ -711,17 +723,13 @@ impl ScopeState {
     /// ```ignore
     /// // use_ref is the simplest way of storing a value between renders
     /// fn use_ref<T: 'static>(initial_value: impl FnOnce() -> T) -> &RefCell<T> {
-    ///     use_hook(
-    ///         || Rc::new(RefCell::new(initial_value())),
-    ///         |state| state,
-    ///     )
+    ///     use_hook(|| Rc::new(RefCell::new(initial_value())))
     /// }
     /// ```
-    pub fn use_hook<'src, State: 'static, Output: 'src>(
+    pub fn use_hook<'src, State: 'static>(
         &'src self,
         initializer: impl FnOnce(usize) -> State,
-        runner: impl FnOnce(&'src mut State) -> Output,
-    ) -> Output {
+    ) -> &'src mut State {
         let mut vals = self.hook_vals.borrow_mut();
 
         let hook_len = vals.len();
@@ -731,7 +739,7 @@ impl ScopeState {
             vals.push(self.hook_arena.alloc(initializer(hook_len)));
         }
 
-        let state = vals
+        vals
             .get(cur_idx)
             .and_then(|inn| {
                 self.hook_idx.set(cur_idx + 1);
@@ -746,9 +754,7 @@ impl ScopeState {
                 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
                 Functions prefixed with "use" should never be called conditionally.
                 "###,
-            );
-
-        runner(state)
+            )
     }
 
     /// The "work in progress frame" represents the frame that is currently being worked on.

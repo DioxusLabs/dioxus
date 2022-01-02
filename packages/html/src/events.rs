@@ -21,12 +21,12 @@ pub mod on {
                 $(
                     $(#[$method_attr])*
                     pub fn $name<'a, F>(
-                        c: NodeFactory<'a>,
+                        factory: NodeFactory<'a>,
                         mut callback: F,
                     ) -> Listener<'a>
                         where F: FnMut(Arc<$wrapper>) + 'a
                     {
-                        let bump = &c.bump();
+                        let bump = &factory.bump();
 
                         // we can't allocate unsized in bumpalo's box, so we need to craft the box manually
                         // safety: this is essentially the same as calling Box::new() but manually
@@ -48,7 +48,7 @@ pub mod on {
                             callback: bump.alloc(std::cell::RefCell::new(Some(callback))),
                         };
 
-                        c.listener(shortname, handler)
+                        factory.listener(shortname, handler)
                     }
                 )*
             )*
@@ -179,8 +179,8 @@ pub mod on {
             /// ```
             ///
             /// ## Reference
-            /// - https://www.w3schools.com/tags/ev_onclick.asp
-            /// - https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event
+            /// - <https://www.w3schools.com/tags/ev_onclick.asp>
+            /// - <https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event>
             onclick
 
             /// oncontextmenu
@@ -430,7 +430,7 @@ pub mod on {
         /// Get the key code as an enum Variant.
         ///
         /// This is intended for things like arrow keys, escape keys, function keys, and other non-international keys.
-        /// To match on unicode sequences, use the [`key`] method - this will return a string identifier instead of a limited enum.
+        /// To match on unicode sequences, use the [`KeyboardEvent::key`] method - this will return a string identifier instead of a limited enum.
         ///
         ///
         /// ## Example

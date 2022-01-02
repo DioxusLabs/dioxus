@@ -399,7 +399,7 @@ pub trait GlobalAttributes {
         height: "height",
 
         /// Specifies how flex items are aligned along the main axis of the flex container after any flexible lengths and auto margins have been resolved.
-        justify_content: "auto margins have been resolved.",
+        justify_content: "justify-content",
 
         /// Specify the location of the left edge of the positioned element.
         left: "left",
@@ -535,6 +535,7 @@ pub trait GlobalAttributes {
 
         /// Sets the horizontal alignment of inline content.
         text_align: "text-align",
+
         /// Specifies how the last line of a block or a line right before a forced line break is aligned when  is justify.",
         text_align_last: "text-align-last",
 
@@ -614,7 +615,7 @@ pub trait GlobalAttributes {
         word_wrap: "word-wrap",
 
         /// Specifies a layering or stacking order for positioned elements.
-        z_index	: "z-index	",
+        z_index	: "z-index",
 
     }
     aria_trait_methods! {

@@ -473,9 +473,16 @@ impl<'bump> DiffState<'bump> {
             // Check the most common cases first
             // these are *actual* elements, not wrappers around lists
             (Text(old), Text(new)) => {
-                self.diff_text_nodes(old, new, old_node, new_node);
+                if let Some(root) = old.id.get() {
+                    if old.text != new.text {
+                        self.mutations.set_text(new.text, root.as_u64());
+                    }
+                    self.scopes.update_node(new_node, root);
+
+                    new.id.set(Some(root));
+                }
             }
-            (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
+
             (Placeholder(old), Placeholder(new)) => {
                 if let Some(root) = old.id.get() {
                     self.scopes.update_node(new_node, root);
@@ -483,10 +490,13 @@ impl<'bump> DiffState<'bump> {
                 }
             }
 
+            (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
+
             // These two sets are pointers to nodes but are not actually nodes themselves
             (Component(old), Component(new)) => {
                 self.diff_component_nodes(old_node, new_node, *old, *new)
             }
+
             (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
 
             // The normal pathway still works, but generates slightly weird instructions
@@ -503,23 +513,6 @@ impl<'bump> DiffState<'bump> {
             ) => self
                 .stack
                 .create_node(new_node, MountType::Replace { old: old_node }),
-        }
-    }
-
-    fn diff_text_nodes(
-        &mut self,
-        old: &'bump VText<'bump>,
-        new: &'bump VText<'bump>,
-        _old_node: &'bump VNode<'bump>,
-        new_node: &'bump VNode<'bump>,
-    ) {
-        if let Some(root) = old.id.get() {
-            if old.text != new.text {
-                self.mutations.set_text(new.text, root.as_u64());
-            }
-            self.scopes.update_node(new_node, root);
-
-            new.id.set(Some(root));
         }
     }
 

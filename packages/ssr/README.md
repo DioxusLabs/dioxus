@@ -1,22 +1,85 @@
-# Dioxus SSR
+<div align="center">
+  <h1>Dioxus Server-Side Rendering (SSR)</h1>
+  <p>
+    <strong>Render Dioxus to valid html.</strong>
+  </p>
+</div>
 
-Render a Dioxus VirtualDOM to a string.
+## Resources
+This crate is a part of the broader Dioxus ecosystem. For more resources about Dioxus, check out:
 
+- [Getting Started](https://dioxuslabs.com/getting-started)
+- [Book](https://dioxuslabs.com/book)
+- [Reference](https://dioxuslabs.com/reference)
+- [Community Examples](https://github.com/DioxusLabs/community-examples)
+
+## Overview
+
+Dioxus SSR provides utilities to render Dioxus components to valid HTML. Once rendered, the HTML can be rehydrated client side or served from your web-server of choice.
 
 ```rust
-// Our app:
-const App: Component = |cx|  rsx!(cx, div {"hello world!"});
+let app: Component = |cx| cx.render(rsx!(div {"hello world!"}));
 
-// Build the virtualdom from our app
-let mut vdom = VirtualDOM::new(App);
-
-// This runs components, lifecycles, etc. without needing a physical dom. Some features (like noderef) won't work.
+let mut vdom = VirtualDom::new(app);
 let _ = vdom.rebuild();
 
-// Render the entire virtualdom from the root
 let text = dioxus::ssr::render_vdom(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
 ```
+
+
+## Basic Usage
+
+The simplest example is to simply render some `rsx!` nodes to html. This can be done with the [`render_lazy`] api.
+
+```rust
+let content = dioxus::ssr::render(rsx!{
+    div {
+        (0..5).map(|i| rsx!(
+            "Number: {i}"
+        ))
+    }
+});
+```
+
+## Rendering a VirtualDom
+
+```rust
+let mut dom = VirtualDom::new(app);
+let _ = dom.rebuild();
+
+let content = dioxus::ssr::render_vdom(&dom);
+```
+
+## Configuring output
+It's possible to configure the output of the generated HTML. 
+
+```rust
+let content = dioxus::ssr::render_vdom(&dom, |config| config.pretty(true).prerender(true));
+```
+
+## Usage as a writer
+
+We provide the basic `SsrFormatter` object that implements `Display`, so you can integrate SSR into an existing string, or write directly to a file.
+
+```rust
+use std::fmt::{Error, Write};
+
+let mut buf = String::new();
+
+let dom = VirtualDom::new(app);
+let _ = dom.rebuild();
+
+let args = dioxus::ssr::formatter(dom, |config| config);
+buf.write_fmt!(format_args!("{}", args));
+```
+
+## Configuration
+
+
+
+
+
 
 
 ## Usage in pre-rendering 

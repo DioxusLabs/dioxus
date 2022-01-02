@@ -1,14 +1,4 @@
-//!
-//!
-//!
-//!
-//! This crate demonstrates how to implement a custom renderer for Dioxus VNodes via the `TextRenderer` renderer.
-//! The `TextRenderer` consumes a Dioxus Virtual DOM, progresses its event queue, and renders the VNodes to a String.
-//!
-//! While `VNode` supports "to_string" directly, it renders child components as the RSX! macro tokens. For custom components,
-//! an external renderer is needed to progress the component lifecycles. The `TextRenderer` shows how to use the Virtual DOM
-//! API to progress these lifecycle events to generate a fully-mounted Virtual DOM instance which can be renderer in the
-//! `render` method.
+#![doc = include_str!("../README.md")]
 
 use std::fmt::{Display, Formatter};
 
@@ -17,7 +7,6 @@ use dioxus_core::exports::bumpalo::Bump;
 use dioxus_core::IntoVNode;
 use dioxus_core::*;
 
-/// A memory pool for rendering
 pub struct SsrRenderer {
     inner: bumpalo::Bump,
     cfg: SsrConfig,
@@ -34,6 +23,7 @@ impl SsrRenderer {
     pub fn render_lazy<'a>(&'a mut self, f: LazyNodes<'a, '_>) -> String {
         let bump = &mut self.inner as *mut _;
         let s = self.render_inner(f);
+
         // reuse the bump's memory
         unsafe { (&mut *bump as &mut bumpalo::Bump).reset() };
         s
@@ -63,13 +53,12 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     // regular component usage. The <'a> lifetime is used to enforce that all calls of IntoVnode use the same allocator.
     //
     // When LazyNodes are provided, they are FnOnce, but do not come with a allocator selected to borrow from. The <'a>
-    // lifetime is therefore longer than the lifetime of the allocator which doesn't exist yet.
+    // lifetime is therefore longer than the lifetime of the allocator which doesn't exist... yet.
     //
     // Therefore, we cast our local bump alloactor into right lifetime. This is okay because our usage of the bump arena
-    // is *definitely* shorter than the <'a> lifetime, and we return owned data - not borrowed data.
-    // Therefore, we know that no references are leaking.
-    let _b: &'a Bump = unsafe { std::mem::transmute(borrowed) };
+    // is *definitely* shorter than the <'a> lifetime, and we return *owned* data - not borrowed data.
 
+    let _b = unsafe { std::mem::transmute::<&Bump, &'a Bump>(borrowed) };
     let root = f.into_vnode(NodeFactory::new(_b));
 
     format!(
@@ -85,6 +74,7 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
 pub fn render_vdom(dom: &VirtualDom) -> String {
     format!("{:}", TextRenderer::from_vdom(dom, SsrConfig::default()))
 }
+
 pub fn render_vdom_cfg(dom: &VirtualDom, cfg: impl FnOnce(SsrConfig) -> SsrConfig) -> String {
     format!(
         "{:}",

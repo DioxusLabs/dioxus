@@ -54,6 +54,11 @@ function serialize_event(event) {
     case "submit": {
       let target = event.target;
       let value = target.value ?? target.textContent;
+
+      if (target.type == "checkbox") {
+        value = target.checked ? "true" : "false";
+      }
+
       return {
         value: value
       };
@@ -310,32 +315,24 @@ class Interpreter {
     element.setAttribute(`dioxus-event-${event_name}`, `${scope}.${mounted_node_id}`);
 
     if (this.listeners[event_name] === undefined) {
-      this.listeners[event_name] = "bla";
+      this.listeners[event_name] = true;
 
       this.root.addEventListener(event_name, (event) => {
-        // console.log("CLICKED");
+        console.log("handling event", event);
+
         const target = event.target;
         const real_id = target.getAttribute(`dioxus-id`);
         if (real_id == null) {
+          alert("no id");
           return;
         }
 
-        // const fields = val.split(".");
-        // const scope_id = parseInt(fields[0]);
-        // const real_id = parseInt(fields[1]);
-
-        // // console.log(`parsed event with scope_id ${scope_id} and real_id ${real_id}`);
-
-        // console.log("message fired");
-        let contents = serialize_event(event);
-        let evt = {
+        rpc.call('user_event', {
           event: event_name,
-          // scope: scope_id,
           mounted_dom_id: parseInt(real_id),
-          contents: contents,
-        };
+          contents: serialize_event(event),
+        });
 
-        rpc.call('user_event', evt);
       });
     }
   }

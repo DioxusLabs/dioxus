@@ -19,7 +19,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
-    token, Expr, ExprClosure, Ident, Result, Token,
+    token, Expr, Ident, Result, Token,
 };
 
 pub struct Component {

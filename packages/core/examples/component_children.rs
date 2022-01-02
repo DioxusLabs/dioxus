@@ -12,7 +12,7 @@ fn main() {
 }
 
 fn parent(cx: Scope) -> Element {
-    let value = cx.use_hook(|_| String::new(), |f| f);
+    let value = cx.use_hook(|_| String::new());
 
     cx.render(rsx! {
         div {
@@ -33,8 +33,8 @@ struct ChildProps<'a> {
 fn child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
     cx.render(rsx! {
         div {
-            "it's nested {cx.props.name}"
-            {&cx.props.children}
+            "it's nested {cx.props.name}",
+            &cx.props.children
         }
     })
 }

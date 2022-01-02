@@ -15,8 +15,7 @@ use dioxus::ssr;
 fn main() {
     let vdom = VirtualDom::new(App);
     let content = ssr::render_vdom_cfg(&vdom, |f| f.pre_render(true));
-
-    // dioxus::desktop::launch_cfg(App, |c| c.with_prerendered(content));
+    dioxus::desktop::launch_cfg(App, |c| c.with_prerendered(content));
 }
 
 static App: Component = |cx| {

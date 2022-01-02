@@ -12,7 +12,7 @@ use dioxus::prelude::*;
 use separator::Separatable;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    // dioxus::desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
