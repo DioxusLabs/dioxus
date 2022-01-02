@@ -16,15 +16,15 @@ use dioxus::prelude::*;
 pub struct MyProps {
     should_show: bool,
 }
-pub static Example0: Component<MyProps> = |cx| {
+pub fn Example0(cx: Scope<MyProps>) -> Element {
     cx.render(rsx! {
         div {
-            {cx.props.should_show.then(|| rsx!{
+            cx.props.should_show.then(|| rsx!{
                 h1 { "showing the title!" }
-            })}
+            })
         }
     })
-};
+}
 
 // Convert a boolean conditional into an either/or
 // Because rsx! is lazy (produces a closure), we cannot use it in two branch arms. To use it in matching/branching, we
@@ -39,31 +39,29 @@ pub static Example0: Component<MyProps> = |cx| {
 pub struct MyProps1 {
     should_show: bool,
 }
-pub static Example1: Component<MyProps1> = |cx| {
+pub fn Example1(cx: Scope<MyProps1>) -> Element {
     cx.render(rsx! {
         div {
             // With matching
-            {match props.should_show {
+            match props.should_show {
                 true => cx.render(rsx!(div {"it is true!"})),
                 false => rsx!(cx, div {"it is false!"}),
-            }}
+            },
 
             // or with just regular conditions
-            {if props.should_show {
+            if props.should_show {
                 rsx!(cx, div {"it is true!"})
             } else {
                 rsx!(cx, div {"it is false!"})
-            }}
+            },
 
             // or with optional chaining
-            {
-                props.should_show
+            props.should_show
                 .then(|| rsx!(cx, div {"it is true!"}))
                 .unwrap_or_else(|| rsx!(cx, div {"it is false!"}))
-            }
         }
     })
-};
+}
 
 /// Matching can be expanded
 
@@ -77,19 +75,19 @@ pub enum Color {
 pub struct MyProps2 {
     color: Color,
 }
-pub static Example2: Component<MyProps2> = |cx| {
+pub fn Example2(cx: Scope<MyProps2>) -> Element {
     cx.render(rsx! {
         div {
-            {match props.color {
+            match props.color {
                 Color::Green => rsx!(cx, div {"it is Green!"}),
                 Color::Yellow => rsx!(cx, div {"it is Yellow!"}),
                 Color::Red => rsx!(cx, div {"it is Red!"}),
-            }}
+            }
         }
     })
-};
+}
 
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope<()>) -> Element {
     let should_show = use_state(&cx, || false);
     let mut color_index = use_state(&cx, || 0);
     let color = match *color_index % 2 {
@@ -101,11 +99,11 @@ pub static Example: Component = |cx| {
     cx.render(rsx! {
         div {
             button {
-                onclick: move |_| should_show.set(!*should_show)
+                onclick: move |_| should_show.set(!*should_show),
                 "click to toggle showing the examples"
             }
             button {
-                onclick: move |_| color_index += 1
+                onclick: move |_| color_index += 1,
                 "click to for the enxt color"
             }
             Example0 { should_show: *should_show }
@@ -113,4 +111,4 @@ pub static Example: Component = |cx| {
             Example2 { color: color }
         }
     })
-};
+}

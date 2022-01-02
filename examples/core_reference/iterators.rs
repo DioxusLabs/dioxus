@@ -15,25 +15,20 @@ use dioxus::prelude::*;
 pub static Example: Component = |cx| {
     let example_data = use_state(&cx, || 0);
 
-    let v = (0..10).map(|f| {
-        rsx! {
-            li { onclick: move |_| example_data.set(f)
-                "ID: {f}"
-                ul {
-                    (0..10).map(|k| rsx!{
-                        li {
-                            "Sub iterator: {f}.{k}"
-                        }
-                    })
-                }
-            }
-        }
-    });
-
     cx.render(rsx! {
         h3 {"Selected: {example_data}"}
         ul {
-            {v}
+            (0..10).map(|f| rsx! {
+                li {
+                    onclick: move |_| example_data.set(f),
+                    "ID: {f}"
+                    ul {
+                        (0..10).map(|k| rsx!{
+                            li { "Sub iterator: {f}.{k}" }
+                        })
+                    }
+                }
+            })
         }
     })
 };

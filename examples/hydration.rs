@@ -13,12 +13,13 @@ use dioxus::prelude::*;
 use dioxus::ssr;
 
 fn main() {
-    let vdom = VirtualDom::new(App);
+    let vdom = VirtualDom::new(app);
     let content = ssr::render_vdom_cfg(&vdom, |f| f.pre_render(true));
-    dioxus::desktop::launch_cfg(App, |c| c.with_prerendered(content));
+
+    dioxus::desktop::launch_cfg(app, |c| c.with_prerendered(content));
 }
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let val = use_state(&cx, || 0);
 
     cx.render(rsx! {
@@ -30,4 +31,4 @@ static App: Component = |cx| {
             }
         }
     })
-};
+}

@@ -7,22 +7,23 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
 const ENDPOINT: &str = "https://api.openweathermap.org/data/2.5/weather";
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     //
     let body = use_suspense(
-        cx,
+        &cx,
         || async {
-            let content = reqwest::get(ENDPOINT)
-                .await
-                .unwrap()
-                .json::<serde_json::Value>()
-                .await
-                .unwrap();
+            todo!()
+            // let content = reqwest::get(ENDPOINT)
+            //     .await
+            //     .unwrap()
+            //     .json::<serde_json::Value>()
+            //     .await
+            //     .unwrap();
         },
         |props| {
             //
@@ -35,13 +36,12 @@ static App: Component = |cx| {
             {body}
         }
     })
-};
+}
 
 #[derive(PartialEq, Props)]
 struct WeatherProps {}
 
-static WeatherDisplay: Component<WeatherProps> = |cx| {
-    //
+fn WeatherDisplay(cx: Scope<WeatherProps>) -> Element {
     cx.render(rsx!(
         div { class: "flex items-center justify-center flex-col",
             div { class: "flex items-center justify-center",
@@ -64,4 +64,4 @@ static WeatherDisplay: Component<WeatherProps> = |cx| {
             }
         }
     ))
-};
+}

@@ -132,12 +132,6 @@ fn App(cx: Scope) -> Element {
 }
 ```
 
-Writing `fn App(cx: Scope) -> Element {` might become tedious. Rust will also let you write functions as static closures, but these types of Components cannot have props that borrow data.
-
-```rust
-static App: Component = |cx| cx.render(rsx!(div { "Hello, world!" }));
-```
-
 ### What is this `Scope` object?
 
 Coming from React, the `Scope` object might be confusing. In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. 

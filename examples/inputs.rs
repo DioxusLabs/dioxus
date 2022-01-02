@@ -7,7 +7,7 @@ use std::sync::Arc;
 use dioxus::{events::FormEvent, prelude::*};
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
 const FIELDS: &[(&str, &str)] = &[
@@ -37,7 +37,7 @@ const FIELDS: &[(&str, &str)] = &[
     ("week", ""),  // degrades to text most of the time
 ];
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div { margin_left: "30px",
 
@@ -147,4 +147,4 @@ static App: Component = |cx| {
 
         }
     })
-};
+}

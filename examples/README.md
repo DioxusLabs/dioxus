@@ -115,7 +115,7 @@ fn App(cx: Scope) -> Element {
 
 Tiny components:
 ```rust
-static App: Component = |cx, _| rsx!(cx, div {"hello world!"});
+static App: Component = |cx| rsx!(cx, div {"hello world!"});
 ```
 
 Borrowed prop contents:

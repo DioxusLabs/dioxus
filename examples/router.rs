@@ -23,7 +23,7 @@ pub enum Route {
     NotFound,
 }
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let route = use_router(&cx, Route::parse);
 
     cx.render(rsx! {
@@ -42,7 +42,7 @@ static App: Component = |cx| {
         }
         footer {}
     })
-};
+}
 
 impl Route {
     // Generate the appropriate route from the "tail" end of the URL

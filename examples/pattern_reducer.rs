@@ -8,10 +8,10 @@
 use dioxus::prelude::*;
 fn main() {
     env_logger::init();
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
-pub static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let state = use_state(&cx, PlayerState::new);
 
     cx.render(rsx!(
@@ -26,7 +26,7 @@ pub static App: Component = |cx| {
             }
         }
     ))
-};
+}
 
 enum PlayerAction {
     Pause,

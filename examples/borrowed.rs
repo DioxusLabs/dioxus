@@ -17,10 +17,10 @@ and is proven to be safe with MIRI.
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
-fn App(cx: Scope) -> Element {
+fn app(cx: Scope) -> Element {
     let text = cx.use_hook(|_| vec![String::from("abc=def")]);
 
     let first = text.get_mut(0).unwrap();

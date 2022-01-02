@@ -21,7 +21,6 @@ use dioxus::desktop::wry::application::dpi::LogicalSize;
 use dioxus::events::*;
 use dioxus::prelude::*;
 
-const STYLE: &str = include_str!("./assets/calculator.css");
 fn main() {
     env_logger::init();
     dioxus::desktop::launch_cfg(app, |cfg| {
@@ -40,31 +39,35 @@ fn app(cx: Scope) -> Element {
     let clear_text = if clear_display { "C" } else { "AC" };
     let formatted = state.read().formatted_display();
 
-    rsx!(cx, div { id: "wrapper",
-        div { class: "app", style { "{STYLE}" }
-            div { class: "calculator", onkeypress: move |evt| state.write().handle_keydown(evt),
-                div { class: "calculator-display", "{formatted}"}
-                div { class: "calculator-keypad",
-                    div { class: "input-keys",
-                        div { class: "function-keys",
-                            CalculatorKey { name: "key-clear", onclick: move |_| state.write().clear_display(), "{clear_text}" }
-                            CalculatorKey { name: "key-sign", onclick: move |_| state.write().toggle_sign(), "±"}
-                            CalculatorKey { name: "key-percent", onclick: move |_| state.write().toggle_percent(), "%"}
+    cx.render(rsx!{
+        div { id: "wrapper",
+            div { 
+                class: "app", 
+                style { [include_str!("./assets/calculator.css")] }
+                div { class: "calculator", onkeypress: move |evt| state.write().handle_keydown(evt),
+                    div { class: "calculator-display", "{formatted}"}
+                    div { class: "calculator-keypad",
+                        div { class: "input-keys",
+                            div { class: "function-keys",
+                                CalculatorKey { name: "key-clear", onclick: move |_| state.write().clear_display(), "{clear_text}" }
+                                CalculatorKey { name: "key-sign", onclick: move |_| state.write().toggle_sign(), "±"}
+                                CalculatorKey { name: "key-percent", onclick: move |_| state.write().toggle_percent(), "%"}
+                            }
+                            div { class: "digit-keys",
+                                CalculatorKey { name: "key-0", onclick: move |_| state.write().input_digit(0), "0" }
+                                CalculatorKey { name: "key-dot", onclick: move |_|  state.write().input_dot(), "●" }
+                                (1..10).map(move |k| rsx!{
+                                    CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  state.write().input_digit(k), "{k}" }
+                                })
+                            }
                         }
-                        div { class: "digit-keys",
-                            CalculatorKey { name: "key-0", onclick: move |_| state.write().input_digit(0), "0" }
-                            CalculatorKey { name: "key-dot", onclick: move |_|  state.write().input_dot(), "●" }
-                            (1..10).map(move |k| rsx!{
-                                CalculatorKey { key: "{k}", name: "key-{k}", onclick: move |_|  state.write().input_digit(k), "{k}" }
-                            })
+                        div { class: "operator-keys",
+                            CalculatorKey { name:"key-divide", onclick: move |_| state.write().set_operator(Operator::Div), "÷" }
+                            CalculatorKey { name:"key-multiply", onclick: move |_| state.write().set_operator(Operator::Mul), "×" }
+                            CalculatorKey { name:"key-subtract", onclick: move |_| state.write().set_operator(Operator::Sub), "−" }
+                            CalculatorKey { name:"key-add", onclick: move |_| state.write().set_operator(Operator::Add), "+" }
+                            CalculatorKey { name:"key-equals", onclick: move |_| state.write().perform_operation(), "=" }
                         }
-                    }
-                    div { class: "operator-keys",
-                        CalculatorKey { name:"key-divide", onclick: move |_| state.write().set_operator(Operator::Div), "÷" }
-                        CalculatorKey { name:"key-multiply", onclick: move |_| state.write().set_operator(Operator::Mul), "×" }
-                        CalculatorKey { name:"key-subtract", onclick: move |_| state.write().set_operator(Operator::Sub), "−" }
-                        CalculatorKey { name:"key-add", onclick: move |_| state.write().set_operator(Operator::Add), "+" }
-                        CalculatorKey { name:"key-equals", onclick: move |_| state.write().perform_operation(), "=" }
                     }
                 }
             }

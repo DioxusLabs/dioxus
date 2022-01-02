@@ -10,17 +10,25 @@
 
 use dioxus::prelude::*;
 
+pub fn Example(cx: Scope) -> Element {
+    cx.render(rsx! {
+        App1 {}
+        App2 {}
+        App3 {}
+    })
+}
+
 // Returning multiple elements with rsx! or html!
-static App1: Component = |cx| {
+pub fn App1(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { }
         h2 { }
         h3 { }
     })
-};
+}
 
 // Using the Fragment component
-static App2: Component = |cx| {
+pub fn App2(cx: Scope) -> Element {
     cx.render(rsx! {
         Fragment {
             div {}
@@ -28,10 +36,10 @@ static App2: Component = |cx| {
             "asd"
         }
     })
-};
+}
 
 // Using the `fragment` method on the NodeFactory
-static App3: Component = |cx| {
+pub fn App3(cx: Scope) -> Element {
     cx.render(LazyNodes::new(move |fac| {
         fac.fragment_from_iter([
             fac.text(format_args!("A")),
@@ -40,12 +48,4 @@ static App3: Component = |cx| {
             fac.text(format_args!("B")),
         ])
     }))
-};
-
-pub static Example: Component = |cx| {
-    cx.render(rsx! {
-        App1 {}
-        App2 {}
-        App3 {}
-    })
-};
+}

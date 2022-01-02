@@ -23,20 +23,20 @@ fn main() {}
 /// This is one way to go about error handling (just toss things away with unwrap).
 /// However, if you get it wrong, the whole app will crash.
 /// This is pretty flimsy.
-static App: Component = |cx| {
+pub fn App(cx: Scope) -> Element {
     let data = get_data().unwrap();
     cx.render(rsx!( div { "{data}" } ))
-};
+}
 
 /// This is a pretty verbose way of error handling
 /// However, it's still pretty good since we don't panic, just fail to render anything
-static App1: Component = |cx| {
+pub fn App1(cx: Scope) -> Element {
     let data = match get_data() {
         Some(data) => data,
         None => return None,
     };
     cx.render(rsx!( div { "{data}" } ))
-};
+}
 
 /// This is an even better form of error handling.
 /// However, it _does_ make the component go blank, which might not be desirable.
@@ -46,33 +46,37 @@ static App1: Component = |cx| {
 /// a user is logged in.
 ///
 /// Dioxus will throw an error in the console if the None-path is ever taken.
-static App2: Component = |cx| {
+pub fn App2(cx: Scope) -> Element {
     let data = get_data()?;
     cx.render(rsx!( div { "{data}" } ))
-};
+}
 
 /// This is top-tier error handling since it displays a failure state.
 ///
 /// However, the error is lacking in context.
-static App3: Component = |cx| match get_data() {
-    Some(data) => cx.render(rsx!( div { "{data}" } )),
-    None => cx.render(rsx!( div { "Failed to load data :(" } )),
-};
+pub fn App3(cx: Scope) -> Element {
+    match get_data() {
+        Some(data) => cx.render(rsx!( div { "{data}" } )),
+        None => cx.render(rsx!( div { "Failed to load data :(" } )),
+    }
+}
 
 /// For errors that return results, it's possible to short-circuit the match-based error handling with `.ok()` which converts
 /// a Result<T, V> into an Option<T> and lets you abort rendering by early-returning `None`
-static App4: Component = |cx| {
+pub fn App4(cx: Scope) -> Element {
     let data = get_data_err().ok()?;
     cx.render(rsx!( div { "{data}" } ))
-};
+}
 
 /// This is great error handling since it displays a failure state... with context!
 ///
 /// Hopefully you'll never need to display a screen like this. It's rather bad taste
-static App5: Component = |cx| match get_data_err() {
-    Ok(data) => cx.render(rsx!( div { "{data}" } )),
-    Err(c) => cx.render(rsx!( div { "Failed to load data: {c}" } )),
-};
+pub fn App5(cx: Scope) -> Element {
+    match get_data_err() {
+        Ok(data) => cx.render(rsx!( div { "{data}" } )),
+        Err(c) => cx.render(rsx!( div { "Failed to load data: {c}" } )),
+    }
+}
 
 // this fetching function produces "nothing"
 fn get_data() -> Option<String> {

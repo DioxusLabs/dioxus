@@ -5,10 +5,10 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
-static App: Component = |cx| {
+fn app(cx: Scope) -> Element {
     let mut count = use_state(&cx, || 0);
 
     cx.render(rsx! {
@@ -18,4 +18,4 @@ static App: Component = |cx| {
             button { onclick: move |_| count -= 1, "Down low!" }
         }
     })
-};
+}

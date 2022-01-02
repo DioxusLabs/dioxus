@@ -1,3 +1,7 @@
+//! XSS Safety
+//!
+//! This example proves that Dioxus is safe from XSS attacks.
+
 use dioxus::prelude::*;
 
 fn main() {
@@ -9,19 +13,11 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div {
-            "hello world!"
-
-            h1 { "{contents}" }
-
-            h3 { [contents.as_str()] }
-
+            h3 { "{contents}" }
             input {
                 value: "{contents}",
-                oninput: move |e| {
-                    contents.set(e.value.clone());
-                    eprintln!("asd");
-                },
-                "type": "text",
+                r#type: "text",
+                oninput: move |e| contents.set(e.value.clone()),
             }
         }
     })

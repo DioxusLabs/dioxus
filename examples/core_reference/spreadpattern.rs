@@ -9,7 +9,7 @@
 
 use dioxus::prelude::*;
 
-pub static Example: Component = |cx| {
+pub fn Example(cx: Scope) -> Element {
     let props = MyProps {
         count: 0,
         live: true,
@@ -18,22 +18,24 @@ pub static Example: Component = |cx| {
     cx.render(rsx! {
         Example1 { ..props, count: 10, div {"child"} }
     })
-};
+}
 
-#[derive(PartialEq, Props)]
-pub struct MyProps {
+#[derive(Props)]
+pub struct MyProps<'a> {
     count: u32,
     live: bool,
     name: &'static str,
+    children: Element<'a>,
 }
 
-pub static Example1: Component<MyProps> = |cx, MyProps { count, live, name }| {
+pub fn Example1(cx: Scope<MyProps>) -> Element {
+    let MyProps { count, live, name } = cx.props;
     cx.render(rsx! {
         div {
             h1 { "Hello, {name}"}
             h3 {"Are we alive? {live}"}
             p {"Count is {count}"}
-            { cx.children() }
+            &cx.props.children
         }
     })
-};
+}
