@@ -16,22 +16,29 @@
     <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square"
       alt="Download" />
   </a>
-  <!-- docs.rs docs -->
+  <!-- docs -->
   <a href="https://docs.rs/dioxus">
     <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
       alt="docs.rs docs" />
   </a>
   <!-- CI -->
-  <!-- <a href="https://github.com/jkelleyrtp/dioxus/actions">
+  <a href="https://github.com/jkelleyrtp/dioxus/actions">
     <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
       alt="CI status" />
-  </a> -->
-  <!--Awesome -->
-  <a href="https://github.com/dioxuslabs/awesome-dioxus">
-    <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg"
-      alt="Awesome Page" />
   </a>
 </div>
+
+<div align="center">
+  <!--Awesome -->
+  <a href="https://github.com/dioxuslabs/awesome-dioxus">
+    <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
+  </a>
+  <!-- Discord -->
+  <a href="https://discord.gg/XgGxMSkvUM">
+    <img src="https://badgen.net/discord/members/XgGxMSkvUM" alt="Awesome Page" />
+  </a>
+</div>
+
 
 <div align="center">
   <h3>
@@ -140,6 +147,15 @@ You shouldn't use Dioxus if:
 - You need a no-std renderer
 - You want to support browsers where Wasm or asm.js are not supported.
 - You need a Send+Sync UI solution (Dioxus is not currently ThreadSafe)
+
+### Comparison with other Rust UI frameworks
+Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**. 
+
+- [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead of React-hooks, no borrowed props, no SSR.
+- [Percy](https://github.com/chinedufn/percy): Supports SSR but less emphasis on state management and event handling.
+- [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but lacking in ergonomics.
+- [Dominator](https://github.com/Pauan/rust-dominator): Signal-based zero-cost alternative, less emphasis on community and docs.
+
 
 # Parity with React
 
