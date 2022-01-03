@@ -4,10 +4,10 @@
 
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::{Future, StreamExt};
+use futures_util::{future::poll_fn, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
-use std::{any::Any, collections::VecDeque, iter::FromIterator, pin::Pin, sync::Arc, task::Poll};
+use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 
 /// A virtual node s ystem that progresses user events and diffs UI trees.
 ///
@@ -111,6 +111,18 @@ pub struct VirtualDom {
         UnboundedSender<SchedulerMsg>,
         UnboundedReceiver<SchedulerMsg>,
     ),
+}
+
+#[derive(Debug)]
+pub enum SchedulerMsg {
+    // events from the host
+    Event(UserEvent),
+
+    // setstate
+    Immediate(ScopeId),
+
+    // an async task pushed from an event handler (or just spawned)
+    NewTask(ScopeId),
 }
 
 // Methods to create the VirtualDom
@@ -260,6 +272,7 @@ impl VirtualDom {
         self.channel.0.clone()
     }
 
+    /// Try to get an element from its ElementId
     pub fn get_element(&self, id: ElementId) -> Option<&VNode> {
         self.scopes.get_element(id)
     }
@@ -318,7 +331,35 @@ impl VirtualDom {
                 if self.scopes.tasks.has_tasks() {
                     use futures_util::future::{select, Either};
 
-                    match select(PollTasks(&mut self.scopes), self.channel.1.next()).await {
+                    let scopes = &mut self.scopes;
+                    let task_poll = poll_fn(|cx| {
+                        //
+                        let mut any_pending = false;
+
+                        let mut tasks = scopes.tasks.tasks.borrow_mut();
+                        let mut to_remove = vec![];
+
+                        // this would be better served by retain
+                        for (id, task) in tasks.iter_mut() {
+                            if task.as_mut().poll(cx).is_ready() {
+                                to_remove.push(*id);
+                            } else {
+                                any_pending = true;
+                            }
+                        }
+
+                        for id in to_remove {
+                            tasks.remove(&id);
+                        }
+
+                        // Resolve the future if any singular task is ready
+                        match any_pending {
+                            true => Poll::Pending,
+                            false => Poll::Ready(()),
+                        }
+                    });
+
+                    match select(task_poll, self.channel.1.next()).await {
                         Either::Left((_, _)) => {}
                         Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
                     }
@@ -697,413 +738,5 @@ impl Drop for VirtualDom {
             scope.reset();
             drop(scope);
         }
-    }
-}
-
-struct PollTasks<'a>(&'a mut ScopeArena);
-
-impl<'a> Future for PollTasks<'a> {
-    type Output = ();
-
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        let mut any_pending = false;
-
-        let mut tasks = self.0.tasks.tasks.borrow_mut();
-        let mut to_remove = vec![];
-
-        // this would be better served by retain
-        for (id, task) in tasks.iter_mut() {
-            if task.as_mut().poll(cx).is_ready() {
-                to_remove.push(*id);
-            } else {
-                any_pending = true;
-            }
-        }
-
-        for id in to_remove {
-            tasks.remove(&id);
-        }
-
-        // Resolve the future if any singular task is ready
-        match any_pending {
-            true => Poll::Pending,
-            false => Poll::Ready(()),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum SchedulerMsg {
-    // events from the host
-    Event(UserEvent),
-
-    // setstate
-    Immediate(ScopeId),
-
-    // an async task pushed from an event handler (or just spawned)
-    NewTask(ScopeId),
-}
-
-/// User Events are events that are shuttled from the renderer into the VirtualDom trhough the scheduler channel.
-///
-/// These events will be passed to the appropriate Element given by `mounted_dom_id` and then bubbled up through the tree
-/// where each listener is checked and fired if the event name matches.
-///
-/// It is the expectation that the event name matches the corresponding event listener, otherwise Dioxus will panic in
-/// attempting to downcast the event data.
-///
-/// Because Event Data is sent across threads, it must be `Send + Sync`. We are hoping to lift the `Sync` restriction but
-/// `Send` will not be lifted. The entire `UserEvent` must also be `Send + Sync` due to its use in the scheduler channel.
-///
-/// # Example
-/// ```rust, ignore
-/// fn App(cx: Scope) -> Element {
-///     rsx!(cx, div {
-///         onclick: move |_| println!("Clicked!")
-///     })
-/// }
-///
-/// let mut dom = VirtualDom::new(App);
-/// let mut scheduler = dom.get_scheduler_channel();
-/// scheduler.unbounded_send(SchedulerMsg::UiEvent(
-///     UserEvent {
-///         scope_id: None,
-///         priority: EventPriority::Medium,
-///         name: "click",
-///         element: Some(ElementId(0)),
-///         data: Arc::new(ClickEvent { .. })
-///     }
-/// )).unwrap();
-/// ```
-#[derive(Debug)]
-pub struct UserEvent {
-    /// The originator of the event trigger if available
-    pub scope_id: Option<ScopeId>,
-
-    /// The priority of the event to be scheduled around ongoing work
-    pub priority: EventPriority,
-
-    /// The optional real node associated with the trigger
-    pub element: Option<ElementId>,
-
-    /// The event type IE "onclick" or "onmouseover"
-    pub name: &'static str,
-
-    /// The event data to be passed onto the event handler
-    pub data: Arc<dyn Any + Send + Sync>,
-}
-
-/// Priority of Event Triggers.
-///
-/// Internally, Dioxus will abort work that's taking too long if new, more important work arrives. Unlike React, Dioxus
-/// won't be afraid to pause work or flush changes to the RealDOM. This is called "cooperative scheduling". Some Renderers
-/// implement this form of scheduling internally, however Dioxus will perform its own scheduling as well.
-///
-/// The ultimate goal of the scheduler is to manage latency of changes, prioritizing "flashier" changes over "subtler" changes.
-///
-/// React has a 5-tier priority system. However, they break things into "Continuous" and "Discrete" priority. For now,
-/// we keep it simple, and just use a 3-tier priority system.
-///
-/// - NoPriority = 0
-/// - LowPriority = 1
-/// - NormalPriority = 2
-/// - UserBlocking = 3
-/// - HighPriority = 4
-/// - ImmediatePriority = 5
-///
-/// We still have a concept of discrete vs continuous though - discrete events won't be batched, but continuous events will.
-/// This means that multiple "scroll" events will be processed in a single frame, but multiple "click" events will be
-/// flushed before proceeding. Multiple discrete events is highly unlikely, though.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
-pub enum EventPriority {
-    /// Work that must be completed during the EventHandler phase.
-    ///
-    /// Currently this is reserved for controlled inputs.
-    Immediate = 3,
-
-    /// "High Priority" work will not interrupt other high priority work, but will interrupt medium and low priority work.
-    ///
-    /// This is typically reserved for things like user interaction.
-    ///
-    /// React calls these "discrete" events, but with an extra category of "user-blocking" (Immediate).
-    High = 2,
-
-    /// "Medium priority" work is generated by page events not triggered by the user. These types of events are less important
-    /// than "High Priority" events and will take precedence over low priority events.
-    ///
-    /// This is typically reserved for VirtualEvents that are not related to keyboard or mouse input.
-    ///
-    /// React calls these "continuous" events (e.g. mouse move, mouse wheel, touch move, etc).
-    Medium = 1,
-
-    /// "Low Priority" work will always be preempted unless the work is significantly delayed, in which case it will be
-    /// advanced to the front of the work queue until completed.
-    ///
-    /// The primary user of Low Priority work is the asynchronous work system (Suspense).
-    ///
-    /// This is considered "idle" work or "background" work.
-    Low = 0,
-}
-
-pub struct FragmentProps<'a>(Element<'a>);
-pub struct FragmentBuilder<'a, const BUILT: bool>(Element<'a>);
-impl<'a> FragmentBuilder<'a, false> {
-    pub fn children(self, children: Element<'a>) -> FragmentBuilder<'a, true> {
-        FragmentBuilder(children)
-    }
-}
-impl<'a, const A: bool> FragmentBuilder<'a, A> {
-    pub fn build(self) -> FragmentProps<'a> {
-        FragmentProps(self.0)
-    }
-}
-
-/// Access the children elements passed into the component
-///
-/// This enables patterns where a component is passed children from its parent.
-///
-/// ## Details
-///
-/// Unlike React, Dioxus allows *only* lists of children to be passed from parent to child - not arbitrary functions
-/// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
-/// on the props that takes Context.
-///
-/// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
-/// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
-/// props are valid for the static lifetime.
-///
-/// ## Example
-///
-/// ```rust, ignore
-/// fn App(cx: Scope) -> Element {
-///     cx.render(rsx!{
-///         CustomCard {
-///             h1 {}2
-///             p {}
-///         }
-///     })
-/// }
-///
-/// #[derive(PartialEq, Props)]
-/// struct CardProps {
-///     children: Element
-/// }
-///
-/// fn CustomCard(cx: Scope<CardProps>) -> Element {
-///     cx.render(rsx!{
-///         div {
-///             h1 {"Title card"}
-///             {cx.props.children}
-///         }
-///     })
-/// }
-/// ```
-impl<'a> Properties for FragmentProps<'a> {
-    type Builder = FragmentBuilder<'a, false>;
-    const IS_STATIC: bool = false;
-    fn builder() -> Self::Builder {
-        FragmentBuilder(None)
-    }
-    unsafe fn memoize(&self, _other: &Self) -> bool {
-        false
-    }
-}
-
-/// Create inline fragments using Component syntax.
-///
-/// ## Details
-///
-/// Fragments capture a series of children without rendering extra nodes.
-///
-/// Creating fragments explicitly with the Fragment component is particularly useful when rendering lists or tables and
-/// a key is needed to identify each item.
-///
-/// ## Example
-///
-/// ```rust, ignore
-/// rsx!{
-///     Fragment { key: "abc" }
-/// }
-/// ```
-///
-/// ## Usage
-///
-/// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
-/// Try to avoid highly nested fragments if you can. Unlike React, there is no protection against infinitely nested fragments.
-///
-/// This function defines a dedicated `Fragment` component that can be used to create inline fragments in the RSX macro.
-///
-/// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
-#[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
-    let i = cx.props.0.as_ref().map(|f| f.decouple());
-    cx.render(LazyNodes::new(|f| f.fragment_from_iter(i)))
-}
-
-/// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
-/// on how to memoize the props and some additional optimizations that can be made. We strongly encourage using the
-/// derive macro to implement the `Properties` trait automatically as guarantee that your memoization strategy is safe.
-///
-/// If your props are 'static, then Dioxus will require that they also be PartialEq for the derived memoize strategy. However,
-/// if your props borrow data, then the memoization strategy will simply default to "false" and the PartialEq will be ignored.
-/// This tends to be useful when props borrow something that simply cannot be compared (IE a reference to a closure);
-///
-/// By default, the memoization strategy is very conservative, but can be tuned to be more aggressive manually. However,
-/// this is only safe if the props are 'static - otherwise you might borrow references after-free.
-///
-/// We strongly suggest that any changes to memoization be done at the "PartialEq" level for 'static props. Additionally,
-/// we advise the use of smart pointers in cases where memoization is important.
-///
-/// ## Example
-///
-/// For props that are 'static:
-/// ```rust, ignore
-/// #[derive(Props, PartialEq)]
-/// struct MyProps {
-///     data: String
-/// }
-/// ```
-///
-/// For props that borrow:
-///
-/// ```rust, ignore
-/// #[derive(Props)]
-/// struct MyProps<'a >{
-///     data: &'a str
-/// }
-/// ```
-pub trait Properties: Sized {
-    type Builder;
-    const IS_STATIC: bool;
-    fn builder() -> Self::Builder;
-
-    /// Memoization can only happen if the props are valid for the 'static lifetime
-    ///
-    /// # Safety
-    /// The user must know if their props are static, but if they make a mistake, UB happens
-    /// Therefore it's unsafe to memoize.
-    unsafe fn memoize(&self, other: &Self) -> bool;
-}
-
-impl Properties for () {
-    type Builder = EmptyBuilder;
-    const IS_STATIC: bool = true;
-    fn builder() -> Self::Builder {
-        EmptyBuilder {}
-    }
-    unsafe fn memoize(&self, _other: &Self) -> bool {
-        true
-    }
-}
-// We allow components to use the () generic parameter if they have no props. This impl enables the "build" method
-// that the macros use to anonymously complete prop construction.
-pub struct EmptyBuilder;
-impl EmptyBuilder {
-    pub fn build(self) {}
-}
-
-/// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
-/// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
-    T::builder()
-}
-
-pub struct Event<T> {
-    data: Arc<T>,
-    _cancel: std::rc::Rc<std::cell::Cell<bool>>,
-}
-
-impl<T> std::ops::Deref for Event<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.data.as_ref()
-    }
-}
-
-impl<T> Event<T> {
-    pub fn cancel(&self) {}
-    pub fn timestamp(&self) {}
-    pub fn triggered_element(&self) -> Option<Element> {
-        None
-    }
-}
-
-pub struct ElementIdIterator<'a> {
-    vdom: &'a VirtualDom,
-
-    // Heuristcally we should never bleed into 5 completely nested fragments/components
-    // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
-    stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 5]>,
-}
-
-impl<'a> ElementIdIterator<'a> {
-    pub fn new(vdom: &'a VirtualDom, node: &'a VNode<'a>) -> Self {
-        Self {
-            vdom,
-            stack: smallvec::smallvec![(0, node)],
-        }
-    }
-}
-
-impl<'a> Iterator for ElementIdIterator<'a> {
-    type Item = &'a VNode<'a>;
-
-    fn next(&mut self) -> Option<&'a VNode<'a>> {
-        let mut should_pop = false;
-        let mut returned_node = None;
-        let mut should_push = None;
-
-        while returned_node.is_none() {
-            if let Some((count, node)) = self.stack.last_mut() {
-                match node {
-                    // We can only exit our looping when we get "real" nodes
-                    VNode::Element(_) | VNode::Text(_) | VNode::Placeholder(_) => {
-                        // We've recursed INTO an element/text
-                        // We need to recurse *out* of it and move forward to the next
-                        // println!("Found element! Returning it!");
-                        should_pop = true;
-                        returned_node = Some(&**node);
-                    }
-
-                    // If we get a fragment we push the next child
-                    VNode::Fragment(frag) => {
-                        let _count = *count as usize;
-                        if _count >= frag.children.len() {
-                            should_pop = true;
-                        } else {
-                            should_push = Some(&frag.children[_count]);
-                        }
-                    }
-
-                    // For components, we load their root and push them onto the stack
-                    VNode::Component(sc) => {
-                        // todo!();
-                        let scope = self.vdom.get_scope(sc.scope.get().unwrap()).unwrap();
-
-                        // Simply swap the current node on the stack with the root of the component
-                        *node = scope.root_node();
-                    }
-                }
-            } else {
-                // If there's no more items on the stack, we're done!
-                return None;
-            }
-
-            if should_pop {
-                self.stack.pop();
-                if let Some((id, _)) = self.stack.last_mut() {
-                    *id += 1;
-                }
-                should_pop = false;
-            }
-
-            if let Some(push) = should_push {
-                self.stack.push((0, push));
-                should_push = None;
-            }
-        }
-
-        returned_node
     }
 }

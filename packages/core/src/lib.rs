@@ -2,18 +2,24 @@
 #![doc = include_str!("../README.md")]
 
 pub(crate) mod diff;
+pub(crate) mod events;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
 pub(crate) mod nodes;
+pub(crate) mod properties;
 pub(crate) mod scopes;
+pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub(crate) use crate::diff::*;
+    pub use crate::events::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
+    pub use crate::properties::*;
     pub use crate::scopes::*;
+    pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
@@ -65,21 +71,17 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    Attribute, Component, DioxusElement, DomEdit, Element, ElementId, ElementIdIterator, Event,
+    AnyEvent, Attribute, Component, DioxusElement, DomEdit, Element, ElementId, ElementIdIterator,
     EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory,
-    Properties, SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, UserEvent, VComponent, VElement,
-    VFragment, VNode, VPlaceholder, VText, VirtualDom,
+    Properties, SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, UiEvent, UserEvent, VComponent,
+    VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
 };
 
 pub mod prelude {
-    pub use crate::innerlude::Scope;
     pub use crate::innerlude::{
-        Attributes, Component, DioxusElement, Element, EventHandler, LazyNodes, NodeFactory,
-        ScopeState,
+        fc_to_builder, Attributes, Component, DioxusElement, Element, EventHandler, Fragment,
+        LazyNodes, NodeFactory, Properties, Scope, ScopeState, VNode, VirtualDom,
     };
-    pub use crate::nodes::VNode;
-    pub use crate::virtual_dom::{fc_to_builder, Fragment, Properties};
-    pub use crate::VirtualDom;
 }
 
 pub mod exports {
@@ -93,7 +95,7 @@ pub mod exports {
 pub(crate) mod unsafe_utils {
     use crate::VNode;
 
-    pub unsafe fn extend_vnode<'a, 'b>(node: &'a VNode<'a>) -> &'b VNode<'b> {
+    pub(crate) unsafe fn extend_vnode<'a, 'b>(node: &'a VNode<'a>) -> &'b VNode<'b> {
         std::mem::transmute(node)
     }
 }

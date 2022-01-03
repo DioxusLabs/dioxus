@@ -278,19 +278,29 @@ impl ScopeArena {
         let nodes = self.nodes.borrow();
         let mut cur_el = Some(element);
 
+        let state = Rc::new(BubbleState::new());
+
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
                 let real_el = unsafe { &**el };
                 if let VNode::Element(real_el) = real_el {
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
+                            if state.canceled.get() {
+                                // stop bubbling if canceled
+                                break;
+                            }
+
                             let mut cb = listener.callback.callback.borrow_mut();
                             if let Some(cb) = cb.as_mut() {
                                 // todo: arcs are pretty heavy to clone
                                 // we really want to convert arc to rc
                                 // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
                                 // we could convert arc to rc internally or something
-                                (cb)(event.data.clone());
+                                (cb)(AnyEvent {
+                                    bubble_state: state.clone(),
+                                    data: event.data.clone(),
+                                });
                             }
                         }
                     }
@@ -702,10 +712,9 @@ impl ScopeState {
     /// }
     ///```
     pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Option<VNode<'src>> {
-        let fac = NodeFactory {
+        Some(rsx.call(NodeFactory {
             bump: &self.wip_frame().bump,
-        };
-        Some(rsx.call(fac))
+        }))
     }
 
     /// Store a value between renders

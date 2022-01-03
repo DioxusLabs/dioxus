@@ -43,63 +43,63 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
     match name {
         "copy" | "cut" | "paste" => {
             //
-            Arc::new(ClipboardEvent {})
+            Arc::new(ClipboardData {})
         }
         "compositionend" | "compositionstart" | "compositionupdate" => {
-            Arc::new(serde_json::from_value::<CompositionEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<CompositionData>(val).unwrap())
         }
         "keydown" | "keypress" | "keyup" => {
-            let evt = serde_json::from_value::<KeyboardEvent>(val).unwrap();
+            let evt = serde_json::from_value::<KeyboardData>(val).unwrap();
             Arc::new(evt)
         }
         "focus" | "blur" => {
             //
-            Arc::new(FocusEvent {})
+            Arc::new(FocusData {})
         }
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
         "change" | "input" | "invalid" | "reset" | "submit" => {
-            Arc::new(serde_json::from_value::<FormEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<FormData>(val).unwrap())
         }
 
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            Arc::new(serde_json::from_value::<MouseEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<MouseData>(val).unwrap())
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            Arc::new(serde_json::from_value::<PointerEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<PointerData>(val).unwrap())
         }
         "select" => {
             //
-            Arc::new(serde_json::from_value::<SelectionEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<SelectionData>(val).unwrap())
         }
 
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
-            Arc::new(serde_json::from_value::<TouchEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<TouchData>(val).unwrap())
         }
 
         "scroll" => Arc::new(()),
 
-        "wheel" => Arc::new(serde_json::from_value::<WheelEvent>(val).unwrap()),
+        "wheel" => Arc::new(serde_json::from_value::<WheelData>(val).unwrap()),
 
         "animationstart" | "animationend" | "animationiteration" => {
-            Arc::new(serde_json::from_value::<AnimationEvent>(val).unwrap())
+            Arc::new(serde_json::from_value::<AnimationData>(val).unwrap())
         }
 
-        "transitionend" => Arc::new(serde_json::from_value::<TransitionEvent>(val).unwrap()),
+        "transitionend" => Arc::new(serde_json::from_value::<TransitionData>(val).unwrap()),
 
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => {
             //
-            Arc::new(MediaEvent {})
+            Arc::new(MediaData {})
         }
 
-        "toggle" => Arc::new(ToggleEvent {}),
+        "toggle" => Arc::new(ToggleData {}),
 
         _ => Arc::new(()),
     }

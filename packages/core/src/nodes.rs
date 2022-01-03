@@ -6,14 +6,12 @@
 use crate::{
     innerlude::{Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
-    Component,
+    AnyEvent, Component,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
-    sync::Arc,
 };
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -330,7 +328,7 @@ pub struct EventHandler<'bump> {
 }
 
 impl EventHandler<'_> {
-    pub fn call(&self, event: Arc<dyn Any + Send + Sync>) {
+    pub fn call(&self, event: AnyEvent) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
         }
@@ -340,7 +338,7 @@ impl EventHandler<'_> {
     }
 }
 
-type ListenerCallback<'bump> = BumpBox<'bump, dyn FnMut(Arc<dyn Any + Send + Sync>) + 'bump>;
+type ListenerCallback<'bump> = BumpBox<'bump, dyn FnMut(AnyEvent) + 'bump>;
 
 impl Copy for EventHandler<'_> {}
 impl Clone for EventHandler<'_> {
