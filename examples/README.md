@@ -2,7 +2,7 @@
 
 Most of these examples are run through webview so you don't need the Dioxus CLI installed to preview the functionality.
 
-These examples are fully-fledged micro apps. They can be ran with the `cargo run --example XYZ`
+These examples are fully-fledged micro apps. They can be ran with the `cargo run --features desktop --example XYZ`
 
 | Example                                             | What it does                                | Status |
 | --------------------------------------------------- | ------------------------------------------- | ------ |
