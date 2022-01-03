@@ -14,7 +14,13 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app)
+    use dioxus::desktop::tao::dpi::LogicalSize;
+    dioxus::desktop::launch_cfg(app, |cfg| {
+        cfg.with_window(|w| {
+            w.with_title("Doggo Fetcher")
+                .with_inner_size(LogicalSize::new(600.0, 800.0))
+        })
+    });
 }
 
 #[derive(serde::Deserialize)]
@@ -31,7 +37,7 @@ fn app(cx: Scope) -> Element {
                 "is a domesticated descendant of the wolf which is characterized by an upturning tail." 
                 "The dog derived from an ancient, extinct wolf,[6][7] and the modern grey wolf is the"
                 "dog's nearest living relative.[8] The dog was the first species to be domesticated,[9][8]"
-                 "by hunter–gatherers over 15,000 years ago,[7] before the development of agriculture.[1]"
+                "by hunter–gatherers over 15,000 years ago,[7] before the development of agriculture.[1]"
             }
 
             h3 { "Illustrious Dog Photo" }
@@ -56,7 +62,7 @@ fn Doggo(cx: Scope) -> Element {
         Some(Ok(resp)) => rsx! {
             button {
                 onclick: move |_| fut.restart(),
-                "Click to fetch another dog"
+                "Click to fetch another doggo"
             }
             div {
                 img {
