@@ -10,4 +10,4 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../../packages/core" }
+dioxus-core = { path = "../../packages/core", version = "0.1.5" }
