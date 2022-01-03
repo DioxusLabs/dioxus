@@ -1,10 +1,59 @@
 //! Dioxus Desktop Renderer
 //!
 //! Render the Dioxus VirtualDom using the platform's native WebView implementation.
+//!
+//! # Desktop
+//!
+//! One of Dioxus' killer features is the ability to quickly build a native desktop app that looks and feels the same across platforms. Apps built with Dioxus are typically <5mb in size and use existing system resources, so they won't hog extreme amounts of RAM or memory.
+//!
+//! Dioxus Desktop is built off Tauri. Right now there aren't any Dioxus abstractions over keyboard shortcuts, menubar, handling, etc, so you'll want to leverage Tauri - mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly. The next major release of Dioxus-Desktop will include components and hooks for notifications, global shortcuts, menubar, etc.
+//!
+//!
+//! ## Getting Set up
+//!
+//! Getting Set up with Dioxus-Desktop is quite easy. Make sure you have Rust and Cargo installed, and then create a new project:
+//!
+//! ```shell
+//! $ cargo new --bin demo
+//! $ cd app
+//! ```
+//!
+//! Add Dioxus with the `desktop` feature:
+//!
+//! ```shell
+//! $ cargo add dioxus --features desktop
+//! ```
+//!
+//! Edit your `main.rs`:
+//!
+//! ```rust
+//! // main.rs
+//! use dioxus::prelude::*;
+//!
+//! fn main() {
+//!     dioxus::desktop::launch(app);
+//! }
+//!
+//! fn app(cx: Scope) -> Element {
+//!     cx.render(rsx!{
+//!         div {
+//!             "hello world!"
+//!         }
+//!     })
+//! }
+//! ```
+//!
+//!
+//! To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
+//!
+//! ## Future Steps
+//!
+//! Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
 
-mod cfg;
-mod escape;
-mod events;
+pub mod cfg;
+pub mod escape;
+pub mod events;
+
 use cfg::DesktopConfig;
 use dioxus_core::*;
 use std::{
@@ -28,9 +77,46 @@ use wry::{
     webview::{WebView, WebViewBuilder},
 };
 
+/// Launch the WebView and run the event loop.
+///
+/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn main() {
+///     dioxus::desktop::launch(app);
+/// }
+///
+/// fn app(cx: Scope) -> Element {
+///     cx.render(rsx!{
+///         h1 {"hello world!"}
+///     })
+/// }
+/// ```
 pub fn launch(root: Component) {
     launch_with_props(root, (), |c| c)
 }
+
+/// Launch the WebView and run the event loop, with configuration.
+///
+/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
+///
+/// You can configure the WebView window with a configuration closure
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn main() {
+///     dioxus::desktop::launch_cfg(app, |c| c.with_window(|w| w.with_title("My App")));
+/// }
+///
+/// fn app(cx: Scope) -> Element {
+///     cx.render(rsx!{
+///         h1 {"hello world!"}
+///     })
+/// }
+/// ```
 pub fn launch_cfg(
     root: Component,
     config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
@@ -38,27 +124,36 @@ pub fn launch_cfg(
     launch_with_props(root, (), config_builder)
 }
 
+/// Launch the WebView and run the event loop, with configuration and root props.
+///
+/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
+///
+/// You can configure the WebView window with a configuration closure
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn main() {
+///     dioxus::desktop::launch_cfg(app, AppProps { name: "asd" }, |c| c);
+/// }
+///
+/// struct AppProps {
+///     name: &'static str
+/// }
+///
+/// fn app(cx: Scope<AppProps>) -> Element {
+///     cx.render(rsx!{
+///         h1 {"hello {cx.props.name}!"}
+///     })
+/// }
+/// ```
 pub fn launch_with_props<P: 'static + Send>(
     root: Component<P>,
     props: P,
     builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) {
-    run(root, props, builder)
-}
-
-#[derive(serde::Serialize)]
-struct Response<'a> {
-    pre_rendered: Option<String>,
-    edits: Vec<DomEdit<'a>>,
-}
-
-pub fn run<T: 'static + Send>(
-    root: Component<T>,
-    props: T,
-    user_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
-) {
     let mut desktop_cfg = DesktopConfig::new();
-    user_builder(&mut desktop_cfg);
+    builder(&mut desktop_cfg);
 
     let event_loop = EventLoop::with_user_event();
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
@@ -116,11 +211,11 @@ pub enum UserWindowEvent {
 }
 
 pub struct DesktopController {
-    webviews: HashMap<WindowId, WebView>,
-    sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-    pending_edits: Arc<RwLock<VecDeque<String>>>,
-    quit_app_on_close: bool,
-    is_ready: Arc<AtomicBool>,
+    pub webviews: HashMap<WindowId, WebView>,
+    pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+    pub pending_edits: Arc<RwLock<VecDeque<String>>>,
+    pub quit_app_on_close: bool,
+    pub is_ready: Arc<AtomicBool>,
 }
 
 impl DesktopController {

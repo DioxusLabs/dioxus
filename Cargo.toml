@@ -20,7 +20,7 @@ dioxus-web = { path = "./packages/web", version = "^0.0.2", optional = true }
 dioxus-desktop = { path = "./packages/desktop", version = "^0.1.1", optional = true }
 dioxus-ssr = { path = "./packages/ssr", version = "0.1.1", optional = true }
 
-# dioxus-router = { path = "./packages/router", optional = true }
+dioxus-router = { path = "./packages/router", optional = true }
 dioxus-mobile = { path = "./packages/mobile", version = "0.0.1", optional = true }
 # dioxus-liveview = { path = "./packages/liveview", optional = true }
 
@@ -33,7 +33,7 @@ html = ["dioxus-html"]
 ssr = ["dioxus-ssr"]
 web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
-# router = ["dioxus-router"]
+router = ["dioxus-router"]
 
 # "dioxus-router/web"
 # "dioxus-router/desktop"

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-desktop"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for a remote webview instance"
