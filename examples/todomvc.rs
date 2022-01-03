@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 
-
 fn main() {
     dioxus::desktop::launch(app);
 }
@@ -18,7 +17,6 @@ pub struct TodoItem {
     pub checked: bool,
     pub contents: String,
 }
-
 
 pub fn app(cx: Scope<()>) -> Element {
     let todos = use_state(&cx, || im_rc::HashMap::<u32, TodoItem>::default());
@@ -80,9 +78,9 @@ pub fn app(cx: Scope<()>) -> Element {
                 }
                 (!todos.is_empty()).then(|| rsx!(
                     footer { class: "footer",
-                        span { class: "todo-count", 
-                            strong {"{items_left} "} 
-                            span {"{item_text} left"} 
+                        span { class: "todo-count",
+                            strong {"{items_left} "}
+                            span {"{item_text} left"}
                         }
                         ul { class: "filters",
                             li { class: "All", a { onclick: move |_| filter.set(FilterState::All), "All" }}
@@ -90,8 +88,8 @@ pub fn app(cx: Scope<()>) -> Element {
                             li { class: "Completed", a { onclick: move |_| filter.set(FilterState::Completed), "Completed" }}
                         }
                         (show_clear_completed).then(|| rsx!(
-                            button { 
-                                class: "clear-completed", 
+                            button {
+                                class: "clear-completed",
                                 onclick: move |_| todos.modify().retain(|_, todo| todo.checked == false),
                                 "Clear completed"
                             }

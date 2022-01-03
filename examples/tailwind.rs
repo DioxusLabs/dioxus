@@ -1,11 +1,10 @@
 //! Example: Basic Tailwind usage
-//! 
+//!
 //! This example shows how an app might be styled with TailwindCSS.
-//! 
+//!
 //! To minify your tailwind bundle, currently you need to use npm. Follow these instructions:
-//! 
+//!
 //!     https://dev.to/arctic_hen7/how-to-set-up-tailwind-css-with-yew-and-trunk-il9
-
 
 use dioxus::prelude::*;
 
@@ -44,7 +43,7 @@ pub fn app(cx: Scope) -> Element {
                         RightArrowIcon {}
                     }
                 }
-            }            
+            }
 
             section { class: "text-gray-400 bg-gray-900 body-font",
                 div { class: "container mx-auto flex px-5 py-24 md:flex-row flex-col items-center",
@@ -73,11 +72,11 @@ pub fn app(cx: Scope) -> Element {
                         }
                     }
                     div { class: "lg:max-w-lg lg:w-full md:w-1/2 w-5/6",
-                        img { 
-                            class: "object-cover object-center rounded", 
+                        img {
+                            class: "object-cover object-center rounded",
                             src: "https://i.imgur.com/oK6BLtw.png",
                             referrerpolicy:"no-referrer",
-                            alt: "hero", 
+                            alt: "hero",
                         }
                     }
                 }
@@ -85,8 +84,6 @@ pub fn app(cx: Scope) -> Element {
         }
     ))
 }
-
-
 
 pub fn StacksIcon(cx: Scope) -> Element {
     cx.render(rsx!(

@@ -27,7 +27,7 @@ fn app(cx: Scope) -> Element {
     let description = use_state(&cx, String::new);
 
     cx.render(rsx!(
-        body { 
+        body {
             margin_left: "35%",
             link {
                 rel: "stylesheet",
