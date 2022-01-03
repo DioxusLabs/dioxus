@@ -1,6 +1,6 @@
 [package]
 name = "dioxus"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -21,7 +21,7 @@ dioxus-desktop = { path = "./packages/desktop", version = "^0.1.1", optional = t
 dioxus-ssr = { path = "./packages/ssr", version = "0.1.1", optional = true }
 
 dioxus-router = { path = "./packages/router", optional = true }
-dioxus-mobile = { path = "./packages/mobile", version = "0.0.1", optional = true }
+dioxus-mobile = { path = "./packages/mobile", version = "^0.0.2", optional = true }
 # dioxus-liveview = { path = "./packages/liveview", optional = true }
 
 [features]
