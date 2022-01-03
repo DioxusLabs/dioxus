@@ -20,8 +20,7 @@ dioxus-web = { path = "./packages/web", version = "^0.0.2", optional = true }
 dioxus-desktop = { path = "./packages/desktop", optional = true }
 dioxus-ssr = { path = "./packages/ssr", optional = true }
 
-dioxus-router = { path = "./packages/router", optional = true }
-
+# dioxus-router = { path = "./packages/router", optional = true }
 # dioxus-mobile = { path = "./packages/mobile", optional = true }
 # dioxus-liveview = { path = "./packages/liveview", optional = true }
 
@@ -31,12 +30,14 @@ default = ["macro", "hooks", "html"]
 macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
-router = ["dioxus-router"]
 ssr = ["dioxus-ssr"]
-web = ["dioxus-web", "dioxus-router/web"]
-desktop = ["dioxus-desktop", "dioxus-router/desktop"]
+web = ["dioxus-web"]
+desktop = ["dioxus-desktop"]
 
-
+# router = ["dioxus-router"]
+# "dioxus-router/web"
+# "dioxus-router/desktop"
+# desktop = ["dioxus-desktop", "dioxus-router/desktop"]
 # mobile = ["dioxus-mobile"]
 # liveview = ["dioxus-liveview"]
 

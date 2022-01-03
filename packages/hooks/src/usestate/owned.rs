@@ -24,10 +24,6 @@ impl<T> UseStateOwned<T> {
     pub fn modify(&self) -> RefMut<T> {
         RefMut::map(self.wip.borrow_mut(), |x| x.as_mut().unwrap())
     }
-
-    pub fn with(&self, f: impl FnOnce(&mut T)) {
-        //
-    }
 }
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};

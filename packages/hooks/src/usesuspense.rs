@@ -20,9 +20,9 @@ pub fn use_suspense<R: 'static, F: Future<Output = R> + 'static>(
 
         let task = cx.push_future(new_fut);
         SuspenseInner {
-            task,
+            _task: task,
             value: None,
-            wip_value,
+            _wip_value: wip_value,
         }
     });
 
@@ -35,7 +35,7 @@ pub fn use_suspense<R: 'static, F: Future<Output = R> + 'static>(
 }
 
 struct SuspenseInner<R> {
-    task: TaskId,
-    wip_value: Rc<Cell<Option<R>>>,
+    _task: TaskId,
+    _wip_value: Rc<Cell<Option<R>>>,
     value: Option<R>,
 }
