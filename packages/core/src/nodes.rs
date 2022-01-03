@@ -447,19 +447,14 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    pub fn element<L, A, V>(
+    pub fn element(
         &self,
         el: impl DioxusElement,
-        listeners: L,
-        attributes: A,
-        children: V,
+        listeners: &'a [Listener<'a>],
+        attributes: &'a [Attribute<'a>],
+        children: &'a [VNode<'a>],
         key: Option<Arguments>,
-    ) -> VNode<'a>
-    where
-        L: 'a + AsRef<[Listener<'a>]>,
-        A: 'a + AsRef<[Attribute<'a>]>,
-        V: 'a + AsRef<[VNode<'a>]>,
-    {
+    ) -> VNode<'a> {
         self.raw_element(
             el.tag_name(),
             el.namespace(),
@@ -470,29 +465,15 @@ impl<'a> NodeFactory<'a> {
         )
     }
 
-    pub fn raw_element<L, A, V>(
+    pub fn raw_element(
         &self,
         tag_name: &'static str,
         namespace: Option<&'static str>,
-        listeners: L,
-        attributes: A,
-        children: V,
+        listeners: &'a [Listener<'a>],
+        attributes: &'a [Attribute<'a>],
+        children: &'a [VNode<'a>],
         key: Option<Arguments>,
-    ) -> VNode<'a>
-    where
-        L: 'a + AsRef<[Listener<'a>]>,
-        A: 'a + AsRef<[Attribute<'a>]>,
-        V: 'a + AsRef<[VNode<'a>]>,
-    {
-        let listeners: &'a L = self.bump.alloc(listeners);
-        let listeners = listeners.as_ref();
-
-        let attributes: &'a A = self.bump.alloc(attributes);
-        let attributes = attributes.as_ref();
-
-        let children: &'a V = self.bump.alloc(children);
-        let children = children.as_ref();
-
+    ) -> VNode<'a> {
         let key = key.map(|f| self.raw_text(f).0);
 
         VNode::Element(self.bump.alloc(VElement {

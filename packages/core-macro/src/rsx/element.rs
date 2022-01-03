@@ -204,9 +204,9 @@ impl ToTokens for Element {
         tokens.append_all(quote! {
             __cx.element(
                 dioxus_elements::#name,
-                [ #(#listeners),* ],
-                [ #(#attr),* ],
-                [ #(#children),* ],
+                __cx.bump().alloc([ #(#listeners),* ]),
+                __cx.bump().alloc([ #(#attr),* ]),
+                __cx.bump().alloc([ #(#children),* ]),
                 #key,
             )
         });
