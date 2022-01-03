@@ -1,7 +1,7 @@
 /*
 Tiny CRM: A port of the Yew CRM example to Dioxus.
 */
-use dioxus::prelude::*;
+use dioxus::{events::FormEvent, prelude::*};
 
 fn main() {
     dioxus::desktop::launch(app);

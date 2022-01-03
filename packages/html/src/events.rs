@@ -17,11 +17,11 @@ pub mod on {
             $(
                 $(
                     $(#[$method_attr])*
-                    pub fn $name<'a, F>(
+                    pub fn $name<'a>(
                         factory: NodeFactory<'a>,
-                        mut callback: F,
+                        mut callback: impl FnMut($wrapper) + 'a,
+                        // mut callback: impl FnMut(UiEvent<$data>) + 'a,
                     ) -> Listener<'a>
-                        where F: FnMut($wrapper) + 'a
                     {
                         let bump = &factory.bump();
 

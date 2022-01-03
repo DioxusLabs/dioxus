@@ -47,12 +47,12 @@ backtrace = "0.3"
 
 [dev-dependencies]
 anyhow = "1.0.42"
-dioxus-html = { path = "../html" }
 fern = { version = "0.6.0", features = ["colored"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
 dioxus-core-macro = { path = "../core-macro", version = "^0.1.2" }
 criterion = "0.3.5"
 thiserror = "1.0.30"
+dioxus-html = { path = "../html" }
 
 [features]
 default = []
