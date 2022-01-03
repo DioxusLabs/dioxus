@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-web"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for the web browser using websys"
