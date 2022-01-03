@@ -76,7 +76,7 @@ If you know React, then you already know Dioxus.
 - Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
 - Extremely memory efficient - 0 global allocations for steady-state components.
 - Multi-channel asynchronous scheduler for first-class async support.
-- And more! Read the [full release post here](https://dioxuslabs.com/).
+- And more! Read the [full release post here](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 
 ### Examples
