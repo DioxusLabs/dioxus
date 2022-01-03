@@ -35,5 +35,5 @@ fn main() {
 
     let app: Component = |cx| cx.render(rsx!(div { "some app" }));
 
-    dioxus_desktop::run(app, (), |c| c.with_edits(edits));
+    dioxus_desktop::launch_core(app, (), |c| c.with_edits(edits));
 }
