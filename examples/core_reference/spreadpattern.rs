@@ -28,7 +28,7 @@ pub struct MyProps<'a> {
     children: Element<'a>,
 }
 
-pub fn Example1(cx: Scope<MyProps>) -> Element {
+pub fn Example1<'a>(cx: Scope<'a, MyProps<'a>>) -> Element {
     let MyProps { count, live, name } = cx.props;
     cx.render(rsx! {
         div {

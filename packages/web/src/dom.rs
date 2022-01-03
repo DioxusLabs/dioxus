@@ -53,18 +53,20 @@ impl WebsysDom {
         let listeners = FxHashMap::default();
 
         // re-hydrate the page - only supports one virtualdom per page
+        // hydration is the dubmest thing you've ever heard of
+        // just blast away the page and replace it completely.
         if cfg.hydrate {
-            // Load all the elements into the arena
-            let node_list: NodeList = document.query_selector_all("dioxus-id").unwrap();
-            let len = node_list.length() as usize;
+            // // Load all the elements into the arena
+            // let node_list: NodeList = document.query_selector_all("dioxus-id").unwrap();
+            // let len = node_list.length() as usize;
 
-            for x in 0..len {
-                let node: Node = node_list.get(x as u32).unwrap();
-                let el: &Element = node.dyn_ref::<Element>().unwrap();
-                let id: String = el.get_attribute("dioxus-id").unwrap();
-                let id = id.parse::<usize>().unwrap();
-                nodes[id] = Some(node);
-            }
+            // for x in 0..len {
+            //     let node: Node = node_list.get(x as u32).unwrap();
+            //     let el: &Element = node.dyn_ref::<Element>().unwrap();
+            //     let id: String = el.get_attribute("dioxus-id").unwrap();
+            //     let id = id.parse::<usize>().unwrap();
+            //     nodes[id] = Some(node);
+            // }
 
             // Load all the event listeners into our listener register
             // TODO

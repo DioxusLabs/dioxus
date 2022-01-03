@@ -13,26 +13,17 @@ use dioxus::prelude::*;
 pub fn Example(cx: Scope) -> Element {
     cx.render(rsx! {
         head {
-            style: { background_color: "powderblue" }
+            background_color: "powderblue"
          }
         body {
-            h1 { style: { color: "blue" }
+            h1 {
+                color: "blue",
                 "This is a heading"
             }
-            p { style: { color: "red" }
+            p {
+                color: "red",
                 "This is a paragraph"
             }
-        }
-    })
-}
-
-// .... technically the rsx! macro is slightly broken at the moment and allows styles not wrapped in style {}
-// I haven't noticed any name collisions yet, and am tentatively leaving this behavior in..
-// Don't rely on it.
-pub fn Example2(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div { color: "red"
-            "hello world!"
         }
     })
 }
