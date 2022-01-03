@@ -85,18 +85,6 @@ impl WebsysDom {
         }
     }
 
-    // pub fn apply_refs(&mut self, refs: &[NodeRefMutation]) {
-    //     for item in refs {
-    //         if let Some(bla) = &item.element {
-    //             let node = self.nodes[item.element_id.as_u64() as usize]
-    //                 .as_ref()
-    //                 .unwrap()
-    //                 .clone();
-    //             bla.set(Arc::new(node)).unwrap();
-    //         }
-    //     }
-    // }
-
     pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
         for edit in edits.drain(..) {
             match edit {
@@ -483,16 +471,16 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
     use dioxus_html::KeyCode;
 
     match event.type_().as_str() {
-        "copy" | "cut" | "paste" => Arc::new(ClipboardEvent {}),
+        "copy" | "cut" | "paste" => Arc::new(ClipboardData {}),
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: &web_sys::CompositionEvent = event.dyn_ref().unwrap();
-            Arc::new(CompositionEvent {
+            Arc::new(CompositionData {
                 data: evt.data().unwrap_or_default(),
             })
         }
         "keydown" | "keypress" | "keyup" => {
             let evt: &web_sys::KeyboardEvent = event.dyn_ref().unwrap();
-            Arc::new(KeyboardEvent {
+            Arc::new(KeyboardData {
                 alt_key: evt.alt_key(),
                 char_code: evt.char_code(),
                 key: evt.key(),
@@ -506,7 +494,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 which: evt.which() as usize,
             })
         }
-        "focus" | "blur" => Arc::new(FocusEvent {}),
+        "focus" | "blur" => Arc::new(FocusData {}),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
@@ -549,13 +537,13 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 })
                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-            Arc::new(FormEvent { value })
+            Arc::new(FormData { value })
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             let evt: &web_sys::MouseEvent = event.dyn_ref().unwrap();
-            Arc::new(MouseEvent {
+            Arc::new(MouseData {
                 alt_key: evt.alt_key(),
                 button: evt.button(),
                 buttons: evt.buttons(),
@@ -573,7 +561,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             let evt: &web_sys::PointerEvent = event.dyn_ref().unwrap();
-            Arc::new(PointerEvent {
+            Arc::new(PointerData {
                 alt_key: evt.alt_key(),
                 button: evt.button(),
                 buttons: evt.buttons(),
@@ -599,10 +587,10 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 // get_modifier_state: evt.get_modifier_state(),
             })
         }
-        "select" => Arc::new(SelectionEvent {}),
+        "select" => Arc::new(SelectionData {}),
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
             let evt: &web_sys::TouchEvent = event.dyn_ref().unwrap();
-            Arc::new(TouchEvent {
+            Arc::new(TouchData {
                 alt_key: evt.alt_key(),
                 ctrl_key: evt.ctrl_key(),
                 meta_key: evt.meta_key(),
@@ -612,7 +600,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
         "scroll" => Arc::new(()),
         "wheel" => {
             let evt: &web_sys::WheelEvent = event.dyn_ref().unwrap();
-            Arc::new(WheelEvent {
+            Arc::new(WheelData {
                 delta_x: evt.delta_x(),
                 delta_y: evt.delta_y(),
                 delta_z: evt.delta_z(),
@@ -621,7 +609,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
         }
         "animationstart" | "animationend" | "animationiteration" => {
             let evt: &web_sys::AnimationEvent = event.dyn_ref().unwrap();
-            Arc::new(AnimationEvent {
+            Arc::new(AnimationData {
                 elapsed_time: evt.elapsed_time(),
                 animation_name: evt.animation_name(),
                 pseudo_element: evt.pseudo_element(),
@@ -629,7 +617,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
         }
         "transitionend" => {
             let evt: &web_sys::TransitionEvent = event.dyn_ref().unwrap();
-            Arc::new(TransitionEvent {
+            Arc::new(TransitionData {
                 elapsed_time: evt.elapsed_time(),
                 property_name: evt.property_name(),
                 pseudo_element: evt.pseudo_element(),
@@ -638,8 +626,8 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => Arc::new(MediaEvent {}),
-        "toggle" => Arc::new(ToggleEvent {}),
+        | "timeupdate" | "volumechange" | "waiting" => Arc::new(MediaData {}),
+        "toggle" => Arc::new(ToggleData {}),
         _ => Arc::new(()),
     }
 }
