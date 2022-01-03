@@ -13,7 +13,7 @@ pub struct LinkProps<'a, R: Routable> {
     ///
     /// You can either put it your own inline method or just autoderive the route using `derive(Routable)`
     ///
-    /// ```rust
+    /// ```rust, ignore
     ///
     /// Link { to: Route::Home, href: |_| "home".to_string() }
     ///

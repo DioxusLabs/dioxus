@@ -122,7 +122,7 @@ pub mod on {
         /// The MouseEvent interface represents events that occur due to the user interacting with a pointing device (such as a mouse).
         ///
         /// ## Trait implementation:
-        /// ```rust
+        /// ```rust, ignore
         ///     fn alt_key(&self) -> bool;
         ///     fn button(&self) -> i16;
         ///     fn buttons(&self) -> u16;
@@ -416,7 +416,7 @@ pub mod on {
         ///
         /// # Example
         ///
-        /// ```rust
+        /// ```rust, ignore
         /// match event.key().as_str() {
         ///     "Esc" | "Escape" => {}
         ///     "ArrowDown" => {}
@@ -435,7 +435,7 @@ pub mod on {
         ///
         /// ## Example
         ///
-        /// ```rust
+        /// ```rust, ignore
         /// use dioxus::KeyCode;
         /// match event.key_code() {
         ///     KeyCode::Escape => {}

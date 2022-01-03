@@ -39,14 +39,14 @@ impl<T> ProvidedStateInner<T> {
 ///
 /// ## Provider
 ///
-/// ```rust
+/// ```rust, ignore
 ///
 ///
 /// ```
 ///
 /// ## Consumer
 ///
-/// ```rust
+/// ```rust, ignore
 ///
 ///
 /// ```

@@ -9,13 +9,12 @@ Specifically:
 - [ ] Async isn't busted
 */
 
-use dioxus::{prelude::*, DomEdit, SchedulerMsg, ScopeId};
+use dioxus::{prelude::*, SchedulerMsg, ScopeId};
 use dioxus_core as dioxus;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
 mod test_logging;
-use DomEdit::*;
 
 const IS_LOGGING_ENABLED: bool = false;
 
@@ -97,7 +96,7 @@ fn memo_works_properly() {
         let name = cx.use_hook(|_| String::from("asd"));
 
         cx.render(rsx!(
-            div { "Hello, world!" }
+            div { "Hello, world! {name}" }
             child(na: "asdfg".to_string())
         ))
     }
@@ -149,7 +148,7 @@ fn free_works_on_root_props() {
 
     impl Drop for Custom {
         fn drop(&mut self) {
-            dbg!("dropped!");
+            dbg!("dropped! {}", &self.val);
         }
     }
 

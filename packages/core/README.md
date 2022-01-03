@@ -5,7 +5,7 @@ This is the core crate for the Dioxus Virtual DOM. This README will focus on the
 To build new apps with Dioxus or to extend the ecosystem with new hooks or components, use the higher-level `dioxus` crate with the appropriate feature flags.
 
 
-```rust
+```rust, ignore
 fn app(cx: Scope) -> Element {
     rsx!(cx, div { "hello world" })
 }

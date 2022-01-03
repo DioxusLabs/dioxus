@@ -185,7 +185,7 @@ impl VirtualDom {
     /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
     /// VirtualDom to be created just to retrieve its channel receiver.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let channel = futures_channel::mpsc::unbounded();
     /// let dom = VirtualDom::new_with_scheduler(Example, (), channel);
     /// ```
@@ -228,7 +228,7 @@ impl VirtualDom {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let mut dom = VirtualDom::new(example);
     /// dom.rebuild();
     ///
@@ -547,7 +547,7 @@ impl VirtualDom {
     ///
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
@@ -567,7 +567,7 @@ impl VirtualDom {
     ///
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
@@ -589,7 +589,7 @@ impl VirtualDom {
     /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
     ///
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
@@ -612,7 +612,7 @@ impl VirtualDom {
     /// Useful when needing to diff two rsx! calls from outside the VirtualDom, such as in a test.
     ///
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
     ///     rsx!(cx, div {})
     /// }
@@ -756,7 +756,7 @@ pub enum SchedulerMsg {
 /// `Send` will not be lifted. The entire `UserEvent` must also be `Send + Sync` due to its use in the scheduler channel.
 ///
 /// # Example
-/// ```rust
+/// ```rust, ignore
 /// fn App(cx: Scope) -> Element {
 ///     rsx!(cx, div {
 ///         onclick: move |_| println!("Clicked!")
@@ -957,7 +957,7 @@ pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
 /// ## Example
 ///
 /// For props that are 'static:
-/// ```rust, ignore ignore
+/// ```rust, ignore
 /// #[derive(Props, PartialEq)]
 /// struct MyProps {
 ///     data: String
@@ -966,7 +966,7 @@ pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
 ///
 /// For props that borrow:
 ///
-/// ```rust, ignore ignore
+/// ```rust, ignore
 /// #[derive(Props)]
 /// struct MyProps<'a >{
 ///     data: &'a str

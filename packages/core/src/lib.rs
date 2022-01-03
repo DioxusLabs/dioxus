@@ -29,7 +29,7 @@ pub(crate) mod innerlude {
     ///
     /// ## Rust-Style
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// fn example(cx: Scope<Props>) -> Element {
     ///     // ...
     /// }
@@ -39,7 +39,7 @@ pub(crate) mod innerlude {
     /// )
     /// ```
     /// ## React-Style
-    /// ```rust
+    /// ```rust, ignore
     /// fn Example(cx: Scope<Props>) -> Element {
     ///     // ...
     /// }
@@ -52,7 +52,7 @@ pub(crate) mod innerlude {
     /// ## As a closure
     /// This particular type alias lets you even use static closures for pure/static components:
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// static Example: Component<Props> = |cx| {
     ///     // ...
     /// };

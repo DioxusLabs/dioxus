@@ -79,7 +79,7 @@ mod ric_raf;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, ignore
 /// fn main() {
 ///     dioxus_web::launch(App);
 /// }
@@ -98,7 +98,7 @@ pub fn launch(root_component: Component) {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, ignore
 /// fn main() {
 ///     dioxus_web::launch_with_props(App, RootProps { name: String::from("joe") });
 /// }
