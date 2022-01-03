@@ -61,7 +61,8 @@ jobs:
       run: |
         rustc -Vv
         cargo -V
-        RUST_BACKTRACE=1 cargo build
+        set RUST_BACKTRACE=1 
+        cargo build
       shell: cmd
 
     - name: test
