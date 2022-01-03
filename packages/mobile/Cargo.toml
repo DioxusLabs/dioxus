@@ -3,6 +3,7 @@ name = "dioxus-mobile"
 version = "0.0.1"
 authors = ["Jonathan Kelley"]
 edition = "2018"
+description = "Mobile-compatible renderer for Dioxus"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
