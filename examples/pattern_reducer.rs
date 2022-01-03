@@ -4,10 +4,13 @@
 //! This example shows how to encapsulate state in dioxus components with the reducer pattern.
 //! This pattern is very useful when a single component can handle many types of input that can
 //! be represented by an enum.
+//!
+//! Currently we don't have a reducer pattern hook. If you'd like to add it,
+//! feel free to make a PR.
 
 use dioxus::prelude::*;
+
 fn main() {
-    env_logger::init();
     dioxus::desktop::launch(app);
 }
 
@@ -17,7 +20,7 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx!(
         div {
             h1 {"Select an option"}
-            h3 { "The radio is... " [state.is_playing()], "!" }
+            h3 { "The radio is... " [state.is_playing()] "!" }
             button { onclick: move |_| state.modify().reduce(PlayerAction::Pause),
                 "Pause"
             }

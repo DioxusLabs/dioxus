@@ -194,7 +194,7 @@ impl<'a> TextRenderer<'a, '_> {
                 // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
                 // them interpreter's stack
                 if let (true, Some(id)) = (self.cfg.pre_render, node.try_mounted_id()) {
-                    write!(f, " dio_el=\"{}\"", id)?;
+                    write!(f, " dioxus-id=\"{}\"", id)?;
 
                     for _listener in el.listeners {
                         // todo: write the listeners

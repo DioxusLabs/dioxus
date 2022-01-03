@@ -191,7 +191,7 @@ impl DesktopController {
             // create `first_menu`
             let mut first_menu = MenuBar::new();
 
-            first_menu.add_native_item(MenuItem::About("Todos".to_string()));
+            first_menu.add_native_item(MenuItem::About("App".to_string()));
             first_menu.add_native_item(MenuItem::Services);
             first_menu.add_native_item(MenuItem::Separator);
             first_menu.add_native_item(MenuItem::Hide);

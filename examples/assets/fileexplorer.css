@@ -1,0 +1,180 @@
+* {
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', sans-serif;
+    user-select: none;
+    transition: .2s all;
+}
+
+body {
+    padding-top: 77px;
+}
+
+
+/* header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 20px;
+  background-color: #2196F3;
+  color: white;
+}
+header h1 {
+  float: left;
+  font-size: 20px;
+  font-weight: 400;
+}
+header .material-icons {
+  float: right;
+  cursor: pointer;
+}
+header .icon-menu {
+  float: left;
+  margin-right: 20px;
+} */
+
+main {
+    padding: 20px 50px;
+}
+
+.folder * {
+    width: 100px;
+}
+
+.folder {
+    float: left;
+    width: 100px;
+    height: 152px;
+    /* //padding: 20px; */
+    margin-right: 50px;
+    margin-bottom: 70px;
+    border-radius: 2px;
+    /* //overflow: hidden; */
+    cursor: pointer;
+}
+
+.folder:hover h1 {
+    display: none;
+}
+
+.folder:hover p.cooltip {
+    opacity: 1;
+    top: 0;
+}
+
+.folder * {
+    text-align: center;
+}
+
+.folder i {
+    margin: 0;
+    font-size: 100px;
+    color: #607D8B;
+}
+
+.folder h1 {
+    position: relative;
+    display: block;
+    top: -37px;
+    font-size: 20px;
+    font-weight: 400;
+}
+
+.folder p.cooltip {
+    position: relative;
+    top: 5px;
+    left: -50%;
+    margin-left: 35px;
+    background: #212121;
+    font-size: 15px;
+    color: white;
+    border-radius: 4px;
+    padding: 10px 20px;
+    padding-right: 30px;
+    width: 100px;
+    opacity: 0;
+}
+
+.folder p.cooltip:before {
+    content: '';
+    position: absolute;
+    display: block;
+    top: -4px;
+    left: 50%;
+    margin-left: -5px;
+    height: 10px;
+    width: 10px;
+    border-radius: 2px;
+    background-color: #212121;
+    transform: rotate(45deg);
+}
+
+div.properties {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    width: 300px;
+    background-color: white;
+}
+
+div.properties:before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 300px;
+    bottom: 0;
+    background-color: #212121;
+    opacity: .5;
+    overflow: hidden;
+}
+
+div.properties img {
+    position: relative;
+    top: -1px;
+    left: -1px;
+    width: 110%;
+    height: 200px;
+    filter: blur(2px);
+}
+
+div.properties h1 {
+    position: relative;
+    width: 100%;
+    text-align: left;
+    margin-left: 20px;
+    color: white;
+}
+
+header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 20px;
+    background-color: #2196F3;
+    color: white;
+    display: flex;
+    align-items: center;
+}
+
+header h1 {
+    font-weight: 400;
+}
+
+header span {
+    flex: 1;
+}
+
+header i {
+    margin: 0 10px;
+    cursor: pointer;
+}
+
+header i:nth-child(1) {
+    margin: 0 20px;
+}

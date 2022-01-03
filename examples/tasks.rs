@@ -25,10 +25,10 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div {
-            h1 { "High-Five counter: {count}" }
+            h1 { "Current count: {count}" }
             button {
-                onclick: move |_| *count.modify() += 1,
-                "Click me!"
+                onclick: move |_| count.set(0),
+                "Reset the count"
             }
         }
     })

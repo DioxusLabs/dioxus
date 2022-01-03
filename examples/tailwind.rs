@@ -1,8 +1,18 @@
+//! Example: Basic Tailwind usage
+//! 
+//! This example shows how an app might be styled with TailwindCSS.
+//! 
+//! To minify your tailwind bundle, currently you need to use npm. Follow these instructions:
+//! 
+//!     https://dev.to/arctic_hen7/how-to-set-up-tailwind-css-with-yew-and-trunk-il9
+
+
 use dioxus::prelude::*;
 
 fn main() {
-    use dioxus::desktop::wry::application::platform::macos::*;
-    dioxus::desktop::launch_cfg(App, |c| {
+    dioxus::desktop::launch_cfg(app, |c| {
+        // we can configure our primary window through the Tauri Config
+        use dioxus::desktop::tao::platform::macos::*;
         c.with_window(|w| {
             w.with_fullsize_content_view(true)
                 .with_titlebar_buttons_hidden(false)
@@ -12,26 +22,9 @@ fn main() {
     });
 }
 
-const STYLE: &str = "body {overflow:hidden;}";
-
-pub fn App(cx: Scope) -> Element {
+pub fn app(cx: Scope) -> Element {
     cx.render(rsx!(
-        div { class: "overflow-hidden",
-        style { "{STYLE}" }
-            link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
-            Header {}
-            Entry {}
-            Hero {}
-            Hero {}
-            Hero {}
-            Hero {}
-            Hero {}
-        }
-    ))
-}
-
-pub fn Header(cx: Scope) -> Element {
-    cx.render(rsx! {
+        link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
         div {
             header { class: "text-gray-400 bg-gray-900 body-font",
                 div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
@@ -51,66 +44,53 @@ pub fn Header(cx: Scope) -> Element {
                         RightArrowIcon {}
                     }
                 }
-            }
-        }
-    })
-}
+            }            
 
-pub fn Hero(cx: Scope) -> Element {
-    //
-    cx.render(rsx! {
-        section{ class: "text-gray-400 bg-gray-900 body-font",
-            div { class: "container mx-auto flex px-5 py-24 md:flex-row flex-col items-center",
-                div { class: "lg:flex-grow md:w-1/2 lg:pr-24 md:pr-16 flex flex-col md:items-start md:text-left mb-16 md:mb-0 items-center text-center",
-                    h1 { class: "title-font sm:text-4xl text-3xl mb-4 font-medium text-white",
-                        br { class: "hidden lg:inline-block" }
-                        "Dioxus Sneak Peek"
-                    }
-                    p {
-                        class: "mb-8 leading-relaxed",
-
-                        "Dioxus is a new UI framework that makes it easy and simple to write cross-platform apps using web
-                        technologies! It is functional, fast, and portable. Dioxus can run on the web, on the desktop, and
-                        on mobile and embedded platforms."
-
-                    }
-                    div { class: "flex justify-center",
-                        button {
-                            class: "inline-flex text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-none hover:bg-indigo-600 rounded text-lg",
-                            "Learn more"
+            section { class: "text-gray-400 bg-gray-900 body-font",
+                div { class: "container mx-auto flex px-5 py-24 md:flex-row flex-col items-center",
+                    div { class: "lg:flex-grow md:w-1/2 lg:pr-24 md:pr-16 flex flex-col md:items-start md:text-left mb-16 md:mb-0 items-center text-center",
+                        h1 { class: "title-font sm:text-4xl text-3xl mb-4 font-medium text-white",
+                            br { class: "hidden lg:inline-block" }
+                            "Dioxus Sneak Peek"
                         }
-                        button {
-                            class: "ml-4 inline-flex text-gray-400 bg-gray-800 border-0 py-2 px-6 focus:outline-none hover:bg-gray-700 hover:text-white rounded text-lg",
-                            "Build an app"
+                        p {
+                            class: "mb-8 leading-relaxed",
+
+                            "Dioxus is a new UI framework that makes it easy and simple to write cross-platform apps using web
+                            technologies! It is functional, fast, and portable. Dioxus can run on the web, on the desktop, and
+                            on mobile and embedded platforms."
+
+                        }
+                        div { class: "flex justify-center",
+                            button {
+                                class: "inline-flex text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-none hover:bg-indigo-600 rounded text-lg",
+                                "Learn more"
+                            }
+                            button {
+                                class: "ml-4 inline-flex text-gray-400 bg-gray-800 border-0 py-2 px-6 focus:outline-none hover:bg-gray-700 hover:text-white rounded text-lg",
+                                "Build an app"
+                            }
                         }
                     }
-                }
-                div { class: "lg:max-w-lg lg:w-full md:w-1/2 w-5/6",
-                    img { class: "object-cover object-center rounded", alt: "hero", src: "https://i.imgur.com/oK6BLtw.png",
-                    referrerpolicy:"no-referrer"
-                }
+                    div { class: "lg:max-w-lg lg:w-full md:w-1/2 w-5/6",
+                        img { 
+                            class: "object-cover object-center rounded", 
+                            src: "https://i.imgur.com/oK6BLtw.png",
+                            referrerpolicy:"no-referrer",
+                            alt: "hero", 
+                        }
+                    }
                 }
             }
         }
-    })
+    ))
 }
-pub fn Entry(cx: Scope) -> Element {
-    //
-    cx.render(rsx! {
-        section{ class: "text-gray-400 bg-gray-900 body-font",
-            div { class: "container mx-auto flex px-5 py-24 md:flex-row flex-col items-center",
-                textarea {
 
-                }
-            }
-        }
-    })
-}
+
 
 pub fn StacksIcon(cx: Scope) -> Element {
     cx.render(rsx!(
         svg {
-            // xmlns: "http://www.w3.org/2000/svg"
             fill: "none",
             stroke: "currentColor",
             stroke_linecap: "round",
@@ -122,6 +102,7 @@ pub fn StacksIcon(cx: Scope) -> Element {
         }
     ))
 }
+
 pub fn RightArrowIcon(cx: Scope) -> Element {
     cx.render(rsx!(
         svg {

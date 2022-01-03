@@ -9,10 +9,13 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let contents = use_state(&cx, || String::from("<script>alert(123)</script>"));
+    let contents = use_state(&cx, || {
+        String::from("<script>alert(\"hello world\")</script>")
+    });
 
     cx.render(rsx! {
         div {
+            h1 {"Dioxus is XSS-Safe"}
             h3 { "{contents}" }
             input {
                 value: "{contents}",
