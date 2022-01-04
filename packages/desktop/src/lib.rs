@@ -340,11 +340,13 @@ impl DesktopController {
             .with_custom_protocol("wry".into(), move |request| {
                 let path = request.uri().replace("wry://", "");
                 let (data, meta) = match path.as_str() {
-                    "index.html" => (include_bytes!("./index.html").to_vec(), "text/html"),
+                    "index.html" | "index.html/" | "/index.html" => {
+                        (include_bytes!("./index.html").to_vec(), "text/html")
+                    }
                     "index.html/index.js" => {
                         (include_bytes!("./index.js").to_vec(), "text/javascript")
                     }
-                    _ => unimplemented!("path {}", path),
+                    _ => (include_bytes!("./index.html").to_vec(), "text/html"),
                 };
 
                 wry::http::ResponseBuilder::new().mimetype(meta).body(data)
