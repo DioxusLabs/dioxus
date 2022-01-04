@@ -12,12 +12,12 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { path = "./packages/core", version = "^0.1.6" }
-dioxus-html = { path = "./packages/html", version = "^0.1.1", optional = true }
-dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.3", optional = true }
-dioxus-hooks = { path = "./packages/hooks", version = "^0.1.4", optional = true }
+dioxus-html = { path = "./packages/html", version = "^0.1.3", optional = true }
+dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.5", optional = true }
+dioxus-hooks = { path = "./packages/hooks", version = "^0.1.5", optional = true }
 
-dioxus-web = { path = "./packages/web", version = "^0.0.2", optional = true }
-dioxus-desktop = { path = "./packages/desktop", version = "^0.1.1", optional = true }
+dioxus-web = { path = "./packages/web", version = "^0.0.3", optional = true }
+dioxus-desktop = { path = "./packages/desktop", version = "^0.1.3", optional = true }
 dioxus-ssr = { path = "./packages/ssr", version = "0.1.1", optional = true }
 
 # dioxus-router = { path = "./packages/router", optional = true }
