@@ -13,7 +13,7 @@ use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, HtmlTextAreaElement, Node, NodeList,
+    HtmlOptionElement, HtmlTextAreaElement, Node,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};
@@ -49,7 +49,7 @@ impl WebsysDom {
     pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         let document = load_document();
 
-        let mut nodes = NodeSlab::new(2000);
+        let nodes = NodeSlab::new(2000);
         let listeners = FxHashMap::default();
 
         // re-hydrate the page - only supports one virtualdom per page

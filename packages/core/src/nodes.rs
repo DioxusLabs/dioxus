@@ -75,7 +75,7 @@ pub enum VNode<'src> {
     ///     Example {}
     /// }
     /// ```
-    Fragment(VFragment<'src>),
+    Fragment(&'src VFragment<'src>),
 
     /// Component nodes represent a mounted component with props, children, and a key.
     ///
@@ -156,15 +156,12 @@ impl<'src> VNode<'src> {
 
     // Create an "owned" version of the vnode.
     pub fn decouple(&self) -> VNode<'src> {
-        match self {
-            VNode::Text(t) => VNode::Text(*t),
-            VNode::Element(e) => VNode::Element(*e),
-            VNode::Component(c) => VNode::Component(*c),
-            VNode::Placeholder(a) => VNode::Placeholder(*a),
-            VNode::Fragment(f) => VNode::Fragment(VFragment {
-                children: f.children,
-                key: f.key,
-            }),
+        match *self {
+            VNode::Text(t) => VNode::Text(t),
+            VNode::Element(e) => VNode::Element(e),
+            VNode::Component(c) => VNode::Component(c),
+            VNode::Placeholder(a) => VNode::Placeholder(a),
+            VNode::Fragment(f) => VNode::Fragment(f),
         }
     }
 }
@@ -447,19 +444,14 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    pub fn element<L, A, V>(
+    pub fn element(
         &self,
         el: impl DioxusElement,
-        listeners: L,
-        attributes: A,
-        children: V,
+        listeners: &'a [Listener<'a>],
+        attributes: &'a [Attribute<'a>],
+        children: &'a [VNode<'a>],
         key: Option<Arguments>,
-    ) -> VNode<'a>
-    where
-        L: 'a + AsRef<[Listener<'a>]>,
-        A: 'a + AsRef<[Attribute<'a>]>,
-        V: 'a + AsRef<[VNode<'a>]>,
-    {
+    ) -> VNode<'a> {
         self.raw_element(
             el.tag_name(),
             el.namespace(),
@@ -470,29 +462,15 @@ impl<'a> NodeFactory<'a> {
         )
     }
 
-    pub fn raw_element<L, A, V>(
+    pub fn raw_element(
         &self,
         tag_name: &'static str,
         namespace: Option<&'static str>,
-        listeners: L,
-        attributes: A,
-        children: V,
+        listeners: &'a [Listener<'a>],
+        attributes: &'a [Attribute<'a>],
+        children: &'a [VNode<'a>],
         key: Option<Arguments>,
-    ) -> VNode<'a>
-    where
-        L: 'a + AsRef<[Listener<'a>]>,
-        A: 'a + AsRef<[Attribute<'a>]>,
-        V: 'a + AsRef<[VNode<'a>]>,
-    {
-        let listeners: &'a L = self.bump.alloc(listeners);
-        let listeners = listeners.as_ref();
-
-        let attributes: &'a A = self.bump.alloc(attributes);
-        let attributes = attributes.as_ref();
-
-        let children: &'a V = self.bump.alloc(children);
-        let children = children.as_ref();
-
+    ) -> VNode<'a> {
         let key = key.map(|f| self.raw_text(f).0);
 
         VNode::Element(self.bump.alloc(VElement {
@@ -574,10 +552,10 @@ impl<'a> NodeFactory<'a> {
         if nodes.is_empty() {
             VNode::Placeholder(self.bump.alloc(VPlaceholder { id: empty_cell() }))
         } else {
-            VNode::Fragment(VFragment {
+            VNode::Fragment(self.bump.alloc(VFragment {
                 children: nodes.into_bump_slice(),
                 key: None,
-            })
+            }))
         }
     }
 
@@ -613,10 +591,10 @@ impl<'a> NodeFactory<'a> {
                 );
             }
 
-            VNode::Fragment(VFragment {
+            VNode::Fragment(self.bump.alloc(VFragment {
                 children,
                 key: None,
-            })
+            }))
         }
     }
 
@@ -639,10 +617,10 @@ impl<'a> NodeFactory<'a> {
         } else {
             let children = nodes.into_bump_slice();
 
-            Some(VNode::Fragment(VFragment {
+            Some(VNode::Fragment(self.bump.alloc(VFragment {
                 children,
                 key: None,
-            }))
+            })))
         }
     }
 }
