@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-hooks"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for a remote webview instance"
@@ -12,4 +12,4 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../../packages/core", version = "0.1.5" }
+dioxus-core = { path = "../../packages/core", version = "^0.1.6" }
