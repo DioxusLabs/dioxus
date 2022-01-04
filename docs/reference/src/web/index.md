@@ -38,9 +38,11 @@ $ cargo add dioxus --features web
 Add an `index.html` for Trunk to use. Make sure your "mount point" element has an ID of "main" (this can be configured later):
 
 ```html
+<!DOCTYPE html>
 <html>
   <head>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" name="viewport" content="width=device-width, initial-scale=1.0" charset="UTF-8">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
   </head>
   <body>
     <div id="main"> </div>
