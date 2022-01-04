@@ -28,7 +28,7 @@ static App: FC<()> = |cx| {
 ![demo app](examples/example.png)
 
 
-Rink is basically a port of [Ink]() but for Rust and Dioxus. Rink doesn't depend on Node.js or any other JavaScript runtime, so your binaries are portable and beautiful.
+Rink is basically a port of [Ink](https://github.com/vadimdemedes/ink) but for Rust and Dioxus. Rink doesn't depend on Node.js or any other JavaScript runtime, so your binaries are portable and beautiful.
 
 ## Status
 
