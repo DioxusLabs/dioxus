@@ -75,7 +75,7 @@ pub enum VNode<'src> {
     ///     Example {}
     /// }
     /// ```
-    Fragment(VFragment<'src>),
+    Fragment(&'src VFragment<'src>),
 
     /// Component nodes represent a mounted component with props, children, and a key.
     ///
@@ -156,15 +156,12 @@ impl<'src> VNode<'src> {
 
     // Create an "owned" version of the vnode.
     pub fn decouple(&self) -> VNode<'src> {
-        match self {
-            VNode::Text(t) => VNode::Text(*t),
-            VNode::Element(e) => VNode::Element(*e),
-            VNode::Component(c) => VNode::Component(*c),
-            VNode::Placeholder(a) => VNode::Placeholder(*a),
-            VNode::Fragment(f) => VNode::Fragment(VFragment {
-                children: f.children,
-                key: f.key,
-            }),
+        match *self {
+            VNode::Text(t) => VNode::Text(t),
+            VNode::Element(e) => VNode::Element(e),
+            VNode::Component(c) => VNode::Component(c),
+            VNode::Placeholder(a) => VNode::Placeholder(a),
+            VNode::Fragment(f) => VNode::Fragment(f),
         }
     }
 }
@@ -555,10 +552,10 @@ impl<'a> NodeFactory<'a> {
         if nodes.is_empty() {
             VNode::Placeholder(self.bump.alloc(VPlaceholder { id: empty_cell() }))
         } else {
-            VNode::Fragment(VFragment {
+            VNode::Fragment(self.bump.alloc(VFragment {
                 children: nodes.into_bump_slice(),
                 key: None,
-            })
+            }))
         }
     }
 
@@ -594,10 +591,10 @@ impl<'a> NodeFactory<'a> {
                 );
             }
 
-            VNode::Fragment(VFragment {
+            VNode::Fragment(self.bump.alloc(VFragment {
                 children,
                 key: None,
-            })
+            }))
         }
     }
 
@@ -620,10 +617,10 @@ impl<'a> NodeFactory<'a> {
         } else {
             let children = nodes.into_bump_slice();
 
-            Some(VNode::Fragment(VFragment {
+            Some(VNode::Fragment(self.bump.alloc(VFragment {
                 children,
                 key: None,
-            }))
+            })))
         }
     }
 }
