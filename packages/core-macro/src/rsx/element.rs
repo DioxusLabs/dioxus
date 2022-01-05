@@ -46,7 +46,7 @@ impl Parse for Element {
 
                 content.parse::<Token![:]>()?;
 
-                if content.peek(LitStr) {
+                if content.peek(LitStr) && content.peek2(Token![,]) {
                     let value = content.parse::<LitStr>()?;
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),

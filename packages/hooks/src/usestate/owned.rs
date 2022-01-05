@@ -12,8 +12,8 @@ pub struct UseStateOwned<T: 'static> {
 }
 
 impl<T> UseStateOwned<T> {
-    pub fn get(&self) -> Ref<T> {
-        Ref::map(self.wip.borrow(), |x| x.as_ref().unwrap())
+    pub fn get(&self) -> Ref<Option<T>> {
+        self.wip.borrow()
     }
 
     pub fn set(&self, new_val: T) {
@@ -21,8 +21,9 @@ impl<T> UseStateOwned<T> {
         (self.update_callback)();
     }
 
-    pub fn modify(&self) -> RefMut<T> {
-        RefMut::map(self.wip.borrow_mut(), |x| x.as_mut().unwrap())
+    pub fn modify(&self) -> RefMut<Option<T>> {
+        (self.update_callback)();
+        self.wip.borrow_mut()
     }
 }
 

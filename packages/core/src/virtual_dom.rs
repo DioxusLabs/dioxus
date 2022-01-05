@@ -531,6 +531,9 @@ impl VirtualDom {
         diff_state.stack.element_stack.push(ElementId(0));
         diff_state.stack.scope_stack.push(scope_id);
         diff_state.work(|| false);
+        self.dirty_scopes.clear();
+        assert!(self.dirty_scopes.is_empty());
+
         diff_state.mutations
     }
 
@@ -599,7 +602,7 @@ impl VirtualDom {
     pub fn render_vnodes<'a>(&'a self, lazy_nodes: LazyNodes<'a, '_>) -> &'a VNode<'a> {
         let scope = self.scopes.get_scope(ScopeId(0)).unwrap();
         let frame = scope.wip_frame();
-        let factory = NodeFactory { bump: &frame.bump };
+        let factory = NodeFactory::new(scope);
         let node = lazy_nodes.call(factory);
         frame.bump.alloc(node)
     }

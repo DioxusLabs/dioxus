@@ -19,6 +19,7 @@ serde = "1"
 url = "2.2.2"
 serde_urlencoded = "0.7"
 
+# for wasm
 web-sys = { version = "0.3", features = [
     "Attr",
     "Document",
@@ -33,11 +34,12 @@ web-sys = { version = "0.3", features = [
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 gloo = { version = "0.5", optional = true }
+log = "0.4.14"
 
 
 [features]
-default = ["derive"]
-web = ["web-sys"]
+default = ["derive", "web"]
+web = ["web-sys", "gloo", "js-sys", "wasm-bindgen"]
 desktop = []
 mobile = []
 derive = []

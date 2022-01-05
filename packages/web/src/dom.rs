@@ -274,7 +274,21 @@ impl WebsysDom {
                 // "Result" cannot be received from JS
                 // Instead, we just build and immediately execute a closure that returns result
                 match decode_trigger(event) {
-                    Ok(synthetic_event) => trigger.as_ref()(SchedulerMsg::Event(synthetic_event)),
+                    Ok(synthetic_event) => {
+                        let target = event.target().unwrap();
+                        if let Some(node) = target.dyn_ref::<HtmlElement>() {
+                            if let Some(name) = node.get_attribute("dioxus-prevent-default") {
+                                if name == synthetic_event.name
+                                    || name.trim_start_matches("on") == synthetic_event.name
+                                {
+                                    log::debug!("Preventing default");
+                                    event.prevent_default();
+                                }
+                            }
+                        }
+
+                        trigger.as_ref()(SchedulerMsg::Event(synthetic_event))
+                    }
                     Err(e) => log::error!("Error decoding Dioxus event attribute. {:#?}", e),
                 };
             });

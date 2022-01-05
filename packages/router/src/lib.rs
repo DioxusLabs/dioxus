@@ -7,17 +7,6 @@
 //!
 //! ```rust
 //! fn app(cx: Scope) -> Element {
-//!     let route = use_router(&cx, |svc, path| {
-//!         match path {
-//!             "/about" => Route::About,
-//!             _ => Route::Home,
-//!         }
-//!     });
-//!
-//!     match route {
-//!         Route::Home => rsx!(cx, h1 { "Home" }),
-//!         Route::About => rsx!(cx, h1 { "About" }),
-//!     }
 //! }
 //!
 //!
@@ -35,22 +24,28 @@
 //!
 //!
 
-mod link;
+mod hooks {
+    mod use_route;
+    pub use use_route::*;
+}
+pub use hooks::*;
+
+mod components {
+    mod router;
+    pub use router::*;
+
+    mod route;
+    pub use route::*;
+
+    mod link;
+    pub use link::*;
+}
+pub use components::*;
+
 mod platform;
+mod routecontext;
 mod service;
-mod userouter;
 mod utils;
 
-pub use link::*;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+pub use routecontext::*;
 pub use service::*;
-pub use userouter::*;
-
-pub trait Routable:
-    'static + Send + Clone + PartialEq + Serialize + DeserializeOwned + Default
-{
-}
-impl<T> Routable for T where
-    T: 'static + Send + Clone + PartialEq + Serialize + DeserializeOwned + Default
-{
-}
