@@ -67,5 +67,5 @@ jobs:
         shell: cmd
 
       - name: test
-        run: cargo test
+        run: cargo test --features "desktop, ssr, router"
         shell: cmd
