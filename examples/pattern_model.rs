@@ -116,8 +116,8 @@ fn app(cx: Scope) -> Element {
 
 #[derive(Props)]
 struct CalculatorKeyProps<'a> {
-    name: &'static str,
-    onclick: &'a dyn Fn(Arc<MouseEvent>),
+    name: &'a str,
+    onclick: &'a dyn Fn(MouseEvent),
     children: Element<'a>,
 }
 
@@ -211,7 +211,7 @@ impl Calculator {
         self.cur_val = self.display_value.parse::<f64>().unwrap();
         self.waiting_for_operand = true;
     }
-    fn handle_keydown(&mut self, evt: Arc<KeyboardEvent>) {
+    fn handle_keydown(&mut self, evt: KeyboardEvent) {
         match evt.key_code {
             KeyCode::Backspace => self.backspace(),
             KeyCode::Num0 => self.input_digit(0),

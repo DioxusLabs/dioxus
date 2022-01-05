@@ -66,7 +66,6 @@ use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
     keyboard::{KeyCode, ModifiersState},
-    menu::{MenuBar, MenuItem},
     window::{Window, WindowId},
 };
 pub use wry;

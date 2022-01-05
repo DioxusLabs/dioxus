@@ -39,7 +39,7 @@
 //!
 //! To launch an app, we use the `launch` method for the specific renderer we want to use. In the launch function, we pass the app's `Component`.
 //!
-//! ```rust
+//! ```rust, ignore
 //! use dioxus::prelude::*;
 //!
 //! fn main() {
@@ -62,7 +62,7 @@
 //! consistency, we force all attributes and listeners to be listed *before*
 //! children.
 //!
-//! ```rust
+//! ```rust, ignore
 //! let value = "123";
 //!
 //! rsx!(
@@ -78,7 +78,7 @@
 //! of the body as child elements and rust expressions. Any rust expression that
 //! implements `IntoIterator<Item = impl IntoVNode>` will be parsed as a child.
 //!
-//! ```rust
+//! ```rust, ignore
 //! rsx!(
 //!     div {
 //!         (0..10).map(|_| rsx!(span { "hello world" }))
@@ -94,7 +94,7 @@
 //! `cx` as the first argument of rsx. This is sometimes useful when we need to
 //! render nodes in match statements.
 //!
-//! ```rust
+//! ```rust, ignore
 //! fn example(cx: Scope) -> Element {
 //!
 //!     // both of these are equivalent
@@ -107,7 +107,7 @@
 //! Putting everything together, we can write a simple component that a list of
 //! elements:
 //!
-//! ```rust
+//! ```rust, ignore
 //! fn app(cx: Scope) -> Element {
 //!     let name = "dave";
 //!     cx.render(rsx!(
@@ -135,7 +135,7 @@
 //!
 //! In Dioxus, all properties are memoized by default!
 //!
-//! ```rust
+//! ```rust, ignore
 //! fn App(cx: Scope) -> Element {
 //!     cx.render(rsx!(
 //!         Header {
@@ -149,7 +149,7 @@
 //! Our `Header` component takes in a `title` and a `color` property, which we
 //! delcare on an explicit `HeaderProps` struct.
 //!
-//! ```
+//! ```rust, ignore
 //! // The `Props` derive macro lets us add additional functionality to how props are interpreted.
 //! #[derive(Props, PartialEq)]
 //! struct HeaderProps {
@@ -170,7 +170,7 @@
 //! Components may use the `inline_props` macro to completely inline the props
 //! definition into the function arguments.
 //!
-//! ```rust
+//! ```rust, ignore
 //! #[inline_props]
 //! fn Header(cx: Scope, title: String, color: String) -> Element {
 //!     cx.render(rsx!(
@@ -186,7 +186,7 @@
 //! attach some lifetimes to the props struct.
 //! > Note: we don't need to derive `PartialEq` for borrowed props since they cannot be memoized.
 //!
-//! ```rust
+//! ```rust, ignore
 //! #[derive(Props)]
 //! struct HeaderProps<'a> {
 //!     title: &'a str,
@@ -206,7 +206,7 @@
 //! Components that beging with an uppercase letter may be called through
 //! traditional curly-brace syntax like so:
 //!
-//! ```rust
+//! ```rust, ignore
 //! rsx!(
 //!     Header { title: "My App" }
 //! )
@@ -215,7 +215,7 @@
 //! Alternatively, if your components begin with a lowercase letter, you can use
 //! the function call syntax:
 //!
-//! ```rust
+//! ```rust, ignore
 //! rsx!(
 //!     header( title: "My App" )
 //! )
@@ -230,7 +230,7 @@
 //! By convention, all hooks are functions that should start with `use_`. We can
 //! use hooks to define state and modify it from within listeners.
 //!
-//! ```rust
+//! ```rust, ignore
 //! fn app(cx: Scope) -> Element {
 //!     let name = use_state(&cx, || "world");
 //!
@@ -250,7 +250,7 @@
 //!
 //! Most hooks you'll write are simply composition of other hooks:
 //!
-//! ```rust
+//! ```rust, ignore
 //! fn use_username(cx: &ScopeState, id: Uuid) -> bool {
 //!     let users = use_context::<Users>(cx);
 //!     users.get(&id).map(|user| user.logged_in).ok_or(false)
@@ -259,7 +259,7 @@
 //!  
 //! To create entirely new foundational hooks, we can use the `use_hook` method on ScopeState.
 //!
-//! ```rust
+//! ```rust, ignore
 //! fn use_mut_string(cx: &ScopeState) -> &mut String {
 //!     cx.use_hook(|_| "Hello".to_string())
 //! }
@@ -271,7 +271,7 @@
 //!
 //! Using components, templates, and hooks, we can build a simple app.
 //!
-//! ```rust
+//! ```rust, ignore
 //! use dioxus::prelude::*;
 //!
 //! fn main() {

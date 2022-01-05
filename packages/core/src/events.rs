@@ -4,7 +4,7 @@
 //! This is all kinda WIP, but the bones are there.
 
 use crate::{ElementId, ScopeId};
-use std::{any::Any, cell::Cell, rc::Rc, sync::Arc};
+use std::{any::Any, cell::Cell, fmt::Debug, rc::Rc, sync::Arc};
 
 pub(crate) struct BubbleState {
     pub canceled: Cell<bool>,
@@ -141,6 +141,12 @@ pub struct UiEvent<T> {
 
     #[allow(unused)]
     bubble_state: Rc<BubbleState>,
+}
+
+impl<T: Debug> std::fmt::Debug for UiEvent<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UiEvent").field("data", &self.data).finish()
+    }
 }
 
 impl<T> std::ops::Deref for UiEvent<T> {

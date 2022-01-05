@@ -187,8 +187,12 @@ impl Parse for ComponentField {
         }
 
         if input.peek(LitStr) && input.peek2(Token![,]) {
-            let content = ContentField::Formatted(input.parse()?);
-            return Ok(Self { name, content });
+            let t: LitStr = input.fork().parse()?;
+
+            if is_literal_foramtted(&t) {
+                let content = ContentField::Formatted(input.parse()?);
+                return Ok(Self { name, content });
+            }
         }
 
         if input.peek(LitStr) && input.peek2(LitStr) {
@@ -208,4 +212,20 @@ impl ToTokens for ComponentField {
             .#name(#content)
         })
     }
+}
+
+fn is_literal_foramtted(lit: &LitStr) -> bool {
+    let s = lit.value();
+    let mut chars = s.chars();
+
+    while let Some(next) = chars.next() {
+        if next == '{' {
+            let nen = chars.next();
+            if nen == Some('{') {
+                return true;
+            }
+        }
+    }
+
+    false
 }

@@ -133,7 +133,7 @@ fn app(cx: Scope) -> Element {
                         r#type: "{field}",
                         value: "{value}",
                         // checked: "false",
-                        oninput: move |evt: Arc<FormEvent>| {
+                        oninput: move |evt: FormEvent| {
                             println!("{:?}", evt);
                         },
                     }
