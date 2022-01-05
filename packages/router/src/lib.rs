@@ -31,6 +31,8 @@ mod hooks {
 pub use hooks::*;
 
 mod components {
+    #![allow(non_snake_case)]
+
     mod router;
     pub use router::*;
 

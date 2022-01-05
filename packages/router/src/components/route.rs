@@ -11,7 +11,11 @@ use crate::{RouteContext, RouterService};
 #[derive(Props)]
 pub struct RouteProps<'a> {
     to: &'a str,
+
     children: Element<'a>,
+
+    #[props(default)]
+    fallback: bool,
 }
 
 pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
@@ -34,15 +38,18 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         });
 
         // submit our rout
-        router_root.register_total_route(route_context.total_route.clone(), cx.scope_id());
+        router_root.register_total_route(
+            route_context.total_route.clone(),
+            cx.scope_id(),
+            cx.props.fallback,
+        );
 
         Some(RouteInner {})
     });
 
-    log::debug!("rendering route {:?}", cx.scope_id());
+    log::debug!("Checking route {}", cx.props.to);
 
     if router_root.should_render(cx.scope_id()) {
-        log::debug!("route {:?} produced nodes", cx.scope_id());
         cx.render(rsx!(&cx.props.children))
     } else {
         None

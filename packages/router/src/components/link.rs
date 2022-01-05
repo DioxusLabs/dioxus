@@ -37,10 +37,8 @@ pub struct LinkProps<'a> {
     attributes: Option<&'a [Attribute<'a>]>,
 }
 
-#[allow(non_snake_case)]
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    log::debug!("rendering link {:?}", cx.scope_id());
-    let service = cx.consume_context::<RouterService>()?;
+    let service = cx.consume_context::<RouterService>().unwrap();
     cx.render(rsx! {
         a {
             href: "{cx.props.to}",
@@ -48,10 +46,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             id: format_args!("{}", cx.props.id.unwrap_or("")),
 
             prevent_default: "onclick",
-            onclick: move |_| {
-                log::debug!("clicked");
-                service.push_route(cx.props.to.clone());
-            },
+            onclick: move |_| service.push_route(cx.props.to.clone()),
 
             &cx.props.children
         }

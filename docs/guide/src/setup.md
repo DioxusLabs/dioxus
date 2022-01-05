@@ -27,7 +27,7 @@ Head over to [https://rust-lang.org](http://rust-lang.org) and install the Rust 
 Once installed, make sure to  install wasm32-unknown-unknown as a target if you're planning on deploying your app to the web.
 
 ```
-rustup target add wasm32-unknown-uknown
+rustup target add wasm32-unknown-unknown
 ```
 
 ### Dioxus-CLI for dev server, bundling, etc.

@@ -1,4 +1,3 @@
-
 function serialize_event(event) {
   switch (event.type) {
     case "copy":
@@ -10,8 +9,8 @@ function serialize_event(event) {
     case "compositionstart":
     case "compositionupdate":
       return {
-        data: event.data
-      }
+        data: event.data,
+      };
 
     case "keydown":
     case "keypress":
@@ -29,7 +28,7 @@ function serialize_event(event) {
         repeat: event.repeat,
         which: event.which,
         // locale: event.locale,
-      }
+      };
 
     case "focus":
     case "blur":
@@ -45,7 +44,7 @@ function serialize_event(event) {
       }
 
       return {
-        value: value
+        value: value,
       };
 
     case "input":
@@ -60,7 +59,7 @@ function serialize_event(event) {
       }
 
       return {
-        value: value
+        value: value,
       };
     }
 
@@ -95,7 +94,7 @@ function serialize_event(event) {
         screen_x: event.screenX,
         screen_y: event.screenY,
         shift_key: event.shiftKey,
-      }
+      };
 
     case "pointerdown":
     case "pointermove":
@@ -130,7 +129,7 @@ function serialize_event(event) {
         twist: event.twist,
         pointer_type: event.pointerType,
         is_primary: event.isPrimary,
-      }
+      };
 
     case "select":
       return {};
@@ -148,7 +147,7 @@ function serialize_event(event) {
         // changed_touches: event.changedTouches,
         // target_touches: event.targetTouches,
         // touches: event.touches,
-      }
+      };
 
     case "scroll":
       return {};
@@ -208,17 +207,14 @@ function serialize_event(event) {
     default:
       return {};
   }
-
-
 }
-
 
 class Interpreter {
   constructor(root) {
     this.root = root;
     this.stack = [root];
     this.listeners = {
-      "onclick": {}
+      onclick: {},
     };
     this.lastNodeWasText = false;
     this.nodes = [root];
@@ -304,35 +300,45 @@ class Interpreter {
     this.nodes[edit.root] = el;
   }
 
-  RemoveEventListener(edit) { }
+  RemoveEventListener(edit) {}
 
   NewEventListener(edit) {
     const event_name = edit.event_name;
     const mounted_node_id = edit.root;
     const scope = edit.scope;
 
-    const element = this.nodes[edit.root]
-    element.setAttribute(`dioxus-event-${event_name}`, `${scope}.${mounted_node_id}`);
+    const element = this.nodes[edit.root];
+    element.setAttribute(
+      `dioxus-event-${event_name}`,
+      `${scope}.${mounted_node_id}`
+    );
 
     if (this.listeners[event_name] === undefined) {
       this.listeners[event_name] = true;
 
       this.root.addEventListener(event_name, (event) => {
-        console.log("handling event", event);
-
         const target = event.target;
         const real_id = target.getAttribute(`dioxus-id`);
+
+        const should_prevent_default = target.getAttribute(
+          `dioxus-prevent-default`
+        );
+
+        let contents = serialize_event(event);
+
+        if (should_prevent_default === `on${event.type}`) {
+          event.preventDefault();
+        }
+
         if (real_id == null) {
-          alert("no id");
           return;
         }
 
-        rpc.call('user_event', {
+        rpc.call("user_event", {
           event: event_name,
           mounted_dom_id: parseInt(real_id),
-          contents: serialize_event(event),
+          contents: contents,
         });
-
       });
     }
   }
@@ -346,11 +352,11 @@ class Interpreter {
     const name = edit.field;
     const value = edit.value;
     const ns = edit.ns;
-    const node = this.nodes[edit.root]
+    const node = this.nodes[edit.root];
 
     if (ns == "style") {
       node.style[name] = value;
-    } else if ((ns != null) || (ns != undefined)) {
+    } else if (ns != null || ns != undefined) {
       node.setAttributeNS(ns, name, value);
     } else {
       switch (name) {
@@ -358,17 +364,15 @@ class Interpreter {
           node.value = value;
           break;
         case "checked":
-          // console.log("setting checked");
-          node.checked = (value === "true");
+          node.checked = value === "true";
           break;
         case "selected":
-          node.selected = (value === "true");
+          node.selected = value === "true";
           break;
         case "dangerous_inner_html":
           node.innerHTML = value;
           break;
         default:
-          // console.log("setting attr directly ", name, value);
           node.setAttribute(name, value);
       }
     }
@@ -390,11 +394,6 @@ class Interpreter {
   }
 
   handleEdits(edits) {
-
-    // console.log("handling raw edits", rawedits);
-    // let edits = JSON.parse(rawedits);
-    // console.log("handling  edits", edits);
-
     this.stack.push(this.root);
 
     for (let x = 0; x < edits.length; x++) {
@@ -410,7 +409,7 @@ function main() {
   window.interpreter = new Interpreter(root);
   console.log(window.interpreter);
 
-  rpc.call('initialize');
+  rpc.call("initialize");
 }
 
-main()
+main();

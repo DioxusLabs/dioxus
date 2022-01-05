@@ -15,13 +15,12 @@ pub struct RouterProps<'a> {
     onchange: Option<&'a Fn(&'a str)>,
 }
 
+#[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    let p = cx.use_hook(|_| {
+    cx.use_hook(|_| {
         let update = cx.schedule_update_any();
         cx.provide_context(RouterService::new(update, cx.scope_id()))
     });
-
-    log::debug!("rendering router {:?}", cx.scope_id());
 
     cx.render(rsx!(
         div { &cx.props.children }

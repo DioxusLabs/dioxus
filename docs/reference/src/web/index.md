@@ -19,7 +19,7 @@ $ cargo install trunk
 
 Make sure the `wasm32-unknown-unknown` target is installed:
 ```shell
-$ rustup target add wasm32-unknown-uknown
+$ rustup target add wasm32-unknown-unknown
 ```
 
 Create a new project:

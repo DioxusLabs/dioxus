@@ -263,7 +263,7 @@ impl<'bump> DiffState<'bump> {
             };
 
             if deadline_expired() {
-                log::debug!("Deadline expired before we could finish!");
+                log::trace!("Deadline expired before we could finish!");
                 return false;
             }
         }
@@ -423,16 +423,25 @@ impl<'bump> DiffState<'bump> {
     fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
         let parent_idx = self.stack.current_scope().unwrap();
 
-        // Insert a new scope into our component list
-        let props: Box<dyn AnyProps + 'bump> = vcomponent.props.borrow_mut().take().unwrap();
-        let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
-        let new_idx = self.scopes.new_with_key(
-            vcomponent.user_fc,
-            props,
-            Some(parent_idx),
-            self.stack.element_stack.last().copied().unwrap(),
-            0,
-        );
+        // the component might already exist - if it does, we need to reuse it
+        // this makes figure out when to drop the component more complicated
+        let new_idx = if let Some(idx) = vcomponent.scope.get() {
+            assert!(self.scopes.get_scope(idx).is_some());
+            idx
+        } else {
+            // Insert a new scope into our component list
+            let props: Box<dyn AnyProps + 'bump> = vcomponent.props.borrow_mut().take().unwrap();
+            let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
+            let new_idx = self.scopes.new_with_key(
+                vcomponent.user_fc,
+                props,
+                Some(parent_idx),
+                self.stack.element_stack.last().copied().unwrap(),
+                0,
+            );
+
+            new_idx
+        };
 
         // Actually initialize the caller's slot with the right address
         vcomponent.scope.set(Some(new_idx));
@@ -443,9 +452,6 @@ impl<'bump> DiffState<'bump> {
             }
             false => {
                 // track this component internally so we know the right drop order
-                // let cur_scope = self.scopes.get_scope(parent_idx).unwrap();
-                // let extended = unsafe { std::mem::transmute(vcomponent) };
-                // cur_scope.items.borrow_mut().borrowed_props.push(extended);
             }
         }
 
@@ -680,10 +686,10 @@ impl<'bump> DiffState<'bump> {
         new: &'bump VComponent<'bump>,
     ) {
         let scope_addr = old.scope.get().unwrap();
-        log::debug!("diff_component_nodes: {:?}", scope_addr);
+        log::trace!("diff_component_nodes: {:?}", scope_addr);
 
         if std::ptr::eq(old, new) {
-            log::debug!("skipping component diff - component is the sames");
+            log::trace!("skipping component diff - component is the sames");
             return;
         }
 
@@ -734,7 +740,7 @@ impl<'bump> DiffState<'bump> {
                     self.scopes.fin_head(scope_addr),
                 );
             } else {
-                log::debug!("memoized");
+                log::trace!("memoized");
                 // memoization has taken place
                 drop(new_props);
             };
@@ -1239,7 +1245,10 @@ impl<'bump> DiffState<'bump> {
 
                 let scope_id = c.scope.get().unwrap();
 
-                self.scopes.try_remove(scope_id).unwrap();
+                // we can only remove components if they are actively being diffed
+                if self.stack.scope_stack.contains(&c.originator) {
+                    self.scopes.try_remove(scope_id).unwrap();
+                }
             }
         }
     }
@@ -1290,7 +1299,11 @@ impl<'bump> DiffState<'bump> {
                     let scope_id = c.scope.get().unwrap();
                     let root = self.scopes.root_node(scope_id);
                     self.remove_nodes(Some(root), gen_muts);
-                    self.scopes.try_remove(scope_id).unwrap();
+
+                    // we can only remove this node if the originator is actively
+                    if self.stack.scope_stack.contains(&c.originator) {
+                        self.scopes.try_remove(scope_id).unwrap();
+                    }
                 }
             }
         }

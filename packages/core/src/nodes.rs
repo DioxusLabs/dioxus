@@ -350,6 +350,7 @@ impl Clone for EventHandler<'_> {
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
     pub key: Option<&'src str>,
+    pub originator: ScopeId,
     pub scope: Cell<Option<ScopeId>>,
     pub can_memoize: bool,
     pub user_fc: *const (),
@@ -526,6 +527,7 @@ impl<'a> NodeFactory<'a> {
             scope: Default::default(),
             can_memoize: P::IS_STATIC,
             user_fc: component as *const (),
+            originator: self.scope.scope_id(),
             props: RefCell::new(Some(Box::new(VComponentProps {
                 // local_props: RefCell::new(Some(props)),
                 // heap_props: RefCell::new(None),
@@ -749,19 +751,14 @@ impl IntoVNode<'_> for Arguments<'_> {
 impl<'a> IntoVNode<'a> for &Option<VNode<'a>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.as_ref()
-            .map(|f| f.decouple())
-            .unwrap_or(VNode::Placeholder(
-                cx.bump.alloc(VPlaceholder { id: empty_cell() }),
-            ))
+            .map(|f| f.into_vnode(cx))
+            .unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
     }
 }
 
 impl<'a> IntoVNode<'a> for &VNode<'a> {
     fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
+        // borrowed nodes are strange
         self.decouple()
     }
-}
-
-trait IntoAcceptedVnode<'a> {
-    fn into_accepted_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
