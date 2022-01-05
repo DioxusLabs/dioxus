@@ -143,6 +143,7 @@ impl ScopeArena {
 
     // Removes a scope and its descendents from the arena
     pub fn try_remove(&self, id: ScopeId) -> Option<()> {
+        log::trace!("removing scope {:?}", id);
         self.ensure_drop_safety(id);
 
         // Safety:
@@ -188,6 +189,8 @@ impl ScopeArena {
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
     pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
+        log::trace!("Ensuring drop safety for scope {:?}", scope_id);
+
         if let Some(scope) = self.get_scope(scope_id) {
             let mut items = scope.items.borrow_mut();
 
@@ -217,6 +220,7 @@ impl ScopeArena {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
+        log::trace!("Running scope {:?}", id);
         self.ensure_drop_safety(id);
 
         // todo: we *know* that this is aliased by the contents of the scope itself
@@ -278,14 +282,19 @@ impl ScopeArena {
         let nodes = self.nodes.borrow();
         let mut cur_el = Some(element);
 
+        log::trace!("calling listener {:?}, {:?}", event, element);
         let state = Rc::new(BubbleState::new());
 
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
+                log::trace!("Found valid receiver element");
+
                 let real_el = unsafe { &**el };
                 if let VNode::Element(real_el) = real_el {
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
+                            log::trace!("Found valid receiver event");
+
                             if state.canceled.get() {
                                 // stop bubbling if canceled
                                 break;
@@ -651,12 +660,14 @@ impl ScopeState {
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_context<T: 'static>(&self, value: T) {
+    pub fn provide_context<T: 'static>(&self, value: T) -> Rc<T> {
+        let value = Rc::new(value);
         self.shared_contexts
             .borrow_mut()
-            .insert(TypeId::of::<T>(), Rc::new(value))
+            .insert(TypeId::of::<T>(), value.clone())
             .map(|f| f.downcast::<T>().ok())
             .flatten();
+        value
     }
 
     /// Try to retrieve a SharedState with type T from the any parent Scope.
@@ -713,6 +724,7 @@ impl ScopeState {
     ///```
     pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Option<VNode<'src>> {
         Some(rsx.call(NodeFactory {
+            scope: self,
             bump: &self.wip_frame().bump,
         }))
     }
@@ -900,7 +912,7 @@ impl TaskQueue {
         } else {
             // todo: it should be okay to remote a fut while the queue is being polled
             // However, it's not currently possible to do that.
-            log::debug!("Unable to remove task from task queue. This is probably a bug.");
+            log::trace!("Unable to remove task from task queue. This is probably a bug.");
         }
     }
     pub(crate) fn has_tasks(&self) -> bool {

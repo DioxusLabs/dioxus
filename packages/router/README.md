@@ -1,40 +1,29 @@
-# Router hook for Dioxus apps
+# Routing for Dioxus App
 
-Dioxus-router provides a use_router hook that returns a different value depending on the route.
-The router is generic over any value, however it makes sense to return a different set of VNodes
-and feed them into the App's return VNodes.
-
-Using the router should feel similar to tide's routing framework where an "address" book is assembled at the head of the app.
-
-Here's an example of how to use the router hook:
+DioxusRouter adds React-Router style routing to your Dioxus apps. Works in browser, SSR, and natively.
 
 ```rust
-#[derive(Clone, PartialEq, Serialize, Deserialize, Routable)]
-enum AppRoute {
-    Home, 
-    Posts,
-    NotFound
+fn app() {
+    cx.render(rsx! {
+        Routes {
+            Route { to: "/", Component {} },
+            Route { to: "/blog", Blog {} },
+            Route { to: "/blog/:id", BlogPost {} },
+        }
+    })
 }
+```
 
-static App: Component = |cx| {
-    let route = use_router(cx, AppRoute::parse);
-    
-    match route {
-        AppRoute::Home => rsx!(cx, Home {})
-        AppRoute::Posts => rsx!(cx, Posts {})
-        AppRoute::Notfound => rsx!(cx, Notfound {})
-    }
-};
+Then, in your route, you can choose to parse the Route any way you want through `use_route`.
+```rust
+let id: usize = use_route(&cx).path("id")?;
+
+let state: CustomState = use_route(&cx).parse()?;
 ```
 
 Adding links into your app:
-
 ```rust
-static Leaf: Component = |cx| {
-    rsx!(cx, div { 
-        Link { to: AppRoute::Home } 
-    })
-}
+Link { to: "id/{id}" }
 ```
 
 Currently, the router is only supported in a web environment, but we plan to add 1st-party support via the context API when new renderers are available.

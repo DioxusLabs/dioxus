@@ -97,7 +97,7 @@ fn memo_works_properly() {
 
         cx.render(rsx!(
             div { "Hello, world! {name}" }
-            child(na: "asdfg".to_string())
+            child(na: "asdfg".to_string() )
         ))
     }
 
@@ -274,6 +274,34 @@ fn basic() {
     fn child(cx: Scope<ChildProps>) -> Element {
         dbg!("rendering child", &cx.props.a);
         rsx!(cx, div { "child {cx.props.a}" })
+    }
+
+    let mut dom = new_dom(app, ());
+    let _ = dom.rebuild();
+
+    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+    dom.work_with_deadline(|| false);
+
+    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+    dom.work_with_deadline(|| false);
+}
+
+#[test]
+fn leak_thru_children() {
+    fn app(cx: Scope) -> Element {
+        cx.render(rsx! {
+            Child {
+                name: "asd".to_string(),
+            }
+        });
+        cx.render(rsx! {
+            div {}
+        })
+    }
+
+    #[inline_props]
+    fn Child(cx: Scope, name: String) -> Element {
+        rsx!(cx, div { "child {name}" })
     }
 
     let mut dom = new_dom(app, ());

@@ -1100,6 +1100,11 @@ impl label {
         cx.attr("for", val, None, false)
     }
 }
+impl a {
+    pub fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("dioxus-prevent-default", val, None, false)
+    }
+}
 
 builder_constructors! {
     // SVG components

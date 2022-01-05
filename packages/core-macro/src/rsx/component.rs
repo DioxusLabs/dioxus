@@ -19,7 +19,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
-    token, Expr, Ident, Result, Token,
+    token, Expr, Ident, LitStr, Result, Token,
 };
 
 pub struct Component {
@@ -135,8 +135,6 @@ impl ToTokens for Component {
             None => quote! { None },
         };
 
-        // #children
-
         tokens.append_all(quote! {
             __cx.component(
                 #name,
@@ -155,7 +153,7 @@ pub struct ComponentField {
 
 enum ContentField {
     ManExpr(Expr),
-
+    Formatted(LitStr),
     OnHandlerRaw(Expr),
 }
 
@@ -163,6 +161,9 @@ impl ToTokens for ContentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             ContentField::ManExpr(e) => e.to_tokens(tokens),
+            ContentField::Formatted(s) => tokens.append_all(quote! {
+                __cx.raw_text(format_args_f!(#s)).0
+            }),
             ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
                 __cx.bump().alloc(#e)
             }),
@@ -175,13 +176,27 @@ impl Parse for ComponentField {
         let name = Ident::parse_any(input)?;
         input.parse::<Token![:]>()?;
 
-        let name_str = name.to_string();
-        let content = if name_str.starts_with("on") {
-            ContentField::OnHandlerRaw(input.parse()?)
-        } else {
-            ContentField::ManExpr(input.parse::<Expr>()?)
-        };
+        if name.to_string().starts_with("on") {
+            let content = ContentField::OnHandlerRaw(input.parse()?);
+            return Ok(Self { name, content });
+        }
 
+        if name.to_string() == "key" {
+            let content = ContentField::ManExpr(input.parse()?);
+            return Ok(Self { name, content });
+        }
+
+        if input.peek(LitStr) && input.peek2(Token![,]) {
+            let content = ContentField::Formatted(input.parse()?);
+            return Ok(Self { name, content });
+        }
+
+        if input.peek(LitStr) && input.peek2(LitStr) {
+            let item = input.parse::<LitStr>().unwrap();
+            proc_macro_error::emit_error!(item, "This attribute is misisng a trailing comma")
+        }
+
+        let content = ContentField::ManExpr(input.parse()?);
         Ok(Self { name, content })
     }
 }

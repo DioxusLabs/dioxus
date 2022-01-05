@@ -350,6 +350,7 @@ impl Clone for EventHandler<'_> {
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
     pub key: Option<&'src str>,
+    pub originator: ScopeId,
     pub scope: Cell<Option<ScopeId>>,
     pub can_memoize: bool,
     pub user_fc: *const (),
@@ -395,12 +396,16 @@ impl<P> AnyProps for VComponentProps<P> {
 /// This struct adds metadata to the final VNode about listeners, attributes, and children
 #[derive(Copy, Clone)]
 pub struct NodeFactory<'a> {
+    pub(crate) scope: &'a ScopeState,
     pub(crate) bump: &'a Bump,
 }
 
 impl<'a> NodeFactory<'a> {
-    pub fn new(bump: &'a Bump) -> NodeFactory<'a> {
-        NodeFactory { bump }
+    pub fn new(scope: &'a ScopeState) -> NodeFactory<'a> {
+        NodeFactory {
+            scope,
+            bump: &scope.wip_frame().bump,
+        }
     }
 
     #[inline]
@@ -473,6 +478,12 @@ impl<'a> NodeFactory<'a> {
     ) -> VNode<'a> {
         let key = key.map(|f| self.raw_text(f).0);
 
+        let mut items = self.scope.items.borrow_mut();
+        for listener in listeners {
+            let long_listener = unsafe { std::mem::transmute(listener) };
+            items.listeners.push(long_listener);
+        }
+
         VNode::Element(self.bump.alloc(VElement {
             tag: tag_name,
             key,
@@ -511,11 +522,12 @@ impl<'a> NodeFactory<'a> {
     where
         P: Properties + 'a,
     {
-        VNode::Component(self.bump.alloc(VComponent {
+        let vcomp = self.bump.alloc(VComponent {
             key: key.map(|f| self.raw_text(f).0),
             scope: Default::default(),
             can_memoize: P::IS_STATIC,
             user_fc: component as *const (),
+            originator: self.scope.scope_id(),
             props: RefCell::new(Some(Box::new(VComponentProps {
                 // local_props: RefCell::new(Some(props)),
                 // heap_props: RefCell::new(None),
@@ -528,7 +540,15 @@ impl<'a> NodeFactory<'a> {
                 // the transformation from this specific lifetime to the for<'a> lifetime
                 render_fn: unsafe { std::mem::transmute(component) },
             }))),
-        }))
+        });
+
+        if !P::IS_STATIC {
+            let vcomp = &*vcomp;
+            let vcomp = unsafe { std::mem::transmute(vcomp) };
+            self.scope.items.borrow_mut().borrowed_props.push(vcomp);
+        }
+
+        VNode::Component(vcomp)
     }
 
     pub fn listener(self, event: &'static str, callback: EventHandler<'a>) -> Listener<'a> {
@@ -730,17 +750,15 @@ impl IntoVNode<'_> for Arguments<'_> {
 
 impl<'a> IntoVNode<'a> for &Option<VNode<'a>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        let r = self.as_ref().map(|f| f.decouple());
-        cx.fragment_from_iter(r)
+        self.as_ref()
+            .map(|f| f.into_vnode(cx))
+            .unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
     }
 }
 
 impl<'a> IntoVNode<'a> for &VNode<'a> {
     fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
+        // borrowed nodes are strange
         self.decouple()
     }
-}
-
-trait IntoAcceptedVnode<'a> {
-    fn into_accepted_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }

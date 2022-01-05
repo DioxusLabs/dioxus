@@ -1,4 +1,4 @@
-use crate::{Routable, RouterService};
+use crate::RouterService;
 use dioxus::Attribute;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
@@ -6,8 +6,8 @@ use dioxus_core_macro::{format_args_f, rsx, Props};
 use dioxus_html as dioxus_elements;
 
 #[derive(Props)]
-pub struct LinkProps<'a, R: Routable> {
-    to: R,
+pub struct LinkProps<'a> {
+    to: &'a str,
 
     /// The url that gets pushed to the history stack
     ///
@@ -28,20 +28,26 @@ pub struct LinkProps<'a, R: Routable> {
     #[props(default, setter(strip_option))]
     class: Option<&'a str>,
 
+    #[props(default, setter(strip_option))]
+    id: Option<&'a str>,
+
     children: Element<'a>,
 
     #[props(default)]
     attributes: Option<&'a [Attribute<'a>]>,
 }
 
-#[allow(non_snake_case)]
-pub fn Link<'a, R: Routable>(cx: Scope<'a, LinkProps<'a, R>>) -> Element {
-    let service = cx.consume_context::<RouterService<R>>()?;
+pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
+    let service = cx.consume_context::<RouterService>().unwrap();
     cx.render(rsx! {
         a {
-            href: "#",
+            href: "{cx.props.to}",
             class: format_args!("{}", cx.props.class.unwrap_or("")),
+            id: format_args!("{}", cx.props.id.unwrap_or("")),
+
+            prevent_default: "onclick",
             onclick: move |_| service.push_route(cx.props.to.clone()),
+
             &cx.props.children
         }
     })

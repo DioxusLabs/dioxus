@@ -279,37 +279,7 @@ impl DesktopController {
         cfg: &DesktopConfig,
         event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     ) {
-        let builder = cfg.window.clone().with_menu({
-            // create main menubar menu
-            let mut menu_bar_menu = MenuBar::new();
-
-            // create `first_menu`
-            let mut first_menu = MenuBar::new();
-
-            first_menu.add_native_item(MenuItem::About("App".to_string()));
-            first_menu.add_native_item(MenuItem::Services);
-            first_menu.add_native_item(MenuItem::Separator);
-            first_menu.add_native_item(MenuItem::Hide);
-            first_menu.add_native_item(MenuItem::HideOthers);
-            first_menu.add_native_item(MenuItem::ShowAll);
-
-            first_menu.add_native_item(MenuItem::Quit);
-            first_menu.add_native_item(MenuItem::CloseWindow);
-
-            // create second menu
-            let mut second_menu = MenuBar::new();
-
-            // second_menu.add_submenu("Sub menu", true, my_sub_menu);
-            second_menu.add_native_item(MenuItem::Copy);
-            second_menu.add_native_item(MenuItem::Paste);
-            second_menu.add_native_item(MenuItem::SelectAll);
-
-            menu_bar_menu.add_submenu("First menu", true, first_menu);
-            menu_bar_menu.add_submenu("Second menu", true, second_menu);
-
-            menu_bar_menu
-        });
-
+        let builder = cfg.window.clone();
         let window = builder.build(event_loop).unwrap();
         let window_id = window.id();
 

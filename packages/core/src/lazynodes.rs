@@ -60,10 +60,7 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         }
     }
 
-    pub fn new<F>(_val: F) -> Self
-    where
-        F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
-    {
+    pub fn new(_val: impl FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b) -> Self {
         // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
         let mut slot = Some(_val);
 
@@ -240,57 +237,77 @@ fn round_to_words(len: usize) -> usize {
     (len + mem::size_of::<usize>() - 1) / mem::size_of::<usize>()
 }
 
-#[test]
-fn it_works() {
-    let bump = bumpalo::Bump::new();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::innerlude::{Element, Scope, VirtualDom};
 
-    let factory = NodeFactory { bump: &bump };
-
-    let caller = LazyNodes::new_some(|f| {
-        //
-        f.text(format_args!("hello world!"))
-    });
-    let g = caller.call(factory);
-
-    dbg!(g);
-}
-
-#[test]
-fn it_drops() {
-    use std::rc::Rc;
-    let bump = bumpalo::Bump::new();
-
-    let factory = NodeFactory { bump: &bump };
-
-    struct DropInner {
-        id: i32,
-    }
-    impl Drop for DropInner {
-        fn drop(&mut self) {
-            log::debug!("dropping inner");
+    #[test]
+    fn it_works() {
+        fn app(cx: Scope<()>) -> Element {
+            cx.render(LazyNodes::new_some(|f| {
+                f.text(format_args!("hello world!"))
+            }))
         }
+
+        let mut dom = VirtualDom::new(app);
+        dom.rebuild();
+
+        let g = dom.base_scope().root_node();
+        dbg!(g);
     }
-    let val = Rc::new(10);
 
-    let caller = {
-        let it = (0..10)
-            .map(|i| {
-                let val = val.clone();
+    #[test]
+    fn it_drops() {
+        use std::rc::Rc;
 
-                LazyNodes::new_some(move |f| {
-                    log::debug!("hell closure");
-                    let inner = DropInner { id: i };
-                    f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
+        struct AppProps {
+            inner: Rc<i32>,
+        }
+
+        fn app(cx: Scope<AppProps>) -> Element {
+            struct DropInner {
+                id: i32,
+            }
+            impl Drop for DropInner {
+                fn drop(&mut self) {
+                    log::debug!("dropping inner");
+                }
+            }
+
+            let caller = {
+                let it = (0..10)
+                    .map(|i| {
+                        let val = cx.props.inner.clone();
+
+                        LazyNodes::new_some(move |f| {
+                            log::debug!("hell closure");
+                            let inner = DropInner { id: i };
+                            f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
+                        })
+                    })
+                    .collect::<Vec<_>>();
+
+                LazyNodes::new_some(|f| {
+                    log::debug!("main closure");
+                    f.fragment_from_iter(it)
                 })
-            })
-            .collect::<Vec<_>>();
+            };
 
-        LazyNodes::new_some(|f| {
-            log::debug!("main closure");
-            f.fragment_from_iter(it)
-        })
-    };
+            cx.render(caller)
+        }
 
-    let _ = caller.call(factory);
-    assert_eq!(Rc::strong_count(&val), 1);
+        let inner = Rc::new(0);
+        let mut dom = VirtualDom::new_with_props(
+            app,
+            AppProps {
+                inner: inner.clone(),
+            },
+        );
+        dom.rebuild();
+
+        drop(dom);
+
+        assert_eq!(Rc::strong_count(&inner), 1);
+    }
 }

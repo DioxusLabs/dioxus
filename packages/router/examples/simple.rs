@@ -11,31 +11,40 @@ fn main() {
 }
 
 static APP: Component = |cx| {
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    enum Route {
-        Home,
-        About,
-        NotFound,
-    }
-    impl Default for Route {
-        fn default() -> Self {
-            Route::Home
-        }
-    }
-
-    let route = use_router(&cx, |c| {});
-
     cx.render(rsx! {
-        div {
-            {match route {
-                Route::Home => rsx!(h1 { "Home" }),
-                Route::About => rsx!(h1 { "About" }),
-                Route::NotFound => rsx!(h1 { "NotFound" }),
-            }}
-            nav {
-                Link { to: Route::Home, href: "/" }
-                Link { to: Route::About, href: "/about" }
+        Router {
+            onchange: move |route| log::info!("route changed to {}", route),
+            Route { to: "/", Home {} }
+            Route { to: "blog"
+                Route { to: "/", BlogList {} }
+                Route { to: ":id", BlogPost {} }
             }
         }
     })
 };
+
+fn Home(cx: Scope) -> Element {
+    cx.render(rsx! {
+        div {
+            h1 { "Home" }
+        }
+    })
+}
+
+fn BlogList(cx: Scope) -> Element {
+    cx.render(rsx! {
+        div {
+
+        }
+    })
+}
+
+fn BlogPost(cx: Scope) -> Element {
+    let id = use_route(&cx).segment::<usize>("id")?;
+
+    cx.render(rsx! {
+        div {
+
+        }
+    })
+}

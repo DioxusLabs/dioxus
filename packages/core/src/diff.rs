@@ -263,7 +263,7 @@ impl<'bump> DiffState<'bump> {
             };
 
             if deadline_expired() {
-                log::debug!("Deadline expired before we could finish!");
+                log::trace!("Deadline expired before we could finish!");
                 return false;
             }
         }
@@ -390,10 +390,7 @@ impl<'bump> DiffState<'bump> {
         self.stack.add_child_count(1);
 
         if let Some(cur_scope_id) = self.stack.current_scope() {
-            let scope = self.scopes.get_scope(cur_scope_id).unwrap();
-
             for listener in *listeners {
-                self.attach_listener_to_scope(listener, scope);
                 listener.mounted_node.set(Some(real_id));
                 self.mutations.new_event_listener(listener, cur_scope_id);
             }
@@ -426,16 +423,25 @@ impl<'bump> DiffState<'bump> {
     fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
         let parent_idx = self.stack.current_scope().unwrap();
 
-        // Insert a new scope into our component list
-        let props: Box<dyn AnyProps + 'bump> = vcomponent.props.borrow_mut().take().unwrap();
-        let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
-        let new_idx = self.scopes.new_with_key(
-            vcomponent.user_fc,
-            props,
-            Some(parent_idx),
-            self.stack.element_stack.last().copied().unwrap(),
-            0,
-        );
+        // the component might already exist - if it does, we need to reuse it
+        // this makes figure out when to drop the component more complicated
+        let new_idx = if let Some(idx) = vcomponent.scope.get() {
+            assert!(self.scopes.get_scope(idx).is_some());
+            idx
+        } else {
+            // Insert a new scope into our component list
+            let props: Box<dyn AnyProps + 'bump> = vcomponent.props.borrow_mut().take().unwrap();
+            let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
+            let new_idx = self.scopes.new_with_key(
+                vcomponent.user_fc,
+                props,
+                Some(parent_idx),
+                self.stack.element_stack.last().copied().unwrap(),
+                0,
+            );
+
+            new_idx
+        };
 
         // Actually initialize the caller's slot with the right address
         vcomponent.scope.set(Some(new_idx));
@@ -446,9 +452,6 @@ impl<'bump> DiffState<'bump> {
             }
             false => {
                 // track this component internally so we know the right drop order
-                let cur_scope = self.scopes.get_scope(parent_idx).unwrap();
-                let extended = unsafe { std::mem::transmute(vcomponent) };
-                cur_scope.items.borrow_mut().borrowed_props.push(extended);
             }
         }
 
@@ -580,8 +583,6 @@ impl<'bump> DiffState<'bump> {
         //
         // TODO: take a more efficient path than this
         if let Some(cur_scope_id) = self.stack.current_scope() {
-            let scope = self.scopes.get_scope(cur_scope_id).unwrap();
-
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                     if old_l.event != new_l.event {
@@ -590,7 +591,6 @@ impl<'bump> DiffState<'bump> {
                         self.mutations.new_event_listener(new_l, cur_scope_id);
                     }
                     new_l.mounted_node.set(old_l.mounted_node.get());
-                    self.attach_listener_to_scope(new_l, scope);
                 }
             } else {
                 for listener in old.listeners {
@@ -600,7 +600,6 @@ impl<'bump> DiffState<'bump> {
                 for listener in new.listeners {
                     listener.mounted_node.set(Some(root));
                     self.mutations.new_event_listener(listener, cur_scope_id);
-                    self.attach_listener_to_scope(listener, scope);
                 }
             }
         }
@@ -687,6 +686,12 @@ impl<'bump> DiffState<'bump> {
         new: &'bump VComponent<'bump>,
     ) {
         let scope_addr = old.scope.get().unwrap();
+        log::trace!("diff_component_nodes: {:?}", scope_addr);
+
+        if std::ptr::eq(old, new) {
+            log::trace!("skipping component diff - component is the sames");
+            return;
+        }
 
         // Make sure we're dealing with the same component (by function pointer)
         if old.user_fc == new.user_fc {
@@ -728,11 +733,14 @@ impl<'bump> DiffState<'bump> {
 
                 // this should auto drop the previous props
                 self.scopes.run_scope(scope_addr);
+                self.mutations.dirty_scopes.insert(scope_addr);
+
                 self.diff_node(
                     self.scopes.wip_head(scope_addr),
                     self.scopes.fin_head(scope_addr),
                 );
             } else {
+                log::trace!("memoized");
                 // memoization has taken place
                 drop(new_props);
             };
@@ -1237,7 +1245,10 @@ impl<'bump> DiffState<'bump> {
 
                 let scope_id = c.scope.get().unwrap();
 
-                self.scopes.try_remove(scope_id).unwrap();
+                // we can only remove components if they are actively being diffed
+                if self.stack.scope_stack.contains(&c.originator) {
+                    self.scopes.try_remove(scope_id).unwrap();
+                }
             }
         }
     }
@@ -1288,15 +1299,13 @@ impl<'bump> DiffState<'bump> {
                     let scope_id = c.scope.get().unwrap();
                     let root = self.scopes.root_node(scope_id);
                     self.remove_nodes(Some(root), gen_muts);
-                    self.scopes.try_remove(scope_id).unwrap();
+
+                    // we can only remove this node if the originator is actively
+                    if self.stack.scope_stack.contains(&c.originator) {
+                        self.scopes.try_remove(scope_id).unwrap();
+                    }
                 }
             }
         }
-    }
-
-    /// Adds a listener closure to a scope during diff.
-    fn attach_listener_to_scope(&mut self, listener: &'bump Listener<'bump>, scope: &ScopeState) {
-        let long_listener = unsafe { std::mem::transmute(listener) };
-        scope.items.borrow_mut().listeners.push(long_listener)
     }
 }
