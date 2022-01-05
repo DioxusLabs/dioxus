@@ -47,7 +47,7 @@ impl RouterService {
             _root_found.set(false);
             // checking if the route is valid is cheap, so we do it
             for (slot, _) in _slots.borrow_mut().iter().rev() {
-                log::debug!("regenerating slot {:?}", slot);
+                log::trace!("regenerating slot {:?}", slot);
                 regen(*slot);
             }
         });

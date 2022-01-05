@@ -157,7 +157,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
 
     let mut websys_dom = dom::WebsysDom::new(root_el, cfg, sender_callback);
 
-    log::debug!("rebuilding app");
+    log::trace!("rebuilding app");
     let mut mutations = dom.rebuild();
 
     // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding
@@ -169,12 +169,12 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
     let work_loop = ric_raf::RafLoop::new();
 
     loop {
-        log::debug!("waiting for work");
+        log::trace!("waiting for work");
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         dom.wait_for_work().await;
 
-        log::debug!("working..");
+        log::trace!("working..");
 
         // wait for the mainthread to schedule us in
         let mut deadline = work_loop.wait_for_idle_time().await;
