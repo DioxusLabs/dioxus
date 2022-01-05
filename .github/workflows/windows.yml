@@ -58,14 +58,11 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-gnu' && matrix.channel == 'nightly'
         shell: bash
 
-      - name: build
+      - name: test
         run: |
           rustc -Vv
           cargo -V
           set RUST_BACKTRACE=1 
           cargo build --features "desktop, ssr, router"
-        shell: cmd
-
-      - name: test
-        run: cargo test --features "desktop, ssr, router"
+          cargo test --features "desktop, ssr, router"
         shell: cmd
