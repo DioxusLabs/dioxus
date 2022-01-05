@@ -31,7 +31,8 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - uses: actions-rs/cargo@v1
         with:
-          command: test --features "desktop, ssr, router"
+          command: test
+          args: --features "desktop, ssr, router"
 
   fmt:
     name: Rustfmt
