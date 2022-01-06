@@ -26,7 +26,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
     }
 }
 
-/// The html! macro makes it easy for developers to write jsx-style markup in their components.
+/// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
 ///
 /// ## Complete Reference Guide:
 /// ```

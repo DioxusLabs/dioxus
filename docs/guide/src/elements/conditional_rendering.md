@@ -61,7 +61,7 @@ We can even match against values:
 fn App(cx: Scope)-> Element {
     match get_name() {
         "jack" => cx.render(rsx!( "Hey Jack, how's Diane?" )),
-        "diane" => cx.render(rsx!( "Hey Diana, how's Jack?" )),
+        "diane" => cx.render(rsx!( "Hey Diane, how's Jack?" )),
         name => cx.render(rsx!( "Hello, {name}!" )),
     }
 }
