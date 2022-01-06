@@ -74,7 +74,7 @@ struct PostListProps<'a> {
 Next, we're going to define our component:
 
 ```rust
-fn App(cx: Scope<PostList?) -> Element {
+fn App(cx: Scope<PostList>) -> Element {
     // First, we create a new iterator by mapping the post array
     let posts = cx.props.posts.iter().map(|post| rsx!{
         Post {
