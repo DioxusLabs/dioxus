@@ -18,7 +18,7 @@ fn main() {
     });
 }
 
-fn clac_val(val: String) -> f64 {
+fn calc_val(val: String) -> f64 {
 
     let mut result = 0.0_f64;
     let mut temp = String::new();
@@ -124,7 +124,7 @@ fn app(cx: Scope) -> Element {
                                 button {
                                     class: "calculator-key key-percent",
                                     onclick: move |_| {
-                                        cur_val.set(clac_val(display_value.get().clone()) / 100.0);
+                                        cur_val.set(calc_val(display_value.get().clone()) / 100.0);
                                     },
                                     "%"
                                 }
@@ -165,7 +165,7 @@ fn app(cx: Scope) -> Element {
                             }
                             button { class: "calculator-key key-equals",
                                 onclick: move |_| {
-                                    cur_val.set(clac_val(display_value.get().clone()));
+                                    cur_val.set(calc_val(display_value.get().clone()));
                                 },
                                 "="
                             }
