@@ -18,12 +18,56 @@ fn main() {
     });
 }
 
-fn app(cx: Scope) -> Element {
-    let cur_val = use_state(&cx, || 0.0_f64);
-    let operator = use_state(&cx, Option::default);
-    let display_value = use_state(&cx, String::new);
+fn clac_val(val: String) -> f64 {
 
-    let input_digit = move |num: u8| display_value.modify().push_str(num.to_string().as_str());
+    let mut result = 0.0_f64;
+    let mut temp = String::new();
+    let mut operation = "+".to_string();
+
+    for c in val.chars() {
+
+        println!("{:?}: {:?} - {:?}", result, c, val);
+
+        if c == '+' || c == '-' || c == '*' || c == '/' {
+            match &operation as &str {
+                "+" => {result += temp.parse::<f64>().unwrap();},
+                "-" => {result -= temp.parse::<f64>().unwrap();},
+                "*" => {result *= temp.parse::<f64>().unwrap();},
+                "/" => {result /= temp.parse::<f64>().unwrap();},
+                _ => unreachable!(),
+            };    
+            operation = c.to_string();
+            temp = String::new();
+        } else {
+            temp.push(c);
+        }
+    }
+
+    if temp != "" {
+        match &operation as &str {
+            "+" => {result += temp.parse::<f64>().unwrap();},
+            "-" => {result -= temp.parse::<f64>().unwrap();},
+            "*" => {result *= temp.parse::<f64>().unwrap();},
+            "/" => {result /= temp.parse::<f64>().unwrap();},
+            _ => unreachable!(),
+        };
+    }
+
+    result
+}
+
+fn app(cx: Scope) -> Element {
+
+    let cur_val = use_state(&cx, || 0.0_f64);
+    let display_value: UseState<String> = use_state(&cx,String::new);
+
+    let input_digit = move |num: u8| {
+        display_value.modify().push_str(num.to_string().as_str());
+    };
+
+    let input_operator = move |key: &str| {
+        display_value.modify().push_str(key);
+    };
 
     cx.render(rsx!(
         style { [include_str!("./assets/calculator.css")] }
@@ -31,10 +75,10 @@ fn app(cx: Scope) -> Element {
             div { class: "app",
                 div { class: "calculator",
                     onkeydown: move |evt| match evt.key_code {
-                        KeyCode::Add => operator.set(Some("+")),
-                        KeyCode::Subtract => operator.set(Some("-")),
-                        KeyCode::Divide => operator.set(Some("/")),
-                        KeyCode::Multiply => operator.set(Some("*")),
+                        KeyCode::Add => input_operator("+"),
+                        KeyCode::Subtract => input_operator("-"),
+                        KeyCode::Divide => input_operator("/"),
+                        KeyCode::Multiply => input_operator("*"),
                         KeyCode::Num0 => input_digit(0),
                         KeyCode::Num1 => input_digit(1),
                         KeyCode::Num2 => input_digit(2),
@@ -46,7 +90,7 @@ fn app(cx: Scope) -> Element {
                         KeyCode::Num8 => input_digit(8),
                         KeyCode::Num9 => input_digit(9),
                         KeyCode::Backspace => {
-                            if !display_value.as_str().eq("0") {
+                            if !display_value.len() != 0 {
                                 display_value.modify().pop();
                             }
                         }
@@ -59,30 +103,28 @@ fn app(cx: Scope) -> Element {
                                 button {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
-                                        display_value.set("0".to_string());
-                                        if display_value != "0" {
-                                            operator.set(None);
+                                        display_value.set(String::new());
+                                        if display_value != "" {
                                             cur_val.set(0.0);
                                         }
                                     },
-                                    [if display_value == "0" { "C" } else { "AC" }]
+                                    [if display_value == "" { "C" } else { "AC" }]
                                 }
                                 button {
                                     class: "calculator-key key-sign",
                                     onclick: move |_| {
-                                        if display_value.starts_with("-") {
-                                            display_value.set(display_value.trim_start_matches("-").to_string())
-                                        } else {
-                                            display_value.set(format!("-{}", *display_value))
-                                        }
+                                        // if display_value.starts_with("-") {
+                                        //     display_value.set(display_value.trim_start_matches("-").to_string())
+                                        // } else {
+                                        //     display_value.set(format!("-{}", *display_value))
+                                        // }
                                     },
                                     "±"
                                 }
                                 button {
                                     class: "calculator-key key-percent",
                                     onclick: move |_| {
-                                        let pct = (display_value.parse::<f64>().unwrap() / 100.0).to_string();
-                                        display_value.set(pct);
+                                        cur_val.set(clac_val(display_value.get().clone()) / 100.0);
                                     },
                                     "%"
                                 }
@@ -106,36 +148,24 @@ fn app(cx: Scope) -> Element {
                         }
                         div { class: "operator-keys",
                             button { class: "calculator-key key-divide",
-                                onclick: move |_| operator.set(Some("/")),
+                                onclick: move |_| input_operator("/"),
                                 "÷"
                             }
                             button { class: "calculator-key key-multiply",
-                                onclick: move |_| operator.set(Some("*")),
+                                onclick: move |_| input_operator("*"),
                                 "×"
                             }
                             button { class: "calculator-key key-subtract",
-                                onclick: move |_| operator.set(Some("-")),
+                                onclick: move |_| input_operator("-"),
                                 "−"
                             }
                             button { class: "calculator-key key-add",
-                                onclick: move |_| operator.set(Some("+")),
+                                onclick: move |_| input_operator("+"),
                                 "+"
                             }
                             button { class: "calculator-key key-equals",
                                 onclick: move |_| {
-                                    if let Some(op) = operator.as_ref() {
-                                        let rhs = display_value.parse::<f64>().unwrap();
-                                        let new_val = match *op {
-                                            "+" => *cur_val + rhs,
-                                            "-" => *cur_val - rhs,
-                                            "*" => *cur_val * rhs,
-                                            "/" => *cur_val / rhs,
-                                            _ => unreachable!(),
-                                        };
-                                        cur_val.set(new_val);
-                                        display_value.set(new_val.to_string());
-                                        operator.set(None);
-                                    }
+                                    cur_val.set(clac_val(display_value.get().clone()));
                                 },
                                 "="
                             }
