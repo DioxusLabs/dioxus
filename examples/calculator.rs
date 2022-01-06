@@ -113,11 +113,12 @@ fn app(cx: Scope) -> Element {
                                 button {
                                     class: "calculator-key key-sign",
                                     onclick: move |_| {
-                                        // if display_value.starts_with("-") {
-                                        //     display_value.set(display_value.trim_start_matches("-").to_string())
-                                        // } else {
-                                        //     display_value.set(format!("-{}", *display_value))
-                                        // }
+                                        let temp = calc_val(display_value.get().clone());
+                                        if temp > 0.0 {
+                                            cur_val.set(temp - (temp * 2.0));
+                                        } else {
+                                            cur_val.set(temp);
+                                        }
                                     },
                                     "±"
                                 }
