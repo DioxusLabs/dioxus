@@ -68,7 +68,7 @@ impl Parse for Element {
                 if content.parse::<Token![,]>().is_err() {
                     proc_macro_error::emit_error!(
                         ident,
-                        "This attribute is misisng a trailing comma"
+                        "This attribute is missing a trailing comma"
                     )
                 }
                 continue;
@@ -129,7 +129,7 @@ impl Parse for Element {
                 if content.parse::<Token![,]>().is_err() {
                     proc_macro_error::emit_error!(
                         ident,
-                        "This attribute is misisng a trailing comma"
+                        "This attribute is missing a trailing comma"
                     )
                 }
                 continue;
