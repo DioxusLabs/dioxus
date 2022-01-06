@@ -9,20 +9,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch_cfg(app, |c| {
-        if cfg!(target_os = "macos") {
-            // we can configure our primary window through the Tauri Config
-            use dioxus::desktop::tao::platform::macos::*;
-            c.with_window(|w| {
-                w.with_fullsize_content_view(true)
-                    .with_titlebar_buttons_hidden(false)
-                    .with_titlebar_transparent(true)
-                    .with_movable_by_window_background(true)
-            })
-        } else {
-            c
-        }
-    });
+    dioxus::desktop::launch(app);
 }
 
 pub fn app(cx: Scope) -> Element {

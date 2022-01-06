@@ -690,8 +690,6 @@ impl ScopeState {
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
-    ///
-    /// The future is forcibly dropped if the component is not ready by the next render
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
         // wake up the scheduler if it is sleeping
         self.tasks

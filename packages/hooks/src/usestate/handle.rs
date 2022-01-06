@@ -59,7 +59,11 @@ impl<'a, T: 'static> UseState<'a, T> {
 
     pub fn setter(&self) -> Rc<dyn Fn(T)> {
         let slot = self.0.wip.clone();
-        Rc::new(move |new| *slot.borrow_mut() = Some(new))
+        let callback = self.0.update_callback.clone();
+        Rc::new(move |new| {
+            callback();
+            *slot.borrow_mut() = Some(new)
+        })
     }
 
     pub fn wtih(&self, f: impl FnOnce(&mut T)) {
