@@ -159,7 +159,8 @@ impl<'a> TextRenderer<'a, '_> {
                 write!(f, "{}", text.text)?
             }
             VNode::Placeholder(_anchor) => {
-                //
+                *last_node_was_text = false;
+
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
@@ -168,6 +169,8 @@ impl<'a> TextRenderer<'a, '_> {
                 write!(f, "<!-- -->")?;
             }
             VNode::Element(el) => {
+                *last_node_was_text = false;
+
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
@@ -204,18 +207,6 @@ impl<'a> TextRenderer<'a, '_> {
                         }
                     }
                 }
-
-                // // we write the element's id as a data attribute
-                // //
-                // // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
-                // // them interpreter's stack
-                // if let (true, Some(id)) = (self.cfg.pre_render, node.try_mounted_id()) {
-                //     write!(f, " dioxus-id=\"{}\"", id)?;
-
-                //     for _listener in el.listeners {
-                //         // todo: write the listeners
-                //     }
-                // }
 
                 match self.cfg.newline {
                     true => writeln!(f, ">")?,
