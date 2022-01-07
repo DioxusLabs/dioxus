@@ -91,7 +91,7 @@ fn app(cx: Scope) -> Element {
 struct ActionButtonProps<'a> {
     name: &'a str,
     id: &'a str,
-    onclick: EventHandler<'a, ()>,
+    onclick: EventHandler<'a>,
 }
 
 fn ActionButton<'a>(cx: Scope<'a, ActionButtonProps<'a>>) -> Element {
