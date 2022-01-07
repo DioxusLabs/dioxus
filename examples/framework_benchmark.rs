@@ -41,22 +41,22 @@ fn app(cx: Scope) -> Element {
                     div { class: "col-md-6",
                         div { class: "row",
                             ActionButton { name: "Create 1,000 rows", id: "run",
-                                onclick: move || items.set(Label::new_list(1_000)),
+                                onclick: move |_| items.set(Label::new_list(1_000)),
                             }
                             ActionButton { name: "Create 10,000 rows", id: "runlots",
-                                onclick: move || items.set(Label::new_list(10_000)),
+                                onclick: move |_| items.set(Label::new_list(10_000)),
                             }
                             ActionButton { name: "Append 1,000 rows", id: "add",
-                                onclick: move || items.write().extend(Label::new_list(1_000)),
+                                onclick: move |_| items.write().extend(Label::new_list(1_000)),
                             }
                             ActionButton { name: "Update every 10th row", id: "update",
-                                onclick: move || items.write().iter_mut().step_by(10).for_each(|item| item.labels[2] = "!!!"),
+                                onclick: move |_| items.write().iter_mut().step_by(10).for_each(|item| item.labels[2] = "!!!"),
                             }
                             ActionButton { name: "Clear", id: "clear",
-                                onclick: move || items.write().clear(),
+                                onclick: move |_| items.write().clear(),
                             }
                             ActionButton { name: "Swap rows", id: "swaprows",
-                                onclick: move || items.write().swap(0, 998),
+                                onclick: move |_| items.write().swap(0, 998),
                             }
                         }
                     }
@@ -91,7 +91,7 @@ fn app(cx: Scope) -> Element {
 struct ActionButtonProps<'a> {
     name: &'a str,
     id: &'a str,
-    onclick: &'a dyn Fn(),
+    onclick: EventHandler<'a, ()>,
 }
 
 fn ActionButton<'a>(cx: Scope<'a, ActionButtonProps<'a>>) -> Element {
@@ -102,7 +102,7 @@ fn ActionButton<'a>(cx: Scope<'a, ActionButtonProps<'a>>) -> Element {
                 class:"btn btn-primary btn-block",
                 r#type: "button",
                 id: "{cx.props.id}",
-                onclick: move |_| (cx.props.onclick)(),
+                onclick: move |_| cx.props.onclick.call(()),
 
                 "{cx.props.name}"
             }

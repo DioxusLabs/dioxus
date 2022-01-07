@@ -165,7 +165,7 @@ impl ToTokens for ContentField {
                 __cx.raw_text(format_args_f!(#s)).0
             }),
             ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
-                __cx.bump().alloc(#e)
+                __cx.event_handler(#e)
             }),
         }
     }

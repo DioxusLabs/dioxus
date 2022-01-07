@@ -43,10 +43,7 @@ pub mod on {
                         // ie copy
                         let shortname: &'static str = &event_name[2..];
 
-                        let handler = EventHandler {
-                            callback: bump.alloc(std::cell::RefCell::new(Some(callback))),
-                        };
-
+                        let handler = bump.alloc(std::cell::RefCell::new(Some(callback)));
                         factory.listener(shortname, handler)
                     }
                 )*

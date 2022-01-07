@@ -15,8 +15,6 @@
 //! the RefCell will panic and crash. You can use `try_get_mut` or `.modify` to avoid this problem, or just not hold two
 //! RefMuts at the same time.
 
-use std::sync::Arc;
-
 use dioxus::desktop::wry::application::dpi::LogicalSize;
 use dioxus::events::*;
 use dioxus::prelude::*;
@@ -117,7 +115,7 @@ fn app(cx: Scope) -> Element {
 #[derive(Props)]
 struct CalculatorKeyProps<'a> {
     name: &'a str,
-    onclick: &'a dyn Fn(MouseEvent),
+    onclick: EventHandler<'a, MouseEvent>,
     children: Element<'a>,
 }
 
@@ -125,7 +123,7 @@ fn CalculatorKey<'a>(cx: Scope<'a, CalculatorKeyProps<'a>>) -> Element {
     cx.render(rsx! {
         button {
             class: "calculator-key {cx.props.name}",
-            onclick: move |e| (cx.props.onclick)(e),
+            onclick: move |e| cx.props.onclick.call(e),
             &cx.props.children
         }
     })
