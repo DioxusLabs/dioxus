@@ -66,3 +66,4 @@ serde_json = "1.0.73"
 rand = { version = "0.8.4", features = ["small_rng"] }
 tokio = { version = "1.14.0", features = ["full"] }
 reqwest = { version = "0.11.8", features = ["json"] }
+dioxus = { path = ".", features = ["desktop", "ssr", "router"] }
