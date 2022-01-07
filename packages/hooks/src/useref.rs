@@ -5,33 +5,27 @@ use std::{
 
 use dioxus_core::ScopeState;
 
-pub fn use_ref<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) -> UseRef<'a, T> {
-    let inner = cx.use_hook(|_| UseRefInner {
-        update_scheduled: Cell::new(false),
+pub fn use_ref<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) -> &'a UseRef<T> {
+    let inner = cx.use_hook(|_| UseRef {
         update_callback: cx.schedule_update(),
-        value: RefCell::new(f()),
+        value: Rc::new(RefCell::new(f())),
     });
 
-    inner.update_scheduled.set(false);
-    UseRef { inner }
+    inner
 }
 
-pub struct UseRef<'a, T> {
-    inner: &'a UseRefInner<T>,
-}
-struct UseRefInner<T> {
-    update_scheduled: Cell<bool>,
+pub struct UseRef<T> {
     update_callback: Rc<dyn Fn()>,
-    value: RefCell<T>,
+    value: Rc<RefCell<T>>,
 }
 
-impl<'a, T> UseRef<'a, T> {
+impl<T> UseRef<T> {
     pub fn read(&self) -> Ref<'_, T> {
-        self.inner.value.borrow()
+        self.value.borrow()
     }
 
     pub fn set(&self, new: T) {
-        *self.inner.value.borrow_mut() = new;
+        *self.value.borrow_mut() = new;
         self.needs_update();
     }
 
@@ -42,25 +36,24 @@ impl<'a, T> UseRef<'a, T> {
     /// Calling "write" will force the component to re-render
     pub fn write(&self) -> RefMut<'_, T> {
         self.needs_update();
-        self.inner.value.borrow_mut()
+        self.value.borrow_mut()
     }
 
     /// Allows the ability to write the value without forcing a re-render
     pub fn write_silent(&self) -> RefMut<'_, T> {
-        self.inner.value.borrow_mut()
+        self.value.borrow_mut()
     }
 
     pub fn needs_update(&self) {
-        if !self.inner.update_scheduled.get() {
-            self.inner.update_scheduled.set(true);
-            (self.inner.update_callback)();
-        }
+        (self.update_callback)();
     }
 }
 
-impl<T> Clone for UseRef<'_, T> {
+impl<T> Clone for UseRef<T> {
     fn clone(&self) -> Self {
-        Self { inner: self.inner }
+        Self {
+            update_callback: self.update_callback.clone(),
+            value: self.value.clone(),
+        }
     }
 }
-impl<T> Copy for UseRef<'_, T> {}
