@@ -17,74 +17,8 @@ fn main() {
     });
 }
 
-fn calc_val(val: String) -> f64 {
-
-    // println!("{:?}", val);
-
-    let mut result;
-    let mut temp = String::new();
-    let mut operation = "+".to_string();
-
-    let mut start_index = 0;
-    let mut temp_value;
-    let mut fin_index = 0;
-    if &val[0..1] == "-" {
-        temp_value = String::from("-");
-        fin_index = 1;
-        start_index += 1;
-    } else {
-        temp_value = String::from("");
-    }
-    for c in val[fin_index..].chars() {
-        if c == '+' || c == '-' || c == '*' || c == '/' {
-            break;
-        }
-        temp_value.push(c);
-        start_index += 1;
-    }
-    result = temp_value.parse::<f64>().unwrap();
-
-    if start_index + 1 >= val.len() {
-        return result;
-    }
-
-    for c in val[start_index..].chars() {
-
-        // println!("{:?}", c);
-
-        if c == '+' || c == '-' || c == '*' || c == '/' {
-            if temp != "" {
-                match &operation as &str {
-                    "+" => {result += temp.parse::<f64>().unwrap();},
-                    "-" => {result -= temp.parse::<f64>().unwrap();},
-                    "*" => {result *= temp.parse::<f64>().unwrap();},
-                    "/" => {result /= temp.parse::<f64>().unwrap();},
-                    _ => unreachable!(),
-                };    
-            }
-            operation = c.to_string();
-            temp = String::new();
-        } else {
-            temp.push(c);
-        }
-    }
-
-    if temp != "" {
-        match &operation as &str {
-            "+" => {result += temp.parse::<f64>().unwrap();},
-            "-" => {result -= temp.parse::<f64>().unwrap();},
-            "*" => {result *= temp.parse::<f64>().unwrap();},
-            "/" => {result /= temp.parse::<f64>().unwrap();},
-            _ => unreachable!(),
-        };
-    }
-
-    result
-}
-
 fn app(cx: Scope) -> Element {
-
-    let display_value: UseState<String> = use_state(&cx,|| String::from("0"));
+    let display_value: UseState<String> = use_state(&cx, || String::from("0"));
 
     let input_digit = move |num: u8| {
         if display_value.get() == "0" {
@@ -207,4 +141,82 @@ fn app(cx: Scope) -> Element {
         }
 
     ))
+}
+
+fn calc_val(val: String) -> f64 {
+
+    let mut result;
+    let mut temp = String::new();
+    let mut operation = "+".to_string();
+
+    let mut start_index = 0;
+    let mut temp_value;
+    let mut fin_index = 0;
+    
+    if &val[0..1] == "-" {
+        temp_value = String::from("-");
+        fin_index = 1;
+        start_index += 1;
+    } else {
+        temp_value = String::from("");
+    }
+
+    for c in val[fin_index..].chars() {
+        if c == '+' || c == '-' || c == '*' || c == '/' {
+            break;
+        }
+        temp_value.push(c);
+        start_index += 1;
+    }
+    result = temp_value.parse::<f64>().unwrap();
+
+    if start_index + 1 >= val.len() {
+        return result;
+    }
+
+    for c in val[start_index..].chars() {
+        if c == '+' || c == '-' || c == '*' || c == '/' {
+            if temp != "" {
+                match &operation as &str {
+                    "+" => {
+                        result += temp.parse::<f64>().unwrap();
+                    }
+                    "-" => {
+                        result -= temp.parse::<f64>().unwrap();
+                    }
+                    "*" => {
+                        result *= temp.parse::<f64>().unwrap();
+                    }
+                    "/" => {
+                        result /= temp.parse::<f64>().unwrap();
+                    }
+                    _ => unreachable!(),
+                };
+            }
+            operation = c.to_string();
+            temp = String::new();
+        } else {
+            temp.push(c);
+        }
+    }
+
+    if temp != "" {
+        match &operation as &str {
+            "+" => {
+                result += temp.parse::<f64>().unwrap();
+            }
+            "-" => {
+                result -= temp.parse::<f64>().unwrap();
+            }
+            "*" => {
+                result *= temp.parse::<f64>().unwrap();
+            }
+            "/" => {
+                result /= temp.parse::<f64>().unwrap();
+            }
+            _ => unreachable!(),
+        };
+    }
+
+    result
 }
