@@ -316,29 +316,33 @@ pub struct Listener<'bump> {
     pub event: &'static str,
 
     /// The actual callback that the user specified
-    pub(crate) callback: EventHandler<'bump>,
+    pub(crate) callback: InternalHandler<'bump>,
 }
 
-/// The callback based into element event listeners.
-pub struct EventHandler<'bump> {
-    pub callback: &'bump RefCell<Option<ListenerCallback<'bump>>>,
+pub type InternalHandler<'bump> = &'bump RefCell<Option<InternalListenerCallback<'bump>>>;
+type InternalListenerCallback<'bump> = BumpBox<'bump, dyn FnMut(AnyEvent) + 'bump>;
+
+type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
+
+/// The callback based through the `rsx!` macro.
+pub struct EventHandler<'bump, T = ()> {
+    pub callback: &'bump RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }
 
-impl EventHandler<'_> {
-    pub fn call(&self, event: AnyEvent) {
+impl<T> EventHandler<'_, T> {
+    pub fn call(&self, event: T) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
         }
     }
+
     pub fn release(&self) {
         self.callback.replace(None);
     }
 }
 
-type ListenerCallback<'bump> = BumpBox<'bump, dyn FnMut(AnyEvent) + 'bump>;
-
-impl Copy for EventHandler<'_> {}
-impl Clone for EventHandler<'_> {
+impl<T> Copy for EventHandler<'_, T> {}
+impl<T> Clone for EventHandler<'_, T> {
     fn clone(&self) -> Self {
         Self {
             callback: self.callback,
@@ -551,7 +555,7 @@ impl<'a> NodeFactory<'a> {
         VNode::Component(vcomp)
     }
 
-    pub fn listener(self, event: &'static str, callback: EventHandler<'a>) -> Listener<'a> {
+    pub fn listener(self, event: &'static str, callback: InternalHandler<'a>) -> Listener<'a> {
         Listener {
             event,
             mounted_node: Cell::new(None),
@@ -642,6 +646,13 @@ impl<'a> NodeFactory<'a> {
                 key: None,
             })))
         }
+    }
+
+    pub fn event_handler<T>(self, f: impl FnMut(T) + 'a) -> EventHandler<'a, T> {
+        let handler: &mut dyn FnMut(T) = self.bump.alloc(f);
+        let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
+        let callback = self.bump.alloc(RefCell::new(Some(caller)));
+        EventHandler { callback }
     }
 }
 

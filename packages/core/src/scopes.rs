@@ -212,7 +212,7 @@ impl ScopeArena {
             items
                 .listeners
                 .drain(..)
-                .for_each(|listener| drop(listener.callback.callback.borrow_mut().take()));
+                .for_each(|listener| drop(listener.callback.borrow_mut().take()));
         }
     }
 
@@ -300,7 +300,7 @@ impl ScopeArena {
                                 break;
                             }
 
-                            let mut cb = listener.callback.callback.borrow_mut();
+                            let mut cb = listener.callback.borrow_mut();
                             if let Some(cb) = cb.as_mut() {
                                 // todo: arcs are pretty heavy to clone
                                 // we really want to convert arc to rc
