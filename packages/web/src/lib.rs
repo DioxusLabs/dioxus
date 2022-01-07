@@ -55,7 +55,6 @@
 use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
-use crate::dom::load_document;
 use dioxus::SchedulerMsg;
 use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
@@ -66,6 +65,7 @@ mod cache;
 mod cfg;
 mod dom;
 mod nodeslab;
+mod rehydrate;
 mod ric_raf;
 
 /// Launch the VirtualDOM given a root component and a configuration.
@@ -146,24 +146,39 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         wasm_bindgen::intern(s);
     }
 
-    let should_hydrate = cfg.hydrate;
-
-    let root_el = load_document().get_element_by_id(&cfg.rootname).unwrap();
-
     let tasks = dom.get_scheduler_channel();
 
     let sender_callback: Rc<dyn Fn(SchedulerMsg)> =
         Rc::new(move |event| tasks.unbounded_send(event).unwrap());
 
-    let mut websys_dom = dom::WebsysDom::new(root_el, cfg, sender_callback);
+    let should_hydrate = cfg.hydrate;
+
+    let mut websys_dom = dom::WebsysDom::new(cfg, sender_callback);
 
     log::trace!("rebuilding app");
-    let mut mutations = dom.rebuild();
 
-    // hydrating is simply running the dom for a single render. If the page is already written, then the corresponding
-    // ElementIds should already line up because the web_sys dom has already loaded elements with the DioxusID into memory
-    if !should_hydrate {
-        websys_dom.process_edits(&mut mutations.edits);
+    if should_hydrate {
+        // todo: we need to split rebuild and initialize into two phases
+        // it's a waste to produce edits just to get the vdom loaded
+        let _ = dom.rebuild();
+
+        if let Err(err) = websys_dom.rehydrate(&dom) {
+            log::error!(
+                "Rehydration failed {:?}. Rebuild DOM into element from scratch",
+                &err
+            );
+
+            websys_dom.root.set_text_content(None);
+
+            // errrrr we should split rebuild into two phases
+            // one that initializes things and one that produces edits
+            let edits = dom.rebuild();
+
+            websys_dom.apply_edits(edits.edits);
+        }
+    } else {
+        let edits = dom.rebuild();
+        websys_dom.apply_edits(edits.edits);
     }
 
     let work_loop = ric_raf::RafLoop::new();
@@ -185,9 +200,9 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         // wait for the animation frame to fire so we can apply our changes
         work_loop.wait_for_raf().await;
 
-        for mut edit in mutations {
+        for edit in mutations {
             // actually apply our changes during the animation frame
-            websys_dom.process_edits(&mut edit.edits);
+            websys_dom.apply_edits(edit.edits);
         }
     }
 }
