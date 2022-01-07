@@ -38,7 +38,7 @@ pub struct LinkProps<'a> {
 }
 
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    let service = cx.consume_context::<RouterService>().unwrap();
+    let service = cx.consume_context::<RouterService>()?;
     cx.render(rsx! {
         a {
             href: "{cx.props.to}",

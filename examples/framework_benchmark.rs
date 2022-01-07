@@ -89,8 +89,8 @@ fn app(cx: Scope) -> Element {
 
 #[derive(Props)]
 struct ActionButtonProps<'a> {
-    name: &'static str,
-    id: &'static str,
+    name: &'a str,
+    id: &'a str,
     onclick: &'a dyn Fn(),
 }
 

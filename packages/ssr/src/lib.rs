@@ -2,13 +2,15 @@
 
 use std::fmt::{Display, Formatter};
 
-use dioxus_core::exports::bumpalo;
-use dioxus_core::exports::bumpalo::Bump;
 use dioxus_core::IntoVNode;
 use dioxus_core::*;
 
+fn app(_cx: Scope) -> Element {
+    None
+}
+
 pub struct SsrRenderer {
-    inner: bumpalo::Bump,
+    vdom: VirtualDom,
     cfg: SsrConfig,
 }
 
@@ -16,21 +18,14 @@ impl SsrRenderer {
     pub fn new(cfg: impl FnOnce(SsrConfig) -> SsrConfig) -> Self {
         Self {
             cfg: cfg(SsrConfig::default()),
-            inner: bumpalo::Bump::new(),
+            vdom: VirtualDom::new(app),
         }
     }
 
     pub fn render_lazy<'a>(&'a mut self, f: LazyNodes<'a, '_>) -> String {
-        let bump = &mut self.inner as *mut _;
-        let s = self.render_inner(f);
+        let scope = self.vdom.base_scope();
+        let factory = NodeFactory::new(&scope);
 
-        // reuse the bump's memory
-        unsafe { (&mut *bump as &mut bumpalo::Bump).reset() };
-        s
-    }
-
-    fn render_inner<'a>(&'a self, f: LazyNodes<'a, '_>) -> String {
-        let factory = NodeFactory::new(&self.inner);
         let root = f.into_vnode(factory);
         format!(
             "{:}",
@@ -44,8 +39,8 @@ impl SsrRenderer {
 }
 
 pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
-    let bump = bumpalo::Bump::new();
-    let borrowed = &bump;
+    let vdom = VirtualDom::new(app);
+    let scope: *const ScopeState = vdom.base_scope();
 
     // Safety
     //
@@ -57,9 +52,9 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     //
     // Therefore, we cast our local bump alloactor into right lifetime. This is okay because our usage of the bump arena
     // is *definitely* shorter than the <'a> lifetime, and we return *owned* data - not borrowed data.
+    let scope = unsafe { &*scope };
 
-    let _b = unsafe { std::mem::transmute::<&Bump, &'a Bump>(borrowed) };
-    let root = f.into_vnode(NodeFactory::new(_b));
+    let root = f.into_vnode(NodeFactory::new(&scope));
 
     format!(
         "{:}",
@@ -280,156 +275,5 @@ impl SsrConfig {
     pub fn skip_components(mut self, a: bool) -> Self {
         self.skip_components = a;
         self
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use dioxus_core::prelude::*;
-    use dioxus_core_macro::*;
-    use dioxus_html as dioxus_elements;
-
-    static SIMPLE_APP: Component = |cx| {
-        cx.render(rsx!(div {
-            "hello world!"
-        }))
-    };
-
-    static SLIGHTLY_MORE_COMPLEX: Component = |cx| {
-        cx.render(rsx! {
-            div { title: "About W3Schools",
-                (0..20).map(|f| rsx!{
-                    div {
-                        title: "About W3Schools",
-                        style: "color:blue;text-align:center",
-                        class: "About W3Schools",
-                        p {
-                            title: "About W3Schools",
-                            "Hello world!: {f}"
-                        }
-                    }
-                })
-            }
-        })
-    };
-
-    static NESTED_APP: Component = |cx| {
-        cx.render(rsx!(
-            div {
-                SIMPLE_APP {}
-            }
-        ))
-    };
-    static FRAGMENT_APP: Component = |cx| {
-        cx.render(rsx!(
-            div { "f1" }
-            div { "f2" }
-            div { "f3" }
-            div { "f4" }
-        ))
-    };
-
-    #[test]
-    fn to_string_works() {
-        let mut dom = VirtualDom::new(SIMPLE_APP);
-        dom.rebuild();
-        dbg!(render_vdom(&dom));
-    }
-
-    #[test]
-    fn hydration() {
-        let mut dom = VirtualDom::new(NESTED_APP);
-        dom.rebuild();
-        dbg!(render_vdom_cfg(&dom, |c| c.pre_render(true)));
-    }
-
-    #[test]
-    fn nested() {
-        let mut dom = VirtualDom::new(NESTED_APP);
-        dom.rebuild();
-        dbg!(render_vdom(&dom));
-    }
-
-    #[test]
-    fn fragment_app() {
-        let mut dom = VirtualDom::new(FRAGMENT_APP);
-        dom.rebuild();
-        dbg!(render_vdom(&dom));
-    }
-
-    #[test]
-    fn write_to_file() {
-        use std::fs::File;
-        use std::io::Write;
-
-        let mut file = File::create("index.html").unwrap();
-
-        let mut dom = VirtualDom::new(SLIGHTLY_MORE_COMPLEX);
-        dom.rebuild();
-
-        file.write_fmt(format_args!(
-            "{}",
-            TextRenderer::from_vdom(&dom, SsrConfig::default())
-        ))
-        .unwrap();
-    }
-
-    #[test]
-    fn styles() {
-        static STLYE_APP: Component = |cx| {
-            cx.render(rsx! {
-                div { color: "blue", font_size: "46px"  }
-            })
-        };
-
-        let mut dom = VirtualDom::new(STLYE_APP);
-        dom.rebuild();
-        dbg!(render_vdom(&dom));
-    }
-
-    #[test]
-    fn lazy() {
-        let p1 = SsrRenderer::new(|c| c).render_lazy(rsx! {
-            div { "ello"  }
-        });
-
-        let p2 = render_lazy(rsx! {
-            div {
-                "ello"
-            }
-        });
-        assert_eq!(p1, p2);
-    }
-
-    #[test]
-    fn big_lazy() {
-        let s = render_lazy(rsx! {
-            div {
-                div {
-                    div {
-                        h1 { "ello world" }
-                        h1 { "ello world" }
-                        h1 { "ello world" }
-                        h1 { "ello world" }
-                        h1 { "ello world" }
-                    }
-                }
-            }
-        });
-
-        dbg!(s);
-    }
-
-    #[test]
-    fn inner_html() {
-        let s = render_lazy(rsx! {
-            div {
-                dangerous_inner_html: "<div> ack </div>"
-            }
-        });
-
-        dbg!(s);
     }
 }

@@ -66,7 +66,6 @@ use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
     keyboard::{KeyCode, ModifiersState},
-    menu::{MenuBar, MenuItem},
     window::{Window, WindowId},
 };
 pub use wry;
@@ -293,7 +292,7 @@ impl DesktopController {
                 match req.method.as_str() {
                     "user_event" => {
                         let event = events::trigger_from_serialized(req.params.unwrap());
-                        log::debug!("User event: {:?}", event);
+                        log::trace!("User event: {:?}", event);
                         sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
                     }
                     "initialize" => {

@@ -15,7 +15,7 @@ impl<'a> UseRoute<'a> {
         todo!()
     }
 
-    pub fn last_segment(&self) -> Option<&str> {
+    pub fn last_segment(&self) -> Option<&'a str> {
         todo!()
     }
 
@@ -25,6 +25,6 @@ impl<'a> UseRoute<'a> {
     }
 }
 
-pub fn use_route(cx: &ScopeState) -> UseRoute {
+pub fn use_route<'a>(cx: &'a ScopeState) -> UseRoute<'a> {
     todo!()
 }
