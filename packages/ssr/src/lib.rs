@@ -144,7 +144,7 @@ impl<'a> TextRenderer<'a, '_> {
     ) -> std::fmt::Result {
         match &node {
             VNode::Text(text) => {
-                if *last_node_was_text && self.cfg.pre_render {
+                if *last_node_was_text {
                     write!(f, "<!--spacer-->")?;
                 }
 
