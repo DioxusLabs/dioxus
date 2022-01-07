@@ -42,7 +42,6 @@ pub enum DomEdit<'bump> {
     PushRoot {
         root: u64,
     },
-    PopRoot,
 
     AppendChildren {
         many: u32,

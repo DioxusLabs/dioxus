@@ -70,6 +70,13 @@ pub fn render_vdom(dom: &VirtualDom) -> String {
     format!("{:}", TextRenderer::from_vdom(dom, SsrConfig::default()))
 }
 
+pub fn pre_render_vdom(dom: &VirtualDom) -> String {
+    format!(
+        "{:}",
+        TextRenderer::from_vdom(dom, SsrConfig::default().pre_render(true))
+    )
+}
+
 pub fn render_vdom_cfg(dom: &VirtualDom, cfg: impl FnOnce(SsrConfig) -> SsrConfig) -> String {
     format!(
         "{:}",
@@ -114,7 +121,8 @@ pub struct TextRenderer<'a, 'b> {
 
 impl Display for TextRenderer<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.html_render(self.root, f, 0)
+        let mut last_node_was_text = false;
+        self.html_render(self.root, f, 0, &mut last_node_was_text)
     }
 }
 
@@ -127,14 +135,27 @@ impl<'a> TextRenderer<'a, '_> {
         }
     }
 
-    fn html_render(&self, node: &VNode, f: &mut std::fmt::Formatter, il: u16) -> std::fmt::Result {
+    fn html_render(
+        &self,
+        node: &VNode,
+        f: &mut std::fmt::Formatter,
+        il: u16,
+        last_node_was_text: &mut bool,
+    ) -> std::fmt::Result {
         match &node {
             VNode::Text(text) => {
+                if *last_node_was_text && self.cfg.pre_render {
+                    write!(f, "<!--spacer-->")?;
+                }
+
                 if self.cfg.indent {
                     for _ in 0..il {
                         write!(f, "    ")?;
                     }
                 }
+
+                *last_node_was_text = true;
+
                 write!(f, "{}", text.text)?
             }
             VNode::Placeholder(_anchor) => {
@@ -184,17 +205,17 @@ impl<'a> TextRenderer<'a, '_> {
                     }
                 }
 
-                // we write the element's id as a data attribute
-                //
-                // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
-                // them interpreter's stack
-                if let (true, Some(id)) = (self.cfg.pre_render, node.try_mounted_id()) {
-                    write!(f, " dioxus-id=\"{}\"", id)?;
+                // // we write the element's id as a data attribute
+                // //
+                // // when the page is loaded, the `querySelectorAll` will be used to collect all the nodes, and then add
+                // // them interpreter's stack
+                // if let (true, Some(id)) = (self.cfg.pre_render, node.try_mounted_id()) {
+                //     write!(f, " dioxus-id=\"{}\"", id)?;
 
-                    for _listener in el.listeners {
-                        // todo: write the listeners
-                    }
-                }
+                //     for _listener in el.listeners {
+                //         // todo: write the listeners
+                //     }
+                // }
 
                 match self.cfg.newline {
                     true => writeln!(f, ">")?,
@@ -204,8 +225,9 @@ impl<'a> TextRenderer<'a, '_> {
                 if let Some(inner_html) = inner_html {
                     write!(f, "{}", inner_html)?;
                 } else {
+                    let mut last_node_was_text = false;
                     for child in el.children {
-                        self.html_render(child, f, il + 1)?;
+                        self.html_render(child, f, il + 1, &mut last_node_was_text)?;
                     }
                 }
 
@@ -225,7 +247,7 @@ impl<'a> TextRenderer<'a, '_> {
             }
             VNode::Fragment(frag) => {
                 for child in frag.children {
-                    self.html_render(child, f, il + 1)?;
+                    self.html_render(child, f, il + 1, last_node_was_text)?;
                 }
             }
             VNode::Component(vcomp) => {
@@ -233,7 +255,7 @@ impl<'a> TextRenderer<'a, '_> {
 
                 if let (Some(vdom), false) = (self.vdom, self.cfg.skip_components) {
                     let new_node = vdom.get_scope(idx).unwrap().root_node();
-                    self.html_render(new_node, f, il + 1)?;
+                    self.html_render(new_node, f, il + 1, last_node_was_text)?;
                 } else {
                 }
             }

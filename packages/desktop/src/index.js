@@ -234,10 +234,6 @@ class Interpreter {
     this.stack.push(node);
   }
 
-  PopRoot(_edit) {
-    this.stack.pop();
-  }
-
   AppendChildren(edit) {
     let root = this.stack[this.stack.length - (1 + edit.many)];
 
@@ -407,7 +403,6 @@ class Interpreter {
 function main() {
   let root = window.document.getElementById("main");
   window.interpreter = new Interpreter(root);
-  console.log(window.interpreter);
 
   rpc.call("initialize");
 }

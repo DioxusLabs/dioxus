@@ -22,11 +22,11 @@ pub struct WebsysDom {
     stack: Stack,
 
     /// A map from ElementID (index) to Node
-    nodes: NodeSlab,
+    pub(crate) nodes: NodeSlab,
 
     document: Document,
 
-    root: Element,
+    pub(crate) root: Element,
 
     sender_callback: Rc<dyn Fn(SchedulerMsg)>,
 
@@ -34,45 +34,20 @@ pub struct WebsysDom {
     // This is roughly a delegater
     // TODO: check how infero delegates its events - some are more performant
     listeners: FxHashMap<&'static str, ListenerEntry>,
-
-    // We need to make sure to add comments between text nodes
-    // We ensure that the text siblings are patched by preventing the browser from merging
-    // neighboring text nodes. Originally inspired by some of React's work from 2016.
-    //  -> https://reactjs.org/blog/2016/04/07/react-v15.html#major-changes
-    //  -> https://github.com/facebook/react/pull/5753
-    last_node_was_text: bool,
 }
 
 type ListenerEntry = (usize, Closure<dyn FnMut(&Event)>);
 
 impl WebsysDom {
-    pub fn new(root: Element, cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
+    pub fn new(cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         let document = load_document();
 
         let nodes = NodeSlab::new(2000);
         let listeners = FxHashMap::default();
 
-        // re-hydrate the page - only supports one virtualdom per page
-        // hydration is the dubmest thing you've ever heard of
-        // just blast away the page and replace it completely.
-        if cfg.hydrate {
-            // // Load all the elements into the arena
-            // let node_list: NodeList = document.query_selector_all("dioxus-id").unwrap();
-            // let len = node_list.length() as usize;
-
-            // for x in 0..len {
-            //     let node: Node = node_list.get(x as u32).unwrap();
-            //     let el: &Element = node.dyn_ref::<Element>().unwrap();
-            //     let id: String = el.get_attribute("dioxus-id").unwrap();
-            //     let id = id.parse::<usize>().unwrap();
-            //     nodes[id] = Some(node);
-            // }
-
-            // Load all the event listeners into our listener register
-            // TODO
-        }
-
         let mut stack = Stack::with_capacity(10);
+
+        let root = load_document().get_element_by_id(&cfg.rootname).unwrap();
         let root_node = root.clone().dyn_into::<Node>().unwrap();
         stack.push(root_node);
 
@@ -83,15 +58,13 @@ impl WebsysDom {
             document,
             sender_callback,
             root,
-            last_node_was_text: false,
         }
     }
 
-    pub fn process_edits(&mut self, edits: &mut Vec<DomEdit>) {
+    pub fn apply_edits(&mut self, mut edits: Vec<DomEdit>) {
         for edit in edits.drain(..) {
             match edit {
                 DomEdit::PushRoot { root } => self.push(root),
-                DomEdit::PopRoot => self.pop(),
                 DomEdit::AppendChildren { many } => self.append_children(many),
                 DomEdit::ReplaceWith { m, root } => self.replace_with(m, root),
                 DomEdit::Remove { root } => self.remove(root),
@@ -137,11 +110,6 @@ impl WebsysDom {
         self.stack.push(real_node);
     }
 
-    // drop the node off the stack
-    fn pop(&mut self) {
-        self.stack.pop();
-    }
-
     fn append_children(&mut self, many: u32) {
         let root: Node = self
             .stack
@@ -150,13 +118,23 @@ impl WebsysDom {
             .unwrap()
             .clone();
 
+        // We need to make sure to add comments between text nodes
+        // We ensure that the text siblings are patched by preventing the browser from merging
+        // neighboring text nodes. Originally inspired by some of React's work from 2016.
+        //  -> https://reactjs.org/blog/2016/04/07/react-v15.html#major-changes
+        //  -> https://github.com/facebook/react/pull/5753
+        /*
+        todo: we need to track this for replacing/insert after/etc
+        */
+        let mut last_node_was_text = false;
+
         for child in self
             .stack
             .list
             .drain((self.stack.list.len() - many as usize)..)
         {
             if child.dyn_ref::<web_sys::Text>().is_some() {
-                if self.last_node_was_text {
+                if last_node_was_text {
                     let comment_node = self
                         .document
                         .create_comment("dioxus")
@@ -164,9 +142,9 @@ impl WebsysDom {
                         .unwrap();
                     root.append_child(&comment_node).unwrap();
                 }
-                self.last_node_was_text = true;
+                last_node_was_text = true;
             } else {
-                self.last_node_was_text = false;
+                last_node_was_text = false;
             }
             root.append_child(&child).unwrap();
         }
