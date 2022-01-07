@@ -26,7 +26,7 @@ jobs:
             x86_64-pc-windows-gnu,
             x86_64-pc-windows-msvc,
           ]
-        cfg_release_channel: [nightly, stable]
+        cfg_release_channel: [stable]
 
     steps:
       # The Windows runners have autocrlf enabled by default
