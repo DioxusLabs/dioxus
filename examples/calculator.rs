@@ -5,7 +5,6 @@ This calculator version uses React-style state management. All state is held as 
 
 use dioxus::events::*;
 use dioxus::prelude::*;
-use separator::Separatable;
 
 fn main() {
     use dioxus::desktop::tao::dpi::LogicalSize;
@@ -19,11 +18,18 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let cur_val = use_state(&cx, || 0.0_f64);
-    let operator = use_state(&cx, Option::default);
-    let display_value = use_state(&cx, String::new);
+    let display_value: UseState<String> = use_state(&cx, || String::from("0"));
 
-    let input_digit = move |num: u8| display_value.modify().push_str(num.to_string().as_str());
+    let input_digit = move |num: u8| {
+        if display_value.get() == "0" {
+            display_value.set(String::new());
+        }
+        display_value.modify().push_str(num.to_string().as_str());
+    };
+
+    let input_operator = move |key: &str| {
+        display_value.modify().push_str(key);
+    };
 
     cx.render(rsx!(
         style { [include_str!("./assets/calculator.css")] }
@@ -31,10 +37,10 @@ fn app(cx: Scope) -> Element {
             div { class: "app",
                 div { class: "calculator",
                     onkeydown: move |evt| match evt.key_code {
-                        KeyCode::Add => operator.set(Some("+")),
-                        KeyCode::Subtract => operator.set(Some("-")),
-                        KeyCode::Divide => operator.set(Some("/")),
-                        KeyCode::Multiply => operator.set(Some("*")),
+                        KeyCode::Add => input_operator("+"),
+                        KeyCode::Subtract => input_operator("-"),
+                        KeyCode::Divide => input_operator("/"),
+                        KeyCode::Multiply => input_operator("*"),
                         KeyCode::Num0 => input_digit(0),
                         KeyCode::Num1 => input_digit(1),
                         KeyCode::Num2 => input_digit(2),
@@ -46,34 +52,34 @@ fn app(cx: Scope) -> Element {
                         KeyCode::Num8 => input_digit(8),
                         KeyCode::Num9 => input_digit(9),
                         KeyCode::Backspace => {
-                            if !display_value.as_str().eq("0") {
+                            if !display_value.len() != 0 {
                                 display_value.modify().pop();
                             }
                         }
                         _ => {}
                     },
-                    div { class: "calculator-display", [cur_val.separated_string()] }
+                    div { class: "calculator-display", [display_value.to_string()] }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
                                 button {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
-                                        display_value.set("0".to_string());
-                                        if display_value != "0" {
-                                            operator.set(None);
-                                            cur_val.set(0.0);
+                                        display_value.set(String::new());
+                                        if display_value != "" {
+                                            display_value.set("0".into());
                                         }
                                     },
-                                    [if display_value == "0" { "C" } else { "AC" }]
+                                    [if display_value == "" { "C" } else { "AC" }]
                                 }
                                 button {
                                     class: "calculator-key key-sign",
                                     onclick: move |_| {
-                                        if display_value.starts_with("-") {
-                                            display_value.set(display_value.trim_start_matches("-").to_string())
+                                        let temp = calc_val(display_value.get().clone());
+                                        if temp > 0.0 {
+                                            display_value.set(format!("-{}", temp));
                                         } else {
-                                            display_value.set(format!("-{}", *display_value))
+                                            display_value.set(format!("{}", temp.abs()));
                                         }
                                     },
                                     "±"
@@ -81,8 +87,9 @@ fn app(cx: Scope) -> Element {
                                 button {
                                     class: "calculator-key key-percent",
                                     onclick: move |_| {
-                                        let pct = (display_value.parse::<f64>().unwrap() / 100.0).to_string();
-                                        display_value.set(pct);
+                                        display_value.set(
+                                            format!("{}", calc_val(display_value.get().clone()) / 100.0)
+                                        );
                                     },
                                     "%"
                                 }
@@ -106,36 +113,24 @@ fn app(cx: Scope) -> Element {
                         }
                         div { class: "operator-keys",
                             button { class: "calculator-key key-divide",
-                                onclick: move |_| operator.set(Some("/")),
+                                onclick: move |_| input_operator("/"),
                                 "÷"
                             }
                             button { class: "calculator-key key-multiply",
-                                onclick: move |_| operator.set(Some("*")),
+                                onclick: move |_| input_operator("*"),
                                 "×"
                             }
                             button { class: "calculator-key key-subtract",
-                                onclick: move |_| operator.set(Some("-")),
+                                onclick: move |_| input_operator("-"),
                                 "−"
                             }
                             button { class: "calculator-key key-add",
-                                onclick: move |_| operator.set(Some("+")),
+                                onclick: move |_| input_operator("+"),
                                 "+"
                             }
                             button { class: "calculator-key key-equals",
                                 onclick: move |_| {
-                                    if let Some(op) = operator.as_ref() {
-                                        let rhs = display_value.parse::<f64>().unwrap();
-                                        let new_val = match *op {
-                                            "+" => *cur_val + rhs,
-                                            "-" => *cur_val - rhs,
-                                            "*" => *cur_val * rhs,
-                                            "/" => *cur_val / rhs,
-                                            _ => unreachable!(),
-                                        };
-                                        cur_val.set(new_val);
-                                        display_value.set(new_val.to_string());
-                                        operator.set(None);
-                                    }
+                                    display_value.set(format!("{}", calc_val(display_value.get().clone())));
                                 },
                                 "="
                             }
@@ -146,4 +141,82 @@ fn app(cx: Scope) -> Element {
         }
 
     ))
+}
+
+fn calc_val(val: String) -> f64 {
+
+    let mut result;
+    let mut temp = String::new();
+    let mut operation = "+".to_string();
+
+    let mut start_index = 0;
+    let mut temp_value;
+    let mut fin_index = 0;
+    
+    if &val[0..1] == "-" {
+        temp_value = String::from("-");
+        fin_index = 1;
+        start_index += 1;
+    } else {
+        temp_value = String::from("");
+    }
+
+    for c in val[fin_index..].chars() {
+        if c == '+' || c == '-' || c == '*' || c == '/' {
+            break;
+        }
+        temp_value.push(c);
+        start_index += 1;
+    }
+    result = temp_value.parse::<f64>().unwrap();
+
+    if start_index + 1 >= val.len() {
+        return result;
+    }
+
+    for c in val[start_index..].chars() {
+        if c == '+' || c == '-' || c == '*' || c == '/' {
+            if temp != "" {
+                match &operation as &str {
+                    "+" => {
+                        result += temp.parse::<f64>().unwrap();
+                    }
+                    "-" => {
+                        result -= temp.parse::<f64>().unwrap();
+                    }
+                    "*" => {
+                        result *= temp.parse::<f64>().unwrap();
+                    }
+                    "/" => {
+                        result /= temp.parse::<f64>().unwrap();
+                    }
+                    _ => unreachable!(),
+                };
+            }
+            operation = c.to_string();
+            temp = String::new();
+        } else {
+            temp.push(c);
+        }
+    }
+
+    if temp != "" {
+        match &operation as &str {
+            "+" => {
+                result += temp.parse::<f64>().unwrap();
+            }
+            "-" => {
+                result -= temp.parse::<f64>().unwrap();
+            }
+            "*" => {
+                result *= temp.parse::<f64>().unwrap();
+            }
+            "/" => {
+                result /= temp.parse::<f64>().unwrap();
+            }
+            _ => unreachable!(),
+        };
+    }
+
+    result
 }
