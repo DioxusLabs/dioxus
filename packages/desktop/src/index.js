@@ -403,7 +403,6 @@ class Interpreter {
 function main() {
   let root = window.document.getElementById("main");
   window.interpreter = new Interpreter(root);
-
   rpc.call("initialize");
 }
 
