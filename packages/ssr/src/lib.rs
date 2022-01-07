@@ -166,7 +166,7 @@ impl<'a> TextRenderer<'a, '_> {
                         write!(f, "    ")?;
                     }
                 }
-                write!(f, "<!-- -->")?;
+                write!(f, "<!--placeholder-->")?;
             }
             VNode::Element(el) => {
                 *last_node_was_text = false;
