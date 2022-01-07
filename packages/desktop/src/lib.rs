@@ -62,10 +62,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 use tao::{
-    accelerator::{Accelerator, SysMods},
     event::{Event, StartCause, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
-    keyboard::{KeyCode, ModifiersState},
+    event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
 pub use wry;
