@@ -5,7 +5,6 @@ This calculator version uses React-style state management. All state is held as 
 
 use dioxus::events::*;
 use dioxus::prelude::*;
-use separator::Separatable;
 
 fn main() {
     use dioxus::desktop::tao::dpi::LogicalSize;
@@ -20,22 +19,49 @@ fn main() {
 
 fn calc_val(val: String) -> f64 {
 
-    let mut result = 0.0_f64;
+    // println!("{:?}", val);
+
+    let mut result;
     let mut temp = String::new();
     let mut operation = "+".to_string();
 
-    for c in val.chars() {
+    let mut start_index = 0;
+    let mut temp_value;
+    let mut fin_index = 0;
+    if &val[0..1] == "-" {
+        temp_value = String::from("-");
+        fin_index = 1;
+        start_index += 1;
+    } else {
+        temp_value = String::from("");
+    }
+    for c in val[fin_index..].chars() {
+        if c == '+' || c == '-' || c == '*' || c == '/' {
+            break;
+        }
+        temp_value.push(c);
+        start_index += 1;
+    }
+    result = temp_value.parse::<f64>().unwrap();
 
-        println!("{:?}: {:?} - {:?}", result, c, val);
+    if start_index + 1 >= val.len() {
+        return result;
+    }
+
+    for c in val[start_index..].chars() {
+
+        // println!("{:?}", c);
 
         if c == '+' || c == '-' || c == '*' || c == '/' {
-            match &operation as &str {
-                "+" => {result += temp.parse::<f64>().unwrap();},
-                "-" => {result -= temp.parse::<f64>().unwrap();},
-                "*" => {result *= temp.parse::<f64>().unwrap();},
-                "/" => {result /= temp.parse::<f64>().unwrap();},
-                _ => unreachable!(),
-            };    
+            if temp != "" {
+                match &operation as &str {
+                    "+" => {result += temp.parse::<f64>().unwrap();},
+                    "-" => {result -= temp.parse::<f64>().unwrap();},
+                    "*" => {result *= temp.parse::<f64>().unwrap();},
+                    "/" => {result /= temp.parse::<f64>().unwrap();},
+                    _ => unreachable!(),
+                };    
+            }
             operation = c.to_string();
             temp = String::new();
         } else {
@@ -58,10 +84,12 @@ fn calc_val(val: String) -> f64 {
 
 fn app(cx: Scope) -> Element {
 
-    let cur_val = use_state(&cx, || 0.0_f64);
-    let display_value: UseState<String> = use_state(&cx,String::new);
+    let display_value: UseState<String> = use_state(&cx,|| String::from("0"));
 
     let input_digit = move |num: u8| {
+        if display_value.get() == "0" {
+            display_value.set(String::new());
+        }
         display_value.modify().push_str(num.to_string().as_str());
     };
 
@@ -96,7 +124,7 @@ fn app(cx: Scope) -> Element {
                         }
                         _ => {}
                     },
-                    div { class: "calculator-display", [cur_val.separated_string()] }
+                    div { class: "calculator-display", [display_value.to_string()] }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
@@ -105,7 +133,7 @@ fn app(cx: Scope) -> Element {
                                     onclick: move |_| {
                                         display_value.set(String::new());
                                         if display_value != "" {
-                                            cur_val.set(0.0);
+                                            display_value.set("0".into());
                                         }
                                     },
                                     [if display_value == "" { "C" } else { "AC" }]
@@ -115,9 +143,9 @@ fn app(cx: Scope) -> Element {
                                     onclick: move |_| {
                                         let temp = calc_val(display_value.get().clone());
                                         if temp > 0.0 {
-                                            cur_val.set(temp - (temp * 2.0));
+                                            display_value.set(format!("-{}", temp));
                                         } else {
-                                            cur_val.set(temp);
+                                            display_value.set(format!("{}", temp.abs()));
                                         }
                                     },
                                     "±"
@@ -125,7 +153,9 @@ fn app(cx: Scope) -> Element {
                                 button {
                                     class: "calculator-key key-percent",
                                     onclick: move |_| {
-                                        cur_val.set(calc_val(display_value.get().clone()) / 100.0);
+                                        display_value.set(
+                                            format!("{}", calc_val(display_value.get().clone()) / 100.0)
+                                        );
                                     },
                                     "%"
                                 }
@@ -166,7 +196,7 @@ fn app(cx: Scope) -> Element {
                             }
                             button { class: "calculator-key key-equals",
                                 onclick: move |_| {
-                                    cur_val.set(calc_val(display_value.get().clone()));
+                                    display_value.set(format!("{}", calc_val(display_value.get().clone())));
                                 },
                                 "="
                             }
