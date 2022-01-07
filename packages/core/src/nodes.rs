@@ -328,7 +328,10 @@ type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 ///
 /// This makes it possible to pass `move |evt| {}` style closures into components as property fields.
 ///
-/// ```rust
+///
+/// # Example
+///
+/// ```rust, ignore
 ///
 /// rsx!{
 ///     MyComponent { onclick: move |evt| log::info!("clicked"), }
