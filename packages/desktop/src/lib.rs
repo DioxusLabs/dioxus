@@ -62,10 +62,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 use tao::{
-    accelerator::{Accelerator, SysMods},
     event::{Event, StartCause, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
-    keyboard::{KeyCode, ModifiersState},
+    event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
 pub use wry;
@@ -151,50 +149,90 @@ pub fn launch_with_props<P: 'static + Send>(
     props: P,
     builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
 ) {
-    let mut desktop_cfg = DesktopConfig::new();
-    builder(&mut desktop_cfg);
+    let mut cfg = DesktopConfig::new();
+    builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
+
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
-    let quit_hotkey = Accelerator::new(SysMods::Cmd, KeyCode::KeyQ);
-    let modifiers = ModifiersState::default();
+    let proxy = event_loop.create_proxy();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
         match window_event {
-            Event::NewEvents(StartCause::Init) => desktop.new_window(&desktop_cfg, event_loop),
+            Event::NewEvents(StartCause::Init) => {
+                let builder = cfg.window.clone();
+
+                let window = builder.build(event_loop).unwrap();
+                let window_id = window.id();
+
+                let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
+
+                let proxy = proxy.clone();
+                let webview = WebViewBuilder::new(window)
+                    .unwrap()
+                    .with_url("wry://index.html/")
+                    .unwrap()
+                    .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
+                        match req.method.as_str() {
+                            "user_event" => {
+                                let event = events::trigger_from_serialized(req.params.unwrap());
+                                log::trace!("User event: {:?}", event);
+                                sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
+                            }
+                            "initialize" => {
+                                is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
+                                let _ = proxy.send_event(UserWindowEvent::Update);
+                            }
+                            _ => {}
+                        }
+                        None
+                    })
+                    .with_custom_protocol("wry".into(), move |request| {
+                        // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"
+                        // For now, we only serve two pieces of content which get included as bytes into the final binary.
+                        let path = request.uri().replace("wry://", "");
+                        let (data, meta) = match path.as_str() {
+                            "index.html" | "index.html/" | "/index.html" => {
+                                (include_bytes!("./index.html").to_vec(), "text/html")
+                            }
+                            "index.html/index.js" => {
+                                (include_bytes!("./index.js").to_vec(), "text/javascript")
+                            }
+                            _ => (include_bytes!("./index.html").to_vec(), "text/html"),
+                        };
+
+                        wry::http::ResponseBuilder::new().mimetype(meta).body(data)
+                    })
+                    .build()
+                    .unwrap();
+
+                desktop.webviews.insert(window_id, webview);
+            }
 
             Event::WindowEvent {
                 event, window_id, ..
-            } => {
-                match event {
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
+            } => match event {
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
 
-                    WindowEvent::KeyboardInput { event, .. } => {
-                        if quit_hotkey.matches(&modifiers, &event.physical_key) {
-                            desktop.close_window(window_id, control_flow);
-                        }
+                WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
+                    if let Some(view) = desktop.webviews.get_mut(&window_id) {
+                        let _ = view.resize();
                     }
-
-                    WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                        if let Some(view) = desktop.webviews.get_mut(&window_id) {
-                            let _ = view.resize();
-                        }
-                    }
-
-                    // TODO: we want to shuttle all of these events into the user's app or provide some handler
-                    _ => {}
                 }
-            }
+
+                _ => {}
+            },
 
             Event::UserEvent(_evt) => {
-                desktop.try_load_ready_webviews();
+                //
+                match _evt {
+                    UserWindowEvent::Update => desktop.try_load_ready_webviews(),
+                }
             }
-            Event::MainEventsCleared => {
-                desktop.try_load_ready_webviews();
-            }
+            Event::MainEventsCleared => {}
             Event::Resumed => {}
             Event::Suspended => {}
             Event::LoopDestroyed => {}
@@ -205,11 +243,11 @@ pub fn launch_with_props<P: 'static + Send>(
 }
 
 pub enum UserWindowEvent {
-    Start,
     Update,
 }
 
 pub struct DesktopController {
+    pub proxy: EventLoopProxy<UserWindowEvent>,
     pub webviews: HashMap<WindowId, WebView>,
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
     pub pending_edits: Arc<RwLock<VecDeque<String>>>,
@@ -230,9 +268,10 @@ impl DesktopController {
 
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
         let return_sender = sender.clone();
+        let proxy = evt.clone();
 
         std::thread::spawn(move || {
-            // We create the runtim as multithreaded, so you can still "spawn" onto multiple threads
+            // We create the runtime as multithreaded, so you can still "spawn" onto multiple threads
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
@@ -252,12 +291,14 @@ impl DesktopController {
                 loop {
                     dom.wait_for_work().await;
                     let mut muts = dom.work_with_deadline(|| false);
+
                     while let Some(edit) = muts.pop() {
                         edit_queue
                             .write()
                             .unwrap()
                             .push_front(serde_json::to_string(&edit.edits).unwrap());
                     }
+
                     let _ = evt.send_event(UserWindowEvent::Update);
                 }
             })
@@ -266,64 +307,11 @@ impl DesktopController {
         Self {
             pending_edits,
             sender: return_sender,
-
+            proxy,
             webviews: HashMap::new(),
             is_ready: Arc::new(AtomicBool::new(false)),
             quit_app_on_close: true,
         }
-    }
-
-    pub fn new_window(
-        &mut self,
-        cfg: &DesktopConfig,
-        event_loop: &EventLoopWindowTarget<UserWindowEvent>,
-    ) {
-        let builder = cfg.window.clone();
-        let window = builder.build(event_loop).unwrap();
-        let window_id = window.id();
-
-        let (is_ready, sender) = (self.is_ready.clone(), self.sender.clone());
-
-        let webview = WebViewBuilder::new(window)
-            .unwrap()
-            .with_url("wry://index.html")
-            .unwrap()
-            .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
-                match req.method.as_str() {
-                    "user_event" => {
-                        let event = events::trigger_from_serialized(req.params.unwrap());
-                        log::trace!("User event: {:?}", event);
-                        sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
-                    }
-                    "initialize" => {
-                        is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    _ => {}
-                }
-                // response always driven through eval.
-                // unfortunately, it seems to be pretty slow, so we might want to look into an RPC form
-                None
-            })
-            // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"
-            // For now, we only serve two pieces of content which get included as bytes into the final binary.
-            .with_custom_protocol("wry".into(), move |request| {
-                let path = request.uri().replace("wry://", "");
-                let (data, meta) = match path.as_str() {
-                    "index.html" | "index.html/" | "/index.html" => {
-                        (include_bytes!("./index.html").to_vec(), "text/html")
-                    }
-                    "index.html/index.js" => {
-                        (include_bytes!("./index.js").to_vec(), "text/javascript")
-                    }
-                    _ => (include_bytes!("./index.html").to_vec(), "text/html"),
-                };
-
-                wry::http::ResponseBuilder::new().mimetype(meta).body(data)
-            })
-            .build()
-            .unwrap();
-
-        self.webviews.insert(window_id, webview);
     }
 
     pub fn close_window(&mut self, window_id: WindowId, control_flow: &mut ControlFlow) {
@@ -338,10 +326,13 @@ impl DesktopController {
         if self.is_ready.load(std::sync::atomic::Ordering::Relaxed) {
             let mut queue = self.pending_edits.write().unwrap();
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
+
             while let Some(edit) = queue.pop_back() {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                     .unwrap();
             }
+        } else {
+            println!("waiting for ready");
         }
     }
 }
