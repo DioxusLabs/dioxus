@@ -81,10 +81,10 @@ If you know React, then you already know Dioxus.
 
 ### Examples
 
-All examples in this repo are desktop apps. To run an example, simply clone this repo and use cargo with the `desktop` feature enabled. For SSR examples, you might need to enable SSR instead.
+All examples in this repo are desktop apps. To run an example, simply clone this repo and use `cargo run --example XYZ`
 
 ```
-cargo run --features desktop --example EXAMPLE
+cargo run --example EXAMPLE
 ```
 
 ## Get Started with...
