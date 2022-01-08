@@ -10,7 +10,7 @@ use dioxus_core::ScopeId;
 pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
     history: Rc<RefCell<BrowserHistory>>,
-    registerd_routes: RefCell<RouteSlot>,
+    registered_routes: RefCell<RouteSlot>,
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
     root_found: Rc<Cell<bool>>,
     cur_root: RefCell<String>,
@@ -53,7 +53,7 @@ impl RouterService {
         });
 
         Self {
-            registerd_routes: RefCell::new(RouteSlot::Routes {
+            registered_routes: RefCell::new(RouteSlot::Routes {
                 partial: String::from("/"),
                 total: String::from("/"),
                 rest: Vec::new(),
