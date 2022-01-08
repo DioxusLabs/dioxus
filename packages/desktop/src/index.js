@@ -369,7 +369,11 @@ class Interpreter {
           node.innerHTML = value;
           break;
         default:
-          node.setAttribute(name, value);
+          if (value == "false") {
+            node.removeAttribute(name);
+          } else {
+            node.setAttribute(name, value);
+          }
       }
     }
   }

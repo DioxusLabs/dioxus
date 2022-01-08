@@ -347,7 +347,15 @@ impl WebsysDom {
                         fallback();
                     }
                 }
-                _ => fallback(),
+                _ => {
+                    if value == "false" {
+                        if let Some(el) = node.dyn_ref::<Element>() {
+                            let _ = el.remove_attribute(name);
+                        }
+                    } else {
+                        fallback();
+                    }
+                }
             }
         }
     }
