@@ -32,8 +32,4 @@ fn main() {
         // append the container to the default render element ("dioxusroot" if used with default config)
         AppendChildren { many: 1 },
     ];
-
-    let app: Component = |cx| cx.render(rsx!(div { "some app" }));
-
-    dioxus_desktop::launch_with_props(app, (), |c| c.with_edits(edits));
 }

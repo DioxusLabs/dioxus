@@ -100,13 +100,13 @@ pub enum DomEdit<'bump> {
     },
     SetAttribute {
         root: u64,
-        field: &'static str,
+        field: &'bump str,
         value: &'bump str,
         ns: Option<&'bump str>,
     },
     RemoveAttribute {
         root: u64,
-        name: &'static str,
+        name: &'bump str,
     },
 }
 
@@ -213,7 +213,7 @@ impl<'a> Mutations<'a> {
         });
     }
 
-    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {
+    pub(crate) fn remove_attribute(&mut self, attribute: &'a Attribute<'a>, root: u64) {
         let name = attribute.name;
         self.edits.push(RemoveAttribute { name, root });
     }

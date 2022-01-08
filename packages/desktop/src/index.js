@@ -368,6 +368,10 @@ class Interpreter {
         case "dangerous_inner_html":
           node.innerHTML = value;
           break;
+        case "disabled":
+          node.disabled = value === "true";
+          break;
+
         default:
           node.setAttribute(name, value);
       }

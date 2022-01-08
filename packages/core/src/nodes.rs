@@ -290,7 +290,7 @@ pub trait DioxusElement {
 /// `href="https://example.com"`.
 #[derive(Clone, Debug)]
 pub struct Attribute<'a> {
-    pub name: &'static str,
+    pub name: &'a str,
 
     pub value: &'a str,
 
@@ -534,6 +534,24 @@ impl<'a> NodeFactory<'a> {
         is_volatile: bool,
     ) -> Attribute<'a> {
         let (value, is_static) = self.raw_text(val);
+        Attribute {
+            name,
+            value,
+            is_static,
+            namespace,
+            is_volatile,
+        }
+    }
+
+    pub fn custom_attr(
+        &self,
+        name: Arguments,
+        val: Arguments,
+        namespace: Option<&'static str>,
+        is_volatile: bool,
+    ) -> Attribute<'a> {
+        let (value, is_static) = self.raw_text(val);
+        let (name, _) = self.raw_text(name);
         Attribute {
             name,
             value,

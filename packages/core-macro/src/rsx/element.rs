@@ -46,17 +46,27 @@ impl Parse for Element {
 
                 content.parse::<Token![:]>()?;
 
+                let custom = is_literal_foramtted(&name);
+
                 if content.peek(LitStr) && content.peek2(Token![,]) {
                     let value = content.parse::<LitStr>()?;
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
-                        attr: ElementAttr::CustomAttrText { name, value },
+                        attr: ElementAttr::CustomAttrText {
+                            name,
+                            value,
+                            custom,
+                        },
                     });
                 } else {
                     let value = content.parse::<Expr>()?;
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
-                        attr: ElementAttr::CustomAttrExpression { name, value },
+                        attr: ElementAttr::CustomAttrExpression {
+                            name,
+                            value,
+                            custom,
+                        },
                     });
                 }
 
@@ -215,22 +225,39 @@ impl ToTokens for Element {
 
 enum ElementAttr {
     // attribute: "valuee {}"
-    AttrText { name: Ident, value: LitStr },
+    AttrText {
+        name: Ident,
+        value: LitStr,
+    },
 
     // attribute: true,
-    AttrExpression { name: Ident, value: Expr },
+    AttrExpression {
+        name: Ident,
+        value: Expr,
+    },
 
     // "attribute": "value {}"
-    CustomAttrText { name: LitStr, value: LitStr },
+    CustomAttrText {
+        name: LitStr,
+        value: LitStr,
+        custom: bool,
+    },
 
     // "attribute": true,
-    CustomAttrExpression { name: LitStr, value: Expr },
+    CustomAttrExpression {
+        name: LitStr,
+        value: Expr,
+        custom: bool,
+    },
 
     // // onclick: move |_| {}
     // EventClosure { name: Ident, closure: ExprClosure },
 
     // onclick: {}
-    EventTokens { name: Ident, tokens: Expr },
+    EventTokens {
+        name: Ident,
+        tokens: Expr,
+    },
 }
 
 struct ElementAttrNamed {
@@ -253,21 +280,37 @@ impl ToTokens for ElementAttrNamed {
                     dioxus_elements::#el_name.#name(__cx, #value)
                 }
             }
-            ElementAttr::CustomAttrText { name, value } => {
-                quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
+            ElementAttr::CustomAttrText {
+                name,
+                value,
+                custom,
+            } => {
+
+                if *custom {
+                    quote! {
+                        __cx.custom_attr( format_args_f!(#name), format_args_f!(#value), None, false )
+                    }
+                } else {
+                    quote! {
+                        __cx.attr( #name, format_args_f!(#value), None, false )
+                    }
                 }
             }
-            ElementAttr::CustomAttrExpression { name, value } => {
-                quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
+
+            ElementAttr::CustomAttrExpression { name, value, custom } => {
+
+                if *custom {
+                    quote! {
+                        __cx.custom_attr( format_args_f!(#name), format_args_f!(#value), None, false )
+                    }
+                } else {
+
+                    quote! {
+                        __cx.attr( #name, format_args_f!(#value), None, false )
+                    }
                 }
             }
-            // ElementAttr::EventClosure { name, closure } => {
-            //     quote! {
-            //         dioxus_elements::on::#name(__cx, #closure)
-            //     }
-            // }
+
             ElementAttr::EventTokens { name, tokens } => {
                 quote! {
                     dioxus_elements::on::#name(__cx, #tokens)
@@ -275,4 +318,20 @@ impl ToTokens for ElementAttrNamed {
             }
         });
     }
+}
+
+fn is_literal_foramtted(lit: &LitStr) -> bool {
+    let s = lit.value();
+    let mut chars = s.chars();
+
+    while let Some(next) = chars.next() {
+        if next == '{' {
+            let nen = chars.next();
+            if nen != Some('{') {
+                return true;
+            }
+        }
+    }
+
+    false
 }
