@@ -13,7 +13,7 @@ use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, HtmlTextAreaElement, Node,
+    HtmlOptionElement, HtmlTextAreaElement, Node, HtmlButtonElement,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};
@@ -343,6 +343,13 @@ impl WebsysDom {
                 "selected" => {
                     if let Some(node) = node.dyn_ref::<HtmlOptionElement>() {
                         node.set_selected(true);
+                    } else {
+                        fallback();
+                    }
+                }
+                "disabled" => {
+                    if let Some(node) = node.dyn_ref::<HtmlButtonElement>() {
+                        node.set_disabled(value != "");
                     } else {
                         fallback();
                     }
