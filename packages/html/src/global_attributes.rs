@@ -49,6 +49,10 @@ macro_rules! aria_trait_methods {
 }
 
 pub trait GlobalAttributes {
+    fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("dioxus-prevent-default", val, None, false)
+    }
+
     no_namespace_trait_methods! {
         accesskey;
 
