@@ -344,7 +344,7 @@ class Interpreter {
   }
 
   SetAttribute(edit) {
-    // console.log("setting attr", edit);
+    console.log("setting attr", edit);
     const name = edit.field;
     const value = edit.value;
     const ns = edit.ns;
@@ -368,17 +368,13 @@ class Interpreter {
         case "dangerous_inner_html":
           node.innerHTML = value;
           break;
-        case "disabled":
-          node.disabled = value === "true";
-          break;
-
         default:
           node.setAttribute(name, value);
       }
     }
   }
   RemoveAttribute(edit) {
-    const name = edit.field;
+    const name = edit.name;
     const node = this.nodes[edit.root];
     node.removeAttribute(name);
 

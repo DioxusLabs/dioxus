@@ -563,6 +563,9 @@ impl<'bump> DiffState<'bump> {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                 if old_attr.value != new_attr.value || new_attr.is_volatile {
                     self.mutations.set_attribute(new_attr, root.as_u64());
+                } else if old_attr.name != new_attr.name {
+                    self.mutations.remove_attribute(old_attr, root.as_u64());
+                    self.mutations.set_attribute(new_attr, root.as_u64());
                 }
             }
         } else {

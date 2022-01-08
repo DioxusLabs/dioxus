@@ -9,7 +9,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let disabled = use_state(&cx, || false);
 
-    // let button_disabled = if *disabled { "disabled" } else { "nnn" };
+    let button_disabled = if *disabled { "disabled" } else { "nnn" };
 
     cx.render(rsx! {
         div {
@@ -19,7 +19,7 @@ fn app(cx: Scope) -> Element {
             }
 
             button {
-                "disabled": "{disabled}",
+                "{button_disabled}": "true",
                 "lower button"
             }
         }
