@@ -347,7 +347,16 @@ impl WebsysDom {
                         fallback();
                     }
                 }
-                _ => fallback(),
+                _ => {
+                    // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
+                    if value == "false" && ((name != "capture") && (name != "download")) {
+                        if let Some(el) = node.dyn_ref::<Element>() {
+                            let _ = el.remove_attribute(name);
+                        }
+                    } else {
+                        fallback();
+                    }
+                }
             }
         }
     }

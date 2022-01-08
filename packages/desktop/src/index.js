@@ -369,7 +369,12 @@ class Interpreter {
           node.innerHTML = value;
           break;
         default:
-          node.setAttribute(name, value);
+          // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
+          if (value == "false" && name != "capture" && name != "download") {
+            node.removeAttribute(name);
+          } else {
+            node.setAttribute(name, value);
+          }
       }
     }
   }
