@@ -46,7 +46,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             id: format_args!("{}", cx.props.id.unwrap_or("")),
 
             prevent_default: "onclick",
-            onclick: move |_| service.push_route(cx.props.to.clone()),
+            onclick: move |_| service.push_route(cx.props.to),
 
             &cx.props.children
         }

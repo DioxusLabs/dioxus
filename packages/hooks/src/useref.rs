@@ -6,12 +6,10 @@ use std::{
 use dioxus_core::ScopeState;
 
 pub fn use_ref<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) -> &'a UseRef<T> {
-    let inner = cx.use_hook(|_| UseRef {
+    cx.use_hook(|_| UseRef {
         update_callback: cx.schedule_update(),
         value: Rc::new(RefCell::new(f())),
-    });
-
-    inner
+    })
 }
 
 pub struct UseRef<T> {

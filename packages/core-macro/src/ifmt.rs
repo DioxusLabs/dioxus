@@ -41,7 +41,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
         let mut out_format_literal = defer(&mut *out_format_literal, |it| {
             it.push(colon_or_closing_brace)
         });
-        let out_format_literal: &mut String = &mut *out_format_literal;
+        let out_format_literal: &mut String = *out_format_literal;
         let mut arg = s[i + 1..end].trim();
         if let Some("=") = arg.get(arg.len().saturating_sub(1)..) {
             assert_eq!(

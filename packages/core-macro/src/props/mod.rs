@@ -270,23 +270,12 @@ mod field_info {
         pub setter: SetterSettings,
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Default)]
     pub struct SetterSettings {
         pub doc: Option<syn::Expr>,
         pub skip: bool,
         pub auto_into: bool,
         pub strip_option: bool,
-    }
-
-    impl Default for SetterSettings {
-        fn default() -> Self {
-            Self {
-                doc: Default::default(),
-                skip: false,
-                auto_into: false,
-                strip_option: false,
-            }
-        }
     }
 
     impl FieldBuilderAttr {

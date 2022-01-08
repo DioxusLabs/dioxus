@@ -27,7 +27,7 @@ pub fn use_suspense<R: 'static, F: Future<Output = R> + 'static>(
     });
 
     if let Some(value) = sus.value.as_ref() {
-        render(&value)
+        render(value)
     } else {
         // generate a placeholder node if the future isnt ready
         None
