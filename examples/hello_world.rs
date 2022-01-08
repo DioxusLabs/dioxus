@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_desktop::tao::menu::MenuBar;
 
 fn main() {
     dioxus::desktop::launch(app);
