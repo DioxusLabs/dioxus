@@ -1047,7 +1047,7 @@ impl input {
     /// - `text`
     /// - `time`
     /// - `url`
-    /// - `week`    
+    /// - `week`
     pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("type", val, None, false)
     }
@@ -1101,6 +1101,12 @@ impl label {
     }
 }
 impl a {
+    pub fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("dioxus-prevent-default", val, None, false)
+    }
+}
+
+impl form {
     pub fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("dioxus-prevent-default", val, None, false)
     }
