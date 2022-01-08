@@ -369,8 +369,38 @@ class Interpreter {
           node.innerHTML = value;
           break;
         default:
+
+          const bool_attrs = [
+            "allowfullscreen",
+            "allowpaymentrequest",
+            "async",
+            "autofocus",
+            "autoplay",
+            "checked",
+            "controls",
+            "default",
+            "defer",
+            "disabled",
+            "formnovalidate",
+            "hidden",
+            "ismap",
+            "itemscope",
+            "loop",
+            "multiple",
+            "muted",
+            "nomodule",
+            "novalidate",
+            "open",
+            "playsinline",
+            "readonly",
+            "required",
+            "reversed",
+            "selected",
+            "truespeed",
+          ]
+
           // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-          if (value == "false" && name != "capture" && name != "download") {
+          if (value == "false" && bool_attrs.indexOf(name)) {
             node.removeAttribute(name);
           } else {
             node.setAttribute(name, value);

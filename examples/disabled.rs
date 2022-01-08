@@ -18,6 +18,11 @@ fn app(cx: Scope) -> Element {
                 disabled: "{disabled}",
                 "lower button"
             }
+
+            input {
+                value: "false",
+            }
+
         }
     })
 }
