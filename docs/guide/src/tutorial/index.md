@@ -17,7 +17,7 @@ The app is running on the web [here]() but is also available:
 - a mobile app
 - and as an API endpoint here
 
-![Weather App Image](static/weather_app.png)
+![Weather App Image](/static/weather_app.png)
 
 
 Let's get started! Head on to the next chapter where we create our app.

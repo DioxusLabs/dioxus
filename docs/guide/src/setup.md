@@ -30,6 +30,23 @@ Once installed, make sure to  install wasm32-unknown-unknown as a target if you'
 rustup target add wasm32-unknown-unknown
 ```
 
+### Platform-Specific Dependencies
+
+If you are running a modern, mainstream operating system, you should need no additional setup to build WebView-based Desktop apps. However, if you are running an older version of Windows or a flavor of linux with no default web rendering engine, you might need to install some additional dependencies.
+
+For windows users: download the [bootstrapper for Webview2 from Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+
+For linux users, we need the development libraries for libgtk.
+
+````
+sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libappindicator3-dev
+```
+
+When distributing onto older Windows platforms or less-mainstream 
+
+
+
+
 ### Dioxus-CLI for dev server, bundling, etc.
 
 We also recommend installing the Dioxus CLI. The Dioxus CLI automates building and packaging for various targets and integrates with simulators, development servers, and app deployment. To install the CLI, you'll need cargo (should be automatically installed with Rust):

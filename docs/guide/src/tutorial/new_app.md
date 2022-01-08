@@ -1,10 +1,10 @@
 # New app
 
-To get started, let's create a new Rust project for our app. 
+To get started, let's create a new Rust project for our Dog Search Engine.
 
 ```shell
-$ cargo new --bin weatherapp
-$ cd weatherapp
+$ cargo new --bin doggo
+$ cd doggo
 ```
 
 Make sure our project builds by default
@@ -12,9 +12,9 @@ Make sure our project builds by default
 ```shell
 $ cargo run
 
-   Compiling weatherapp v0.1.0
+   Compiling doggo v0.1.0
     Finished dev [unoptimized + debuginfo] target(s) in 0.41s
-     Running `target/debug/weatherapp`
+     Running `target/debug/doggo`
 Hello, world!
 ```
 
@@ -53,3 +53,8 @@ fn app(cx: Scope) -> Element {
 
 
 ## Making sure things run
+
+
+
+
+
