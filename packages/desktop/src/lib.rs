@@ -174,7 +174,7 @@ pub fn launch_with_props<P: 'static + Send>(
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
-                    .with_url("wry://index.html/")
+                    .with_url("dioxus://index.html/")
                     .unwrap()
                     .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
                         match req.method.as_str() {
@@ -200,7 +200,7 @@ pub fn launch_with_props<P: 'static + Send>(
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/html")
                                 .body(include_bytes!("./index.html").to_vec())
-                        } else if path == "index.js" {
+                        } else if path.trim_end_matches("/") == "index.html/index.js" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/javascript")
                                 .body(include_bytes!("./index.js").to_vec())
