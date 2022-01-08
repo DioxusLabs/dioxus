@@ -372,6 +372,8 @@ class Interpreter {
           console.log("SB: " + value);
           if (value != "") {
             node.disabled = "true";
+          } else {
+            node.setAttribute(name, value);
           }
           break;
         default:
@@ -379,6 +381,7 @@ class Interpreter {
       }
     }
   }
+
   RemoveAttribute(edit) {
     const name = edit.field;
     const node = this.nodes[edit.root];

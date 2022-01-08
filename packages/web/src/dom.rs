@@ -12,8 +12,8 @@ use fxhash::FxHashMap;
 use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
-    CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, HtmlTextAreaElement, Node, HtmlButtonElement
+    CssStyleDeclaration, Document, Element, Event, HtmlButtonElement, HtmlElement,
+    HtmlInputElement, HtmlOptionElement, HtmlTextAreaElement, Node,
 };
 
 use crate::{nodeslab::NodeSlab, WebConfig};
