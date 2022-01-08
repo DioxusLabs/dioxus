@@ -5,21 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v0.1.0 (2021-12-15)
-
-### Bug Fixes
-
- - <csr-id-a33f7701fcf5f917fea8719253650b5ad92554fd/> tags
- - <csr-id-868f6739d2b2c5f2ace0c5240cff8008901e818c/> keyword length
+## v0.1.2 (2022-01-08)
 
 ### Documentation
 
+ - <csr-id-e4c06ce8e893779d2aad0883a1bb27d193bc5985/> update cargo tomls
  - <csr-id-4de16c4779648e591b3869b5df31271ae603c812/> update local examples and docs to support new syntaxes
  - <csr-id-583fdfa5618e11d660985b97e570d4503be2ff49/> big updates to the reference
- - <csr-id-e4c06ce8e893779d2aad0883a1bb27d193bc5985/> update cargo tomls
 
 ### New Features
 
+ - <csr-id-bbb6ee10de824f2e3259576ac01768640c884279/> make hydration more robust
+ - <csr-id-420a30e5d432722e9da16311deb6aa60ea46b0cb/> overhaul examples and clean things up
+ - <csr-id-b997b8ebbb82b5b9e9119bd2eb25335e2ed009d0/> enable children properly
  - <csr-id-fd93ee89c19b085a04307ef30217170518defa8e/> upgrade syntax
  - <csr-id-cfc24f5451cd2d1e9dcd5f1589ee50f705404110/> support innerhtml
  - <csr-id-63568c546c76375aa8acb0b8d2555727ef48edc4/> add more to ssr renderer
@@ -37,12 +35,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-9abb0470b7869019d539a2fc21da3872348ae38b/> static node infrastructure and ssr changes
  - <csr-id-cfa0927cdd40bc3dba22996018605dbad91d0391/> todomvc
 
+### Bug Fixes
+
+ - <csr-id-dbb6e9b4feeead7a0e29feefb80f8839bcb7b0f6/> lastnodewastext in ssr
+ - <csr-id-bd341f5571580cdf5e495379b49ca988fd9211c3/> tests
+ - <csr-id-3dc0e59876f5aba88ed26f1bbd692820f239d4b0/> readme and examples syntax
+ - <csr-id-868f6739d2b2c5f2ace0c5240cff8008901e818c/> keyword length
+ - <csr-id-a33f7701fcf5f917fea8719253650b5ad92554fd/> tags
+
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 65 commits contributed to the release over the course of 333 calendar days.
- - 61 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 84 commits contributed to the release over the course of 357 calendar days.
+ - 75 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -52,21 +58,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`a36dab7`](https://github.comgit//DioxusLabs/dioxus/commit/a36dab7f45920acd8535a69b4aa3695f3bb92111))
+    - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
+    - Merge pull request #74 from mrxiaozhuox/master ([`47056fd`](https://github.comgit//DioxusLabs/dioxus/commit/47056fda4577bcbdaa2a6f63d82eec876e5a5aee))
+    - Merge pull request #80 from DioxusLabs/jk/router2dotoh ([`cdc2d8e`](https://github.comgit//DioxusLabs/dioxus/commit/cdc2d8ec6d123245c2ea5f6d10af02b6a6833994))
+    - add palceholder as comment content ([`c6e917c`](https://github.comgit//DioxusLabs/dioxus/commit/c6e917c4a03c4ae7efc2278ca2c657cf48e013ac))
+    - always add spacing comments between textnodes ([`b3a774b`](https://github.comgit//DioxusLabs/dioxus/commit/b3a774b284f16f7fc56591802e9ae90693af32c2))
+    - lastnodewastext in ssr ([`dbb6e9b`](https://github.comgit//DioxusLabs/dioxus/commit/dbb6e9b4feeead7a0e29feefb80f8839bcb7b0f6))
+    - make hydration more robust ([`bbb6ee1`](https://github.comgit//DioxusLabs/dioxus/commit/bbb6ee10de824f2e3259576ac01768640c884279))
+    - new versions of everything ([`4ea5c99`](https://github.comgit//DioxusLabs/dioxus/commit/4ea5c990d72b1645724ab0a88ffea2baf28e2835))
+    - bump all versions ([`4f92ba4`](https://github.comgit//DioxusLabs/dioxus/commit/4f92ba41602d706449c1bddabd49829873ee72eb))
+    - tests ([`bd341f5`](https://github.comgit//DioxusLabs/dioxus/commit/bd341f5571580cdf5e495379b49ca988fd9211c3))
+    - ssr ([`a2317bf`](https://github.comgit//DioxusLabs/dioxus/commit/a2317bf5b0c3acc32c0992f83f28cc678afe8dde))
+    - overhaul examples and clean things up ([`420a30e`](https://github.comgit//DioxusLabs/dioxus/commit/420a30e5d432722e9da16311deb6aa60ea46b0cb))
+    - remove runner on hook and then update docs ([`d156045`](https://github.comgit//DioxusLabs/dioxus/commit/d1560450bac55f9566e00e00ea405bd1c70b57e5))
+    - arbitrary expressions excepted without braces ([`4c85bcf`](https://github.comgit//DioxusLabs/dioxus/commit/4c85bcfdc84184b4fd0fb9317ba31fe569884890))
+    - readme and examples syntax ([`3dc0e59`](https://github.comgit//DioxusLabs/dioxus/commit/3dc0e59876f5aba88ed26f1bbd692820f239d4b0))
+    - enable children properly ([`b997b8e`](https://github.comgit//DioxusLabs/dioxus/commit/b997b8ebbb82b5b9e9119bd2eb25335e2ed009d0))
+    - fix ssr ([`ded9696`](https://github.comgit//DioxusLabs/dioxus/commit/ded9696930ec825e0aba990494790e8be43a73e5))
+    - adjust memoization ([`e2e4d43`](https://github.comgit//DioxusLabs/dioxus/commit/e2e4d431e14e9e91b3301e994363c042400e687e))
+    - rename fc to component ([`1e4a599`](https://github.comgit//DioxusLabs/dioxus/commit/1e4a599d14af85a2d1c29a442dd489f8dc8df321))
+    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.1 ([`2b92837`](https://github.comgit//DioxusLabs/dioxus/commit/2b928372fb1b74a4d4e220ff3d798bb7e52f79d2))
+    - rename ([`36d89be`](https://github.comgit//DioxusLabs/dioxus/commit/36d89beb34821694cb0afb546d3b0cb4e01aaae1))
+    - some docs and suspense ([`93d4b8c`](https://github.comgit//DioxusLabs/dioxus/commit/93d4b8ca7c1b133e5dba2a8dc9a310dbe1357001))
+    - move examples around ([`1e6e5e6`](https://github.comgit//DioxusLabs/dioxus/commit/1e6e5e611b61571f272289adefc9cdd7d59c4399))
     - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`0d480a4`](https://github.comgit//DioxusLabs/dioxus/commit/0d480a4c437d424f0eaff486e510a8fd3f3e6584))
     - keyword length ([`868f673`](https://github.comgit//DioxusLabs/dioxus/commit/868f6739d2b2c5f2ace0c5240cff8008901e818c))
+    - docs and router ([`a5f05d7`](https://github.comgit//DioxusLabs/dioxus/commit/a5f05d73acc0e47b05cff64a373482519414bc7c))
+    - upgrade syntax ([`fd93ee8`](https://github.comgit//DioxusLabs/dioxus/commit/fd93ee89c19b085a04307ef30217170518defa8e))
     - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`b32665d`](https://github.comgit//DioxusLabs/dioxus/commit/b32665d7212a5b9a3e21cb7af7abba63ae399fac))
     - tags ([`a33f770`](https://github.comgit//DioxusLabs/dioxus/commit/a33f7701fcf5f917fea8719253650b5ad92554fd))
     - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`3a706ac`](https://github.comgit//DioxusLabs/dioxus/commit/3a706ac4168db137723bea90d7a0058190adfc3c))
     - update cargo tomls ([`e4c06ce`](https://github.comgit//DioxusLabs/dioxus/commit/e4c06ce8e893779d2aad0883a1bb27d193bc5985))
     - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`270dfc9`](https://github.comgit//DioxusLabs/dioxus/commit/270dfc9590b2354d083ea8da5cc0e1a1497d30e0))
     - update local examples and docs to support new syntaxes ([`4de16c4`](https://github.comgit//DioxusLabs/dioxus/commit/4de16c4779648e591b3869b5df31271ae603c812))
-    - fix ssr ([`ded9696`](https://github.comgit//DioxusLabs/dioxus/commit/ded9696930ec825e0aba990494790e8be43a73e5))
-    - rename fc to component ([`1e4a599`](https://github.comgit//DioxusLabs/dioxus/commit/1e4a599d14af85a2d1c29a442dd489f8dc8df321))
-    - rename ([`36d89be`](https://github.comgit//DioxusLabs/dioxus/commit/36d89beb34821694cb0afb546d3b0cb4e01aaae1))
-    - some docs and suspense ([`93d4b8c`](https://github.comgit//DioxusLabs/dioxus/commit/93d4b8ca7c1b133e5dba2a8dc9a310dbe1357001))
-    - move examples around ([`1e6e5e6`](https://github.comgit//DioxusLabs/dioxus/commit/1e6e5e611b61571f272289adefc9cdd7d59c4399))
-    - docs and router ([`a5f05d7`](https://github.comgit//DioxusLabs/dioxus/commit/a5f05d73acc0e47b05cff64a373482519414bc7c))
-    - upgrade syntax ([`fd93ee8`](https://github.comgit//DioxusLabs/dioxus/commit/fd93ee89c19b085a04307ef30217170518defa8e))
     - support innerhtml ([`cfc24f5`](https://github.comgit//DioxusLabs/dioxus/commit/cfc24f5451cd2d1e9dcd5f1589ee50f705404110))
     - clean up and add lazy renderer ([`d4dcb17`](https://github.comgit//DioxusLabs/dioxus/commit/d4dcb175670f4cf8e51a25af8ddc584356c3d067))
     - add more to ssr renderer ([`63568c5`](https://github.comgit//DioxusLabs/dioxus/commit/63568c546c76375aa8acb0b8d2555727ef48edc4))
@@ -118,4 +143,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - update fc_macro ([`28ac37a`](https://github.comgit//DioxusLabs/dioxus/commit/28ac37a8b23874c77011a46a11e6b9cbdf79ecdd))
     - more docs, example, mroe nodes ([`d13e04c`](https://github.comgit//DioxusLabs/dioxus/commit/d13e04c9ff4c2a98e295d762d631d47e0c762049))
 </details>
+
+## v0.1.0 (2021-12-15)
+
+### Bug Fixes
+
+ - <csr-id-a33f7701fcf5f917fea8719253650b5ad92554fd/> tags
+ - <csr-id-868f6739d2b2c5f2ace0c5240cff8008901e818c/> keyword length
+
+### Documentation
+
+ - <csr-id-4de16c4779648e591b3869b5df31271ae603c812/> update local examples and docs to support new syntaxes
+ - <csr-id-583fdfa5618e11d660985b97e570d4503be2ff49/> big updates to the reference
+ - <csr-id-e4c06ce8e893779d2aad0883a1bb27d193bc5985/> update cargo tomls
+
+### New Features
+
+ - <csr-id-fd93ee89c19b085a04307ef30217170518defa8e/> upgrade syntax
+ - <csr-id-cfc24f5451cd2d1e9dcd5f1589ee50f705404110/> support innerhtml
+ - <csr-id-63568c546c76375aa8acb0b8d2555727ef48edc4/> add more to ssr renderer
+ - <csr-id-9726a065b0d4fb1ede5b53a2ddd58c855e51539f/> massage lifetimes
+ - <csr-id-c321532a6cef40b2d2e4adc8c7a55931b6755b08/> some docs, cleaning
+ - <csr-id-d618092e9d150589e61516f7bbb169f2db49d3f2/> a new vnode type for anchors
+ - <csr-id-00231adfa2e1d67a9d7ae2fa61c33e3a22d51978/> code quality improvements for core
+ - <csr-id-a2c7d17b0595769f60bc1c2bbf7cbe32cec37486/> mvoe away from compound context
+ - <csr-id-31702dbf878dd0207d101f7869ebefd2bb9f6860/> wire up resource pool
+ - <csr-id-f782e142118fb7acf1b88a0f3fbb03e4a5e3e91e/> omg what a dumb mistake
+ - <csr-id-f457b7113129479cad577237ef21cb735fffe483/> rebuild doesn't return errors
+ - <csr-id-4091846934b4b3b2bc03d3ca8aaf7712aebd4e36/> add aria
+ - <csr-id-c79d9ae674e235c8e9c2c069d24902122b9c7464/> buff up html allowed attributes
+ - <csr-id-bbcb5a0234dbce48ffeb64903c3ec04562a87ad6/> enable components in ssr
+ - <csr-id-9abb0470b7869019d539a2fc21da3872348ae38b/> static node infrastructure and ssr changes
+ - <csr-id-cfa0927cdd40bc3dba22996018605dbad91d0391/> todomvc
 

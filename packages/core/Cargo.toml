@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-core"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -49,7 +49,7 @@ backtrace = "0.3"
 anyhow = "1.0.42"
 fern = { version = "0.6.0", features = ["colored"] }
 rand = { version = "0.8.4", features = ["small_rng"] }
-dioxus-core-macro = { path = "../core-macro", version = "^0.1.2" }
+dioxus-core-macro = { path = "../core-macro", version ="^0.1.6"}
 criterion = "0.3.5"
 thiserror = "1.0.30"
 dioxus-html = { path = "../html" }

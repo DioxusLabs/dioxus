@@ -5,15 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v0.1.3 (2021-12-15)
+## v0.1.7 (2022-01-08)
 
 ### Documentation
 
- - <csr-id-4de16c4779648e591b3869b5df31271ae603c812/> update local examples and docs to support new syntaxes
- - <csr-id-e495b09bf1c99950b5ea8647b371f296dc64afbe/> fix table
+ - <csr-id-d11f322f554e7dbf43b988c9cfda56498cc49872/> add title to doc comment
+ - <csr-id-be9f1a52ad2b04f101397ae34482ea7394df653b/> better document the `EventHandler` type
  - <csr-id-9874f342e2bc1116410142c691545d75b0e0d6fe/> more docs
  - <csr-id-54d050cf897131ddc4f53651f1aeedaf03f23f57/> strong improvmenets, first major section done
+ - <csr-id-e4c06ce8e893779d2aad0883a1bb27d193bc5985/> update cargo tomls
  - <csr-id-9b5f82af7dce18b75a781b86b188bc713860bb99/> start on components
+ - <csr-id-4de16c4779648e591b3869b5df31271ae603c812/> update local examples and docs to support new syntaxes
+ - <csr-id-e495b09bf1c99950b5ea8647b371f296dc64afbe/> fix table
  - <csr-id-460783ad549818a85db634ed9c39ffce210b98ec/> lnks to projects
  - <csr-id-583fdfa5618e11d660985b97e570d4503be2ff49/> big updates to the reference
  - <csr-id-d9e6d0925b30690212d1d690dfba288f1a694a27/> examples
@@ -21,10 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-70cd46dbb2a689ae2d512e142b8aee9c80798430/> move around examples
  - <csr-id-69f5cc3802af136729bc73e5c3d209270d41b184/> move into a fromjs tutorial
  - <csr-id-7102fe5f984fe8692cf977ea3a43e2973eed4f45/> add some more sources in the core implementation
- - <csr-id-e4c06ce8e893779d2aad0883a1bb27d193bc5985/> update cargo tomls
 
 ### New Features
 
+ - <csr-id-427b126bc17336d5d14d56eb7fddb8e07752495f/> add prevent default attribute and upgrade router
+ - <csr-id-bbb6ee10de824f2e3259576ac01768640c884279/> make hydration more robust
+ - <csr-id-06276edd0d4f1f6f6b0a3bf7a467931413ab33c3/> eanble bubbling
+ - <csr-id-d84fc0538670b2a3bda9ae41878896793b74e8ee/> plug in bubbling
+ - <csr-id-a4f280d16399205c638033bf9beb858e478e98ff/> more API updates
+ - <csr-id-b997b8ebbb82b5b9e9119bd2eb25335e2ed009d0/> enable children properly
+ - <csr-id-78d9056e35deb6e87ea2929cc5369e35b8a20847/> it works with a new bump each time!!
  - <csr-id-96b3d56e09a38843f7dc6c1047fe2a3923bd8473/> move back to combined cx/props
  - <csr-id-19df1bda109aba03c40ff631263bcb7035004ca0/> bubbling
  - <csr-id-8acdd2ea830b995b608d8bac2ef527db8d40e662/> it compiles once more
@@ -105,14 +114,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
+ - <csr-id-c439b0ac7e09f70a04262b7c29938d8c52197b76/> component pass thru events
+ - <csr-id-4aadec1e30e5e4aa86bdfa56d8fbff9dc7fa1c69/> ci and bug in setter
+ - <csr-id-2481cd05c2371b4a23b03d7710598708b1b2e491/> attempt to fix ice
+ - <csr-id-bd341f5571580cdf5e495379b49ca988fd9211c3/> tests
+ - <csr-id-75fa7b4aa672a8a10afcd11016a1b80e0e6f0f02/> make tests pass
+ - <csr-id-3dc0e59876f5aba88ed26f1bbd692820f239d4b0/> readme and examples syntax
  - <csr-id-52c7154897111b570918127ffe3285bb1d5951a0/> really big bug around hooks
+ - <csr-id-868f6739d2b2c5f2ace0c5240cff8008901e818c/> keyword length
+ - <csr-id-a33f7701fcf5f917fea8719253650b5ad92554fd/> tags
  - <csr-id-601078f9cf78a58d7502a377676ac94f3cf037bf/> desktop and mobile
  - <csr-id-77686ba329cba0679d0339589a00df77d3c4c1a1/> it compiles again
  - <csr-id-27d891934a70424b45e6278b7e2baaa2d1b78b35/> use annotation method from rust/58052 to fix closure lifetimes
  - <csr-id-ba9e1dbb8fa24048a6c9ccef8a8722688226a845/> messed up how lifetimes worked, need to render once per component
  - <csr-id-478255f40d4de1d2e3f3cc9b6d758b30ff394b39/> all the bugs!
- - <csr-id-a33f7701fcf5f917fea8719253650b5ad92554fd/> tags
- - <csr-id-868f6739d2b2c5f2ace0c5240cff8008901e818c/> keyword length
 
 ### Performance
 
@@ -123,8 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 400 commits contributed to the release over the course of 335 calendar days.
- - 383 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 437 commits contributed to the release over the course of 358 calendar days.
+ - 416 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -134,26 +149,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`0d480a4`](https://github.comgit//DioxusLabs/dioxus/commit/0d480a4c437d424f0eaff486e510a8fd3f3e6584))
-    - keyword length ([`868f673`](https://github.comgit//DioxusLabs/dioxus/commit/868f6739d2b2c5f2ace0c5240cff8008901e818c))
-    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`b32665d`](https://github.comgit//DioxusLabs/dioxus/commit/b32665d7212a5b9a3e21cb7af7abba63ae399fac))
-    - tags ([`a33f770`](https://github.comgit//DioxusLabs/dioxus/commit/a33f7701fcf5f917fea8719253650b5ad92554fd))
-    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`3a706ac`](https://github.comgit//DioxusLabs/dioxus/commit/3a706ac4168db137723bea90d7a0058190adfc3c))
-    - update cargo tomls ([`e4c06ce`](https://github.comgit//DioxusLabs/dioxus/commit/e4c06ce8e893779d2aad0883a1bb27d193bc5985))
-    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`270dfc9`](https://github.comgit//DioxusLabs/dioxus/commit/270dfc9590b2354d083ea8da5cc0e1a1497d30e0))
-    - update local examples and docs to support new syntaxes ([`4de16c4`](https://github.comgit//DioxusLabs/dioxus/commit/4de16c4779648e591b3869b5df31271ae603c812))
-    - fix table ([`e495b09`](https://github.comgit//DioxusLabs/dioxus/commit/e495b09bf1c99950b5ea8647b371f296dc64afbe))
+    - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
+    - add title to doc comment ([`d11f322`](https://github.comgit//DioxusLabs/dioxus/commit/d11f322f554e7dbf43b988c9cfda56498cc49872))
+    - better document the `EventHandler` type ([`be9f1a5`](https://github.comgit//DioxusLabs/dioxus/commit/be9f1a52ad2b04f101397ae34482ea7394df653b))
+    - component pass thru events ([`c439b0a`](https://github.comgit//DioxusLabs/dioxus/commit/c439b0ac7e09f70a04262b7c29938d8c52197b76))
+    - Merge pull request #74 from mrxiaozhuox/master ([`47056fd`](https://github.comgit//DioxusLabs/dioxus/commit/47056fda4577bcbdaa2a6f63d82eec876e5a5aee))
+    - Merge pull request #80 from DioxusLabs/jk/router2dotoh ([`cdc2d8e`](https://github.comgit//DioxusLabs/dioxus/commit/cdc2d8ec6d123245c2ea5f6d10af02b6a6833994))
+    - ci and bug in setter ([`4aadec1`](https://github.comgit//DioxusLabs/dioxus/commit/4aadec1e30e5e4aa86bdfa56d8fbff9dc7fa1c69))
+    - add prevent default attribute and upgrade router ([`427b126`](https://github.comgit//DioxusLabs/dioxus/commit/427b126bc17336d5d14d56eb7fddb8e07752495f))
+    - memoize dom in the prescence of identical components ([`cb2782b`](https://github.comgit//DioxusLabs/dioxus/commit/cb2782b4bb34cdaadfff590bfee930ae3ac6536c))
+    - make hydration more robust ([`bbb6ee1`](https://github.comgit//DioxusLabs/dioxus/commit/bbb6ee10de824f2e3259576ac01768640c884279))
+    - bump all versions ([`4f92ba4`](https://github.comgit//DioxusLabs/dioxus/commit/4f92ba41602d706449c1bddabd49829873ee72eb))
+    - attempt to fix ice ([`2481cd0`](https://github.comgit//DioxusLabs/dioxus/commit/2481cd05c2371b4a23b03d7710598708b1b2e491))
+    - tests ([`bd341f5`](https://github.comgit//DioxusLabs/dioxus/commit/bd341f5571580cdf5e495379b49ca988fd9211c3))
+    - update core, core-macro, and html ([`f9b9bb9`](https://github.comgit//DioxusLabs/dioxus/commit/f9b9bb9c0c2c55f55d2d6860e3d2d986debd6412))
+    - eanble bubbling ([`06276ed`](https://github.comgit//DioxusLabs/dioxus/commit/06276edd0d4f1f6f6b0a3bf7a467931413ab33c3))
+    - plug in bubbling ([`d84fc05`](https://github.comgit//DioxusLabs/dioxus/commit/d84fc0538670b2a3bda9ae41878896793b74e8ee))
+    - run cargo fmt ([`a95dead`](https://github.comgit//DioxusLabs/dioxus/commit/a95dead76d67646a862bb13421c2853cac7604ee))
+    - make tests pass ([`75fa7b4`](https://github.comgit//DioxusLabs/dioxus/commit/75fa7b4aa672a8a10afcd11016a1b80e0e6f0f02))
+    - remove runner on hook and then update docs ([`d156045`](https://github.comgit//DioxusLabs/dioxus/commit/d1560450bac55f9566e00e00ea405bd1c70b57e5))
+    - arbitrary expressions excepted without braces ([`4c85bcf`](https://github.comgit//DioxusLabs/dioxus/commit/4c85bcfdc84184b4fd0fb9317ba31fe569884890))
+    - polish some more things ([`1496102`](https://github.comgit//DioxusLabs/dioxus/commit/14961023f927b3a8bde83cfc7883aa8bfcca9e85))
+    - bump core version ([`ddfa2ba`](https://github.comgit//DioxusLabs/dioxus/commit/ddfa2bac3f598523e8d5508e7d99a7ff6fa11726))
+    - more API updates ([`a4f280d`](https://github.comgit//DioxusLabs/dioxus/commit/a4f280d16399205c638033bf9beb858e478e98ff))
+    - clean up examples and demo list ([`944b3a8`](https://github.comgit//DioxusLabs/dioxus/commit/944b3a8bc565da3142ebc8031f9c5fc565877bd8))
+    - upgrade hooks ([`b3ac2ee`](https://github.comgit//DioxusLabs/dioxus/commit/b3ac2ee3f76549cd1c7b6f9eee7e3382b07d873c))
+    - readme and examples syntax ([`3dc0e59`](https://github.comgit//DioxusLabs/dioxus/commit/3dc0e59876f5aba88ed26f1bbd692820f239d4b0))
+    - rip out unsafe task engine ([`c7d001c`](https://github.comgit//DioxusLabs/dioxus/commit/c7d001cbb457929b9742ad96c4997cdcc695bb1a))
+    - continue to consolidate ([`21e00c1`](https://github.comgit//DioxusLabs/dioxus/commit/21e00c114ea30ffd5d98d067103fe110b9c53c44))
+    - upgrade to new version of dioxus core. ([`cda759c`](https://github.comgit//DioxusLabs/dioxus/commit/cda759c659dfc4b1dde17e3896c35525005026df))
+    - clean it up a bit ([`fa106be`](https://github.comgit//DioxusLabs/dioxus/commit/fa106be1f5a45fa5707e66542e52c9f09e8cea7a))
+    - enable children properly ([`b997b8e`](https://github.comgit//DioxusLabs/dioxus/commit/b997b8ebbb82b5b9e9119bd2eb25335e2ed009d0))
     - fix ssr ([`ded9696`](https://github.comgit//DioxusLabs/dioxus/commit/ded9696930ec825e0aba990494790e8be43a73e5))
     - remove portals completely ([`2fd56e7`](https://github.comgit//DioxusLabs/dioxus/commit/2fd56e76192bc70d5503bfcd6b4127d383dd082c))
     - some basic cleaning ([`f746793`](https://github.comgit//DioxusLabs/dioxus/commit/f746793890d091d3bca4b7c5261b8b2e2d080512))
+    - it works with a new bump each time!! ([`78d9056`](https://github.comgit//DioxusLabs/dioxus/commit/78d9056e35deb6e87ea2929cc5369e35b8a20847))
+    - miri stress tets ([`934de21`](https://github.comgit//DioxusLabs/dioxus/commit/934de21dd673b1b79904a3249998427f11428426))
     - go back to noisy lifetime solution ([`8daf7a6`](https://github.comgit//DioxusLabs/dioxus/commit/8daf7a6ed86df72522b089aa2647eea7bee0f3b6))
     - clean up the core crate ([`e6c6bbd`](https://github.comgit//DioxusLabs/dioxus/commit/e6c6bbdc1ec6a8c251b78c05ca104f006b6fad26))
+    - adjust memoization ([`e2e4d43`](https://github.comgit//DioxusLabs/dioxus/commit/e2e4d431e14e9e91b3301e994363c042400e687e))
+    - adjust semantics of placeholders and fragments ([`1c516ab`](https://github.comgit//DioxusLabs/dioxus/commit/1c516aba6a5dbe11c7a7162f3d65625e62461f03))
     - rename fc to component ([`1e4a599`](https://github.comgit//DioxusLabs/dioxus/commit/1e4a599d14af85a2d1c29a442dd489f8dc8df321))
     - docs ([`8814977`](https://github.comgit//DioxusLabs/dioxus/commit/8814977eeebe06748a3b9677a8070e42a037ebd7))
     - polish ([`8bf57dc`](https://github.comgit//DioxusLabs/dioxus/commit/8bf57dc21dfbcbae5b95650203b68d3f41227652))
+    - prepare to change our fragment pattern. Add some more docs ([`2c3a046`](https://github.comgit//DioxusLabs/dioxus/commit/2c3a0464264fa11e8100df025d863931f9606cdb))
     - update hooks ([`597a045`](https://github.comgit//DioxusLabs/dioxus/commit/597a0456f59872bd5dc60d382acdec76a98b1db2))
     - really big bug around hooks ([`52c7154`](https://github.comgit//DioxusLabs/dioxus/commit/52c7154897111b570918127ffe3285bb1d5951a0))
     - better desktop support ([`25a8411`](https://github.comgit//DioxusLabs/dioxus/commit/25a8411485e85bb7e3c8f20701d484529efe9a80))
+    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.1 ([`2b92837`](https://github.comgit//DioxusLabs/dioxus/commit/2b928372fb1b74a4d4e220ff3d798bb7e52f79d2))
     - move back to combined cx/props ([`96b3d56`](https://github.comgit//DioxusLabs/dioxus/commit/96b3d56e09a38843f7dc6c1047fe2a3923bd8473))
     - rename ([`36d89be`](https://github.comgit//DioxusLabs/dioxus/commit/36d89beb34821694cb0afb546d3b0cb4e01aaae1))
     - bubbling ([`19df1bd`](https://github.comgit//DioxusLabs/dioxus/commit/19df1bda109aba03c40ff631263bcb7035004ca0))
@@ -162,32 +205,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - update readme ([`9bd56ee`](https://github.comgit//DioxusLabs/dioxus/commit/9bd56ee499dd8d3ce2b382655487d150e5a6cacf))
     - should be functional across the boar ([`74c6211`](https://github.comgit//DioxusLabs/dioxus/commit/74c6211408ea0db5916a4e0973a3f9a7208faa44))
     - move examples around ([`1e6e5e6`](https://github.comgit//DioxusLabs/dioxus/commit/1e6e5e611b61571f272289adefc9cdd7d59c4399))
+    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`0d480a4`](https://github.comgit//DioxusLabs/dioxus/commit/0d480a4c437d424f0eaff486e510a8fd3f3e6584))
     - updates to router ([`bab21a0`](https://github.comgit//DioxusLabs/dioxus/commit/bab21a0aa1cbf8e6bd95f823e49f53c082e8d6cc))
     - wire tasks up ([`55e6dd9`](https://github.comgit//DioxusLabs/dioxus/commit/55e6dd9701d3710ff17a25581b99b8f159e609b9))
     - wire up linked nodes ([`c10c1f4`](https://github.comgit//DioxusLabs/dioxus/commit/c10c1f418bf21e0e54b53e2babeb37c672c06901))
     - add router ([`d298b62`](https://github.comgit//DioxusLabs/dioxus/commit/d298b626d3ae21a39a8ec4426373369ac94edf9f))
+    - keyword length ([`868f673`](https://github.comgit//DioxusLabs/dioxus/commit/868f6739d2b2c5f2ace0c5240cff8008901e818c))
     - docs and router ([`a5f05d7`](https://github.comgit//DioxusLabs/dioxus/commit/a5f05d73acc0e47b05cff64a373482519414bc7c))
     - it properly bubbles ([`9d8c5ca`](https://github.comgit//DioxusLabs/dioxus/commit/9d8c5ca5ab5784b3f17d7ee20a451ee68fd703d6))
     - upgrade syntax ([`fd93ee8`](https://github.comgit//DioxusLabs/dioxus/commit/fd93ee89c19b085a04307ef30217170518defa8e))
     - more docs ([`9874f34`](https://github.comgit//DioxusLabs/dioxus/commit/9874f342e2bc1116410142c691545d75b0e0d6fe))
     - strong improvmenets, first major section done ([`54d050c`](https://github.comgit//DioxusLabs/dioxus/commit/54d050cf897131ddc4f53651f1aeedaf03f23f57))
+    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`b32665d`](https://github.comgit//DioxusLabs/dioxus/commit/b32665d7212a5b9a3e21cb7af7abba63ae399fac))
     - fake bubbling ([`11757dd`](https://github.comgit//DioxusLabs/dioxus/commit/11757ddf61e1decb1bd1c2bb30455d0bd01a3e95))
     - remove scopechildren in favor of elements directly ([`574d7fd`](https://github.comgit//DioxusLabs/dioxus/commit/574d7fdb9e72a5254130589f13f9efd31e3d2870))
     - remove send requirement on root props ([`5a21493`](https://github.comgit//DioxusLabs/dioxus/commit/5a21493fb7162287989bd7c0cd1c496cc3143605))
+    - tags ([`a33f770`](https://github.comgit//DioxusLabs/dioxus/commit/a33f7701fcf5f917fea8719253650b5ad92554fd))
     - events bubble now ([`f223406`](https://github.comgit//DioxusLabs/dioxus/commit/f2234068ba7cd915a00a81e41660d7d6ee1177cc))
     - move hooklist into scope ([`b9fc5fc`](https://github.comgit//DioxusLabs/dioxus/commit/b9fc5fc251b874fe4a9b5bc46718093029c07bad))
     - Merge branch 'master' into jk/remove_node_safety ([`db00047`](https://github.comgit//DioxusLabs/dioxus/commit/db0004758c77331cc3b93ea8cf227c060028e12e))
+    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`3a706ac`](https://github.comgit//DioxusLabs/dioxus/commit/3a706ac4168db137723bea90d7a0058190adfc3c))
     - bubbling reserves nodes ([`b6262ed`](https://github.comgit//DioxusLabs/dioxus/commit/b6262edd53767bf0d87ed1af3bb0c32612380a23))
     - move testdom methods into virtualdom ([`d2f0547`](https://github.comgit//DioxusLabs/dioxus/commit/d2f0547692cb8b4594fbec1d9fa0934e169d1706))
     - pull children out of component definition ([`2cf90b6`](https://github.comgit//DioxusLabs/dioxus/commit/2cf90b6903411e42f01a801f89037686194ee068))
     - Merge branch 'master' of https://github.com/jkelleyrtp/dioxus ([`60d6eb2`](https://github.comgit//DioxusLabs/dioxus/commit/60d6eb204a10633e5e52f91e855bd12c5cda40f2))
     - Various typos/grammar/rewording ([`5747e00`](https://github.comgit//DioxusLabs/dioxus/commit/5747e00b27b1b69c4f9c2820e7e78030feaff71e))
+    - update cargo tomls ([`e4c06ce`](https://github.comgit//DioxusLabs/dioxus/commit/e4c06ce8e893779d2aad0883a1bb27d193bc5985))
     - bubbling in progress ([`a21020e`](https://github.comgit//DioxusLabs/dioxus/commit/a21020ea575e467ba0d608737269fe1b0792dba7))
     - cleanup src ([`f2e343c`](https://github.comgit//DioxusLabs/dioxus/commit/f2e343c1548588ad01ddac6e39e5014132cff91c))
     - move children onto scope ([`f438bbc`](https://github.comgit//DioxusLabs/dioxus/commit/f438bbcfd20be889aac9a9ca8486e5896af1ce14))
     - desktop and mobile ([`601078f`](https://github.comgit//DioxusLabs/dioxus/commit/601078f9cf78a58d7502a377676ac94f3cf037bf))
     - start on components ([`9b5f82a`](https://github.comgit//DioxusLabs/dioxus/commit/9b5f82af7dce18b75a781b86b188bc713860bb99))
     - cleanuup ([`84fd0c6`](https://github.comgit//DioxusLabs/dioxus/commit/84fd0c616252bf29cd665782258530032b54d13a))
+    - Release dioxus-core v0.1.3, dioxus-core-macro v0.1.2, dioxus-html v0.1.0, dioxus-desktop v0.0.0, dioxus-hooks v0.1.3, dioxus-liveview v0.1.0, dioxus-mobile v0.0.0, dioxus-router v0.1.0, dioxus-ssr v0.1.0, dioxus-web v0.0.0, dioxus v0.1.0 ([`270dfc9`](https://github.comgit//DioxusLabs/dioxus/commit/270dfc9590b2354d083ea8da5cc0e1a1497d30e0))
     - it compiles again ([`77686ba`](https://github.comgit//DioxusLabs/dioxus/commit/77686ba329cba0679d0339589a00df77d3c4c1a1))
     - move debugging virtualdom into its own feature ([`d1b294f`](https://github.comgit//DioxusLabs/dioxus/commit/d1b294fff0c8618e50969ca59f198baf0565777d))
     - clean up using new children syntax ([`9c13436`](https://github.comgit//DioxusLabs/dioxus/commit/9c1343610b3907bd8c6acadc086bfc9a8c7b3f3e))
@@ -196,9 +246,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - slim deps and upgrade docs ([`83dd49d`](https://github.comgit//DioxusLabs/dioxus/commit/83dd49d89044b618fa371e09f9f34ea28b9fd529))
     - work on scheduler, async, coroutines, and merge scope into context ([`b56ea6c`](https://github.comgit//DioxusLabs/dioxus/commit/b56ea6c9a99cd747f376aca4a3c439c13f082714))
     - implement dst magic ([`d4192d0`](https://github.comgit//DioxusLabs/dioxus/commit/d4192d0de2fb352d31f33f2fadfc21de0b1b950c))
+    - update local examples and docs to support new syntaxes ([`4de16c4`](https://github.comgit//DioxusLabs/dioxus/commit/4de16c4779648e591b3869b5df31271ae603c812))
     - working on re-enabling components ([`fffc7ea`](https://github.comgit//DioxusLabs/dioxus/commit/fffc7ea061922120cd2288982a310a87691948cd))
     - a few things left, slme cleanup ([`289d2f2`](https://github.comgit//DioxusLabs/dioxus/commit/289d2f2518cef937a6fc823495a8bd32f287b84e))
     - implement lazy nodes properly ([`3e07214`](https://github.comgit//DioxusLabs/dioxus/commit/3e07214272f20a47b168d6431fcb39880cd41a9d))
+    - fix table ([`e495b09`](https://github.comgit//DioxusLabs/dioxus/commit/e495b09bf1c99950b5ea8647b371f296dc64afbe))
     - fix rebuild ([`15c31d5`](https://github.comgit//DioxusLabs/dioxus/commit/15c31d545a84f05fe17254009dc275aac93e7574))
     - dst drops properly ([`f33510b`](https://github.comgit//DioxusLabs/dioxus/commit/f33510b13fa515e496e6a934650c5a7c61838a39))
     - remove cx.children. start to move towards a "children" field ([`7b97e00`](https://github.comgit//DioxusLabs/dioxus/commit/7b97e009ec74cd2f134bbb8e576404e7a964db74))
@@ -535,4 +587,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - WIP ([`ce34d0d`](https://github.comgit//DioxusLabs/dioxus/commit/ce34d0dfcda82d847a6032f8f42749b39e0fba18))
     - docs, code frm percy ([`2b9c8d0`](https://github.comgit//DioxusLabs/dioxus/commit/2b9c8d09d926ff6b5ad8a7e7b7b0b6f93bb8eb36))
 </details>
+
+## v0.1.3 (2021-12-15)
+
+### Documentation
+
+ - <csr-id-4de16c4779648e591b3869b5df31271ae603c812/> update local examples and docs to support new syntaxes
+ - <csr-id-e495b09bf1c99950b5ea8647b371f296dc64afbe/> fix table
+ - <csr-id-9874f342e2bc1116410142c691545d75b0e0d6fe/> more docs
+ - <csr-id-54d050cf897131ddc4f53651f1aeedaf03f23f57/> strong improvmenets, first major section done
+ - <csr-id-9b5f82af7dce18b75a781b86b188bc713860bb99/> start on components
+ - <csr-id-460783ad549818a85db634ed9c39ffce210b98ec/> lnks to projects
+ - <csr-id-583fdfa5618e11d660985b97e570d4503be2ff49/> big updates to the reference
+ - <csr-id-d9e6d0925b30690212d1d690dfba288f1a694a27/> examples
+ - <csr-id-0826fdfee13d26b08cb8a2fa45cbd59cc4f20c25/> more docs
+ - <csr-id-70cd46dbb2a689ae2d512e142b8aee9c80798430/> move around examples
+ - <csr-id-69f5cc3802af136729bc73e5c3d209270d41b184/> move into a fromjs tutorial
+ - <csr-id-7102fe5f984fe8692cf977ea3a43e2973eed4f45/> add some more sources in the core implementation
+ - <csr-id-e4c06ce8e893779d2aad0883a1bb27d193bc5985/> update cargo tomls
+
+### New Features
+
+ - <csr-id-96b3d56e09a38843f7dc6c1047fe2a3923bd8473/> move back to combined cx/props
+ - <csr-id-19df1bda109aba03c40ff631263bcb7035004ca0/> bubbling
+ - <csr-id-8acdd2ea830b995b608d8bac2ef527db8d40e662/> it compiles once more
+ - <csr-id-74c6211408ea0db5916a4e0973a3f9a7208faa44/> should be functional across the boar
+ - <csr-id-55e6dd9701d3710ff17a25581b99b8f159e609b9/> wire tasks up
+ - <csr-id-c10c1f418bf21e0e54b53e2babeb37c672c06901/> wire up linked nodes
+ - <csr-id-9d8c5ca5ab5784b3f17d7ee20a451ee68fd703d6/> it properly bubbles
+ - <csr-id-fd93ee89c19b085a04307ef30217170518defa8e/> upgrade syntax
+ - <csr-id-11757ddf61e1decb1bd1c2bb30455d0bd01a3e95/> fake bubbling
+ - <csr-id-f2234068ba7cd915a00a81e41660d7d6ee1177cc/> events bubble now
+ - <csr-id-2cf90b6903411e42f01a801f89037686194ee068/> pull children out of component definition
+ - <csr-id-84fd0c616252bf29cd665782258530032b54d13a/> cleanuup
+ - <csr-id-79503f15c5db04fa04575c8735941a2e3a75030b/> full html support
+ - <csr-id-6b2645fd80ab20153e7bb51887443e994fbab5cb/> improve FC handling to allow lifetimes of parent
+ - <csr-id-fda2ebc2a22965845e015384f39f34ce7cb3e428/> improve safety
+ - <csr-id-9726a065b0d4fb1ede5b53a2ddd58c855e51539f/> massage lifetimes
+ - <csr-id-efd0e9b5648c809057f339083ba9d454f810d483/> support desktop more completely
+ - <csr-id-a2b0c50a343005c63c7032bcefb8323b78350bb9/> add update functionality to useref
+ - <csr-id-5502429626023d0788cca352e94ac6ea67c2cb11/> desktop functioning well
+ - <csr-id-4a4c7afca7e1beadd4b213214074fdb420eb0923/> shared state mechanisms
+ - <csr-id-fac42339c272b0e430ebf4f31b6061a0635d3e19/> mutations
+ - <csr-id-687cda1b6d9595357d1dc8720ebe921f61098d8f/> re-enable suspense
+ - <csr-id-4a72b3140bd244da602deada1eeecded65ff5848/> amazingly awesome error handling
+ - <csr-id-d7940aa2ac2017316d62e0f2eac0701dc6ad1f09/> proper handling of events
+ - <csr-id-d717c22d9c5da7b6f343fede11faaf953a3a29e0/> keyed diffing!!
+ - <csr-id-fac2e56ed63fc708a89e14df15f1fc32f58391a9/> update root props
+ - <csr-id-c321532a6cef40b2d2e4adc8c7a55931b6755b08/> some docs, cleaning
+ - <csr-id-1749eba8eb6c8ffa38ab3ad52160b637fe021e86/> more and more sophisticated diff
+ - <csr-id-d618092e9d150589e61516f7bbb169f2db49d3f2/> a new vnode type for anchors
+ - <csr-id-00231adfa2e1d67a9d7ae2fa61c33e3a22d51978/> code quality improvements for core
+ - <csr-id-a2c7d17b0595769f60bc1c2bbf7cbe32cec37486/> mvoe away from compound context
+ - <csr-id-31702dbf878dd0207d101f7869ebefd2bb9f6860/> wire up resource pool
+ - <csr-id-e5c88fe3a49649ecb308decd14c2557963978619/> make hooks free-functions
+ - <csr-id-bfdcb20437c385116fd640e46b6361d09d8d5ff8/> transition to cx, props
+ - <csr-id-f782e142118fb7acf1b88a0f3fbb03e4a5e3e91e/> omg what a dumb mistake
+ - <csr-id-4837d8e741343d26f31b55e4478a374dc761e538/> suspense!
+ - <csr-id-4a0068f09918adbc299150edcf777f342ced0dd3/> bless up, no more segfaults
+ - <csr-id-de9f61bcf48c0d6e35e46c337b72a713c9f9f7d2/> more suspended nodes!
+ - <csr-id-7dfe89c9581f45a445f17f9fe4bb94e61f67e971/> wire up event delegator for webview
+ - <csr-id-0a907b35c647b67172080023462770b761364d51/> fix some lifetime issues
+ - <csr-id-80e6c256980eb3e8c32e30f3dbb43c8b3b9a9cf4/> move over to push based mechanism
+ - <csr-id-e7238762ae518c5688f9339d11832d17f99ad553/> architecture document and edit list
+ - <csr-id-3a57b942624afb8aa6650aeee05466c3c9ce967e/> task system works
+   but I broke the other things :(
+ - <csr-id-f457b7113129479cad577237ef21cb735fffe483/> rebuild doesn't return errors
+ - <csr-id-4091846934b4b3b2bc03d3ca8aaf7712aebd4e36/> add aria
+ - <csr-id-c79d9ae674e235c8e9c2c069d24902122b9c7464/> buff up html allowed attributes
+ - <csr-id-bbcb5a0234dbce48ffeb64903c3ec04562a87ad6/> enable components in ssr
+ - <csr-id-0479252a5fba96e554dcf2422a8566e248fc6593/> keyed diffing
+ - <csr-id-9abb0470b7869019d539a2fc21da3872348ae38b/> static node infrastructure and ssr changes
+ - <csr-id-e6f56563bc84516e017b3db06f11fab2549b9a50/> tests and benchmarks
+ - <csr-id-db6d0184aa5aa612bd7229a06f72b4c2ec5f6409/> dedicated mutations module
+ - <csr-id-1cc1679a6ba33ff68d45ad1e964b73230224bc23/> refactor out the hooks implementation
+ - <csr-id-2ce0752a9cd253fee1c8b205400aa191b09c9dcb/> fix compiling
+ - <csr-id-99d94b69aba192be7e41ebe891aca4bb4f6cae88/> move webview to wry
+ - <csr-id-e4cdb645aad800484b19ec35ba1f8bb9ccf71d12/> beaf up the use_state hook
+ - <csr-id-22e659c2bd7797ca5a822180aca0cb5d950c5287/> namespaced attributes
+   this commit adds namespaced attributes. This lets us support attribute groups, and thus, inline styles.
+   
+   This namespaced attribute stuff is only available for styles at the moment, though it theoretically could be enabled for any other attributes.
+ - <csr-id-904b26f7111c3fc66400744ff6192e4b20bf6d74/> add edits back! and more webview support!
+   This commit adds a new type - the DomEdit - for serializing the changes made by the diffing machine. The architecture of how DomEdits fit into the cooperative scheduling is still TBD but it will allow us to build change lists without applying them immediately. This is more performant  and allows us to only render parts of the page at a time.
+   
+   This commit also adds more infrastructure around webview. Dioxus can now run on the web, generate static pages, run in the desktop, and run on mobile, with a large part of thanks to webview.
+ - <csr-id-b5e5ef171aa9f8986fb4ab04d793eb63f557c4ae/> two calculator examples
+ - <csr-id-7665f2c6cf05cea64bb9131381d4ac11cbdeb932/> move to slotmap
+ - <csr-id-f4fb5bb454536d9f108c7e276ce98a8924ab45e1/> integrate serialization and string borrowing
+   This commit adds lifetimes to the diff and realdom methods so consumers may borrow the contents of the DOM for serialization or asynchronous modifications.
+ - <csr-id-9d7ee79826a3b3fb952a70abcbb16dcd3363d2fb/> events work again!
+ - <csr-id-73047fe95678d50fcfd62a4ace7c6b406c5304e1/> props memoization is more powerful
+   This commit solves the memoization , properly memoizing properties that don't have any generic parameters. This is a rough heuristic to prevent non-static lifetimes from creeping into props and breaking our minual lifetime management.
+   
+   Props that have a generic parameter are opted-out of the `partialeq` requirement and props *without* lifetimes must implement partialeq. We're going to leave manual disabling of memoization for future work.
+ - <csr-id-cfa0927cdd40bc3dba22996018605dbad91d0391/> todomvc
+ - <csr-id-d4f1ceaffbc0551ea3b179a101885275690cebec/> somewhat working with rc and weak
+ - <csr-id-89f22906926ccb5aa4cbe3fe1b6d834b06dd91e7/> dyn scope
+ - <csr-id-8329268d39238f030dd703ab4614253e58339e0b/> update builder
+
+### Bug Fixes
+
+ - <csr-id-52c7154897111b570918127ffe3285bb1d5951a0/> really big bug around hooks
+ - <csr-id-601078f9cf78a58d7502a377676ac94f3cf037bf/> desktop and mobile
+ - <csr-id-77686ba329cba0679d0339589a00df77d3c4c1a1/> it compiles again
+ - <csr-id-27d891934a70424b45e6278b7e2baaa2d1b78b35/> use annotation method from rust/58052 to fix closure lifetimes
+ - <csr-id-ba9e1dbb8fa24048a6c9ccef8a8722688226a845/> messed up how lifetimes worked, need to render once per component
+ - <csr-id-478255f40d4de1d2e3f3cc9b6d758b30ff394b39/> all the bugs!
+ - <csr-id-a33f7701fcf5f917fea8719253650b5ad92554fd/> tags
+ - <csr-id-868f6739d2b2c5f2ace0c5240cff8008901e818c/> keyword length
+
+### Performance
+
+ - <csr-id-8b3ac0b57ca073c1451e8d5df93882c9360ca52a/> remove global allocation for props
+ - <csr-id-ea91fc984dc648150acbafd0abb79d9f42aca500/> refcell to cell for hookidx
 
