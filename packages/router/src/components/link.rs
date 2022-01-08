@@ -31,6 +31,9 @@ pub struct LinkProps<'a> {
     #[props(default, strip_option)]
     id: Option<&'a str>,
 
+    #[props(default, strip_option)]
+    title: Option<&'a str>,
+
     children: Element<'a>,
 
     #[props(default)]
@@ -44,6 +47,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             href: "{cx.props.to}",
             class: format_args!("{}", cx.props.class.unwrap_or("")),
             id: format_args!("{}", cx.props.id.unwrap_or("")),
+            title: format_args!("{}", cx.props.title.unwrap_or("")),
 
             prevent_default: "onclick",
             onclick: move |_| service.push_route(cx.props.to),
