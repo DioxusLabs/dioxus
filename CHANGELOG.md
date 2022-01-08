@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.1.7 (2022-01-08)
+
+### Bug Fixes
+
+ - <csr-id-bd341f5571580cdf5e495379b49ca988fd9211c3/> tests
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release over the course of 2 calendar days.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - tests ([`bd341f5`](https://github.comgit//DioxusLabs/dioxus/commit/bd341f5571580cdf5e495379b49ca988fd9211c3))
+</details>
+
 ## v0.1.1 (2021-12-15)
 
 ### Documentation
@@ -26,12 +50,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-4091846934b4b3b2bc03d3ca8aaf7712aebd4e36/> add aria
  - <csr-id-7aec40d57e78ec13ff3a90ca8149521cbf1d9ff2/> enable arbitrary body in rsx! macro
 
+## v0.0.1 (2022-01-03)
+
+### Documentation
+
+ - <csr-id-78007445f944f259170307d840e0f16242b7b4b6/> improve docs
+ - <csr-id-4de16c4779648e591b3869b5df31271ae603c812/> update local examples and docs to support new syntaxes
+ - <csr-id-583fdfa5618e11d660985b97e570d4503be2ff49/> big updates to the reference
+ - <csr-id-bf21c82de04e25daee60a06232b9a16b640508f2/> lib.rs docs
+ - <csr-id-70cd46dbb2a689ae2d512e142b8aee9c80798430/> move around examples
+
+### New Features
+
+ - <csr-id-8acdd2ea830b995b608d8bac2ef527db8d40e662/> it compiles once more
+ - <csr-id-9726a065b0d4fb1ede5b53a2ddd58c855e51539f/> massage lifetimes
+ - <csr-id-4a72b3140bd244da602deada1eeecded65ff5848/> amazingly awesome error handling
+ - <csr-id-3bedcb93cacec5bdf134adc38ff02eadbf96c1c6/> svgs working in webview
+ - <csr-id-a2c7d17b0595769f60bc1c2bbf7cbe32cec37486/> mvoe away from compound context
+ - <csr-id-de9f61bcf48c0d6e35e46c337b72a713c9f9f7d2/> more suspended nodes!
+ - <csr-id-4091846934b4b3b2bc03d3ca8aaf7712aebd4e36/> add aria
+ - <csr-id-7aec40d57e78ec13ff3a90ca8149521cbf1d9ff2/> enable arbitrary body in rsx! macro
+
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 36 commits contributed to the release over the course of 174 calendar days.
- - 34 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 40 commits contributed to the release over the course of 193 calendar days.
+ - 38 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -41,8 +86,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - update local examples and docs to support new syntaxes ([`4de16c4`](https://github.comgit//DioxusLabs/dioxus/commit/4de16c4779648e591b3869b5df31271ae603c812))
+    - remove runner on hook and then update docs ([`d156045`](https://github.comgit//DioxusLabs/dioxus/commit/d1560450bac55f9566e00e00ea405bd1c70b57e5))
+    - polish some more things ([`1496102`](https://github.comgit//DioxusLabs/dioxus/commit/14961023f927b3a8bde83cfc7883aa8bfcca9e85))
+    - upgrade hooks ([`b3ac2ee`](https://github.comgit//DioxusLabs/dioxus/commit/b3ac2ee3f76549cd1c7b6f9eee7e3382b07d873c))
     - docs ([`8814977`](https://github.comgit//DioxusLabs/dioxus/commit/8814977eeebe06748a3b9677a8070e42a037ebd7))
+    - prepare to change our fragment pattern. Add some more docs ([`2c3a046`](https://github.comgit//DioxusLabs/dioxus/commit/2c3a0464264fa11e8100df025d863931f9606cdb))
     - it compiles once more ([`8acdd2e`](https://github.comgit//DioxusLabs/dioxus/commit/8acdd2ea830b995b608d8bac2ef527db8d40e662))
     - some docs and suspense ([`93d4b8c`](https://github.comgit//DioxusLabs/dioxus/commit/93d4b8ca7c1b133e5dba2a8dc9a310dbe1357001))
     - docs and router ([`a5f05d7`](https://github.comgit//DioxusLabs/dioxus/commit/a5f05d73acc0e47b05cff64a373482519414bc7c))
@@ -50,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - improve docs ([`7800744`](https://github.comgit//DioxusLabs/dioxus/commit/78007445f944f259170307d840e0f16242b7b4b6))
     - Various typos/grammar/rewording ([`5747e00`](https://github.comgit//DioxusLabs/dioxus/commit/5747e00b27b1b69c4f9c2820e7e78030feaff71e))
     - bubbling in progress ([`a21020e`](https://github.comgit//DioxusLabs/dioxus/commit/a21020ea575e467ba0d608737269fe1b0792dba7))
+    - update local examples and docs to support new syntaxes ([`4de16c4`](https://github.comgit//DioxusLabs/dioxus/commit/4de16c4779648e591b3869b5df31271ae603c812))
     - massage lifetimes ([`9726a06`](https://github.comgit//DioxusLabs/dioxus/commit/9726a065b0d4fb1ede5b53a2ddd58c855e51539f))
     - major cleanups to scheduler ([`2933e4b`](https://github.comgit//DioxusLabs/dioxus/commit/2933e4bc11b3074c2bde8d76ec55364fca841988))
     - threadsafe ([`82953f2`](https://github.comgit//DioxusLabs/dioxus/commit/82953f2ac37913f83a822333acd0c47e20777d31))
