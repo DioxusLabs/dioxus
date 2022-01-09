@@ -169,7 +169,7 @@ fn write_tabs(f: &mut Formatter, num: u32) -> std::fmt::Result {
 
 #[test]
 fn generates_svgs() {
-    let st = include_str!("../../tests/svg.html");
+    let st = include_str!("../../../tests/svg.html");
 
     let out = format!("{:}", convert_html_to_component(st).unwrap());
     dbg!(&out);

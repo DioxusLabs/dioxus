@@ -1,5 +1,4 @@
 use crate::{
-    cli::BuildOptions,
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
 };

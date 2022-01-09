@@ -1,8 +1,4 @@
-use crate::{
-    cli::{BuildOptions, DevelopOptions},
-    error::Result,
-    LaunchCommand,
-};
+use crate::error::Result;
 use std::{io::Write, path::PathBuf, process::Command};
 
 #[derive(Debug, Clone)]
@@ -75,19 +71,19 @@ impl CrateConfig {
         self
     }
 
-    pub fn with_build_options(&mut self, options: &BuildOptions) {
-        if let Some(name) = &options.example {
-            self.as_example(name.clone());
-        }
-        self.release = options.release;
-        self.out_dir = options.outdir.clone().into();
-    }
+    // pub fn with_build_options(&mut self, options: &BuildOptions) {
+    //     if let Some(name) = &options.example {
+    //         self.as_example(name.clone());
+    //     }
+    //     self.release = options.release;
+    //     self.out_dir = options.outdir.clone().into();
+    // }
 
-    pub fn with_develop_options(&mut self, options: &DevelopOptions) {
-        if let Some(name) = &options.example {
-            self.as_example(name.clone());
-        }
-        self.release = options.release;
-        self.out_dir = tempfile::Builder::new().tempdir().expect("").into_path();
-    }
+    // pub fn with_develop_options(&mut self, options: &DevelopOptions) {
+    //     if let Some(name) = &options.example {
+    //         self.as_example(name.clone());
+    //     }
+    //     self.release = options.release;
+    //     self.out_dir = tempfile::Builder::new().tempdir().expect("").into_path();
+    // }
 }

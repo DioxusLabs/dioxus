@@ -44,12 +44,9 @@ async fn watch_directory(config: CrateConfig, is_err: ErrStatus) -> Result<()> {
     // Automatically select the best implementation for your platform.
     // You can also access each implementation directly e.g. INotifyWatcher.
     let mut watcher: RecommendedWatcher = Watcher::new(move |res| {
-<<<<<<< HEAD
         async_std::task::block_on(watcher_tx.send(res));
-=======
         // send an event
         let _ = async_std::task::block_on(watcher_tx.send(res));
->>>>>>> 9451713 (wip: studio upgrades)
     })
     .expect("failed to make watcher");
 
