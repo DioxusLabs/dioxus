@@ -1,10 +1,10 @@
 [package]
 name = "dioxus-cli"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
-"license" = "MIT/Apache-2.0"
+license = "MIT/Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
