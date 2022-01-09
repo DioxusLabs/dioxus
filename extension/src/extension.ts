@@ -13,7 +13,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const selection = editor.selection;
 			const word = document.getText(selection);
 
-			const child_proc = spawn("dioxus", ["translate", "-t", word]);
+			const child_proc = spawn("dioxus", ["translate", "--source", word]);
 
 			let result = '';
 			child_proc.stdout?.on('data', data => result += data);
@@ -37,7 +37,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const selection = editor.selection;
 			const word = document.getText(selection);
 
-			const child_proc = spawn("dioxus", ["translate", "-c", "-t", word]);
+			const child_proc = spawn("dioxus", ["translate", "--component", "--source", word]);
 
 			let result = '';
 			child_proc.stdout?.on('data', data => result += data);

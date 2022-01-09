@@ -10,3 +10,5 @@ pub struct Build {
     #[structopt(flatten)]
     pub build: ConfigOptsBuild,
 }
+
+pub async fn perform_build() {}

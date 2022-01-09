@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>📦✨  dioxus-Studio </h1>
+  <h1>📦✨  dioxus-cli </h1>
   <p>
     <strong>Tooling to supercharge dioxus projects</strong>
   </p>
@@ -10,6 +10,14 @@
 
 # About
 
-
 dioxus-studio (inspired by wasm-pack and webpack) is a tool to help get dioxus projects off the ground. It handles all the build, development, bundling, and publishing to make web development simple.
+
+
+## Installation
+
+```
+$ cargo install dioxus-cli
+```
+
+Now, `dioxus` is in your path.
 
