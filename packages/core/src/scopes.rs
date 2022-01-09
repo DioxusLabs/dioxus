@@ -745,6 +745,7 @@ impl ScopeState {
     ///     use_hook(|| Rc::new(RefCell::new(initial_value())))
     /// }
     /// ```
+    #[allow(clippy::mut_from_ref)]
     pub fn use_hook<'src, State: 'static>(
         &'src self,
         initializer: impl FnOnce(usize) -> State,

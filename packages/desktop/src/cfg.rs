@@ -4,11 +4,13 @@ use wry::{
     webview::WebView,
 };
 
+pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
+
 pub struct DesktopConfig<'a> {
     pub window: WindowBuilder,
     pub(crate) manual_edits: Option<Vec<DomEdit<'a>>>,
     pub(crate) pre_rendered: Option<String>,
-    pub(crate) event_handler: Option<Box<dyn Fn(&mut EventLoop<()>, &mut WebView)>>,
+    pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
 }
 
 impl<'a> DesktopConfig<'a> {
@@ -53,5 +55,11 @@ impl<'a> DesktopConfig<'a> {
     ) -> &mut Self {
         self.event_handler = Some(Box::new(handler));
         self
+    }
+}
+
+impl<'a> Default for DesktopConfig<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -27,8 +27,8 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
     cx.use_hook(|_| {
         // create a bigger, better, longer route if one above us exists
         let total_route = match cx.consume_context::<RouteContext>() {
-            Some(ctx) => format!("{}", ctx.total_route.clone()),
-            None => format!("{}", cx.props.to.clone()),
+            Some(ctx) => ctx.total_route.to_string(),
+            None => cx.props.to.to_string(),
         };
 
         // provide our route context

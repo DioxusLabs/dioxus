@@ -24,7 +24,7 @@ impl SsrRenderer {
 
     pub fn render_lazy<'a>(&'a mut self, f: LazyNodes<'a, '_>) -> String {
         let scope = self.vdom.base_scope();
-        let factory = NodeFactory::new(&scope);
+        let factory = NodeFactory::new(scope);
 
         let root = f.into_vnode(factory);
         format!(
@@ -38,6 +38,7 @@ impl SsrRenderer {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     let vdom = VirtualDom::new(app);
     let scope: *const ScopeState = vdom.base_scope();
@@ -50,11 +51,11 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     // When LazyNodes are provided, they are FnOnce, but do not come with a allocator selected to borrow from. The <'a>
     // lifetime is therefore longer than the lifetime of the allocator which doesn't exist... yet.
     //
-    // Therefore, we cast our local bump alloactor into right lifetime. This is okay because our usage of the bump arena
-    // is *definitely* shorter than the <'a> lifetime, and we return *owned* data - not borrowed data.
+    // Therefore, we cast our local bump allocator to the right lifetime. This is okay because our usage of the bump
+    // arena is *definitely* shorter than the <'a> lifetime, and we return *owned* data - not borrowed data.
     let scope = unsafe { &*scope };
 
-    let root = f.into_vnode(NodeFactory::new(&scope));
+    let root = f.into_vnode(NodeFactory::new(scope));
 
     format!(
         "{:}",

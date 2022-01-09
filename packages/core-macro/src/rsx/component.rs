@@ -181,7 +181,7 @@ impl Parse for ComponentField {
             return Ok(Self { name, content });
         }
 
-        if name.to_string() == "key" {
+        if name == "key" {
             let content = ContentField::ManExpr(input.parse()?);
             return Ok(Self { name, content });
         }

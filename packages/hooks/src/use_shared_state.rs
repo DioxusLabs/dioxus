@@ -171,7 +171,7 @@ where
 ///
 ///
 ///
-pub fn use_context_provider<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) {
+pub fn use_context_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) {
     cx.use_hook(|_| {
         let state: ProvidedState<T> = RefCell::new(ProvidedStateInner {
             value: Rc::new(RefCell::new(f())),

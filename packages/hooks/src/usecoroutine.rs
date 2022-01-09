@@ -15,10 +15,7 @@ let g = use_coroutine(&cx, || {
 
 
 */
-pub fn use_coroutine<'a, F>(
-    cx: &'a ScopeState,
-    create_future: impl FnOnce() -> F,
-) -> CoroutineHandle<'a>
+pub fn use_coroutine<F>(cx: &ScopeState, create_future: impl FnOnce() -> F) -> CoroutineHandle<'_>
 where
     F: Future<Output = ()> + 'static,
 {
@@ -98,6 +95,7 @@ impl Clone for CoroutineHandle<'_> {
 impl Copy for CoroutineHandle<'_> {}
 
 impl<'a> CoroutineHandle<'a> {
+    #[allow(clippy::needless_return)]
     pub fn start(&self) {
         if self.is_running() {
             return;
