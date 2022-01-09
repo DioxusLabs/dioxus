@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-studio"
+name = "dioxus-cli"
 version = "0.1.0"
 authors = ["Jonathan Kelley"]
 edition = "2018"
