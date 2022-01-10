@@ -1,7 +1,6 @@
-use gloo::history::{BrowserHistory, History, HistoryListener};
+use gloo::history::{BrowserHistory, History, HistoryListener, Location};
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
     rc::Rc,
 };
 
@@ -117,6 +116,10 @@ impl RouterService {
             }
             None => false,
         }
+    }
+
+    pub fn current_location(&self) -> Location {
+        self.history.borrow().location().clone()
     }
 }
 
