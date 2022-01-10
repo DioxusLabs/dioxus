@@ -156,42 +156,6 @@ For users of React: Dioxus knows *not* to memoize components that borrow propert
 
 This means that during the render process, a newer version of `TitleCardProps` will never be compared with a previous version, saving some clock cycles.
 
-## The inline_props macro
-
-Yes - *another* macro! However, this one is entirely optional.
-
-For internal components, we provide the `inline_props` macro, which will let you embed your `Props` definition right into the function arguments of your component.
-
-Our title card above would be transformed from:
-
-```rust
-#[derive(Props, PartialEq)]
-struct TitleCardProps {
-    title: String,
-}
-
-fn TitleCard(cx: Scope<TitleCardProps>) -> Element {
-    cx.render(rsx!{
-        h1 { "{cx.props.title}" }
-    })
-}   
-```
-
-to:
-
-```rust
-#[inline_props]
-fn TitleCard(cx: Scope, title: String) -> Element {
-    cx.render(rsx!{
-        h1 { "{title}" }
-    })
-}   
-```
-
-Again, this macro is optional and should not be used by library authors since you have less fine-grained control over documentation and optionality.
-
-However, it's great for quickly throwing together an app without dealing with *any* extra boilerplate.
-
 ## The `Scope` object
 
 Though very similar to React, Dioxus is different in a few ways. Most notably, React components will not have a `Scope` parameter in the component declaration. 

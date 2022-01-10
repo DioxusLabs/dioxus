@@ -75,19 +75,16 @@ Next, we're going to define our component:
 
 ```rust
 fn App(cx: Scope<PostList>) -> Element {
-    // First, we create a new iterator by mapping the post array
-    let posts = cx.props.posts.iter().map(|post| rsx!{
-        Post {
-            title: post.title,
-            age: post.age,
-            original_poster: post.original_poster
-        }
-    });
-
-    // Finally, we render the post list inside of a container
     cx.render(rsx!{
-        ul { class: "post-list"
-            {posts}
+        ul { class: "post-list",
+            // we can drop an iterator directly into our elements
+            cx.props.posts.iter().map(|post| rsx!{
+                Post {
+                    title: post.title,
+                    age: post.age,
+                    original_poster: post.original_poster
+                }
+            })
         }
     })
 }
