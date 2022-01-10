@@ -221,7 +221,7 @@ fn is_literal_foramtted(lit: &LitStr) -> bool {
     while let Some(next) = chars.next() {
         if next == '{' {
             let nen = chars.next();
-            if nen == Some('{') {
+            if nen != Some('{') {
                 return true;
             }
         }
