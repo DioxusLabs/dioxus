@@ -28,7 +28,7 @@ struct ButtonProps {
     #[props(default)]
     c: Option<String>,
 
-    #[props(default)]
+    #[props(default, strip_option)]
     d: Option<String>,
 }
 
