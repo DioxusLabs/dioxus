@@ -22,13 +22,13 @@ pub struct LinkProps<'a> {
     /// Link { to: Route::Home, href: Route::as_url }
     ///
     /// ```
-    #[props(default, setter(strip_option))]
+    #[props(default, strip_option)]
     href: Option<&'a str>,
 
-    #[props(default, setter(strip_option))]
+    #[props(default, strip_option)]
     class: Option<&'a str>,
 
-    #[props(default, setter(strip_option))]
+    #[props(default, strip_option)]
     id: Option<&'a str>,
 
     children: Element<'a>,

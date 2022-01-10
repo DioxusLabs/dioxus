@@ -267,11 +267,6 @@ mod field_info {
     #[derive(Debug, Default, Clone)]
     pub struct FieldBuilderAttr {
         pub default: Option<syn::Expr>,
-        pub setter: SetterSettings,
-    }
-
-    #[derive(Debug, Clone, Default)]
-    pub struct SetterSettings {
         pub doc: Option<syn::Expr>,
         pub skip: bool,
         pub auto_into: bool,
@@ -305,12 +300,12 @@ mod field_info {
                     }
                 }
                 // Stash its span for later (we don’t yet know if it’ll be an error)
-                if self.setter.skip && skip_tokens.is_none() {
+                if self.skip && skip_tokens.is_none() {
                     skip_tokens = Some(attr.tokens.clone());
                 }
             }
 
-            if self.setter.skip && self.default.is_none() {
+            if self.skip && self.default.is_none() {
                 return Err(Error::new_spanned(
                     skip_tokens.unwrap(),
                     "#[props(skip)] must be accompanied by default or default_code",
@@ -329,6 +324,10 @@ mod field_info {
                     match name.as_str() {
                         "default" => {
                             self.default = Some(*assign.right);
+                            Ok(())
+                        }
+                        "doc" => {
+                            self.doc = Some(*assign.right);
                             Ok(())
                         }
                         "default_code" => {
@@ -355,7 +354,7 @@ mod field_info {
                     }
                 }
 
-                // uh not sure
+                // #[props(default)]
                 syn::Expr::Path(path) => {
                     let name = path_to_single_string(&path.path)
                         .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
@@ -365,39 +364,33 @@ mod field_info {
                                 Some(syn::parse(quote!(Default::default()).into()).unwrap());
                             Ok(())
                         }
-                        _ => Err(Error::new_spanned(
-                            &path,
-                            format!("Unknown parameter {:?}", name),
-                        )),
-                    }
-                }
-
-                //
-                syn::Expr::Call(call) => {
-                    let subsetting_name = if let syn::Expr::Path(path) = &*call.func {
-                        path_to_single_string(&path.path)
-                    } else {
-                        None
-                    }
-                    .ok_or_else(|| {
-                        let call_func = &call.func;
-                        let call_func = quote!(#call_func);
-                        Error::new_spanned(
-                            &call.func,
-                            format!("Illegal builder setting group {}", call_func),
-                        )
-                    })?;
-                    match subsetting_name.as_ref() {
-                        "setter" => {
-                            for arg in call.args {
-                                self.setter.apply_meta(arg)?;
+                        _ => {
+                            macro_rules! handle_fields {
+                                ( $( $flag:expr, $field:ident, $already:expr; )* ) => {
+                                    match name.as_str() {
+                                        $(
+                                            $flag => {
+                                                if self.$field {
+                                                    Err(Error::new(path.span(), concat!("Illegal setting - field is already ", $already)))
+                                                } else {
+                                                    self.$field = true;
+                                                    Ok(())
+                                                }
+                                            }
+                                        )*
+                                        _ => Err(Error::new_spanned(
+                                                &path,
+                                                format!("Unknown setter parameter {:?}", name),
+                                        ))
+                                    }
+                                }
                             }
-                            Ok(())
+                            handle_fields!(
+                                "skip", skip, "skipped";
+                                "into", auto_into, "calling into() on the argument";
+                                "strip_option", strip_option, "putting the argument in Some(...)";
+                            )
                         }
-                        _ => Err(Error::new_spanned(
-                            &call.func,
-                            format!("Illegal builder setting group name {}", subsetting_name),
-                        )),
                     }
                 }
 
@@ -414,75 +407,6 @@ mod field_info {
                                 self.default = None;
                                 Ok(())
                             }
-                            _ => Err(Error::new_spanned(path, "Unknown setting".to_owned())),
-                        }
-                    } else {
-                        Err(Error::new_spanned(
-                            expr,
-                            "Expected simple identifier".to_owned(),
-                        ))
-                    }
-                }
-                _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
-            }
-        }
-    }
-
-    impl SetterSettings {
-        fn apply_meta(&mut self, expr: syn::Expr) -> Result<(), Error> {
-            match expr {
-                syn::Expr::Assign(assign) => {
-                    let name = expr_to_single_string(&assign.left)
-                        .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
-                    match name.as_str() {
-                        "doc" => {
-                            self.doc = Some(*assign.right);
-                            Ok(())
-                        }
-                        _ => Err(Error::new_spanned(
-                            &assign,
-                            format!("Unknown parameter {:?}", name),
-                        )),
-                    }
-                }
-                syn::Expr::Path(path) => {
-                    let name = path_to_single_string(&path.path)
-                        .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
-                    macro_rules! handle_fields {
-                    ( $( $flag:expr, $field:ident, $already:expr; )* ) => {
-                        match name.as_str() {
-                            $(
-                                $flag => {
-                                    if self.$field {
-                                        Err(Error::new(path.span(), concat!("Illegal setting - field is already ", $already)))
-                                    } else {
-                                        self.$field = true;
-                                        Ok(())
-                                    }
-                                }
-                            )*
-                            _ => Err(Error::new_spanned(
-                                    &path,
-                                    format!("Unknown setter parameter {:?}", name),
-                            ))
-                        }
-                    }
-                }
-                    handle_fields!(
-                        "skip", skip, "skipped";
-                        "into", auto_into, "calling into() on the argument";
-                        "strip_option", strip_option, "putting the argument in Some(...)";
-                    )
-                }
-                syn::Expr::Unary(syn::ExprUnary {
-                    op: syn::UnOp::Not(_),
-                    expr,
-                    ..
-                }) => {
-                    if let syn::Expr::Path(path) = *expr {
-                        let name = path_to_single_string(&path.path)
-                            .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
-                        match name.as_str() {
                             "doc" => {
                                 self.doc = None;
                                 Ok(())
@@ -540,7 +464,7 @@ mod struct_info {
 
     impl<'a> StructInfo<'a> {
         pub fn included_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
-            self.fields.iter().filter(|f| !f.builder_attr.setter.skip)
+            self.fields.iter().filter(|f| !f.builder_attr.skip)
         }
 
         pub fn new(
@@ -826,14 +750,14 @@ Finally, call `.build()` to create the instance of `{name}`.
                 syn::GenericArgument::Type(ty_generics_tuple.into()),
             );
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-            let doc = match field.builder_attr.setter.doc {
+            let doc = match field.builder_attr.doc {
                 Some(ref doc) => quote!(#[doc = #doc]),
                 None => quote!(),
             };
 
             // NOTE: both auto_into and strip_option affect `arg_type` and `arg_expr`, but the order of
             // nesting is different so we have to do this little dance.
-            let arg_type = if field.builder_attr.setter.strip_option {
+            let arg_type = if field.builder_attr.strip_option {
                 let internal_type = field.type_from_inside_option().ok_or_else(|| {
                     Error::new_spanned(
                         &field_type,
@@ -844,7 +768,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             } else {
                 field_type
             };
-            let (arg_type, arg_expr) = if field.builder_attr.setter.auto_into {
+            let (arg_type, arg_expr) = if field.builder_attr.auto_into {
                 (
                     quote!(impl core::convert::Into<#arg_type>),
                     quote!(#field_name.into()),
@@ -852,7 +776,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             } else {
                 (quote!(#arg_type), quote!(#field_name))
             };
-            let arg_expr = if field.builder_attr.setter.strip_option {
+            let arg_expr = if field.builder_attr.strip_option {
                 quote!(Some(#arg_expr))
             } else {
                 arg_expr
@@ -1076,7 +1000,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let assignments = self.fields.iter().map(|field| {
                 let name = &field.name;
                 if let Some(ref default) = field.builder_attr.default {
-                    if field.builder_attr.setter.skip {
+                    if field.builder_attr.skip {
                         quote!(let #name = #default;)
                     } else {
                         quote!(let #name = #helper_trait_name::into_value(#name, || #default);)

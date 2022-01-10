@@ -11,7 +11,7 @@ use crate::RouterService;
 pub struct RouterProps<'a> {
     children: Element<'a>,
 
-    #[props(default, setter(strip_option))]
+    #[props(default, strip_option)]
     onchange: Option<&'a Fn(&'a str)>,
 }
 
