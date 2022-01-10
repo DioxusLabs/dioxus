@@ -181,7 +181,7 @@ impl Parse for ComponentField {
             return Ok(Self { name, content });
         }
 
-        if name.to_string() == "key" {
+        if name == "key" {
             let content = ContentField::ManExpr(input.parse()?);
             return Ok(Self { name, content });
         }
@@ -221,7 +221,7 @@ fn is_literal_foramtted(lit: &LitStr) -> bool {
     while let Some(next) = chars.next() {
         if next == '{' {
             let nen = chars.next();
-            if nen == Some('{') {
+            if nen != Some('{') {
                 return true;
             }
         }
