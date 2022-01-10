@@ -321,6 +321,7 @@ class Interpreter {
 
   CreatePlaceholder(edit) {
     let el = document.createElement("pre");
+    el.hidden = true;
     this.stack.push(el);
     this.nodes[edit.root] = el;
   }
