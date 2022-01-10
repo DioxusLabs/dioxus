@@ -1,31 +1,31 @@
-const bool_attrs = [
-  "allowfullscreen",
-  "allowpaymentrequest",
-  "async",
-  "autofocus",
-  "autoplay",
-  "checked",
-  "controls",
-  "default",
-  "defer",
-  "disabled",
-  "formnovalidate",
-  "hidden",
-  "ismap",
-  "itemscope",
-  "loop",
-  "multiple",
-  "muted",
-  "nomodule",
-  "novalidate",
-  "open",
-  "playsinline",
-  "readonly",
-  "required",
-  "reversed",
-  "selected",
-  "truespeed",
-]
+const bool_attrs = {
+  allowfullscreen: true,
+  allowpaymentrequest: true,
+  async: true,
+  autofocus: true,
+  autoplay: true,
+  checked: true,
+  controls: true,
+  default: true,
+  defer: true,
+  disabled: true,
+  formnovalidate: true,
+  hidden: true,
+  ismap: true,
+  itemscope: true,
+  loop: true,
+  multiple: true,
+  muted: true,
+  nomodule: true,
+  novalidate: true,
+  open: true,
+  playsinline: true,
+  readonly: true,
+  required: true,
+  reversed: true,
+  selected: true,
+  truespeed: true,
+};
 
 function serialize_event(event) {
   switch (event.type) {
@@ -386,7 +386,9 @@ class Interpreter {
     } else {
       switch (name) {
         case "value":
-          node.value = value;
+          if (value != node.value) {
+            node.value = value;
+          }
           break;
         case "checked":
           node.checked = value === "true";
@@ -399,7 +401,7 @@ class Interpreter {
           break;
         default:
           // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-          if (value == "false" && bool_attrs.indexOf(name)) {
+          if (value == "false" && bool_attrs.hasOwnProperty(name)) {
             node.removeAttribute(name);
           } else {
             node.setAttribute(name, value);
