@@ -1,19 +1,29 @@
-use dioxus_core::DomEdit;
 use wry::{
-    application::{event_loop::EventLoop, window::WindowBuilder},
-    webview::WebView,
+    application::{
+        event_loop::EventLoop,
+        window::{Window, WindowBuilder},
+    },
+    http::{Request as HttpRequest, Response as HttpResponse},
+    webview::{FileDropEvent, WebView},
+    Result as WryResult,
 };
 
 pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
-pub struct DesktopConfig<'a> {
+pub struct DesktopConfig {
     pub window: WindowBuilder,
-    pub(crate) manual_edits: Option<Vec<DomEdit<'a>>>,
+    pub file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
+    pub protocos: Vec<WryProtocl>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
 }
 
-impl<'a> DesktopConfig<'a> {
+pub type WryProtocl = (
+    String,
+    Box<dyn Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static>,
+);
+
+impl DesktopConfig {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
@@ -21,14 +31,10 @@ impl<'a> DesktopConfig<'a> {
         Self {
             event_handler: None,
             window,
+            protocos: Vec::new(),
+            file_drop_handler: None,
             pre_rendered: None,
-            manual_edits: None,
         }
-    }
-
-    pub fn with_edits(&mut self, edits: Vec<DomEdit<'a>>) -> &mut Self {
-        self.manual_edits = Some(edits);
-        self
     }
 
     pub fn with_prerendered(&mut self, content: String) -> &mut Self {
@@ -56,9 +62,25 @@ impl<'a> DesktopConfig<'a> {
         self.event_handler = Some(Box::new(handler));
         self
     }
+
+    pub fn with_file_drop_handler(
+        &mut self,
+        handler: impl Fn(&Window, FileDropEvent) -> bool + 'static,
+    ) -> &mut Self {
+        self.file_drop_handler = Some(Box::new(handler));
+        self
+    }
+
+    pub fn with_custom_protocol<F>(mut self, name: String, handler: F) -> Self
+    where
+        F: Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static,
+    {
+        self.protocos.push((name, Box::new(handler)));
+        self
+    }
 }
 
-impl<'a> Default for DesktopConfig<'a> {
+impl Default for DesktopConfig {
     fn default() -> Self {
         Self::new()
     }
