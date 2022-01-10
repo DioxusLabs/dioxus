@@ -196,11 +196,11 @@ pub fn launch_with_props<P: 'static + Send>(
                         // For now, we only serve two pieces of content which get included as bytes into the final binary.
                         let path = request.uri().replace("dioxus://", "");
 
-                        if path.trim_end_matches("/") == "index.html" {
+                        if path.trim_end_matches('/') == "index.html" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/html")
                                 .body(include_bytes!("./index.html").to_vec())
-                        } else if path.trim_end_matches("/") == "index.html/index.js" {
+                        } else if path.trim_end_matches('/') == "index.html/index.js" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/javascript")
                                 .body(include_bytes!("./index.js").to_vec())
