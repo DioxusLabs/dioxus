@@ -187,6 +187,36 @@ impl<'a> TextRenderer<'a, '_> {
                     match attr.namespace {
                         None => match attr.name {
                             "dangerous_inner_html" => inner_html = Some(attr.value),
+                            "allowfullscreen"
+                            | "allowpaymentrequest"
+                            | "async"
+                            | "autofocus"
+                            | "autoplay"
+                            | "checked"
+                            | "controls"
+                            | "default"
+                            | "defer"
+                            | "disabled"
+                            | "formnovalidate"
+                            | "hidden"
+                            | "ismap"
+                            | "itemscope"
+                            | "loop"
+                            | "multiple"
+                            | "muted"
+                            | "nomodule"
+                            | "novalidate"
+                            | "open"
+                            | "playsinline"
+                            | "readonly"
+                            | "required"
+                            | "reversed"
+                            | "selected"
+                            | "truespeed" => {
+                                if attr.value != "false" {
+                                    write!(f, " {}=\"{}\"", attr.name, attr.value)?
+                                }
+                            }
                             _ => write!(f, " {}=\"{}\"", attr.name, attr.value)?,
                         },
 
