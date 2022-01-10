@@ -116,8 +116,12 @@ pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let todo = &cx.props.todos[&cx.props.id];
     let is_editing = use_state(&cx, || false);
     let completed = if todo.checked { "completed" } else { "" };
+    let editing = if *is_editing.get() { "editing" } else { "" };
 
-    rsx!(cx, li { class: "{completed}",
+    rsx!(cx, li {
+        class: "{completed} {editing}",
+        onclick: move |_| is_editing.set(true),
+        onfocusout: move |_| is_editing.set(false),
         div { class: "view",
             input { class: "toggle", r#type: "checkbox", id: "cbg-{todo.id}", checked: "{todo.checked}",
                 onchange: move |evt| {
@@ -125,12 +129,20 @@ pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                 }
             }
             label { r#for: "cbg-{todo.id}", pointer_events: "none", "{todo.contents}" }
-            is_editing.then(|| rsx!{
-                input {
-                    value: "{todo.contents}",
-                    oninput: move |evt| cx.props.todos.modify()[&cx.props.id].contents = evt.value.clone(),
-                }
-            })
         }
+        is_editing.then(|| rsx!{
+            input {
+                class: "edit",
+                value: "{todo.contents}",
+                oninput: move |evt| cx.props.todos.modify()[&cx.props.id].contents = evt.value.clone(),
+                autofocus: "true",
+                onkeydown: move |evt| {
+                    match evt.key.as_str() {
+                        "Enter" | "Escape" | "Tab" => is_editing.set(false),
+                        _ => {}
+                    }
+                },
+            }
+        })
     })
 }

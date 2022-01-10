@@ -91,6 +91,9 @@ pub mod on {
             /// onfocus
             onfocus
 
+            // onfocusout
+            onfocusout
+
             /// onblur
             onblur
         ];
@@ -1092,7 +1095,7 @@ pub(crate) fn _event_meta(event: &UserEvent) -> (bool, EventPriority) {
         "keydown" | "keypress" | "keyup" => (true, High),
 
         // Focus
-        "focus" | "blur" => (true, Low),
+        "focus" | "blur" | "focusout" => (true, Low),
 
         // Form
         "change" | "input" | "invalid" | "reset" | "submit" => (true, Medium),
