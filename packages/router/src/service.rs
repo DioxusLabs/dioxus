@@ -72,8 +72,9 @@ impl RouterService {
     }
 
     pub fn register_total_route(&self, route: String, scope: ScopeId, fallback: bool) {
-        log::trace!("Registered route '{}' with scope id {:?}", route, scope);
-        self.slots.borrow_mut().push((scope, route));
+        let clean = clean_route(route);
+        log::trace!("Registered route '{}' with scope id {:?}", clean, scope);
+        self.slots.borrow_mut().push((scope, clean));
     }
 
     pub fn should_render(&self, scope: ScopeId) -> bool {
@@ -99,7 +100,7 @@ impl RouterService {
                     scope,
                     route,
                 );
-                if route == path {
+                if route_matches_path(route, path) {
                     log::trace!("    and it matches the current path '{}'", path);
                     self.root_found.set(true);
                     true
@@ -121,6 +122,59 @@ impl RouterService {
     pub fn current_location(&self) -> Location {
         self.history.borrow().location().clone()
     }
+}
+
+fn clean_route(route: String) -> String {
+    if route.as_str() == "/" {
+        return route;
+    }
+    route.trim_end_matches('/').to_string()
+}
+
+fn clean_path(path: &str) -> &str {
+    if path == "/" {
+        return path;
+    }
+    path.trim_end_matches('/')
+}
+
+fn route_matches_path(route: &str, path: &str) -> bool {
+    let route_pieces = route.split('/').collect::<Vec<_>>();
+    let path_pieces = clean_path(path).split('/').collect::<Vec<_>>();
+
+    log::trace!(
+        "  checking route pieces {:?} vs path pieces {:?}",
+        route_pieces,
+        path_pieces,
+    );
+
+    if route_pieces.len() != path_pieces.len() {
+        log::trace!("    the routes are different lengths");
+        return false;
+    }
+
+    for (i, r) in route_pieces.iter().enumerate() {
+        log::trace!("    checking route piece '{}' vs path", r);
+        // If this is a parameter then it matches as long as there's
+        // _any_thing in that spot in the path.
+        if r.starts_with(':') {
+            log::trace!(
+                "      route piece '{}' starts with a colon so it matches anything",
+                r,
+            );
+            continue;
+        }
+        log::trace!(
+            "      route piece '{}' must be an exact match for path piece '{}'",
+            r,
+            path_pieces[i],
+        );
+        if path_pieces[i] != *r {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 pub struct RouterCfg {
