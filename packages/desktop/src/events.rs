@@ -52,7 +52,7 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
             let evt = serde_json::from_value::<KeyboardData>(val).unwrap();
             Arc::new(evt)
         }
-        "focus" | "blur" | "focusout" => {
+        "focus" | "blur" | "focusout" | "focusin" => {
             //
             Arc::new(FocusData {})
         }
@@ -118,6 +118,7 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "keyup" => "keyup",
         "focus" => "focus",
         "focusout" => "focusout",
+        "focusin" => "focusin",
         "blur" => "blur",
         "change" => "change",
         "input" => "input",

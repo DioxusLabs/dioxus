@@ -204,6 +204,7 @@ pub static BUILTIN_INTERNED_STRINGS: &[&'static str] = &[
     "onerror",
     "onfocus",
     "onfocusout",
+    "onfocusin",
     "onhashchange",
     "oninput",
     "oninvalid",
