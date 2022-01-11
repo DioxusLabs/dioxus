@@ -45,10 +45,21 @@ Finally, we can include this list in the final structure:
 ```rust
 rsx!(
     ul {
-        {name_list}
+        name_list
     }
 )
 ```
+Or, we can include the iterator inline:
+```rust
+rsx!(
+    ul {
+        names.iter().map(|name| rsx!(
+            li { "{name}" } 
+        ))
+    }
+)
+```
+
 The HTML-rendered version of this list would follow what you would expect:
 ```html
 <ul>
@@ -58,38 +69,6 @@ The HTML-rendered version of this list would follow what you would expect:
     <li> doe </li>
 </ul>
 ```
-
-### Rendering our posts with a PostList component
-
-Let's start by modeling this problem with a component and some properties. 
-
-For this example, we're going to use the borrowed component syntax since we probably have a large list of posts that we don't want to clone every time we render the Post List.
-
-```rust
-#[derive(Props, PartialEq)]
-struct PostListProps<'a> {
-    posts: &'a [PostData]
-}
-```
-Next, we're going to define our component:
-
-```rust
-fn App(cx: Scope<PostList>) -> Element {
-    cx.render(rsx!{
-        ul { class: "post-list",
-            // we can drop an iterator directly into our elements
-            cx.props.posts.iter().map(|post| rsx!{
-                Post {
-                    title: post.title,
-                    age: post.age,
-                    original_poster: post.original_poster
-                }
-            })
-        }
-    })
-}
-```
-
 
 ## Filtering Iterators
 

@@ -30,9 +30,7 @@ fn BlogPost(cx: Scope) -> Element {
 }
 ```
 
-> Note! 
-
-This attribute is called "dangerous_inner_html" because it is DANGEROUS. If you're not careful, you can easily expose cross-site-scripting (XSS) attacks to your users. If you're handling untrusted input, make sure to escape your HTML before passing it into `dangerous_inner_html`.
+> Note! This attribute is called "dangerous_inner_html" because it is DANGEROUS. If you're not careful, you can easily expose cross-site-scripting (XSS) attacks to your users. If you're handling untrusted input, make sure to escape your HTML before passing it into `dangerous_inner_html`.
 
 
 ## Boolean Attributes
@@ -87,13 +85,13 @@ Not all attributes work like this however. Only *these specific attributes* are 
 
 For any other attributes, a value of `"false"` will be sent directly to the DOM.
 
-## `prevent_default`
+## Stopping form input and navigation with `prevent_default`
 
-Currently, preventing default on events from an event handler is not possible from Desktop/Mobile. Until this is supported, it's possible to prevent default using the `prevent_default` attribute. 
+Currently, calling `prevent_default` on events in EventHandlers is not possible from Desktop/Mobile. Until this is supported, it's possible to prevent default using the `prevent_default` attribute. 
 
 > Note: you cannot conditionally prevent default with this approach. This is a limitation until synchronous event handling is available across the Webview boundary 
 
-To use `prevent_default`, simple use the `prevent_default` attribute and set it to the name of the event handler you want to prevent default on. We can attach this attribute multiple times for multiple attributes.
+To use `prevent_default`, simply attach the `prevent_default` attribute to a given element and set it to the name of the event handler you want to prevent default on. We can attach this attribute multiple times for multiple attributes.
 
 ```rust
 rsx!{
@@ -107,7 +105,7 @@ rsx!{
 }
 ```
 
-## `..Attributes`
+## Passing attributes into children: `..Attributes`
 
 Just like Dioxus supports spreading component props into components, we also support spreading attributes into elements. This lets you pass any arbitrary attributes through components into elements.
 
@@ -130,7 +128,6 @@ pub fn StateInput<'a>(cx: Scope<'a, InputProps<'a>>) -> Element {
 ```
 
 ## Controlled inputs and `value`, `checked`, and `selected`
-
 
 In Dioxus, there is a distinction between controlled and uncontrolled inputs. Most inputs you'll use are "controlled," meaning we both drive the `value` of the input and react to the `oninput`.
 
@@ -179,3 +176,15 @@ rsx!{
 ```
 
 ## Wrapping up
+
+We've reached just about the end of what you can do with elements without venturing into "advanced" territory.
+
+In this chapter, we learned:
+- How to declare elements
+- How to conditionally render parts of your UI
+- How to render lists
+- Which attributes are "special"
+
+There's more to elements! For further reading, check out:
+
+- [Custom Elements]()
