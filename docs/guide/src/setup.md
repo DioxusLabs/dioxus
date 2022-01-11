@@ -38,7 +38,7 @@ For windows users: download the [bootstrapper for Webview2 from Microsoft](https
 
 For linux users, we need the development libraries for libgtk.
 
-````
+```
 sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libappindicator3-dev
 ```
 
