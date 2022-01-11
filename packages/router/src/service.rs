@@ -1,6 +1,7 @@
 use gloo::history::{BrowserHistory, History, HistoryListener, Location};
 use std::{
-    cell::{Cell, RefCell},
+    cell::{Cell, Ref, RefCell},
+    collections::HashMap,
     rc::Rc,
 };
 
@@ -9,10 +10,9 @@ use dioxus_core::ScopeId;
 pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
     history: Rc<RefCell<BrowserHistory>>,
-    registered_routes: RefCell<RouteSlot>,
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
     root_found: Rc<Cell<bool>>,
-    cur_root: RefCell<String>,
+    cur_path_params: Rc<RefCell<HashMap<String, String>>>,
     listener: HistoryListener,
 }
 
@@ -52,16 +52,11 @@ impl RouterService {
         });
 
         Self {
-            registered_routes: RefCell::new(RouteSlot::Routes {
-                partial: String::from("/"),
-                total: String::from("/"),
-                rest: Vec::new(),
-            }),
             root_found,
             history: Rc::new(RefCell::new(history)),
             regen_route,
             slots,
-            cur_root: RefCell::new(path.to_string()),
+            cur_path_params: Rc::new(RefCell::new(HashMap::new())),
             listener,
         }
     }
@@ -100,9 +95,10 @@ impl RouterService {
                     scope,
                     route,
                 );
-                if route_matches_path(route, path) {
+                if let Some(params) = route_matches_path(route, path) {
                     log::trace!("    and it matches the current path '{}'", path);
                     self.root_found.set(true);
+                    *self.cur_path_params.borrow_mut() = params;
                     true
                 } else {
                     if route == "" {
@@ -122,6 +118,10 @@ impl RouterService {
     pub fn current_location(&self) -> Location {
         self.history.borrow().location().clone()
     }
+
+    pub fn current_path_params(&self) -> Ref<HashMap<String, String>> {
+        self.cur_path_params.borrow()
+    }
 }
 
 fn clean_route(route: String) -> String {
@@ -138,7 +138,7 @@ fn clean_path(path: &str) -> &str {
     path.trim_end_matches('/')
 }
 
-fn route_matches_path(route: &str, path: &str) -> bool {
+fn route_matches_path(route: &str, path: &str) -> Option<HashMap<String, String>> {
     let route_pieces = route.split('/').collect::<Vec<_>>();
     let path_pieces = clean_path(path).split('/').collect::<Vec<_>>();
 
@@ -150,9 +150,10 @@ fn route_matches_path(route: &str, path: &str) -> bool {
 
     if route_pieces.len() != path_pieces.len() {
         log::trace!("    the routes are different lengths");
-        return false;
+        return None;
     }
 
+    let mut matches = HashMap::new();
     for (i, r) in route_pieces.iter().enumerate() {
         log::trace!("    checking route piece '{}' vs path", r);
         // If this is a parameter then it matches as long as there's
@@ -162,6 +163,8 @@ fn route_matches_path(route: &str, path: &str) -> bool {
                 "      route piece '{}' starts with a colon so it matches anything",
                 r,
             );
+            let param = &r[1..];
+            matches.insert(param.to_string(), path_pieces[i].to_string());
             continue;
         }
         log::trace!(
@@ -170,11 +173,11 @@ fn route_matches_path(route: &str, path: &str) -> bool {
             path_pieces[i],
         );
         if path_pieces[i] != *r {
-            return false;
+            return None;
         }
     }
 
-    return true;
+    Some(matches)
 }
 
 pub struct RouterCfg {

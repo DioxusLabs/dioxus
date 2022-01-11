@@ -1,6 +1,6 @@
 use dioxus_core::ScopeState;
 use gloo::history::Location;
-use std::rc::Rc;
+use std::{rc::Rc, str::FromStr};
 
 use crate::RouterService;
 
@@ -33,9 +33,18 @@ impl<'a> UseRoute<'a> {
         Some(segments.remove(len - 1))
     }
 
-    /// Parse the segments of the URL, using named parameters (defined in your router)
-    pub fn segment<T>(&self, name: &str) -> Option<&T> {
-        todo!()
+    /// Get the named parameter from the path, as defined in your router. The
+    /// value will be parsed into the type specified by `T` by calling
+    /// `value.parse::<T>()`. This method returns `None` if the named
+    /// parameter does not exist in the current path.
+    pub fn segment<T>(&self, name: &str) -> Option<Result<T, T::Err>>
+    where
+        T: FromStr,
+    {
+        self.router
+            .current_path_params()
+            .get(name)
+            .and_then(|v| Some(v.parse::<T>()))
     }
 
     pub fn current_location(&self) -> Location {
