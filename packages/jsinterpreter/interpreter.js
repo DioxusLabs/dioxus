@@ -1,5 +1,6 @@
 "use strict";
 exports.__esModule = true;
+exports.Interpreter = void 0;
 function serialize_event(event) {
     var _a, _b;
     switch (event.type) {
@@ -247,84 +248,79 @@ var Interpreter = /** @class */ (function () {
     Interpreter.prototype.pop = function () {
         return this.stack.pop();
     };
-    Interpreter.prototype.PushRoot = function (edit) {
-        var id = edit.root;
-        var node = this.nodes[id];
+    Interpreter.prototype.PushRoot = function (root) {
+        var node = this.nodes[root];
         this.stack.push(node);
     };
-    Interpreter.prototype.AppendChildren = function (edit) {
-        var root = this.stack[this.stack.length - (1 + edit.many)];
-        var to_add = this.stack.splice(this.stack.length - edit.many);
-        for (var i = 0; i < edit.many; i++) {
+    Interpreter.prototype.AppendChildren = function (many) {
+        var root = this.stack[this.stack.length - (1 + many)];
+        var to_add = this.stack.splice(this.stack.length - many);
+        for (var i = 0; i < many; i++) {
             root.appendChild(to_add[i]);
         }
     };
-    Interpreter.prototype.ReplaceWith = function (edit) {
-        var root = this.nodes[edit.root];
-        var els = this.stack.splice(this.stack.length - edit.m);
+    Interpreter.prototype.ReplaceWith = function (root_id, m) {
+        var root = this.nodes[root_id];
+        var els = this.stack.splice(this.stack.length - m);
         root.replaceWith.apply(root, els);
     };
-    Interpreter.prototype.InsertAfter = function (edit) {
-        var old = this.nodes[edit.root];
-        var new_nodes = this.stack.splice(this.stack.length - edit.n);
+    Interpreter.prototype.InsertAfter = function (root, n) {
+        var old = this.nodes[root];
+        var new_nodes = this.stack.splice(this.stack.length - n);
         old.after.apply(old, new_nodes);
     };
-    Interpreter.prototype.InsertBefore = function (edit) {
-        var old = this.nodes[edit.root];
-        var new_nodes = this.stack.splice(this.stack.length - edit.n);
+    Interpreter.prototype.InsertBefore = function (root, n) {
+        var old = this.nodes[root];
+        var new_nodes = this.stack.splice(this.stack.length - n);
         old.before.apply(old, new_nodes);
     };
-    Interpreter.prototype.Remove = function (edit) {
-        var node = this.nodes[edit.root];
+    Interpreter.prototype.Remove = function (root) {
+        var node = this.nodes[root];
         if (node !== undefined) {
             node.remove();
         }
     };
-    Interpreter.prototype.CreateTextNode = function (edit) {
+    Interpreter.prototype.CreateTextNode = function (text, root) {
         // todo: make it so the types are okay
-        var node = document.createTextNode(edit.text);
-        this.nodes[edit.root] = node;
+        var node = document.createTextNode(text);
+        this.nodes[root] = node;
         this.stack.push(node);
     };
-    Interpreter.prototype.CreateElement = function (edit) {
-        var el = document.createElement(edit.tag);
-        el.setAttribute("dioxus-id", "".concat(edit.root));
-        this.nodes[edit.root] = el;
+    Interpreter.prototype.CreateElement = function (tag, root) {
+        var el = document.createElement(tag);
+        el.setAttribute("dioxus-id", "".concat(root));
+        this.nodes[root] = el;
         this.stack.push(el);
     };
-    Interpreter.prototype.CreateElementNs = function (edit) {
-        var el = document.createElementNS(edit.ns, edit.tag);
+    Interpreter.prototype.CreateElementNs = function (tag, root, ns) {
+        var el = document.createElementNS(ns, tag);
         this.stack.push(el);
-        this.nodes[edit.root] = el;
+        this.nodes[root] = el;
     };
-    Interpreter.prototype.CreatePlaceholder = function (edit) {
+    Interpreter.prototype.CreatePlaceholder = function (root) {
         var el = document.createElement("pre");
         el.hidden = true;
         this.stack.push(el);
-        this.nodes[edit.root] = el;
+        this.nodes[root] = el;
     };
-    Interpreter.prototype.RemoveEventListener = function (edit) { };
-    Interpreter.prototype.NewEventListener = function (edit, handler) {
-        var event_name = edit.event_name;
-        var mounted_node_id = edit.root;
-        var scope = edit.scope;
-        console.log('new event listener', event_name, mounted_node_id, scope);
-        var element = this.nodes[edit.root];
-        element.setAttribute("dioxus-event-".concat(event_name), "".concat(scope, ".").concat(mounted_node_id));
-        if (!this.listeners[event_name]) {
-            this.listeners[event_name] = handler;
-            this.root.addEventListener(event_name, handler);
-        }
+    Interpreter.prototype.NewEventListener = function (event_name, scope, root) {
+        console.log('new event listener', event_name, root, scope);
+        var element = this.nodes[root];
+        element.setAttribute("dioxus-event-".concat(event_name), "".concat(scope, ".").concat(root));
+        // if (!this.listeners[event_name]) {
+        //   this.listeners[event_name] = handler;
+        //   this.root.addEventListener(event_name, handler);
+        // }
     };
-    Interpreter.prototype.SetText = function (edit) {
-        this.nodes[edit.root].textContent = edit.text;
+    Interpreter.prototype.RemoveEventListener = function (root, event_name, scope) {
+        //
     };
-    Interpreter.prototype.SetAttribute = function (edit) {
-        // console.log("setting attr", edit);
-        var name = edit.field;
-        var value = edit.value;
-        var ns = edit.ns;
-        var node = this.nodes[edit.root];
+    Interpreter.prototype.SetText = function (root, text) {
+        this.nodes[root].textContent = text;
+    };
+    Interpreter.prototype.SetAttribute = function (root, field, value, ns) {
+        var name = field;
+        var node = this.nodes[root];
         if (ns == "style") {
             // @ts-ignore
             node.style[name] = value;
@@ -359,9 +355,8 @@ var Interpreter = /** @class */ (function () {
             }
         }
     };
-    Interpreter.prototype.RemoveAttribute = function (edit) {
-        var name = edit.name;
-        var node = this.nodes[edit.root];
+    Interpreter.prototype.RemoveAttribute = function (root, name) {
+        var node = this.nodes[root];
         node.removeAttribute(name);
         if (name === "value") {
             node.value = "";
@@ -376,81 +371,85 @@ var Interpreter = /** @class */ (function () {
     Interpreter.prototype.handleEdits = function (edits) {
         console.log("handling edits ", edits);
         this.stack.push(this.root);
-        var _loop_1 = function (edit) {
-            switch (edit.type) {
-                case "AppendChildren":
-                    this_1.AppendChildren(edit);
-                    break;
-                case "ReplaceWith":
-                    this_1.ReplaceWith(edit);
-                    break;
-                case "InsertAfter":
-                    this_1.InsertAfter(edit);
-                    break;
-                case "InsertBefore":
-                    this_1.InsertBefore(edit);
-                    break;
-                case "Remove":
-                    this_1.Remove(edit);
-                    break;
-                case "CreateTextNode":
-                    this_1.CreateTextNode(edit);
-                    break;
-                case "CreateElement":
-                    this_1.CreateElement(edit);
-                    break;
-                case "CreateElementNs":
-                    this_1.CreateElementNs(edit);
-                    break;
-                case "CreatePlaceholder":
-                    this_1.CreatePlaceholder(edit);
-                    break;
-                case "RemoveEventListener":
-                    this_1.RemoveEventListener(edit);
-                    break;
-                case "NewEventListener":
-                    // todo: only on desktop should we make our own handler
-                    var handler = function (event) {
-                        var target = event.target;
-                        console.log("event", event);
-                        if (target != null) {
-                            var real_id = target.getAttribute("dioxus-id");
-                            var should_prevent_default = target.getAttribute("dioxus-prevent-default");
-                            var contents = serialize_event(event);
-                            if (should_prevent_default === "on".concat(event.type)) {
-                                event.preventDefault();
-                            }
-                            if (real_id == null) {
-                                return;
-                            }
-                            window.rpc.call("user_event", {
-                                event: edit.event_name,
-                                mounted_dom_id: parseInt(real_id),
-                                contents: contents
-                            });
-                        }
-                    };
-                    this_1.NewEventListener(edit, handler);
-                    break;
-                case "SetText":
-                    this_1.SetText(edit);
-                    break;
-                case "SetAttribute":
-                    this_1.SetAttribute(edit);
-                    break;
-                case "RemoveAttribute":
-                    this_1.RemoveAttribute(edit);
-                    break;
-            }
-        };
-        var this_1 = this;
         for (var _i = 0, edits_1 = edits; _i < edits_1.length; _i++) {
             var edit = edits_1[_i];
-            _loop_1(edit);
+            this.handleEdit(edit);
+        }
+    };
+    Interpreter.prototype.handleEdit = function (edit) {
+        switch (edit.type) {
+            case "PushRoot":
+                this.PushRoot(edit.root);
+                break;
+            case "AppendChildren":
+                this.AppendChildren(edit.many);
+                break;
+            case "ReplaceWith":
+                this.ReplaceWith(edit.root, edit.m);
+                break;
+            case "InsertAfter":
+                this.InsertAfter(edit.root, edit.n);
+                break;
+            case "InsertBefore":
+                this.InsertBefore(edit.root, edit.n);
+                break;
+            case "Remove":
+                this.Remove(edit.root);
+                break;
+            case "CreateTextNode":
+                this.CreateTextNode(edit.text, edit.root);
+                break;
+            case "CreateElement":
+                this.CreateElement(edit.tag, edit.root);
+                break;
+            case "CreateElementNs":
+                this.CreateElementNs(edit.tag, edit.root, edit.ns);
+                break;
+            case "CreatePlaceholder":
+                this.CreatePlaceholder(edit.root);
+                break;
+            case "RemoveEventListener":
+                this.RemoveEventListener(edit.root, edit.event_name, edit.scope);
+                break;
+            case "NewEventListener":
+                // todo: only on desktop should we make our own handler
+                var handler = function (event) {
+                    var target = event.target;
+                    console.log("event", event);
+                    if (target != null) {
+                        var real_id = target.getAttribute("dioxus-id");
+                        var should_prevent_default = target.getAttribute("dioxus-prevent-default");
+                        var contents = serialize_event(event);
+                        if (should_prevent_default === "on".concat(event.type)) {
+                            event.preventDefault();
+                        }
+                        if (real_id == null) {
+                            return;
+                        }
+                        window.rpc.call("user_event", {
+                            event: edit.event_name,
+                            mounted_dom_id: parseInt(real_id),
+                            contents: contents
+                        });
+                    }
+                };
+                this.NewEventListener(edit.event_name, edit.scope, edit.root);
+                // this.NewEventListener(edit, handler);
+                break;
+            case "SetText":
+                this.SetText(edit.root, edit.text);
+                break;
+            case "SetAttribute":
+                this.SetAttribute(edit.root, edit.field, edit.value, edit.ns);
+                break;
+            case "RemoveAttribute":
+                this.RemoveAttribute(edit.root, edit.name);
+                break;
         }
     };
     return Interpreter;
 }());
+exports.Interpreter = Interpreter;
 function main() {
     var root = window.document.getElementById("main");
     if (root != null) {

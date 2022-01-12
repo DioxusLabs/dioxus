@@ -61,6 +61,7 @@ pub use dioxus_core as dioxus;
 use dioxus_core::prelude::Component;
 use futures_util::FutureExt;
 
+pub(crate) mod bindings;
 mod cache;
 mod cfg;
 mod dom;
