@@ -4,24 +4,42 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use dioxus::core::exports::futures_channel::mpsc::unbounded;
-use dioxus::core::*;
-use futures::{future::Either, pin_mut, StreamExt};
+use dioxus::{core::exports::futures_channel::mpsc::unbounded, prelude::Props};
+use dioxus::{core::*, prelude::*};
+use futures::{
+    channel::mpsc::{UnboundedReceiver, UnboundedSender},
+    future::Either,
+    pin_mut, StreamExt,
+};
 use std::{
+    cell::Cell,
     collections::HashMap,
     io,
+    rc::Rc,
     time::{Duration, Instant},
 };
 use stretch2::{prelude::Size, Stretch};
 use tui::{backend::CrosstermBackend, style::Style as TuiStyle, Terminal};
 
 mod attributes;
+mod hooks;
 mod layout;
 mod render;
 
 pub use attributes::*;
+pub use hooks::*;
 pub use layout::*;
 pub use render::*;
+
+pub fn launch(app: Component<()>) {
+    let mut dom = VirtualDom::new(app);
+    let (tx, rx) = unbounded();
+
+    dom.base_scope().provide_context(RinkContext::new(rx));
+    dom.rebuild();
+
+    render_vdom(&mut dom, tx).unwrap();
+}
 
 pub struct TuiNode<'a> {
     pub layout: stretch2::node::Node,
@@ -29,10 +47,9 @@ pub struct TuiNode<'a> {
     pub node: &'a VNode<'a>,
 }
 
-pub fn render_vdom(vdom: &mut VirtualDom) -> Result<()> {
+pub fn render_vdom(vdom: &mut VirtualDom, ctx: UnboundedSender<TermEvent>) -> Result<()> {
     // Setup input handling
     let (tx, mut rx) = unbounded();
-
     std::thread::spawn(move || {
         let tick_rate = Duration::from_millis(100);
         let mut last_tick = Instant::now();
@@ -117,35 +134,27 @@ pub fn render_vdom(vdom: &mut VirtualDom) -> Result<()> {
 
                     match select(wait, rx.next()).await {
                         Either::Left((a, b)) => {
-                            // println!("work");
+                            //
                         }
                         Either::Right((evt, o)) => {
-                            // println!("event");
-                            match evt.unwrap() {
+                            //
+                            match evt.as_ref().unwrap() {
                                 InputEvent::UserInput(event) => match event {
                                     TermEvent::Key(key) => {
                                         match key.code {
-                                            KeyCode::Char('q') => {
-                                                disable_raw_mode()?;
-                                                execute!(
-                                                    terminal.backend_mut(),
-                                                    LeaveAlternateScreen,
-                                                    DisableMouseCapture
-                                                )?;
-                                                terminal.show_cursor()?;
-                                                break;
-                                            }
+                                            KeyCode::Char('q') => break,
                                             _ => {} // handle event
                                         }
                                     }
-                                    TermEvent::Mouse(_) => {}
-                                    TermEvent::Resize(_, _) => {}
+                                    TermEvent::Resize(_, _) | TermEvent::Mouse(_) => {}
                                 },
                                 InputEvent::Tick => {} // tick
-                                InputEvent::Close => {
-                                    break;
-                                }
+                                InputEvent::Close => break,
                             };
+
+                            if let InputEvent::UserInput(evt) = evt.unwrap() {
+                                ctx.unbounded_send(evt).unwrap();
+                            }
                         }
                     }
                 }

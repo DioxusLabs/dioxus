@@ -1,10 +1,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    let mut dom = VirtualDom::new(app);
-    dom.rebuild();
-
-    rink::render_vdom(&mut dom).unwrap();
+    rink::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

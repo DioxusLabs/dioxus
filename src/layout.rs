@@ -67,7 +67,17 @@ pub fn collect_layout<'a>(
             for el in el.children {
                 let ite = ElementIdIterator::new(vdom, el);
                 for node in ite {
-                    child_layout.push(nodes[&node.mounted_id()].layout)
+                    match node {
+                        VNode::Element(_) | VNode::Text(_) => {
+                            //
+                            child_layout.push(nodes[&node.mounted_id()].layout)
+                        }
+                        VNode::Placeholder(_) => {}
+                        VNode::Fragment(_) => todo!(),
+                        VNode::Component(_) => todo!(),
+                    }
+
+                    // child_layout.push(nodes[&node.mounted_id()].layout)
                 }
             }
 
@@ -86,7 +96,14 @@ pub fn collect_layout<'a>(
                 collect_layout(layout, nodes, vdom, child);
             }
         }
-        VNode::Component(_) => todo!(),
-        VNode::Placeholder(_) => todo!(),
+        VNode::Component(sc) => {
+            //
+            let scope = vdom.get_scope(sc.scope.get().unwrap()).unwrap();
+            let root = scope.root_node();
+            collect_layout(layout, nodes, vdom, root);
+        }
+        VNode::Placeholder(_) => {
+            //
+        }
     };
 }
