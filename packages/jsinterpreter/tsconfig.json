@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+        "target": "es5",
+        // "module": "None",
+        "module": "commonjs",
+        "strict": true,
+        "outDir": "dist",
+        "sourceMap": true
+    }
+}

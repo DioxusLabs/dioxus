@@ -203,7 +203,7 @@ pub fn launch_with_props<P: 'static + Send>(
                         } else if path.trim_end_matches('/') == "index.html/index.js" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/javascript")
-                                .body(include_bytes!("./index.js").to_vec())
+                                .body(include_bytes!("../../jsinterpreter/interpreter.js").to_vec())
                         } else {
                             wry::http::ResponseBuilder::new()
                                 .status(wry::http::status::StatusCode::NOT_FOUND)
