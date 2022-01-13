@@ -54,7 +54,7 @@
   <h4>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> Chinese </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
   </h3>
 </div>
 
