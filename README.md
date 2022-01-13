@@ -159,7 +159,7 @@ You shouldn't use Dioxus if:
 ### Comparison with other Rust UI frameworks
 Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**. 
 
-- [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead of React-hooks, no borrowed props, no SSR.
+- [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead of React-hooks, no borrowed props, supports SSR (no hydration).
 - [Percy](https://github.com/chinedufn/percy): Supports SSR but less emphasis on state management and event handling.
 - [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but lacking in ergonomics.
 - [Dominator](https://github.com/Pauan/rust-dominator): Signal-based zero-cost alternative, less emphasis on community and docs.
