@@ -50,6 +50,14 @@
   </h3>
 </div>
 
+<div align="center">
+  <h4>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> Chinese </a>
+  </h3>
+</div>
+
 <br/>
 
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust.
