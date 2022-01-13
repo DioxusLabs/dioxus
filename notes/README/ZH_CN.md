@@ -75,7 +75,9 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-Dioxus 可用于制作 网页程序、桌面应用、静态站点、移动端应用。Dioxus 为不同的平台都提供了很好的开发文档。
+Dioxus 可用于制作 网页程序、桌面应用、静态站点、移动端应用。
+
+Dioxus 为不同的平台都提供了很好的开发文档。
 
 如果你会使用 React ，那 Dioxus 对你来说会很简单。 
 
@@ -89,13 +91,13 @@ Dioxus 可用于制作 网页程序、桌面应用、静态站点、移动端应
 
 ### 示例
 
-所有例子都是 桌面应用 程序，请使用 `cargo run --example XYZ` 运行这些例子。
+本项目中的所有例子都是 `桌面应用` 程序，请使用 `cargo run --example XYZ` 运行这些例子。
 
 ```
 cargo run --example EXAMPLE
 ```
 
-## 开始学习
+## 进入学习
 
 <table style="width:100%" align="center">
     <tr >
@@ -118,7 +120,7 @@ cargo run --example EXAMPLE
 
 查看 [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) 查看更多有趣（~~NiuBi~~）的项目！
 
-## 为什么使用 Rust 开发
+## 为什么使用 Dioxus 和 Rust ？
 
 TypeScript 是一个不错的 JavaScript 拓展集，但它仍然算是 JavaScript。
 
@@ -128,7 +130,7 @@ TS 代码运行效率不高，而且有大量的配置项。
 
 使用 Rust 开发，我们能获得：
 
-- 所有库的静态类型支持。
+- 库的静态类型支持。
 - 变量的默认不变性。
 - 一个简单且直观的模块管理系统。
 - 集成在内部的文档系统。
@@ -145,7 +147,7 @@ Dioxus 能为开发者提供的：
 - 正确且安全的使用不可变数据结构。
 - 安全的错误处理结果。
 - 拥有原生移动端的性能。
-- 直接访问系统层IO。
+- 直接访问系统的IO层。
 
 Dioxus 使 Rust 应用程序的编写速度和 React 应用程序一样快，但提供了更多的健壮性，让你的前端团队更有信心在更短的时间内做出重大改变。
 
@@ -153,9 +155,10 @@ Dioxus 使 Rust 应用程序的编写速度和 React 应用程序一样快，但
 
 您不该在这些情况下使用 Dioxus ：
 
-- 你不喜欢 React Hooks 的前端开发方案。
-- 你需要一个 `no-std` 的渲染器。
+- 您不喜欢 React Hooks 的前端开发方案。
+- 您需要一个 `no-std` 的渲染器。
 - 您希望应用运行在 `不支持 Wasm 或 asm.js` 的浏览器。
+- 您需要一个 `Send + Sync` UI 解决方案（目前不支持）。
 
 
 ## 协议
