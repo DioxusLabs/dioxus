@@ -50,6 +50,14 @@
   </h3>
 </div>
 
+<div align="center">
+  <h4>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
+  </h3>
+</div>
+
 <br/>
 
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust.
@@ -108,7 +116,7 @@ cargo run --example EXAMPLE
 | [![File Explorer](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![E-commerce Example](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
 
 
-See the awesome-dioxus page for a curated list of content in the Dioxus Ecosystem.
+See the [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) page for a curated list of content in the Dioxus Ecosystem.
 
 
 ## Why Dioxus and why Rust?
