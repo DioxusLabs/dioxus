@@ -11,7 +11,7 @@ pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
     history: Rc<RefCell<BrowserHistory>>,
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
-    root_found: Rc<Cell<bool>>,
+    root_found: Rc<Cell<Option<ScopeId>>>,
     cur_path_params: Rc<RefCell<HashMap<String, String>>>,
     listener: HistoryListener,
 }
@@ -39,11 +39,11 @@ impl RouterService {
 
         let _slots = slots.clone();
 
-        let root_found = Rc::new(Cell::new(false));
+        let root_found = Rc::new(Cell::new(None));
         let regen = regen_route.clone();
         let _root_found = root_found.clone();
         let listener = history.listen(move || {
-            _root_found.set(false);
+            _root_found.set(None);
             // checking if the route is valid is cheap, so we do it
             for (slot, root) in _slots.borrow_mut().iter().rev() {
                 log::trace!("regenerating slot {:?} for root '{}'", slot, root);
@@ -74,8 +74,13 @@ impl RouterService {
 
     pub fn should_render(&self, scope: ScopeId) -> bool {
         log::trace!("Should render scope id {:?}?", scope);
-        if self.root_found.get() {
-            log::trace!("  no - because root_found is true");
+        if let Some(root_id) = self.root_found.get() {
+            log::trace!("  we already found a root with scope id {:?}", root_id);
+            if root_id == scope {
+                log::trace!("    yes - it's a match");
+                return true;
+            }
+            log::trace!("    no - it's not a match");
             return false;
         }
 
@@ -89,7 +94,7 @@ impl RouterService {
 
         // fallback logic
         match root {
-            Some((_id, route)) => {
+            Some((id, route)) => {
                 log::trace!(
                     "  matched given scope id {:?} with route root '{}'",
                     scope,
@@ -97,13 +102,13 @@ impl RouterService {
                 );
                 if let Some(params) = route_matches_path(route, path) {
                     log::trace!("    and it matches the current path '{}'", path);
-                    self.root_found.set(true);
+                    self.root_found.set(Some(*id));
                     *self.cur_path_params.borrow_mut() = params;
                     true
                 } else {
                     if route == "" {
                         log::trace!("    and the route is the root, so we will use that without a better match");
-                        self.root_found.set(true);
+                        self.root_found.set(Some(*id));
                         true
                     } else {
                         log::trace!("    and the route '{}' is not the root nor does it match the current path", route);
