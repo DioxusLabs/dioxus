@@ -8,51 +8,50 @@
 //! - Partial delegation?>
 
 use crate::bindings::Interpreter;
-use dioxus_core::{DomEdit, ElementId, SchedulerMsg, ScopeId, UserEvent};
-use fxhash::FxHashMap;
-use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
-use web_sys::{
-    CssStyleDeclaration, Document, Element, Event, HtmlElement, HtmlInputElement,
-    HtmlOptionElement, HtmlTextAreaElement, Node,
-};
+use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
+use js_sys::Function;
+use std::{any::Any, rc::Rc, sync::Arc};
+use wasm_bindgen::{closure::Closure, JsCast};
+use web_sys::{Document, Element, Event, HtmlElement};
 
-use crate::{nodeslab::NodeSlab, WebConfig};
+use crate::WebConfig;
 
 pub struct WebsysDom {
-    document: Document,
-
     pub interpreter: Interpreter,
 
     pub(crate) root: Element,
 
-    sender_callback: Rc<dyn Fn(SchedulerMsg)>,
-
-    // map of listener types to number of those listeners
-    // This is roughly a delegater
-    // TODO: check how infero delegates its events - some are more performant
-    listeners: FxHashMap<&'static str, ListenerEntry>,
+    handler: Closure<dyn FnMut(&Event)>,
 }
-
-type ListenerEntry = (usize, Closure<dyn FnMut(&Event)>);
 
 impl WebsysDom {
     pub fn new(cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
-        let document = load_document();
+        // eventually, we just want to let the interpreter do all the work of decoding events into our event type
+        let callback: Box<dyn FnMut(&Event)> = Box::new(move |event: &web_sys::Event| {
+            if let Ok(synthetic_event) = decode_trigger(event) {
+                // Try to prevent default if the attribute is set
+                if let Some(target) = event.target() {
+                    if let Some(node) = target.dyn_ref::<HtmlElement>() {
+                        if let Some(name) = node.get_attribute("dioxus-prevent-default") {
+                            if name == synthetic_event.name
+                                || name.trim_start_matches("on") == synthetic_event.name
+                            {
+                                log::trace!("Preventing default");
+                                event.prevent_default();
+                            }
+                        }
+                    }
+                }
 
-        let listeners = FxHashMap::default();
-
-        let mut stack = Stack::with_capacity(10);
+                sender_callback.as_ref()(SchedulerMsg::Event(synthetic_event))
+            }
+        });
 
         let root = load_document().get_element_by_id(&cfg.rootname).unwrap();
-        let root_node = root.clone().dyn_into::<Node>().unwrap();
-        stack.push(root_node);
 
         Self {
             interpreter: Interpreter::new(root.clone()),
-            listeners,
-            document,
-            sender_callback,
+            handler: Closure::wrap(callback),
             root,
         }
     }
@@ -78,7 +77,12 @@ impl WebsysDom {
                     event_name,
                     scope,
                     root,
-                } => self.interpreter.NewEventListener(event_name, scope.0, root),
+                } => {
+                    //
+                    let handler: &Function = self.handler.as_ref().unchecked_ref();
+                    self.interpreter
+                        .NewEventListener(event_name, scope.0, root, handler);
+                }
                 DomEdit::RemoveEventListener { root, event } => {
                     self.interpreter.RemoveEventListener(root, event)
                 }
@@ -93,37 +97,6 @@ impl WebsysDom {
                     self.interpreter.RemoveAttribute(root, name)
                 }
             }
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct Stack {
-    list: Vec<Node>,
-}
-
-impl Stack {
-    #[inline]
-    fn with_capacity(cap: usize) -> Self {
-        Stack {
-            list: Vec::with_capacity(cap),
-        }
-    }
-
-    #[inline]
-    fn push(&mut self, node: Node) {
-        self.list.push(node);
-    }
-
-    #[inline]
-    fn pop(&mut self) -> Node {
-        self.list.pop().unwrap()
-    }
-
-    fn top(&self) -> &Node {
-        match self.list.last() {
-            Some(a) => a,
-            None => panic!("Called 'top' of an empty stack, make sure to push the root first"),
         }
     }
 }
@@ -267,6 +240,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 shift_key: evt.shift_key(),
             })
         }
+
         "scroll" => Arc::new(()),
         "wheel" => {
             let evt: &web_sys::WheelEvent = event.dyn_ref().unwrap();

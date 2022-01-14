@@ -1,23 +1,22 @@
-"use strict";
-exports.__esModule = true;
-exports.Interpreter = void 0;
 function serialize_event(event) {
     var _a, _b;
     switch (event.type) {
         case "copy":
         case "cut":
-        case "past":
+        case "past": {
             return {};
+        }
         case "compositionend":
         case "compositionstart":
-        case "compositionupdate":
+        case "compositionupdate": {
             var data = event.data;
             return {
-                data: data
+                data: data,
             };
+        }
         case "keydown":
         case "keypress":
-        case "keyup":
+        case "keyup": {
             var _c = event, charCode = _c.charCode, key = _c.key, altKey = _c.altKey, ctrlKey = _c.ctrlKey, metaKey = _c.metaKey, keyCode = _c.keyCode, shiftKey = _c.shiftKey, location_1 = _c.location, repeat = _c.repeat, which = _c.which;
             return {
                 char_code: charCode,
@@ -30,12 +29,14 @@ function serialize_event(event) {
                 location: location_1,
                 repeat: repeat,
                 which: which,
-                locale: "locale"
+                locale: "locale",
             };
+        }
         case "focus":
-        case "blur":
+        case "blur": {
             return {};
-        case "change":
+        }
+        case "change": {
             var target = event.target;
             var value = void 0;
             if (target.type === "checkbox" || target.type === "radio") {
@@ -45,19 +46,20 @@ function serialize_event(event) {
                 value = (_a = target.value) !== null && _a !== void 0 ? _a : target.textContent;
             }
             return {
-                value: value
+                value: value,
             };
+        }
         case "input":
         case "invalid":
         case "reset":
         case "submit": {
-            var target_1 = event.target;
-            var value_1 = (_b = target_1.value) !== null && _b !== void 0 ? _b : target_1.textContent;
-            if (target_1.type == "checkbox") {
-                value_1 = target_1.checked ? "true" : "false";
+            var target = event.target;
+            var value = (_b = target.value) !== null && _b !== void 0 ? _b : target.textContent;
+            if (target.type == "checkbox") {
+                value = target.checked ? "true" : "false";
             }
             return {
-                value: value_1
+                value: value,
             };
         }
         case "click":
@@ -78,20 +80,20 @@ function serialize_event(event) {
         case "mouseout":
         case "mouseover":
         case "mouseup": {
-            var _d = event, altKey_1 = _d.altKey, button = _d.button, buttons = _d.buttons, clientX = _d.clientX, clientY = _d.clientY, ctrlKey_1 = _d.ctrlKey, metaKey_1 = _d.metaKey, pageX = _d.pageX, pageY = _d.pageY, screenX_1 = _d.screenX, screenY_1 = _d.screenY, shiftKey_1 = _d.shiftKey;
+            var _d = event, altKey = _d.altKey, button = _d.button, buttons = _d.buttons, clientX = _d.clientX, clientY = _d.clientY, ctrlKey = _d.ctrlKey, metaKey = _d.metaKey, pageX = _d.pageX, pageY = _d.pageY, screenX_1 = _d.screenX, screenY_1 = _d.screenY, shiftKey = _d.shiftKey;
             return {
-                alt_key: altKey_1,
+                alt_key: altKey,
                 button: button,
                 buttons: buttons,
                 client_x: clientX,
                 client_y: clientY,
-                ctrl_key: ctrlKey_1,
-                meta_key: metaKey_1,
+                ctrl_key: ctrlKey,
+                meta_key: metaKey,
                 page_x: pageX,
                 page_y: pageY,
                 screen_x: screenX_1,
                 screen_y: screenY_1,
-                shift_key: shiftKey_1
+                shift_key: shiftKey,
             };
         }
         case "pointerdown":
@@ -104,20 +106,20 @@ function serialize_event(event) {
         case "pointerleave":
         case "pointerover":
         case "pointerout": {
-            var _e = event, altKey_2 = _e.altKey, button = _e.button, buttons = _e.buttons, clientX = _e.clientX, clientY = _e.clientY, ctrlKey_2 = _e.ctrlKey, metaKey_2 = _e.metaKey, pageX = _e.pageX, pageY = _e.pageY, screenX_2 = _e.screenX, screenY_2 = _e.screenY, shiftKey_2 = _e.shiftKey, pointerId = _e.pointerId, width = _e.width, height = _e.height, pressure = _e.pressure, tangentialPressure = _e.tangentialPressure, tiltX = _e.tiltX, tiltY = _e.tiltY, twist = _e.twist, pointerType = _e.pointerType, isPrimary = _e.isPrimary;
+            var _e = event, altKey = _e.altKey, button = _e.button, buttons = _e.buttons, clientX = _e.clientX, clientY = _e.clientY, ctrlKey = _e.ctrlKey, metaKey = _e.metaKey, pageX = _e.pageX, pageY = _e.pageY, screenX_2 = _e.screenX, screenY_2 = _e.screenY, shiftKey = _e.shiftKey, pointerId = _e.pointerId, width = _e.width, height = _e.height, pressure = _e.pressure, tangentialPressure = _e.tangentialPressure, tiltX = _e.tiltX, tiltY = _e.tiltY, twist = _e.twist, pointerType = _e.pointerType, isPrimary = _e.isPrimary;
             return {
-                alt_key: altKey_2,
+                alt_key: altKey,
                 button: button,
                 buttons: buttons,
                 client_x: clientX,
                 client_y: clientY,
-                ctrl_key: ctrlKey_2,
-                meta_key: metaKey_2,
+                ctrl_key: ctrlKey,
+                meta_key: metaKey,
                 page_x: pageX,
                 page_y: pageY,
                 screen_x: screenX_2,
                 screen_y: screenY_2,
-                shift_key: shiftKey_2,
+                shift_key: shiftKey,
                 pointer_id: pointerId,
                 width: width,
                 height: height,
@@ -127,35 +129,37 @@ function serialize_event(event) {
                 tilt_y: tiltY,
                 twist: twist,
                 pointer_type: pointerType,
-                is_primary: isPrimary
+                is_primary: isPrimary,
             };
         }
-        case "select":
+        case "select": {
             return {};
+        }
         case "touchcancel":
         case "touchend":
         case "touchmove":
         case "touchstart": {
-            var _f = event, altKey_3 = _f.altKey, ctrlKey_3 = _f.ctrlKey, metaKey_3 = _f.metaKey, shiftKey_3 = _f.shiftKey;
+            var _f = event, altKey = _f.altKey, ctrlKey = _f.ctrlKey, metaKey = _f.metaKey, shiftKey = _f.shiftKey;
             return {
                 // changed_touches: event.changedTouches,
                 // target_touches: event.targetTouches,
                 // touches: event.touches,
-                alt_key: altKey_3,
-                ctrl_key: ctrlKey_3,
-                meta_key: metaKey_3,
-                shift_key: shiftKey_3
+                alt_key: altKey,
+                ctrl_key: ctrlKey,
+                meta_key: metaKey,
+                shift_key: shiftKey,
             };
         }
-        case "scroll":
+        case "scroll": {
             return {};
+        }
         case "wheel": {
             var _g = event, deltaX = _g.deltaX, deltaY = _g.deltaY, deltaZ = _g.deltaZ, deltaMode = _g.deltaMode;
             return {
                 delta_x: deltaX,
                 delta_y: deltaY,
                 delta_z: deltaZ,
-                delta_mode: deltaMode
+                delta_mode: deltaMode,
             };
         }
         case "animationstart":
@@ -165,7 +169,7 @@ function serialize_event(event) {
             return {
                 animation_name: animationName,
                 elapsed_time: elapsedTime,
-                pseudo_element: pseudoElement
+                pseudo_element: pseudoElement,
             };
         }
         case "transitionend": {
@@ -173,7 +177,7 @@ function serialize_event(event) {
             return {
                 property_name: propertyName,
                 elapsed_time: elapsedTime,
-                pseudo_element: pseudoElement
+                pseudo_element: pseudoElement,
             };
         }
         case "abort":
@@ -198,12 +202,15 @@ function serialize_event(event) {
         case "suspend":
         case "timeupdate":
         case "volumechange":
-        case "waiting":
+        case "waiting": {
             return {};
-        case "toggle":
+        }
+        case "toggle": {
             return {};
-        default:
+        }
+        default: {
             return {};
+        }
     }
 }
 var bool_attrs = {
@@ -214,7 +221,7 @@ var bool_attrs = {
     autoplay: true,
     checked: true,
     controls: true,
-    "default": true,
+    default: true,
     defer: true,
     disabled: true,
     formnovalidate: true,
@@ -232,13 +239,14 @@ var bool_attrs = {
     required: true,
     reversed: true,
     selected: true,
-    truespeed: true
+    truespeed: true,
 };
 var Interpreter = /** @class */ (function () {
     function Interpreter(root) {
         this.root = root;
         this.stack = [root];
         this.listeners = {};
+        this.handlers = {};
         this.lastNodeWasText = false;
         this.nodes = [root];
     }
@@ -303,17 +311,28 @@ var Interpreter = /** @class */ (function () {
         this.stack.push(el);
         this.nodes[root] = el;
     };
-    Interpreter.prototype.NewEventListener = function (event_name, scope, root) {
-        console.log('new event listener', event_name, root, scope);
+    Interpreter.prototype.NewEventListener = function (event_name, scope, root, handler) {
+        // console.log('new event listener', event_name, root, scope);
         var element = this.nodes[root];
         element.setAttribute("dioxus-event-".concat(event_name), "".concat(scope, ".").concat(root));
-        // if (!this.listeners[event_name]) {
-        //   this.listeners[event_name] = handler;
-        //   this.root.addEventListener(event_name, handler);
-        // }
+        if (this.listeners[event_name] === undefined) {
+            this.listeners[event_name] = 0;
+            this.handlers[event_name] = handler;
+            this.root.addEventListener(event_name, handler);
+        }
+        else {
+            this.listeners[event_name]++;
+        }
     };
-    Interpreter.prototype.RemoveEventListener = function (root, event_name, scope) {
-        //
+    Interpreter.prototype.RemoveEventListener = function (root, event_name) {
+        var element = this.nodes[root];
+        element.removeAttribute("dioxus-event-".concat(event_name));
+        this.listeners[event_name]--;
+        if (this.listeners[event_name] === 0) {
+            this.root.removeEventListener(event_name, this.handlers[event_name]);
+            delete this.listeners[event_name];
+            delete this.handlers[event_name];
+        }
     };
     Interpreter.prototype.SetText = function (root, text) {
         this.nodes[root].textContent = text;
@@ -369,7 +388,6 @@ var Interpreter = /** @class */ (function () {
         }
     };
     Interpreter.prototype.handleEdits = function (edits) {
-        console.log("handling edits ", edits);
         this.stack.push(this.root);
         for (var _i = 0, edits_1 = edits; _i < edits_1.length; _i++) {
             var edit = edits_1[_i];
@@ -409,13 +427,13 @@ var Interpreter = /** @class */ (function () {
                 this.CreatePlaceholder(edit.root);
                 break;
             case "RemoveEventListener":
-                this.RemoveEventListener(edit.root, edit.event_name, edit.scope);
+                this.RemoveEventListener(edit.root, edit.event_name);
                 break;
             case "NewEventListener":
                 // todo: only on desktop should we make our own handler
                 var handler = function (event) {
                     var target = event.target;
-                    console.log("event", event);
+                    // console.log("event", event);
                     if (target != null) {
                         var real_id = target.getAttribute("dioxus-id");
                         var should_prevent_default = target.getAttribute("dioxus-prevent-default");
@@ -429,12 +447,11 @@ var Interpreter = /** @class */ (function () {
                         window.rpc.call("user_event", {
                             event: edit.event_name,
                             mounted_dom_id: parseInt(real_id),
-                            contents: contents
+                            contents: contents,
                         });
                     }
                 };
-                this.NewEventListener(edit.event_name, edit.scope, edit.root);
-                // this.NewEventListener(edit, handler);
+                this.NewEventListener(edit.event_name, edit.scope, edit.root, handler);
                 break;
             case "SetText":
                 this.SetText(edit.root, edit.text);
@@ -449,7 +466,7 @@ var Interpreter = /** @class */ (function () {
     };
     return Interpreter;
 }());
-exports.Interpreter = Interpreter;
+export { Interpreter };
 function main() {
     var root = window.document.getElementById("main");
     if (root != null) {
@@ -457,4 +474,4 @@ function main() {
         window.rpc.call("initialize");
     }
 }
-main();
+//# sourceMappingURL=interpreter.js.map

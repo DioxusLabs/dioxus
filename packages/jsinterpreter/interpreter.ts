@@ -1,23 +1,23 @@
-
-
 function serialize_event(event: Event) {
   switch (event.type) {
     case "copy":
     case "cut":
-    case "past":
+    case "past": {
       return {};
+    }
 
     case "compositionend":
     case "compositionstart":
-    case "compositionupdate":
+    case "compositionupdate": {
       let { data } = (event as CompositionEvent);
       return {
         data,
       };
+    }
 
     case "keydown":
     case "keypress":
-    case "keyup":
+    case "keyup": {
       let {
         charCode,
         key,
@@ -44,12 +44,14 @@ function serialize_event(event: Event) {
         which: which,
         locale: "locale",
       };
+    }
 
     case "focus":
-    case "blur":
+    case "blur": {
       return {};
+    }
 
-    case "change":
+    case "change": {
       let target = event.target as HTMLInputElement;
       let value;
       if (target.type === "checkbox" || target.type === "radio") {
@@ -61,6 +63,7 @@ function serialize_event(event: Event) {
       return {
         value: value,
       };
+    }
 
     case "input":
     case "invalid":
@@ -187,8 +190,9 @@ function serialize_event(event: Event) {
       };
     }
 
-    case "select":
+    case "select": {
       return {};
+    }
 
     case "touchcancel":
     case "touchend":
@@ -211,8 +215,10 @@ function serialize_event(event: Event) {
       };
     }
 
-    case "scroll":
+    case "scroll": {
       return {};
+    }
+
     case "wheel": {
       const {
         deltaX,
@@ -278,14 +284,17 @@ function serialize_event(event: Event) {
     case "suspend":
     case "timeupdate":
     case "volumechange":
-    case "waiting":
+    case "waiting": {
       return {};
+    }
 
-    case "toggle":
+    case "toggle": {
       return {};
+    }
 
-    default:
+    default: {
       return {};
+    }
   }
 }
 
@@ -321,7 +330,8 @@ const bool_attrs = {
 export class Interpreter {
   root: Element;
   stack: Element[];
-  listeners: { [key: string]: (event: Event) => void };
+  listeners: { [key: string]: number };
+  handlers: { [key: string]: (evt: Event) => void };
   lastNodeWasText: boolean;
   nodes: Element[];
 
@@ -329,8 +339,8 @@ export class Interpreter {
   constructor(root: Element) {
     this.root = root;
     this.stack = [root];
-    this.listeners = {
-    };
+    this.listeners = {};
+    this.handlers = {};
     this.lastNodeWasText = false;
     this.nodes = [root];
   }
@@ -412,23 +422,36 @@ export class Interpreter {
     this.nodes[root] = el;
   }
 
-  NewEventListener(event_name: string, scope: number, root: number) {
-    console.log('new event listener', event_name, root, scope);
+  NewEventListener(event_name: string, scope: number, root: number, handler: (evt: Event) => void) {
+    // console.log('new event listener', event_name, root, scope);
     const element = this.nodes[root];
     element.setAttribute(
       `dioxus-event-${event_name}`,
       `${scope}.${root}`
     );
 
-    // if (!this.listeners[event_name]) {
-    //   this.listeners[event_name] = handler;
-    //   this.root.addEventListener(event_name, handler);
-    // }
+    if (this.listeners[event_name] === undefined) {
+      this.listeners[event_name] = 0;
+      this.handlers[event_name] = handler;
+      this.root.addEventListener(event_name, handler);
+    } else {
+      this.listeners[event_name]++;
+    }
   }
 
+  RemoveEventListener(root: number, event_name: string) {
+    const element = this.nodes[root];
+    element.removeAttribute(
+      `dioxus-event-${event_name}`
+    );
 
-  RemoveEventListener(root: number, event_name: string, scope: number) {
-    //
+    this.listeners[event_name]--;
+
+    if (this.listeners[event_name] === 0) {
+      this.root.removeEventListener(event_name, this.handlers[event_name]);
+      delete this.listeners[event_name];
+      delete this.handlers[event_name];
+    }
   }
 
 
@@ -492,7 +515,6 @@ export class Interpreter {
   }
 
   handleEdits(edits: DomEdit[]) {
-    console.log("handling edits ", edits);
     this.stack.push(this.root);
 
     for (let edit of edits) {
@@ -533,13 +555,13 @@ export class Interpreter {
         this.CreatePlaceholder(edit.root);
         break;
       case "RemoveEventListener":
-        this.RemoveEventListener(edit.root, edit.event_name, edit.scope);
+        this.RemoveEventListener(edit.root, edit.event_name);
         break;
       case "NewEventListener":
         // todo: only on desktop should we make our own handler
         let handler = (event: Event) => {
           const target = event.target as Element | null;
-          console.log("event", event);
+          // console.log("event", event);
           if (target != null) {
 
             const real_id = target.getAttribute(`dioxus-id`);
@@ -565,8 +587,7 @@ export class Interpreter {
             });
           }
         };
-        this.NewEventListener(edit.event_name, edit.scope, edit.root);
-        // this.NewEventListener(edit, handler);
+        this.NewEventListener(edit.event_name, edit.scope, edit.root, handler);
         break;
       case "SetText":
         this.SetText(edit.root, edit.text);

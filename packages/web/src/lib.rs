@@ -65,7 +65,6 @@ pub(crate) mod bindings;
 mod cache;
 mod cfg;
 mod dom;
-mod nodeslab;
 mod rehydrate;
 mod ric_raf;
 

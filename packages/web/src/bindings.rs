@@ -1,8 +1,8 @@
-use dioxus_core::DomEdit;
-use wasm_bindgen::{convert::IntoWasmAbi, describe::WasmDescribe, prelude::*};
-use web_sys::{Element, HtmlElement, Node};
+use js_sys::Function;
+use wasm_bindgen::prelude::*;
+use web_sys::{Element, Node};
 
-#[wasm_bindgen(module = "/src/interpreter.js")]
+#[wasm_bindgen(module = "/../jsinterpreter/interpreter.js")]
 extern "C" {
     pub type Interpreter;
 
@@ -43,7 +43,13 @@ extern "C" {
     pub fn CreatePlaceholder(this: &Interpreter, root: u64);
 
     #[wasm_bindgen(method)]
-    pub fn NewEventListener(this: &Interpreter, name: &str, scope: usize, root: u64);
+    pub fn NewEventListener(
+        this: &Interpreter,
+        name: &str,
+        scope: usize,
+        root: u64,
+        handler: &Function,
+    );
 
     #[wasm_bindgen(method)]
     pub fn RemoveEventListener(this: &Interpreter, root: u64, name: &str);
