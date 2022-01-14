@@ -61,7 +61,7 @@
 
 <br/>
 
-Dioxus 是一个可移植、高性能的框架，用于在 Rust 中建跨平台的用户界面。
+Dioxus 是一个可移植、高性能的框架，用于在 Rust 中构建跨平台的用户界面。
 
 ```rust
 fn app(cx: Scope) -> Element {
