@@ -1,6 +1,7 @@
 # Summary
 
 - [Introduction](README.md)
+- [Roadmap](ROADMAP.md)
 - [Getting Setup](setup.md)
 - [Hello, World!](hello_world.md)
 - [Describing the UI](elements/index.md)

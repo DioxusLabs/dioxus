@@ -69,3 +69,5 @@ Jank
 noderef
 reborrow
 VirtualDoms
+bootstrapper
+WebkitGtk
