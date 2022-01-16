@@ -38,7 +38,7 @@ fn app(cx: Scope) -> Element {
 
             h1 {"Dioxus CRM Example"}
 
-            match *scene {
+            match scene.get() {
                 Scene::ClientsList => rsx!(
                     div { class: "crm",
                         h2 { margin_bottom: "10px", "List of clients" }

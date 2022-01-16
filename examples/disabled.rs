@@ -11,7 +11,7 @@ fn app(cx: Scope) -> Element {
         div {
             button {
                 onclick: move |_| disabled.set(!disabled.get()),
-                "click to " [if *disabled {"enable"} else {"disable"} ] " the lower button"
+                "click to " [if **disabled {"enable"} else {"disable"} ] " the lower button"
             }
 
             button {

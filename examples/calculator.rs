@@ -18,7 +18,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let display_value: UseState<String> = use_state(&cx, || String::from("0"));
+    let display_value = use_state(&cx, || String::from("0"));
 
     let input_digit = move |num: u8| {
         if display_value.get() == "0" {
@@ -66,11 +66,11 @@ fn app(cx: Scope) -> Element {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
                                         display_value.set(String::new());
-                                        if display_value != "" {
+                                        if *display_value != "" {
                                             display_value.set("0".into());
                                         }
                                     },
-                                    [if display_value == "" { "C" } else { "AC" }]
+                                    [if *display_value == "" { "C" } else { "AC" }]
                                 }
                                 button {
                                     class: "calculator-key key-sign",

@@ -42,7 +42,7 @@ fn app(cx: Scope) -> Element {
                         ))
                     }
                     div { flex: "50%",
-                        match &*selected_breed {
+                        match selected_breed.get() {
                             Some(breed) => rsx!( Breed { breed: breed.clone() } ),
                             None => rsx!("No Breed selected"),
                         }

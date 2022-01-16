@@ -19,15 +19,15 @@ pub struct TodoItem {
 }
 
 pub fn app(cx: Scope<()>) -> Element {
-    let todos = use_state(&cx, || im_rc::HashMap::<u32, TodoItem>::default());
+    let todos = use_state(&cx, im_rc::HashMap::<u32, TodoItem>::default);
     let filter = use_state(&cx, || FilterState::All);
     let draft = use_state(&cx, || "".to_string());
-    let mut todo_id = use_state(&cx, || 0);
+    let (todo_id, set_todo_id) = use_state(&cx, || 0).split();
 
     // Filter the todos based on the filter state
     let mut filtered_todos = todos
         .iter()
-        .filter(|(_, item)| match *filter {
+        .filter(|(_, item)| match **filter {
             FilterState::All => true,
             FilterState::Active => !item.checked,
             FilterState::Completed => item.checked,
@@ -56,19 +56,17 @@ pub fn app(cx: Scope<()>) -> Element {
                         autofocus: "true",
                         oninput: move |evt| draft.set(evt.value.clone()),
                         onkeydown: move |evt| {
-                            if evt.key == "Enter" {
-                                if !draft.is_empty() {
-                                    todos.modify().insert(
-                                        *todo_id,
-                                        TodoItem {
-                                            id: *todo_id,
-                                            checked: false,
-                                            contents: draft.get().clone(),
-                                        },
-                                    );
-                                    todo_id += 1;
-                                    draft.set("".to_string());
-                                }
+                            if evt.key == "Enter" && !draft.is_empty() {
+                                todos.modify().insert(
+                                    *todo_id,
+                                    TodoItem {
+                                        id: *todo_id,
+                                        checked: false,
+                                        contents: draft.get().clone(),
+                                    },
+                                );
+                                set_todo_id(todo_id + 1);
+                                draft.set("".to_string());
                             }
                         }
                     }
@@ -90,7 +88,7 @@ pub fn app(cx: Scope<()>) -> Element {
                         (show_clear_completed).then(|| rsx!(
                             button {
                                 class: "clear-completed",
-                                onclick: move |_| todos.modify().retain(|_, todo| todo.checked == false),
+                                onclick: move |_| todos.modify().retain(|_, todo| !todo.checked),
                                 "Clear completed"
                             }
                         ))
@@ -108,7 +106,7 @@ pub fn app(cx: Scope<()>) -> Element {
 
 #[derive(Props)]
 pub struct TodoEntryProps<'a> {
-    todos: UseState<'a, im_rc::HashMap<u32, TodoItem>>,
+    todos: &'a UseState<im_rc::HashMap<u32, TodoItem>>,
     id: u32,
 }
 
