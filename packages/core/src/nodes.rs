@@ -357,12 +357,14 @@ pub struct EventHandler<'bump, T = ()> {
 }
 
 impl<T> EventHandler<'_, T> {
+    /// Call this event handler with the appropriate event type
     pub fn call(&self, event: T) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
         }
     }
 
+    /// Forcibly drop the internal handler callback, releasing memory
     pub fn release(&self) {
         self.callback.replace(None);
     }
