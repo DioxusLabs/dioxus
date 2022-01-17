@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 //! Example: README.md showcase
 //!
 //! The example from the README.md.
@@ -14,6 +16,7 @@ fn app(cx: Scope) -> Element {
             a: "asd".to_string(),
             c: Some("asd".to_string()),
             d: "asd".to_string(),
+            e: "asd".to_string(),
         }
     })
 }
@@ -30,8 +33,19 @@ struct ButtonProps {
 
     #[props(default, strip_option)]
     d: Option<String>,
+
+    #[props(optional)]
+    e: Option<String>,
 }
 
 fn Button(cx: Scope<ButtonProps>) -> Element {
-    todo!()
+    cx.render(rsx! {
+        button {
+            "{cx.props.a}"
+            "{cx.props.b:?}"
+            "{cx.props.c:?}"
+            "{cx.props.d:?}"
+            "{cx.props.e:?}"
+        }
+    })
 }
