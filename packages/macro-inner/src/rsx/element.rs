@@ -4,19 +4,18 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
-    Expr, Ident, LitStr, Result, Token,
+    Expr, ExprClosure, Ident, LitStr, Result, Token,
 };
 
 // =======================================
 // Parse the VNode::Element type
 // =======================================
 pub struct Element {
-    name: Ident,
-    key: Option<LitStr>,
-    attributes: Vec<ElementAttrNamed>,
-    listeners: Vec<ElementAttrNamed>,
-    children: Vec<BodyNode>,
-    _is_static: bool,
+    pub name: Ident,
+    pub key: Option<LitStr>,
+    pub attributes: Vec<ElementAttrNamed>,
+    pub children: Vec<BodyNode>,
+    pub _is_static: bool,
 }
 
 impl Parse for Element {
@@ -28,7 +27,6 @@ impl Parse for Element {
         syn::braced!(content in stream);
 
         let mut attributes: Vec<ElementAttrNamed> = vec![];
-        let mut listeners: Vec<ElementAttrNamed> = vec![];
         let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
         let mut _el_ref = None;
@@ -54,6 +52,7 @@ impl Parse for Element {
                     });
                 } else {
                     let value = content.parse::<Expr>()?;
+
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr::CustomAttrExpression { name, value },
@@ -82,13 +81,24 @@ impl Parse for Element {
                 content.parse::<Token![:]>()?;
 
                 if name_str.starts_with("on") {
-                    listeners.push(ElementAttrNamed {
-                        el_name: el_name.clone(),
-                        attr: ElementAttr::EventTokens {
-                            name,
-                            tokens: content.parse()?,
-                        },
-                    });
+                    if content.fork().parse::<ExprClosure>().is_ok() {
+                        //
+                        attributes.push(ElementAttrNamed {
+                            el_name: el_name.clone(),
+                            attr: ElementAttr::EventClosure {
+                                name,
+                                closure: content.parse()?,
+                            },
+                        });
+                    } else {
+                        attributes.push(ElementAttrNamed {
+                            el_name: el_name.clone(),
+                            attr: ElementAttr::EventTokens {
+                                name,
+                                tokens: content.parse()?,
+                            },
+                        });
+                    }
                 } else {
                     match name_str.as_str() {
                         "key" => {
@@ -182,7 +192,7 @@ impl Parse for Element {
             name: el_name,
             attributes,
             children,
-            listeners,
+            // listeners,
             _is_static: false,
         })
     }
@@ -193,13 +203,28 @@ impl ToTokens for Element {
         let name = &self.name;
         let children = &self.children;
 
-        let listeners = &self.listeners;
-        let attr = &self.attributes;
+        // let listeners = &self.listeners;
 
         let key = match &self.key {
             Some(ty) => quote! { Some(format_args_f!(#ty)) },
             None => quote! { None },
         };
+
+        let listeners = self.attributes.iter().filter(|f| {
+            if let ElementAttr::EventTokens { .. } = f.attr {
+                true
+            } else {
+                false
+            }
+        });
+
+        let attr = self.attributes.iter().filter(|f| {
+            if let ElementAttr::EventTokens { .. } = f.attr {
+                false
+            } else {
+                true
+            }
+        });
 
         tokens.append_all(quote! {
             __cx.element(
@@ -213,29 +238,29 @@ impl ToTokens for Element {
     }
 }
 
-enum ElementAttr {
-    // attribute: "valuee {}"
+pub enum ElementAttr {
+    /// attribute: "valuee {}"
     AttrText { name: Ident, value: LitStr },
 
-    // attribute: true,
+    /// attribute: true,
     AttrExpression { name: Ident, value: Expr },
 
-    // "attribute": "value {}"
+    /// "attribute": "value {}"
     CustomAttrText { name: LitStr, value: LitStr },
 
-    // "attribute": true,
+    /// "attribute": true,
     CustomAttrExpression { name: LitStr, value: Expr },
 
-    // // onclick: move |_| {}
-    // EventClosure { name: Ident, closure: ExprClosure },
+    /// onclick: move |_| {}
+    EventClosure { name: Ident, closure: ExprClosure },
 
-    // onclick: {}
+    /// onclick: {}
     EventTokens { name: Ident, tokens: Expr },
 }
 
-struct ElementAttrNamed {
-    el_name: Ident,
-    attr: ElementAttr,
+pub struct ElementAttrNamed {
+    pub el_name: Ident,
+    pub attr: ElementAttr,
 }
 
 impl ToTokens for ElementAttrNamed {
@@ -263,11 +288,11 @@ impl ToTokens for ElementAttrNamed {
                     __cx.attr( #name, format_args_f!(#value), None, false )
                 }
             }
-            // ElementAttr::EventClosure { name, closure } => {
-            //     quote! {
-            //         dioxus_elements::on::#name(__cx, #closure)
-            //     }
-            // }
+            ElementAttr::EventClosure { name, closure } => {
+                quote! {
+                    dioxus_elements::on::#name(__cx, #closure)
+                }
+            }
             ElementAttr::EventTokens { name, tokens } => {
                 quote! {
                     dioxus_elements::on::#name(__cx, #tokens)

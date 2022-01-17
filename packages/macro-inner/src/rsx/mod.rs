@@ -29,8 +29,8 @@ use syn::{
 };
 
 pub struct CallBody {
-    custom_context: Option<Ident>,
-    roots: Vec<BodyNode>,
+    pub custom_context: Option<Ident>,
+    pub roots: Vec<BodyNode>,
 }
 
 impl Parse for CallBody {

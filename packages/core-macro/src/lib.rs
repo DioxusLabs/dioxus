@@ -1,12 +1,7 @@
+use dioxus_macro_inner::*;
 use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::parse_macro_input;
-
-pub(crate) mod ifmt;
-pub(crate) mod inlineprops;
-pub(crate) mod props;
-pub(crate) mod router;
-pub(crate) mod rsx;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {
