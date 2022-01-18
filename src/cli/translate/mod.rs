@@ -3,6 +3,7 @@ use html_parser::Node;
 use std::fmt::Write;
 use std::io::Read;
 use std::path::PathBuf;
+use std::process::exit;
 use structopt::StructOpt;
 
 pub mod extract_svgs;
@@ -33,6 +34,7 @@ pub struct Translate {
 
 impl Translate {
     pub fn translate(self) -> anyhow::Result<()> {
+
         let Translate {
             component: as_component,
             input,
@@ -40,21 +42,29 @@ impl Translate {
             source,
         } = self;
 
-        let contents = input
+        let contents;
+        let temp = input
             .map(|f| {
-                std::fs::read_to_string(&f)
-                    .unwrap_or_else(|e| panic!("Could not read input file: {}", e))
-            })
-            .unwrap_or(source.unwrap_or_else(|| {
-                if atty::is(atty::Stream::Stdin) {
-                    panic!("No input file, source, or stdin to translate from");
-                }
+                std::fs::read_to_string(&f).unwrap_or_else(|e| {
+                    // panic!("Could not read input file: {}", e)
+                    log::error!("Cloud not read input file: {}.", e);
+                    exit(0);
+                })
+            });
+        if let None = temp {
+            if atty::is(atty::Stream::Stdin) {
+                // panic!("No input file, source, or stdin to translate from");
+                log::error!("No input file, source, or stdin to translate from.");
+                exit(0);
+            }
 
-                let mut buffer = String::new();
-                std::io::stdin().read_to_string(&mut buffer).unwrap();
+            let mut buffer = String::new();
+            std::io::stdin().read_to_string(&mut buffer).unwrap();
 
-                buffer.trim().to_string()
-            }));
+            contents = buffer.trim().to_string();
+        } else {
+            contents = temp.unwrap();
+        }
 
         // parse the input as html and prepare the output
         let dom = Dom::parse(&contents)?;
