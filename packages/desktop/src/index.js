@@ -374,7 +374,9 @@ class Interpreter {
   }
 
   SetAttribute(edit) {
-    console.log("setting attr", edit);
+
+    // console.log("setting attr", edit);
+    
     const name = edit.field;
     const value = edit.value;
     const ns = edit.ns;
