@@ -414,10 +414,15 @@ class Interpreter {
               const target = event.target;
               const real_id = target.getAttribute(`dioxus-id`);
 
-              rpc.call("browser_open", {
-                mounted_dom_id: parseInt(real_id),
-                href: target.getAttribute("browser-href"),
-              })
+              if (target.getAttribute("browser-open") != "false") {
+                rpc.call("browser_open", {
+                  mounted_dom_id: parseInt(real_id),
+                  href: target.getAttribute("browser-href"),
+                });
+              } else {
+                window.location = target.getAttribute("browser-href");
+              }
+
             })
 
           } else {
