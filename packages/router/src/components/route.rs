@@ -12,10 +12,10 @@ use crate::{RouteContext, RouterService};
 pub struct RouteProps<'a> {
     to: &'a str,
 
-    children: Element<'a>,
-
     #[props(default)]
     fallback: bool,
+
+    children: Element<'a>,
 }
 
 pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
@@ -30,6 +30,7 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
             Some(ctx) => ctx.total_route.to_string(),
             None => cx.props.to.to_string(),
         };
+
         log::trace!("total route for {} is {}", cx.props.to, total_route);
 
         // provide our route context
@@ -44,8 +45,6 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
             cx.scope_id(),
             cx.props.fallback,
         );
-
-        Some(RouteInner {})
     });
 
     log::trace!("Checking route {}", cx.props.to);
@@ -54,13 +53,5 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         cx.render(rsx!(&cx.props.children))
     } else {
         None
-    }
-}
-
-struct RouteInner {}
-
-impl Drop for RouteInner {
-    fn drop(&mut self) {
-        // todo!()
     }
 }

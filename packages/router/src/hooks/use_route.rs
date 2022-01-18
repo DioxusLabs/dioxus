@@ -52,7 +52,7 @@ impl UseRoute {
         self.router
             .current_path_params()
             .get(name)
-            .and_then(|v| Some(v.parse::<T>()))
+            .map(|v| v.parse::<T>())
     }
 
     /// Returns the [Location] for the current route.
@@ -75,9 +75,9 @@ impl UseRoute {
 /// context of a [`Router`]. If this function is called outside of a `Router`
 /// component it will panic.
 pub fn use_route(cx: &ScopeState) -> UseRoute {
-    let router = cx
-        .consume_context::<RouterService>()
-        .expect("Cannot call use_route outside the scope of a Router component")
-        .clone();
-    UseRoute { router }
+    UseRoute {
+        router: cx
+            .consume_context::<RouterService>()
+            .expect("Cannot call use_route outside the scope of a Router component"),
+    }
 }

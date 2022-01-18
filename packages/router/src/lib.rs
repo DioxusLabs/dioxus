@@ -1,4 +1,3 @@
-#![allow(warnings)]
 //! Dioxus-Router
 //!
 //! A simple match-based router and router service for most routing needs.

@@ -1,8 +1,9 @@
+#![allow(non_snake_case)]
+
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_router::*;
-use serde::{Deserialize, Serialize};
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -13,7 +14,6 @@ fn main() {
 static APP: Component = |cx| {
     cx.render(rsx! {
         Router {
-            onchange: move |route| log::info!("route changed to {}", route),
             Route { to: "/", Home {} }
             Route { to: "blog"
                 Route { to: "/", BlogList {} }
@@ -40,11 +40,9 @@ fn BlogList(cx: Scope) -> Element {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let id = use_route(&cx).segment::<usize>("id")?;
+    let id = use_route(&cx).segment::<usize>("id")?.ok()?;
 
     cx.render(rsx! {
-        div {
-
-        }
+        div { "Blog Post {id}" }
     })
 }

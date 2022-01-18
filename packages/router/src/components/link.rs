@@ -1,5 +1,4 @@
 use crate::RouterService;
-use dioxus::Attribute;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::{format_args_f, rsx, Props};
@@ -9,41 +8,25 @@ use dioxus_html as dioxus_elements;
 pub struct LinkProps<'a> {
     to: &'a str,
 
-    /// The url that gets pushed to the history stack
-    ///
-    /// You can either put it your own inline method or just autoderive the route using `derive(Routable)`
-    ///
-    /// ```rust, ignore
-    ///
-    /// Link { to: Route::Home, href: |_| "home".to_string() }
-    ///
-    /// // or
-    ///
-    /// Link { to: Route::Home, href: Route::as_url }
-    ///
-    /// ```
-    #[props(default, strip_option)]
-    href: Option<&'a str>,
-
-    #[props(default, strip_option)]
+    #[props(optional)]
     class: Option<&'a str>,
 
-    #[props(default, strip_option)]
+    #[props(optional)]
     id: Option<&'a str>,
 
-    #[props(default, strip_option)]
+    #[props(optional)]
     title: Option<&'a str>,
 
-    children: Element<'a>,
-
+    #[allow(unused)] // temporarily while we work on adding attribute spreading
     #[props(default)]
-    attributes: Option<&'a [Attribute<'a>]>,
+    attributes: Attributes<'a>,
+
+    children: Element<'a>,
 }
 
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    log::debug!("render Link to {}", cx.props.to);
-    if let Some(service) = cx.consume_context::<RouterService>() {
-        return cx.render(rsx! {
+    match cx.consume_context::<RouterService>() {
+        Some(service) => cx.render(rsx! {
             a {
                 href: "{cx.props.to}",
                 class: format_args!("{}", cx.props.class.unwrap_or("")),
@@ -55,11 +38,13 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
 
                 &cx.props.children
             }
-        });
+        }),
+        None => {
+            log::warn!(
+                "Attempted to create a Link to {} outside of a Router context",
+                cx.props.to,
+            );
+            None
+        }
     }
-    log::warn!(
-        "Attempted to create a Link to {} outside of a Router context",
-        cx.props.to,
-    );
-    None
 }

@@ -8,32 +8,19 @@ use std::{
 use dioxus_core::ScopeId;
 
 pub struct RouterService {
-    pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
+    pub(crate) _regen_route: Rc<dyn Fn(ScopeId)>,
     history: Rc<RefCell<BrowserHistory>>,
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
     root_found: Rc<Cell<Option<ScopeId>>>,
     cur_path_params: Rc<RefCell<HashMap<String, String>>>,
-    listener: HistoryListener,
-}
 
-enum RouteSlot {
-    Routes {
-        // the partial route
-        partial: String,
-
-        // the total route
-        total: String,
-
-        // Connections to other routs
-        rest: Vec<RouteSlot>,
-    },
+    // only here so we drop it when the router is dropped
+    _listener: HistoryListener,
 }
 
 impl RouterService {
-    pub fn new(regen_route: Rc<dyn Fn(ScopeId)>, root_scope: ScopeId) -> Self {
+    pub fn new(regen_route: Rc<dyn Fn(ScopeId)>, _root_scope: ScopeId) -> Self {
         let history = BrowserHistory::default();
-        let location = history.location();
-        let path = location.path();
 
         let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
 
@@ -54,10 +41,10 @@ impl RouterService {
         Self {
             root_found,
             history: Rc::new(RefCell::new(history)),
-            regen_route,
+            _regen_route: regen_route,
             slots,
             cur_path_params: Rc::new(RefCell::new(HashMap::new())),
-            listener,
+            _listener: listener,
         }
     }
 
@@ -66,7 +53,7 @@ impl RouterService {
         self.history.borrow_mut().push(route);
     }
 
-    pub fn register_total_route(&self, route: String, scope: ScopeId, fallback: bool) {
+    pub fn register_total_route(&self, route: String, scope: ScopeId, _fallback: bool) {
         let clean = clean_route(route);
         log::trace!("Registered route '{}' with scope id {:?}", clean, scope);
         self.slots.borrow_mut().push((scope, clean));
@@ -90,7 +77,7 @@ impl RouterService {
 
         let roots = self.slots.borrow();
 
-        let root = roots.iter().find(|(id, route)| id == &scope);
+        let root = roots.iter().find(|(id, _route)| id == &scope);
 
         // fallback logic
         match root {
@@ -105,15 +92,18 @@ impl RouterService {
                     self.root_found.set(Some(*id));
                     *self.cur_path_params.borrow_mut() = params;
                     true
+                } else if route.is_empty() {
+                    log::trace!(
+                        "    and the route is the root, so we will use that without a better match"
+                    );
+                    self.root_found.set(Some(*id));
+                    true
                 } else {
-                    if route == "" {
-                        log::trace!("    and the route is the root, so we will use that without a better match");
-                        self.root_found.set(Some(*id));
-                        true
-                    } else {
-                        log::trace!("    and the route '{}' is not the root nor does it match the current path", route);
-                        false
-                    }
+                    log::trace!(
+                        "    and the route '{}' is not the root nor does it match the current path",
+                        route
+                    );
+                    false
                 }
             }
             None => false,
@@ -121,7 +111,7 @@ impl RouterService {
     }
 
     pub fn current_location(&self) -> Location {
-        self.history.borrow().location().clone()
+        self.history.borrow().location()
     }
 
     pub fn current_path_params(&self) -> Ref<HashMap<String, String>> {
@@ -163,13 +153,12 @@ fn route_matches_path(route: &str, path: &str) -> Option<HashMap<String, String>
         log::trace!("    checking route piece '{}' vs path", r);
         // If this is a parameter then it matches as long as there's
         // _any_thing in that spot in the path.
-        if r.starts_with(':') {
+        if let Some(stripped) = r.strip_prefix(':') {
             log::trace!(
                 "      route piece '{}' starts with a colon so it matches anything",
                 r,
             );
-            let param = &r[1..];
-            matches.insert(param.to_string(), path_pieces[i].to_string());
+            matches.insert(stripped.to_string(), path_pieces[i].to_string());
             continue;
         }
         log::trace!(
@@ -183,14 +172,4 @@ fn route_matches_path(route: &str, path: &str) -> Option<HashMap<String, String>
     }
 
     Some(matches)
-}
-
-pub struct RouterCfg {
-    initial_route: String,
-}
-
-impl RouterCfg {
-    pub fn new(initial_route: String) -> Self {
-        Self { initial_route }
-    }
 }

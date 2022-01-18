@@ -11,8 +11,9 @@ use crate::RouterService;
 pub struct RouterProps<'a> {
     children: Element<'a>,
 
-    #[props(default, strip_option)]
-    onchange: Option<&'a dyn Fn(&'a str)>,
+    #[allow(unused)] // temporarily
+    #[props(default)]
+    onchange: EventHandler<'a, String>,
 }
 
 #[allow(non_snake_case)]
@@ -22,7 +23,5 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         cx.provide_context(RouterService::new(update, cx.scope_id()))
     });
 
-    cx.render(rsx!(
-        div { &cx.props.children }
-    ))
+    cx.render(rsx!(&cx.props.children))
 }
