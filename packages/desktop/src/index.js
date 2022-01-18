@@ -357,7 +357,10 @@ class Interpreter {
           event.preventDefault();
         }
 
-        console.log(event);
+        if (event.type == "submit") {
+          event.preventDefault();
+        }
+        
         if (event.type == "click") {
           event.preventDefault();
           if (should_prevent_default !== `onclick`) {
