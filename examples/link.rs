@@ -6,7 +6,7 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx! (
-        div { 
+        div {
             p {
                 a {
                     href: "http://dioxuslabs.com/",
