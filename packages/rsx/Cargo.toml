@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-macro-inner"
+name = "dioxus-rsx"
 version = "0.0.0"
 edition = "2018"
 

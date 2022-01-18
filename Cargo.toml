@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "./packages/core", version = "^0.1.7" }
 dioxus-html = { path = "./packages/html", version = "^0.1.4", optional = true }
 dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.6", optional = true }
-dioxus-macro-inner = { path = "./packages/macro-inner", optional = true }
+dioxus-macro-inner = { path = "./packages/rsx", optional = true }
 dioxus-hooks = { path = "./packages/hooks", version = "^0.1.6", optional = true }
 
 dioxus-web = { path = "./packages/web", version = "^0.0.4", optional = true }
@@ -48,7 +48,7 @@ router = ["dioxus-router"]
 members = [
     "packages/core",
     "packages/core-macro",
-    "packages/macro-inner",
+    "packages/rsx",
     "packages/html",
     "packages/hooks",
     "packages/web",
