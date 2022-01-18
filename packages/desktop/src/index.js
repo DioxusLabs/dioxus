@@ -364,12 +364,14 @@ class Interpreter {
         if (event.type == "click") {
           event.preventDefault();
           if (should_prevent_default !== `onclick`) {
-            console.log(event.target.getAttribute("href"));
             if(element.tagName == "A") {
-              rpc.call("browser_open", {
-                mounted_dom_id: parseInt(real_id),
-                href: event.target.getAttribute("href")
-              })
+              const href = event.target.getAttribute("href")
+              if (href !== "" || href !== null) {
+                rpc.call("browser_open", {
+                  mounted_dom_id: parseInt(real_id),
+                  href: event.target.getAttribute("href")
+                });
+              }
             }
           }
         }
