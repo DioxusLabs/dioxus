@@ -9,24 +9,21 @@ async fn main() -> Result<()> {
     match args.action {
         Commands::Translate(opts) => {
             opts.translate();
-        }
+        } // Commands::Build(_) => {
+          //     //
+          // }
 
-        // Commands::Build(_) => {
-        //     //
-        // }
+          // Commands::Clean(_) => {
+          //     //
+          // }
 
+          // Commands::Config(_) => {
+          //     //
+          // }
 
-        // Commands::Clean(_) => {
-        //     //
-        // }
-
-        // Commands::Config(_) => {
-        //     //
-        // }
-
-        // Commands::Serve(_) => {
-        //     //
-        // }
+          // Commands::Serve(_) => {
+          //     //
+          // }
     }
 
     Ok(())

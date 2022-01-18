@@ -34,7 +34,6 @@ pub struct Translate {
 
 impl Translate {
     pub fn translate(self) -> anyhow::Result<()> {
-
         let Translate {
             component: as_component,
             input,
@@ -43,25 +42,28 @@ impl Translate {
         } = self;
 
         let contents;
-        let temp = input
-            .map(|f| {
-                std::fs::read_to_string(&f).unwrap_or_else(|e| {
-                    // panic!("Could not read input file: {}", e)
-                    log::error!("Cloud not read input file: {}.", e);
-                    exit(0);
-                })
-            });
-        if let None = temp {
-            if atty::is(atty::Stream::Stdin) {
-                // panic!("No input file, source, or stdin to translate from");
-                log::error!("No input file, source, or stdin to translate from.");
+        let temp = input.map(|f| {
+            std::fs::read_to_string(&f).unwrap_or_else(|e| {
+                // panic!("Could not read input file: {}", e)
+                log::error!("Cloud not read input file: {}.", e);
                 exit(0);
+            })
+        });
+        if let None = temp {
+            if let Some(s) = source {
+                contents = s;
+            } else {
+                if atty::is(atty::Stream::Stdin) {
+                    // panic!("No input file, source, or stdin to translate from");
+                    log::error!("No input file, source, or stdin to translate from.");
+                    exit(0);
+                }
+
+                let mut buffer = String::new();
+                std::io::stdin().read_to_string(&mut buffer).unwrap();
+
+                contents = buffer.trim().to_string();
             }
-
-            let mut buffer = String::new();
-            std::io::stdin().read_to_string(&mut buffer).unwrap();
-
-            contents = buffer.trim().to_string();
         } else {
             contents = temp.unwrap();
         }
