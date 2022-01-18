@@ -190,10 +190,8 @@ pub fn launch_with_props<P: 'static + Send>(
                             "browser_open" => {
                                 let data = req.params.unwrap();
                                 log::trace!("Open browser: {:?}", data);
-                                if data.is_array() {
-                                    let arr = data.as_array().unwrap();
-                                    if arr[0].is_object() {
-                                        let temp = arr[0].as_object().unwrap();
+                                if let Some(arr) = data.as_array() {
+                                    if let Some(temp) = arr[0].as_object() {
                                         if temp.contains_key("href") {
                                             let url = temp.get("href").unwrap().as_str().unwrap();
                                             if let Err(e) = webbrowser::open(url) {
