@@ -44,7 +44,6 @@ impl Translate {
         let contents;
         let temp = input.map(|f| {
             std::fs::read_to_string(&f).unwrap_or_else(|e| {
-                // panic!("Could not read input file: {}", e)
                 log::error!("Cloud not read input file: {}.", e);
                 exit(0);
             })
@@ -54,7 +53,6 @@ impl Translate {
                 contents = s;
             } else {
                 if atty::is(atty::Stream::Stdin) {
-                    // panic!("No input file, source, or stdin to translate from");
                     log::error!("No input file, source, or stdin to translate from.");
                     exit(0);
                 }
