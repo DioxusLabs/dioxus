@@ -32,11 +32,11 @@ fn Example(cx: Scope) -> Element {
 }
 
 #[derive(Props)]
-struct BannerProps {
+struct BannerProps<'a> {
     children: Element<'a>,
 }
 
-fn Banner(cx: Scope) -> Element {
+fn Banner<'a>(cx: Scope<'a, BannerProps<'a>>) -> Element<'a> {
     cx.render(rsx! {
         div {
             h1 { "This is a great banner!" }

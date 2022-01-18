@@ -116,7 +116,7 @@ pub fn launch(root: Component) {
 /// ```
 pub fn launch_cfg(
     root: Component,
-    config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
+    config_builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
     launch_with_props(root, (), config_builder)
 }
@@ -147,7 +147,7 @@ pub fn launch_cfg(
 pub fn launch_with_props<P: 'static + Send>(
     root: Component<P>,
     props: P,
-    builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
+    builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
     let mut cfg = DesktopConfig::new();
     builder(&mut cfg);
@@ -170,9 +170,11 @@ pub fn launch_with_props<P: 'static + Send>(
                 let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
 
                 let proxy = proxy.clone();
-                let webview = WebViewBuilder::new(window)
+                let file_handler = cfg.file_drop_handler.take();
+
+                let mut webview = WebViewBuilder::new(window)
                     .unwrap()
-                    .with_url("wry://index.html/")
+                    .with_url("dioxus://index.html/")
                     .unwrap()
                     .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
                         match req.method.as_str() {
@@ -189,26 +191,37 @@ pub fn launch_with_props<P: 'static + Send>(
                         }
                         None
                     })
-                    .with_custom_protocol("wry".into(), move |request| {
-                        // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"
+                    .with_custom_protocol("dioxus".into(), move |request| {
+                        // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
                         // For now, we only serve two pieces of content which get included as bytes into the final binary.
-                        let path = request.uri().replace("wry://", "");
-                        let (data, meta) = match path.as_str() {
-                            "index.html" | "index.html/" | "/index.html" => {
-                                (include_bytes!("./index.html").to_vec(), "text/html")
-                            }
-                            "index.html/index.js" => {
-                                (include_bytes!("./index.js").to_vec(), "text/javascript")
-                            }
-                            _ => (include_bytes!("./index.html").to_vec(), "text/html"),
-                        };
+                        let path = request.uri().replace("dioxus://", "");
 
-                        wry::http::ResponseBuilder::new().mimetype(meta).body(data)
+                        if path.trim_end_matches('/') == "index.html" {
+                            wry::http::ResponseBuilder::new()
+                                .mimetype("text/html")
+                                .body(include_bytes!("./index.html").to_vec())
+                        } else if path.trim_end_matches('/') == "index.html/index.js" {
+                            wry::http::ResponseBuilder::new()
+                                .mimetype("text/javascript")
+                                .body(include_bytes!("./index.js").to_vec())
+                        } else {
+                            wry::http::ResponseBuilder::new()
+                                .status(wry::http::status::StatusCode::NOT_FOUND)
+                                .body(format!("Not found: {}", path).as_bytes().to_vec())
+                        }
                     })
-                    .build()
-                    .unwrap();
+                    .with_file_drop_handler(move |window, evet| {
+                        if let Some(handler) = file_handler.as_ref() {
+                            return handler(window, evet);
+                        }
+                        false
+                    });
 
-                desktop.webviews.insert(window_id, webview);
+                for (name, handler) in cfg.protocos.drain(..) {
+                    webview = webview.with_custom_protocol(name, handler)
+                }
+
+                desktop.webviews.insert(window_id, webview.build().unwrap());
             }
 
             Event::WindowEvent {

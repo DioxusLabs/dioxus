@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 use dioxus::router::{Link, Route, Router};
+use serde::Deserialize;
 
 fn main() {
     dioxus::desktop::launch(app);
@@ -30,7 +31,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let post = dioxus::router::use_route(&cx).last_segment()?;
+    let post = dioxus::router::use_route(&cx).last_segment();
 
     cx.render(rsx! {
         div {
@@ -40,9 +41,14 @@ fn BlogPost(cx: Scope) -> Element {
     })
 }
 
+#[derive(Deserialize)]
+struct Query {
+    bold: bool,
+}
+
 fn User(cx: Scope) -> Element {
-    let post = dioxus::router::use_route(&cx).last_segment()?;
-    let bold = dioxus::router::use_route(&cx).param::<bool>("bold");
+    let post = dioxus::router::use_route(&cx).last_segment();
+    let query = dioxus::router::use_route(&cx).query::<Query>();
 
     cx.render(rsx! {
         div {
