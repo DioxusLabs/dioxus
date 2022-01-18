@@ -366,7 +366,7 @@ class Interpreter {
           if (should_prevent_default !== `onclick`) {
             if(element.tagName == "A") {
               const href = event.target.getAttribute("href")
-              if (href !== "" || href !== null) {
+              if (href !== "" && href !== null && href !== undefined) {
                 rpc.call("browser_open", {
                   mounted_dom_id: parseInt(real_id),
                   href: event.target.getAttribute("href")
