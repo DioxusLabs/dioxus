@@ -16,7 +16,7 @@ fn app(cx: Scope) -> Element {
             p {
                 a {
                     href: "http://dioxuslabs.com/",
-                    "browser-open": "false",
+                    prevent_default: "onclick",
                     onclick: |_| {
                         println!("Hello Dioxus");
                     },

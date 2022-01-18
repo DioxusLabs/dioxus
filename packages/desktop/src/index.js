@@ -343,6 +343,7 @@ class Interpreter {
       this.listeners[event_name] = true;
 
       this.root.addEventListener(event_name, (event) => {
+
         const target = event.target;
         const real_id = target.getAttribute(`dioxus-id`);
 
@@ -354,6 +355,20 @@ class Interpreter {
 
         if (should_prevent_default === `on${event.type}`) {
           event.preventDefault();
+        }
+
+        console.log(event);
+        if (event.type == "click") {
+          event.preventDefault();
+          if (should_prevent_default !== `onclick`) {
+            console.log(event.target.getAttribute("href"));
+            if(element.tagName == "A") {
+              rpc.call("browser_open", {
+                mounted_dom_id: parseInt(real_id),
+                href: event.target.getAttribute("href")
+              })
+            }
+          }
         }
 
         if (real_id == null) {
@@ -401,34 +416,6 @@ class Interpreter {
           break;
         case "dangerous_inner_html":
           node.innerHTML = value;
-          break;
-        case "href":
-
-          if (node.tagName == "A") {
-            // open the <a> tag in browser
-            node.setAttribute("browser-href", value);
-            node.setAttribute("href", "#");
-
-            node.addEventListener("click", function(event) {
-
-              const target = event.target;
-              const real_id = target.getAttribute(`dioxus-id`);
-
-              if (target.getAttribute("browser-open") != "false") {
-                rpc.call("browser_open", {
-                  mounted_dom_id: parseInt(real_id),
-                  href: target.getAttribute("browser-href"),
-                });
-              } else {
-                window.location = target.getAttribute("browser-href");
-              }
-
-            })
-
-          } else {
-            node.setAttribute(name, value);
-          }
-
           break;
         default:
           // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
