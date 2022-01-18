@@ -198,12 +198,9 @@ impl ScopeArena {
             // run the hooks (which hold an &mut Reference)
             // recursively call ensure_drop_safety on all children
             items.borrowed_props.drain(..).for_each(|comp| {
-                let scope_id = comp
-                    .scope
-                    .get()
-                    .expect("VComponents should be associated with a valid Scope");
-
-                self.ensure_drop_safety(scope_id);
+                if let Some(scope_id) = comp.scope.get() {
+                    self.ensure_drop_safety(scope_id);
+                }
 
                 drop(comp.props.take());
             });

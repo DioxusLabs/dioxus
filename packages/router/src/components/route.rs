@@ -30,6 +30,7 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
             Some(ctx) => ctx.total_route.to_string(),
             None => cx.props.to.to_string(),
         };
+        log::trace!("total route for {} is {}", cx.props.to, total_route);
 
         // provide our route context
         let route_context = cx.provide_context(RouteContext {
