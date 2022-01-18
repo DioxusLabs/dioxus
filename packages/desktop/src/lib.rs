@@ -187,6 +187,27 @@ pub fn launch_with_props<P: 'static + Send>(
                                 is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let _ = proxy.send_event(UserWindowEvent::Update);
                             }
+                            "browser_open" => {
+                                let data = req.params.unwrap();
+                                log::trace!("Open browser: {:?}", data);
+                                if data.is_array() {
+                                    let arr = data.as_array().unwrap();
+                                    if arr[0].is_object() {
+                                        let temp = arr[0]
+                                            .as_object()
+                                            .unwrap();
+                                        if temp.contains_key("href") {
+                                            let url = temp
+                                            .get("href").unwrap()
+                                            .as_str().unwrap();
+                                            match webbrowser::open(url) {
+                                                Ok(_) => {},
+                                                Err(e) => log::trace!("Open browser error: {:?}", e),
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                         None

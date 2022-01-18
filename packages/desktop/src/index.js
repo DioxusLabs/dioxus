@@ -374,7 +374,7 @@ class Interpreter {
   }
 
   SetAttribute(edit) {
-    // console.log("setting attr", edit);
+    console.log("setting attr", edit);
     const name = edit.field;
     const value = edit.value;
     const ns = edit.ns;
@@ -399,6 +399,29 @@ class Interpreter {
           break;
         case "dangerous_inner_html":
           node.innerHTML = value;
+          break;
+        case "href":
+
+          if (node.tagName == "A") {
+            // open the <a> tag in browser
+            node.setAttribute("browser-href", value);
+            node.setAttribute("href", "#");
+
+            node.addEventListener("click", function(event) {
+
+              const target = event.target;
+              const real_id = target.getAttribute(`dioxus-id`);
+
+              rpc.call("browser_open", {
+                mounted_dom_id: parseInt(real_id),
+                href: target.getAttribute("browser-href"),
+              })
+            })
+
+          } else {
+            node.setAttribute(name, value);
+          }
+
           break;
         default:
           // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
