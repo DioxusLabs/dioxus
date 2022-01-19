@@ -61,7 +61,7 @@ fn app(cx: Scope) -> Element {
 
 #[inline_props]
 fn Breed(cx: Scope, breed: String) -> Element {
-    #[derive(serde::Deserialize)]
+    #[derive(serde::Deserialize, Debug)]
     struct DogApi {
         message: String,
     }
@@ -71,6 +71,12 @@ fn Breed(cx: Scope, breed: String) -> Element {
     let fut = use_future(&cx, || async move {
         reqwest::get(endpoint).await.unwrap().json::<DogApi>().await
     });
+
+    let breed_name = use_state(&cx, || breed.clone());
+    if breed_name.get() != breed {
+        breed_name.set(breed.clone());
+        fut.restart();
+    }
 
     cx.render(match fut.value() {
         Some(Ok(resp)) => rsx! {
