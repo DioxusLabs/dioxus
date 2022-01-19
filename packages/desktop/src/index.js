@@ -343,6 +343,7 @@ class Interpreter {
       this.listeners[event_name] = true;
 
       this.root.addEventListener(event_name, (event) => {
+
         const target = event.target;
         const real_id = target.getAttribute(`dioxus-id`);
 
@@ -354,6 +355,25 @@ class Interpreter {
 
         if (should_prevent_default === `on${event.type}`) {
           event.preventDefault();
+        }
+
+        if (event.type == "submit") {
+          event.preventDefault();
+        }
+        
+        if (event.type == "click") {
+          event.preventDefault();
+          if (should_prevent_default !== `onclick`) {
+            if(element.tagName == "A") {
+              const href = event.target.getAttribute("href")
+              if (href !== "" && href !== null && href !== undefined) {
+                rpc.call("browser_open", {
+                  mounted_dom_id: parseInt(real_id),
+                  href: event.target.getAttribute("href")
+                });
+              }
+            }
+          }
         }
 
         if (real_id == null) {
@@ -374,7 +394,9 @@ class Interpreter {
   }
 
   SetAttribute(edit) {
+
     // console.log("setting attr", edit);
+    
     const name = edit.field;
     const value = edit.value;
     const ns = edit.ns;
