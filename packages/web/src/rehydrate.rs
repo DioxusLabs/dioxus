@@ -116,7 +116,14 @@ impl WebsysDom {
                 // we cant have the last node be text
                 let mut last_node_was_text = false;
                 for child in vel.children {
-                    self.rehydrate_single(nodes, place, dom, &child, &mut last_node_was_text)?;
+                    self.rehydrate_single(nodes, place, dom, child, &mut last_node_was_text)?;
+                }
+
+                for listener in vel.listeners {
+                    self.new_event_listener(
+                        listener.event,
+                        listener.mounted_node.get().unwrap().as_u64(),
+                    );
                 }
 
                 place.pop();
@@ -142,7 +149,7 @@ impl WebsysDom {
 
             VNode::Fragment(el) => {
                 for el in el.children {
-                    self.rehydrate_single(nodes, place, dom, &el, last_node_was_text)?;
+                    self.rehydrate_single(nodes, place, dom, el, last_node_was_text)?;
                 }
             }
 

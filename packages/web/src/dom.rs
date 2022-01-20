@@ -75,10 +75,8 @@ impl WebsysDom {
                 }
                 DomEdit::CreatePlaceholder { root: id } => self.create_placeholder(id),
                 DomEdit::NewEventListener {
-                    event_name,
-                    scope,
-                    root: mounted_node_id,
-                } => self.new_event_listener(event_name, scope, mounted_node_id),
+                    event_name, root, ..
+                } => self.new_event_listener(event_name, root),
 
                 DomEdit::RemoveEventListener { event, root } => {
                     self.remove_event_listener(event, root)
@@ -172,10 +170,8 @@ impl WebsysDom {
         let node = self.nodes[root as usize].as_ref().unwrap();
         if let Some(element) = node.dyn_ref::<Element>() {
             element.remove();
-        } else {
-            if let Some(parent) = node.parent_node() {
-                parent.remove_child(&node).unwrap();
-            }
+        } else if let Some(parent) = node.parent_node() {
+            parent.remove_child(node).unwrap();
         }
     }
 
@@ -227,7 +223,7 @@ impl WebsysDom {
         self.nodes[(id as usize)] = Some(el);
     }
 
-    fn new_event_listener(&mut self, event: &'static str, _scope: ScopeId, _real_id: u64) {
+    pub fn new_event_listener(&mut self, event: &'static str, node: u64) {
         let event = wasm_bindgen::intern(event);
 
         // attach the correct attributes to the element
@@ -235,7 +231,7 @@ impl WebsysDom {
         // This ensures we only ever have one handler attached to the root, but decide
         // dynamically when we want to call a listener.
 
-        let el = self.stack.top();
+        let el = self.nodes[(node as usize)].as_ref().unwrap();
 
         let el = el.dyn_ref::<Element>().unwrap();
 
@@ -278,7 +274,7 @@ impl WebsysDom {
                 .unwrap();
 
             // Increment the listeners
-            self.listeners.insert(event.into(), (1, handler));
+            self.listeners.insert(event, (1, handler));
         }
     }
 
@@ -442,7 +438,7 @@ impl WebsysDom {
             anchor
                 .parent_node()
                 .unwrap()
-                .insert_before(&before, Some(&anchor))
+                .insert_before(&before, Some(anchor))
                 .unwrap();
         } else {
             let arr: js_sys::Array = self
