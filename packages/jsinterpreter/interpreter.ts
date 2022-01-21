@@ -558,31 +558,50 @@ export class Interpreter {
         this.RemoveEventListener(edit.root, edit.event_name);
         break;
       case "NewEventListener":
-        // todo: only on desktop should we make our own handler
+
+
+        // this handler is only provided on desktop implementations since this 
+        // method is not used by the web implementation
         let handler = (event: Event) => {
           const target = event.target as Element | null;
-          // console.log("event", event);
+
           if (target != null) {
+            const realId = target.getAttribute(`dioxus-id`);
 
-            const real_id = target.getAttribute(`dioxus-id`);
-
-            const should_prevent_default = target.getAttribute(
-              `dioxus-prevent-default`
-            );
+            const shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
 
             let contents = serialize_event(event);
 
-            if (should_prevent_default === `on${event.type}`) {
+            if (shouldPreventDefault === `on${event.type}`) {
               event.preventDefault();
             }
 
-            if (real_id == null) {
+            if (event.type == "submit") {
+              event.preventDefault();
+            }
+
+            if (event.type == "click") {
+              event.preventDefault();
+              if (shouldPreventDefault !== `onclick`) {
+                if (target.tagName == "A") {
+                  const href = target.getAttribute("href")
+                  if (href !== "" && href !== null && href !== undefined && realId != null) {
+                    window.rpc.call("browser_open", {
+                      mounted_dom_id: parseInt(realId),
+                      href
+                    });
+                  }
+                }
+              }
+            }
+
+            if (realId == null) {
               return;
             }
 
             window.rpc.call("user_event", {
               event: (edit as NewEventListener).event_name,
-              mounted_dom_id: parseInt(real_id),
+              mounted_dom_id: parseInt(realId),
               contents: contents,
             });
           }
@@ -655,4 +674,3 @@ declare global {
 }
 
 
-type Edits = DomEdit[];
