@@ -702,19 +702,22 @@ impl ScopeState {
         while let Some(parent) = search_parent.take() {
             let parent = unsafe { &*parent };
 
-            if parent
-                .shared_contexts
-                .borrow_mut()
-                .insert(TypeId::of::<T>(), value.clone())
-                .is_some()
-            {
-                log::warn!("Context already provided to parent scope - replacing it");
+            if parent.scope_id() == ScopeId(0) {
+                let exists = parent
+                    .shared_contexts
+                    .borrow_mut()
+                    .insert(TypeId::of::<T>(), value.clone());
+
+                if exists.is_some() {
+                    log::warn!("Context already provided to parent scope - replacing it");
+                }
+                return value;
             }
 
             search_parent = parent.parent_scope;
         }
 
-        value
+        unreachable!("all apps have a root scope")
     }
 
     /// Try to retrieve a SharedState with type T from the any parent Scope.
