@@ -205,7 +205,7 @@ pub fn launch_with_props<P: 'static + Send>(
                         }
                         None
                     })
-                    .with_custom_protocol("dioxus".into(), move |request| {
+                    .with_custom_protocol(String::from("dioxus"), move |request| {
                         // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
                         // For now, we only serve two pieces of content which get included as bytes into the final binary.
                         let path = request.uri().replace("dioxus://", "");
@@ -225,10 +225,10 @@ pub fn launch_with_props<P: 'static + Send>(
                         }
                     })
                     .with_file_drop_handler(move |window, evet| {
-                        if let Some(handler) = file_handler.as_ref() {
-                            return handler(window, evet);
-                        }
-                        false
+                        file_handler
+                            .as_ref()
+                            .map(|handler| handler(window, evet))
+                            .unwrap_or_default()
                     });
 
                 for (name, handler) in cfg.protocos.drain(..) {

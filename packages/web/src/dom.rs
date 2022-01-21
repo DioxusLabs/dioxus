@@ -277,9 +277,7 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
 /// This function decodes a websys event and produces an EventTrigger
 /// With the websys implementation, we attach a unique key to the nodes
 fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
-    use anyhow::Context;
-
-    let target = event
+    let mut target = event
         .target()
         .expect("missing target")
         .dyn_into::<Element>()
@@ -287,18 +285,36 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
 
     let typ = event.type_();
 
-    let element_id = target
-        .get_attribute("dioxus-id")
-        .context("Could not find element id on event target")?
-        .parse()?;
-
-    Ok(UserEvent {
-        name: event_name_from_typ(&typ),
-        data: virtual_event_from_websys_event(event.clone()),
-        element: Some(ElementId(element_id)),
-        scope_id: None,
-        priority: dioxus_core::EventPriority::Medium,
-    })
+    loop {
+        match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
+            Some(Ok(id)) => {
+                return Ok(UserEvent {
+                    name: event_name_from_typ(&typ),
+                    data: virtual_event_from_websys_event(event.clone()),
+                    element: Some(ElementId(id)),
+                    scope_id: None,
+                    priority: dioxus_core::EventPriority::Medium,
+                });
+            }
+            Some(Err(e)) => {
+                return Err(e.into());
+            }
+            None => {
+                // walk the tree upwards until we actually find an event target
+                if let Some(parent) = target.parent_element() {
+                    target = parent;
+                } else {
+                    return Ok(UserEvent {
+                        name: event_name_from_typ(&typ),
+                        data: virtual_event_from_websys_event(event.clone()),
+                        element: None,
+                        scope_id: None,
+                        priority: dioxus_core::EventPriority::Low,
+                    });
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn load_document() -> Document {
