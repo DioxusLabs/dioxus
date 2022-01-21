@@ -80,7 +80,8 @@ impl WebsysDom {
 
                 *last_node_was_text = true;
 
-                self.nodes[node_id.0] = Some(node);
+                self.interpreter.set_node(node_id.0, node);
+                // self.nodes[node_id.0] = Some(node);
 
                 *cur_place += 1;
             }
@@ -105,7 +106,8 @@ impl WebsysDom {
                     .set_attribute("dioxus-id", s.as_str())
                     .unwrap();
 
-                self.nodes[node_id.0] = Some(node.clone());
+                self.interpreter.set_node(node_id.0, node.clone());
+                // self.nodes[node_id.0] = Some(node.clone());
 
                 *cur_place += 1;
 
@@ -120,9 +122,10 @@ impl WebsysDom {
                 }
 
                 for listener in vel.listeners {
-                    self.new_event_listener(
+                    self.interpreter.NewEventListener(
                         listener.event,
                         listener.mounted_node.get().unwrap().as_u64(),
+                        self.handler.as_ref().unchecked_ref(),
                     );
                 }
 
@@ -142,7 +145,9 @@ impl WebsysDom {
                 let cur_place = place.last_mut().unwrap();
                 let node = nodes.last().unwrap().child_nodes().get(*cur_place).unwrap();
 
-                self.nodes[node_id.0] = Some(node);
+                self.interpreter.set_node(node_id.0, node);
+
+                // self.nodes[node_id.0] = Some(node);
 
                 *cur_place += 1;
             }

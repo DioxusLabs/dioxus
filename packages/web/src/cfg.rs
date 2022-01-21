@@ -3,10 +3,9 @@
 /// This struct helps configure the specifics of hydration and render destination for WebSys.
 ///
 /// # Example
+///
 /// ```rust, ignore
-/// fn main() {
-///     dioxus::web::launch(App, |cfg| cfg.hydrate(true).root_name("myroot"))
-/// }
+/// dioxus::web::launch(App, |cfg| cfg.hydrate(true).root_name("myroot"))
 /// ```
 pub struct WebConfig {
     pub(crate) hydrate: bool,
