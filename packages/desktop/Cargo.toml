@@ -29,6 +29,7 @@ tokio = { version = "1.12.0", features = [
 ], optional = true, default-features = false }
 dioxus-core-macro = { path = "../core-macro", version ="^0.1.6"}
 dioxus-html = { path = "../html", features = ["serialize"], version ="^0.1.4"}
+webbrowser = "0.5.5"
 
 [features]
 default = ["tokio_runtime"]

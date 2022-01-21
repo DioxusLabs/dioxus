@@ -351,28 +351,22 @@ type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 /// }
 ///
 /// ```
+#[derive(Default)]
 pub struct EventHandler<'bump, T = ()> {
-    pub callback: &'bump RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+    pub callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }
 
 impl<T> EventHandler<'_, T> {
+    /// Call this event handler with the appropriate event type
     pub fn call(&self, event: T) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
         }
     }
 
+    /// Forcibly drop the internal handler callback, releasing memory
     pub fn release(&self) {
         self.callback.replace(None);
-    }
-}
-
-impl<T> Copy for EventHandler<'_, T> {}
-impl<T> Clone for EventHandler<'_, T> {
-    fn clone(&self) -> Self {
-        Self {
-            callback: self.callback,
-        }
     }
 }
 
@@ -677,7 +671,7 @@ impl<'a> NodeFactory<'a> {
     pub fn event_handler<T>(self, f: impl FnMut(T) + 'a) -> EventHandler<'a, T> {
         let handler: &mut dyn FnMut(T) = self.bump.alloc(f);
         let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
-        let callback = self.bump.alloc(RefCell::new(Some(caller)));
+        let callback = RefCell::new(Some(caller));
         EventHandler { callback }
     }
 }

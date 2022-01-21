@@ -43,13 +43,7 @@ extern "C" {
     pub fn CreatePlaceholder(this: &Interpreter, root: u64);
 
     #[wasm_bindgen(method)]
-    pub fn NewEventListener(
-        this: &Interpreter,
-        name: &str,
-        scope: usize,
-        root: u64,
-        handler: &Function,
-    );
+    pub fn NewEventListener(this: &Interpreter, name: &str, root: u64, handler: &Function);
 
     #[wasm_bindgen(method)]
     pub fn RemoveEventListener(this: &Interpreter, root: u64, name: &str);

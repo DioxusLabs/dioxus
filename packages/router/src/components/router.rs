@@ -12,7 +12,7 @@ pub struct RouterProps<'a> {
     children: Element<'a>,
 
     #[props(default, strip_option)]
-    onchange: Option<&'a Fn(&'a str)>,
+    onchange: Option<&'a dyn Fn(&'a str)>,
 }
 
 #[allow(non_snake_case)]

@@ -21,7 +21,7 @@ pub struct WebsysDom {
 
     pub(crate) root: Element,
 
-    handler: Closure<dyn FnMut(&Event)>,
+    pub handler: Closure<dyn FnMut(&Event)>,
 }
 
 impl WebsysDom {
@@ -74,15 +74,12 @@ impl WebsysDom {
                 }
                 DomEdit::CreatePlaceholder { root } => self.interpreter.CreatePlaceholder(root),
                 DomEdit::NewEventListener {
-                    event_name,
-                    scope,
-                    root,
+                    event_name, root, ..
                 } => {
-                    //
                     let handler: &Function = self.handler.as_ref().unchecked_ref();
-                    self.interpreter
-                        .NewEventListener(event_name, scope.0, root, handler);
+                    self.interpreter.NewEventListener(event_name, root, handler);
                 }
+
                 DomEdit::RemoveEventListener { root, event } => {
                     self.interpreter.RemoveEventListener(root, event)
                 }
@@ -104,6 +101,7 @@ impl WebsysDom {
 pub struct DioxusWebsysEvent(web_sys::Event);
 
 // safety: currently the web is not multithreaded and our VirtualDom exists on the same thread
+#[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for DioxusWebsysEvent {}
 unsafe impl Sync for DioxusWebsysEvent {}
 

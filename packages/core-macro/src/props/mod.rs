@@ -364,6 +364,14 @@ mod field_info {
                                 Some(syn::parse(quote!(Default::default()).into()).unwrap());
                             Ok(())
                         }
+
+                        "optional" => {
+                            self.default =
+                                Some(syn::parse(quote!(Default::default()).into()).unwrap());
+                            self.strip_option = true;
+                            Ok(())
+                        }
+
                         _ => {
                             macro_rules! handle_fields {
                                 ( $( $flag:expr, $field:ident, $already:expr; )* ) => {

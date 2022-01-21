@@ -121,6 +121,14 @@ impl WebsysDom {
                     self.rehydrate_single(nodes, place, dom, child, &mut last_node_was_text)?;
                 }
 
+                for listener in vel.listeners {
+                    self.interpreter.NewEventListener(
+                        listener.event,
+                        listener.mounted_node.get().unwrap().as_u64(),
+                        self.handler.as_ref().unchecked_ref(),
+                    );
+                }
+
                 place.pop();
                 nodes.pop();
 
