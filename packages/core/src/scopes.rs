@@ -667,6 +667,56 @@ impl ScopeState {
         value
     }
 
+    /// Provide a context for the root component from anywhere in your app.
+    ///
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// struct SharedState(&'static str);
+    ///
+    /// static App: Component = |cx| {
+    ///     cx.use_hook(|_| cx.provide_root_context(SharedState("world")));
+    ///     rsx!(cx, Child {})
+    /// }
+    ///
+    /// static Child: Component = |cx| {
+    ///     let state = cx.consume_state::<SharedState>();
+    ///     rsx!(cx, div { "hello {state.0}" })
+    /// }
+    /// ```
+    pub fn provide_root_context<T: 'static>(&self, value: T) -> Rc<T> {
+        let value = Rc::new(value);
+
+        // if we *are* the root component, then we can just provide the context directly
+        if self.scope_id() == ScopeId(0) {
+            self.shared_contexts
+                .borrow_mut()
+                .insert(TypeId::of::<T>(), value.clone())
+                .map(|f| f.downcast::<T>().ok())
+                .flatten();
+        }
+
+        let mut search_parent = self.parent_scope;
+
+        while let Some(parent) = search_parent.take() {
+            let parent = unsafe { &*parent };
+
+            if parent
+                .shared_contexts
+                .borrow_mut()
+                .insert(TypeId::of::<T>(), value.clone())
+                .is_some()
+            {
+                log::warn!("Context already provided to parent scope - replacing it");
+            }
+
+            search_parent = parent.parent_scope;
+        }
+
+        value
+    }
+
     /// Try to retrieve a SharedState with type T from the any parent Scope.
     pub fn consume_context<T: 'static>(&self) -> Option<Rc<T>> {
         if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
