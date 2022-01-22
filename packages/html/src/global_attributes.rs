@@ -533,7 +533,7 @@ pub trait GlobalAttributes {
 
         /// Specify the location of the right edge of the positioned element.
         right: "right",
-        
+
         /// Specifies the gap between the rows in a multi_column element.
         row_gap: "row-gap",
 
