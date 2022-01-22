@@ -70,7 +70,7 @@ impl ScopeArena {
     }
 
     /// Safety:
-    /// - Obtaining a mutable refernece to any Scope is unsafe
+    /// - Obtaining a mutable reference to any Scope is unsafe
     /// - Scopes use interior mutability when sharing data into components
     pub(crate) fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
         unsafe { self.scopes.borrow().get(&id).map(|f| &**f) }
@@ -101,7 +101,7 @@ impl ScopeArena {
         let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
 
         /*
-        This scopearena aggressively reuse old scopes when possible.
+        This scopearena aggressively reuses old scopes when possible.
         We try to minimize the new allocations for props/arenas.
 
         However, this will probably lead to some sort of fragmentation.

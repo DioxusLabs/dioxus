@@ -66,7 +66,7 @@ impl<'a, T: 'static> UseState<'a, T> {
         })
     }
 
-    pub fn wtih(&self, f: impl FnOnce(&mut T)) {
+    pub fn with(&self, f: impl FnOnce(&mut T)) {
         let mut val = self.0.wip.borrow_mut();
 
         if let Some(inner) = val.as_mut() {

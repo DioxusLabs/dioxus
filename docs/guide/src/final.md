@@ -15,7 +15,7 @@ With any luck, you followed through the "Putting it All Together" mini guide and
 
 Continuing on your journey with Dioxus, you can try a number of things:
 
-- Build a simple TUI app 
+- Build a simple TUI app
 - Publish your search engine app
 - Deploy a WASM app to GitHub
 - Design a custom hook
@@ -37,7 +37,7 @@ The core team is actively working on:
 
 - Declarative window management (via Tauri) for Desktop apps
 - Portals for Dioxus Core
-- Mobile support 
+- Mobile support
 - Integration with 3D renderers
 - Better async story (suspense, error handling)
 - Global state management

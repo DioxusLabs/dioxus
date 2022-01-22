@@ -1,6 +1,6 @@
 # Conditional Lists and Keys
 
-You will often want to display multiple similar components from a collection of data. 
+You will often want to display multiple similar components from a collection of data.
 
 In this chapter, you will learn:
 
@@ -22,9 +22,9 @@ rsx!(
 )
 ```
 
-Instead, we need to transform the list of data into a list of Elements. 
+Instead, we need to transform the list of data into a list of Elements.
 
-For convenience, `rsx!` supports any type in curly braces that implements the `IntoVnodeList` trait. Conveniently, every iterator that returns something that can be rendered as an Element also implements `IntoVnodeList`. 
+For convenience, `rsx!` supports any type in curly braces that implements the `IntoVnodeList` trait. Conveniently, every iterator that returns something that can be rendered as an Element also implements `IntoVnodeList`.
 
 As a simple example, let's render a list of names. First, start with our input data:
 
@@ -61,7 +61,7 @@ The HTML-rendered version of this list would follow what you would expect:
 
 ### Rendering our posts with a PostList component
 
-Let's start by modeling this problem with a component and some properties. 
+Let's start by modeling this problem with a component and some properties.
 
 For this example, we're going to use the borrowed component syntax since we probably have a large list of posts that we don't want to clone every time we render the Post List.
 
@@ -98,7 +98,7 @@ fn App(cx: Scope<PostList>) -> Element {
 
 Rust's iterators are extremely powerful, especially when used for filtering tasks. When building user interfaces, you might want to display a list of items filtered by some arbitrary check.
 
-As a very simple example, let's set up a filter where we only list names that begin with the letter "J". 
+As a very simple example, let's set up a filter where we only list names that begin with the letter "J".
 
 Let's make our list of names:
 
@@ -117,7 +117,7 @@ let name_list = names
 
 Rust's iterators provide us tons of functionality and are significantly easier to work with than JavaScript's map/filter/reduce.
 
-For keen Rustaceans: notice how we don't actually call `collect` on the name list. If we `collected` our filtered list into new Vec, then we would need to make an allocation to store these new elements. Instead, we create an entirely new _lazy_ iterator which will then be consumed by Dioxus in the `render` call. 
+For keen Rustaceans: notice how we don't actually call `collect` on the name list. If we `collected` our filtered list into new Vec, then we would need to make an allocation to store these new elements. Instead, we create an entirely new _lazy_ iterator which will then be consumed by Dioxus in the `render` call.
 
 The `render` method is extraordinarily efficient, so it's best practice to let it do most of the allocations for us.
 

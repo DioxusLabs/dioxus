@@ -3,7 +3,7 @@ use crate::innerlude::*;
 pub struct ElementIdIterator<'a> {
     vdom: &'a VirtualDom,
 
-    // Heuristcally we should never bleed into 5 completely nested fragments/components
+    // Heuristically we should never bleed into 5 completely nested fragments/components
     // Smallvec lets us stack allocate our little stack machine so the vast majority of cases are sane
     stack: smallvec::SmallVec<[(u16, &'a VNode<'a>); 5]>,
 }

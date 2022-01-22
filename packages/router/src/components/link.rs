@@ -11,7 +11,7 @@ pub struct LinkProps<'a> {
 
     /// The url that gets pushed to the history stack
     ///
-    /// You can either put it your own inline method or just autoderive the route using `derive(Routable)`
+    /// You can either put in your own inline method or just autoderive the route using `derive(Routable)`
     ///
     /// ```rust, ignore
     ///

@@ -9,7 +9,7 @@ In this chapter, you'll learn about:
 
 ## The use case
 
-Let's say you're building a user interface and want to make some part of it clickable to another website. You would normally start with the HTML `<a>` tag, like so:
+Let's say you're building a user interface and want to make some part of it a clickable link to another website. You would normally start with the HTML `<a>` tag, like so:
 
 ```rust
 rsx!(
@@ -98,7 +98,7 @@ struct ClickableProps<'a> {
     children: Element<'a>
 }
 
-fn clickable(cx: Scope<ClickableProps>) -> Element {
+fn Clickable(cx: Scope<ClickableProps>) -> Element {
     cx.render(rsx!(
         a {
             href: "{cx.props.href}",
@@ -162,7 +162,7 @@ struct ClickableProps<'a> {
 
 fn clickable(cx: Scope<ClickableProps>) -> Element {
     cx.render(rsx!(
-        a { 
+        a {
             ..cx.props.attributes,
             "Any link, anywhere"
         }
@@ -186,7 +186,7 @@ struct ClickableProps<'a> {
 
 fn clickable(cx: Scope<ClickableProps>) -> Element {
     cx.render(rsx!(
-        a { 
+        a {
             onclick: move |evt| cx.props.onclick.call(evt)
         }
     ))

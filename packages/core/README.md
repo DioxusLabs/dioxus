@@ -94,5 +94,5 @@ Dioxus deals with arenas, lifetimes, asynchronous tasks, custom allocators, pinn
 
 If you don't want to use a crate that uses unsafe, then this crate is not for you.
 
-However, we are always interested in decreasing the scope of the core VirtualDom to make it easier to review. We'd be happy to welcome PRs that can eliminate unsafe code while still upholding the numerous variants required to execute certain features.
+However, we are always interested in decreasing the scope of the core VirtualDom to make it easier to review. We'd be happy to welcome PRs that can eliminate unsafe code while still upholding the numerous invariants required to execute certain features.
 

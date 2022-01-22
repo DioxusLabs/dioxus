@@ -22,7 +22,7 @@ In general, Dioxus and React share many functional similarities. If this guide i
 
 ## Multiplatform
 
-Dioxus is a *portable* toolkit, meaning the Core implementation can run anywhere with no platform-dependent linking. Unlike many other Rust frontend toolkits, Dioxus is not intrinsically linked to Web-Sys. In fact, every element and event listener can be swapped out at compile time. By default, Dioxus ships with the `Html` feature enabled which can be disabled depending on your target renderer.
+Dioxus is a *portable* toolkit, meaning the Core implementation can run anywhere with no platform-dependent linking. Unlike many other Rust frontend toolkits, Dioxus is not intrinsically linked to Web-Sys. In fact, every element and event listener can be swapped out at compile time. By default, Dioxus ships with the `html` feature enabled, but this can be disabled depending on your target renderer.
 
 Right now, we have several 1st-party renderers:
 - WebSys (for WASM)
@@ -33,8 +33,7 @@ Right now, we have several 1st-party renderers:
 
 ### Web Support
 ---
-
-The Web is the most-supported target platform for Dioxus. To run on the Web, your app must be compiled to WebAssembly and depend on the `dioxus` crate with the `web` feature enabled. Because of the Wasm limitation, not every crate will work with your web-apps, so you'll need to make sure that your crates work without native system calls (timers, IO, etc).
+The Web is the best-supported target platform for Dioxus. To run on the Web, your app must be compiled to WebAssembly and depend on the `dioxus` crate with the `web` feature enabled. Because of the limitations of Wasm  not every crate will work with your web-apps, so you'll need to make sure that your crates work without native system calls (timers, IO, etc).
 
 Because the web is a fairly mature platform, we expect there to be very little API churn for web-based features.
 
@@ -45,9 +44,10 @@ Examples:
 - [ECommerce](https://github.com/DioxusLabs/example-projects/tree/master/ecommerce-site)
 
 [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc)
+
 ### SSR Support
 ---
-Dioxus supports server-side rendering! 
+Dioxus supports server-side rendering!
 
 For rendering statically to an `.html` file or from a WebServer, then you'll want to make sure the `ssr` feature is enabled in the `dioxus` crate and use the `dioxus::ssr` API. We don't expect the SSR API to change drastically in the future.
 
@@ -90,13 +90,13 @@ Examples:
 ### LiveView / Server Component Support
 ---
 
-The internal architecture of Dioxus was designed from day one to support the `LiveView` use-case, where a web server hosts a running app for each connected user. As of today, there is no first-class LiveView support - you'll need to wire this up yourself. 
+The internal architecture of Dioxus was designed from day one to support the `LiveView` use-case, where a web server hosts a running app for each connected user. As of today, there is no first-class LiveView support - you'll need to wire this up yourself.
 
 While not currently fully implemented, the expectation is that LiveView apps can be a hybrid between Wasm and server-rendered where only portions of a page are "live" and the rest of the page is either server-rendered, statically generated, or handled by the host SPA.
 
 ### Multithreaded Support
 ---
-The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite a bit of interior mutability which is not thread-safe. This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc. 
+The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite a bit of interior mutability which is not thread-safe. This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc.
 
 To solve this, you'll want to spawn a VirtualDom on its own thread and communicate with it via channels.
 
