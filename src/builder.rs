@@ -37,7 +37,6 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         .arg("wasm32-unknown-unknown")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-        ;
 
     if config.release {
         cmd.arg("--release");
@@ -54,7 +53,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     let output = child.wait()?;
 
     if output.success() {
-        log::info!("Build complete! {:?}", reason);
+        log::info!("Build complete!");
     } else {
         log::error!("Build failed!");
         let mut reason = String::new();
@@ -63,7 +62,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     }
 
     // [2] Establish the output directory structure
-    let bindgen_outdir = out_dir.join("wasm");
+    let bindgen_outdir = out_dir.join("assets");
 
     // [3] Bindgen the final binary for use easy linking
     let mut bindgen_builder = Bindgen::new();
@@ -100,8 +99,6 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     // [5] Generate the html file with the module name
     // TODO: support names via options
     log::info!("Writing to '{:#?}' directory...", out_dir);
-    let mut file = std::fs::File::create(out_dir.join("index.html"))?;
-    file.write_all(gen_page("./wasm/module.js").as_str().as_bytes())?;
 
     let copy_options = fs_extra::dir::CopyOptions::new();
     if static_dir.is_dir() {
@@ -118,7 +115,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     Ok(())
 }
 
-fn gen_page(module: &str) -> String {
+pub fn gen_page(module: &str) -> String {
     format!(
         r#"
 <html>
@@ -132,7 +129,7 @@ fn gen_page(module: &str) -> String {
     <!-- Note the usage of `type=module` here as this is an ES6 module -->
     <script type="module">
       import init from "{}";
-      init("./wasm/module_bg.wasm");
+      init("./assets/module_bg.wasm");
     </script>
     <div id="dioxusroot"> </div>
   </body>

@@ -21,14 +21,17 @@ cargo_toml = "0.10.0"
 futures = "0.3.12"
 notify = "4.0.17"
 html_parser = "0.6.2"
-tui = { version = "0.16.0", features = ["crossterm"] }
-crossterm = "0.22.1"
 binary-install = "0.0.2"
 convert_case = "0.5.0"
 structopt = "0.3.25"
 cargo_metadata = "0.14.1"
 tokio = { version = "1.15.0", features = ["full"] }
 atty = "0.2.14"
+
+axum = { version = "0.4.4", features = ["ws", "headers"] }
+tower-http = { version = "0.2.0", features = ["fs", "trace"] }
+headers = "0.3"
+# hyper = { version = "0.14.11", features = ["full"] }
 
 [[bin]]
 path = "src/main.rs"

@@ -1,0 +1,28 @@
+<html>
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <meta charset="UTF-8" />
+    <title>Dioxus-CLI Dev Server</title>
+  </head>
+  <body>
+    <div id="main"></div>
+
+    <!-- Note the usage of `type=module` here as this is an ES6 module -->
+    <script type="module">
+      import init from "./assets/module.js";
+      init("./assets/module_bg.wasm");
+    </script>
+
+    <script>
+      const socket = new WebSocket("ws://localhost:8080/ws");
+
+      socket.addEventListener("message", function (event) {
+        console.log(event);
+        if (event.data === "reload") {
+          window.location.reload();
+        }
+      });
+
+    </script>
+  </body>
+</html>

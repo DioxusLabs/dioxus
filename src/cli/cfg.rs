@@ -67,6 +67,26 @@ pub struct ConfigOptsBuild {
     pub pattern_params: Option<HashMap<String, String>>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, StructOpt)]
+pub struct ConfigOptsServe {
+    /// The index HTML file to drive the bundling process [default: index.html]
+    #[structopt(parse(from_os_str))]
+    pub target: Option<PathBuf>,
+
+    /// Build in release mode [default: false]
+    #[structopt(long)]
+    #[serde(default)]
+    pub release: bool,
+
+    /// The output dir for all final assets [default: dist]
+    #[structopt(short, long, parse(from_os_str))]
+    pub dist: Option<PathBuf>,
+
+    /// The public URL from which assets are to be served [default: /]
+    #[structopt(long, parse(from_str=parse_public_url))]
+    pub public_url: Option<String>,
+}
+
 /// Ensure the given value for `--public-url` is formatted correctly.
 pub fn parse_public_url(val: &str) -> String {
     let prefix = if !val.starts_with('/') { "/" } else { "" };

@@ -13,8 +13,7 @@ pub struct Build {
 
 impl Build {
     pub fn build(self) -> anyhow::Result<()> {
-
-        let mut crate_config =  crate::CrateConfig::new()?;
+        let mut crate_config = crate::CrateConfig::new()?;
 
         // change the relase state.
         crate_config.with_release(self.build.release);

@@ -35,7 +35,6 @@ pub enum Commands {
     Translate(translate::Translate),
     // /// Build, watch & serve the Rust WASM app and all of its assets.
     Serve(serve::Serve),
-
     // /// Clean output artifacts.
     // Clean(clean::Clean),
 
