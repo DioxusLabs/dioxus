@@ -1,5 +1,5 @@
 use crate::error::Result;
-use std::{io::Write, path::PathBuf, process::Command};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct CrateConfig {

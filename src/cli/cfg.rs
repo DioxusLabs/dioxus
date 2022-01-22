@@ -1,11 +1,8 @@
-use anyhow::Result;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::Arc;
 
 /// Config options for the build system.
 #[derive(Clone, Debug, Default, Deserialize, StructOpt)]

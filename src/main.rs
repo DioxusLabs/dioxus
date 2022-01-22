@@ -8,11 +8,11 @@ async fn main() -> Result<()> {
 
     match args.action {
         Commands::Translate(opts) => {
-            opts.translate();
+            opts.translate()?;
         }
 
         Commands::Build(opts) => {
-            opts.build();
+            opts.build()?;
         }
 
         // Commands::Clean(_) => {
@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
         //     //
         // }
         Commands::Serve(opts) => {
-            opts.serve().await;
+            opts.serve().await?;
         }
     }
 

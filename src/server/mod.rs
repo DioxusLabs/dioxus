@@ -1,6 +1,6 @@
 use axum::{
     extract::{
-        ws::{Message, WebSocket},
+        ws::Message,
         Extension, TypedHeader, WebSocketUpgrade,
     },
     http::StatusCode,
@@ -19,11 +19,11 @@ struct WsRelodState {
     update: bool,
 }
 
-impl WsRelodState { fn change(&mut self) { self.update = !self.update } }
+impl WsRelodState { fn change(&mut self) { self.update = !self.update; } }
 
 pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
 
-    log::info!("Starting development server 🚀");
+    log::info!("🚀 Starting development server...");
         
     let (tx, rx) = channel();
 
@@ -40,8 +40,9 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
                 match v {
                     DebouncedEvent::Create(_) | DebouncedEvent::Write(_) |
                     DebouncedEvent::Remove(_) | DebouncedEvent::Rename(_, _) => {
-                        builder::build(&watcher_conf).unwrap();
-                        watcher_ws_state.lock().unwrap().change();
+                        if let Ok(_) = builder::build(&watcher_conf) {
+                            watcher_ws_state.lock().unwrap().change();
+                        }
                     },
                     _ => {}
                 }

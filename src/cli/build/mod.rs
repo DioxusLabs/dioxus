@@ -1,6 +1,4 @@
 use crate::cfg::ConfigOptsBuild;
-use anyhow::Result;
-use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// Build the Rust WASM app and all of its assets.
@@ -18,7 +16,7 @@ impl Build {
         // change the relase state.
         crate_config.with_release(self.build.release);
 
-        crate::builder::build(&crate_config);
+        crate::builder::build(&crate_config)?;
 
         Ok(())
     }

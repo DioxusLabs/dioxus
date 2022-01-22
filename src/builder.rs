@@ -3,7 +3,7 @@ use crate::{
     error::{Error, Result},
 };
 use std::{
-    io::{Read, Write},
+    io::Write,
     process::Command,
 };
 use wasm_bindgen_cli_support::Bindgen;
@@ -29,14 +29,15 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     let t_start = std::time::Instant::now();
 
     // [1] Build the .wasm module
-    log::info!("Running build commands...");
+    log::info!("🚅 Running build commands...");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&crate_dir)
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+    ;
 
     if config.release {
         cmd.arg("--release");
@@ -48,16 +49,13 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let mut child = cmd.spawn()?;
+    let output = cmd.output()?;
 
-    let output = child.wait()?;
-
-    if output.success() {
-        log::info!("Build complete!");
+    if output.status.success() {
+        std::io::stdout().write_all(&output.stdout).unwrap();
     } else {
         log::error!("Build failed!");
-        let mut reason = String::new();
-        child.stderr.unwrap().read_to_string(&mut reason)?;
+        let reason = String::from_utf8_lossy(&output.stderr).to_string();
         return Err(Error::BuildFailed(reason));
     }
 
@@ -98,8 +96,8 @@ pub fn build(config: &CrateConfig) -> Result<()> {
 
     // [5] Generate the html file with the module name
     // TODO: support names via options
-    log::info!("Writing to '{:#?}' directory...", out_dir);
 
+    // log::info!("Writing to '{:#?}' directory...", out_dir);
     let copy_options = fs_extra::dir::CopyOptions::new();
     if static_dir.is_dir() {
         match fs_extra::dir::copy(static_dir, out_dir, &copy_options) {
@@ -111,7 +109,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     }
 
     let t_end = std::time::Instant::now();
-    log::info!("Done in {}ms! 🎉", (t_end - t_start).as_millis());
+    log::info!("🏁 Done in {}ms!", (t_end - t_start).as_millis());
     Ok(())
 }
 

@@ -20,6 +20,7 @@ pub fn convert_html_to_component(html: &str) -> Result<ComponentRenderer> {
     })
 }
 
+#[allow(dead_code)]
 pub struct ComponentRenderer {
     dom: Dom,
     icon_index: usize,
