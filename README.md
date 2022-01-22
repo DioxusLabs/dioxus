@@ -163,6 +163,7 @@ Dioxus primarily emphasizes **developer experience** and **familiarity with Reac
 - [Percy](https://github.com/chinedufn/percy): Supports SSR but with less emphasis on state management and event handling.
 - [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but lacking in ergonomics.
 - [Dominator](https://github.com/Pauan/rust-dominator): Signal-based zero-cost alternative, less emphasis on community and docs.
+- [Azul](https://azul.rs): Fully native HTML/CSS renderer for desktop applications, no support for web/ssr
 
 
 # Parity with React
