@@ -399,6 +399,9 @@ pub trait GlobalAttributes {
         /// Specify the font weight of the text.
         font_weight: "font-weight",
 
+        /// Sets gaps (gutters) between rows and columns. Shorthand for row_gap and column_gap.
+        gap: "gap",
+
         /// Specify the height of an element.
         height: "height",
 
@@ -530,6 +533,9 @@ pub trait GlobalAttributes {
 
         /// Specify the location of the right edge of the positioned element.
         right: "right",
+        
+        /// Specifies the gap between the rows in a multi_column element.
+        row_gap: "row-gap",
 
         /// Specifies the length of the tab character.
         tab_size: "tab-size",
