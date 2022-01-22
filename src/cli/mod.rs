@@ -5,10 +5,8 @@ use structopt::StructOpt;
 pub mod build;
 pub mod cfg;
 pub mod clean;
-pub mod config;
 pub mod serve;
 pub mod translate;
-pub mod watch;
 
 /// Build, bundle, & ship your Dioxus app.
 ///
@@ -32,11 +30,11 @@ pub struct Cli {
 #[derive(StructOpt)]
 pub enum Commands {
     // /// Build the Rust WASM app and all of its assets.
-    // Build(build::Build),
+    Build(build::Build),
     /// Translate some source file into Dioxus code.
     Translate(translate::Translate),
     // /// Build, watch & serve the Rust WASM app and all of its assets.
-    // Serve(serve::Serve),
+    Serve(serve::Serve),
 
     // /// Clean output artifacts.
     // Clean(clean::Clean),

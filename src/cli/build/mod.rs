@@ -11,4 +11,16 @@ pub struct Build {
     pub build: ConfigOptsBuild,
 }
 
-pub async fn perform_build() {}
+impl Build {
+    pub fn build(self) -> anyhow::Result<()> {
+
+        let mut crate_config =  crate::CrateConfig::new()?;
+
+        // change the relase state.
+        crate_config.with_release(self.build.release);
+
+        crate::builder::build(&crate_config);
+
+        Ok(())
+    }
+}

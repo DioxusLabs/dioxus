@@ -3,15 +3,18 @@ use structopt::StructOpt;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    
     let args = Cli::from_args();
     set_up_logging();
 
     match args.action {
         Commands::Translate(opts) => {
             opts.translate();
-        } // Commands::Build(_) => {
-          //     //
-          // }
+        } 
+        
+        Commands::Build(opts) => {
+            opts.build();
+        }
 
           // Commands::Clean(_) => {
           //     //
@@ -21,9 +24,9 @@ async fn main() -> Result<()> {
           //     //
           // }
 
-          // Commands::Serve(_) => {
-          //     //
-          // }
+          Commands::Serve(_) => {
+              //
+          }
     }
 
     Ok(())

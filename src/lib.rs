@@ -17,11 +17,3 @@ pub mod logging;
 pub use logging::*;
 
 pub mod watch;
-
-pub mod buildsystem {
-    pub mod wasm;
-    pub use wasm::*;
-
-    pub mod assets;
-    pub use assets::*;
-}

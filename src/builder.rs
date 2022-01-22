@@ -37,6 +37,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         .arg("wasm32-unknown-unknown")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+        ;
 
     if config.release {
         cmd.arg("--release");
@@ -49,10 +50,11 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     };
 
     let mut child = cmd.spawn()?;
+
     let output = child.wait()?;
 
     if output.success() {
-        log::info!("Build complete!");
+        log::info!("Build complete! {:?}", reason);
     } else {
         log::error!("Build failed!");
         let mut reason = String::new();
@@ -102,10 +104,12 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     file.write_all(gen_page("./wasm/module.js").as_str().as_bytes())?;
 
     let copy_options = fs_extra::dir::CopyOptions::new();
-    match fs_extra::dir::copy(static_dir, out_dir, &copy_options) {
-        Ok(_) => {}
-        Err(_e) => {
-            log::warn!("Error copying dir");
+    if static_dir.is_dir() {
+        match fs_extra::dir::copy(static_dir, out_dir, &copy_options) {
+            Ok(_) => {}
+            Err(_e) => {
+                log::warn!("Error copying dir: {}", _e);
+            }
         }
     }
 
