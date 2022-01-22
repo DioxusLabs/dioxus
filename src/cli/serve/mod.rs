@@ -2,8 +2,6 @@ use crate::{cfg::ConfigOptsServe, server};
 use std::io::Write;
 use structopt::StructOpt;
 
-mod develop;
-
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(name = "serve")]
@@ -14,7 +12,6 @@ pub struct Serve {
 
 impl Serve {
     pub async fn serve(self) -> anyhow::Result<()> {
-
         let mut crate_config = crate::CrateConfig::new()?;
         // change the relase state.
         crate_config.with_release(self.serve.release);

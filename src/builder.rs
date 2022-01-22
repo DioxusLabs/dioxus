@@ -2,10 +2,7 @@ use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
 };
-use std::{
-    io::Write,
-    process::Command,
-};
+use std::{io::Write, process::Command};
 use wasm_bindgen_cli_support::Bindgen;
 
 pub fn build(config: &CrateConfig) -> Result<()> {
@@ -36,8 +33,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         .arg("--target")
         .arg("wasm32-unknown-unknown")
         .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit())
-    ;
+        .stderr(std::process::Stdio::inherit());
 
     if config.release {
         cmd.arg("--release");

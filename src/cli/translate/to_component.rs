@@ -4,6 +4,7 @@
 //! - [ ] Extracts svgs
 //! - [ ] Attempts to extract lists
 
+#[allow(unused_imports)]
 use std::{
     fmt::{Display, Formatter},
     io::Write,

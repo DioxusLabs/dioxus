@@ -8,11 +8,15 @@ async fn main() -> Result<()> {
 
     match args.action {
         Commands::Translate(opts) => {
-            opts.translate()?;
+            if let Err(e) = opts.translate() {
+                log::error!("translate error: {}", e);
+            }
         }
 
         Commands::Build(opts) => {
-            opts.build()?;
+            if let Err(e) = opts.build() {
+                log::error!("build error: {}", e);
+            }
         }
 
         // Commands::Clean(_) => {
@@ -23,7 +27,15 @@ async fn main() -> Result<()> {
         //     //
         // }
         Commands::Serve(opts) => {
-            opts.serve().await?;
+            if let Err(e) = opts.serve().await {
+                log::error!("serve error: {}", e);
+            }
+        }
+
+        Commands::Init(opts) => {
+            if let Err(e) = opts.init() {
+                log::error!("init error: {}", e);
+            }
         }
     }
 
