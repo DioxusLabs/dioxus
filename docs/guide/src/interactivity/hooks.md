@@ -1,5 +1,5 @@
 # Hooks and Internal State
- 
+
 In the [Adding Interactivity](./interactivity.md) section, we briefly covered the concept of hooks and state stored internal to components.
 
 In this section, we'll dive a bit deeper into hooks, exploring both the theory and mechanics.
@@ -10,7 +10,7 @@ In this section, we'll dive a bit deeper into hooks, exploring both the theory a
 
 Over the past several decades, computer scientists and engineers have long sought the "right way" of designing user interfaces. With each new programming language, novel features are unlocked that change the paradigm in which user interfaces are coded.
 
-Generally, a number of patterns have emerged, each with their own strengths and tradeoffs. 
+Generally, a number of patterns have emerged, each with their own strengths and tradeoffs.
 
 Broadly, there are two types of GUI structures:
 
@@ -21,7 +21,7 @@ Typically, immediate-mode GUIs are simpler to write but can slow down as more fe
 
 Many GUIs today are written in *Retained mode* - your code changes the data of the user interface but the renderer is responsible for actually drawing to the screen. In these cases, our GUI's state sticks around as the UI is rendered. To help accommodate retained mode GUIs, like the web browser, Dioxus provides a mechanism to keep state around.
 
-> Note: Even though hooks are accessible, you should still prefer to one-way data flow and encapsulation. Your UI code should be as predictable as possible. Dioxus is plenty fast, even for the largest apps.
+> Note: Even though hooks are accessible, you should still prefer one-way data flow and encapsulation. Your UI code should be as predictable as possible. Dioxus is plenty fast, even for the largest apps.
 
 ## Mechanics of Hooks
 In order to have state stick around between renders, Dioxus provides the `hook` through the `use_hook` API. This gives us a mutable reference to data returned from the initialization function.
@@ -48,7 +48,7 @@ fn example(cx: Scope) -> Element {
 }
 ```
 
-Mechanically, each call to `use_hook` provides us with `&mut T` for a new value. 
+Mechanically, each call to `use_hook` provides us with `&mut T` for a new value.
 
 ```rust
 fn example(cx: Scope) -> Element {
@@ -182,7 +182,7 @@ By default, we bundle a handful of hooks in the Dioxus-Hooks package. Feel free 
 - [use_context](https://docs.rs/dioxus_hooks/use_context) - consume state provided by `use_provide_context`
 
 For a more in-depth guide to building new hooks, checkout out the advanced hook building guide in the reference.
-  
+
 ## Wrapping up
 
 In this chapter, we learned about the mechanics and intricacies of storing state inside a component.

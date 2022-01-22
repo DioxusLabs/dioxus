@@ -93,7 +93,7 @@ Alternatively, `&str` can be included directly, though it must be inside of an a
 rsx!( "Hello ",  [if enabled { "Jack" } else { "Bob" }] )
 ```
 
-This is different from React's way of generating arbitrary markup but fits within idiomatic Rust. 
+This is different from React's way of generating arbitrary markup but fits within idiomatic Rust.
 
 Typically, with Dioxus, you'll just want to compute your substrings outside of the `rsx!` call and leverage the f-string formatting:
 
@@ -138,11 +138,11 @@ rsx!(
 All element attributes must occur *before* child elements. The `rsx!` macro will throw an error if your child elements come before any of your attributes. If you don't see the error, try editing your Rust-Analyzer IDE setting to ignore macro-errors. This is a temporary workaround because Rust-Analyzer currently throws *two* errors instead of just the one we care about.
 
 ```rust
-// settings.json 
+// settings.json
 {
   "rust-analyzer.diagnostics.disabled": [
     "macro-error"
-  ],   
+  ],
 }
 ```
 
@@ -166,7 +166,7 @@ This chapter just scratches the surface on how Elements can be defined.
 
 We learned:
 - Elements are the basic building blocks of User Interfaces
-- Elements can contain other elements 
+- Elements can contain other elements
 - Elements can either be a named container or text
 - Some Elements have properties that the renderer can use to draw the UI to the screen
 

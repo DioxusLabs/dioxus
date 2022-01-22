@@ -1,7 +1,7 @@
 # Summary
 
 - [Introduction](README.md)
-- [Getting Setup](setup.md)
+- [Getting Set Up](setup.md)
 - [Hello, World!](hello_world.md)
 - [Describing the UI](elements/index.md)
   - [Intro to Elements](elements/vnodes.md)
@@ -17,8 +17,8 @@
   - [User Input and Controlled Components](interactivity/user_input.md)
   - [Lifecycle, updates, and effects](interactivity/lifecycles.md)
 - [Managing State](state/index.md)
-  - [Local State](state/localstate.md) 
-  - [Lifting State](state/liftingstate.md) 
+  - [Local State](state/localstate.md)
+  - [Lifting State](state/liftingstate.md)
   - [Global State](state/sharedstate.md)
   - [Error handling](state/errorhandling.md)
 - [Working with Async](async/index.md)

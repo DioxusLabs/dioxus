@@ -21,7 +21,7 @@ use std::{
 /// - the `rsx!` macro
 /// - the [`NodeFactory`] API
 pub enum VNode<'src> {
-    /// Text VNodes simply bump-allocated (or static) string slices
+    /// Text VNodes are simply bump-allocated (or static) string slices
     ///
     /// # Example
     ///
@@ -399,7 +399,7 @@ impl<P> AnyProps for VComponentProps<P> {
     }
 
     // Safety:
-    // this will downcat the other ptr as our swallowed type!
+    // this will downcast the other ptr as our swallowed type!
     // you *must* make this check *before* calling this method
     // if your functions are not the same, then you will downcast a pointer into a different type (UB)
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool {

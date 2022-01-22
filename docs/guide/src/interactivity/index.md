@@ -10,7 +10,7 @@ Before we get too deep into the mechanics of interactivity, we should first unde
 
 Every app you'll ever build has some sort of information that needs to be rendered to the screen. Dioxus is responsible for translating your desired user interface to what is rendered to the screen. *You* are responsible for providing the content.
 
-The dynamic data in your user interface is called `State`. 
+The dynamic data in your user interface is called `State`.
 
 When you first launch your app with `dioxus::web::launch_with_props` you'll be providing the initial state. You need to declare the initial state *before* starting the app.
 
@@ -32,7 +32,7 @@ fn main() {
 }
 ```
 
-When Dioxus renders your app, it will pass an immutable reference of `PostProps` to your `Post` component. Here, you can pass the state down into children.
+When Dioxus renders your app, it will pass an immutable reference to `PostProps` into your `Post` component. Here, you can pass the state down into children.
 
 ```rust
 fn App(cx: Scope<PostProps>) -> Element {
@@ -73,14 +73,14 @@ fn App(cx: Scope)-> Element {
             url: String::from("dioxuslabs.com"),
             title: String::from("Hello, world"),
             original_poster: String::from("dioxus")
-        }        
+        }
     });
 
     cx.render(rsx!{
         Title { title: &post.title }
         Score { score: &post.score }
         // etc
-    })   
+    })
 }
 ```
 
@@ -102,7 +102,7 @@ We'll dive deeper into how exactly these hooks work later.
 
 ### When do I update my state?
 
-There are a few different approaches to choosing when to update your state. You can update your state in response to user-triggered events or asynchronously in some background task.    
+There are a few different approaches to choosing when to update your state. You can update your state in response to user-triggered events or asynchronously in some background task.
 
 ### Updating state in listeners
 
@@ -120,7 +120,7 @@ fn App(cx: Scope)-> Element {
             "Generate a random post"
         }
         Post { props: &post }
-    })   
+    })
 }
 ```
 
@@ -162,7 +162,7 @@ Whenever you inform Dioxus that the component needs to be updated, it will "rend
 
 ![Diffing](../images/diffing.png)
 
-In React, the specifics of when a component gets re-rendered is somewhat blurry. With Dioxus, any component can mark itself as "dirty" through a method on `Context`: `needs_update`. In addition, any component can mark any _other_ component as dirty provided it knows the other component's ID with `needs_update_any`. 
+In React, the specifics of when a component gets re-rendered is somewhat blurry. With Dioxus, any component can mark itself as "dirty" through a method on `Context`: `needs_update`. In addition, any component can mark any _other_ component as dirty provided it knows the other component's ID with `needs_update_any`.
 
 With these building blocks, we can craft new hooks similar to `use_state` that let us easily tell Dioxus that new information is ready to be sent to the screen.
 
