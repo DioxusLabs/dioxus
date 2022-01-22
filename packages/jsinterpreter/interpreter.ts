@@ -244,7 +244,6 @@ export class Interpreter {
         break;
       case "NewEventListener":
 
-
         // this handler is only provided on desktop implementations since this 
         // method is not used by the web implementation
         let handler = (event: Event) => {
@@ -281,6 +280,23 @@ export class Interpreter {
                       mounted_dom_id: parseInt(realId),
                       href
                     });
+                  }
+                }
+              }
+            }
+
+            if (target.tagName == "FORM") {
+              let formTarget = target as HTMLFormElement;
+              for (let x = 0; x < formTarget.elements.length; x++) {
+                let element = formTarget.elements[x];
+                let name = element.getAttribute("name");
+                if (name != null) {
+                  if (element.getAttribute("type") == "checkbox") {
+                    // @ts-ignore
+                    contents.values[name] = element.checked ? "true" : "false";
+                  } else {
+                    // @ts-ignore
+                    contents.values[name] = element.value ?? element.textContent;
                   }
                 }
               }
@@ -385,6 +401,8 @@ function serialize_event(event: Event) {
     case "invalid":
     case "reset":
     case "submit": {
+
+
       let target = event.target as HTMLFormElement;
       let value = target.value ?? target.textContent;
 
@@ -394,6 +412,7 @@ function serialize_event(event: Event) {
 
       return {
         value: value,
+        values: {}
       };
     }
 
@@ -643,8 +662,6 @@ const bool_attrs = {
   truespeed: true,
 };
 
-
-
 type PushRoot = { type: "PushRoot", root: number };
 type AppendChildren = { type: "AppendChildren", many: number };
 type ReplaceWith = { type: "ReplaceWith", root: number, m: number };
@@ -660,7 +677,6 @@ type RemoveEventListener = { type: "RemoveEventListener", event_name: string, sc
 type SetText = { type: "SetText", root: number, text: string };
 type SetAttribute = { type: "SetAttribute", root: number, field: string, value: string, ns: string | undefined };
 type RemoveAttribute = { type: "RemoveAttribute", root: number, name: string };
-
 
 type DomEdit =
   PushRoot |

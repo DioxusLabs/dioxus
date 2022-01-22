@@ -231,6 +231,23 @@ export class Interpreter {
                                 }
                             }
                         }
+                        if (target.tagName == "FORM") {
+                            let formTarget = target;
+                            for (let x = 0; x < formTarget.elements.length; x++) {
+                                let element = formTarget.elements[x];
+                                let name = element.getAttribute("name");
+                                if (name != null) {
+                                    if (element.getAttribute("type") == "checkbox") {
+                                        // @ts-ignore
+                                        contents.values[name] = element.checked ? "true" : "false";
+                                    }
+                                    else {
+                                        // @ts-ignore
+                                        contents.values[name] = element.value ?? element.textContent;
+                                    }
+                                }
+                            }
+                        }
                         if (realId == null) {
                             return;
                         }
@@ -316,6 +333,7 @@ function serialize_event(event) {
             }
             return {
                 value: value,
+                values: {}
             };
         }
         case "click":

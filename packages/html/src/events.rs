@@ -3,6 +3,8 @@ use dioxus_core::exports::bumpalo;
 use dioxus_core::*;
 
 pub mod on {
+    use std::collections::HashMap;
+
     use super::*;
     macro_rules! event_directory {
         ( $(
@@ -484,6 +486,7 @@ pub mod on {
     #[derive(Debug)]
     pub struct FormData {
         pub value: String,
+        pub values: HashMap<String, String>,
         /* DOMEvent:  Send + SyncTarget relatedTarget */
     }
 

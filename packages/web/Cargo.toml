@@ -41,6 +41,7 @@ features = [
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",
+    "HtmlFormElement",
     "EventTarget",
     "HtmlCollection",
     "Node",

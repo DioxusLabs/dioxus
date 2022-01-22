@@ -178,7 +178,8 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 })
                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-            Arc::new(FormData { value })
+            let values = std::collections::HashMap::new();
+            Arc::new(FormData { value, values })
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
@@ -296,9 +297,7 @@ fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
                     priority: dioxus_core::EventPriority::Medium,
                 });
             }
-            Some(Err(e)) => {
-                return Err(e.into());
-            }
+            Some(Err(e)) => return Err(e.into()),
             None => {
                 // walk the tree upwards until we actually find an event target
                 if let Some(parent) = target.parent_element() {
