@@ -2,10 +2,10 @@ use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
 };
-use std::{io::Write, process::Command};
+use std::{io::Write, path::PathBuf, process::Command};
 use wasm_bindgen_cli_support::Bindgen;
 
-pub fn build(config: &CrateConfig) -> Result<()> {
+pub fn build(config: &CrateConfig, dist: PathBuf) -> Result<()> {
     /*
     [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     [2] Generate the appropriate build folders
@@ -15,7 +15,6 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     */
 
     let CrateConfig {
-        out_dir,
         crate_dir,
         target_dir,
         static_dir,
@@ -23,10 +22,12 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         ..
     } = config;
 
+    let out_dir = crate_dir.join(dist);
+
     let t_start = std::time::Instant::now();
 
     // [1] Build the .wasm module
-    log::info!("🚅 Running build commands...");
+    log::info!("🚅 Running build command...");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&crate_dir)
         .arg("build")

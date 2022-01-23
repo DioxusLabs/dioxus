@@ -1,14 +1,18 @@
-use std::{process::{Command, Stdio}, fs::File, path::PathBuf, io::Write};
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 use structopt::StructOpt;
 
-use crate::{error::{Error, Result}, cargo};
+use crate::error::{Error, Result};
 
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(name = "init")]
 pub struct Init {
-
     /// Init project path
     #[structopt(default_value = ".")]
     path: String,
@@ -16,15 +20,18 @@ pub struct Init {
     /// Template path
     #[structopt(default_value = "default", long)]
     template: String,
-
 }
 
 impl Init {
     pub fn init(self) -> Result<()> {
-        
         log::info!("🔧 Start to init a new project '{}'.", self.path);
 
         let project_path = PathBuf::from(&self.path);
+
+        if project_path.join("Cargo.toml").is_file() {
+            log::warn!("Path '{}' is initialized.", self.path);
+            return Ok(());
+        }
 
         let output = Command::new("cargo")
             .arg("init")
@@ -32,8 +39,7 @@ impl Init {
             .arg("--bin")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output()?
-        ;
+            .output()?;
 
         if !output.status.success() {
             return Err(Error::CargoError("Cargo init failed".into()));
@@ -54,7 +60,21 @@ impl Init {
 
         // log::info!("🎯 Project initialization completed.");
 
-        
+        if !Command::new("cargo")
+            .args(["add", "dioxus", "--features web"])
+            .output()?
+            .status
+            .success()
+        {
+            let mut file = OpenOptions::new()
+                .append(true)
+                .open(project_path.join("Cargo.toml"))?;
+            file.write_all("dioxus = { version = \"0.1.7\", features = [\"web\"] }".as_bytes())?;
+        }
+
+        log::info!("\n💡 Project initialized:");
+        log::info!("🎯> cd {}", self.path);
+        log::info!("🎯> dioxus serve");
 
         Ok(())
     }

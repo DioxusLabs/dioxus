@@ -6,8 +6,11 @@ use axum::{
     AddExtensionLayer, Router,
 };
 use notify::{watcher, DebouncedEvent, Watcher};
-use std::sync::{mpsc::channel, Arc, Mutex};
 use std::time::Duration;
+use std::{
+    path::PathBuf,
+    sync::{mpsc::channel, Arc, Mutex},
+};
 use tower_http::services::ServeDir;
 
 use crate::{builder, CrateConfig};
@@ -22,7 +25,10 @@ impl WsRelodState {
     }
 }
 
-pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
+pub async fn startup(
+    config: CrateConfig,
+    opts: &crate::cfg::ConfigOptsServe,
+) -> anyhow::Result<()> {
     log::info!("🚀 Starting development server...");
 
     let (tx, rx) = channel();
@@ -40,6 +46,7 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
 
     let watcher_conf = config.clone();
     let watcher_ws_state = ws_reload_state.clone();
+    let dist_path = opts.dist.clone().unwrap_or(PathBuf::from("dist"));
     tokio::spawn(async move {
         loop {
             if let Ok(v) = rx.recv() {
@@ -48,7 +55,7 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
                     | DebouncedEvent::Write(_)
                     | DebouncedEvent::Remove(_)
                     | DebouncedEvent::Rename(_, _) => {
-                        if let Ok(_) = builder::build(&watcher_conf) {
+                        if let Ok(_) = builder::build(&watcher_conf, dist_path.clone()) {
                             // change the websocket reload state to true;
                             // the page will auto-reload.
                             watcher_ws_state.lock().unwrap().change();

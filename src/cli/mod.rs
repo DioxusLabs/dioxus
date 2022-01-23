@@ -3,9 +3,9 @@ use structopt::StructOpt;
 pub mod build;
 pub mod cfg;
 pub mod clean;
+pub mod init;
 pub mod serve;
 pub mod translate;
-pub mod init;
 
 /// Build, bundle, & ship your Dioxus app.
 ///
@@ -36,7 +36,6 @@ pub enum Commands {
     Serve(serve::Serve),
     /// Init a new project for Dioxus.
     Init(init::Init),
-
     // /// Clean output artifacts.
     // Clean(clean::Clean),
 
