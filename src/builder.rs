@@ -48,14 +48,12 @@ pub fn build(config: &CrateConfig, dist: PathBuf) -> Result<()> {
 
     let output = cmd.output()?;
 
-    if output.status.success() {
-        std::io::stdout().write_all(&output.stdout).unwrap();
-    } else {
+    if !output.status.success() {
         log::error!("Build failed!");
         let reason = String::from_utf8_lossy(&output.stderr).to_string();
         return Err(Error::BuildFailed(reason));
     }
-
+    
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets");
 
@@ -88,13 +86,6 @@ pub fn build(config: &CrateConfig, dist: PathBuf) -> Result<()> {
         .out_name("module")
         .generate(&bindgen_outdir)?;
 
-    // [4]
-    // TODO: wasm-opt
-
-    // [5] Generate the html file with the module name
-    // TODO: support names via options
-
-    // log::info!("Writing to '{:#?}' directory...", out_dir);
     let copy_options = fs_extra::dir::CopyOptions::new();
     if static_dir.is_dir() {
         match fs_extra::dir::copy(static_dir, out_dir, &copy_options) {

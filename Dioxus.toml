@@ -1,0 +1,42 @@
+[application]
+
+# App (Project) Name
+name = "dioxus-cli"
+
+# Dioxus App Support Platform
+# desktop, web, mobile, ssr
+platforms = ["web"]
+
+[web.app]
+
+# Web `build` & `serve` dist path
+out_dir = "dist"
+
+# resource (static) file folder
+static_dir = "static"
+
+[web.watcher]
+
+
+watch_path = ["src"]
+
+# include `assets` in web platform
+[web.resource]
+
+# CSS style file
+style = [
+    "./my-style.css"
+]
+
+# Javascript code file
+script = [
+    "./app.js"
+]
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = [
+    "./debug.js"
+]

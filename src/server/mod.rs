@@ -33,6 +33,8 @@ pub async fn startup(
 
     let (tx, rx) = channel();
 
+    let dist_path = opts.dist.clone().unwrap_or(PathBuf::from("dist"));
+
     // file watcher: check file change
     let mut watcher = watcher(tx, Duration::from_secs(2)).unwrap();
     watcher
@@ -46,7 +48,7 @@ pub async fn startup(
 
     let watcher_conf = config.clone();
     let watcher_ws_state = ws_reload_state.clone();
-    let dist_path = opts.dist.clone().unwrap_or(PathBuf::from("dist"));
+    let watcher_dist_path = dist_path.clone();
     tokio::spawn(async move {
         loop {
             if let Ok(v) = rx.recv() {
@@ -55,7 +57,7 @@ pub async fn startup(
                     | DebouncedEvent::Write(_)
                     | DebouncedEvent::Remove(_)
                     | DebouncedEvent::Rename(_, _) => {
-                        if let Ok(_) = builder::build(&watcher_conf, dist_path.clone()) {
+                        if let Ok(_) = builder::build(&watcher_conf, watcher_dist_path.clone()) {
                             // change the websocket reload state to true;
                             // the page will auto-reload.
                             watcher_ws_state.lock().unwrap().change();
@@ -69,14 +71,16 @@ pub async fn startup(
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
-        .fallback(get_service(ServeDir::new(config.out_dir)).handle_error(
-            |error: std::io::Error| async move {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unhandled internal error: {}", error),
-                )
-            },
-        ))
+        .fallback(
+            get_service(ServeDir::new(config.crate_dir.join(&dist_path))).handle_error(
+                |error: std::io::Error| async move {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Unhandled internal error: {}", error),
+                    )
+                },
+            ),
+        )
         .layer(AddExtensionLayer::new(ws_reload_state.clone()));
 
     // start serve dev-server at 0.0.0.0:8080

@@ -1,5 +1,43 @@
 use crate::error::Result;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DioxusConfig {
+    application: ApplicationConfig,
+    web: WebConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplicationConfig {
+    name: String,
+    platform: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebConfig {
+    app: WebAppConfing,
+    watcher: WebWatcherConfing,
+    resource: WebResourceConfing,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebAppConfing {
+
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebWatcherConfing {
+    
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebResourceConfing {
+    
+}
+
 
 #[derive(Debug, Clone)]
 pub struct CrateConfig {
