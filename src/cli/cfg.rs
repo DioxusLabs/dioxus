@@ -16,6 +16,10 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub release: bool,
 
+    /// Build a example [default: ""]
+    #[structopt(long)]
+    pub example: Option<String>,
+
     /// Optional pattern for the app loader script [default: None]
     ///
     /// Patterns should include the sequences `{base}`, `{wasm}`, and `{js}` in order to
@@ -61,6 +65,10 @@ pub struct ConfigOptsServe {
     /// The index HTML file to drive the bundling process [default: index.html]
     #[structopt(parse(from_os_str))]
     pub target: Option<PathBuf>,
+
+    /// Build a example [default: ""]
+    #[structopt(long)]
+    pub example: Option<String>,
 
     /// Build in release mode [default: false]
     #[structopt(long)]

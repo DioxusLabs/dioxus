@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -28,6 +28,7 @@ structopt = "0.3.25"
 cargo_metadata = "0.14.1"
 tokio = { version = "1.15.0", features = ["full"] }
 atty = "0.2.14"
+regex = "1.5.4"
 
 axum = { version = "0.4.4", features = ["ws", "headers"] }
 tower-http = { version = "0.2.0", features = ["fs", "trace"] }

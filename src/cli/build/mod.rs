@@ -18,6 +18,10 @@ impl Build {
         // change the relase state.
         crate_config.with_release(self.build.release);
 
+        if self.build.example.is_some() {
+            crate_config.as_example(self.build.example.unwrap());
+        }
+
         crate::builder::build(&crate_config)?;
 
         let temp = gen_page(&crate_config.dioxus_config, false);

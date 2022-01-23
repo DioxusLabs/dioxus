@@ -1,16 +1,18 @@
 use std::{
-    fs::{File, OpenOptions},
-    io::Write,
+    fs::File,
+    io::{Read, Write},
     path::PathBuf,
     process::{Command, Stdio},
 };
 
+use regex::Regex;
+use serde::Deserialize;
 use structopt::StructOpt;
 
-use crate::error::{Error, Result};
+use crate::{error::Result, Error};
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, Default, Deserialize, StructOpt)]
 #[structopt(name = "init")]
 pub struct Init {
     /// Init project name
@@ -18,69 +20,73 @@ pub struct Init {
     name: String,
 
     /// Template path
-    #[structopt(default_value = "default", long)]
+    #[structopt(default_value = "gh:dioxuslabs/dioxus-template", long)]
     template: String,
+
+    /// Create a `lib` project, include a `hello-world` example.
+    #[structopt(long)]
+    #[serde(default)]
+    pub lib: bool,
 }
 
 impl Init {
     pub fn init(self) -> Result<()> {
-        if self.name.contains(".") {
+        if Self::name_vaild_check(self.name.clone()) {
             log::error!("❗Unsupported project name.");
             return Ok(());
         }
 
-        log::info!("🔧 Start to init a new project '{}'.", self.name);
-
         let project_path = PathBuf::from(&self.name);
 
-        if project_path.join("Cargo.toml").is_file() {
-            log::warn!("Folder '{}' is initialized.", self.name);
-            return Ok(());
+        if project_path.join("Dioxus.toml").is_file() || project_path.join("Cargo.toml").is_file() {
+            return Err(Error::Other(anyhow::anyhow!(
+                "🧨 Folder '{}' is initialized.",
+                &self.name
+            )));
         }
 
+        log::info!("🔧 Start to init a new project '{}'.", self.name);
+
         let output = Command::new("cargo")
-            .arg("init")
-            .arg(&format!("./{}", self.name))
-            .arg("--bin")
+            .arg("generate")
+            .arg("--help")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()?;
 
         if !output.status.success() {
-            return Err(Error::CargoError("Cargo init failed".into()));
+            log::warn!("Tool is not installed: cargo-generate, try to install it.");
+            let install_output = Command::new("cargo")
+                .arg("install")
+                .arg("cargo-generate")
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .output()?;
+            if !install_output.status.success() {
+                return Err(Error::Other(anyhow::anyhow!(
+                    "Try to install cargo-generate failed."
+                )));
+            }
         }
 
-        // get the template code
-        let template_str = match self.template {
-            _ => include_str!("../../template/default.rs"),
-        };
+        let generate_output = Command::new("cargo")
+            .arg("generate")
+            .arg(&self.template)
+            .arg("--name")
+            .arg(&self.name)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .output()?;
 
-        let main_rs_file = project_path.join("src").join("main.rs");
-        if !main_rs_file.is_file() {
-            return Err(Error::FailedToWrite);
+        if !generate_output.status.success() {
+            return Err(Error::Other(anyhow::anyhow!("Generate project failed.")));
         }
 
-        let mut file = File::create(main_rs_file)?;
-        file.write_all(&template_str.as_bytes())?;
-
-        let mut file = File::create(project_path.join("Dioxus.toml"))?;
-        let dioxus_conf = String::from(include_str!("../../template/config.toml"))
-            .replace("{project-name}", &self.name);
-        file.write_all(dioxus_conf.as_bytes())?;
-
-        // log::info!("🎯 Project initialization completed.");
-
-        if !Command::new("cargo")
-            .args(["add", "dioxus", "--features web"])
-            .output()?
-            .status
-            .success()
-        {
-            let mut file = OpenOptions::new()
-                .append(true)
-                .open(project_path.join("Cargo.toml"))?;
-            file.write_all("dioxus = { version = \"0.1.7\", features = [\"web\"] }".as_bytes())?;
-        }
+        let mut dioxus_file = File::open(project_path.join("Dioxus.toml"))?;
+        let mut meta_file = String::new();
+        dioxus_file.read_to_string(&mut meta_file)?;
+        meta_file = meta_file.replace("{{project-name}}", &self.name);
+        File::create(project_path.join("Dioxus.toml"))?.write_all(meta_file.as_bytes())?;
 
         println!("");
         log::info!("💡 Project initialized:");
@@ -88,5 +94,10 @@ impl Init {
         log::info!("🎯> dioxus serve");
 
         Ok(())
+    }
+
+    fn name_vaild_check(name: String) -> bool {
+        let r = Regex::new(r"^[a-zA-Z][a-zA-Z0-9\-_]$").unwrap();
+        r.is_match(&name)
     }
 }

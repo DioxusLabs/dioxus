@@ -13,8 +13,13 @@ pub struct Serve {
 impl Serve {
     pub async fn serve(self) -> anyhow::Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
+
         // change the relase state.
         crate_config.with_release(self.serve.release);
+
+        if self.serve.example.is_some() {
+            crate_config.as_example(self.serve.example.unwrap());
+        }
 
         crate::builder::build(&crate_config).expect("build failed");
 

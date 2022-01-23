@@ -13,7 +13,7 @@ platforms = ["web"]
 out_dir = "dist"
 
 # resource (static) file folder
-static_dir = "static"
+public_dir = "public"
 
 [web.watcher]
 
