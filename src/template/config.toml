@@ -1,9 +1,38 @@
-[package]
-name = "{project}"
-version = "0.1.0"
-edition = "2021"
+[application]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# App (Project) Name
+name = "{project-name}"
 
-[dependencies]
-dioxus = { version = "0.1.7", features = ["web"] }
+# Dioxus App Support Platform
+# desktop, web, mobile, ssr
+platforms = ["web"]
+
+[web.app]
+
+# HTML title tag content
+title = "dioxus | ⛺"
+
+# Web `build` & `serve` dist path
+out_dir = "dist"
+
+# resource (static) file folder
+static_dir = "static"
+
+[web.watcher]
+
+watch_path = ["src"]
+
+# include `assets` in web platform
+[web.resource]
+
+# CSS style file
+style = []
+
+# Javascript code file
+script = []
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []

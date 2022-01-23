@@ -16,14 +16,6 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub release: bool,
 
-    /// The output dir for all final assets [default: dist]
-    #[structopt(short, long, parse(from_os_str))]
-    pub dist: Option<PathBuf>,
-
-    /// The public URL from which assets are to be served [default: /]
-    #[structopt(long, parse(from_str=parse_public_url))]
-    pub public_url: Option<String>,
-
     /// Optional pattern for the app loader script [default: None]
     ///
     /// Patterns should include the sequences `{base}`, `{wasm}`, and `{js}` in order to
@@ -74,14 +66,6 @@ pub struct ConfigOptsServe {
     #[structopt(long)]
     #[serde(default)]
     pub release: bool,
-
-    /// The output dir for all final assets [default: dist]
-    #[structopt(short, long, parse(from_os_str))]
-    pub dist: Option<PathBuf>,
-
-    /// The public URL from which assets are to be served [default: /]
-    #[structopt(long, parse(from_str=parse_public_url))]
-    pub public_url: Option<String>,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.

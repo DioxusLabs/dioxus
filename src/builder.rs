@@ -1,11 +1,12 @@
 use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
+    DioxusConfig,
 };
-use std::{io::Write, path::PathBuf, process::Command};
+use std::process::Command;
 use wasm_bindgen_cli_support::Bindgen;
 
-pub fn build(config: &CrateConfig, dist: PathBuf) -> Result<()> {
+pub fn build(config: &CrateConfig) -> Result<()> {
     /*
     [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     [2] Generate the appropriate build folders
@@ -15,14 +16,14 @@ pub fn build(config: &CrateConfig, dist: PathBuf) -> Result<()> {
     */
 
     let CrateConfig {
+        out_dir,
         crate_dir,
         target_dir,
         static_dir,
         executable,
+        dioxus_config,
         ..
     } = config;
-
-    let out_dir = crate_dir.join(dist);
 
     let t_start = std::time::Instant::now();
 
@@ -53,7 +54,7 @@ pub fn build(config: &CrateConfig, dist: PathBuf) -> Result<()> {
         let reason = String::from_utf8_lossy(&output.stderr).to_string();
         return Err(Error::BuildFailed(reason));
     }
-    
+
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets");
 
@@ -83,7 +84,7 @@ pub fn build(config: &CrateConfig, dist: PathBuf) -> Result<()> {
         .keep_debug(true)
         .remove_name_section(false)
         .remove_producers_section(false)
-        .out_name("module")
+        .out_name(&dioxus_config.application.name)
         .generate(&bindgen_outdir)?;
 
     let copy_options = fs_extra::dir::CopyOptions::new();
@@ -101,28 +102,52 @@ pub fn build(config: &CrateConfig, dist: PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub fn gen_page(module: &str) -> String {
-    format!(
-        r#"
-<html>
-  <head>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-    <meta charset="UTF-8" />
-  </head>
-  <body>
-    <div id="main">
-    </div>
-    <!-- Note the usage of `type=module` here as this is an ES6 module -->
-    <script type="module">
-      import init from "{}";
-      init("./assets/module_bg.wasm");
-    </script>
-    <div id="dioxusroot"> </div>
-  </body>
-</html>
-"#,
-        module
-    )
+pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
+    let mut html = String::from(include_str!("./assets/index.html"));
+
+    let resouces = config.web.resource.clone();
+
+    let mut style_list = resouces.style.unwrap_or(vec![]);
+    let mut script_list = resouces.script.unwrap_or(vec![]);
+
+    if serve {
+        let mut dev_style = resouces.dev.style.clone().unwrap_or(vec![]);
+        let mut dev_script = resouces.dev.script.clone().unwrap_or(vec![]);
+        style_list.append(&mut dev_style);
+        script_list.append(&mut dev_script);
+    }
+
+    let mut style_str = String::new();
+    for style in style_list {
+        style_str.push_str(&format!(
+            "<link rel=\"stylesheet\" href=\"{}\">\n",
+            &style.to_str().unwrap(),
+        ))
+    }
+    html = html.replace("{style_include}", &style_str);
+
+    let mut script_str = String::new();
+    for script in script_list {
+        script_str.push_str(&format!(
+            "<script src=\"{}\"></script>\n",
+            &script.to_str().unwrap(),
+        ))
+    }
+
+    html = html.replace("{script_include}", &script_str);
+
+    if serve {
+        html += &format!(
+            "<script>{}</script>",
+            include_str!("./assets/autoreload.js")
+        );
+    }
+
+    html = html.replace("{app_name}", &config.application.name);
+
+    let title = config.web.app.title.clone().unwrap_or("dioxus | ⛺".into());
+
+    html.replace("{app_title}", &title)
 }
 
 // use binary_install::{Cache, Download};

@@ -13,9 +13,9 @@ use crate::error::{Error, Result};
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(name = "init")]
 pub struct Init {
-    /// Init project path
+    /// Init project name
     #[structopt(default_value = ".")]
-    path: String,
+    name: String,
 
     /// Template path
     #[structopt(default_value = "default", long)]
@@ -24,18 +24,23 @@ pub struct Init {
 
 impl Init {
     pub fn init(self) -> Result<()> {
-        log::info!("🔧 Start to init a new project '{}'.", self.path);
+        if self.name.contains(".") {
+            log::error!("❗Unsupported project name.");
+            return Ok(());
+        }
 
-        let project_path = PathBuf::from(&self.path);
+        log::info!("🔧 Start to init a new project '{}'.", self.name);
+
+        let project_path = PathBuf::from(&self.name);
 
         if project_path.join("Cargo.toml").is_file() {
-            log::warn!("Path '{}' is initialized.", self.path);
+            log::warn!("Folder '{}' is initialized.", self.name);
             return Ok(());
         }
 
         let output = Command::new("cargo")
             .arg("init")
-            .arg(&self.path)
+            .arg(&format!("./{}", self.name))
             .arg("--bin")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -58,6 +63,11 @@ impl Init {
         let mut file = File::create(main_rs_file)?;
         file.write_all(&template_str.as_bytes())?;
 
+        let mut file = File::create(project_path.join("Dioxus.toml"))?;
+        let dioxus_conf = String::from(include_str!("../../template/config.toml"))
+            .replace("{project-name}", &self.name);
+        file.write_all(dioxus_conf.as_bytes())?;
+
         // log::info!("🎯 Project initialization completed.");
 
         if !Command::new("cargo")
@@ -72,8 +82,9 @@ impl Init {
             file.write_all("dioxus = { version = \"0.1.7\", features = [\"web\"] }".as_bytes())?;
         }
 
-        log::info!("\n💡 Project initialized:");
-        log::info!("🎯> cd {}", self.path);
+        println!("");
+        log::info!("💡 Project initialized:");
+        log::info!("🎯> cd ./{}", self.name);
         log::info!("🎯> dioxus serve");
 
         Ok(())

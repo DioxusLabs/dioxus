@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::cfg::ConfigOptsBuild;
 use structopt::StructOpt;
 
@@ -18,10 +16,7 @@ impl Build {
         // change the relase state.
         crate_config.with_release(self.build.release);
 
-        crate::builder::build(
-            &crate_config,
-            self.build.dist.unwrap_or(PathBuf::from("dist")),
-        )?;
+        crate::builder::build(&crate_config)?;
 
         Ok(())
     }

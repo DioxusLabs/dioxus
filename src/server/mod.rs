@@ -13,7 +13,7 @@ use std::{
 };
 use tower_http::services::ServeDir;
 
-use crate::{builder, CrateConfig};
+use crate::{builder, crate_root, CrateConfig};
 
 struct WsRelodState {
     update: bool,
@@ -25,42 +25,54 @@ impl WsRelodState {
     }
 }
 
-pub async fn startup(
-    config: CrateConfig,
-    opts: &crate::cfg::ConfigOptsServe,
-) -> anyhow::Result<()> {
+pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
     log::info!("🚀 Starting development server...");
 
     let (tx, rx) = channel();
 
-    let dist_path = opts.dist.clone().unwrap_or(PathBuf::from("dist"));
+    let dist_path = config.out_dir.clone();
 
     // file watcher: check file change
-    let mut watcher = watcher(tx, Duration::from_secs(2)).unwrap();
+    let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
     watcher
-        .watch(
-            config.crate_dir.join("src").clone(),
-            notify::RecursiveMode::Recursive,
-        )
+        .watch(config.crate_dir.clone(), notify::RecursiveMode::Recursive)
         .unwrap();
 
     let ws_reload_state = Arc::new(Mutex::new(WsRelodState { update: false }));
 
     let watcher_conf = config.clone();
     let watcher_ws_state = ws_reload_state.clone();
-    let watcher_dist_path = dist_path.clone();
     tokio::spawn(async move {
+        let allow_watch_path = watcher_conf
+            .dioxus_config
+            .web
+            .watcher
+            .watch_path
+            .clone()
+            .unwrap_or(vec![PathBuf::from("src")]);
+        let crate_dir = watcher_conf.crate_dir.clone();
         loop {
             if let Ok(v) = rx.recv() {
                 match v {
-                    DebouncedEvent::Create(_)
-                    | DebouncedEvent::Write(_)
-                    | DebouncedEvent::Remove(_)
-                    | DebouncedEvent::Rename(_, _) => {
-                        if let Ok(_) = builder::build(&watcher_conf, watcher_dist_path.clone()) {
-                            // change the websocket reload state to true;
-                            // the page will auto-reload.
-                            watcher_ws_state.lock().unwrap().change();
+                    DebouncedEvent::Create(e)
+                    | DebouncedEvent::Write(e)
+                    | DebouncedEvent::Remove(e)
+                    | DebouncedEvent::Rename(e, _) => {
+                        let mut reload = false;
+                        for path in &allow_watch_path {
+                            let temp = crate_dir.clone().join(path);
+                            if e.starts_with(temp) {
+                                reload = true;
+                                break;
+                            }
+                        }
+
+                        if reload {
+                            if let Ok(_) = builder::build(&watcher_conf) {
+                                // change the websocket reload state to true;
+                                // the page will auto-reload.
+                                watcher_ws_state.lock().unwrap().change();
+                            }
                         }
                     }
                     _ => {}
@@ -70,7 +82,7 @@ pub async fn startup(
     });
 
     let app = Router::new()
-        .route("/ws", get(ws_handler))
+        .route("/_dioxus/ws", get(ws_handler))
         .fallback(
             get_service(ServeDir::new(config.crate_dir.join(&dist_path))).handle_error(
                 |error: std::io::Error| async move {

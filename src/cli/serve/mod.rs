@@ -1,4 +1,4 @@
-use crate::{cfg::ConfigOptsServe, server};
+use crate::{cfg::ConfigOptsServe, gen_page, server};
 use std::{io::Write, path::PathBuf};
 use structopt::StructOpt;
 
@@ -16,19 +16,31 @@ impl Serve {
         // change the relase state.
         crate_config.with_release(self.serve.release);
 
-        let dist_path = self.serve.dist.clone().unwrap_or(PathBuf::from("dist"));
+        crate::builder::build(&crate_config).expect("build failed");
 
-        crate::builder::build(&crate_config, dist_path.clone()).expect("build failed");
+        let serve_html = gen_page(&crate_config.dioxus_config, true);
 
-        let serve_html = String::from(include_str!("../../server/serve.html"));
-
-        let mut file =
-            std::fs::File::create(crate_config.crate_dir.join(dist_path).join("index.html"))?;
+        let mut file = std::fs::File::create(
+            crate_config
+                .crate_dir
+                .join(
+                    crate_config
+                        .dioxus_config
+                        .web
+                        .app
+                        .out_dir
+                        .clone()
+                        .unwrap_or(PathBuf::from("dist")),
+                )
+                .join("index.html"),
+        )?;
         file.write_all(serve_html.as_bytes())?;
 
         // start the develop server
-        server::startup(crate_config.clone(), &self.serve).await?;
+        server::startup(crate_config.clone()).await?;
 
         Ok(())
     }
+
+    pub fn regen_page() {}
 }
