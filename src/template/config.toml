@@ -15,11 +15,15 @@ title = "dioxus | ⛺"
 # Web `build` & `serve` dist path
 out_dir = "dist"
 
-# resource (static) file folder
-static_dir = "static"
+# resource (public) file folder
+public_dir = "public"
 
 [web.watcher]
 
+# when watcher trigger, regenerate the `index.html`
+reload_html = true
+
+# which files or dirs will be watcher monitoring
 watch_path = ["src"]
 
 # include `assets` in web platform

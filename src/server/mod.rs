@@ -13,7 +13,7 @@ use std::{
 };
 use tower_http::services::ServeDir;
 
-use crate::{builder, crate_root, CrateConfig};
+use crate::{builder, serve::Serve, CrateConfig};
 
 struct WsRelodState {
     update: bool,
@@ -71,6 +71,15 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
                             if let Ok(_) = builder::build(&watcher_conf) {
                                 // change the websocket reload state to true;
                                 // the page will auto-reload.
+                                if watcher_conf
+                                    .dioxus_config
+                                    .web
+                                    .watcher
+                                    .reload_html
+                                    .unwrap_or(false)
+                                {
+                                    let _ = Serve::regen_dev_page(&watcher_conf);
+                                }
                                 watcher_ws_state.lock().unwrap().change();
                             }
                         }

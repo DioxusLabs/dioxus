@@ -19,7 +19,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         out_dir,
         crate_dir,
         target_dir,
-        static_dir,
+        public_dir,
         executable,
         dioxus_config,
         ..
@@ -56,7 +56,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     }
 
     // [2] Establish the output directory structure
-    let bindgen_outdir = out_dir.join("assets");
+    let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
     // [3] Bindgen the final binary for use easy linking
     let mut bindgen_builder = Bindgen::new();
@@ -87,12 +87,26 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         .out_name(&dioxus_config.application.name)
         .generate(&bindgen_outdir)?;
 
-    let copy_options = fs_extra::dir::CopyOptions::new();
-    if static_dir.is_dir() {
-        match fs_extra::dir::copy(static_dir, out_dir, &copy_options) {
-            Ok(_) => {}
-            Err(_e) => {
-                log::warn!("Error copying dir: {}", _e);
+    let copy_options = fs_extra::dir::CopyOptions {
+        overwrite: true,
+        skip_exist: false,
+        buffer_size: 64000,
+        copy_inside: false,
+        content_only: false,
+        depth: 0,
+    };
+    if public_dir.is_dir() {
+        for entry in std::fs::read_dir(&public_dir)? {
+            let path = entry?.path();
+            if path.is_file() {
+                std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;
+            } else {
+                match fs_extra::dir::copy(&path, out_dir, &copy_options) {
+                    Ok(_) => {}
+                    Err(_e) => {
+                        log::warn!("Error copying dir: {}", _e);
+                    }
+                }
             }
         }
     }

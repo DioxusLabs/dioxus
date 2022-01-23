@@ -37,8 +37,7 @@ pub enum Commands {
     /// Init a new project for Dioxus.
     Init(init::Init),
     // /// Clean output artifacts.
-    // Clean(clean::Clean),
-
+    Clean(clean::Clean),
     // /// Trunk config controls.
     // Config(config::Config),
 }

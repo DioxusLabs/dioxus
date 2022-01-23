@@ -19,9 +19,11 @@ async fn main() -> Result<()> {
             }
         }
 
-        // Commands::Clean(_) => {
-        //     //
-        // }
+        Commands::Clean(opts) => {
+            if let Err(e) = opts.clean() {
+                log::error!("clean error: {}", e);
+            }
+        }
 
         // Commands::Config(_) => {
         //     //

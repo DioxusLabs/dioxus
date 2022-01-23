@@ -1,4 +1,4 @@
-use crate::{cfg::ConfigOptsServe, gen_page, server};
+use crate::{cfg::ConfigOptsServe, gen_page, server, CrateConfig};
 use std::{io::Write, path::PathBuf};
 use structopt::StructOpt;
 
@@ -18,6 +18,16 @@ impl Serve {
 
         crate::builder::build(&crate_config).expect("build failed");
 
+        // generate dev-index page
+        Serve::regen_dev_page(&crate_config)?;
+
+        // start the develop server
+        server::startup(crate_config.clone()).await?;
+
+        Ok(())
+    }
+
+    pub fn regen_dev_page(crate_config: &CrateConfig) -> anyhow::Result<()> {
         let serve_html = gen_page(&crate_config.dioxus_config, true);
 
         let mut file = std::fs::File::create(
@@ -36,11 +46,6 @@ impl Serve {
         )?;
         file.write_all(serve_html.as_bytes())?;
 
-        // start the develop server
-        server::startup(crate_config.clone()).await?;
-
         Ok(())
     }
-
-    pub fn regen_page() {}
 }
