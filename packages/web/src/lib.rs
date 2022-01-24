@@ -120,6 +120,10 @@ pub fn launch_with_props<T, F>(
     T: Send + 'static,
     F: FnOnce(WebConfig) -> WebConfig,
 {
+    if cfg!(feature = "panic_hook") {
+        console_error_panic_hook::set_once();
+    }
+
     let config = configuration_builder(WebConfig::default());
     wasm_bindgen_futures::spawn_local(run_with_props(root_component, root_properties, config));
 }
