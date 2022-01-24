@@ -695,6 +695,7 @@ impl ScopeState {
                 .insert(TypeId::of::<T>(), value.clone())
                 .map(|f| f.downcast::<T>().ok())
                 .flatten();
+            return value;
         }
 
         let mut search_parent = self.parent_scope;
