@@ -3,6 +3,7 @@ use structopt::StructOpt;
 pub mod build;
 pub mod cfg;
 pub mod clean;
+pub mod config;
 pub mod create;
 pub mod serve;
 pub mod translate;
@@ -36,8 +37,8 @@ pub enum Commands {
     Serve(serve::Serve),
     /// Init a new project for Dioxus.
     Create(create::Create),
-    // /// Clean output artifacts.
+    /// Clean output artifacts.
     Clean(clean::Clean),
-    // /// Trunk config controls.
-    // Config(config::Config),
+    /// Dioxus config file controls.
+    Config(config::Config),
 }

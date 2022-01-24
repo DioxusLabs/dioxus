@@ -22,11 +22,6 @@ pub struct Create {
     /// Template path
     #[structopt(default_value = "gh:dioxuslabs/dioxus-template", long)]
     template: String,
-
-    /// Create a `lib` project, include a `hello-world` example.
-    #[structopt(long)]
-    #[serde(default)]
-    pub lib: bool,
 }
 
 impl Create {

@@ -39,6 +39,12 @@ async fn main() -> Result<()> {
                 log::error!("create error: {}", e);
             }
         }
+
+        Commands::Config(opts) => {
+            if let Err(e) = opts.config() {
+                log::error!("config error: {}", e);
+            }
+        }
     }
 
     Ok(())

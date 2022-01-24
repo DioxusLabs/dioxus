@@ -1,7 +1,7 @@
 [application]
 
 # App (Project) Name
-name = "dioxus-cli"
+name = "{{project-name}}"
 
 # Dioxus App Support Platform
 # desktop, web, mobile, ssr
@@ -12,11 +12,13 @@ out_dir = "dist"
 
 [web.app]
 
+# HTML title tag content
+title = "dioxus | ⛺"
+
 # resource (static) file folder
 public_dir = "public"
 
 [web.watcher]
-
 
 watch_path = ["src"]
 
@@ -24,19 +26,13 @@ watch_path = ["src"]
 [web.resource]
 
 # CSS style file
-style = [
-    "./my-style.css"
-]
+style = []
 
 # Javascript code file
-script = [
-    "./app.js"
-]
+script = []
 
 [web.resource.dev]
 
 # Javascript code file
 # serve: [dev-server] only
-script = [
-    "./debug.js"
-]
+script = []
