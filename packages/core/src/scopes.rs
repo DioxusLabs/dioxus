@@ -891,13 +891,15 @@ impl ScopeState {
         self.frames[0].reset();
         self.frames[1].reset();
 
-        // Finally, free up the hook values
-        self.hook_arena.reset();
+        // Free up the hook values
         self.hook_vals.get_mut().drain(..).for_each(|state| {
             let as_mut = unsafe { &mut *state };
             let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
             drop(boxed);
         });
+
+        // Finally, clear the hook arena
+        self.hook_arena.reset();
     }
 }
 
