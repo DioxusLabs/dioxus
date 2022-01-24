@@ -7,10 +7,10 @@ name = "dioxus-cli"
 # desktop, web, mobile, ssr
 platforms = ["web"]
 
-[web.app]
-
 # Web `build` & `serve` dist path
 out_dir = "dist"
+
+[web.app]
 
 # resource (static) file folder
 public_dir = "public"

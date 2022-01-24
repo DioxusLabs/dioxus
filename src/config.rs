@@ -39,11 +39,11 @@ impl Default for DioxusConfig {
             application: ApplicationConfig {
                 name: "dioxus".into(),
                 platforms: vec![String::from("web")],
+                out_dir: Some(PathBuf::from("dist")),
             },
             web: WebConfig {
                 app: WebAppConfing {
                     title: Some("dioxus | ⛺".into()),
-                    out_dir: Some(PathBuf::from("dist")),
                     public_dir: Some(PathBuf::from("public")),
                 },
                 watcher: WebWatcherConfing {
@@ -67,6 +67,7 @@ impl Default for DioxusConfig {
 pub struct ApplicationConfig {
     pub name: String,
     pub platforms: Vec<String>,
+    pub out_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,7 +80,6 @@ pub struct WebConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebAppConfing {
     pub title: Option<String>,
-    pub out_dir: Option<PathBuf>,
     pub public_dir: Option<PathBuf>,
 }
 
@@ -130,7 +130,7 @@ impl CrateConfig {
         let workspace_dir = crate::cargo::workspace_root()?;
         let target_dir = workspace_dir.join("target");
 
-        let out_dir = match dioxus_config.web.app.out_dir {
+        let out_dir = match dioxus_config.application.out_dir {
             Some(ref v) => crate_dir.join(v),
             None => crate_dir.join("dist"),
         };

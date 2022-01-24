@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 use serde::Deserialize;
-use std::collections::HashMap;
 
 /// Config options for the build system.
 #[derive(Clone, Debug, Default, Deserialize, StructOpt)]

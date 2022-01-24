@@ -41,8 +41,7 @@ impl Serve {
                 .join(
                     crate_config
                         .dioxus_config
-                        .web
-                        .app
+                        .application
                         .out_dir
                         .clone()
                         .unwrap_or(PathBuf::from("dist")),

@@ -1,4 +1,9 @@
-use std::{io::Write, path::PathBuf, process::Command, fs::copy};
+use std::{
+    fs::{copy, create_dir_all},
+    io::Write,
+    path::PathBuf,
+    process::Command,
+};
 
 use crate::{cfg::ConfigOptsBuild, gen_page};
 use std::fs::remove_dir_all;
@@ -25,7 +30,7 @@ impl Build {
 
         if self.build.platform.is_some() {
             if self.build.platform.unwrap().to_uppercase() == "DESKTOP" {
-                log::info!("🚅 Running build command...");
+                log::info!("🚅 Running build [Desktop] command...");
 
                 let mut cmd = Command::new("cargo");
                 cmd.current_dir(&crate_config.crate_dir)
@@ -47,36 +52,52 @@ impl Build {
 
                 if output.status.success() {
                     if crate_config.out_dir.is_dir() {
-
                         remove_dir_all(&crate_config.out_dir)?;
+                    }
 
-                        let release_type = match crate_config.release {
-                            true => "release",
-                            false => "debug",
-                        };
-                    
-                        let mut res_path = match &crate_config.executable {
-                            crate::ExecutableType::Binary(name)
-                            | crate::ExecutableType::Lib(name) => crate_config
+                    let release_type = match crate_config.release {
+                        true => "release",
+                        false => "debug",
+                    };
+
+                    let file_name: String;
+                    let mut res_path = match &crate_config.executable {
+                        crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
+                            file_name = name.clone();
+                            crate_config
                                 .target_dir
                                 .join(format!("{}", release_type))
-                                .join(format!("{}", name)),
-
-                            crate::ExecutableType::Example(name) => crate_config
-                                .target_dir
-                                .join(format!("{}/examples", release_type))
-                                .join(format!("{}", name)),
-                        };
-
-                        let target_file;
-                        if cfg!(windows) {
-                            res_path.set_extension("exe");
-                            target_file = format!("{}.exe", &crate_config.dioxus_config.application.name);
-                        } else {
-                            target_file = crate_config.dioxus_config.application.name.clone();
+                                .join(format!("{}", name))
                         }
-                        copy(res_path, &crate_config.out_dir.join(target_file))?;
+                        crate::ExecutableType::Example(name) => {
+                            file_name = name.clone();
+                            crate_config
+                                .target_dir
+                                .join(format!("{}", release_type))
+                                .join("examples")
+                                .join(format!("{}", name))
+                        }
+                    };
+
+                    let target_file;
+                    if cfg!(windows) {
+                        res_path.set_extension("exe");
+                        target_file = format!("{}.exe", &file_name);
+                    } else {
+                        target_file = file_name.clone();
                     }
+                    create_dir_all(&crate_config.out_dir)?;
+                    copy(res_path, &crate_config.out_dir.join(target_file))?;
+
+                    log::info!(
+                        "🏛 Build completed: [:{}]",
+                        &crate_config
+                            .dioxus_config
+                            .application
+                            .out_dir
+                            .unwrap_or(PathBuf::from("dist"))
+                            .display()
+                    );
                 }
 
                 return Ok(());
@@ -93,8 +114,7 @@ impl Build {
                 .join(
                     crate_config
                         .dioxus_config
-                        .web
-                        .app
+                        .application
                         .out_dir
                         .clone()
                         .unwrap_or(PathBuf::from("dist")),

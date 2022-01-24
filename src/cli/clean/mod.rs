@@ -28,8 +28,7 @@ impl Clean {
 
         let out_dir = crate_config
             .dioxus_config
-            .web
-            .app
+            .application
             .out_dir
             .unwrap_or(PathBuf::from("dist"));
         if crate_config.crate_dir.join(&out_dir).is_dir() {
