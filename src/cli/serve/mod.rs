@@ -1,5 +1,5 @@
 use crate::{cfg::ConfigOptsServe, gen_page, server, CrateConfig};
-use std::{io::Write, path::PathBuf};
+use std::{io::Write, path::PathBuf, process::Command};
 use structopt::StructOpt;
 
 /// Run the WASM project on dev-server
@@ -19,6 +19,29 @@ impl Serve {
 
         if self.serve.example.is_some() {
             crate_config.as_example(self.serve.example.unwrap());
+        }
+
+        if self.serve.platform.is_some() {
+            if self.serve.platform.unwrap().to_uppercase() == "DESKTOP" {
+                crate::builder::build_desktop(&crate_config)?;
+
+                match &crate_config.executable {
+                    crate::ExecutableType::Binary(name)
+                    | crate::ExecutableType::Lib(name)
+                    | crate::ExecutableType::Example(name) => {
+                        let mut file = crate_config.out_dir.join(name);
+                        if cfg!(windows) {
+                            file.set_extension("exe");
+                        }
+                        Command::new(format!(
+                            "{}",
+                            crate_config.out_dir.join(file).to_str().unwrap()
+                        ))
+                        .output()?;
+                    }
+                }
+                return Ok(());
+            }
         }
 
         crate::builder::build(&crate_config).expect("build failed");

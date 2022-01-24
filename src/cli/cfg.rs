@@ -38,6 +38,10 @@ pub struct ConfigOptsServe {
     #[structopt(long)]
     #[serde(default)]
     pub release: bool,
+
+    /// Build platform: support Web & Desktop [default: "web"]
+    #[structopt(long)]
+    pub platform: Option<String>,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.

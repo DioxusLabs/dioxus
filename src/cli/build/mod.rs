@@ -1,12 +1,6 @@
-use std::{
-    fs::{copy, create_dir_all},
-    io::Write,
-    path::PathBuf,
-    process::Command,
-};
+use std::{io::Write, path::PathBuf};
 
 use crate::{cfg::ConfigOptsBuild, gen_page};
-use std::fs::remove_dir_all;
 use structopt::StructOpt;
 
 /// Build the Rust WASM app and all of its assets.
@@ -30,77 +24,7 @@ impl Build {
 
         if self.build.platform.is_some() {
             if self.build.platform.unwrap().to_uppercase() == "DESKTOP" {
-                log::info!("🚅 Running build [Desktop] command...");
-
-                let mut cmd = Command::new("cargo");
-                cmd.current_dir(&crate_config.crate_dir)
-                    .arg("build")
-                    .stdout(std::process::Stdio::inherit())
-                    .stderr(std::process::Stdio::inherit());
-
-                if self.build.release {
-                    cmd.arg("--release");
-                }
-
-                match &crate_config.executable {
-                    crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
-                    crate::ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
-                    crate::ExecutableType::Example(name) => cmd.arg("--example").arg(name),
-                };
-
-                let output = cmd.output()?;
-
-                if output.status.success() {
-                    if crate_config.out_dir.is_dir() {
-                        remove_dir_all(&crate_config.out_dir)?;
-                    }
-
-                    let release_type = match crate_config.release {
-                        true => "release",
-                        false => "debug",
-                    };
-
-                    let file_name: String;
-                    let mut res_path = match &crate_config.executable {
-                        crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
-                            file_name = name.clone();
-                            crate_config
-                                .target_dir
-                                .join(format!("{}", release_type))
-                                .join(format!("{}", name))
-                        }
-                        crate::ExecutableType::Example(name) => {
-                            file_name = name.clone();
-                            crate_config
-                                .target_dir
-                                .join(format!("{}", release_type))
-                                .join("examples")
-                                .join(format!("{}", name))
-                        }
-                    };
-
-                    let target_file;
-                    if cfg!(windows) {
-                        res_path.set_extension("exe");
-                        target_file = format!("{}.exe", &file_name);
-                    } else {
-                        target_file = file_name.clone();
-                    }
-                    create_dir_all(&crate_config.out_dir)?;
-                    copy(res_path, &crate_config.out_dir.join(target_file))?;
-
-                    log::info!(
-                        "🏛 Build completed: [:{}]",
-                        &crate_config
-                            .dioxus_config
-                            .application
-                            .out_dir
-                            .unwrap_or(PathBuf::from("dist"))
-                            .display()
-                    );
-                }
-
-                return Ok(());
+                crate::builder::build_desktop(&crate_config)?;
             }
         }
 

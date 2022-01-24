@@ -3,7 +3,11 @@ use crate::{
     error::{Error, Result},
     DioxusConfig,
 };
-use std::process::Command;
+use std::{
+    fs::{copy, create_dir_all, remove_dir_all},
+    path::PathBuf,
+    process::Command,
+};
 use wasm_bindgen_cli_support::Bindgen;
 
 pub fn build(config: &CrateConfig) -> Result<()> {
@@ -113,6 +117,81 @@ pub fn build(config: &CrateConfig) -> Result<()> {
 
     let t_end = std::time::Instant::now();
     log::info!("🏁 Done in {}ms!", (t_end - t_start).as_millis());
+    Ok(())
+}
+
+pub fn build_desktop(config: &CrateConfig) -> Result<()> {
+    log::info!("🚅 Running build [Desktop] command...");
+
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(&config.crate_dir)
+        .arg("build")
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
+
+    if config.release {
+        cmd.arg("--release");
+    }
+
+    match &config.executable {
+        crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
+        crate::ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
+        crate::ExecutableType::Example(name) => cmd.arg("--example").arg(name),
+    };
+
+    let output = cmd.output()?;
+
+    if output.status.success() {
+        if config.out_dir.is_dir() {
+            remove_dir_all(&config.out_dir)?;
+        }
+
+        let release_type = match config.release {
+            true => "release",
+            false => "debug",
+        };
+
+        let file_name: String;
+        let mut res_path = match &config.executable {
+            crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
+                file_name = name.clone();
+                config
+                    .target_dir
+                    .join(format!("{}", release_type))
+                    .join(format!("{}", name))
+            }
+            crate::ExecutableType::Example(name) => {
+                file_name = name.clone();
+                config
+                    .target_dir
+                    .join(format!("{}", release_type))
+                    .join("examples")
+                    .join(format!("{}", name))
+            }
+        };
+
+        let target_file;
+        if cfg!(windows) {
+            res_path.set_extension("exe");
+            target_file = format!("{}.exe", &file_name);
+        } else {
+            target_file = file_name.clone();
+        }
+        create_dir_all(&config.out_dir)?;
+        copy(res_path, &config.out_dir.join(target_file))?;
+
+        log::info!(
+            "🚩 Build completed: [./{}]",
+            config
+                .dioxus_config
+                .application
+                .out_dir
+                .clone()
+                .unwrap_or(PathBuf::from("dist"))
+                .display()
+        );
+    }
+
     Ok(())
 }
 
