@@ -13,8 +13,8 @@ use crate::{error::Result, Error};
 
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Default, Deserialize, StructOpt)]
-#[structopt(name = "init")]
-pub struct Init {
+#[structopt(name = "create")]
+pub struct Create {
     /// Init project name
     #[structopt(default_value = ".")]
     name: String,
@@ -29,8 +29,8 @@ pub struct Init {
     pub lib: bool,
 }
 
-impl Init {
-    pub fn init(self) -> Result<()> {
+impl Create {
+    pub fn create(self) -> Result<()> {
         if Self::name_vaild_check(self.name.clone()) {
             log::error!("❗Unsupported project name.");
             return Ok(());
@@ -45,7 +45,7 @@ impl Init {
             )));
         }
 
-        log::info!("🔧 Start to init a new project '{}'.", self.name);
+        log::info!("🔧 Start to create a new project '{}'.", self.name);
 
         let output = Command::new("cargo")
             .arg("generate")

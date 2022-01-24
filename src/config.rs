@@ -13,8 +13,7 @@ impl DioxusConfig {
         let crate_dir = crate::cargo::crate_root()?;
 
         if !crate_dir.join("Dioxus.toml").is_file() {
-            log::warn!("Config file: `Dioxus.toml` not found.");
-            return Ok(Self::default());
+            return Err(crate::error::Error::Unique("Config file: `Dioxus.toml` not found.".into()));
         }
 
         let mut dioxus_conf_file = File::open(crate_dir.join("Dioxus.toml"))?;

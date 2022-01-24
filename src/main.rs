@@ -34,9 +34,9 @@ async fn main() -> Result<()> {
             }
         }
 
-        Commands::Init(opts) => {
-            if let Err(e) = opts.init() {
-                log::error!("init error: {}", e);
+        Commands::Create(opts) => {
+            if let Err(e) = opts.create() {
+                log::error!("create error: {}", e);
             }
         }
     }

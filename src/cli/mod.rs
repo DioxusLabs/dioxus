@@ -3,7 +3,7 @@ use structopt::StructOpt;
 pub mod build;
 pub mod cfg;
 pub mod clean;
-pub mod init;
+pub mod create;
 pub mod serve;
 pub mod translate;
 
@@ -35,7 +35,7 @@ pub enum Commands {
     /// Build, watch & serve the Rust WASM app and all of its assets.
     Serve(serve::Serve),
     /// Init a new project for Dioxus.
-    Init(init::Init),
+    Create(create::Create),
     // /// Clean output artifacts.
     Clean(clean::Clean),
     // /// Trunk config controls.
