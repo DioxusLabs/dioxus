@@ -751,6 +751,11 @@ impl ScopeState {
         self.tasks.push_fut(fut)
     }
 
+    /// Spawns the future but does not return the TaskId
+    pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) {
+        self.push_future(fut);
+    }
+
     // todo: attach some state to the future to know if we should poll it
     pub fn remove_future(&self, id: TaskId) {
         self.tasks.remove_fut(id);
