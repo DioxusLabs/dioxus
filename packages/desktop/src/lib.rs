@@ -149,7 +149,7 @@ pub fn launch_with_props<P: 'static + Send>(
     props: P,
     builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
-    let mut cfg = DesktopConfig::new();
+    let mut cfg = DesktopConfig::default();
     builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
