@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 //! Example: Calculator
 //! -------------------
 //!
@@ -30,7 +32,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let state = use_ref(&cx, || Calculator::new());
+    let state = use_ref(&cx, Calculator::new);
 
     cx.render(rsx! {
         style { [include_str!("./assets/calculator.css")] }
@@ -171,8 +173,8 @@ impl Calculator {
         }
     }
     fn input_dot(&mut self) {
-        if self.display_value.find(".").is_none() {
-            self.display_value.push_str(".");
+        if !self.display_value.contains('.') {
+            self.display_value.push('.');
         }
     }
     fn perform_operation(&mut self) {
@@ -190,8 +192,8 @@ impl Calculator {
         }
     }
     fn toggle_sign(&mut self) {
-        if self.display_value.starts_with("-") {
-            self.display_value = self.display_value.trim_start_matches("-").to_string();
+        if self.display_value.starts_with('-') {
+            self.display_value = self.display_value.trim_start_matches('-').to_string();
         } else {
             self.display_value = format!("-{}", self.display_value);
         }

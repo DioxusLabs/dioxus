@@ -68,8 +68,7 @@ impl RafLoop {
         let ric_fn = self.ric_closure.as_ref().dyn_ref::<Function>().unwrap();
         let _cb_id: u32 = self.window.request_idle_callback(ric_fn).unwrap();
         let deadline = self.ric_receiver.recv().await.unwrap();
-        let deadline = TimeoutFuture::new(deadline);
-        deadline
+        TimeoutFuture::new(deadline)
     }
 
     pub async fn wait_for_raf(&self) {

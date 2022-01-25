@@ -27,7 +27,7 @@ Now that we have a "logged_in" flag accessible in our props, we can render two d
 
 ```rust
 fn App(cx: Scope<AppProps>) -> Element {
-    if props.logged_in {
+    if cx.props.logged_in {
         cx.render(rsx!{
             DashboardScreen {}
         })
@@ -39,7 +39,7 @@ fn App(cx: Scope<AppProps>) -> Element {
 }
 ```
 
-When the user is logged in, then this component will return the DashboardScreen. Else, the component will render the LoginScreen.
+When the user is logged in, then this component will return the DashboardScreen. If they're not logged in, the component will render the LoginScreen.
 
 ## Using match statements
 

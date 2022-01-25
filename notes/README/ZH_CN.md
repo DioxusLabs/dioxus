@@ -35,7 +35,7 @@
   </a>
   <!-- Discord -->
   <a href="https://discord.gg/XgGxMSkvUM">
-    <img src="https://badgen.net/discord/members/XgGxMSkvUM" alt="Awesome Page" />
+    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
   </a>
 </div>
 
@@ -82,11 +82,11 @@ Dioxus 为不同的平台都提供了很好的开发文档。
 如果你会使用 React ，那 Dioxus 对你来说会很简单。 
 
 ### 项目特点:
-- 桌面程序在本地运行。
+- 对桌面应用的原生支持。
 - 强大的状态管理工具。
 - 支持所有 HTML 标签，监听器和事件。
 - 超高的内存使用率，稳定的组件分配器。
-- 多通道异步调动器，超强的异步支持。
+- 多通道异步调度器，超强的异步支持。
 - 更多信息请查阅： [版本发布文档](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 ### 示例
@@ -113,7 +113,7 @@ cargo run --example EXAMPLE
 
 ## Dioxus 项目
 
-| 文件浏览器 (桌面应用)                                                                                                                                                        | WiFi 扫描器 (桌面应用)                                                                                                                                                                 | Todo管理 (所有平台)                                                                                                                                                 | 商城系统 (SSR/liveview)                                                                                                                                                 |
+| 文件浏览器 (桌面应用)                                                                                                                                                           | WiFi 扫描器 (桌面应用)                                                                                                                                                                 | Todo管理 (所有平台)                                                                                                                                                     | 商城系统 (SSR/liveview)                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![File Explorer](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![E-commerce Example](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
 
@@ -126,36 +126,36 @@ TypeScript 是一个不错的 JavaScript 拓展集，但它仍然算是 JavaScri
 
 TS 代码运行效率不高，而且有大量的配置项。
 
-相比之下，Dioxus 使用用 Rust 编写将大大的提高效能。
+相比之下，Dioxus 使用 Rust 编写将大大的提高效能。
 
 使用 Rust 开发，我们能获得：
 
-- 库的静态类型支持。
-- 变量的默认不变性。
-- 一个简单且直观的模块管理系统。
-- 集成在内部的文档系统。
+- 静态类型支持。
+- 变量默认不变性。
+- 简单直观的模块系统。
+- 内部集成的文档系统。
 - 先进的模式匹配系统。
-- 简洁、高效、可组合的迭代器。
-- 内联内置的 单元测试 / 集成测试。
-- 一流的异常处理系统。
+- 简洁、高效、强大的迭代器。
+- 内置的 单元测试 / 集成测试。
+- 优秀的异常处理系统。
 - 强大且健全的标准库。
 - 灵活的 `宏` 系统。
 - 使用 `crates.io` 管理包。
 
 Dioxus 能为开发者提供的：
 
-- 正确且安全的使用不可变数据结构。
+- 安全使用数据结构。
 - 安全的错误处理结果。
 - 拥有原生移动端的性能。
 - 直接访问系统的IO层。
 
-Dioxus 使 Rust 应用程序的编写速度和 React 应用程序一样快，但提供了更多的健壮性，让你的前端团队更有信心在更短的时间内做出重大改变。
+Dioxus 使 Rust 应用程序的编写速度和 React 应用程序一样快，但提供了更多的健壮性，让团队能在更短的时间内做出强大功能。
 
 ### 不建议使用 Dioxus 的情况？
 
 您不该在这些情况下使用 Dioxus ：
 
-- 您不喜欢 React Hooks 的前端开发方案。
+- 您不喜欢类似 React 的开发风格。
 - 您需要一个 `no-std` 的渲染器。
 - 您希望应用运行在 `不支持 Wasm 或 asm.js` 的浏览器。
 - 您需要一个 `Send + Sync` UI 解决方案（目前不支持）。

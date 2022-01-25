@@ -3,10 +3,9 @@
 /// This struct helps configure the specifics of hydration and render destination for WebSys.
 ///
 /// # Example
+///
 /// ```rust, ignore
-/// fn main() {
-///     dioxus::web::launch(App, |cfg| cfg.hydrate(true).root_name("myroot"))
-/// }
+/// dioxus::web::launch(App, |cfg| cfg.hydrate(true).root_name("myroot"))
 /// ```
 pub struct WebConfig {
     pub(crate) hydrate: bool,
@@ -31,7 +30,7 @@ impl WebConfig {
     /// work and suspended nodes.
     ///
     /// Dioxus will load up all the elements with the `dio_el` data attribute into memory when the page is loaded.
-    pub fn hydrate(mut self, f: bool) -> Self {
+    pub fn hydrate(&mut self, f: bool) -> &mut Self {
         self.hydrate = f;
         self
     }
@@ -39,7 +38,7 @@ impl WebConfig {
     /// Set the name of the element that Dioxus will use as the root.
     ///
     /// This is akint to calling React.render() on the element with the specified name.
-    pub fn rootname(mut self, name: impl Into<String>) -> Self {
+    pub fn rootname(&mut self, name: impl Into<String>) -> &mut Self {
         self.rootname = name.into();
         self
     }
@@ -47,7 +46,7 @@ impl WebConfig {
     /// Set the name of the element that Dioxus will use as the root.
     ///
     /// This is akint to calling React.render() on the element with the specified name.
-    pub fn with_string_cache(mut self, cache: Vec<String>) -> Self {
+    pub fn with_string_cache(&mut self, cache: Vec<String>) -> &mut Self {
         self.cached_strings = cache;
         self
     }

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 fn main() {
     dioxus::desktop::launch_with_props(app, (), |c| {
-        c.with_file_drop_handler(|w, e| {
+        c.with_file_drop_handler(|_w, e| {
             println!("{:?}", e);
             false
         })

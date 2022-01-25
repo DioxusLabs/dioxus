@@ -149,7 +149,7 @@ pub fn launch_with_props<P: 'static + Send>(
     props: P,
     builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
-    let mut cfg = DesktopConfig::new();
+    let mut cfg = DesktopConfig::default();
     builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
@@ -187,11 +187,25 @@ pub fn launch_with_props<P: 'static + Send>(
                                 is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let _ = proxy.send_event(UserWindowEvent::Update);
                             }
+                            "browser_open" => {
+                                let data = req.params.unwrap();
+                                log::trace!("Open browser: {:?}", data);
+                                if let Some(arr) = data.as_array() {
+                                    if let Some(temp) = arr[0].as_object() {
+                                        if temp.contains_key("href") {
+                                            let url = temp.get("href").unwrap().as_str().unwrap();
+                                            if let Err(e) = webbrowser::open(url) {
+                                                log::error!("Open Browser error: {:?}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                         None
                     })
-                    .with_custom_protocol("dioxus".into(), move |request| {
+                    .with_custom_protocol(String::from("dioxus"), move |request| {
                         // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
                         // For now, we only serve two pieces of content which get included as bytes into the final binary.
                         let path = request.uri().replace("dioxus://", "");
@@ -203,7 +217,7 @@ pub fn launch_with_props<P: 'static + Send>(
                         } else if path.trim_end_matches('/') == "index.html/index.js" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/javascript")
-                                .body(include_bytes!("./index.js").to_vec())
+                                .body(include_bytes!("../../jsinterpreter/interpreter.js").to_vec())
                         } else {
                             wry::http::ResponseBuilder::new()
                                 .status(wry::http::status::StatusCode::NOT_FOUND)
@@ -211,10 +225,10 @@ pub fn launch_with_props<P: 'static + Send>(
                         }
                     })
                     .with_file_drop_handler(move |window, evet| {
-                        if let Some(handler) = file_handler.as_ref() {
-                            return handler(window, evet);
-                        }
-                        false
+                        file_handler
+                            .as_ref()
+                            .map(|handler| handler(window, evet))
+                            .unwrap_or_default()
                     });
 
                 for (name, handler) in cfg.protocos.drain(..) {

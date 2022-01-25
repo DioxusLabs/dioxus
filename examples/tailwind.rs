@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 //! Example: Basic Tailwind usage
 //!
 //! This example shows how an app might be styled with TailwindCSS.

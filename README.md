@@ -35,9 +35,10 @@
   </a>
   <!-- Discord -->
   <a href="https://discord.gg/XgGxMSkvUM">
-    <img src="https://badgen.net/discord/members/XgGxMSkvUM" alt="Awesome Page" />
+    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
   </a>
 </div>
+
 
 
 <div align="center">
@@ -84,7 +85,7 @@ If you know React, then you already know Dioxus.
 - Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
 - Extremely memory efficient - 0 global allocations for steady-state components.
 - Multi-channel asynchronous scheduler for first-class async support.
-- And more! Read the [full release post here](https://dioxuslabs.com/blog/introducing-dioxus/).
+- And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 
 ### Examples
@@ -121,9 +122,9 @@ See the [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) page for 
 
 ## Why Dioxus and why Rust?
 
-TypeScript is a fantastic addition to JavaScript, but it's still fundamentally JavaScript. TS code runs slightly slower, has tons of configuration options, and not every package is properly typed. 
+TypeScript is a fantastic addition to JavaScript, but it's still fundamentally JavaScript. TS code runs slightly slower, has tons of configuration options, and not every package is properly typed.
 
-In contrast, Dioxus is written in Rust - which is almost like "TypeScript on steroids". 
+In contrast, Dioxus is written in Rust - which is almost like "TypeScript on steroids".
 
 By using Rust, we gain:
 
@@ -141,12 +142,12 @@ By using Rust, we gain:
 
 Specifically, Dioxus provides us many other assurances:
 
-- Proper use of immutable datastructures
-- Guaranteed error handling (so you can sleep easy at night not worrying about `cannot read property of undefined`) 
+- Proper use of immutable data structures
+- Guaranteed error handling (so you can sleep easy at night not worrying about `cannot read property of undefined`)
 - Native performance on mobile
 - Direct access to system IO
 
-And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time. 
+And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time.
 
 ### Why NOT Dioxus?
 You shouldn't use Dioxus if:
@@ -154,15 +155,16 @@ You shouldn't use Dioxus if:
 - You don't like the React Hooks approach to frontend
 - You need a no-std renderer
 - You want to support browsers where Wasm or asm.js are not supported.
-- You need a Send+Sync UI solution (Dioxus is not currently ThreadSafe)
+- You need a Send+Sync UI solution (Dioxus is not currently thread-safe)
 
 ### Comparison with other Rust UI frameworks
-Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**. 
+Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**.
 
 - [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead of React-hooks, no borrowed props, supports SSR (no hydration).
-- [Percy](https://github.com/chinedufn/percy): Supports SSR but less emphasis on state management and event handling.
+- [Percy](https://github.com/chinedufn/percy): Supports SSR but with less emphasis on state management and event handling.
 - [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but lacking in ergonomics.
 - [Dominator](https://github.com/Pauan/rust-dominator): Signal-based zero-cost alternative, less emphasis on community and docs.
+- [Azul](https://azul.rs): Fully native HTML/CSS renderer for desktop applications, no support for web/ssr
 
 
 # Parity with React

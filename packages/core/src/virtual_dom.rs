@@ -9,12 +9,12 @@ use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 
-/// A virtual node s ystem that progresses user events and diffs UI trees.
+/// A virtual node system that progresses user events and diffs UI trees.
 ///
 ///
 /// ## Guide
 ///
-/// Components are defined as simple functions that take [`Scope`] and return an [`Element`].  
+/// Components are defined as simple functions that take [`Scope`] and return an [`Element`].
 ///
 /// ```rust, ignore
 /// #[derive(Props, PartialEq)]
@@ -233,7 +233,7 @@ impl VirtualDom {
 
     /// Get the [`Scope`] for the root component.
     ///
-    /// This is useful for traversing the tree from the root for heuristics or alternsative renderers that use Dioxus
+    /// This is useful for traversing the tree from the root for heuristics or alternative renderers that use Dioxus
     /// directly.
     ///
     /// This method is equivalent to calling `get_scope(ScopeId(0))`
@@ -618,7 +618,7 @@ impl VirtualDom {
     ///
     /// let dom = VirtualDom::new(Base);
     /// let nodes = dom.render_nodes(rsx!("div"));
-    /// ```   
+    /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.stack.push(DiffInstruction::Diff { new, old });

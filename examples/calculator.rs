@@ -98,7 +98,7 @@ fn app(cx: Scope) -> Element {
                                 button { class: "calculator-key key-0", onclick: move |_| input_digit(0),
                                     "0"
                                 }
-                                button { class: "calculator-key key-dot", onclick: move |_| display_value.modify().push_str("."),
+                                button { class: "calculator-key key-dot", onclick: move |_| display_value.modify().push('.'),
                                     "●"
                                 }
                                 (1..10).map(|k| rsx!{
@@ -175,7 +175,7 @@ fn calc_val(val: String) -> f64 {
 
     for c in val[start_index..].chars() {
         if c == '+' || c == '-' || c == '*' || c == '/' {
-            if temp != "" {
+            if !temp.is_empty() {
                 match &operation as &str {
                     "+" => result += temp.parse::<f64>().unwrap(),
                     "-" => result -= temp.parse::<f64>().unwrap(),
@@ -191,7 +191,7 @@ fn calc_val(val: String) -> f64 {
         }
     }
 
-    if temp != "" {
+    if !temp.is_empty() {
         match &operation as &str {
             "+" => result += temp.parse::<f64>().unwrap(),
             "-" => result -= temp.parse::<f64>().unwrap(),

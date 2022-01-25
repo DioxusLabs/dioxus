@@ -1,6 +1,6 @@
 # Core Topics
 
-In this chapter, we'll cover some core topics on how Dioxus works and how to best leverage the features to build a beautiful, reactive app.
+In this chapter, we'll cover some core topics about how Dioxus works and how to best leverage the features to build a beautiful, reactive app.
 
 At a very high level, Dioxus is simply a Rust framework for _declaring_ user interfaces and _reacting_ to changes.
 

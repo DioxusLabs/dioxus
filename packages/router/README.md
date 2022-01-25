@@ -16,7 +16,7 @@ fn app() {
 
 Then, in your route, you can choose to parse the Route any way you want through `use_route`.
 ```rust
-let id: usize = use_route(&cx).path("id")?;
+let id: usize = use_route(&cx).segment("id")?;
 
 let state: CustomState = use_route(&cx).parse()?;
 ```
