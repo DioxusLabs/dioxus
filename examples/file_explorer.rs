@@ -15,7 +15,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let files = use_ref(&cx, || Files::new());
+    let files = use_ref(&cx, Files::new);
 
     rsx!(cx, div {
         link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet", }
@@ -28,8 +28,8 @@ fn app(cx: Scope) -> Element {
         }
         main {
             files.read().path_names.iter().enumerate().map(|(dir_id, path)| {
-                let path_end = path.split('/').last().unwrap_or(path.as_str());
-                let icon_type = if path_end.contains(".") {
+                let path_end = path.split('/').last().unwrap_or_else(|| path.as_str());
+                let icon_type = if path_end.contains('.') {
                     "description"
                 } else {
                     "folder"

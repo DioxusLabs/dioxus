@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 //! Suspense in Dioxus
 //!
 //! Currently, `rsx!` does not accept futures as values. To achieve the functionality

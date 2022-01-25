@@ -1,5 +1,6 @@
+#![allow(non_snake_case)]
+
 //! Render a bunch of doggos!
-//!
 
 use std::collections::HashMap;
 
@@ -50,7 +51,7 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }),
-        Some(Err(e)) => cx.render(rsx! {
+        Some(Err(_e)) => cx.render(rsx! {
             div { "Error fetching breeds" }
         }),
         None => cx.render(rsx! {
