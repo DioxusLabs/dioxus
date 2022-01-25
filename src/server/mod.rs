@@ -20,8 +20,8 @@ struct WsRelodState {
 }
 
 impl WsRelodState {
-    fn change(&mut self) {
-        self.update = !self.update;
+    fn change(&mut self, state: bool) {
+        self.update = state;
     }
 }
 
@@ -34,40 +34,35 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
 
     // file watcher: check file change
     let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
-    watcher
-        .watch(config.crate_dir.clone(), notify::RecursiveMode::Recursive)
-        .unwrap();
+    let allow_watch_path = config
+        .dioxus_config
+        .web
+        .watcher
+        .watch_path
+        .clone()
+        .unwrap_or_else(|| vec![PathBuf::from("src")]);
+    for sub_path in allow_watch_path {
+        watcher
+            .watch(
+                config.crate_dir.join(sub_path),
+                notify::RecursiveMode::Recursive,
+            )
+            .unwrap();
+    }
 
     let ws_reload_state = Arc::new(Mutex::new(WsRelodState { update: false }));
 
     let watcher_conf = config.clone();
     let watcher_ws_state = ws_reload_state.clone();
     tokio::spawn(async move {
-        let allow_watch_path = watcher_conf
-            .dioxus_config
-            .web
-            .watcher
-            .watch_path
-            .clone()
-            .unwrap_or_else(|| vec![PathBuf::from("src")]);
-        let crate_dir = watcher_conf.crate_dir.clone();
         loop {
             if let Ok(v) = rx.recv() {
                 match v {
-                    DebouncedEvent::Create(e)
-                    | DebouncedEvent::Write(e)
-                    | DebouncedEvent::Remove(e)
-                    | DebouncedEvent::Rename(e, _) => {
-                        let mut should_reload = false;
-                        for path in &allow_watch_path {
-                            let temp = crate_dir.clone().join(path);
-                            if e.starts_with(temp) {
-                                should_reload = true;
-                                break;
-                            }
-                        }
-
-                        if should_reload && builder::build(&watcher_conf).is_ok() {
+                    DebouncedEvent::Create(_)
+                    | DebouncedEvent::Write(_)
+                    | DebouncedEvent::Remove(_)
+                    | DebouncedEvent::Rename(_, _) => {
+                        if builder::build(&watcher_conf).is_ok() {
                             // change the websocket reload state to true;
                             // the page will auto-reload.
                             if watcher_conf
@@ -79,7 +74,7 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
                             {
                                 let _ = Serve::regen_dev_page(&watcher_conf);
                             }
-                            watcher_ws_state.lock().unwrap().change();
+                            watcher_ws_state.lock().unwrap().change(true);
                         }
                     }
                     _ => {}
@@ -118,13 +113,17 @@ async fn ws_handler(
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {
         loop {
-            tokio::time::sleep(tokio::time::Duration::from_millis(1200)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
             if state.lock().unwrap().update {
-                socket
+                // ignore the error
+                if socket
                     .send(Message::Text(String::from("reload")))
                     .await
-                    .unwrap();
-                state.lock().unwrap().change();
+                    .is_err()
+                {
+                    return;
+                }
+                state.lock().unwrap().change(false);
             }
         }
     })
