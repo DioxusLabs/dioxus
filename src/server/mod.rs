@@ -49,7 +49,7 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
             .watcher
             .watch_path
             .clone()
-            .unwrap_or(vec![PathBuf::from("src")]);
+            .unwrap_or_else(|| vec![PathBuf::from("src")]);
         let crate_dir = watcher_conf.crate_dir.clone();
         loop {
             if let Ok(v) = rx.recv() {
@@ -67,21 +67,19 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
                             }
                         }
 
-                        if reload {
-                            if let Ok(_) = builder::build(&watcher_conf) {
-                                // change the websocket reload state to true;
-                                // the page will auto-reload.
-                                if watcher_conf
-                                    .dioxus_config
-                                    .web
-                                    .watcher
-                                    .reload_html
-                                    .unwrap_or(false)
-                                {
-                                    let _ = Serve::regen_dev_page(&watcher_conf);
-                                }
-                                watcher_ws_state.lock().unwrap().change();
+                        if reload && builder::build(&watcher_conf).is_ok() {
+                            // change the websocket reload state to true;
+                            // the page will auto-reload.
+                            if watcher_conf
+                                .dioxus_config
+                                .web
+                                .watcher
+                                .reload_html
+                                .unwrap_or(false)
+                            {
+                                let _ = Serve::regen_dev_page(&watcher_conf);
                             }
+                            watcher_ws_state.lock().unwrap().change();
                         }
                     }
                     _ => {}

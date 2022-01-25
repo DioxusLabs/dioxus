@@ -187,7 +187,7 @@ pub fn build_desktop(config: &CrateConfig) -> Result<()> {
                 .application
                 .out_dir
                 .clone()
-                .unwrap_or(PathBuf::from("dist"))
+                .unwrap_or_else(|| PathBuf::from("dist"))
                 .display()
         );
     }
@@ -238,7 +238,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
 
     html = html.replace("{app_name}", &config.application.name);
 
-    let title = config.web.app.title.clone().unwrap_or("dioxus | ⛺".into());
+    let title = config.web.app.title.clone().unwrap_or_else(|| "dioxus | ⛺".into());
 
     html.replace("{app_title}", &title)
 }

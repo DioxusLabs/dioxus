@@ -30,7 +30,7 @@ impl Clean {
             .dioxus_config
             .application
             .out_dir
-            .unwrap_or(PathBuf::from("dist"));
+            .unwrap_or_else(|| PathBuf::from("dist"));
         if crate_config.crate_dir.join(&out_dir).is_dir() {
             remove_dir_all(crate_config.crate_dir.join(&out_dir))?;
         }

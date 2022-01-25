@@ -39,7 +39,7 @@ impl Build {
                         .application
                         .out_dir
                         .clone()
-                        .unwrap_or(PathBuf::from("dist")),
+                        .unwrap_or_else(|| PathBuf::from("dist")),
                 )
                 .join("index.html"),
         )?;

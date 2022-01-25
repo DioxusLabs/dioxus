@@ -48,7 +48,7 @@ impl Translate {
                 exit(0);
             })
         });
-        if temp.is_none() {
+        if let Some(..) = temp {
             if let Some(s) = source {
                 contents = s;
             } else {
