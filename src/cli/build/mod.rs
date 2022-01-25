@@ -22,10 +22,8 @@ impl Build {
             crate_config.as_example(self.build.example.unwrap());
         }
 
-        if self.build.platform.is_some() {
-            if self.build.platform.unwrap().to_uppercase() == "DESKTOP" {
-                crate::builder::build_desktop(&crate_config)?;
-            }
+        if self.build.platform.is_some() && self.build.platform.unwrap().to_uppercase() == "DESKTOP" {
+            crate::builder::build_desktop(&crate_config)?;
         }
 
         crate::builder::build(&crate_config)?;

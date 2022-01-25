@@ -83,7 +83,7 @@ impl Create {
         meta_file = meta_file.replace("{{project-name}}", &self.name);
         File::create(project_path.join("Dioxus.toml"))?.write_all(meta_file.as_bytes())?;
 
-        println!("");
+        println!();
         log::info!("💡 Project initialized:");
         log::info!("🎯> cd ./{}", self.name);
         log::info!("🎯> dioxus serve");

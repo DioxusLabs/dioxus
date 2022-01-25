@@ -23,12 +23,12 @@ impl DioxusConfig {
         dioxus_conf_file.read_to_string(&mut meta_str)?;
 
         match toml::from_str::<DioxusConfig>(&meta_str) {
-            Ok(v) => return Ok(v),
+            Ok(v) => Ok(v),
             Err(e) => {
                 log::error!("{}", e);
-                return Err(crate::error::Error::Unique(
+                Err(crate::error::Error::Unique(
                     "Dioxus.toml parse failed".into(),
-                ));
+                ))
             }
         }
     }
@@ -147,16 +147,15 @@ impl CrateConfig {
 
         // We just assume they're using a 'main.rs'
         // Anyway, we've already parsed the manifest, so it should be easy to change the type
-        let output_filename = (&manifest)
+        let output_filename = manifest
             .lib
             .as_ref()
             .and_then(|lib| lib.name.clone())
             .or_else(|| {
-                (&manifest)
+                manifest
                     .package
-                    .as_ref()
-                    .and_then(|pkg| Some(pkg.name.clone()))
-                    .clone()
+                    .as_ref().map(|pkg| pkg.name.clone())
+                    
             })
             .expect("No lib found from cargo metadata");
         let executable = ExecutableType::Binary(output_filename);

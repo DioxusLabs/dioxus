@@ -157,16 +157,16 @@ pub fn build_desktop(config: &CrateConfig) -> Result<()> {
                 file_name = name.clone();
                 config
                     .target_dir
-                    .join(format!("{}", release_type))
-                    .join(format!("{}", name))
+                    .join(release_type.to_string())
+                    .join(name.to_string())
             }
             crate::ExecutableType::Example(name) => {
                 file_name = name.clone();
                 config
                     .target_dir
-                    .join(format!("{}", release_type))
+                    .join(release_type.to_string())
                     .join("examples")
-                    .join(format!("{}", name))
+                    .join(name.to_string())
             }
         };
 
@@ -175,7 +175,7 @@ pub fn build_desktop(config: &CrateConfig) -> Result<()> {
             res_path.set_extension("exe");
             target_file = format!("{}.exe", &file_name);
         } else {
-            target_file = file_name.clone();
+            target_file = file_name;
         }
         create_dir_all(&config.out_dir)?;
         copy(res_path, &config.out_dir.join(target_file))?;
@@ -200,12 +200,12 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
 
     let resouces = config.web.resource.clone();
 
-    let mut style_list = resouces.style.unwrap_or(vec![]);
-    let mut script_list = resouces.script.unwrap_or(vec![]);
+    let mut style_list = resouces.style.unwrap_or_default();
+    let mut script_list = resouces.script.unwrap_or_default();
 
     if serve {
-        let mut dev_style = resouces.dev.style.clone().unwrap_or(vec![]);
-        let mut dev_script = resouces.dev.script.clone().unwrap_or(vec![]);
+        let mut dev_style = resouces.dev.style.clone().unwrap_or_default();
+        let mut dev_script = resouces.dev.script.unwrap_or_default();
         style_list.append(&mut dev_style);
         script_list.append(&mut dev_script);
     }

@@ -120,7 +120,7 @@ fn render_element<'a>(
         }
         write!(f, "\",")?;
     }
-    write!(f, "\n")?;
+    writeln!(f)?;
 
     // write the attributes
     if let Some(id) = &el.id {

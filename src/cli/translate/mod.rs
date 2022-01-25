@@ -48,7 +48,7 @@ impl Translate {
                 exit(0);
             })
         });
-        if let None = temp {
+        if temp.is_none() {
             if let Some(s) = source {
                 contents = s;
             } else {
@@ -112,7 +112,7 @@ fn render_child(f: &mut impl Write, child: &Node, il: u32) -> std::fmt::Result {
                 }
                 write!(f, "\",")?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
 
             // write the attributes
             if let Some(id) = &el.id {

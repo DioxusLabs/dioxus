@@ -25,7 +25,7 @@ impl Config {
         match self {
             Config::Init { name, force } => {
                 let conf_path = crate_root.join("Dioxus.toml");
-                if conf_path.is_file() && force == false {
+                if conf_path.is_file() && !force {
                     log::warn!(
                         "config file `Dioxus.toml` already exist, use `--force` to overwrite it."
                     );
