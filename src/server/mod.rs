@@ -118,6 +118,7 @@ async fn ws_handler(
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {
         loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(1200)).await;
             if state.lock().unwrap().update {
                 socket
                     .send(Message::Text(String::from("reload")))
