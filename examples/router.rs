@@ -56,7 +56,7 @@ fn User(cx: Scope) -> Element {
         div {
             h1 { "Reading blog post: {post}" }
             p { "example blog post" }
-            
+
             if query.bold {
                 rsx!{ b { "bold" } }
             } else {
