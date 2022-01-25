@@ -22,11 +22,17 @@ impl Build {
             crate_config.as_example(self.build.example.unwrap());
         }
 
-        if self.build.platform.is_some() && self.build.platform.unwrap().to_uppercase() == "DESKTOP" {
-            crate::builder::build_desktop(&crate_config)?;
+        match self.build.platform.as_str() {
+            "web" => {
+                crate::builder::build(&crate_config)?;
+            }
+            "desktop" => {
+                crate::builder::build_desktop(&crate_config)?;
+            }
+            _ => {
+                return Err(anyhow::anyhow!("Unsoppurt platform target."));
+            }
         }
-
-        crate::builder::build(&crate_config)?;
 
         let temp = gen_page(&crate_config.dioxus_config, false);
 

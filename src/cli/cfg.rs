@@ -20,8 +20,8 @@ pub struct ConfigOptsBuild {
     pub example: Option<String>,
 
     /// Build platform: support Web & Desktop [default: "web"]
-    #[structopt(long)]
-    pub platform: Option<String>,
+    #[structopt(long, default_value = "web")]
+    pub platform: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, StructOpt)]
@@ -40,8 +40,8 @@ pub struct ConfigOptsServe {
     pub release: bool,
 
     /// Build platform: support Web & Desktop [default: "web"]
-    #[structopt(long)]
-    pub platform: Option<String>,
+    #[structopt(long, default_value = "web")]
+    pub platform: String,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.

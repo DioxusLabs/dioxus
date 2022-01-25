@@ -58,16 +58,16 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
                     | DebouncedEvent::Write(e)
                     | DebouncedEvent::Remove(e)
                     | DebouncedEvent::Rename(e, _) => {
-                        let mut reload = false;
+                        let mut should_reload = false;
                         for path in &allow_watch_path {
                             let temp = crate_dir.clone().join(path);
                             if e.starts_with(temp) {
-                                reload = true;
+                                should_reload = true;
                                 break;
                             }
                         }
 
-                        if reload && builder::build(&watcher_conf).is_ok() {
+                        if should_reload && builder::build(&watcher_conf).is_ok() {
                             // change the websocket reload state to true;
                             // the page will auto-reload.
                             if watcher_conf

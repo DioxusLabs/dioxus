@@ -170,13 +170,13 @@ pub fn build_desktop(config: &CrateConfig) -> Result<()> {
             }
         };
 
-        let target_file;
-        if cfg!(windows) {
+        let target_file = if cfg!(windows) {
             res_path.set_extension("exe");
-            target_file = format!("{}.exe", &file_name);
+            format!("{}.exe", &file_name)
         } else {
-            target_file = file_name;
-        }
+            file_name
+        };
+
         create_dir_all(&config.out_dir)?;
         copy(res_path, &config.out_dir.join(target_file))?;
 
@@ -238,7 +238,12 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
 
     html = html.replace("{app_name}", &config.application.name);
 
-    let title = config.web.app.title.clone().unwrap_or_else(|| "dioxus | ⛺".into());
+    let title = config
+        .web
+        .app
+        .title
+        .clone()
+        .unwrap_or_else(|| "dioxus | ⛺".into());
 
     html.replace("{app_title}", &title)
 }

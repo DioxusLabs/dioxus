@@ -25,9 +25,6 @@ async fn main() -> Result<()> {
             }
         }
 
-        // Commands::Config(_) => {
-        //     //
-        // }
         Commands::Serve(opts) => {
             if let Err(e) = opts.serve().await {
                 log::error!("serve error: {}", e);

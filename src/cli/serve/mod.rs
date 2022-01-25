@@ -21,25 +21,38 @@ impl Serve {
             crate_config.as_example(self.serve.example.unwrap());
         }
 
-        if self.serve.platform.is_some() && self.serve.platform.unwrap().to_uppercase() == "DESKTOP" {
-            crate::builder::build_desktop(&crate_config)?;
-
-            match &crate_config.executable {
-                crate::ExecutableType::Binary(name)
-                | crate::ExecutableType::Lib(name)
-                | crate::ExecutableType::Example(name) => {
-                    let mut file = crate_config.out_dir.join(name);
-                    if cfg!(windows) {
-                        file.set_extension("exe");
-                    }
-                    Command::new(crate_config.out_dir.join(file).to_str().unwrap().to_string())
-                    .output()?;
-                }
+        match self.serve.platform.as_str() {
+            "web" => {
+                crate::builder::build(&crate_config)?;
             }
-            return Ok(());
-        }
+            "desktop" => {
+                crate::builder::build_desktop(&crate_config)?;
 
-        crate::builder::build(&crate_config).expect("build failed");
+                match &crate_config.executable {
+                    crate::ExecutableType::Binary(name)
+                    | crate::ExecutableType::Lib(name)
+                    | crate::ExecutableType::Example(name) => {
+                        let mut file = crate_config.out_dir.join(name);
+                        if cfg!(windows) {
+                            file.set_extension("exe");
+                        }
+                        Command::new(
+                            crate_config
+                                .out_dir
+                                .join(file)
+                                .to_str()
+                                .unwrap()
+                                .to_string(),
+                        )
+                        .output()?;
+                    }
+                }
+                return Ok(());
+            }
+            _ => {
+                return Err(anyhow::anyhow!("Unsoppurt platform target."));
+            }
+        }
 
         // generate dev-index page
         Serve::regen_dev_page(&crate_config)?;

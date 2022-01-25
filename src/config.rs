@@ -13,9 +13,8 @@ impl DioxusConfig {
         let crate_dir = crate::cargo::crate_root()?;
 
         if !crate_dir.join("Dioxus.toml").is_file() {
-            return Err(crate::error::Error::Unique(
-                "Config file: `Dioxus.toml` not found.".into(),
-            ));
+            log::warn!("Config file: `Dioxus.toml` not found; using default config.");
+            return Ok(DioxusConfig::default());
         }
 
         let mut dioxus_conf_file = File::open(crate_dir.join("Dioxus.toml"))?;
@@ -151,12 +150,7 @@ impl CrateConfig {
             .lib
             .as_ref()
             .and_then(|lib| lib.name.clone())
-            .or_else(|| {
-                manifest
-                    .package
-                    .as_ref().map(|pkg| pkg.name.clone())
-                    
-            })
+            .or_else(|| manifest.package.as_ref().map(|pkg| pkg.name.clone()))
             .expect("No lib found from cargo metadata");
         let executable = ExecutableType::Binary(output_filename);
 

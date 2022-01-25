@@ -1,6 +1,11 @@
 //! Utilities for working with cargo and rust files
 use crate::error::{Error, Result};
-use std::{env, fs, path::{PathBuf, Path}, process::Command, str};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+    str,
+};
 
 /// How many parent folders are searched for a `Cargo.toml`
 const MAX_ANCESTORS: u32 = 10;
