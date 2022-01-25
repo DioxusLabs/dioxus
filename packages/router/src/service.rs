@@ -9,11 +9,18 @@ use dioxus_core::ScopeId;
 
 pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
+    pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
     history: Rc<RefCell<BrowserHistory>>,
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
     root_found: Rc<Cell<Option<ScopeId>>>,
     cur_path_params: Rc<RefCell<HashMap<String, String>>>,
     listener: HistoryListener,
+}
+
+pub enum RouteEvent {
+    Change,
+    Pop,
+    Push,
 }
 
 enum RouteSlot {
@@ -36,28 +43,37 @@ impl RouterService {
         let path = location.path();
 
         let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
-
-        let _slots = slots.clone();
-
+        let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
         let root_found = Rc::new(Cell::new(None));
-        let regen = regen_route.clone();
-        let _root_found = root_found.clone();
-        let listener = history.listen(move || {
-            _root_found.set(None);
-            // checking if the route is valid is cheap, so we do it
-            for (slot, root) in _slots.borrow_mut().iter().rev() {
-                log::trace!("regenerating slot {:?} for root '{}'", slot, root);
-                regen(*slot);
+
+        let listener = history.listen({
+            let pending_events = pending_events.clone();
+            let regen_route = regen_route.clone();
+            let root_found = root_found.clone();
+            let slots = slots.clone();
+            move || {
+                root_found.set(None);
+                // checking if the route is valid is cheap, so we do it
+                for (slot, root) in slots.borrow_mut().iter().rev() {
+                    log::trace!("regenerating slot {:?} for root '{}'", slot, root);
+                    regen_route(*slot);
+                }
+
+                // also regenerate the root
+                regen_route(root_scope);
+
+                pending_events.borrow_mut().push(RouteEvent::Change)
             }
         });
 
         Self {
+            listener,
             root_found,
             history: Rc::new(RefCell::new(history)),
             regen_route,
             slots,
+            pending_events,
             cur_path_params: Rc::new(RefCell::new(HashMap::new())),
-            listener,
         }
     }
 

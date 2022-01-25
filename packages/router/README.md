@@ -5,7 +5,7 @@ DioxusRouter adds React-Router style routing to your Dioxus apps. Works in brows
 ```rust
 fn app() {
     cx.render(rsx! {
-        Routes {
+        Router {
             Route { to: "/", Component {} },
             Route { to: "/blog", Blog {} },
             Route { to: "/blog/:id", BlogPost {} },
