@@ -21,15 +21,8 @@ impl DioxusConfig {
         let mut meta_str = String::new();
         dioxus_conf_file.read_to_string(&mut meta_str)?;
 
-        match toml::from_str::<DioxusConfig>(&meta_str) {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                log::error!("{}", e);
-                Err(crate::error::Error::Unique(
-                    "Dioxus.toml parse failed".into(),
-                ))
-            }
-        }
+        toml::from_str::<DioxusConfig>(&meta_str)
+            .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
     }
 }
 
