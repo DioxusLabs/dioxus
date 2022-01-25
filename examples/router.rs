@@ -19,7 +19,7 @@ fn app(cx: Scope) -> Element {
             Route { to: "/", "Home" }
             Route { to: "users",
                 Route { to: "/", "User list" }
-                Route { to: ":name", BlogPost {} }
+                Route { to: ":name", User {} }
              }
             Route { to: "blog"
                 Route { to: "/", "Blog list" }
@@ -48,12 +48,20 @@ struct Query {
 
 fn User(cx: Scope) -> Element {
     let post = dioxus::router::use_route(&cx).last_segment();
-    let query = dioxus::router::use_route(&cx).query::<Query>();
+    let query = dioxus::router::use_route(&cx)
+        .query::<Query>()
+        .unwrap_or(Query { bold: false });
 
     cx.render(rsx! {
         div {
             h1 { "Reading blog post: {post}" }
             p { "example blog post" }
+
+            if query.bold {
+                rsx!{ b { "bold" } }
+            } else {
+                rsx!{ i { "italic" } }
+            }
         }
     })
 }

@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 /*
 Dioxus manages borrow lifetimes for you. This means any child may borrow from its parent. However, it is not possible
 to hand out an &mut T to children - all props are consumed by &P, so you'd only get an &&mut T.
