@@ -35,9 +35,10 @@
   </a>
   <!-- Discord -->
   <a href="https://discord.gg/XgGxMSkvUM">
-    <img src="https://badgen.net/discord/members/XgGxMSkvUM" alt="Awesome Page" />
+    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
   </a>
 </div>
+
 
 
 <div align="center">
