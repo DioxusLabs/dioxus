@@ -24,7 +24,7 @@ fn app(cx: Scope) -> Element {
             .await
     });
 
-    let selected_breed = use_state(&cx, || None);
+    let (breed, set_breed) = use_state(&cx, || None);
 
     match fut.value() {
         Some(Ok(breeds)) => cx.render(rsx! {
@@ -36,14 +36,14 @@ fn app(cx: Scope) -> Element {
                         breeds.message.keys().map(|breed| rsx!(
                             li {
                                 button {
-                                    onclick: move |_| selected_breed.set(Some(breed.clone())),
+                                    onclick: move |_| set_breed(Some(breed.clone())),
                                     "{breed}"
                                 }
                             }
                         ))
                     }
                     div { flex: "50%",
-                        match selected_breed.get() {
+                        match breed {
                             Some(breed) => rsx!( Breed { breed: breed.clone() } ),
                             None => rsx!("No Breed selected"),
                         }
@@ -73,9 +73,9 @@ fn Breed(cx: Scope, breed: String) -> Element {
         reqwest::get(endpoint).await.unwrap().json::<DogApi>().await
     });
 
-    let breed_name = use_state(&cx, || breed.clone());
-    if breed_name.get() != breed {
-        breed_name.set(breed.clone());
+    let (name, set_name) = use_state(&cx, || breed.clone());
+    if name != breed {
+        set_name(breed.clone());
         fut.restart();
     }
 

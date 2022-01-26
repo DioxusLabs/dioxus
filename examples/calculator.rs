@@ -18,17 +18,19 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let display_value = use_state(&cx, || String::from("0"));
+    let (display_value, set_display_value) = use_state(&cx, || String::from("0"));
 
     let input_digit = move |num: u8| {
-        if display_value.get() == "0" {
-            display_value.set(String::new());
+        if display_value == "0" {
+            set_display_value(String::new());
         }
-        display_value.modify().push_str(num.to_string().as_str());
+        set_display_value
+            .make_mut()
+            .push_str(num.to_string().as_str());
     };
 
     let input_operator = move |key: &str| {
-        display_value.modify().push_str(key);
+        set_display_value.make_mut().push_str(key);
     };
 
     cx.render(rsx!(
@@ -53,7 +55,7 @@ fn app(cx: Scope) -> Element {
                         KeyCode::Num9 => input_digit(9),
                         KeyCode::Backspace => {
                             if !display_value.len() != 0 {
-                                display_value.modify().pop();
+                                set_display_value.make_mut().pop();
                             }
                         }
                         _ => {}
@@ -65,21 +67,21 @@ fn app(cx: Scope) -> Element {
                                 button {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
-                                        display_value.set(String::new());
-                                        if *display_value != "" {
-                                            display_value.set("0".into());
+                                        set_display_value(String::new());
+                                        if !display_value.is_empty(){
+                                            set_display_value("0".into());
                                         }
                                     },
-                                    [if *display_value == "" { "C" } else { "AC" }]
+                                    [if display_value.is_empty() { "C" } else { "AC" }]
                                 }
                                 button {
                                     class: "calculator-key key-sign",
                                     onclick: move |_| {
-                                        let temp = calc_val(display_value.get().clone());
+                                        let temp = calc_val(display_value.clone());
                                         if temp > 0.0 {
-                                            display_value.set(format!("-{}", temp));
+                                            set_display_value(format!("-{}", temp));
                                         } else {
-                                            display_value.set(format!("{}", temp.abs()));
+                                            set_display_value(format!("{}", temp.abs()));
                                         }
                                     },
                                     "±"
@@ -87,8 +89,8 @@ fn app(cx: Scope) -> Element {
                                 button {
                                     class: "calculator-key key-percent",
                                     onclick: move |_| {
-                                        display_value.set(
-                                            format!("{}", calc_val(display_value.get().clone()) / 100.0)
+                                        set_display_value(
+                                            format!("{}", calc_val(display_value.clone()) / 100.0)
                                         );
                                     },
                                     "%"
@@ -98,7 +100,7 @@ fn app(cx: Scope) -> Element {
                                 button { class: "calculator-key key-0", onclick: move |_| input_digit(0),
                                     "0"
                                 }
-                                button { class: "calculator-key key-dot", onclick: move |_| display_value.modify().push('.'),
+                                button { class: "calculator-key key-dot", onclick: move |_| set_display_value.make_mut().push('.'),
                                     "●"
                                 }
                                 (1..10).map(|k| rsx!{
@@ -130,7 +132,7 @@ fn app(cx: Scope) -> Element {
                             }
                             button { class: "calculator-key key-equals",
                                 onclick: move |_| {
-                                    display_value.set(format!("{}", calc_val(display_value.get().clone())));
+                                    set_display_value(format!("{}", calc_val(display_value.clone())));
                                 },
                                 "="
                             }

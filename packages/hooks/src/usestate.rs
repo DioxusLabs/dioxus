@@ -1,46 +1,29 @@
+#![warn(clippy::pedantic)]
+
 use dioxus_core::prelude::*;
 use std::{
-    cell::{Cell, Ref, RefCell, RefMut},
+    cell::{RefCell, RefMut},
     fmt::{Debug, Display},
     rc::Rc,
 };
 
-/// Store state between component renders!
+/// Store state between component renders.
 ///
 /// ## Dioxus equivalent of useState, designed for Rust
 ///
 /// The Dioxus version of `useState` for state management inside components. It allows you to ergonomically store and
 /// modify state between component renders. When the state is updated, the component will re-render.
 ///
-/// Dioxus' use_state basically wraps a RefCell with helper methods and integrates it with the VirtualDOM update system.
-///
-/// [`use_state`] exposes a few helper methods to modify the underlying state:
-/// - `.set(new)` allows you to override the "work in progress" value with a new value
-/// - `.get_mut()` allows you to modify the WIP value
-/// - `.get_wip()` allows you to access the WIP value
-/// - `.deref()` provides the previous value (often done implicitly, though a manual dereference with `*` might be required)
-///
-/// Additionally, a ton of std::ops traits are implemented for the `UseState` wrapper, meaning any mutative type operations
-/// will automatically be called on the WIP value.
-///
-/// ## Combinators
-///
-/// On top of the methods to set/get state, `use_state` also supports fancy combinators to extend its functionality:
-/// - `.classic()` and `.split()`  convert the hook into the classic React-style hook
-///     ```rust
-///     let (state, set_state) = use_state(&cx, || 10).split()
-///     ```
-/// Usage:
 ///
 /// ```ignore
 /// const Example: Component = |cx| {
-///     let counter = use_state(&cx, || 0);
+///     let (count, set_count) = use_state(&cx, || 0);
 ///
 ///     cx.render(rsx! {
 ///         div {
-///             h1 { "Counter: {counter}" }
-///             button { onclick: move |_| counter.set(**counter + 1), "Increment" }
-///             button { onclick: move |_| counter.set(**counter - 1), "Decrement" }
+///             h1 { "Count: {count}" }
+///             button { onclick: move |_| set_count(a - 1), "Increment" }
+///             button { onclick: move |_| set_count(a + 1), "Decrement" }
 ///         }
 ///     ))
 /// }
@@ -48,34 +31,269 @@ use std::{
 pub fn use_state<'a, T: 'static>(
     cx: &'a ScopeState,
     initial_state_fn: impl FnOnce() -> T,
-) -> &'a UseState<T> {
-    let hook = cx.use_hook(move |_| UseState {
-        current_val: Rc::new(initial_state_fn()),
-        update_callback: cx.schedule_update(),
-        wip: Rc::new(RefCell::new(None)),
-        update_scheuled: Cell::new(false),
+) -> (&'a T, &'a UseState<T>) {
+    let hook = cx.use_hook(move |_| {
+        let current_val = Rc::new(initial_state_fn());
+        let update_callback = cx.schedule_update();
+        let slot = Rc::new(RefCell::new(current_val.clone()));
+        let setter = Rc::new({
+            crate::to_owned![update_callback, slot];
+            move |new| {
+                let mut slot = slot.borrow_mut();
+
+                // if there's only one reference (weak or otherwise), we can just swap the values
+                // Typically happens when the state is set multiple times - we don't want to create a new Rc for each new value
+                if let Some(val) = Rc::get_mut(&mut slot) {
+                    *val = new;
+                } else {
+                    *slot = Rc::new(new);
+                }
+
+                update_callback();
+            }
+        });
+
+        UseState {
+            current_val,
+            update_callback,
+            setter,
+            slot,
+        }
     });
 
-    hook.update_scheuled.set(false);
-    let mut new_val = hook.wip.borrow_mut();
-
-    if new_val.is_some() {
-        // if there's only one reference (weak or otherwise), we can just swap the values
-        if let Some(val) = Rc::get_mut(&mut hook.current_val) {
-            *val = new_val.take().unwrap();
-        } else {
-            hook.current_val = Rc::new(new_val.take().unwrap());
-        }
-    }
-
-    hook
+    (hook.current_val.as_ref(), hook)
 }
 
 pub struct UseState<T: 'static> {
     pub(crate) current_val: Rc<T>,
-    pub(crate) wip: Rc<RefCell<Option<T>>>,
     pub(crate) update_callback: Rc<dyn Fn()>,
-    pub(crate) update_scheuled: Cell<bool>,
+    pub(crate) setter: Rc<dyn Fn(T)>,
+    pub(crate) slot: Rc<RefCell<Rc<T>>>,
+}
+
+impl<T: 'static> UseState<T> {
+    /// Get the current value of the state by cloning its container Rc.
+    ///
+    /// This is useful when you are dealing with state in async contexts but need
+    /// to know the current value. You are not given a reference to the state.
+    ///
+    /// # Examples
+    /// An async context might need to know the current value:
+    ///
+    /// ```rust, ignore
+    /// fn component(cx: Scope) -> Element {
+    ///     let (count, set_count) = use_state(&cx, || 0);
+    ///     cx.spawn({
+    ///         let set_count = set_count.to_owned();
+    ///         async move {
+    ///             let current = set_count.current();
+    ///         }
+    ///     })
+    /// }
+    /// ```    
+    #[must_use]
+    pub fn current(&self) -> Rc<T> {
+        self.slot.borrow().clone()
+    }
+
+    /// Get the `setter` function directly without the `UseState` wrapper.
+    ///
+    /// This is useful for passing the setter function to other components.
+    ///
+    /// However, for most cases, calling `to_owned` o`UseState`te is the
+    /// preferred way to get "anoth`set_state`tate handle.
+    ///
+    ///
+    /// # Examples
+    /// A component might require an `Rc<dyn Fn(T)>` as an input to set a value.
+    ///
+    /// ```rust, ignore
+    /// fn component(cx: Scope) -> Element {
+    ///     let (value, set_value) = use_state(&cx, || 0);
+    ///
+    ///     rsx!{
+    ///         Component {
+    ///             handler: set_val.setter()
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    #[must_use]
+    pub fn setter(&self) -> Rc<dyn Fn(T)> {
+        self.setter.clone()
+    }
+
+    /// Set the state to a new value, using the current state value as a reference.
+    ///
+    /// This is similar to passing a closure to React's `set_value` function.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    /// ```rust
+    /// # use dioxus_core::prelude::*;
+    /// # use dioxus_hooks::*;
+    /// fn component(cx: Scope) -> Element {
+    ///     let (value, set_value) = use_state(&cx, || 0);
+    ///    
+    ///     // to increment the value
+    ///     set_value.modify(|v| v + 1);
+    ///    
+    ///     // usage in async
+    ///     cx.spawn({
+    ///         let set_value = set_value.to_owned();
+    ///         async move {
+    ///             set_value.modify(|v| v + 1);
+    ///         }
+    ///     });
+    ///
+    ///     # todo!()
+    /// }
+    /// ```
+    pub fn modify(&self, f: impl FnOnce(&T) -> T) {
+        let curernt = self.slot.borrow();
+        let new_val = f(curernt.as_ref());
+        (self.setter)(new_val);
+    }
+
+    /// Get the value of the state when this handle was created.
+    ///
+    /// This method is useful when you want an `Rc` around the data to cheaply
+    /// pass it around your app.
+    ///
+    /// ## Warning
+    ///
+    /// This will return a stale value if used within async contexts.
+    ///
+    /// Try `current` to get the real current value of the state.
+    ///
+    /// ## Example
+    ///
+    /// ```rust, ignore
+    /// # use dioxus_core::prelude::*;
+    /// # use dioxus_hooks::*;
+    /// fn component(cx: Scope) -> Element {
+    ///     let (value, set_value) = use_state(&cx, || 0);
+    ///    
+    ///     let as_rc = set_value.get();
+    ///     assert_eq!(as_rc.as_ref(), &0);
+    ///
+    ///     # todo!()
+    /// }
+    /// ```
+    #[must_use]
+    pub fn get(&self) -> &Rc<T> {
+        &self.current_val
+    }
+
+    /// Mark the component that create this [`UseState`] as dirty, forcing it to re-render.
+    ///
+    /// ```rust, ignore
+    /// fn component(cx: Scope) -> Element {
+    ///     let (count, set_count) = use_state(&cx, || 0);
+    ///     cx.spawn({
+    ///         let set_count = set_count.to_owned();
+    ///         async move {
+    ///             // for the component to re-render
+    ///             set_count.needs_update();
+    ///         }
+    ///     })
+    /// }
+    /// ```   
+    pub fn needs_update(&self) {
+        (self.update_callback)();
+    }
+}
+
+impl<T: Clone> UseState<T> {
+    /// Get a mutable handle to the value by calling `ToOwned::to_owned` on the
+    /// current value.
+    ///
+    /// This is essentially cloning the underlying value and then setting it,
+    /// giving you a mutable handle in the process. This method is intended for
+    /// types that are cheaply cloneable.
+    ///
+    /// If you are comfortable dealing with `RefMut`, then you can use `make_mut` to get
+    /// the underlying slot. However, be careful with `RefMut` since you might panic
+    /// if the `RefCell` is left open.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let (val, set_val) = use_state(&cx, || 0);
+    ///
+    /// set_val.with_mut(|v| *v = 1);
+    /// ```
+    pub fn with_mut(&self, apply: impl FnOnce(&mut T)) {
+        let mut slot = self.slot.borrow_mut();
+        let mut inner = slot.as_ref().to_owned();
+
+        apply(&mut inner);
+
+        if let Some(new) = Rc::get_mut(&mut slot) {
+            *new = inner;
+        } else {
+            *slot = Rc::new(inner);
+        }
+
+        self.needs_update();
+    }
+
+    /// Get a mutable handle to the value by calling `ToOwned::to_owned` on the
+    /// current value.
+    ///
+    /// This is essentially cloning the underlying value and then setting it,
+    /// giving you a mutable handle in the process. This method is intended for
+    /// types that are cheaply cloneable.
+    ///
+    /// # Warning
+    /// Be careful with `RefMut` since you might panic if the `RefCell` is left open!
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let (val, set_val) = use_state(&cx, || 0);
+    ///
+    /// set_val.with_mut(|v| *v = 1);
+    /// ```
+    #[must_use]
+    pub fn make_mut(&self) -> RefMut<T> {
+        let mut slot = self.slot.borrow_mut();
+
+        self.needs_update();
+
+        if Rc::strong_count(&*slot) > 0 {
+            *slot = Rc::new(slot.as_ref().to_owned());
+        }
+
+        RefMut::map(slot, |rc| Rc::get_mut(rc).expect("the hard count to be 0"))
+    }
+}
+
+impl<T: 'static> ToOwned for UseState<T> {
+    type Owned = UseState<T>;
+
+    fn to_owned(&self) -> Self::Owned {
+        UseState {
+            current_val: self.current_val.clone(),
+            update_callback: self.update_callback.clone(),
+            setter: self.setter.clone(),
+            slot: self.slot.clone(),
+        }
+    }
+}
+
+impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.current_val)
+    }
+}
+
+impl<T> PartialEq<UseState<T>> for UseState<T> {
+    fn eq(&self, other: &UseState<T>) -> bool {
+        // some level of memoization for UseState
+        Rc::ptr_eq(&self.slot, &other.slot)
+    }
 }
 
 impl<T: Debug> Debug for UseState<T> {
@@ -84,129 +302,42 @@ impl<T: Debug> Debug for UseState<T> {
     }
 }
 
-impl<T: 'static> UseState<T> {
-    /// Tell the Dioxus Scheduler that we need to be processed
-    pub fn needs_update(&self) {
-        if !self.update_scheuled.get() {
-            self.update_scheuled.set(true);
-            (self.update_callback)();
-        }
-    }
-
-    pub fn set(&self, new_val: T) {
-        *self.wip.borrow_mut() = Some(new_val);
-        self.needs_update();
-    }
-
-    pub fn get(&self) -> &T {
-        &self.current_val
-    }
-
-    pub fn get_rc(&self) -> &Rc<T> {
-        &self.current_val
-    }
-
-    /// Get the current status of the work-in-progress data
-    pub fn get_wip(&self) -> Ref<Option<T>> {
-        self.wip.borrow()
-    }
-
-    /// Get the current status of the work-in-progress data
-    pub fn get_wip_mut(&self) -> RefMut<Option<T>> {
-        self.wip.borrow_mut()
-    }
-
-    pub fn split(&self) -> (&T, Rc<dyn Fn(T)>) {
-        (&self.current_val, self.setter())
-    }
-
-    pub fn setter(&self) -> Rc<dyn Fn(T)> {
-        let slot = self.wip.clone();
-        let callback = self.update_callback.clone();
-        Rc::new(move |new| {
-            callback();
-            *slot.borrow_mut() = Some(new)
-        })
-    }
-
-    pub fn wtih(&self, f: impl FnOnce(&mut T)) {
-        let mut val = self.wip.borrow_mut();
-
-        if let Some(inner) = val.as_mut() {
-            f(inner);
-        }
-    }
-
-    pub fn for_async(&self) -> UseState<T> {
-        let UseState {
-            current_val,
-            wip,
-            update_callback,
-            update_scheuled,
-        } = self;
-
-        UseState {
-            current_val: current_val.clone(),
-            wip: wip.clone(),
-            update_callback: update_callback.clone(),
-            update_scheuled: update_scheuled.clone(),
-        }
-    }
-}
-
-impl<T: 'static + ToOwned<Owned = T>> UseState<T> {
-    /// Gain mutable access to the new value via [`RefMut`].
-    ///
-    /// If `modify` is called, then the component will re-render.
-    ///
-    /// This method is only available when the value is a `ToOwned` type.
-    ///
-    /// Mutable access is derived by calling "ToOwned" (IE cloning) on the current value.
-    ///
-    /// To get a reference to the current value, use `.get()`
-    pub fn modify(&self) -> RefMut<T> {
-        // make sure we get processed
-        self.needs_update();
-
-        // Bring out the new value, cloning if it we need to
-        // "get_mut" is locked behind "ToOwned" to make it explicit that cloning occurs to use this
-        RefMut::map(self.wip.borrow_mut(), |slot| {
-            if slot.is_none() {
-                *slot = Some(self.current_val.as_ref().to_owned());
-            }
-            slot.as_mut().unwrap()
-        })
-    }
-
-    pub fn inner(self) -> T {
-        self.current_val.as_ref().to_owned()
-    }
-}
-
 impl<'a, T> std::ops::Deref for UseState<T> {
-    type Target = T;
+    type Target = Rc<dyn Fn(T)>;
 
     fn deref(&self) -> &Self::Target {
-        self.get()
+        &self.setter
     }
 }
 
-// enable displaty for the handle
-impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.current_val)
-    }
-}
+#[test]
+fn api_makes_sense() {
+    #[allow(unused)]
+    fn app(cx: Scope) -> Element {
+        let (val, set_val) = use_state(&cx, || 0);
 
-impl<'a, V, T: PartialEq<V>> PartialEq<V> for UseState<T> {
-    fn eq(&self, other: &V) -> bool {
-        self.get() == other
-    }
-}
-impl<'a, O, T: std::ops::Not<Output = O> + Copy> std::ops::Not for UseState<T> {
-    type Output = O;
+        set_val(0);
+        set_val.modify(|v| v + 1);
+        let real_current = set_val.current();
 
-    fn not(self) -> Self::Output {
-        !*self.get()
+        match val {
+            10 => {
+                set_val(20);
+                set_val.modify(|v| v + 1);
+            }
+            20 => {}
+            _ => {
+                println!("{real_current}");
+            }
+        }
+
+        cx.spawn({
+            crate::to_owned![set_val];
+            async move {
+                set_val.modify(|f| f + 1);
+            }
+        });
+
+        cx.render(LazyNodes::new(|f| f.static_text("asd")))
     }
 }

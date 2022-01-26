@@ -33,7 +33,7 @@ impl Label {
 
 fn app(cx: Scope) -> Element {
     let items = use_ref(&cx, Vec::new);
-    let selected = use_state(&cx, || None);
+    let (selected, set_selected) = use_state(&cx, || None);
 
     cx.render(rsx! {
         div { class: "container",
@@ -71,7 +71,7 @@ fn app(cx: Scope) -> Element {
                         rsx!(tr { class: "{is_in_danger}",
                             td { class:"col-md-1" }
                             td { class:"col-md-1", "{item.key}" }
-                            td { class:"col-md-1", onclick: move |_| selected.set(Some(id)),
+                            td { class:"col-md-1", onclick: move |_| set_selected(Some(id)),
                                 a { class: "lbl", item.labels }
                             }
                             td { class: "col-md-1",
