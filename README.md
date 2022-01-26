@@ -149,7 +149,7 @@ Specifically, Dioxus provides us many other assurances:
 
 And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time.
 
-### Why NOT Dioxus?
+## Why NOT Dioxus?
 You shouldn't use Dioxus if:
 
 - You don't like the React Hooks approach to frontend
@@ -157,7 +157,7 @@ You shouldn't use Dioxus if:
 - You want to support browsers where Wasm or asm.js are not supported.
 - You need a Send+Sync UI solution (Dioxus is not currently thread-safe)
 
-### Comparison with other Rust UI frameworks
+## Comparison with other Rust UI frameworks
 Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**.
 
 - [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead of React-hooks, no borrowed props, supports SSR (no hydration).
