@@ -17,4 +17,8 @@
     ws.send("init");
   });
 
+  ws.addEventListener("close", () => {
+    alert("Dev-Server Socket Closed.");
+  });
+
 })();

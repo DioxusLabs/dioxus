@@ -9,31 +9,26 @@ use notify::{watcher, DebouncedEvent, Watcher};
 use std::time::Duration;
 use std::{
     path::PathBuf,
-    sync::{mpsc::channel, Arc, Mutex},
+    sync::{mpsc::channel, Arc},
 };
 use tower_http::services::ServeDir;
 
 use crate::{builder, serve::Serve, CrateConfig};
+use tokio::sync::broadcast;
 
 struct WsRelodState {
-    update: bool,
-}
-
-impl WsRelodState {
-    fn change(&mut self, state: bool) {
-        self.update = state;
-    }
+    update: broadcast::Sender<String>,
 }
 
 pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
     log::info!("🚀 Starting development server...");
 
-    let (tx, rx) = channel();
+    let (watcher_tx, watcher_rx) = channel();
 
     let dist_path = config.out_dir.clone();
 
     // file watcher: check file change
-    let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
+    let mut watcher = watcher(watcher_tx, Duration::from_secs(1)).unwrap();
     let allow_watch_path = config
         .dioxus_config
         .web
@@ -50,13 +45,14 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
             .unwrap();
     }
 
-    let ws_reload_state = Arc::new(Mutex::new(WsRelodState { update: false }));
+    let (reload_tx, _) = broadcast::channel(100);
+    let ws_reload_state = Arc::new(WsRelodState { update: reload_tx });
 
     let watcher_conf = config.clone();
-    let watcher_ws_state = ws_reload_state.clone();
+    let watcher_ws_state = ws_reload_state.update.clone();
     tokio::spawn(async move {
         loop {
-            if let Ok(v) = rx.recv() {
+            if let Ok(v) = watcher_rx.recv() {
                 match v {
                     DebouncedEvent::Create(_)
                     | DebouncedEvent::Write(_)
@@ -74,7 +70,8 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
                             {
                                 let _ = Serve::regen_dev_page(&watcher_conf);
                             }
-                            watcher_ws_state.lock().unwrap().change(true);
+                            println!("send reload!");
+                            watcher_ws_state.send("reload".into()).unwrap();
                         }
                     }
                     _ => {}
@@ -109,21 +106,26 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
 async fn ws_handler(
     ws: WebSocketUpgrade,
     _: Option<TypedHeader<headers::UserAgent>>,
-    Extension(state): Extension<Arc<Mutex<WsRelodState>>>,
+    Extension(state): Extension<Arc<WsRelodState>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {
+        let mut rx = state.update.subscribe();
         loop {
-            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-            if state.lock().unwrap().update {
-                // ignore the error
-                if socket
-                    .send(Message::Text(String::from("reload")))
-                    .await
-                    .is_err()
-                {
-                    return;
+            println!("wait");
+            if let Ok(v) = rx.recv().await {
+                println!("trigger recv: {}", v);
+                if v == "reload" {
+                    // ignore the error
+                    if socket
+                        .send(Message::Text(String::from("reload")))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
                 }
-                state.lock().unwrap().change(false);
+            } else {
+                println!("SS");
             }
         }
     })
