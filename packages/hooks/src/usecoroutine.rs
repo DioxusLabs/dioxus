@@ -1,115 +1,93 @@
-use dioxus_core::{ScopeState, TaskId};
+use bumpalo::boxed::Box as BumpBox;
+use dioxus_core::exports::bumpalo;
+use dioxus_core::exports::futures_channel;
+use dioxus_core::{LazyNodes, ScopeState, TaskId};
 use std::future::Future;
 use std::{cell::Cell, rc::Rc};
-/*
 
-
-
-let g = use_coroutine(&cx, || {
-    // clone the items in
-    async move {
-
-    }
-})
-
-
-
-*/
-pub fn use_coroutine<F>(cx: &ScopeState, create_future: impl FnOnce() -> F) -> CoroutineHandle<'_>
+/// Maintain a handle over a future that can be paused, resumed, and canceled.
+///
+///
+///
+///
+///
+///
+///
+///
+///
+///
+///
+///
+///
+///
+///
+///
+pub fn use_coroutine<'a, F>(
+    cx: &'a ScopeState,
+    create_future: impl FnOnce() -> F + 'a,
+) -> UseCoroutine<F>
 where
     F: Future<Output = ()> + 'static,
 {
-    let state = cx.use_hook(move |_| {
-        let f = create_future();
-        let id = cx.push_future(f);
-        State {
-                running: Default::default(),
-                _id: id
-                // pending_fut: Default::default(),
-                // running_fut: Default::default(),
-            }
+    let state = cx.use_hook(move |_| CoroutineInner {
+        _id: None,
+        running: Default::default(),
     });
 
-    // state.pending_fut.set(Some(Box::pin(f)));
+    let mut bump = None;
 
-    // if let Some(fut) = state.running_fut.as_mut() {
-    //     cx.push_future(fut);
-    // }
+    // as an optimization, we use the bump arena to allocate the callback instead of boxes
+    // that way we don't always call the constructor, but it's still efficient
+    cx.render(LazyNodes::new(move |f| {
+        bump.replace(f.bump());
+        f.static_text("")
+    }));
 
-    // if let Some(fut) = state.running_fut.take() {
-    // state.running.set(true);
-    // fut.resume();
-    // }
+    let mut slot = Some(create_future);
 
-    // let submit: Box<dyn FnOnce() + 'a> = Box::new(move || {
-    //     let g = async move {
-    //         running.set(true);
-    //         create_future().await;
-    //         running.set(false);
-    //     };
-    //     let p: Pin<Box<dyn Future<Output = ()>>> = Box::pin(g);
-    //     fut_slot
-    //         .borrow_mut()
-    //         .replace(unsafe { std::mem::transmute(p) });
-    // });
+    // safety: bumpalo is limited in constructing unsized box types, so we have to do it through dynamic dispatch
+    let boxed: BumpBox<'a, dyn FnMut() -> F + 'a> = unsafe {
+        BumpBox::from_raw(bump.unwrap().alloc(move || {
+            let inner = slot.take().unwrap();
+            inner()
+        }))
+    };
 
-    // let submit = unsafe { std::mem::transmute(submit) };
-    // state.submit.get_mut().replace(submit);
-
-    // if state.running.get() {
-    //     // let mut fut = state.fut.borrow_mut();
-    //     // cx.push_task(|| fut.as_mut().unwrap().as_mut());
-    // } else {
-    //     // make sure to drop the old future
-    //     if let Some(fut) = state.fut.borrow_mut().take() {
-    //         drop(fut);
-    //     }
-    // }
-    CoroutineHandle { cx, inner: state }
-}
-
-struct State {
-    running: Rc<Cell<bool>>,
-    _id: TaskId,
-    // the way this is structure, you can toggle the coroutine without re-rendering the comppnent
-    // this means every render *generates* the future, which is a bit of a waste
-    // todo: allocate pending futures in the bump allocator and then have a true promotion
-    // pending_fut: Cell<Option<Pin<Box<dyn Future<Output = ()> + 'static>>>>,
-    // running_fut: Option<Pin<Box<dyn Future<Output = ()> + 'static>>>,
-    // running_fut: Rc<RefCell<Option<Pin<Box<dyn Future<Output = ()> + 'static>>>>>
-}
-
-pub struct CoroutineHandle<'a> {
-    cx: &'a ScopeState,
-    inner: &'a State,
-}
-
-impl Clone for CoroutineHandle<'_> {
-    fn clone(&self) -> Self {
-        CoroutineHandle {
-            cx: self.cx,
-            inner: self.inner,
-        }
+    UseCoroutine {
+        inner: state,
+        create_fut: Cell::new(Some(boxed)),
+        cx,
     }
 }
-impl Copy for CoroutineHandle<'_> {}
 
-impl<'a> CoroutineHandle<'a> {
-    #[allow(clippy::needless_return)]
+struct CoroutineInner {
+    running: Rc<Cell<bool>>,
+    _id: Option<TaskId>,
+}
+
+pub struct UseCoroutine<'a, F: Future<Output = ()> + 'static> {
+    create_fut: Cell<Option<BumpBox<'a, dyn FnMut() -> F + 'a>>>,
+    inner: &'a CoroutineInner,
+    cx: &'a ScopeState,
+}
+
+impl<'a, F: Future<Output = ()> + 'static> UseCoroutine<'a, F> {
+    pub fn auto_start(&self, start: bool) -> &Self {
+        todo!()
+    }
+
     pub fn start(&self) {
-        if self.is_running() {
-            return;
+        if !self.is_running() {
+            if let Some(mut fut) = self.create_fut.take() {
+                let fut = fut();
+                self.cx.push_future(fut);
+            }
         }
-
-        // if let Some(submit) = self.inner.pending_fut.take() {
-        // submit();
-        // let inner = self.inner;
-        // self.cx.push_task(submit());
-        // }
     }
 
     pub fn is_running(&self) -> bool {
-        self.inner.running.get()
+        // self.inner.running.get()
+        false
     }
 
     pub fn resume(&self) {
@@ -119,4 +97,20 @@ impl<'a> CoroutineHandle<'a> {
     pub fn stop(&self) {}
 
     pub fn restart(&self) {}
+}
+
+#[test]
+fn it_works() {
+    use dioxus_core::prelude::*;
+    fn app(cx: Scope) -> Element {
+        let poll_tasks = use_coroutine(&cx, || async {
+            loop {
+                println!("polling tasks");
+            }
+        });
+
+        poll_tasks.auto_start(true);
+
+        todo!()
+    }
 }
