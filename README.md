@@ -167,52 +167,31 @@ Dioxus primarily emphasizes **developer experience** and **familiarity with Reac
 - [Azul](https://azul.rs): Fully native HTML/CSS renderer for desktop applications, no support for web/ssr
 
 
-# Parity with React
+## Parity with React & Roadmap
 
-Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. This parity table does not necessarily include important ecosystem crates like code blocks, markdown, resizing hooks, etc.
+Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. These include:
 
+- Portals
+- Suspense integration with SSR
+- Server Components / Bundle Splitting / Lazy
 
-| Feature                   | Dioxus | React | Notes for Dioxus                                                     |
-| ------------------------- | ------ | ----- | -------------------------------------------------------------------- |
-| Conditional Rendering     | ✅      | ✅     | if/then to hide/show component                                       |
-| Map, Iterator             | ✅      | ✅     | map/filter/reduce to produce rsx!                                    |
-| Keyed Components          | ✅      | ✅     | advanced diffing with keys                                           |
-| Web                       | ✅      | ✅     | renderer for web browser                                             |
-| Desktop (webview)         | ✅      | ✅     | renderer for desktop                                                 |
-| Shared State (Context)    | ✅      | ✅     | share state through the tree                                         |
-| Hooks                     | ✅      | ✅     | memory cells in components                                           |
-| SSR                       | ✅      | ✅     | render directly to string                                            |
-| Component Children        | ✅      | ✅     | cx.children() as a list of nodes                                     |
-| Headless components       | ✅      | ✅     | components that don't return real elements                           |
-| Fragments                 | ✅      | ✅     | multiple elements without a real root                                |
-| Manual Props              | ✅      | ✅     | Manually pass in props with spread syntax                            |
-| Controlled Inputs         | ✅      | ✅     | stateful wrappers around inputs                                      |
-| CSS/Inline Styles         | ✅      | ✅     | syntax for inline styles/attribute groups                            |
-| Custom elements           | ✅      | ✅     | Define new element primitives                                        |
-| Suspense                  | ✅      | ✅     | schedule future render from future/promise                           |
-| Integrated error handling | ✅      | ✅     | Gracefully handle errors with ? syntax                               |
-| NodeRef                   | ✅      | ✅     | gain direct access to nodes                                          |
-| Re-hydration              | ✅      | ✅     | Pre-render to HTML to speed up first contentful paint                |
-| Jank-Free Rendering       | ✅      | ✅     | Large diffs are segmented across frames for silky-smooth transitions |
-| Effects                   | ✅      | ✅     | Run effects after a component has been committed to render           |
-| Portals                   | 🛠      | ✅     | Render nodes outside of the traditional tree structure               |
-| Cooperative Scheduling    | 🛠      | ✅     | Prioritize important events over non-important events                |
-| Server Components         | 🛠      | ✅     | Hybrid components for SPA and Server                                 |
-| Bundle Splitting          | 👀      | ✅     | Efficiently and asynchronously load the app                          |
-| Lazy Components           | 👀      | ✅     | Dynamically load the new components as the page is loaded            |
-| 1st class global state    | ✅      | ✅     | redux/recoil/mobx on top of context                                  |
-| Runs natively             | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)                       |
-| Subtree Memoization       | ✅      | ❓     | skip diffing static element subtrees                                 |
-| High-efficiency templates | 🛠      | ❓     | rsx! calls are translated to templates on the DOM's side             |
-| Compile-time correct      | ✅      | ❓     | Throw errors on invalid template layouts                             |
-| Heuristic Engine          | ✅      | ❓     | track component memory usage to minimize future allocations          |
-| Fine-grained reactivity   | 👀      | ❓     | Skip diffing for fine-grain updates                                  |
+Dioxus is unique in the Rust ecosystem in that it supports:
 
-- ✅ = implemented and working
-- 🛠 = actively being worked on
-- 👀 = not yet implemented or being worked on
-- ❓ = not sure if will or can implement
+- Components with props that borrow from their parent
+- Server-side-rendering with client-side hydration
+- Support for desktop applications
 
+For more information on what features are currently available and the roadmap for the future, be sure to check out [the guide](https://dioxuslabs.com/guide/).
+
+## Projects in the ecosystem
+
+Want to jump in and help build the future of Rust frontend? There's plenty of places where your contributions can make a huge difference:
+
+- [TUI renderer](https://github.com/dioxusLabs/rink)
+- [CLI Tooling](https://github.com/dioxusLabs/cli)
+- [Documentation and Example Projects](https://github.com/dioxusLabs/docsite)
+- LiveView and Web Server
+- Asset System
 
 ## License
 
