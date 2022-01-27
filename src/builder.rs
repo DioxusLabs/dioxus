@@ -141,6 +141,10 @@ pub fn build_desktop(config: &CrateConfig) -> Result<()> {
 
     let output = cmd.output()?;
 
+    if !output.status.success() {
+        return Err(Error::BuildFailed("Program build failed.".into()));
+    }
+
     if output.status.success() {
         if config.out_dir.is_dir() {
             remove_dir_all(&config.out_dir)?;
