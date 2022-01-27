@@ -32,7 +32,7 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
 
     // file watcher: check file change
     let watcher_conf = config.clone();
-    let mut watcher = RecommendedWatcher::new(move | _ : notify::Result<notify::Event>| {
+    let mut watcher = RecommendedWatcher::new(move |_: notify::Result<notify::Event>| {
         if chrono::Local::now().timestamp() > last_update_time
             && builder::build(&watcher_conf).is_ok()
         {
@@ -69,33 +69,6 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
             )
             .unwrap();
     }
-
-    // tokio::spawn(async move {
-    // while let Ok(v) = watcher_rx.recv() {
-    //     match v {
-    //         DebouncedEvent::Create(_)
-    //         | DebouncedEvent::Write(_)
-    //         | DebouncedEvent::Remove(_)
-    //         | DebouncedEvent::Rename(_, _) => {
-    //             if builder::build(&watcher_conf).is_ok() {
-    //                 // change the websocket reload state to true;
-    //                 // the page will auto-reload.
-    //                 if watcher_conf
-    //                     .dioxus_config
-    //                     .web
-    //                     .watcher
-    //                     .reload_html
-    //                     .unwrap_or(false)
-    //                 {
-    //                     let _ = Serve::regen_dev_page(&watcher_conf);
-    //                 }
-    //                 reload_tx.send("reload".into()).unwrap();
-    //             }
-    //         }
-    //         _ => {}
-    //     }
-    // }
-    // });
 
     // start serve dev-server at 0.0.0.0:8080
     let port = "8080";
