@@ -1,57 +1,32 @@
-'use strict';
-
 import * as vscode from 'vscode';
 import { spawn } from "child_process";
 
 export function activate(context: vscode.ExtensionContext) {
-	const htmlToPureRsx = vscode.commands.registerCommand('extension.htmlToRsx', function () {
-		// Get the active text editor
-		const editor = vscode.window.activeTextEditor;
-
-		if (editor) {
-			const document = editor.document;
-			const selection = editor.selection;
-			const word = document.getText(selection);
-
-			const child_proc = spawn("dioxus", ["translate", "--source", word]);
-
-			let result = '';
-			child_proc.stdout?.on('data', data => result += data);
-
-			child_proc.on('close', () => {
-				editor.edit(editBuilder => {
-					if (result != '') {
-						editBuilder.replace(selection, result)
-					}
-				})
-			});
+	function registerCommand(cmd: string) {
+		function convert(cmd: string) {
+			const editor = vscode.window.activeTextEditor;// Get the active text editor
+			if (editor) {
+				const html = editor.document.getText(editor.selection);
+				if (html.length > 0) {
+					let params = ["translate"];
+					if (cmd.includes("Component")) params.push("--component");
+					params.push("--source");
+					params.push(html);
+					const child_proc = spawn("dioxus", params);
+					let result = '';
+					child_proc.stdout?.on('data', data => result += data);
+					child_proc.on('close', () => {
+						if (result.length > 0) editor.edit(editBuilder => editBuilder.replace(editor.selection, result));
+					});
+				} else {
+					vscode.window.showWarningMessage("Please select HTML fragment before invoking this command!");
+				}
+			}
 		}
-	});
+		const handle = vscode.commands.registerCommand(cmd, () => convert(cmd));
+		context.subscriptions.push(handle);
+	}
 
-	const htmlToComponent = vscode.commands.registerCommand('extension.htmlToComponent', function () {
-		// Get the active text editor
-		const editor = vscode.window.activeTextEditor;
-
-		if (editor) {
-			const document = editor.document;
-			const selection = editor.selection;
-			const word = document.getText(selection);
-
-			const child_proc = spawn("dioxus", ["translate", "--component", "--source", word]);
-
-			let result = '';
-			child_proc.stdout?.on('data', data => result += data);
-
-			child_proc.on('close', () => {
-				editor.edit(editBuilder => {
-					if (result != '') {
-						editBuilder.replace(selection, result)
-					}
-				})
-			});
-		}
-	});
-
-	context.subscriptions.push(htmlToPureRsx);
-	context.subscriptions.push(htmlToComponent);
+	registerCommand('extension.htmlToDioxusRsx');
+	registerCommand('extension.htmlToDioxusComponent');
 }
