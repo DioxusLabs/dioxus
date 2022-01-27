@@ -12,7 +12,7 @@ fn main() {
 }
 
 fn example(cx: Scope) -> Element {
-    let items = use_state(&cx, || {
+    let (items, _set_items) = use_state(&cx, || {
         vec![Thing {
             a: "asd".to_string(),
             b: 10,
