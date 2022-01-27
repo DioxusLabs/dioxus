@@ -28,10 +28,14 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
         update: reload_tx.clone(),
     });
 
+    let mut last_update_time = chrono::Local::now().timestamp();
+
     // file watcher: check file change
     let watcher_conf = config.clone();
-    let mut watcher = RecommendedWatcher::new(move |_| {
-        if builder::build(&watcher_conf).is_ok() {
+    let mut watcher = RecommendedWatcher::new(move | _ : notify::Result<notify::Event>| {
+        if chrono::Local::now().timestamp() > last_update_time
+            && builder::build(&watcher_conf).is_ok()
+        {
             // change the websocket reload state to true;
             // the page will auto-reload.
             if watcher_conf
@@ -43,7 +47,9 @@ pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
             {
                 let _ = Serve::regen_dev_page(&watcher_conf);
             }
+            println!("watcher send reload");
             reload_tx.send("reload".into()).unwrap();
+            last_update_time = chrono::Local::now().timestamp();
         }
     })
     .unwrap();
@@ -127,7 +133,6 @@ async fn ws_handler(
         let reload_watcher = tokio::spawn(async move {
             loop {
                 let v = rx.recv().await.unwrap();
-                println!("trigger recv: {}", v);
                 if v == "reload" {
                     // ignore the error
                     if socket
