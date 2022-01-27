@@ -15,6 +15,7 @@
   var ws = new WebSocket(url);
   ws.onmessage = (ev) => {
       if (ev.data == "reload") {
+        //   alert("reload!!!");
           window.location.reload();
       }
   };
