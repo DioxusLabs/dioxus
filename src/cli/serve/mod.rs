@@ -1,5 +1,5 @@
 use crate::{cfg::ConfigOptsServe, gen_page, server, CrateConfig};
-use std::{io::Write, path::PathBuf, process::Command};
+use std::{io::Write, path::PathBuf, process::{Command, Stdio}};
 use structopt::StructOpt;
 
 /// Run the WASM project on dev-server
@@ -44,6 +44,7 @@ impl Serve {
                                 .unwrap()
                                 .to_string(),
                         )
+                        .stdout(Stdio::inherit())
                         .output()?;
                     }
                 }
