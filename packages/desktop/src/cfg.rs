@@ -71,7 +71,7 @@ impl DesktopConfig {
         self
     }
 
-    pub fn with_custom_protocol<F>(mut self, name: String, handler: F) -> Self
+    pub fn with_custom_protocol<F>(&mut self, name: String, handler: F) -> &mut Self
     where
         F: Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static,
     {
