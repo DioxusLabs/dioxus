@@ -1,10 +1,11 @@
 use dioxus_core::{ScopeState, TaskId};
 use std::{cell::Cell, future::Future, rc::Rc};
 
-pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static>(
-    cx: &'a ScopeState,
-    new_fut: impl FnOnce() -> F,
-) -> &'a UseFuture<T> {
+pub fn use_future<F, T>(cx: &ScopeState, new_fut: impl FnOnce() -> F) -> &UseFuture<T>
+where
+    T: 'static,
+    F: Future<Output = T> + 'static,
+{
     let state = cx.use_hook(move |_| {
         //
         UseFuture {
