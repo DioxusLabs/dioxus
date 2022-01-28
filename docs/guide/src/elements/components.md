@@ -3,8 +3,8 @@
 In the previous chapter, we learned about Elements and how they can be composed to create a basic User Interface. In this chapter, we'll learn how to group Elements together to form Components.
 
 In this chapter, we'll learn:
-- What makes a Component 
-- How to model a component and its properties in Dioxus 
+- What makes a Component
+- How to model a component and its properties in Dioxus
 - How to "think declaratively"
 
 ## What is a component?
@@ -39,7 +39,7 @@ struct PostData {
 }
 ```
 
-If we look at the layout of the component, we notice quite a few buttons and functionality:
+If we look at the layout of the component, we notice quite a few buttons and pieces of functionality:
 
 - Upvote/Downvote
 - View comments
@@ -51,9 +51,9 @@ If we look at the layout of the component, we notice quite a few buttons and fun
 - Crosspost
 - Filter by site
 - View article
-- Visit user 
+- Visit user
 
-If we included all this functionality in one `rsx!` call, it would be huge! Instead, let's break the post down into some core pieces:
+If we included all this functionality in one `rsx!` call it would be huge! Instead, let's break the post down into some core pieces:
 
 ![Post as Component](../images/reddit_post_components.png)
 
@@ -112,7 +112,7 @@ Let's take a look at the `VoteButton` component. For now, we won't include any i
 
 Most of your Components will look exactly like this: a Props struct and a render function. Every component must take a `Scope` generic over some `Props` and return an `Element`.
 
-As covered before, we'll build our User Interface with the `rsx!` macro and HTML tags. However, with components, we must actually "render" our HTML markup. Calling `cx.render` converts our "lazy" `rsx!` structure into an `Element`. 
+As covered before, we'll build our User Interface with the `rsx!` macro and HTML tags. However, with components, we must actually "render" our HTML markup. Calling `cx.render` converts our "lazy" `rsx!` structure into an `Element`.
 
 ```rust
 #[derive(PartialEq, Props)]
@@ -133,9 +133,9 @@ fn VoteButton(cx: Scope<VoteButtonProps>) -> Element {
 
 ## Borrowing
 
-You can avoid clones using borrowed component syntax. For example, let's say we passed the `TitleCard` title as an `&str` instead of `String`. In JavaScript, the string would be copied by reference - none of the contents would be copied, but rather the reference to the string's contents are copied. In Rust, this would be similar to calling `clone` on `Rc<str>`.
+You can avoid clones by using borrowed component syntax. For example, let's say we passed the `TitleCard` title as an `&str` instead of `String`. In JavaScript, the string would be copied by reference - none of the contents would be copied, but rather the reference to the string's contents are copied. In Rust, this would be similar to calling `clone` on `Rc<str>`.
 
-Because we're working in Rust, we can choose to either use `Rc<str>`, clone `Title` on every re-render of `Post`, or simply borrow it. In most cases, you'll just want to let `Title` be cloned. 
+Because we're working in Rust, we can choose to either use `Rc<str>`, clone `Title` on every re-render of `Post`, or simply borrow it. In most cases, you'll just want to let `Title` be cloned.
 
 To enable borrowed values for your component, we need to add a lifetime to let the Rust compiler know that the output `Element` borrows from the component's props.
 
@@ -149,18 +149,54 @@ fn TitleCard<'a>(cx: Scope<'a, TitleCardProps<'a>>) -> Element {
     cx.render(rsx!{
         h1 { "{cx.props.title}" }
     })
-}   
+}
 ```
 
 For users of React: Dioxus knows *not* to memoize components that borrow property fields. By default, every component in Dioxus is memoized. This can be disabled by the presence of a non-`'static` borrow.
 
 This means that during the render process, a newer version of `TitleCardProps` will never be compared with a previous version, saving some clock cycles.
 
+## The inline_props macro
+
+Yes - *another* macro! However, this one is entirely optional.
+
+For internal components, we provide the `inline_props` macro, which will let you embed your `Props` definition right into the function arguments of your component.
+
+Our title card above would be transformed from:
+
+```rust
+#[derive(Props, PartialEq)]
+struct TitleCardProps {
+    title: String,
+}
+
+fn TitleCard(cx: Scope<TitleCardProps>) -> Element {
+    cx.render(rsx!{
+        h1 { "{cx.props.title}" }
+    })
+}
+```
+
+to:
+
+```rust
+#[inline_props]
+fn TitleCard(cx: Scope, title: String) -> Element {
+    cx.render(rsx!{
+        h1 { "{title}" }
+    })
+}
+```
+
+Again, this macro is optional and should not be used by library authors since you have less fine-grained control over documentation and optionality.
+
+However, it's great for quickly throwing together an app without dealing with *any* extra boilerplate.
+
 ## The `Scope` object
 
-Though very similar to React, Dioxus is different in a few ways. Most notably, React components will not have a `Scope` parameter in the component declaration. 
+Though very similar to React, Dioxus is different in a few ways. Most notably, React components will not have a `Scope` parameter in the component declaration.
 
-Have you ever wondered how the `useState()` call works in React without a `this` object to actually store the state? 
+Have you ever wondered how the `useState()` call works in React without a `this` object to actually store the state?
 
 React uses global variables to store this information. Global mutable variables must be carefully managed and are broadly discouraged in Rust programs.
 

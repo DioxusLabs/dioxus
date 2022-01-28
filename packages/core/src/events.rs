@@ -18,7 +18,7 @@ impl BubbleState {
     }
 }
 
-/// User Events are events that are shuttled from the renderer into the VirtualDom trhough the scheduler channel.
+/// User Events are events that are shuttled from the renderer into the VirtualDom through the scheduler channel.
 ///
 /// These events will be passed to the appropriate Element given by `mounted_dom_id` and then bubbled up through the tree
 /// where each listener is checked and fired if the event name matches.

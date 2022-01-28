@@ -116,7 +116,7 @@ pub fn launch(root: Component) {
 /// ```
 pub fn launch_cfg(
     root: Component,
-    config_builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
+    config_builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
     launch_with_props(root, (), config_builder)
 }
@@ -147,9 +147,9 @@ pub fn launch_cfg(
 pub fn launch_with_props<P: 'static + Send>(
     root: Component<P>,
     props: P,
-    builder: impl for<'a, 'b> FnOnce(&'b mut DesktopConfig<'a>) -> &'b mut DesktopConfig<'a>,
+    builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
-    let mut cfg = DesktopConfig::new();
+    let mut cfg = DesktopConfig::default();
     builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
@@ -170,9 +170,11 @@ pub fn launch_with_props<P: 'static + Send>(
                 let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
 
                 let proxy = proxy.clone();
-                let webview = WebViewBuilder::new(window)
+                let file_handler = cfg.file_drop_handler.take();
+
+                let mut webview = WebViewBuilder::new(window)
                     .unwrap()
-                    .with_url("wry://index.html/")
+                    .with_url("dioxus://index.html/")
                     .unwrap()
                     .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
                         match req.method.as_str() {
@@ -185,30 +187,80 @@ pub fn launch_with_props<P: 'static + Send>(
                                 is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let _ = proxy.send_event(UserWindowEvent::Update);
                             }
+                            "browser_open" => {
+                                let data = req.params.unwrap();
+                                log::trace!("Open browser: {:?}", data);
+                                if let Some(arr) = data.as_array() {
+                                    if let Some(temp) = arr[0].as_object() {
+                                        if temp.contains_key("href") {
+                                            let url = temp.get("href").unwrap().as_str().unwrap();
+                                            if let Err(e) = webbrowser::open(url) {
+                                                log::error!("Open Browser error: {:?}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                         None
                     })
-                    .with_custom_protocol("wry".into(), move |request| {
-                        // Any content that that uses the `wry://` scheme will be shuttled through this handler as a "special case"
+                    .with_custom_protocol(String::from("dioxus"), move |request| {
+                        // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
                         // For now, we only serve two pieces of content which get included as bytes into the final binary.
-                        let path = request.uri().replace("wry://", "");
-                        let (data, meta) = match path.as_str() {
-                            "index.html" | "index.html/" | "/index.html" => {
-                                (include_bytes!("./index.html").to_vec(), "text/html")
-                            }
-                            "index.html/index.js" => {
-                                (include_bytes!("./index.js").to_vec(), "text/javascript")
-                            }
-                            _ => (include_bytes!("./index.html").to_vec(), "text/html"),
-                        };
+                        let path = request.uri().replace("dioxus://", "");
 
-                        wry::http::ResponseBuilder::new().mimetype(meta).body(data)
+                        // all assets shouldbe called from index.html
+                        let trimmed = path.trim_start_matches("index.html/");
+
+                        if trimmed.is_empty() {
+                            wry::http::ResponseBuilder::new()
+                                .mimetype("text/html")
+                                .body(include_bytes!("./index.html").to_vec())
+                        } else if trimmed == "index.js" {
+                            wry::http::ResponseBuilder::new()
+                                .mimetype("text/javascript")
+                                .body(include_bytes!("../../jsinterpreter/interpreter.js").to_vec())
+                        } else {
+                            // Read the file content from file path
+                            use std::fs::read;
+
+                            let path_buf = std::path::Path::new(trimmed).canonicalize()?;
+                            let cur_path = std::path::Path::new(".").canonicalize()?;
+
+                            if !path_buf.starts_with(cur_path) {
+                                return wry::http::ResponseBuilder::new()
+                                    .status(wry::http::status::StatusCode::FORBIDDEN)
+                                    .body(String::from("Forbidden").into_bytes());
+                            }
+
+                            if !path_buf.exists() {
+                                return wry::http::ResponseBuilder::new()
+                                    .status(wry::http::status::StatusCode::NOT_FOUND)
+                                    .body(String::from("Not Found").into_bytes());
+                            }
+
+                            let mime = mime_guess::from_path(&path_buf).first_or_octet_stream();
+
+                            // do not let path searching to go two layers beyond the caller level
+                            let data = read(path_buf)?;
+                            let meta = format!("{mime}");
+
+                            wry::http::ResponseBuilder::new().mimetype(&meta).body(data)
+                        }
                     })
-                    .build()
-                    .unwrap();
+                    .with_file_drop_handler(move |window, evet| {
+                        file_handler
+                            .as_ref()
+                            .map(|handler| handler(window, evet))
+                            .unwrap_or_default()
+                    });
 
-                desktop.webviews.insert(window_id, webview);
+                for (name, handler) in cfg.protocos.drain(..) {
+                    webview = webview.with_custom_protocol(name, handler)
+                }
+
+                desktop.webviews.insert(window_id, webview.build().unwrap());
             }
 
             Event::WindowEvent {

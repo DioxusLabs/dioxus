@@ -33,9 +33,9 @@ async fetch_name() -> String {
 
 This component will only schedule its render once the fetch is complete. However, we _don't_ recommend using async/await directly in your components.
 
-Async is a notoriously challenging yet rewarding tool for efficient tools. If not careful, locking and unlocking shared aspects of the component's context can lead to data races and panics. If a shared resource is locked while the component is awaiting, then other components can be locked or panic when trying to access the same resource. These rules are especially important when references to shared global state are accessed using the context object's lifetime. If mutable references to data captured immutably by the context are taken, then the component will panic, and cause confusion.
+Async is a notoriously challenging yet rewarding tool for efficient tools. If not careful, locking and unlocking shared aspects of the component's context can lead to data races and panics. If a shared resource is locked while the component is awaiting, then other components can be locked or panic when trying to access the same resource. These rules are especially important when references to shared global state are accessed using the context object's lifetime. If mutable references to data captured immutably by the context are taken, then the component will panic, causing confusion.
 
-Instead, we suggest using hooks and future combinators that can safely utilize the safe guards of the component's Context when interacting with async tasks.
+Instead, we suggest using hooks and future combinators that can safely utilize the safeguards of the component's Context when interacting with async tasks.
 
 As part of our Dioxus hooks crate, we provide a data loader hook which pauses a component until its async dependencies are ready. This caches requests, reruns the fetch if dependencies have changed, and provides the option to render something else while the component is loading.
 

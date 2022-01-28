@@ -70,7 +70,7 @@ impl ScopeArena {
     }
 
     /// Safety:
-    /// - Obtaining a mutable refernece to any Scope is unsafe
+    /// - Obtaining a mutable reference to any Scope is unsafe
     /// - Scopes use interior mutability when sharing data into components
     pub(crate) fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
         unsafe { self.scopes.borrow().get(&id).map(|f| &**f) }
@@ -101,7 +101,7 @@ impl ScopeArena {
         let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
 
         /*
-        This scopearena aggressively reuse old scopes when possible.
+        This scopearena aggressively reuses old scopes when possible.
         We try to minimize the new allocations for props/arenas.
 
         However, this will probably lead to some sort of fragmentation.
@@ -198,12 +198,9 @@ impl ScopeArena {
             // run the hooks (which hold an &mut Reference)
             // recursively call ensure_drop_safety on all children
             items.borrowed_props.drain(..).for_each(|comp| {
-                let scope_id = comp
-                    .scope
-                    .get()
-                    .expect("VComponents should be associated with a valid Scope");
-
-                self.ensure_drop_safety(scope_id);
+                if let Some(scope_id) = comp.scope.get() {
+                    self.ensure_drop_safety(scope_id);
+                }
 
                 drop(comp.props.take());
             });
@@ -670,6 +667,60 @@ impl ScopeState {
         value
     }
 
+    /// Provide a context for the root component from anywhere in your app.
+    ///
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// struct SharedState(&'static str);
+    ///
+    /// static App: Component = |cx| {
+    ///     cx.use_hook(|_| cx.provide_root_context(SharedState("world")));
+    ///     rsx!(cx, Child {})
+    /// }
+    ///
+    /// static Child: Component = |cx| {
+    ///     let state = cx.consume_state::<SharedState>();
+    ///     rsx!(cx, div { "hello {state.0}" })
+    /// }
+    /// ```
+    pub fn provide_root_context<T: 'static>(&self, value: T) -> Rc<T> {
+        let value = Rc::new(value);
+
+        // if we *are* the root component, then we can just provide the context directly
+        if self.scope_id() == ScopeId(0) {
+            self.shared_contexts
+                .borrow_mut()
+                .insert(TypeId::of::<T>(), value.clone())
+                .map(|f| f.downcast::<T>().ok())
+                .flatten();
+            return value;
+        }
+
+        let mut search_parent = self.parent_scope;
+
+        while let Some(parent) = search_parent.take() {
+            let parent = unsafe { &*parent };
+
+            if parent.scope_id() == ScopeId(0) {
+                let exists = parent
+                    .shared_contexts
+                    .borrow_mut()
+                    .insert(TypeId::of::<T>(), value.clone());
+
+                if exists.is_some() {
+                    log::warn!("Context already provided to parent scope - replacing it");
+                }
+                return value;
+            }
+
+            search_parent = parent.parent_scope;
+        }
+
+        unreachable!("all apps have a root scope")
+    }
+
     /// Try to retrieve a SharedState with type T from the any parent Scope.
     pub fn consume_context<T: 'static>(&self) -> Option<Rc<T>> {
         if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
@@ -698,6 +749,11 @@ impl ScopeState {
             .unwrap();
 
         self.tasks.push_fut(fut)
+    }
+
+    /// Spawns the future but does not return the TaskId
+    pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) {
+        self.push_future(fut);
     }
 
     // todo: attach some state to the future to know if we should poll it
@@ -745,6 +801,7 @@ impl ScopeState {
     ///     use_hook(|| Rc::new(RefCell::new(initial_value())))
     /// }
     /// ```
+    #[allow(clippy::mut_from_ref)]
     pub fn use_hook<'src, State: 'static>(
         &'src self,
         initializer: impl FnOnce(usize) -> State,
@@ -839,13 +896,15 @@ impl ScopeState {
         self.frames[0].reset();
         self.frames[1].reset();
 
-        // Finally, free up the hook values
-        self.hook_arena.reset();
+        // Free up the hook values
         self.hook_vals.get_mut().drain(..).for_each(|state| {
             let as_mut = unsafe { &mut *state };
             let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
             drop(boxed);
         });
+
+        // Finally, clear the hook arena
+        self.hook_arena.reset();
     }
 }
 

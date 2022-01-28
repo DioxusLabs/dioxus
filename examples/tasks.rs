@@ -10,16 +10,15 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
+    let (count, set_count) = use_state(&cx, || 0);
 
     use_future(&cx, move || {
-        let count = UseState::for_async(&count);
-        // for_async![count];
+        let set_count = set_count.to_owned();
         async move {
-            // loop {
-            //     tokio::time::sleep(Duration::from_millis(1000)).await;
-            //     count += 1;
-            // }
+            loop {
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+                set_count.modify(|f| f + 1);
+            }
         }
     });
 
@@ -27,7 +26,7 @@ fn app(cx: Scope) -> Element {
         div {
             h1 { "Current count: {count}" }
             button {
-                onclick: move |_| count.set(0),
+                onclick: move |_| set_count(0),
                 "Reset the count"
             }
         }

@@ -12,7 +12,11 @@
     <div id="main">
     </div>
 </body>
-<script type="text/javascript" src="index.js">
+
+<script>
+    import("./index.js").then(function (module) {
+        module.main();
+    });
 </script>
 
 </html>

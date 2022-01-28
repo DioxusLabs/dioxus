@@ -81,7 +81,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 ///                 // Using an "ID" associated with your data is a good idea.
 ///                 data.into_iter().map(|(k, v)| rsx!(li { key: "{k}" "{v}" }))
 ///             }}
-///            
+///
 ///             // Matching
 ///             {match true {
 ///                 true => rsx!(h1 {"Top text"}),
@@ -229,18 +229,18 @@ pub fn routable_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
 /// #[inline_props]
 /// fn app(cx: Scope, bob: String) -> Element {
 ///     cx.render(rsx!("hello, {bob}"))
-/// }  
+/// }
 ///
 /// // is equivalent to
 ///
 /// #[derive(PartialEq, Props)]
 /// struct AppProps {
 ///     bob: String,
-/// }  
+/// }
 ///
 /// fn app(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!("hello, {bob}"))
-/// }  
+/// }
 /// ```
 #[proc_macro_attribute]
 pub fn inline_props(_args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {

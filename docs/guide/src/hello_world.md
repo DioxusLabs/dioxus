@@ -1,6 +1,6 @@
 # "Hello, World" desktop app
 
-Let's put together a simple "hello world" desktop application to get acquainted with Dioxus. 
+Let's put together a simple "hello world" desktop application to get acquainted with Dioxus.
 
 In this chapter, we'll cover:
 
@@ -31,7 +31,7 @@ $ tree
 
 We are greeted with a pre-initialized git repository, our code folder (`src`) and our project file (`Cargo.toml`).
 
-Our `src` folder holds our code. Our `main.rs` file holds our `fn main` which will be executed when our app is ran.
+Our `src` folder holds our code. Our `main.rs` file holds our `fn main` which will be executed when our app is run.
 
 ```shell
 $ more src/main.rs
@@ -128,13 +128,13 @@ Finally, our app. Every component in Dioxus is a function that takes in `Context
 fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         div { "Hello, world!" }
-    })    
+    })
 }
 ```
 
 ### What is this `Scope` object?
 
-Coming from React, the `Scope` object might be confusing. In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering. 
+Coming from React, the `Scope` object might be confusing. In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering.
 
 In Dioxus, you are given an explicit `Scope` object to control how the component renders and stores data. The `Scope` object provides a handful of useful APIs for features like suspense, rendering, and more.
 

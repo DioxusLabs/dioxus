@@ -1,6 +1,6 @@
 # Overview
 
-In this chapter, we're going to get "set up" with a small desktop application.
+In this chapter, we're going to get set up with a small desktop application.
 
 We'll learn about:
 - Installing the Rust programming language
@@ -15,16 +15,15 @@ For platform-specific guides, check out the [Platform Specific Guides](../platfo
 Dioxus requires a few main things to get up and running:
 
 - The [Rust compiler](https://www.rust-lang.org) and associated build tooling
-
 - An editor of your choice, ideally configured with the [Rust-Analyzer LSP plugin](https://rust-analyzer.github.io)
 
 Dioxus integrates very well with the Rust-Analyzer IDE plugin which will provide appropriate syntax highlighting, code navigation, folding, and more.
 
 ## Installing Rust
 
-Head over to [https://rust-lang.org](http://rust-lang.org) and install the Rust compiler. 
+Head over to [https://rust-lang.org](http://rust-lang.org) and install the Rust compiler.
 
-Once installed, make sure to  install wasm32-unknown-unknown as a target if you're planning on deploying your app to the web.
+Once installed, make sure to install wasm32-unknown-unknown as a target if you're planning on deploying your app to the web.
 
 ```
 rustup target add wasm32-unknown-unknown
@@ -32,7 +31,7 @@ rustup target add wasm32-unknown-unknown
 
 ## Platform-Specific Dependencies
 
-If you are running a modern, mainstream operating system, you should need no additional setup to build WebView-based Desktop apps. However, if you are running an older version of Windows or a flavor of linux with no default web rendering engine, you might need to install some additional dependencies.
+If you are running a modern, mainstream operating system, you should need no additional setup to build WebView-based Desktop apps. However, if you are running an older version of Windows or a flavor of Linux with no default web rendering engine, you might need to install some additional dependencies.
 
 
 ### Windows
@@ -64,13 +63,13 @@ Currently - everything for macOS is built right in! However, you might run into 
 
 ## Dioxus-CLI for dev server, bundling, etc.
 
-We also recommend installing the Dioxus CLI. The Dioxus CLI automates building and packaging for various targets and integrates with simulators, development servers, and app deployment. To install the CLI, you'll need cargo (should be automatically installed with Rust):
+We also recommend installing the Dioxus CLI. The Dioxus CLI automates building and packaging for various targets and integrates with simulators, development servers, and app deployment. To install the CLI, you'll need cargo (which should be automatically installed with Rust):
 
 ```
 $ cargo install dioxus-cli
 ```
 
-You can update the dioxus-cli at any time with:
+You can update dioxus-cli at any time with:
 
 ```
 $ cargo install --force dioxus-cli

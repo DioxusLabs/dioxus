@@ -1,6 +1,6 @@
 # Signals: Skipping the Diff
 
-In most cases, the traditional VirtualDOM diffing pattern is plenty fast. Dioxus will compare trees of VNodes, find the differences, and then update the Renderer's DOM with the updates. However, this can generate a lot of overhead for certain types of components. In apps where reducing visual latency is a top priority, you can opt into the `Signals` api to entirely disable diffing of hot-path components. Dioxus will then automatically construct a state machine for your component, making updates nearly instant.
+In most cases, the traditional VirtualDOM diffing pattern is plenty fast. Dioxus will compare trees of VNodes, find the differences, and then update the Renderer's DOM with the diffs. However, this can generate a lot of overhead for certain types of components. In apps where reducing visual latency is a top priority, you can opt into the `Signals` api to entirely disable diffing of hot-path components. Dioxus will then automatically construct a state machine for your component, making updates nearly instant.
 
 Signals build on the same infrastructure that powers asynchronous rendering where in-tree values can be updated outside of the render phase. In async rendering, a future is used as the signal source. With the raw signal API, any value can be used as a signal source.
 
@@ -69,7 +69,7 @@ fn Calculator(cx: Scope) -> DomTree {
 }
 ```
 
-Do you notice how we can use built-in operations on signals? Under the hood, we actually create a new derived signal that depends on `a` and `b`. Whenever `a` or `b` update, then `c` will update. If we need to create a new derived signal that's more complex that a basic operation (`std::ops`) we can either chain signals together or combine them:
+Do you notice how we can use built-in operations on signals? Under the hood, we actually create a new derived signal that depends on `a` and `b`. Whenever `a` or `b` update, then `c` will update. If we need to create a new derived signal that's more complex than a basic operation (`std::ops`) we can either chain signals together or combine them:
 
 ```rust
 let mut a = use_signal(&cx, || 0);
@@ -88,7 +88,7 @@ let mut a = use_signal(&cx, || 0);
 let c = *a + *b;
 ```
 
-Calling `deref` or `derefmut` is actually more complex than it seems. When a value is derefed, you're essentially telling Dioxus that _this_ element _needs_ to be subscribed to the signal. If a signal is derefed outside of an element, the entire component will be subscribed and the advantage of skipping diffing will be lost. Dioxus will throw an error in the console when this happens to tell you that you're using signals wrong, but your component will continue to work.
+Calling `deref` or `deref_mut` is actually more complex than it seems. When a value is derefed, you're essentially telling Dioxus that _this_ element _needs_ to be subscribed to the signal. If a signal is derefed outside of an element, the entire component will be subscribed and the advantage of skipping diffing will be lost. Dioxus will throw an error in the console when this happens to tell you that you're using signals wrong, but your component will continue to work.
 
 ## Global Signals
 
@@ -128,7 +128,7 @@ Sometimes you want to use a collection of items. With Signals, you can bypass di
 
 By default, Dioxus is limited when you use iter/map. With the `For` component, you can provide an iterator and a function for the iterator to map to.
 
-Dioxus automatically understands how to use your signals when mixed with iterators through Deref/DerefMut. This lets you efficiently map collections while avoiding the re-rendering of lists. In essence, signals act as a hint to Dioxus on how to avoid un-necessary checks and renders, making your app faster.
+Dioxus automatically understands how to use your signals when mixed with iterators through `Deref`/`DerefMut`. This lets you efficiently map collections while avoiding the re-rendering of lists. In essence, signals act as a hint to Dioxus on how to avoid un-necessary checks and renders, making your app faster.
 
 ```rust
 const DICT: AtomFamily<String, String> = |_| {};

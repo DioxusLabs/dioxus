@@ -1,5 +1,6 @@
+#![allow(non_snake_case)]
+
 //! Render a bunch of doggos!
-//!
 
 use std::collections::HashMap;
 
@@ -23,7 +24,7 @@ fn app(cx: Scope) -> Element {
             .await
     });
 
-    let selected_breed = use_state(&cx, || None);
+    let (breed, set_breed) = use_state(&cx, || None);
 
     match fut.value() {
         Some(Ok(breeds)) => cx.render(rsx! {
@@ -35,14 +36,14 @@ fn app(cx: Scope) -> Element {
                         breeds.message.keys().map(|breed| rsx!(
                             li {
                                 button {
-                                    onclick: move |_| selected_breed.set(Some(breed.clone())),
+                                    onclick: move |_| set_breed(Some(breed.clone())),
                                     "{breed}"
                                 }
                             }
                         ))
                     }
                     div { flex: "50%",
-                        match &*selected_breed {
+                        match breed {
                             Some(breed) => rsx!( Breed { breed: breed.clone() } ),
                             None => rsx!("No Breed selected"),
                         }
@@ -50,7 +51,7 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }),
-        Some(Err(e)) => cx.render(rsx! {
+        Some(Err(_e)) => cx.render(rsx! {
             div { "Error fetching breeds" }
         }),
         None => cx.render(rsx! {
@@ -61,7 +62,7 @@ fn app(cx: Scope) -> Element {
 
 #[inline_props]
 fn Breed(cx: Scope, breed: String) -> Element {
-    #[derive(serde::Deserialize)]
+    #[derive(serde::Deserialize, Debug)]
     struct DogApi {
         message: String,
     }
@@ -71,6 +72,12 @@ fn Breed(cx: Scope, breed: String) -> Element {
     let fut = use_future(&cx, || async move {
         reqwest::get(endpoint).await.unwrap().json::<DogApi>().await
     });
+
+    let (name, set_name) = use_state(&cx, || breed.clone());
+    if name != breed {
+        set_name(breed.clone());
+        fut.restart();
+    }
 
     cx.render(match fut.value() {
         Some(Ok(resp)) => rsx! {
