@@ -1,4 +1,4 @@
-use dioxus_core::ScopeState;
+use dioxus_core::{ScopeId, ScopeState};
 use gloo::history::{HistoryResult, Location};
 use serde::de::DeserializeOwned;
 use std::{rc::Rc, str::FromStr};
@@ -74,10 +74,28 @@ impl UseRoute {
 /// This hook provides access to information about the current location in the
 /// context of a [`Router`]. If this function is called outside of a `Router`
 /// component it will panic.
-pub fn use_route(cx: &ScopeState) -> UseRoute {
-    let router = cx
-        .consume_context::<RouterService>()
-        .expect("Cannot call use_route outside the scope of a Router component")
-        .clone();
-    UseRoute { router }
+pub fn use_route(cx: &ScopeState) -> &UseRoute {
+    &cx.use_hook(|_| {
+        let router = cx
+            .consume_context::<RouterService>()
+            .expect("Cannot call use_route outside the scope of a Router component");
+
+        router.subscribe_onchange(cx.scope_id());
+
+        UseRouteInner {
+            router: UseRoute { router },
+            scope: cx.scope_id(),
+        }
+    })
+    .router
+}
+
+struct UseRouteInner {
+    router: UseRoute,
+    scope: ScopeId,
+}
+impl Drop for UseRouteInner {
+    fn drop(&mut self) {
+        self.router.router.unsubscribe_onchange(self.scope)
+    }
 }
