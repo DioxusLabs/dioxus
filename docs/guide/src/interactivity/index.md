@@ -112,11 +112,11 @@ For example, let's say we provide a button to generate a new post. Whenever the 
 
 ```rust
 fn App(cx: Scope)-> Element {
-    let post = use_state(&cx, || PostData::new());
+    let (post, set_post) = use_state(&cx, || PostData::new());
 
     cx.render(rsx!{
         button {
-            on_click: move |_| post.set(PostData::random())
+            on_click: move |_| set_post(PostData::random())
             "Generate a random post"
         }
         Post { props: &post }
@@ -131,7 +131,6 @@ We'll dive much deeper into event listeners later.
 We can also update our state outside of event listeners with `futures` and `coroutines`. 
 
 - `Futures` are Rust's version of promises that can execute asynchronous work by an efficient polling system. We can submit new futures to Dioxus either through `push_future` which returns a `TaskId` or with `spawn`.
-- 
 - `Coroutines` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component. 
 
 Since coroutines and Futures stick around between renders, the data in them must be valid for the `'static` lifetime. We must explicitly declare which values our task will rely on to avoid the `stale props` problem common in React.
@@ -142,14 +141,14 @@ We can use tasks in our components to build a tiny stopwatch that ticks every se
 
 ```rust
 fn App(cx: Scope)-> Element {
-    let mut sec_elapsed = use_state(&cx, || 0);
+    let (elapsed, set_elapsed) = use_state(&cx, || 0);
 
     use_future(&cx, || {
-        to_owned![sec_elapsed]; // explicitly capture this hook for use in async
+        to_owned![set_elapsed]; // explicitly capture this hook for use in async
         async move {
             loop {
                 TimeoutFuture::from_ms(1000).await;
-                sec_elapsed += 1;
+                set_elapsed.modify(|i| i + 1)
             }
         }
     });
@@ -161,8 +160,6 @@ fn App(cx: Scope)-> Element {
 Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps. We have an entire section dedicated to using `async` properly later in this book.
 
 ### How do I tell Dioxus that my state changed?
-
-So far, we've only updated our state with `.set`. However, you might've noticed that we used `AddAssign` to increment the `sec_elapsed` value in our stopwatch example *without* calling set. This is because the `AddAssign` trait is implemented for `UseState<T>` (the wrapper around our value returned from `use_state`). Under the hood, whenever you try to mutate our value through `UseState`, you're actually calling `.set` which informs Dioxus that _this_ component needs to be updated on the screen.
 
 Whenever you inform Dioxus that the component needs to be updated, it will "render" your component again, storing the previous and current Elements in memory. Dioxus will automatically figure out the differences between the old and the new and generate a list of edits that the renderer needs to apply to change what's on the screen. This process is called "diffing":
 

@@ -2,7 +2,7 @@
 
 We've finally reached the point in our tutorial where we can talk about the "Theory of React." We've talked about defining a declarative view, but not about the aspects that make our code *reactive*.
 
-Understanding the theory of reactive program is essential to making sense of Dioxus and writing effective, performant UIs.
+Understanding the theory of reactive programming is essential to making sense of Dioxus and writing effective, performant UIs.
 
 In this section, we'll talk about:
 
@@ -17,15 +17,15 @@ This section is a bit long, but worth the read. We recommend coffee, tea, and/or
 
 Dioxus is one the very few Rust libraries that provide a "Reactive Programming Model". The term "Reactive programming" is a classification of programming paradigm - much like functional or imperative programming. This is a very important distinction since it affects how we *think* about our code.
 
-Reactive programming is programming model concerned with deriving computations from asynchronous data flow. Most reactive programs are comprised of a handful of datasources, intermediate computations, and a final result.
+Reactive programming is a programming model concerned with deriving computations from asynchronous data flow. Most reactive programs are comprised of datasources, intermediate computations, and a final result.
 
-We can consider the our rendered GUI to be the final result of reactive app and our datasources to include shared contexts and component properties. 
+We consider the rendered GUI to be the final result of our Dioxus apps. The datasources for our apps include local and global state.
 
 For example, the model presented in the figure below is comprised of two data sources: time and a constant. These values are passed through our computation graph to achieve a final result: `g`.
 
 ![Reactive Model](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Reactive_programming_glitches.svg/440px-Reactive_programming_glitches.svg.png)
 
-Whenever our `seconds` variable changes, then we will reevaluate the computation for `t`. Because `g` relies on `t`, then we will also reevaluate its computation too. Notice that we would've reevaluated the computation for `g` even if `t` didn't change because `seconds` is used to calculate `g`.
+Whenever our `seconds` variable changes, we will then reevaluate the computation for `t`. Because `g` relies on `t`, we will also reevaluate its computation too. Notice that we would've reevaluated the computation for `g` even if `t` didn't change because `seconds` is used to calculate `g`.
 
 However, if we somehow changed our constant from `1` to `2`, then we need to reevaluate `t`. If, for whatever reason, this change did not affect the result of `t`, then we wouldn't try to reevaluate `g`.
 
@@ -51,7 +51,7 @@ fn compute_graph(constant: i32, seconds: i32) -> bool {
 
 ## How is Dioxus Reactive?
 
-The Dioxus VirtualDom provides us a framework for reactive programming. When we build apps with dioxus, we need to feed it our own custom datasources. This can be either initial props or some values fetched from the network. We then pass this data through our app into components through properties. 
+The Dioxus VirtualDom provides us a framework for reactive programming. When we build apps with dioxus, we need to provide our own datasources. This can be either initial props or some values fetched from the network. We then pass this data through our app into components through properties. 
 
 If we represented the reactive graph presented above in Dioxus, it would look very similar:
 
@@ -85,7 +85,7 @@ With this app, we've defined three components. Our top-level component provides 
 
 Now, whenever the `constant` changes, our `RenderT` component will be re-rendered. However, if `seconds` doesn't change, then we don't need to re-render `RenderG` because the input is the same. If `seconds` *does* change, then both RenderG and RenderT will be reevaluated.
 
-Dioxus is "Reactive" because it provides this framework for us. All we need to do is write our own tiny units of computations and Dioxus figures out which components need to be reevaluated automatically.
+Dioxus is "Reactive" because it provides this framework for us. All we need to do is write our own tiny units of computation and Dioxus figures out which components need to be reevaluated automatically.
 
 These extra checks and algorithms add some overhead, which is why you see projects like [Sycamore](http://sycamore-rs.netlify.app) and [SolidJS](http://solidjs.com) eliminating them altogether. Dioxus is *really* fast, so we're willing to exchange the added overhead for improved developer experience.
 
@@ -142,11 +142,11 @@ A single component will be called multiple times, modifying its own internal sta
 
 With the `provide_context` and `consume_context` methods on `Scope`, we can share values to descendants without having to pass values through component props. This has the side-effect of making our datasources less obvious from a high-level perspective, but it makes our components more modular within the same codebase.
 
-To make app-global state easier to reason about, Dioxus makes all values provided through `provide_context` immutable. This means any library built on top of `provide_context` needs to use interior mutability to modify share global state.
+To make app-global state easier to reason about, Dioxus makes all values provided through `provide_context` immutable. This means any library built on top of `provide_context` needs to use interior mutability to modify shared global state.
 
 In these cases, App-Global state needs to manually track which components need to be re-generated. 
 
-To regenerate *any* component in your app, you can get a handle the Dioxus' internal scheduler through `schedule_update_any`:
+To regenerate *any* component in your app, you can get a handle to the Dioxus' internal scheduler through `schedule_update_any`:
 
 ```rust
 let force_render = cx.schedule_update_any();
@@ -155,7 +155,7 @@ let force_render = cx.schedule_update_any();
 force_render(ScopeId(0));
 ```
 
-## What does it mean for a component to "re-render"
+## What does it mean for a component to "re-render"?
 
 In our guides, we frequently use the phrase "re-render" to describe updates to our app. You'll often hear this paired with "preventing unnecessary re-renders." But what exactly does this mean?
 

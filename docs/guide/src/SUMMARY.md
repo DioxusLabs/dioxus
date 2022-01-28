@@ -13,11 +13,11 @@
   - [Properties](elements/propsmacro.md)
   - [Reusing, Importing, and Exporting](elements/exporting_components.md)
   - [Children and Attributes](elements/component_children.md)
-  - [Theory of Reactive Programming](elements/composing.md)
+  - [How Data Flows](elements/composing.md)
 - [Adding Interactivity](interactivity/index.md)
   - [Hooks and Internal State](interactivity/hooks.md)
+  - [UseState and UseRef](interactivity/importanthooks.md) 
   - [Event Listeners](interactivity/event_handlers.md)
-  - [UseState and UseRef](interactivity/importanthooks.md)
   - [User Input and Controlled Components](interactivity/user_input.md)
   - [Lifecycle, updates, and effects](interactivity/lifecycles.md)
 - [Managing State](state/index.md)
@@ -45,3 +45,4 @@
 
   <!-- - [Suspense](concepts/suspense.md) -->
   <!-- - [Async Callbacks](concepts/asynccallbacks.md) -->
+
