@@ -210,18 +210,43 @@ pub fn launch_with_props<P: 'static + Send>(
                         // For now, we only serve two pieces of content which get included as bytes into the final binary.
                         let path = request.uri().replace("dioxus://", "");
 
-                        if path.trim_end_matches('/') == "index.html" {
+                        // all assets shouldbe called from index.html
+                        let trimmed = path.trim_start_matches("index.html/");
+
+                        if trimmed.is_empty() {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/html")
                                 .body(include_bytes!("./index.html").to_vec())
-                        } else if path.trim_end_matches('/') == "index.html/index.js" {
+                        } else if trimmed == "index.js" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/javascript")
                                 .body(include_bytes!("../../jsinterpreter/interpreter.js").to_vec())
                         } else {
-                            wry::http::ResponseBuilder::new()
-                                .status(wry::http::status::StatusCode::NOT_FOUND)
-                                .body(format!("Not found: {}", path).as_bytes().to_vec())
+                            // Read the file content from file path
+                            use std::fs::read;
+
+                            let path_buf = std::path::Path::new(trimmed).canonicalize()?;
+                            let cur_path = std::path::Path::new(".").canonicalize()?;
+
+                            if !path_buf.starts_with(cur_path) {
+                                return wry::http::ResponseBuilder::new()
+                                    .status(wry::http::status::StatusCode::FORBIDDEN)
+                                    .body(String::from("Forbidden").into_bytes());
+                            }
+
+                            if !path_buf.exists() {
+                                return wry::http::ResponseBuilder::new()
+                                    .status(wry::http::status::StatusCode::NOT_FOUND)
+                                    .body(String::from("Not Found").into_bytes());
+                            }
+
+                            let mime = mime_guess::from_path(&path_buf).first_or_octet_stream();
+
+                            // do not let path searching to go two layers beyond the caller level
+                            let data = read(path_buf)?;
+                            let meta = format!("{mime}");
+
+                            wry::http::ResponseBuilder::new().mimetype(&meta).body(data)
                         }
                     })
                     .with_file_drop_handler(move |window, evet| {
