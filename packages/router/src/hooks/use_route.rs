@@ -104,3 +104,11 @@ impl Drop for UseRouteListener {
         self.router.router.unsubscribe_onchange(self.scope)
     }
 }
+
+/// This hook provides access to the `RouterService` for the app.
+pub fn use_router(cx: &ScopeState) -> &RouterService {
+    cx.use_hook(|_| {
+        cx.consume_context::<RouterService>()
+            .expect("Cannot call use_route outside the scope of a Router component")
+    })
+}
