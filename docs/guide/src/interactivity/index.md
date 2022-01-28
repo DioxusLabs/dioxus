@@ -64,7 +64,7 @@ The most common hook you'll use for storing state is `use_state`. `use_state` pr
 
 ```rust
 fn App(cx: Scope)-> Element {
-    let post = use_state(&cx, || {
+    let (post, set_post) = use_state(&cx, || {
         PostData {
             id: Uuid::new_v4(),
             score: 10,
@@ -84,10 +84,10 @@ fn App(cx: Scope)-> Element {
 }
 ```
 
-Whenever we have a new post that we want to render, we can call `set` on `post` and provide a new value:
+Whenever we have a new post that we want to render, we can call `set_post` and provide a new value:
 
 ```rust
-post.set(PostData {
+set_post(PostData {
     id: Uuid::new_v4(),
     score: 20,
     comment_count: 0,
@@ -128,7 +128,13 @@ We'll dive much deeper into event listeners later.
 
 ### Updating state asynchronously
 
-We can also update our state outside of event listeners with `coroutines`. `Coroutines` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component. Since coroutines stick around between renders, the data in them must be valid for the `'static` lifetime. We must explicitly declare which values our task will rely on to avoid the `stale props` problem common in React.
+We can also update our state outside of event listeners with `futures` and `coroutines`. 
+
+- `Futures` are Rust's version of promises that can execute asynchronous work by an efficient polling system. We can submit new futures to Dioxus either through `push_future` which returns a `TaskId` or with `spawn`.
+- 
+- `Coroutines` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component. 
+
+Since coroutines and Futures stick around between renders, the data in them must be valid for the `'static` lifetime. We must explicitly declare which values our task will rely on to avoid the `stale props` problem common in React.
 
 We can use tasks in our components to build a tiny stopwatch that ticks every second.
 
@@ -139,7 +145,7 @@ fn App(cx: Scope)-> Element {
     let mut sec_elapsed = use_state(&cx, || 0);
 
     use_future(&cx, || {
-        let mut sec_elapsed = sec_elapsed.for_async();
+        to_owned![sec_elapsed]; // explicitly capture this hook for use in async
         async move {
             loop {
                 TimeoutFuture::from_ms(1000).await;
@@ -152,7 +158,7 @@ fn App(cx: Scope)-> Element {
 }
 ```
 
-Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps.
+Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps. We have an entire section dedicated to using `async` properly later in this book.
 
 ### How do I tell Dioxus that my state changed?
 
@@ -170,7 +176,7 @@ With these building blocks, we can craft new hooks similar to `use_state` that l
 
 In general, Dioxus should be plenty fast for most use cases. However, there are some rules you should consider following to ensure your apps are quick.
 
-- 1) **Don't call set—state _while rendering_**. This will cause Dioxus to unnecessarily re-check the component for updates.
+- 1) **Don't call set—state _while rendering_**. This will cause Dioxus to unnecessarily re-check the component for updates or enter an infinite loop.
 - 2) **Break your state apart into smaller sections.** Hooks are explicitly designed to "unshackle" your state from the typical model-view-controller paradigm, making it easy to reuse useful bits of code with a single function.
 - 3) **Move local state down**. Dioxus will need to re-check child components of your app if the root component is constantly being updated. You'll get best results if rapidly-changing state does not cause major re-renders.
 
