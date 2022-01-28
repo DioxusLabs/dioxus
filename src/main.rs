@@ -8,22 +8,40 @@ async fn main() -> Result<()> {
 
     match args.action {
         Commands::Translate(opts) => {
-            opts.translate();
-        } // Commands::Build(_) => {
-          //     //
-          // }
+            if let Err(e) = opts.translate() {
+                log::error!("translate error: {}", e);
+            }
+        }
 
-          // Commands::Clean(_) => {
-          //     //
-          // }
+        Commands::Build(opts) => {
+            if let Err(e) = opts.build() {
+                log::error!("build error: {}", e);
+            }
+        }
 
-          // Commands::Config(_) => {
-          //     //
-          // }
+        Commands::Clean(opts) => {
+            if let Err(e) = opts.clean() {
+                log::error!("clean error: {}", e);
+            }
+        }
 
-          // Commands::Serve(_) => {
-          //     //
-          // }
+        Commands::Serve(opts) => {
+            if let Err(e) = opts.serve().await {
+                log::error!("serve error: {}", e);
+            }
+        }
+
+        Commands::Create(opts) => {
+            if let Err(e) = opts.create() {
+                log::error!("create error: {}", e);
+            }
+        }
+
+        Commands::Config(opts) => {
+            if let Err(e) = opts.config() {
+                log::error!("config error: {}", e);
+            }
+        }
     }
 
     Ok(())

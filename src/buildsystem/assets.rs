@@ -1,4 +1,0 @@
-/*
-
-todo: wasm splitting
-*/

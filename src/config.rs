@@ -1,5 +1,99 @@
 use crate::error::Result;
-use std::{io::Write, path::PathBuf, process::Command};
+use serde::{Deserialize, Serialize};
+use std::{fs::File, io::Read, path::PathBuf};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DioxusConfig {
+    pub application: ApplicationConfig,
+    pub web: WebConfig,
+}
+
+impl DioxusConfig {
+    pub fn load() -> crate::error::Result<DioxusConfig> {
+        let crate_dir = crate::cargo::crate_root()?;
+
+        if !crate_dir.join("Dioxus.toml").is_file() {
+            log::warn!("Config file: `Dioxus.toml` not found; using default config.");
+            return Ok(DioxusConfig::default());
+        }
+
+        let mut dioxus_conf_file = File::open(crate_dir.join("Dioxus.toml"))?;
+        let mut meta_str = String::new();
+        dioxus_conf_file.read_to_string(&mut meta_str)?;
+
+        toml::from_str::<DioxusConfig>(&meta_str)
+            .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
+    }
+}
+
+impl Default for DioxusConfig {
+    fn default() -> Self {
+        Self {
+            application: ApplicationConfig {
+                name: "dioxus".into(),
+                platforms: vec![String::from("web")],
+                out_dir: Some(PathBuf::from("dist")),
+            },
+            web: WebConfig {
+                app: WebAppConfing {
+                    title: Some("dioxus | ⛺".into()),
+                    public_dir: Some(PathBuf::from("public")),
+                },
+                watcher: WebWatcherConfing {
+                    watch_path: Some(vec![PathBuf::from("src")]),
+                    reload_html: Some(false),
+                },
+                resource: WebResourceConfing {
+                    dev: WebDevResourceConfing {
+                        style: Some(vec![]),
+                        script: Some(vec![]),
+                    },
+                    style: Some(vec![]),
+                    script: Some(vec![]),
+                },
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplicationConfig {
+    pub name: String,
+    pub platforms: Vec<String>,
+    pub out_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebConfig {
+    pub app: WebAppConfing,
+    pub watcher: WebWatcherConfing,
+    pub resource: WebResourceConfing,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebAppConfing {
+    pub title: Option<String>,
+    pub public_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebWatcherConfing {
+    pub watch_path: Option<Vec<PathBuf>>,
+    pub reload_html: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebResourceConfing {
+    pub dev: WebDevResourceConfing,
+    pub style: Option<Vec<PathBuf>>,
+    pub script: Option<Vec<PathBuf>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebDevResourceConfing {
+    pub style: Option<Vec<PathBuf>>,
+    pub script: Option<Vec<PathBuf>>,
+}
 
 #[derive(Debug, Clone)]
 pub struct CrateConfig {
@@ -7,9 +101,10 @@ pub struct CrateConfig {
     pub crate_dir: PathBuf,
     pub workspace_dir: PathBuf,
     pub target_dir: PathBuf,
-    pub static_dir: PathBuf,
+    pub public_dir: PathBuf,
     pub manifest: cargo_toml::Manifest<cargo_toml::Value>,
     pub executable: ExecutableType,
+    pub dioxus_config: DioxusConfig,
     pub release: bool,
 }
 
@@ -22,28 +117,33 @@ pub enum ExecutableType {
 
 impl CrateConfig {
     pub fn new() -> Result<Self> {
+        let dioxus_config = DioxusConfig::load()?;
+
         let crate_dir = crate::cargo::crate_root()?;
         let workspace_dir = crate::cargo::workspace_root()?;
         let target_dir = workspace_dir.join("target");
-        let out_dir = crate_dir.join("public");
+
+        let out_dir = match dioxus_config.application.out_dir {
+            Some(ref v) => crate_dir.join(v),
+            None => crate_dir.join("dist"),
+        };
+
         let cargo_def = &crate_dir.join("Cargo.toml");
-        let static_dir = crate_dir.join("static");
+
+        let public_dir = match dioxus_config.web.app.public_dir {
+            Some(ref v) => crate_dir.join(v),
+            None => crate_dir.join("public"),
+        };
 
         let manifest = cargo_toml::Manifest::from_path(&cargo_def).unwrap();
 
         // We just assume they're using a 'main.rs'
         // Anyway, we've already parsed the manifest, so it should be easy to change the type
-        let output_filename = (&manifest)
+        let output_filename = manifest
             .lib
             .as_ref()
             .and_then(|lib| lib.name.clone())
-            .or_else(|| {
-                (&manifest)
-                    .package
-                    .as_ref()
-                    .and_then(|pkg| Some(pkg.name.replace("-", "_")))
-                    .clone()
-            })
+            .or_else(|| manifest.package.as_ref().map(|pkg| pkg.name.clone()))
             .expect("No lib found from cargo metadata");
         let executable = ExecutableType::Binary(output_filename);
 
@@ -54,10 +154,11 @@ impl CrateConfig {
             crate_dir,
             workspace_dir,
             target_dir,
-            static_dir,
+            public_dir,
             manifest,
             executable,
             release,
+            dioxus_config,
         })
     }
 

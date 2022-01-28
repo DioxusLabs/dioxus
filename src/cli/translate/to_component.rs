@@ -4,6 +4,7 @@
 //! - [ ] Extracts svgs
 //! - [ ] Attempts to extract lists
 
+#[allow(unused_imports)]
 use std::{
     fmt::{Display, Formatter},
     io::Write,
@@ -20,6 +21,7 @@ pub fn convert_html_to_component(html: &str) -> Result<ComponentRenderer> {
     })
 }
 
+#[allow(dead_code)]
 pub struct ComponentRenderer {
     dom: Dom,
     icon_index: usize,
@@ -118,7 +120,7 @@ fn render_element<'a>(
         }
         write!(f, "\",")?;
     }
-    write!(f, "\n")?;
+    writeln!(f)?;
 
     // write the attributes
     if let Some(id) = &el.id {

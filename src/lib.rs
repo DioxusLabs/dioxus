@@ -1,4 +1,5 @@
 pub mod builder;
+pub mod server;
 pub use builder::*;
 
 pub mod cargo;
@@ -15,13 +16,3 @@ pub use error::*;
 
 pub mod logging;
 pub use logging::*;
-
-pub mod watch;
-
-pub mod buildsystem {
-    pub mod wasm;
-    pub use wasm::*;
-
-    pub mod assets;
-    pub use assets::*;
-}

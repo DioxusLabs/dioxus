@@ -1,6 +1,11 @@
 //! Utilities for working with cargo and rust files
 use crate::error::{Error, Result};
-use std::{env, fs, path::PathBuf, process::Command, str};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+    str,
+};
 
 /// How many parent folders are searched for a `Cargo.toml`
 const MAX_ANCESTORS: u32 = 10;
@@ -44,7 +49,7 @@ pub fn workspace_root() -> Result<PathBuf> {
     }
 
     let stdout = str::from_utf8(&output.stdout).unwrap();
-    for line in stdout.lines() {
+    if let Some(line) = stdout.lines().next() {
         let meta: serde_json::Value = serde_json::from_str(line)
             .map_err(|_| Error::CargoError("InvalidOutput".to_string()))?;
 
@@ -58,7 +63,7 @@ pub fn workspace_root() -> Result<PathBuf> {
 }
 
 /// Checks if the directory contains `Cargo.toml`
-fn contains_manifest(path: &PathBuf) -> bool {
+fn contains_manifest(path: &Path) -> bool {
     fs::read_dir(path)
         .map(|entries| {
             entries

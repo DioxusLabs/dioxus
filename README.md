@@ -10,7 +10,7 @@
 
 # About
 
-dioxus-studio (inspired by wasm-pack and webpack) is a tool to help get dioxus projects off the ground. It handles all the build, development, bundling, and publishing to make web development simple.
+dioxus-cli (inspired by wasm-pack and webpack) is a tool to help get dioxus projects off the ground. It handles all the build, development, bundling, and publishing to make web development simple.
 
 
 ## Installation
@@ -20,4 +20,3 @@ $ cargo install dioxus-cli
 ```
 
 Now, `dioxus` is in your path.
-

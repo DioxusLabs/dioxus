@@ -1,14 +1,12 @@
-use anyhow::{Context, Result};
-use std::path::PathBuf;
 use structopt::StructOpt;
 
 pub mod build;
 pub mod cfg;
 pub mod clean;
 pub mod config;
+pub mod create;
 pub mod serve;
 pub mod translate;
-pub mod watch;
 
 /// Build, bundle, & ship your Dioxus app.
 ///
@@ -31,16 +29,16 @@ pub struct Cli {
 
 #[derive(StructOpt)]
 pub enum Commands {
-    // /// Build the Rust WASM app and all of its assets.
-    // Build(build::Build),
+    /// Build the Rust WASM app and all of its assets.
+    Build(build::Build),
     /// Translate some source file into Dioxus code.
     Translate(translate::Translate),
-    // /// Build, watch & serve the Rust WASM app and all of its assets.
-    // Serve(serve::Serve),
-
-    // /// Clean output artifacts.
-    // Clean(clean::Clean),
-
-    // /// Trunk config controls.
-    // Config(config::Config),
+    /// Build, watch & serve the Rust WASM app and all of its assets.
+    Serve(serve::Serve),
+    /// Init a new project for Dioxus.
+    Create(create::Create),
+    /// Clean output artifacts.
+    Clean(clean::Clean),
+    /// Dioxus config file controls.
+    Config(config::Config),
 }

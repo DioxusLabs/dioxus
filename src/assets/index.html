@@ -1,0 +1,18 @@
+<html>
+  <head>
+    <title>{app_title}</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <meta charset="UTF-8" />
+    {style_include}
+    
+  </head>
+  <body>
+    <div id="main"></div>
+    <!-- Note the usage of `type=module` here as this is an ES6 module -->
+    <script type="module">
+      import init from "./assets/dioxus/{app_name}.js";
+      init("./assets/dioxus/{app_name}_bg.wasm");
+    </script>
+    {script_include}
+  </body>
+</html>

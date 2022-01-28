@@ -1,9 +1,11 @@
 use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
+    DioxusConfig,
 };
 use std::{
-    io::{Read, Write},
+    fs::{copy, create_dir_all, remove_dir_all},
+    path::PathBuf,
     process::Command,
 };
 use wasm_bindgen_cli_support::Bindgen;
@@ -21,22 +23,23 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         out_dir,
         crate_dir,
         target_dir,
-        static_dir,
+        public_dir,
         executable,
+        dioxus_config,
         ..
     } = config;
 
     let t_start = std::time::Instant::now();
 
     // [1] Build the .wasm module
-    log::info!("Running build commands...");
+    log::info!("🚅 Running build command...");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&crate_dir)
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
 
     if config.release {
         cmd.arg("--release");
@@ -48,20 +51,16 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let mut child = cmd.spawn()?;
-    let output = child.wait()?;
+    let output = cmd.output()?;
 
-    if output.success() {
-        log::info!("Build complete!");
-    } else {
+    if !output.status.success() {
         log::error!("Build failed!");
-        let mut reason = String::new();
-        child.stderr.unwrap().read_to_string(&mut reason)?;
+        let reason = String::from_utf8_lossy(&output.stderr).to_string();
         return Err(Error::BuildFailed(reason));
     }
 
     // [2] Establish the output directory structure
-    let bindgen_outdir = out_dir.join("wasm");
+    let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
     // [3] Bindgen the final binary for use easy linking
     let mut bindgen_builder = Bindgen::new();
@@ -89,53 +88,168 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         .keep_debug(true)
         .remove_name_section(false)
         .remove_producers_section(false)
-        .out_name("module")
+        .out_name(&dioxus_config.application.name)
         .generate(&bindgen_outdir)?;
 
-    // [4]
-    // TODO: wasm-opt
-
-    // [5] Generate the html file with the module name
-    // TODO: support names via options
-    log::info!("Writing to '{:#?}' directory...", out_dir);
-    let mut file = std::fs::File::create(out_dir.join("index.html"))?;
-    file.write_all(gen_page("./wasm/module.js").as_str().as_bytes())?;
-
-    let copy_options = fs_extra::dir::CopyOptions::new();
-    match fs_extra::dir::copy(static_dir, out_dir, &copy_options) {
-        Ok(_) => {}
-        Err(_e) => {
-            log::warn!("Error copying dir");
+    let copy_options = fs_extra::dir::CopyOptions {
+        overwrite: true,
+        skip_exist: false,
+        buffer_size: 64000,
+        copy_inside: false,
+        content_only: false,
+        depth: 0,
+    };
+    if public_dir.is_dir() {
+        for entry in std::fs::read_dir(&public_dir)? {
+            let path = entry?.path();
+            if path.is_file() {
+                std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;
+            } else {
+                match fs_extra::dir::copy(&path, out_dir, &copy_options) {
+                    Ok(_) => {}
+                    Err(_e) => {
+                        log::warn!("Error copying dir: {}", _e);
+                    }
+                }
+            }
         }
     }
 
     let t_end = std::time::Instant::now();
-    log::info!("Done in {}ms! 🎉", (t_end - t_start).as_millis());
+    log::info!("🏁 Done in {}ms!", (t_end - t_start).as_millis());
     Ok(())
 }
 
-fn gen_page(module: &str) -> String {
-    format!(
-        r#"
-<html>
-  <head>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-    <meta charset="UTF-8" />
-  </head>
-  <body>
-    <div id="main">
-    </div>
-    <!-- Note the usage of `type=module` here as this is an ES6 module -->
-    <script type="module">
-      import init from "{}";
-      init("./wasm/module_bg.wasm");
-    </script>
-    <div id="dioxusroot"> </div>
-  </body>
-</html>
-"#,
-        module
-    )
+pub fn build_desktop(config: &CrateConfig) -> Result<()> {
+    log::info!("🚅 Running build [Desktop] command...");
+
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(&config.crate_dir)
+        .arg("build")
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
+
+    if config.release {
+        cmd.arg("--release");
+    }
+
+    match &config.executable {
+        crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
+        crate::ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
+        crate::ExecutableType::Example(name) => cmd.arg("--example").arg(name),
+    };
+
+    let output = cmd.output()?;
+
+    if !output.status.success() {
+        return Err(Error::BuildFailed("Program build failed.".into()));
+    }
+
+    if output.status.success() {
+        if config.out_dir.is_dir() {
+            remove_dir_all(&config.out_dir)?;
+        }
+
+        let release_type = match config.release {
+            true => "release",
+            false => "debug",
+        };
+
+        let file_name: String;
+        let mut res_path = match &config.executable {
+            crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
+                file_name = name.clone();
+                config
+                    .target_dir
+                    .join(release_type.to_string())
+                    .join(name.to_string())
+            }
+            crate::ExecutableType::Example(name) => {
+                file_name = name.clone();
+                config
+                    .target_dir
+                    .join(release_type.to_string())
+                    .join("examples")
+                    .join(name.to_string())
+            }
+        };
+
+        let target_file = if cfg!(windows) {
+            res_path.set_extension("exe");
+            format!("{}.exe", &file_name)
+        } else {
+            file_name
+        };
+
+        create_dir_all(&config.out_dir)?;
+        copy(res_path, &config.out_dir.join(target_file))?;
+
+        log::info!(
+            "🚩 Build completed: [./{}]",
+            config
+                .dioxus_config
+                .application
+                .out_dir
+                .clone()
+                .unwrap_or_else(|| PathBuf::from("dist"))
+                .display()
+        );
+    }
+
+    Ok(())
+}
+
+pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
+    let mut html = String::from(include_str!("./assets/index.html"));
+
+    let resouces = config.web.resource.clone();
+
+    let mut style_list = resouces.style.unwrap_or_default();
+    let mut script_list = resouces.script.unwrap_or_default();
+
+    if serve {
+        let mut dev_style = resouces.dev.style.clone().unwrap_or_default();
+        let mut dev_script = resouces.dev.script.unwrap_or_default();
+        style_list.append(&mut dev_style);
+        script_list.append(&mut dev_script);
+    }
+
+    let mut style_str = String::new();
+    for style in style_list {
+        style_str.push_str(&format!(
+            "<link rel=\"stylesheet\" href=\"{}\">\n",
+            &style.to_str().unwrap(),
+        ))
+    }
+    html = html.replace("{style_include}", &style_str);
+
+    let mut script_str = String::new();
+    for script in script_list {
+        script_str.push_str(&format!(
+            "<script src=\"{}\"></script>\n",
+            &script.to_str().unwrap(),
+        ))
+    }
+
+    html = html.replace("{script_include}", &script_str);
+
+    if serve {
+        html += &format!(
+            "<script>{}</script>",
+            include_str!("./assets/autoreload.js")
+        );
+    }
+
+    html = html.replace("{app_name}", &config.application.name);
+
+    let title = config
+        .web
+        .app
+        .title
+        .clone()
+        .unwrap_or_else(|| "dioxus | ⛺".into());
+
+    html.replace("{app_title}", &title)
 }
 
 // use binary_install::{Cache, Download};

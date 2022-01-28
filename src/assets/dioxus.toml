@@ -1,0 +1,38 @@
+[application]
+
+# App (Project) Name
+name = "{{project-name}}"
+
+# Dioxus App Support Platform
+# desktop, web, mobile, ssr
+platforms = ["web"]
+
+# Web `build` & `serve` dist path
+out_dir = "dist"
+
+[web.app]
+
+# HTML title tag content
+title = "dioxus | ⛺"
+
+# resource (static) file folder
+public_dir = "public"
+
+[web.watcher]
+
+watch_path = ["src"]
+
+# include `assets` in web platform
+[web.resource]
+
+# CSS style file
+style = []
+
+# Javascript code file
+script = []
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []

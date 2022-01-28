@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -12,23 +12,29 @@ license = "MIT/Apache-2.0"
 thiserror = "1.0.23"
 log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }
-wasm-bindgen-cli-support = "0.2.78"
+wasm-bindgen-cli-support = "0.2.79"
 anyhow = "1.0.38"
 serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1"
+toml = "0.5.8"
 fs_extra = "1.2.0"
 cargo_toml = "0.10.0"
 futures = "0.3.12"
-notify = "4.0.17"
+notify = { version = "5.0.0-pre.13", features = ["serde"] }
 html_parser = "0.6.2"
-tui = { version = "0.16.0", default-features = false, features = ["crossterm"] }
-crossterm = "0.22.1"
 binary-install = "0.0.2"
 convert_case = "0.5.0"
 structopt = "0.3.25"
 cargo_metadata = "0.14.1"
 tokio = { version = "1.15.0", features = ["full"] }
 atty = "0.2.14"
+regex = "1.5.4"
+chrono = "0.4.19"
+
+axum = { version = "0.4.4", features = ["ws", "headers"] }
+tower-http = { version = "0.2.0", features = ["fs", "trace"] }
+headers = "0.3"
+# hyper = { version = "0.14.11", features = ["full"] }
 
 [[bin]]
 path = "src/main.rs"
