@@ -43,6 +43,7 @@ impl RouterService {
         let location = history.location();
         let path = location.path();
 
+        let onchange_listeners = Rc::new(RefCell::new(HashSet::new()));
         let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
         let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
         let root_found = Rc::new(Cell::new(None));
@@ -52,6 +53,7 @@ impl RouterService {
             let regen_route = regen_route.clone();
             let root_found = root_found.clone();
             let slots = slots.clone();
+            let onchange_listeners = onchange_listeners.clone();
             move || {
                 root_found.set(None);
                 // checking if the route is valid is cheap, so we do it
@@ -59,6 +61,13 @@ impl RouterService {
                     log::trace!("regenerating slot {:?} for root '{}'", slot, root);
                     regen_route(*slot);
                 }
+
+                for listener in onchange_listeners.borrow_mut().iter() {
+                    log::trace!("regenerating listener {:?}", listener);
+                    regen_route(*listener);
+                }
+
+
 
                 // also regenerate the root
                 regen_route(root_scope);
@@ -74,7 +83,7 @@ impl RouterService {
             regen_route,
             slots,
             pending_events,
-            onchange_listeners: Rc::new(RefCell::new(HashSet::new())),
+            onchange_listeners,
             cur_path_params: Rc::new(RefCell::new(HashMap::new())),
         }
     }
