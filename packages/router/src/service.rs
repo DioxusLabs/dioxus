@@ -67,8 +67,6 @@ impl RouterService {
                     regen_route(*listener);
                 }
 
-
-
                 // also regenerate the root
                 regen_route(root_scope);
 
