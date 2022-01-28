@@ -17,19 +17,19 @@
         "Other"
     ],
     "activationEvents": [
-        "onCommand:extension.htmlToRsx",
-        "onCommand:extension.htmlToComponent"
+        "onCommand:extension.htmlToDioxusRsx",
+        "onCommand:extension.htmlToDioxusComponent"
     ],
     "main": "./out/extension",
     "contributes": {
         "commands": [
             {
-                "command": "extension.htmlToRsx",
-                "title": "Convert HTML to RSX"
+                "command": "extension.htmlToDioxusRsx",
+                "title": "Dioxus: Convert HTML to RSX"
             },
             {
-                "command": "extension.htmlToComponent",
-                "title": "Convert HTML to Dioxus Component"
+                "command": "extension.htmlToDioxusComponent",
+                "title": "Dioxus: Convert HTML to Component"
             }
         ]
     },
@@ -37,7 +37,8 @@
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
         "lint": "eslint . --ext .ts,.tsx",
-        "watch": "tsc -watch -p ./"
+        "watch": "tsc -watch -p ./",
+        "package": "vsce package"
     },
     "devDependencies": {
         "@types/node": "^12.12.0",
