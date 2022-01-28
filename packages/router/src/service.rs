@@ -1,7 +1,7 @@
 use gloo::history::{BrowserHistory, History, HistoryListener, Location};
 use std::{
     cell::{Cell, Ref, RefCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     rc::Rc,
 };
 
@@ -12,6 +12,7 @@ pub struct RouterService {
     pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
     history: Rc<RefCell<BrowserHistory>>,
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
+    onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
     root_found: Rc<Cell<Option<ScopeId>>>,
     cur_path_params: Rc<RefCell<HashMap<String, String>>>,
     listener: HistoryListener,
@@ -42,6 +43,7 @@ impl RouterService {
         let location = history.location();
         let path = location.path();
 
+        let onchange_listeners = Rc::new(RefCell::new(HashSet::new()));
         let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
         let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
         let root_found = Rc::new(Cell::new(None));
@@ -51,12 +53,18 @@ impl RouterService {
             let regen_route = regen_route.clone();
             let root_found = root_found.clone();
             let slots = slots.clone();
+            let onchange_listeners = onchange_listeners.clone();
             move || {
                 root_found.set(None);
                 // checking if the route is valid is cheap, so we do it
                 for (slot, root) in slots.borrow_mut().iter().rev() {
                     log::trace!("regenerating slot {:?} for root '{}'", slot, root);
                     regen_route(*slot);
+                }
+
+                for listener in onchange_listeners.borrow_mut().iter() {
+                    log::trace!("regenerating listener {:?}", listener);
+                    regen_route(*listener);
                 }
 
                 // also regenerate the root
@@ -73,6 +81,7 @@ impl RouterService {
             regen_route,
             slots,
             pending_events,
+            onchange_listeners,
             cur_path_params: Rc::new(RefCell::new(HashMap::new())),
         }
     }
@@ -142,6 +151,16 @@ impl RouterService {
 
     pub fn current_path_params(&self) -> Ref<HashMap<String, String>> {
         self.cur_path_params.borrow()
+    }
+
+    pub fn subscribe_onchange(&self, id: ScopeId) {
+        log::trace!("Subscribing onchange for scope id {:?}", id);
+        self.onchange_listeners.borrow_mut().insert(id);
+    }
+
+    pub fn unsubscribe_onchange(&self, id: ScopeId) {
+        log::trace!("Subscribing onchange for scope id {:?}", id);
+        self.onchange_listeners.borrow_mut().remove(&id);
     }
 }
 
