@@ -8,6 +8,7 @@ use crate::RouterService;
 /// This struct provides is a wrapper around the internal router
 /// implementation, with methods for getting information about the current
 /// route.
+#[derive(Clone)]
 pub struct UseRoute {
     router: Rc<RouterService>,
 }
@@ -82,7 +83,7 @@ pub fn use_route(cx: &ScopeState) -> &UseRoute {
 
         router.subscribe_onchange(cx.scope_id());
 
-        UseRouteInner {
+        UseRouteListener {
             router: UseRoute { router },
             scope: cx.scope_id(),
         }
@@ -90,11 +91,15 @@ pub fn use_route(cx: &ScopeState) -> &UseRoute {
     .router
 }
 
-struct UseRouteInner {
+// The entire purpose of this struct is to unubscribe this component when it is unmounted.
+// The UseRoute can be cloned into async contexts, so we can't rely on its drop to unubscribe.
+// Instead, we hide the drop implementation on this private type exclusive to the hook,
+// and reveal our cached version of UseRoute to the component.
+struct UseRouteListener {
     router: UseRoute,
     scope: ScopeId,
 }
-impl Drop for UseRouteInner {
+impl Drop for UseRouteListener {
     fn drop(&mut self) {
         self.router.router.unsubscribe_onchange(self.scope)
     }
