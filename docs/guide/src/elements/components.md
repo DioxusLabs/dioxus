@@ -106,7 +106,7 @@ fn Post(cx: Scope<PostProps>) -> Element {
 }
 ```
 
-When declaring a component in `rsx!`, we can pass in properties using the traditional Rust struct syntax. Dioxus will automatically call "into" on the property fields, cloning when necessary. Our `Post` component is simply a collection of smaller components wrapped together in a single container.
+When declaring a component in `rsx!`, we can pass in properties using the traditional Rust struct syntax. Our `Post` component is simply a collection of smaller components wrapped together in a single container.
 
 Let's take a look at the `VoteButton` component. For now, we won't include any interactivity - just the rendering the score and buttons to the screen.
 

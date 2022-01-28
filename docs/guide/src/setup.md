@@ -38,9 +38,9 @@ If you are running a modern, mainstream operating system, you should need no add
 
 Windows Desktop apps depend on WebView2 - a library which should be installed in all modern Windows distributions. If you have Edge installed, then Dioxus will work fine. If you *don't* have Webview2, [then you can install it through Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/). MS provides 3 options:
 
-- 1) A tiny "evergreen" *bootstrapper* which will fetch an installer from Microsoft's CDN
-- 2) A tiny *installer* which will fetch Webview2 from Microsoft's CDN
-- 3) A statically linked version of Webview2 in your final binary for offline users
+1. A tiny "evergreen" *bootstrapper* which will fetch an installer from Microsoft's CDN
+2. A tiny *installer* which will fetch Webview2 from Microsoft's CDN
+3. A statically linked version of Webview2 in your final binary for offline users
 
 For development purposes, use Option 1. 
 

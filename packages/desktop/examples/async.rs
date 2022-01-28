@@ -10,14 +10,14 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
+    let (count, set_count) = use_state(&cx, || 0);
 
     use_future(&cx, || {
-        let count = count.for_async();
+        to_owned![set_count];
         async move {
             loop {
                 tokio::time::sleep(Duration::from_millis(1000)).await;
-                *count.modify() += 1;
+                set_count.modify(|v| v + 1)
             }
         }
     });
@@ -26,7 +26,7 @@ fn app(cx: Scope) -> Element {
         div {
             h1 { "High-Five counter: {count}" }
             button {
-                onclick: move |_| count.set(0),
+                onclick: move |_| set_count(0),
                 "Click me!"
             }
         }

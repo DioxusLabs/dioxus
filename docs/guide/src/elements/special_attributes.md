@@ -7,7 +7,7 @@ In this section, we'll cover special attributes built into Dioxus:
 - `dangerous_inner_html`
 - Boolean attributes
 - `prevent_default`
-- `..Attributes`
+<!-- - `..Attributes` -->
 - event handlers as string attributes
 - `value`, `checked`, and `selected`
 
@@ -104,8 +104,10 @@ rsx!{
     }
 }
 ```
-
+<!-- 
 ## Passing attributes into children: `..Attributes`
+
+> Note: this is an experimental, unstable feature not available in released versions of Dioxus. Feel free to skip this section.
 
 Just like Dioxus supports spreading component props into components, we also support spreading attributes into elements. This lets you pass any arbitrary attributes through components into elements.
 
@@ -125,7 +127,7 @@ pub fn StateInput<'a>(cx: Scope<'a, InputProps<'a>>) -> Element {
         }
     ))
 }
-```
+``` -->
 
 ## Controlled inputs and `value`, `checked`, and `selected`
 

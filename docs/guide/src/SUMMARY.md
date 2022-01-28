@@ -13,7 +13,7 @@
   - [Properties](elements/propsmacro.md)
   - [Reusing, Importing, and Exporting](elements/exporting_components.md)
   - [Children and Attributes](elements/component_children.md)
-  - [Composing Components](elements/composing.md)
+  - [Theory of React](elements/composing.md)
 - [Adding Interactivity](interactivity/index.md)
   - [Hooks and Internal State](interactivity/hooks.md)
   - [Event handlers](interactivity/event_handlers.md)

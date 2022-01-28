@@ -170,4 +170,4 @@ We learned:
 - Elements can either be a named container or text
 - Some Elements have properties that the renderer can use to draw the UI to the screen
 
-Next, we'll compose Elements together to form components.
+Next, we'll compose Elements together using Rust-based logic.
