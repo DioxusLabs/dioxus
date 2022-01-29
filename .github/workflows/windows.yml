@@ -19,13 +19,7 @@ jobs:
       max-parallel: 2
       fail-fast: false
       matrix:
-        target:
-          [
-            i686-pc-windows-gnu,
-            i686-pc-windows-msvc,
-            x86_64-pc-windows-gnu,
-            x86_64-pc-windows-msvc,
-          ]
+        target: [x86_64-pc-windows-gnu, x86_64-pc-windows-msvc]
         cfg_release_channel: [stable]
 
     steps:
