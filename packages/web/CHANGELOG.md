@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Documentation
+
+ - <csr-id-a239d2ba6ac7f1f3d09de16c022ce8ca52cf0f63/> fix web doc example and use &mut for builders everywhere
+
+### New Features
+
+ - <csr-id-1406c9020bb3102635737dc2d13e5b3171499a18/> add panic hook by default
+ - <csr-id-95e93ed0bcf6c69990f4cf3c6448b2bf5da96c36/> remove dioxus id on non-event elements
+ - <csr-id-05331ddd8033f6997d4916179b62f4d62f832988/> wire up both desktop and web
+ - <csr-id-8f4aa84f1a4f2443b34d81ee42490564e168de53/> bool attr white list
+
+### Bug Fixes
+
+ - <csr-id-ae676d9d816fcbf88d110157124443a5b3aef9eb/> webconfig should take &mut self
+ - <csr-id-92561612c727e73356d7d36e16af39aacf02a56d/> format code
+ - <csr-id-c1a5d4e11f5277e6ee644f670dc6fdd68f2202f1/> ssr + hydration event listeners
+ - <csr-id-21232285d9d84168d9003969ddd254fc22951e4b/> add exclusion list
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 17 commits contributed to the release over the course of 21 calendar days.
+ - 10 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - webconfig should take &mut self ([`ae676d9`](https://github.comgit//DioxusLabs/dioxus/commit/ae676d9d816fcbf88d110157124443a5b3aef9eb))
+    - fix web doc example and use &mut for builders everywhere ([`a239d2b`](https://github.comgit//DioxusLabs/dioxus/commit/a239d2ba6ac7f1f3d09de16c022ce8ca52cf0f63))
+    - add panic hook by default ([`1406c90`](https://github.comgit//DioxusLabs/dioxus/commit/1406c9020bb3102635737dc2d13e5b3171499a18))
+    - Merge pull request #111 from DioxusLabs/jk/props-attrs ([`0369fe7`](https://github.comgit//DioxusLabs/dioxus/commit/0369fe72fb247409da300a54ef11ba9155d0efb3))
+    - Merge pull request #113 from DioxusLabs/jk/desktop-cursor-jump ([`20a2940`](https://github.comgit//DioxusLabs/dioxus/commit/20a29409b22510b001fdbee349724adb7b44d401))
+    - remove dioxus id on non-event elements ([`95e93ed`](https://github.comgit//DioxusLabs/dioxus/commit/95e93ed0bcf6c69990f4cf3c6448b2bf5da96c36))
+    - feat(events:focus): add missing `onfocusin` event ([`007d06d`](https://github.comgit//DioxusLabs/dioxus/commit/007d06d602f1adfaa51c87ec89b2afe90d8cdef9))
+    - feat(example:todomvc): add editing support ([`9849f68`](https://github.comgit//DioxusLabs/dioxus/commit/9849f68f257200fac511c048bfb1a076243b86d3))
+    - Merge pull request #101 from alexkirsz/ci ([`29bf424`](https://github.comgit//DioxusLabs/dioxus/commit/29bf424b0976b95ff645bb128d0e758cf0186614))
+    - Merge pull request #139 from DioxusLabs/jk/provide-context-any ([`70f2ef4`](https://github.comgit//DioxusLabs/dioxus/commit/70f2ef43db5b6737bd9bcbfc1aa21c834ce4b395))
+    - Merge branch 'master' into jk/unify ([`824defa`](https://github.comgit//DioxusLabs/dioxus/commit/824defa2dbcc16d66588b3976699d89b65a8a068))
+    - wire up both desktop and web ([`05331dd`](https://github.comgit//DioxusLabs/dioxus/commit/05331ddd8033f6997d4916179b62f4d62f832988))
+    - format code ([`9256161`](https://github.comgit//DioxusLabs/dioxus/commit/92561612c727e73356d7d36e16af39aacf02a56d))
+    - ssr + hydration event listeners ([`c1a5d4e`](https://github.comgit//DioxusLabs/dioxus/commit/c1a5d4e11f5277e6ee644f670dc6fdd68f2202f1))
+    - web now links against the js interprter code ([`10db6ad`](https://github.comgit//DioxusLabs/dioxus/commit/10db6ad65bd23dabf60d0afbe6ff82cda8220a8b))
+    - bool attr white list ([`8f4aa84`](https://github.comgit//DioxusLabs/dioxus/commit/8f4aa84f1a4f2443b34d81ee42490564e168de53))
+    - add exclusion list ([`2123228`](https://github.comgit//DioxusLabs/dioxus/commit/21232285d9d84168d9003969ddd254fc22951e4b))
+</details>
+
 ## v0.0.4 (2022-01-08)
 
 ### Documentation
@@ -84,7 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <csr-read-only-do-not-edit/>
 
  - 203 commits contributed to the release over the course of 358 calendar days.
- - 190 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 189 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -94,10 +148,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`b804c69`](https://github.comgit//DioxusLabs/dioxus/commit/b804c691d5ade4776390bb3d334cc9cd8efa4a49))
+    - handle bool attrs properly ([`8d685f4`](https://github.comgit//DioxusLabs/dioxus/commit/8d685f40b7e0ef6521c60310d8687291e9b9c48a))
     - Release dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`a36dab7`](https://github.comgit//DioxusLabs/dioxus/commit/a36dab7f45920acd8535a69b4aa3695f3bb92111))
     - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
-    - add exclusion list ([`2123228`](https://github.comgit//DioxusLabs/dioxus/commit/21232285d9d84168d9003969ddd254fc22951e4b))
-    - handle bool attrs properly ([`8d685f4`](https://github.comgit//DioxusLabs/dioxus/commit/8d685f40b7e0ef6521c60310d8687291e9b9c48a))
     - Merge pull request #74 from mrxiaozhuox/master ([`47056fd`](https://github.comgit//DioxusLabs/dioxus/commit/47056fda4577bcbdaa2a6f63d82eec876e5a5aee))
     - Merge pull request #80 from DioxusLabs/jk/router2dotoh ([`cdc2d8e`](https://github.comgit//DioxusLabs/dioxus/commit/cdc2d8ec6d123245c2ea5f6d10af02b6a6833994))
     - memoize dom in the prescence of identical components ([`cb2782b`](https://github.comgit//DioxusLabs/dioxus/commit/cb2782b4bb34cdaadfff590bfee930ae3ac6536c))

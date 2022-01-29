@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Documentation
+
+ - <csr-id-036a0ff49a7dade0e04c9c07071a1ff49133ee24/> add comments for the Handler
+
+### New Features
+
+ - <csr-id-bad4b773b7bbab6a38d4f48d88d8c5a8787927ac/> add "spawn" method
+ - <csr-id-d2bd1751436ef4bec554bb361ba87aea1357036a/> allow providing context to the root component
+
+### Bug Fixes
+
+ - <csr-id-d9a07ddddb45ba00e35645ac0e0ad1a4d2dd996d/> provide_root_context on root scopes
+ - <csr-id-c8d528b3b18e320ca0cee1542ae5fc659c1cca81/> proprogation of root context
+ - <csr-id-e47ead5347ce778935f8f2127fcb14f520eda0ce/> allow eventhandler to derive default
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 18 commits contributed to the release over the course of 13 calendar days.
+ - 8 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #169 from DioxusLabs/jk/router-userouter ([`3509602`](https://github.comgit//DioxusLabs/dioxus/commit/3509602c0bcd327a33bc8c95896775e24751da1a))
+    - Merge branch 'master' of github.com:DioxusLabs/dioxus ([`8899701`](https://github.comgit//DioxusLabs/dioxus/commit/88997019c5c74658bfd76344d6bb6f3565943b41))
+    - add miri stress test ([`e9792e9`](https://github.comgit//DioxusLabs/dioxus/commit/e9792e9b95521fcf0b0b4e240d7cf0397cd79b8f))
+    - add "spawn" method ([`bad4b77`](https://github.comgit//DioxusLabs/dioxus/commit/bad4b773b7bbab6a38d4f48d88d8c5a8787927ac))
+    - drop hooks before resetting bump arena ([`2e4f765`](https://github.comgit//DioxusLabs/dioxus/commit/2e4f7659327b69b74e20af59b6d5e65c699b6adb))
+    - provide_root_context on root scopes ([`d9a07dd`](https://github.comgit//DioxusLabs/dioxus/commit/d9a07ddddb45ba00e35645ac0e0ad1a4d2dd996d))
+    - Fix various typos and grammar nits ([`9e4ec43`](https://github.comgit//DioxusLabs/dioxus/commit/9e4ec43b1e78d355c56a38e4c092170b2b01b20d))
+    - Merge pull request #121 from DioxusLabs/jk/unify ([`b287a4c`](https://github.comgit//DioxusLabs/dioxus/commit/b287a4cab3eec9e6961a3f010846291f4f105747))
+    - Merge pull request #108 from DioxusLabs/jk/fstring-component-fields ([`f4132d1`](https://github.comgit//DioxusLabs/dioxus/commit/f4132d1874f7495049fac23ba0a022ac137ad74f))
+    - proprogation of root context ([`c8d528b`](https://github.comgit//DioxusLabs/dioxus/commit/c8d528b3b18e320ca0cee1542ae5fc659c1cca81))
+    - allow providing context to the root component ([`d2bd175`](https://github.comgit//DioxusLabs/dioxus/commit/d2bd1751436ef4bec554bb361ba87aea1357036a))
+    - Enable clippy ([`b6903bf`](https://github.comgit//DioxusLabs/dioxus/commit/b6903bf558bc7a3d0fe6794a137c44fca0957d11))
+    - Merge pull request #107 from autarch/autarch/half-assed-router ([`8d3ac3f`](https://github.comgit//DioxusLabs/dioxus/commit/8d3ac3ff148aef9d10a393eda453a11c1e882f58))
+    - Merge pull request #138 from mrxiaozhuox/master ([`8c7473d`](https://github.comgit//DioxusLabs/dioxus/commit/8c7473d1943dd133f388ec36116c9d8295861b97))
+    - Merge pull request #133 from mrxiaozhuox/master ([`887f69d`](https://github.comgit//DioxusLabs/dioxus/commit/887f69d5b47bdcde4fe0eab094c0cd0de23e4f3f))
+    - Don't expect all components to have a scope in ScopeArena.ensure_drop_safety ([`9b282d8`](https://github.comgit//DioxusLabs/dioxus/commit/9b282d877ba0fe2463687cde7ea899b7f8510425))
+    - add comments for the Handler ([`036a0ff`](https://github.comgit//DioxusLabs/dioxus/commit/036a0ff49a7dade0e04c9c07071a1ff49133ee24))
+    - allow eventhandler to derive default ([`e47ead5`](https://github.comgit//DioxusLabs/dioxus/commit/e47ead5347ce778935f8f2127fcb14f520eda0ce))
+</details>
+
 ## v0.1.7 (2022-01-08)
 
 ### Documentation
@@ -138,7 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 437 commits contributed to the release over the course of 358 calendar days.
+ - 438 commits contributed to the release over the course of 358 calendar days.
  - 416 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -149,8 +201,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
+    - Release dioxus-core v0.1.7 ([`16d73b2`](https://github.comgit//DioxusLabs/dioxus/commit/16d73b240fc446c6f6996c19ccf52bbcda2eca79))
     - add title to doc comment ([`d11f322`](https://github.comgit//DioxusLabs/dioxus/commit/d11f322f554e7dbf43b988c9cfda56498cc49872))
+    - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
     - better document the `EventHandler` type ([`be9f1a5`](https://github.comgit//DioxusLabs/dioxus/commit/be9f1a52ad2b04f101397ae34482ea7394df653b))
     - component pass thru events ([`c439b0a`](https://github.comgit//DioxusLabs/dioxus/commit/c439b0ac7e09f70a04262b7c29938d8c52197b76))
     - Merge pull request #74 from mrxiaozhuox/master ([`47056fd`](https://github.comgit//DioxusLabs/dioxus/commit/47056fda4577bcbdaa2a6f63d82eec876e5a5aee))
