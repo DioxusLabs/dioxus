@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "./packages/core", version = "^0.1.8" }
 dioxus-html = { path = "./packages/html", version = "^0.1.5", optional = true }
 dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.7", optional = true }
-dioxus-hooks = { path = "./packages/hooks", version = "^0.1.6", optional = true }
+dioxus-hooks = { path = "./packages/hooks", version = "^0.1.7", optional = true }
 
 dioxus-web = { path = "./packages/web", version = "^0.0.4", optional = true }
 dioxus-desktop = { path = "./packages/desktop", version = "^0.1.5", optional = true }

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-hooks"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for a remote webview instance"
