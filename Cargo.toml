@@ -11,7 +11,7 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "./packages/core", version = "^0.1.8" }
+dioxus-core = { path = "./packages/core", version = "^0.1.9" }
 dioxus-html = { path = "./packages/html", version = "^0.1.5", optional = true }
 dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.7", optional = true }
 dioxus-hooks = { path = "./packages/hooks", version = "^0.1.7", optional = true }

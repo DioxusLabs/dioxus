@@ -11,7 +11,7 @@ documentation = "https://docs.rs/dioxus"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.1.8" }
+dioxus-core = { path = "../core", version = "^0.1.9" }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 
