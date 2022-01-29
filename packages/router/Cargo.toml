@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-router"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for the web browser using websys"
 license = "MIT/Apache-2.0"
