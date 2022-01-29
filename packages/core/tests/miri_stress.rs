@@ -313,3 +313,42 @@ fn leak_thru_children() {
     dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
     dom.work_with_deadline(|| false);
 }
+
+#[test]
+fn test_pass_thru() {
+    #[inline_props]
+    fn Router<'a>(cx: Scope, children: Element<'a>) -> Element {
+        cx.render(rsx! {
+            &cx.props.children
+        })
+    }
+
+    fn MemoizedThing(cx: Scope) -> Element {
+        rsx!(cx, div { "memoized" })
+    }
+
+    fn app(cx: Scope) -> Element {
+        let thing = cx.use_hook(|_| "asd");
+        rsx!(cx,
+            Router {
+                MemoizedThing {
+                }
+            }
+        )
+    }
+
+    let mut dom = new_dom(app, ());
+    let _ = dom.rebuild();
+
+    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+    dom.work_with_deadline(|| false);
+
+    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+    dom.work_with_deadline(|| false);
+
+    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+    dom.work_with_deadline(|| false);
+
+    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+    dom.work_with_deadline(|| false);
+}
