@@ -2,7 +2,7 @@ use js_sys::Function;
 use wasm_bindgen::prelude::*;
 use web_sys::{Element, Node};
 
-#[wasm_bindgen(module = "/../jsinterpreter/interpreter.js")]
+#[wasm_bindgen(module = "/src/interpreter.js")]
 extern "C" {
     pub type Interpreter;
 
