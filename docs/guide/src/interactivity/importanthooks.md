@@ -7,6 +7,8 @@ Most components you will write in Dioxus will need to store state somehow. For l
 
 Both of these hooks are extremely powerful and flexible, so we've dedicated this section to understanding them properly.
 
+> These two hooks are not the only way to store state. You can always build your own hooks!
+
 ## Note on Hooks
 
 If you're struggling with errors due to usage in hooks, make sure you're following the rules of hooks:
