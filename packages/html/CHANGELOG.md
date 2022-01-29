@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Bug Fixes
+
+ - <csr-id-43e78d56f72e23ada939f5688a6bd2fdd9b8292d/> rustfmt
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 7 commits contributed to the release over the course of 19 calendar days.
+ - 1 commit where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - rustfmt ([`43e78d5`](https://github.comgit//DioxusLabs/dioxus/commit/43e78d56f72e23ada939f5688a6bd2fdd9b8292d))
+    - Add gap and row_gap to style_trait_methods ([`5f4a724`](https://github.comgit//DioxusLabs/dioxus/commit/5f4a72446e63441628e18bb19fd9b2d9f65f9d52))
+    - Merge pull request #111 from DioxusLabs/jk/props-attrs ([`0369fe7`](https://github.comgit//DioxusLabs/dioxus/commit/0369fe72fb247409da300a54ef11ba9155d0efb3))
+    - Fix various typos and grammar nits ([`9e4ec43`](https://github.comgit//DioxusLabs/dioxus/commit/9e4ec43b1e78d355c56a38e4c092170b2b01b20d))
+    - Merge pull request #113 from DioxusLabs/jk/desktop-cursor-jump ([`20a2940`](https://github.comgit//DioxusLabs/dioxus/commit/20a29409b22510b001fdbee349724adb7b44d401))
+    - feat(events:focus): add missing `onfocusin` event ([`007d06d`](https://github.comgit//DioxusLabs/dioxus/commit/007d06d602f1adfaa51c87ec89b2afe90d8cdef9))
+    - feat(example:todomvc): add editing support ([`9849f68`](https://github.comgit//DioxusLabs/dioxus/commit/9849f68f257200fac511c048bfb1a076243b86d3))
+</details>
+
 ## v0.1.4 (2022-01-08)
 
 ### Documentation
@@ -42,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 60 commits contributed to the release over the course of 184 calendar days.
+ - 61 commits contributed to the release over the course of 184 calendar days.
  - 52 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -53,8 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
+    - Release dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`a36dab7`](https://github.comgit//DioxusLabs/dioxus/commit/a36dab7f45920acd8535a69b4aa3695f3bb92111))
     - enable prevent_default everywhere ([`9dff700`](https://github.comgit//DioxusLabs/dioxus/commit/9dff700c220dd9e0da2ee028900e82fd24f9d0dd))
+    - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
     - component pass thru events ([`c439b0a`](https://github.comgit//DioxusLabs/dioxus/commit/c439b0ac7e09f70a04262b7c29938d8c52197b76))
     - memoize dom in the prescence of identical components ([`cb2782b`](https://github.comgit//DioxusLabs/dioxus/commit/cb2782b4bb34cdaadfff590bfee930ae3ac6536c))
     - new versions of everything ([`4ea5c99`](https://github.comgit//DioxusLabs/dioxus/commit/4ea5c990d72b1645724ab0a88ffea2baf28e2835))

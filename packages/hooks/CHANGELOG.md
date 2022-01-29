@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Bug Fixes
+
+ - <csr-id-c092bd43edf1891c427722bc9ca04e11c9359069/> use_state
+ - <csr-id-a8952a9ee8d8831fa911cef4e7035293c3a9f88b/> exampels
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 9 commits contributed to the release over the course of 21 calendar days.
+ - 3 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #169 from DioxusLabs/jk/router-userouter ([`3509602`](https://github.comgit//DioxusLabs/dioxus/commit/3509602c0bcd327a33bc8c95896775e24751da1a))
+    - Merge pull request #158 from DioxusLabs/jk/router-onchange ([`08988e1`](https://github.comgit//DioxusLabs/dioxus/commit/08988e1bfec35eadb30e50b5d677dbb36af91b9b))
+    - use_state ([`c092bd4`](https://github.comgit//DioxusLabs/dioxus/commit/c092bd43edf1891c427722bc9ca04e11c9359069))
+    - exampels ([`a8952a9`](https://github.comgit//DioxusLabs/dioxus/commit/a8952a9ee8d8831fa911cef4e7035293c3a9f88b))
+    - Merge branch 'master' into jk/update-hooks ([`5c4bd08`](https://github.comgit//DioxusLabs/dioxus/commit/5c4bd0881bc10572440d9272ceb8ca774431c406))
+    - modify usestate to be borrowed ([`58839f4`](https://github.comgit//DioxusLabs/dioxus/commit/58839f47bae3c49cadd4b41da9a5debebb1def99))
+    - Fix various typos and grammar nits ([`9e4ec43`](https://github.comgit//DioxusLabs/dioxus/commit/9e4ec43b1e78d355c56a38e4c092170b2b01b20d))
+    - Merge pull request #108 from DioxusLabs/jk/fstring-component-fields ([`f4132d1`](https://github.comgit//DioxusLabs/dioxus/commit/f4132d1874f7495049fac23ba0a022ac137ad74f))
+    - Enable clippy ([`b6903bf`](https://github.comgit//DioxusLabs/dioxus/commit/b6903bf558bc7a3d0fe6794a137c44fca0957d11))
+</details>
+
 ## v0.1.6 (2022-01-08)
 
 ### Documentation
@@ -52,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 93 commits contributed to the release over the course of 358 calendar days.
+ - 94 commits contributed to the release over the course of 358 calendar days.
  - 82 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -63,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`b804c69`](https://github.comgit//DioxusLabs/dioxus/commit/b804c691d5ade4776390bb3d334cc9cd8efa4a49))
     - Release dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`a36dab7`](https://github.comgit//DioxusLabs/dioxus/commit/a36dab7f45920acd8535a69b4aa3695f3bb92111))
     - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
     - component pass thru events ([`c439b0a`](https://github.comgit//DioxusLabs/dioxus/commit/c439b0ac7e09f70a04262b7c29938d8c52197b76))
