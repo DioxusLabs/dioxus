@@ -355,7 +355,7 @@ pub struct EventHandler<'bump, T = ()> {
     pub callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }
 
-impl<'a> Default for EventHandler<'a> {
+impl<'a, T> Default for EventHandler<'a, T> {
     fn default() -> Self {
         Self {
             callback: RefCell::new(None),
