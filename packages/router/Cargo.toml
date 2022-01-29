@@ -12,7 +12,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.1.8", default-features = false }
-dioxus-html = { path = "../html", version ="^0.1.4", default-features = false }
+dioxus-html = { path = "../html", version = "^0.1.5", default-features = false }
 dioxus-core-macro = { path = "../core-macro", version = "^0.1.7" }
 
 serde = "1"

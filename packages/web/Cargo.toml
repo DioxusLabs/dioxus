@@ -12,7 +12,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.1.8" }
-dioxus-html = { path = "../html", version = "^0.1.4" }
+dioxus-html = { path = "../html", version = "^0.1.5" }
 js-sys = "0.3"
 wasm-bindgen = { version = "0.2.78", features = ["enable-interning"] }
 lazy_static = "1.4.0"
