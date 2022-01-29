@@ -33,7 +33,7 @@ impl<T> ProvidedStateInner<T> {
 /// This hook provides some relatively light ergonomics around shared state.
 ///
 /// It is not a substitute for a proper state management system, but it is capable enough to provide use_state - type
-/// ergonimics in a pinch, with zero cost.
+/// ergonomics in a pinch, with zero cost.
 ///
 /// # Example
 ///
