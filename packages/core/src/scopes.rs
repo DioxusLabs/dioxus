@@ -255,7 +255,7 @@ impl ScopeArena {
         let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
 
         // if cfg!(debug_assertions) {
-        log::debug!("running scope {:?} symbol: {:?}", id, scope.fnptr);
+        // log::debug!("running scope {:?} symbol: {:?}", id, scope.fnptr);
 
         // todo: resolve frames properly
         backtrace::resolve(scope.fnptr, |symbol| {
@@ -733,7 +733,6 @@ impl ScopeState {
             while let Some(parent_ptr) = search_parent {
                 // safety: all parent pointers are valid thanks to the bump arena
                 let parent = unsafe { &*parent_ptr };
-                log::trace!("Searching parent scope {:?}", parent.scope_id());
                 if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
                     return Some(shared.clone().downcast::<T>().unwrap());
                 }

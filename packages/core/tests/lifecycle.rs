@@ -27,12 +27,7 @@ fn manual_diffing() {
     };
 
     let value = Arc::new(Mutex::new("Hello"));
-    let mut dom = VirtualDom::new_with_props(
-        App,
-        AppProps {
-            value: value.clone(),
-        },
-    );
+    let mut dom = VirtualDom::new_with_props(App, AppProps { value: value.clone() });
 
     let _ = dom.rebuild();
 
@@ -45,7 +40,7 @@ fn manual_diffing() {
 
 #[test]
 fn events_generate() {
-    static App: Component = |cx| {
+    fn app(cx: Scope) -> Element {
         let count = cx.use_hook(|_| 0);
 
         let inner = match *count {
@@ -66,7 +61,7 @@ fn events_generate() {
         cx.render(inner)
     };
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
     let mut channel = dom.get_scheduler_channel();
     assert!(dom.has_work());
 
@@ -74,28 +69,12 @@ fn events_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement {
-                tag: "div",
-                root: 1,
-            },
-            NewEventListener {
-                event_name: "click",
-                scope: ScopeId(0),
-                root: 1,
-            },
-            CreateElement {
-                tag: "div",
-                root: 2,
-            },
-            CreateTextNode {
-                text: "nested",
-                root: 3,
-            },
+            CreateElement { tag: "div", root: 1 },
+            NewEventListener { event_name: "click", scope: ScopeId(0), root: 1 },
+            CreateElement { tag: "div", root: 2 },
+            CreateTextNode { text: "nested", root: 3 },
             AppendChildren { many: 1 },
-            CreateTextNode {
-                text: "Click me!",
-                root: 4,
-            },
+            CreateTextNode { text: "Click me!", root: 4 },
             AppendChildren { many: 2 },
             AppendChildren { many: 1 },
         ]
@@ -104,7 +83,7 @@ fn events_generate() {
 
 #[test]
 fn components_generate() {
-    static App: Component = |cx| {
+    fn app(cx: Scope) -> Element {
         let render_phase = cx.use_hook(|_| 0);
         *render_phase += 1;
 
@@ -121,106 +100,84 @@ fn components_generate() {
         })
     };
 
-    static Child: Component = |cx| {
+    fn Child(cx: Scope) -> Element {
+        log::debug!("Running child");
         cx.render(rsx! {
             h1 {}
         })
-    };
+    }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
     let edits = dom.rebuild();
     assert_eq!(
         edits.edits,
         [
-            CreateTextNode {
-                text: "Text0",
-                root: 1,
-            },
+            CreateTextNode { text: "Text0", root: 1 },
             AppendChildren { many: 1 },
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
-        edits.edits,
+        dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateElement {
-                tag: "div",
-                root: 2,
-            },
+            CreateElement { tag: "div", root: 2 },
             ReplaceWith { root: 1, m: 1 },
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
-        edits.edits,
+        dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateTextNode {
-                text: "Text2",
-                root: 3,
-            },
+            CreateTextNode { text: "Text2", root: 1 },
             ReplaceWith { root: 2, m: 1 },
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0));
+    // child {}
     assert_eq!(
-        edits.edits,
+        dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateElement { tag: "h1", root: 4 },
-            ReplaceWith { root: 3, m: 1 },
+            CreateElement { tag: "h1", root: 2 },
+            ReplaceWith { root: 1, m: 1 },
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0));
+    // placeholder
     assert_eq!(
-        edits.edits,
-        [CreatePlaceholder { root: 5 }, ReplaceWith { root: 4, m: 1 },]
+        dom.hard_diff(ScopeId(0)).edits,
+        [CreatePlaceholder { root: 1 }, ReplaceWith { root: 2, m: 1 },]
     );
 
-    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
-        edits.edits,
+        dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateTextNode {
-                text: "text 3",
-                root: 6,
-            },
-            ReplaceWith { root: 5, m: 1 },
+            CreateTextNode { text: "text 3", root: 2 },
+            ReplaceWith { root: 1, m: 1 },
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
-        edits.edits,
+        dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateTextNode {
-                text: "text 0",
-                root: 7,
-            },
-            CreateTextNode {
-                text: "text 1",
-                root: 8,
-            },
-            ReplaceWith { root: 6, m: 2 },
+            CreateTextNode { text: "text 0", root: 1 },
+            CreateTextNode { text: "text 1", root: 3 },
+            ReplaceWith { root: 2, m: 2 },
         ]
     );
 
-    let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
-        edits.edits,
+        dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateElement { tag: "h1", root: 9 },
-            ReplaceWith { root: 7, m: 1 },
-            Remove { root: 8 },
+            CreateElement { tag: "h1", root: 2 },
+            ReplaceWith { root: 1, m: 1 },
+            Remove { root: 3 },
         ]
     );
 }
 
 #[test]
 fn component_swap() {
-    static App: Component = |cx| {
+    fn app(cx: Scope) -> Element {
         let render_phase = cx.use_hook(|_| 0);
         *render_phase += 1;
 
@@ -296,7 +253,7 @@ fn component_swap() {
         })
     };
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
     let edits = dom.rebuild();
     dbg!(&edits);
 

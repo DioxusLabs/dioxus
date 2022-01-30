@@ -1,485 +1,35 @@
-//! This module contains the stateful DiffState and all methods to diff VNodes, their properties, and their children.
-//!
-//! The [`DiffState`] calculates the diffs between the old and new frames, updates the new nodes, and generates a set
-//! of mutations for the RealDom to apply.
-//!
-//! ## Notice:
-//!
-//! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
-//! Components, Fragments, Suspense, SubTree memoization, incremental diffing, cancellation, NodeRefs, pausing, priority
-//! scheduling, and additional batching operations.
-//!
-//! ## Implementation Details:
-//!
-//! ### IDs for elements
-//! --------------------
-//! All nodes are addressed by their IDs. The RealDom provides an imperative interface for making changes to these nodes.
-//! We don't necessarily require that DOM changes happen instantly during the diffing process, so the implementor may choose
-//! to batch nodes if it is more performant for their application. The element IDs are indices into the internal element
-//! array. The expectation is that implementors will use the ID as an index into a Vec of real nodes, allowing for passive
-//! garbage collection as the VirtualDOM replaces old nodes.
-//!
-//! When new vnodes are created through `cx.render`, they won't know which real node they correspond to. During diffing,
-//! we always make sure to copy over the ID. If we don't do this properly, the ElementId will be populated incorrectly
-//! and brick the user's page.
-//!
-//! ### Fragment Support
-//! --------------------
-//! Fragments (nodes without a parent) are supported through a combination of "replace with" and anchor vnodes. Fragments
-//! can be particularly challenging when they are empty, so the anchor node lets us "reserve" a spot for the empty
-//! fragment to be replaced with when it is no longer empty. This is guaranteed by logic in the NodeFactory - it is
-//! impossible to craft a fragment with 0 elements - they must always have at least a single placeholder element. Adding
-//! "dummy" nodes _is_ inefficient, but it makes our diffing algorithm faster and the implementation is completely up to
-//! the platform.
-//!
-//! Other implementations either don't support fragments or use a "child + sibling" pattern to represent them. Our code is
-//! vastly simpler and more performant when we can just create a placeholder element while the fragment has no children.
-//!
-//! ### Suspense
-//! ------------
-//! Dioxus implements Suspense slightly differently than React. In React, each fiber is manually progressed until it runs
-//! into a promise-like value. React will then work on the next "ready" fiber, checking back on the previous fiber once
-//! it has finished its new work. In Dioxus, we use a similar approach, but try to completely render the tree before
-//! switching sub-fibers. Instead, each future is submitted into a futures-queue and the node is manually loaded later on.
-//! Due to the frequent calls to "yield_now" we can get the pure "fetch-as-you-render" behavior of React Fiber.
-//!
-//! We're able to use this approach because we use placeholder nodes - futures that aren't ready still get submitted to
-//! DOM, but as a placeholder.
-//!
-//! Right now, the "suspense" queue is intertwined with hooks. In the future, we should allow any future to drive attributes
-//! and contents, without the need for the "use_suspense" hook. In the interim, this is the quickest way to get Suspense working.
-//!
-//! ## Subtree Memoization
-//! -----------------------
-//! We also employ "subtree memoization" which saves us from having to check trees which hold no dynamic content. We can
-//! detect if a subtree is "static" by checking if its children are "static". Since we dive into the tree depth-first, the
-//! calls to "create" propagate this information upwards. Structures like the one below are entirely static:
-//! ```rust, ignore
-//! rsx!( div { class: "hello world", "this node is entirely static" } )
-//! ```
-//! Because the subtrees won't be diffed, their "real node" data will be stale (invalid), so it's up to the reconciler to
-//! track nodes created in a scope and clean up all relevant data. Support for this is currently WIP and depends on comp-time
-//! hashing of the subtree from the rsx! macro. We do a very limited form of static analysis via static string pointers as
-//! a way of short-circuiting the most expensive checks.
-//!
-//! ## Bloom Filter and Heuristics
-//! ------------------------------
-//! For all components, we employ some basic heuristics to speed up allocations and pre-size bump arenas. The heuristics are
-//! currently very rough, but will get better as time goes on. The information currently tracked includes the size of a
-//! bump arena after first render, the number of hooks, and the number of nodes in the tree.
-//!
-//! ## Garbage Collection
-//! ---------------------
-//! Dioxus uses a passive garbage collection system to clean up old nodes once the work has been completed. This garbage
-//! collection is done internally once the main diffing work is complete. After the "garbage" is collected, Dioxus will then
-//! start to re-use old keys for new nodes. This results in a passive memory management system that is very efficient.
-//!
-//! The IDs used by the key/map are just an index into a Vec. This means that Dioxus will drive the key allocation strategy
-//! so the client only needs to maintain a simple list of nodes. By default, Dioxus will not manually clean up old nodes
-//! for the client. As new nodes are created, old nodes will be over-written.
-//!
-//! ## Further Reading and Thoughts
-//! ----------------------------
-//! There are more ways of increasing diff performance here that are currently not implemented.
-//! - Strong memoization of subtrees.
-//! - Guided diffing.
-//! - Certain web-dom-specific optimizations.
-//!
-//! More info on how to improve this diffing algorithm:
-//!  - <https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/>
-
 use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
-use DomEdit::*;
 
-/// Our DiffState is an iterative tree differ.
-///
-/// It uses techniques of a stack machine to allow pausing and restarting of the diff algorithm. This
-/// was originally implemented using recursive techniques, but Rust lacks the ability to call async functions recursively,
-/// meaning we could not "pause" the original diffing algorithm.
-///
-/// Instead, we use a traditional stack machine approach to diff and create new nodes. The diff algorithm periodically
-/// calls "yield_now" which allows the machine to pause and return control to the caller. The caller can then wait for
-/// the next period of idle time, preventing our diff algorithm from blocking the main thread.
-///
-/// Funnily enough, this stack machine's entire job is to create instructions for another stack machine to execute. It's
-/// stack machines all the way down!
-pub(crate) struct DiffState<'bump> {
+pub(crate) struct AsyncDiffState<'bump> {
     pub(crate) scopes: &'bump ScopeArena,
     pub(crate) mutations: Mutations<'bump>,
-    pub(crate) stack: DiffStack<'bump>,
     pub(crate) force_diff: bool,
+    pub(crate) element_stack: SmallVec<[ElementId; 10]>,
+    pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
 }
 
-impl<'bump> DiffState<'bump> {
-    pub(crate) fn new(scopes: &'bump ScopeArena) -> Self {
+impl<'b> AsyncDiffState<'b> {
+    pub fn new(scopes: &'b ScopeArena) -> Self {
         Self {
             scopes,
             mutations: Mutations::new(),
-            stack: DiffStack::new(),
             force_diff: false,
-        }
-    }
-}
-
-/// The stack instructions we use to diff and create new nodes.
-#[derive(Debug)]
-pub(crate) enum DiffInstruction<'a> {
-    Diff {
-        old: &'a VNode<'a>,
-        new: &'a VNode<'a>,
-    },
-
-    Create {
-        node: &'a VNode<'a>,
-    },
-
-    /// pushes the node elements onto the stack for use in mount
-    PrepareMove {
-        node: &'a VNode<'a>,
-    },
-
-    Mount {
-        and: MountType<'a>,
-    },
-
-    PopScope,
-    PopElement,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum MountType<'a> {
-    Absorb,
-    Append,
-    Replace { old: &'a VNode<'a> },
-    InsertAfter { other_node: &'a VNode<'a> },
-    InsertBefore { other_node: &'a VNode<'a> },
-}
-
-pub(crate) struct DiffStack<'bump> {
-    pub(crate) instructions: Vec<DiffInstruction<'bump>>,
-    pub(crate) nodes_created_stack: SmallVec<[usize; 10]>,
-    pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
-    pub(crate) element_stack: SmallVec<[ElementId; 10]>,
-}
-
-impl<'bump> DiffStack<'bump> {
-    fn new() -> Self {
-        Self {
-            instructions: Vec::with_capacity(1000),
-            nodes_created_stack: smallvec![],
-            scope_stack: smallvec![],
             element_stack: smallvec![],
+            scope_stack: smallvec![],
         }
     }
 
-    fn pop(&mut self) -> Option<DiffInstruction<'bump>> {
-        self.instructions.pop()
+    pub fn diff_scope(&mut self, scopeid: ScopeId) {
+        let (old, new) = (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
+        self.scope_stack.push(scopeid);
+        let scope = self.scopes.get_scope(scopeid).unwrap();
+        self.element_stack.push(scope.container);
+        self.diff_node(old, new);
     }
 
-    fn pop_off_scope(&mut self) {
-        self.scope_stack.pop();
-    }
-
-    pub(crate) fn push(&mut self, instruction: DiffInstruction<'bump>) {
-        self.instructions.push(instruction)
-    }
-
-    fn create_children(&mut self, children: &'bump [VNode<'bump>], and: MountType<'bump>) {
-        self.nodes_created_stack.push(0);
-        self.instructions.push(DiffInstruction::Mount { and });
-
-        for child in children.iter().rev() {
-            self.instructions
-                .push(DiffInstruction::Create { node: child });
-        }
-    }
-
-    // todo: subtrees
-    // fn push_subtree(&mut self) {
-    //     self.nodes_created_stack.push(0);
-    //     self.instructions.push(DiffInstruction::Mount {
-    //         and: MountType::Append,
-    //     });
-    // }
-
-    fn push_nodes_created(&mut self, count: usize) {
-        self.nodes_created_stack.push(count);
-    }
-
-    pub(crate) fn create_node(&mut self, node: &'bump VNode<'bump>, and: MountType<'bump>) {
-        self.nodes_created_stack.push(0);
-        self.instructions.push(DiffInstruction::Mount { and });
-        self.instructions.push(DiffInstruction::Create { node });
-    }
-
-    fn add_child_count(&mut self, count: usize) {
-        *self.nodes_created_stack.last_mut().unwrap() += count;
-    }
-
-    fn pop_nodes_created(&mut self) -> usize {
-        self.nodes_created_stack.pop().unwrap()
-    }
-
-    pub fn current_scope(&self) -> Option<ScopeId> {
-        self.scope_stack.last().copied()
-    }
-
-    fn create_component(&mut self, idx: ScopeId, node: &'bump VNode<'bump>) {
-        // Push the new scope onto the stack
-        self.scope_stack.push(idx);
-
-        self.instructions.push(DiffInstruction::PopScope);
-
-        // Run the creation algorithm with this scope on the stack
-        // ?? I think we treat components as fragments??
-        self.instructions.push(DiffInstruction::Create { node });
-    }
-}
-
-impl<'bump> DiffState<'bump> {
-    /// Progress the diffing for this "fiber"
-    ///
-    /// This method implements a depth-first iterative tree traversal.
-    ///
-    /// We do depth-first to maintain high cache locality (nodes were originally generated recursively).
-    ///
-    /// Returns a `bool` indicating that the work completed properly.
-    pub fn work(&mut self, mut deadline_expired: impl FnMut() -> bool) -> bool {
-        while let Some(instruction) = self.stack.pop() {
-            match instruction {
-                DiffInstruction::Diff { old, new } => self.diff_node(old, new),
-                DiffInstruction::Create { node } => self.create_node(node),
-                DiffInstruction::Mount { and } => self.mount(and),
-                DiffInstruction::PrepareMove { node } => {
-                    let num_on_stack = self.push_all_nodes(node);
-                    self.stack.add_child_count(num_on_stack);
-                }
-                DiffInstruction::PopScope => self.stack.pop_off_scope(),
-                DiffInstruction::PopElement => {
-                    self.stack.element_stack.pop();
-                }
-            };
-
-            if deadline_expired() {
-                log::trace!("Deadline expired before we could finish!");
-                return false;
-            }
-        }
-
-        true
-    }
-
-    // recursively push all the nodes of a tree onto the stack and return how many are there
-    fn push_all_nodes(&mut self, node: &'bump VNode<'bump>) -> usize {
-        match node {
-            VNode::Text(_) | VNode::Placeholder(_) => {
-                self.mutations.push_root(node.mounted_id());
-                1
-            }
-
-            VNode::Fragment(_) | VNode::Component(_) => {
-                //
-                let mut added = 0;
-                for child in node.children() {
-                    added += self.push_all_nodes(child);
-                }
-                added
-            }
-
-            VNode::Element(el) => {
-                let mut num_on_stack = 0;
-                for child in el.children.iter() {
-                    num_on_stack += self.push_all_nodes(child);
-                }
-                self.mutations.push_root(el.id.get().unwrap());
-
-                num_on_stack + 1
-            }
-        }
-    }
-
-    fn mount(&mut self, and: MountType<'bump>) {
-        let nodes_created = self.stack.pop_nodes_created();
-        match and {
-            // add the nodes from this virtual list to the parent
-            // used by fragments and components
-            MountType::Absorb => {
-                self.stack.add_child_count(nodes_created);
-            }
-
-            MountType::Replace { old } => {
-                self.replace_node(old, nodes_created);
-            }
-
-            MountType::Append => {
-                self.mutations.append_children(nodes_created as u32);
-                // self.mutations.edits.push(AppendChildren {
-                //     many: nodes_created as u32,
-                // });
-            }
-
-            MountType::InsertAfter { other_node } => {
-                let root = self.find_last_element(other_node).unwrap();
-                self.mutations.insert_after(root, nodes_created as u32);
-            }
-
-            MountType::InsertBefore { other_node } => {
-                let root = self.find_first_element_id(other_node).unwrap();
-                self.mutations.insert_before(root, nodes_created as u32);
-            }
-        }
-    }
-
-    // =================================
-    //  Tools for creating new nodes
-    // =================================
-
-    fn create_node(&mut self, node: &'bump VNode<'bump>) {
-        match node {
-            VNode::Text(vtext) => self.create_text_node(vtext, node),
-            VNode::Placeholder(anchor) => self.create_anchor_node(anchor, node),
-            VNode::Element(element) => self.create_element_node(element, node),
-            VNode::Fragment(frag) => self.create_fragment_node(frag),
-            VNode::Component(component) => self.create_component_node(*component),
-        }
-    }
-
-    fn create_text_node(&mut self, vtext: &'bump VText<'bump>, node: &'bump VNode<'bump>) {
-        let real_id = self.scopes.reserve_node(node);
-
-        self.mutations.create_text_node(vtext.text, real_id);
-        vtext.id.set(Some(real_id));
-        self.stack.add_child_count(1);
-    }
-
-    fn create_anchor_node(&mut self, anchor: &'bump VPlaceholder, node: &'bump VNode<'bump>) {
-        let real_id = self.scopes.reserve_node(node);
-
-        self.mutations.create_placeholder(real_id);
-        anchor.id.set(Some(real_id));
-
-        self.stack.add_child_count(1);
-    }
-
-    fn create_element_node(&mut self, element: &'bump VElement<'bump>, node: &'bump VNode<'bump>) {
-        let VElement {
-            tag: tag_name,
-            listeners,
-            attributes,
-            children,
-            namespace,
-            id: dom_id,
-            parent: parent_id,
-            ..
-        } = element;
-
-        // set the parent ID for event bubbling
-        self.stack.instructions.push(DiffInstruction::PopElement);
-
-        let parent = self.stack.element_stack.last().unwrap();
-        parent_id.set(Some(*parent));
-
-        // set the id of the element
-        let real_id = self.scopes.reserve_node(node);
-        self.stack.element_stack.push(real_id);
-        dom_id.set(Some(real_id));
-
-        self.mutations.create_element(tag_name, *namespace, real_id);
-
-        self.stack.add_child_count(1);
-
-        if let Some(cur_scope_id) = self.stack.current_scope() {
-            for listener in *listeners {
-                listener.mounted_node.set(Some(real_id));
-                self.mutations.new_event_listener(listener, cur_scope_id);
-            }
-        } else {
-            log::warn!("create element called with no scope on the stack - this is an error for a live dom");
-        }
-
-        for attr in *attributes {
-            self.mutations.set_attribute(attr, real_id.as_u64());
-        }
-
-        // todo: the settext optimization
-        //
-        // if children.len() == 1 {
-        //     if let VNode::Text(vtext) = children[0] {
-        //         self.mutations.set_text(vtext.text, real_id.as_u64());
-        //         return;
-        //     }
-        // }
-
-        if !children.is_empty() {
-            self.stack.create_children(children, MountType::Append);
-        }
-    }
-
-    fn create_fragment_node(&mut self, frag: &'bump VFragment<'bump>) {
-        self.stack.create_children(frag.children, MountType::Absorb);
-    }
-
-    fn create_component_node(&mut self, vcomponent: &'bump VComponent<'bump>) {
-        let parent_idx = self.stack.current_scope().unwrap();
-
-        // the component might already exist - if it does, we need to reuse it
-        // this makes figure out when to drop the component more complicated
-        let new_idx = if let Some(idx) = vcomponent.scope.get() {
-            assert!(self.scopes.get_scope(idx).is_some());
-            idx
-        } else {
-            // Insert a new scope into our component list
-            let props: Box<dyn AnyProps + 'bump> = vcomponent.props.borrow_mut().take().unwrap();
-            let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
-            let new_idx = self.scopes.new_with_key(
-                vcomponent.user_fc,
-                props,
-                Some(parent_idx),
-                self.stack.element_stack.last().copied().unwrap(),
-                0,
-            );
-
-            new_idx
-        };
-
-        log::info!(
-            "created component {:?} with parent {:?} and originator {:?}",
-            new_idx,
-            parent_idx,
-            vcomponent.originator
-        );
-
-        // Actually initialize the caller's slot with the right address
-        vcomponent.scope.set(Some(new_idx));
-
-        match vcomponent.can_memoize {
-            true => {
-                // todo: implement promotion logic. save us from boxing props that we don't need
-            }
-            false => {
-                // track this component internally so we know the right drop order
-            }
-        }
-
-        // Run the scope for one iteration to initialize it
-        self.scopes.run_scope(new_idx);
-
-        // Take the node that was just generated from running the component
-        let nextnode = self.scopes.fin_head(new_idx);
-        self.stack.create_component(new_idx, nextnode);
-
-        // Finally, insert this scope as a seen node.
-        self.mutations.mark_dirty_scope(new_idx);
-        // self.mutations.dirty_scopes.insert(new_idx);
-    }
-
-    // =================================
-    //  Tools for diffing nodes
-    // =================================
-
-    pub fn diff_node(&mut self, old_node: &'bump VNode<'bump>, new_node: &'bump VNode<'bump>) {
+    pub fn diff_node(&mut self, old_node: &'b VNode<'b>, new_node: &'b VNode<'b>) {
         use VNode::*;
         match (old_node, new_node) {
             // Check the most common cases first
@@ -539,28 +89,157 @@ impl<'bump> DiffState<'bump> {
 
             // The normal pathway still works, but generates slightly weird instructions
             // This pathway ensures uses the ReplaceAll, not the InsertAfter and remove
-            (Placeholder(_), Fragment(new)) => {
+            (Placeholder(_), Fragment(_)) => {
                 log::debug!("replacing placeholder with fragment {:?}", new_node);
-                self.stack
-                    .create_children(new.children, MountType::Replace { old: old_node });
+                self.replace_node(old_node, new_node);
             }
 
             // Anything else is just a basic replace and create
             (
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
-            ) => self
-                .stack
-                .create_node(new_node, MountType::Replace { old: old_node }),
+            ) => self.replace_node(old_node, new_node),
         }
+    }
+
+    pub fn create_node(&mut self, node: &'b VNode<'b>) -> usize {
+        match node {
+            VNode::Text(vtext) => self.create_text_node(vtext, node),
+            VNode::Placeholder(anchor) => self.create_anchor_node(anchor, node),
+            VNode::Element(element) => self.create_element_node(element, node),
+            VNode::Fragment(frag) => self.create_fragment_node(frag),
+            VNode::Component(component) => self.create_component_node(*component),
+        }
+    }
+
+    fn create_text_node(&mut self, vtext: &'b VText<'b>, node: &'b VNode<'b>) -> usize {
+        let real_id = self.scopes.reserve_node(node);
+        self.mutations.create_text_node(vtext.text, real_id);
+        vtext.id.set(Some(real_id));
+
+        1
+    }
+
+    fn create_anchor_node(&mut self, anchor: &'b VPlaceholder, node: &'b VNode<'b>) -> usize {
+        let real_id = self.scopes.reserve_node(node);
+        self.mutations.create_placeholder(real_id);
+        anchor.id.set(Some(real_id));
+
+        1
+    }
+
+    fn create_element_node(&mut self, element: &'b VElement<'b>, node: &'b VNode<'b>) -> usize {
+        let VElement {
+            tag: tag_name,
+            listeners,
+            attributes,
+            children,
+            namespace,
+            id: dom_id,
+            parent: parent_id,
+            ..
+        } = element;
+
+        // set the parent ID for event bubbling
+        // self.stack.instructions.push(DiffInstruction::PopElement);
+
+        let parent = self.element_stack.last().unwrap();
+        parent_id.set(Some(*parent));
+
+        // set the id of the element
+        let real_id = self.scopes.reserve_node(node);
+        self.element_stack.push(real_id);
+        dom_id.set(Some(real_id));
+
+        self.mutations.create_element(tag_name, *namespace, real_id);
+
+        if let Some(cur_scope_id) = self.current_scope() {
+            for listener in *listeners {
+                listener.mounted_node.set(Some(real_id));
+                self.mutations.new_event_listener(listener, cur_scope_id);
+            }
+        } else {
+            log::warn!("create element called with no scope on the stack - this is an error for a live dom");
+        }
+
+        for attr in *attributes {
+            self.mutations.set_attribute(attr, real_id.as_u64());
+        }
+
+        if !children.is_empty() {
+            self.create_and_append_children(children);
+        }
+
+        1
+    }
+
+    fn create_fragment_node(&mut self, frag: &'b VFragment<'b>) -> usize {
+        self.create_children(frag.children)
+    }
+
+    fn create_component_node(&mut self, vcomponent: &'b VComponent<'b>) -> usize {
+        let parent_idx = self.current_scope().unwrap();
+
+        // the component might already exist - if it does, we need to reuse it
+        // this makes figure out when to drop the component more complicated
+        let new_idx = if let Some(idx) = vcomponent.scope.get() {
+            assert!(self.scopes.get_scope(idx).is_some());
+            idx
+        } else {
+            // Insert a new scope into our component list
+            let props: Box<dyn AnyProps + 'b> = vcomponent.props.borrow_mut().take().unwrap();
+            let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
+            let new_idx = self.scopes.new_with_key(
+                vcomponent.user_fc,
+                props,
+                Some(parent_idx),
+                self.element_stack.last().copied().unwrap(),
+                0,
+            );
+
+            new_idx
+        };
+
+        log::info!(
+            "created component {:?} with parent {:?} and originator {:?}",
+            new_idx,
+            parent_idx,
+            vcomponent.originator
+        );
+
+        // Actually initialize the caller's slot with the right address
+        vcomponent.scope.set(Some(new_idx));
+
+        match vcomponent.can_memoize {
+            true => {
+                // todo: implement promotion logic. save us from boxing props that we don't need
+            }
+            false => {
+                // track this component internally so we know the right drop order
+            }
+        }
+
+        self.enter_scope(new_idx);
+
+        // Run the scope for one iteration to initialize it
+        self.scopes.run_scope(new_idx);
+        self.mutations.mark_dirty_scope(new_idx);
+
+        // Take the node that was just generated from running the component
+        let nextnode = self.scopes.fin_head(new_idx);
+        let created = self.create_node(nextnode);
+
+        self.leave_scope();
+
+        created
     }
 
     fn diff_element_nodes(
         &mut self,
-        old: &'bump VElement<'bump>,
-        new: &'bump VElement<'bump>,
-        old_node: &'bump VNode<'bump>,
-        new_node: &'bump VNode<'bump>,
+        old: &'b VElement<'b>,
+        new: &'b VElement<'b>,
+        old_node: &'b VNode<'b>,
+        new_node: &'b VNode<'b>,
     ) {
         let root = old.id.get().unwrap();
 
@@ -569,13 +248,7 @@ impl<'bump> DiffState<'bump> {
         //
         // This case is rather rare (typically only in non-keyed lists)
         if new.tag != old.tag || new.namespace != old.namespace {
-            // maybe make this an instruction?
-            // issue is that we need the "vnode" but this method only has the velement
-            self.stack.push_nodes_created(0);
-            self.stack.push(DiffInstruction::Mount {
-                and: MountType::Replace { old: old_node },
-            });
-            self.create_element_node(new, new_node);
+            self.replace_node(old_node, new_node);
             return;
         }
 
@@ -618,7 +291,7 @@ impl<'bump> DiffState<'bump> {
         // We also need to make sure that all listeners are properly attached to the parent scope (fix_listener)
         //
         // TODO: take a more efficient path than this
-        if let Some(cur_scope_id) = self.stack.current_scope() {
+        if let Some(cur_scope_id) = self.current_scope() {
             if old.listeners.len() == new.listeners.len() {
                 for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                     if old_l.event != new_l.event {
@@ -640,87 +313,24 @@ impl<'bump> DiffState<'bump> {
             }
         }
 
-        if old.children.is_empty() && !new.children.is_empty() {
-            self.mutations.push_root(root);
-            // self.mutations.edits.push(PushRoot {
-            //     root: root.as_u64(),
-            // });
-            self.stack.element_stack.push(root);
-            self.stack.instructions.push(DiffInstruction::PopElement);
-            self.stack.create_children(new.children, MountType::Append);
-        } else {
-            self.stack.element_stack.push(root);
-            self.stack.instructions.push(DiffInstruction::PopElement);
-            self.diff_children(old.children, new.children);
-        }
-
-        // todo: this is for the "settext" optimization
-        // it works, but i'm not sure if it's the direction we want to take right away
-        // I haven't benchmarked the performance imporvemenet yet. Perhaps
-        // we can make it a config?
-
-        // match (old.children.len(), new.children.len()) {
-        //     (0, 0) => {}
-        //     (1, 1) => {
-        //         let old1 = &old.children[0];
-        //         let new1 = &new.children[0];
-
-        //         match (old1, new1) {
-        //             (VNode::Text(old_text), VNode::Text(new_text)) => {
-        //                 if old_text.text != new_text.text {
-        //                     self.mutations.set_text(new_text.text, root.as_u64());
-        //                 }
-        //             }
-        //             (VNode::Text(_old_text), _) => {
-        //                 self.stack.element_stack.push(root);
-        //                 self.stack.instructions.push(DiffInstruction::PopElement);
-        //                 self.stack.create_node(new1, MountType::Append);
-        //             }
-        //             (_, VNode::Text(new_text)) => {
-        //                 self.remove_nodes([old1], false);
-        //                 self.mutations.set_text(new_text.text, root.as_u64());
-        //             }
-        //             _ => {
-        //                 self.stack.element_stack.push(root);
-        //                 self.stack.instructions.push(DiffInstruction::PopElement);
-        //                 self.diff_children(old.children, new.children);
-        //             }
-        //         }
-        //     }
-        //     (0, 1) => {
-        //         if let VNode::Text(text) = &new.children[0] {
-        //             self.mutations.set_text(text.text, root.as_u64());
-        //         } else {
-        //             self.stack.element_stack.push(root);
-        //             self.stack.instructions.push(DiffInstruction::PopElement);
-        //         }
-        //     }
-        //     (0, _) => {
-        //         self.mutations.edits.push(PushRoot {
-        //             root: root.as_u64(),
-        //         });
-        //         self.stack.element_stack.push(root);
-        //         self.stack.instructions.push(DiffInstruction::PopElement);
-        //         self.stack.create_children(new.children, MountType::Append);
-        //     }
-        //     (_, 0) => {
-        //         self.remove_nodes(old.children, false);
-        //         self.mutations.set_text("", root.as_u64());
-        //     }
-        //     (_, _) => {
-        //         self.stack.element_stack.push(root);
-        //         self.stack.instructions.push(DiffInstruction::PopElement);
-        //         self.diff_children(old.children, new.children);
-        //     }
-        // }
+        match (old.children.len(), new.children.len()) {
+            (0, 0) => {}
+            (0, _) => {
+                let created = self.create_children(new.children);
+                self.mutations.append_children(created as u32);
+            }
+            (_, _) => {
+                self.diff_children(old.children, new.children);
+            }
+        };
     }
 
     fn diff_component_nodes(
         &mut self,
-        old_node: &'bump VNode<'bump>,
-        new_node: &'bump VNode<'bump>,
-        old: &'bump VComponent<'bump>,
-        new: &'bump VComponent<'bump>,
+        old_node: &'b VNode<'b>,
+        new_node: &'b VNode<'b>,
+        old: &'b VComponent<'b>,
+        new: &'b VComponent<'b>,
     ) {
         let scope_addr = old.scope.get().unwrap();
         log::trace!(
@@ -736,7 +346,7 @@ impl<'bump> DiffState<'bump> {
 
         // Make sure we're dealing with the same component (by function pointer)
         if old.user_fc == new.user_fc {
-            self.stack.scope_stack.push(scope_addr);
+            self.enter_scope(scope_addr);
 
             // Make sure the new component vnode is referencing the right scope id
             new.scope.set(Some(scope_addr));
@@ -786,16 +396,14 @@ impl<'bump> DiffState<'bump> {
                 drop(new_props);
             };
 
-            self.stack.scope_stack.pop();
+            self.leave_scope();
         } else {
-            //
-            log::debug!("scope stack is {:#?}", self.stack.scope_stack);
-            self.stack
-                .create_node(new_node, MountType::Replace { old: old_node });
+            log::debug!("scope stack is {:#?}", self.scope_stack);
+            self.replace_node(old_node, new_node);
         }
     }
 
-    fn diff_fragment_nodes(&mut self, old: &'bump VFragment<'bump>, new: &'bump VFragment<'bump>) {
+    fn diff_fragment_nodes(&mut self, old: &'b VFragment<'b>, new: &'b VFragment<'b>) {
         // This is the case where options or direct vnodes might be used.
         // In this case, it's faster to just skip ahead to their diff
         if old.children.len() == 1 && new.children.len() == 1 {
@@ -828,15 +436,12 @@ impl<'bump> DiffState<'bump> {
     //
     // Fragment nodes cannot generate empty children lists, so we can assume that when a list is empty, it belongs only
     // to an element, and appending makes sense.
-    fn diff_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
+    fn diff_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         // Remember, fragments can never be empty (they always have a single child)
         match (old, new) {
             ([], []) => {}
-            ([], _) => self.stack.create_children(new, MountType::Append),
-            (_, []) => {
-                log::debug!("removing nodes {:?}", old);
-                self.remove_nodes(old, true)
-            }
+            ([], _) => self.create_and_append_children(new),
+            (_, []) => self.remove_nodes(old, true),
             _ => {
                 let new_is_keyed = new[0].key().is_some();
                 let old_is_keyed = old[0].key().is_some();
@@ -867,29 +472,20 @@ impl<'bump> DiffState<'bump> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
+    fn diff_non_keyed_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         // Handled these cases in `diff_children` before calling this function.
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
-        for (new, old) in new.iter().zip(old.iter()).rev() {
-            self.stack.push(DiffInstruction::Diff { new, old });
-        }
-
         use std::cmp::Ordering;
         match old.len().cmp(&new.len()) {
             Ordering::Greater => self.remove_nodes(&old[new.len()..], true),
-            Ordering::Less => {
-                self.stack.create_children(
-                    &new[old.len()..],
-                    MountType::InsertAfter {
-                        other_node: old.last().unwrap(),
-                    },
-                );
-            }
-            Ordering::Equal => {
-                // nothing - they're the same size
-            }
+            Ordering::Less => self.create_and_insert_after(&new[old.len()..], old.last().unwrap()),
+            Ordering::Equal => {}
+        }
+
+        for (new, old) in new.iter().zip(old.iter()) {
+            self.diff_node(old, new);
         }
     }
 
@@ -909,10 +505,10 @@ impl<'bump> DiffState<'bump> {
     // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
     //
     // The stack is empty upon entry.
-    fn diff_keyed_children(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
+    fn diff_keyed_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         if cfg!(debug_assertions) {
             let mut keys = fxhash::FxHashSet::default();
-            let mut assert_unique_keys = |children: &'bump [VNode<'bump>]| {
+            let mut assert_unique_keys = |children: &'b [VNode<'b>]| {
                 keys.clear();
                 for child in children {
                     let key = child.key();
@@ -953,6 +549,7 @@ impl<'bump> DiffState<'bump> {
             !((old_middle.len() == new_middle.len()) && old_middle.is_empty()),
             "keyed children must have the same number of children"
         );
+
         if new_middle.is_empty() {
             // remove the old elements
             self.remove_nodes(old_middle, true);
@@ -962,30 +559,15 @@ impl<'bump> DiffState<'bump> {
             if left_offset == 0 {
                 // insert at the beginning of the old list
                 let foothold = &old[old.len() - right_offset];
-                self.stack.create_children(
-                    new_middle,
-                    MountType::InsertBefore {
-                        other_node: foothold,
-                    },
-                );
+                self.create_and_insert_before(new_middle, foothold);
             } else if right_offset == 0 {
                 // insert at the end  the old list
                 let foothold = old.last().unwrap();
-                self.stack.create_children(
-                    new_middle,
-                    MountType::InsertAfter {
-                        other_node: foothold,
-                    },
-                );
+                self.create_and_insert_after(new_middle, foothold);
             } else {
                 // inserting in the middle
                 let foothold = &old[left_offset - 1];
-                self.stack.create_children(
-                    new_middle,
-                    MountType::InsertAfter {
-                        other_node: foothold,
-                    },
-                );
+                self.create_and_insert_after(new_middle, foothold);
             }
         } else {
             self.diff_keyed_middle(old_middle, new_middle);
@@ -999,9 +581,8 @@ impl<'bump> DiffState<'bump> {
     /// If there is no offset, then this function returns None and the diffing is complete.
     fn diff_keyed_ends(
         &mut self,
-
-        old: &'bump [VNode<'bump>],
-        new: &'bump [VNode<'bump>],
+        old: &'b [VNode<'b>],
+        new: &'b [VNode<'b>],
     ) -> Option<(usize, usize)> {
         let mut left_offset = 0;
 
@@ -1010,19 +591,14 @@ impl<'bump> DiffState<'bump> {
             if old.key() != new.key() {
                 break;
             }
-            self.stack.push(DiffInstruction::Diff { old, new });
+            self.diff_node(old, new);
             left_offset += 1;
         }
 
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if left_offset == old.len() {
-            self.stack.create_children(
-                &new[left_offset..],
-                MountType::InsertAfter {
-                    other_node: old.last().unwrap(),
-                },
-            );
+            self.create_and_insert_after(&new[left_offset..], old.last().unwrap());
             return None;
         }
 
@@ -1060,7 +636,7 @@ impl<'bump> DiffState<'bump> {
     // This function will load the appropriate nodes onto the stack and do diffing in place.
     //
     // Upon exit from this function, it will be restored to that same self.
-    fn diff_keyed_middle(&mut self, old: &'bump [VNode<'bump>], new: &'bump [VNode<'bump>]) {
+    fn diff_keyed_middle(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
         2. Create a map of old key to its index
@@ -1118,10 +694,12 @@ impl<'bump> DiffState<'bump> {
         if shared_keys.is_empty() {
             if let Some(first_old) = old.get(0) {
                 self.remove_nodes(&old[1..], true);
-                self.stack
-                    .create_children(new, MountType::Replace { old: first_old })
+                let nodes_created = self.create_children(new);
+                self.replace_inner(first_old, nodes_created);
             } else {
-                self.stack.create_children(new, MountType::Append {});
+                // I think this is wrong - why are we appending?
+                // only valid of the if there are no trailing elements
+                self.create_and_append_children(new);
             }
             return;
         }
@@ -1149,33 +727,31 @@ impl<'bump> DiffState<'bump> {
             lis_sequence.pop();
         }
 
-        let apply = |new_idx, new_node: &'bump VNode<'bump>, stack: &mut DiffStack<'bump>| {
-            let old_index = new_index_to_old_index[new_idx];
-            if old_index == u32::MAX as usize {
-                stack.create_node(new_node, MountType::Absorb);
-            } else {
-                // this function should never take LIS indices
-                stack.push(DiffInstruction::PrepareMove { node: new_node });
-                stack.push(DiffInstruction::Diff {
-                    new: new_node,
-                    old: &old[old_index],
-                });
-            }
-        };
+        for idx in lis_sequence.iter() {
+            self.diff_node(&old[new_index_to_old_index[*idx]], &new[*idx]);
+        }
 
-        // add mount instruction for the last items not covered by the lis
-        let first_lis = *lis_sequence.first().unwrap();
-        if first_lis > 0 {
-            self.stack.push_nodes_created(0);
-            self.stack.push(DiffInstruction::Mount {
-                and: MountType::InsertBefore {
-                    other_node: &new[first_lis],
-                },
-            });
+        let mut nodes_created = 0;
 
-            for (idx, new_node) in new[..first_lis].iter().enumerate().rev() {
-                apply(idx, new_node, &mut self.stack);
+        // add mount instruction for the first items not covered by the lis
+        let last = *lis_sequence.last().unwrap();
+        if last < (new.len() - 1) {
+            for (idx, new_node) in new[(last + 1)..].iter().enumerate() {
+                let new_idx = idx + last + 1;
+                let old_index = new_index_to_old_index[new_idx];
+                if old_index == u32::MAX as usize {
+                    nodes_created += self.create_node(new_node);
+                } else {
+                    self.diff_node(&old[old_index], new_node);
+                    nodes_created += self.push_all_nodes(new_node);
+                }
             }
+
+            self.mutations.insert_after(
+                self.find_last_element(&new[last]).unwrap(),
+                nodes_created as u32,
+            );
+            nodes_created = 0;
         }
 
         // for each spacing, generate a mount instruction
@@ -1183,46 +759,185 @@ impl<'bump> DiffState<'bump> {
         let mut last = *lis_iter.next().unwrap();
         for next in lis_iter {
             if last - next > 1 {
-                self.stack.push_nodes_created(0);
-                self.stack.push(DiffInstruction::Mount {
-                    and: MountType::InsertBefore {
-                        other_node: &new[last],
-                    },
-                });
-                for (idx, new_node) in new[(next + 1)..last].iter().enumerate().rev() {
-                    apply(idx + next + 1, new_node, &mut self.stack);
+                for (idx, new_node) in new[(next + 1)..last].iter().enumerate() {
+                    let new_idx = idx + next + 1;
+
+                    let old_index = new_index_to_old_index[new_idx];
+                    if old_index == u32::MAX as usize {
+                        nodes_created += self.create_node(new_node);
+                    } else {
+                        self.diff_node(&old[old_index], new_node);
+                        nodes_created += self.push_all_nodes(new_node);
+                    }
                 }
+
+                self.mutations.insert_before(
+                    self.find_first_element(&new[last]).unwrap(),
+                    nodes_created as u32,
+                );
+
+                nodes_created = 0;
             }
             last = *next;
         }
 
-        // add mount instruction for the first items not covered by the lis
-        let last = *lis_sequence.last().unwrap();
-        if last < (new.len() - 1) {
-            self.stack.push_nodes_created(0);
-            self.stack.push(DiffInstruction::Mount {
-                and: MountType::InsertAfter {
-                    other_node: &new[last],
-                },
-            });
-            for (idx, new_node) in new[(last + 1)..].iter().enumerate().rev() {
-                apply(idx + last + 1, new_node, &mut self.stack);
+        // add mount instruction for the last items not covered by the lis
+        let first_lis = *lis_sequence.first().unwrap();
+        if first_lis > 0 {
+            for (idx, new_node) in new[..first_lis].iter().enumerate() {
+                let old_index = new_index_to_old_index[idx];
+                if old_index == u32::MAX as usize {
+                    nodes_created += self.create_node(new_node);
+                } else {
+                    self.diff_node(&old[old_index], new_node);
+                    nodes_created += self.push_all_nodes(new_node);
+                }
             }
-        }
 
-        for idx in lis_sequence.iter().rev() {
-            self.stack.push(DiffInstruction::Diff {
-                new: &new[*idx],
-                old: &old[new_index_to_old_index[*idx]],
-            });
+            self.mutations.insert_before(
+                self.find_first_element(&new[first_lis]).unwrap(),
+                nodes_created as u32,
+            );
         }
     }
 
-    // =====================
-    //  Utilities
-    // =====================
+    fn replace_node(&mut self, old: &'b VNode<'b>, new: &'b VNode<'b>) {
+        log::debug!("Replacing node\n old: {:?}\n new: {:?}", old, new);
+        let nodes_created = self.create_node(new);
+        self.replace_inner(old, nodes_created);
+    }
 
-    fn find_last_element(&mut self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
+    fn replace_inner(&mut self, old: &'b VNode<'b>, nodes_created: usize) {
+        match old {
+            VNode::Element(el) => {
+                let id = old
+                    .try_mounted_id()
+                    .unwrap_or_else(|| panic!("broke on {:?}", old));
+
+                self.mutations.replace_with(id, nodes_created as u32);
+                self.remove_nodes(el.children, false);
+                self.scopes.collect_garbage(id);
+            }
+
+            VNode::Text(_) | VNode::Placeholder(_) => {
+                let id = old
+                    .try_mounted_id()
+                    .unwrap_or_else(|| panic!("broke on {:?}", old));
+
+                self.mutations.replace_with(id, nodes_created as u32);
+                self.scopes.collect_garbage(id);
+            }
+
+            VNode::Fragment(f) => {
+                self.replace_inner(&f.children[0], nodes_created);
+                self.remove_nodes(f.children.iter().skip(1), true);
+            }
+
+            VNode::Component(c) => {
+                let node = self.scopes.fin_head(c.scope.get().unwrap());
+                self.replace_inner(node, nodes_created);
+
+                let scope_id = c.scope.get().unwrap();
+
+                // we can only remove components if they are actively being diffed
+                if self.scope_stack.contains(&c.originator) {
+                    log::debug!("Removing component {:?}", old);
+
+                    self.scopes.try_remove(scope_id).unwrap();
+                }
+            }
+        }
+    }
+
+    pub fn remove_nodes(&mut self, nodes: impl IntoIterator<Item = &'b VNode<'b>>, gen_muts: bool) {
+        for node in nodes {
+            match node {
+                VNode::Text(t) => {
+                    // this check exists because our null node will be removed but does not have an ID
+                    if let Some(id) = t.id.get() {
+                        self.scopes.collect_garbage(id);
+
+                        if gen_muts {
+                            self.mutations.remove(id.as_u64());
+                        }
+                    }
+                }
+                VNode::Placeholder(a) => {
+                    let id = a.id.get().unwrap();
+                    self.scopes.collect_garbage(id);
+
+                    if gen_muts {
+                        self.mutations.remove(id.as_u64());
+                    }
+                }
+                VNode::Element(e) => {
+                    let id = e.id.get().unwrap();
+
+                    if gen_muts {
+                        self.mutations.remove(id.as_u64());
+                    }
+
+                    self.scopes.collect_garbage(id);
+
+                    self.remove_nodes(e.children, false);
+                }
+
+                VNode::Fragment(f) => {
+                    self.remove_nodes(f.children, gen_muts);
+                }
+
+                VNode::Component(c) => {
+                    let scope_id = c.scope.get().unwrap();
+                    let root = self.scopes.root_node(scope_id);
+                    self.remove_nodes([root], gen_muts);
+
+                    // we can only remove this node if the originator is actively
+                    if self.scope_stack.contains(&c.originator) {
+                        self.scopes.try_remove(scope_id).unwrap();
+                    }
+                }
+            }
+        }
+    }
+
+    fn create_children(&mut self, nodes: &'b [VNode<'b>]) -> usize {
+        let mut created = 0;
+        for node in nodes {
+            created += self.create_node(node);
+        }
+        created
+    }
+
+    fn create_and_append_children(&mut self, nodes: &'b [VNode<'b>]) {
+        let created = self.create_children(nodes);
+        self.mutations.append_children(created as u32);
+    }
+
+    fn create_and_insert_after(&mut self, nodes: &'b [VNode<'b>], after: &'b VNode<'b>) {
+        let created = self.create_children(nodes);
+        let last = self.find_last_element(after).unwrap();
+        self.mutations.insert_after(last, created as u32);
+    }
+
+    fn create_and_insert_before(&mut self, nodes: &'b [VNode<'b>], before: &'b VNode<'b>) {
+        let created = self.create_children(nodes);
+        let first = self.find_first_element(before).unwrap();
+        self.mutations.insert_before(first, created as u32);
+    }
+
+    fn current_scope(&self) -> Option<ScopeId> {
+        self.scope_stack.last().copied()
+    }
+
+    fn enter_scope(&mut self, scope: ScopeId) {
+        self.scope_stack.push(scope);
+    }
+
+    fn leave_scope(&mut self) {
+        self.scope_stack.pop();
+    }
+
+    fn find_last_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
 
         loop {
@@ -1241,7 +956,7 @@ impl<'bump> DiffState<'bump> {
         }
     }
 
-    fn find_first_element_id(&mut self, vnode: &'bump VNode<'bump>) -> Option<ElementId> {
+    fn find_first_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
 
         loop {
@@ -1261,100 +976,31 @@ impl<'bump> DiffState<'bump> {
         }
     }
 
-    fn replace_node(&mut self, old: &'bump VNode<'bump>, nodes_created: usize) {
-        log::debug!("Replacing node {:?}", old);
-        match old {
-            VNode::Element(el) => {
-                let id = old
-                    .try_mounted_id()
-                    .unwrap_or_else(|| panic!("broke on {:?}", old));
-
-                self.mutations.replace_with(id, nodes_created as u32);
-                self.remove_nodes(el.children, false);
-            }
-
+    // recursively push all the nodes of a tree onto the stack and return how many are there
+    fn push_all_nodes(&mut self, node: &'b VNode<'b>) -> usize {
+        match node {
             VNode::Text(_) | VNode::Placeholder(_) => {
-                let id = old
-                    .try_mounted_id()
-                    .unwrap_or_else(|| panic!("broke on {:?}", old));
-
-                self.mutations.replace_with(id, nodes_created as u32);
+                self.mutations.push_root(node.mounted_id());
+                1
             }
 
-            VNode::Fragment(f) => {
-                self.replace_node(&f.children[0], nodes_created);
-                self.remove_nodes(f.children.iter().skip(1), true);
+            VNode::Fragment(_) | VNode::Component(_) => {
+                //
+                let mut added = 0;
+                for child in node.children() {
+                    added += self.push_all_nodes(child);
+                }
+                added
             }
 
-            VNode::Component(c) => {
-                let node = self.scopes.fin_head(c.scope.get().unwrap());
-                self.replace_node(node, nodes_created);
-
-                let scope_id = c.scope.get().unwrap();
-
-                // we can only remove components if they are actively being diffed
-                if self.stack.scope_stack.contains(&c.originator) {
-                    self.scopes.try_remove(scope_id).unwrap();
+            VNode::Element(el) => {
+                let mut num_on_stack = 0;
+                for child in el.children.iter() {
+                    num_on_stack += self.push_all_nodes(child);
                 }
-            }
-        }
-    }
+                self.mutations.push_root(el.id.get().unwrap());
 
-    /// schedules nodes for garbage collection and pushes "remove" to the mutation stack
-    /// remove can happen whenever
-    pub(crate) fn remove_nodes(
-        &mut self,
-        nodes: impl IntoIterator<Item = &'bump VNode<'bump>>,
-        gen_muts: bool,
-    ) {
-        // or cache the vec on the diff machine
-        for node in nodes {
-            log::debug!("removing {:?}", node);
-            match node {
-                VNode::Text(t) => {
-                    // this check exists because our null node will be removed but does not have an ID
-                    if let Some(id) = t.id.get() {
-                        // self.scopes.collect_garbage(id);
-
-                        if gen_muts {
-                            self.mutations.remove(id.as_u64());
-                        }
-                    }
-                }
-                VNode::Placeholder(a) => {
-                    let id = a.id.get().unwrap();
-                    // self.scopes.collect_garbage(id);
-
-                    if gen_muts {
-                        self.mutations.remove(id.as_u64());
-                    }
-                }
-                VNode::Element(e) => {
-                    let id = e.id.get().unwrap();
-
-                    if gen_muts {
-                        self.mutations.remove(id.as_u64());
-                    }
-
-                    self.remove_nodes(e.children, false);
-
-                    // self.scopes.collect_garbage(id);
-                }
-
-                VNode::Fragment(f) => {
-                    self.remove_nodes(f.children, gen_muts);
-                }
-
-                VNode::Component(c) => {
-                    let scope_id = c.scope.get().unwrap();
-                    let root = self.scopes.root_node(scope_id);
-                    self.remove_nodes(Some(root), gen_muts);
-
-                    // we can only remove this node if the originator is actively
-                    if self.stack.scope_stack.contains(&c.originator) {
-                        self.scopes.try_remove(scope_id).unwrap();
-                    }
-                }
+                num_on_stack + 1
             }
         }
     }

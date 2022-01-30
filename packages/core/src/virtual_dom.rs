@@ -2,7 +2,7 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::diff_async::AsyncDiffState as DiffState;
+use crate::diff::AsyncDiffState as DiffState;
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{future::poll_fn, StreamExt};

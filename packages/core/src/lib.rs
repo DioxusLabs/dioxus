@@ -1,8 +1,7 @@
 #![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
 
-// pub(crate) mod diff;
-pub(crate) mod diff_async;
+pub(crate) mod diff;
 pub(crate) mod events;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
@@ -13,8 +12,7 @@ pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
-    pub(crate) use crate::diff_async::*;
-    // pub(crate) use crate::diff::*;
+    pub(crate) use crate::diff::*;
     pub use crate::events::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
