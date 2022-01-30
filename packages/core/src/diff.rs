@@ -222,7 +222,7 @@ impl<'bump> DiffStack<'bump> {
         self.nodes_created_stack.pop().unwrap()
     }
 
-    fn current_scope(&self) -> Option<ScopeId> {
+    pub fn current_scope(&self) -> Option<ScopeId> {
         self.scope_stack.last().copied()
     }
 
@@ -314,9 +314,10 @@ impl<'bump> DiffState<'bump> {
             }
 
             MountType::Append => {
-                self.mutations.edits.push(AppendChildren {
-                    many: nodes_created as u32,
-                });
+                self.mutations.append_children(nodes_created as u32);
+                // self.mutations.edits.push(AppendChildren {
+                //     many: nodes_created as u32,
+                // });
             }
 
             MountType::InsertAfter { other_node } => {
@@ -470,7 +471,8 @@ impl<'bump> DiffState<'bump> {
         self.stack.create_component(new_idx, nextnode);
 
         // Finally, insert this scope as a seen node.
-        self.mutations.dirty_scopes.insert(new_idx);
+        self.mutations.mark_dirty_scope(new_idx);
+        // self.mutations.dirty_scopes.insert(new_idx);
     }
 
     // =================================
@@ -639,9 +641,10 @@ impl<'bump> DiffState<'bump> {
         }
 
         if old.children.is_empty() && !new.children.is_empty() {
-            self.mutations.edits.push(PushRoot {
-                root: root.as_u64(),
-            });
+            self.mutations.push_root(root);
+            // self.mutations.edits.push(PushRoot {
+            //     root: root.as_u64(),
+            // });
             self.stack.element_stack.push(root);
             self.stack.instructions.push(DiffInstruction::PopElement);
             self.stack.create_children(new.children, MountType::Append);
@@ -771,7 +774,7 @@ impl<'bump> DiffState<'bump> {
 
                 // this should auto drop the previous props
                 self.scopes.run_scope(scope_addr);
-                self.mutations.dirty_scopes.insert(scope_addr);
+                self.mutations.mark_dirty_scope(scope_addr);
 
                 self.diff_node(
                     self.scopes.wip_head(scope_addr),

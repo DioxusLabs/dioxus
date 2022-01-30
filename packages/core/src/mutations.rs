@@ -143,6 +143,10 @@ impl<'a> Mutations<'a> {
         self.edits.push(InsertBefore { n, root });
     }
 
+    pub(crate) fn append_children(&mut self, n: u32) {
+        self.edits.push(AppendChildren { many: n });
+    }
+
     // Remove Nodes from the dom
     pub(crate) fn remove(&mut self, id: u64) {
         self.edits.push(Remove { root: id });
@@ -216,6 +220,10 @@ impl<'a> Mutations<'a> {
     pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {
         let name = attribute.name;
         self.edits.push(RemoveAttribute { name, root });
+    }
+
+    pub(crate) fn mark_dirty_scope(&mut self, scope: ScopeId) {
+        self.dirty_scopes.insert(scope);
     }
 }
 

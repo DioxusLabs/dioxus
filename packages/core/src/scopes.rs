@@ -203,7 +203,8 @@ impl ScopeArena {
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
-        log::debug!("collecting garbage for {:?}", id);
+        // println!("collecting garbage for {:?}", id);
+        // log::debug!("collecting garbage for {:?}", id);
         self.nodes.borrow_mut().remove(id.0);
     }
 
@@ -304,11 +305,9 @@ impl ScopeArena {
             frame.node.set(unsafe { extend_vnode(node) });
         } else {
             let frame = scope.wip_frame();
-            let node = frame
-                .bump
-                .alloc(VNode::Placeholder(frame.bump.alloc(VPlaceholder {
-                    id: Default::default(),
-                })));
+            let node = frame.bump.alloc(VNode::Placeholder(
+                frame.bump.alloc(VPlaceholder { id: Default::default() }),
+            ));
             frame.node.set(unsafe { extend_vnode(node) });
         }
 
@@ -418,10 +417,7 @@ pub struct Scope<'a, P = ()> {
 impl<P> Copy for Scope<'_, P> {}
 impl<P> Clone for Scope<'_, P> {
     fn clone(&self) -> Self {
-        Self {
-            scope: self.scope,
-            props: self.props,
-        }
+        Self { scope: self.scope, props: self.props }
     }
 }
 
@@ -784,10 +780,7 @@ impl ScopeState {
     /// }
     ///```
     pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Option<VNode<'src>> {
-        Some(rsx.call(NodeFactory {
-            scope: self,
-            bump: &self.wip_frame().bump,
-        }))
+        Some(rsx.call(NodeFactory { scope: self, bump: &self.wip_frame().bump }))
     }
 
     /// Store a value between renders
@@ -894,10 +887,7 @@ impl ScopeState {
         self.shared_contexts.get_mut().clear();
 
         // next: reset the node data
-        let SelfReferentialItems {
-            borrowed_props,
-            listeners,
-        } = self.items.get_mut();
+        let SelfReferentialItems { borrowed_props, listeners } = self.items.get_mut();
         borrowed_props.clear();
         listeners.clear();
         self.frames[0].reset();
@@ -955,11 +945,7 @@ pub(crate) struct TaskQueue {
 pub(crate) type InnerTask = Pin<Box<dyn Future<Output = ()>>>;
 impl TaskQueue {
     fn new(sender: UnboundedSender<SchedulerMsg>) -> Rc<Self> {
-        Rc::new(Self {
-            tasks: RefCell::new(FxHashMap::default()),
-            gen: Cell::new(0),
-            sender,
-        })
+        Rc::new(Self { tasks: RefCell::new(FxHashMap::default()), gen: Cell::new(0), sender })
     }
     fn push_fut(&self, task: impl Future<Output = ()> + 'static) -> TaskId {
         let pinned = Box::pin(task);

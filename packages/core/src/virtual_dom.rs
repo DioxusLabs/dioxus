@@ -2,6 +2,7 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
+use crate::diff_async::AsyncDiffState as DiffState;
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{future::poll_fn, StreamExt};
@@ -453,7 +454,7 @@ impl VirtualDom {
 
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
-            let mut diff_state = DiffState::new(scopes);
+            let mut diff_state = AsyncDiffState::new(scopes);
 
             let mut ran_scopes = FxHashSet::default();
 
@@ -473,31 +474,32 @@ impl VirtualDom {
 
                     self.scopes.run_scope(scopeid);
 
-                    let (old, new) = (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
-                    diff_state.stack.push(DiffInstruction::Diff { new, old });
+                    diff_state.diff_scope(scopeid);
 
-                    log::debug!("pushing scope {:?} onto scope stack", scopeid);
-                    diff_state.stack.scope_stack.push(scopeid);
+                    let AsyncDiffState { mutations, .. } = diff_state;
 
-                    let scope = scopes.get_scope(scopeid).unwrap();
-                    diff_state.stack.element_stack.push(scope.container);
+                    for scope in &mutations.dirty_scopes {
+                        self.dirty_scopes.remove(scope);
+                    }
+
+                    committed_mutations.push(mutations);
+
+                    // if diff_state.work(&mut deadline) {
+                    //     let DiffState { mutations, .. } = diff_state;
+
+                    //     for scope in &mutations.dirty_scopes {
+                    //         self.dirty_scopes.remove(scope);
+                    //     }
+
+                    //     committed_mutations.push(mutations);
+                    // } else {
+                    //     // leave the work in an incomplete state
+                    //     //
+                    //     // todo: we should store the edits and re-apply them later
+                    //     // for now, we just dump the work completely (threadsafe)
+                    //     return committed_mutations;
+                    // }
                 }
-            }
-
-            if diff_state.work(&mut deadline) {
-                let DiffState { mutations, .. } = diff_state;
-
-                for scope in &mutations.dirty_scopes {
-                    self.dirty_scopes.remove(scope);
-                }
-
-                committed_mutations.push(mutations);
-            } else {
-                // leave the work in an incomplete state
-                //
-                // todo: we should store the edits and re-apply them later
-                // for now, we just dump the work completely (threadsafe)
-                return committed_mutations;
             }
         }
 
@@ -526,13 +528,15 @@ impl VirtualDom {
         let mut diff_state = DiffState::new(&self.scopes);
 
         self.scopes.run_scope(scope_id);
-        diff_state
-            .stack
-            .create_node(self.scopes.fin_head(scope_id), MountType::Append);
 
-        diff_state.stack.element_stack.push(ElementId(0));
-        diff_state.stack.scope_stack.push(scope_id);
-        diff_state.work(|| false);
+        diff_state.element_stack.push(ElementId(0));
+        diff_state.scope_stack.push(scope_id);
+
+        let node = self.scopes.fin_head(scope_id);
+        let created = diff_state.create_node(node);
+
+        diff_state.mutations.append_children(created as u32);
+
         self.dirty_scopes.clear();
         assert!(self.dirty_scopes.is_empty());
 
@@ -579,12 +583,11 @@ impl VirtualDom {
         );
 
         diff_machine.force_diff = true;
-        diff_machine.stack.push(DiffInstruction::Diff { old, new });
-        diff_machine.stack.scope_stack.push(scope_id);
-
+        diff_machine.scope_stack.push(scope_id);
         let scope = diff_machine.scopes.get_scope(scope_id).unwrap();
-        diff_machine.stack.element_stack.push(scope.container);
-        diff_machine.work(|| false);
+        diff_machine.element_stack.push(scope.container);
+
+        diff_machine.diff_node(old, new);
 
         diff_machine.mutations
     }
@@ -623,10 +626,10 @@ impl VirtualDom {
     /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
-        machine.stack.push(DiffInstruction::Diff { new, old });
-        machine.stack.element_stack.push(ElementId(0));
-        machine.stack.scope_stack.push(ScopeId(0));
-        machine.work(|| false);
+        machine.element_stack.push(ElementId(0));
+        machine.scope_stack.push(ScopeId(0));
+        machine.diff_node(old, new);
+
         machine.mutations
     }
 
@@ -645,11 +648,11 @@ impl VirtualDom {
     /// ```
     pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
-        machine.stack.element_stack.push(ElementId(0));
-        machine
-            .stack
-            .create_node(self.render_vnodes(nodes), MountType::Append);
-        machine.work(|| false);
+        machine.scope_stack.push(ScopeId(0));
+        machine.element_stack.push(ElementId(0));
+        let node = self.render_vnodes(nodes);
+        let created = machine.create_node(node);
+        machine.mutations.append_children(created as u32);
         machine.mutations
     }
 
@@ -674,16 +677,15 @@ impl VirtualDom {
         let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
 
         let mut create = DiffState::new(&self.scopes);
-        create.stack.scope_stack.push(ScopeId(0));
-        create.stack.element_stack.push(ElementId(0));
-        create.stack.create_node(old, MountType::Append);
-        create.work(|| false);
+        create.scope_stack.push(ScopeId(0));
+        create.element_stack.push(ElementId(0));
+        let created = create.create_node(old);
+        create.mutations.append_children(created as u32);
 
         let mut edit = DiffState::new(&self.scopes);
-        edit.stack.scope_stack.push(ScopeId(0));
-        edit.stack.element_stack.push(ElementId(0));
-        edit.stack.push(DiffInstruction::Diff { old, new });
-        edit.work(|| false);
+        edit.scope_stack.push(ScopeId(0));
+        edit.element_stack.push(ElementId(0));
+        edit.diff_node(old, new);
 
         (create.mutations, edit.mutations)
     }
