@@ -319,36 +319,117 @@ fn test_pass_thru() {
     #[inline_props]
     fn Router<'a>(cx: Scope, children: Element<'a>) -> Element {
         cx.render(rsx! {
-            &cx.props.children
+            div {
+                &cx.props.children
+            }
         })
     }
 
-    fn MemoizedThing(cx: Scope) -> Element {
-        rsx!(cx, div { "memoized" })
+    #[inline_props]
+    fn NavContainer<'a>(cx: Scope, children: Element<'a>) -> Element {
+        cx.render(rsx! {
+            header {
+                nav {
+                    &cx.props.children
+                }
+            }
+        })
+    }
+
+    fn NavMenu(cx: Scope) -> Element {
+        rsx!(cx,
+            NavBrand {}
+            div {
+                NavStart {}
+                NavEnd {}
+            }
+        )
+    }
+
+    fn NavBrand(cx: Scope) -> Element {
+        rsx!(cx, div {})
+    }
+
+    fn NavStart(cx: Scope) -> Element {
+        rsx!(cx, div {})
+    }
+
+    fn NavEnd(cx: Scope) -> Element {
+        rsx!(cx, div {})
+    }
+
+    #[inline_props]
+    fn MainContainer<'a>(
+        cx: Scope,
+        nav: Element<'a>,
+        body: Element<'a>,
+        footer: Element<'a>,
+    ) -> Element {
+        cx.render(rsx! {
+            div {
+                class: "columns is-mobile",
+                div {
+                    class: "column is-full",
+                    &cx.props.nav,
+                    &cx.props.body,
+                    &cx.props.footer,
+                }
+            }
+        })
     }
 
     fn app(cx: Scope) -> Element {
-        let thing = cx.use_hook(|_| "asd");
-        rsx!(cx,
-            Router {
-                MemoizedThing {
-                }
+        let nav = cx.render(rsx! {
+            NavContainer {
+                NavMenu {}
             }
-        )
+        });
+        let body = cx.render(rsx! {
+            div {}
+        });
+        let footer = cx.render(rsx! {
+            div {}
+        });
+
+        cx.render(rsx! {
+            MainContainer {
+                nav: nav,
+                body: body,
+                footer: footer,
+            }
+        })
     }
 
     let mut dom = new_dom(app, ());
     let _ = dom.rebuild();
 
-    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-    dom.work_with_deadline(|| false);
+    for x in 0..40 {
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+        dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+        dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
+        dom.work_with_deadline(|| false);
 
-    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-    dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
+        dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
+        dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
+        dom.work_with_deadline(|| false);
 
-    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-    dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(2)));
+        dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(2)));
+        dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(2)));
+        dom.work_with_deadline(|| false);
 
-    dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-    dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(3)));
+        dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(3)));
+        dom.work_with_deadline(|| false);
+        dom.handle_message(SchedulerMsg::Immediate(ScopeId(3)));
+        dom.work_with_deadline(|| false);
+    }
 }

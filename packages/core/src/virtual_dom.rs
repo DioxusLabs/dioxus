@@ -212,7 +212,7 @@ impl VirtualDom {
         let scopes = ScopeArena::new(channel.0.clone());
 
         scopes.new_with_key(
-            root as *const _,
+            root as *mut std::os::raw::c_void,
             Box::new(VComponentProps {
                 props: root_props,
                 memo: |_a, _b| unreachable!("memo on root will neve be run"),
@@ -475,6 +475,8 @@ impl VirtualDom {
 
                     let (old, new) = (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
                     diff_state.stack.push(DiffInstruction::Diff { new, old });
+
+                    log::debug!("pushing scope {:?} onto scope stack", scopeid);
                     diff_state.stack.scope_stack.push(scopeid);
 
                     let scope = scopes.get_scope(scopeid).unwrap();

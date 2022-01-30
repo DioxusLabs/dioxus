@@ -41,7 +41,7 @@ pub struct LinkProps<'a> {
 }
 
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    log::trace!("render Link to {}", cx.props.to);
+    // log::trace!("render Link to {}", cx.props.to);
     if let Some(service) = cx.consume_context::<RouterService>() {
         return cx.render(rsx! {
             a {

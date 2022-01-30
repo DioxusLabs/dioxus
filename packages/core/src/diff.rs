@@ -443,6 +443,13 @@ impl<'bump> DiffState<'bump> {
             new_idx
         };
 
+        log::info!(
+            "created component {:?} with parent {:?} and originator {:?}",
+            new_idx,
+            parent_idx,
+            vcomponent.originator
+        );
+
         // Actually initialize the caller's slot with the right address
         vcomponent.scope.set(Some(new_idx));
 
@@ -476,6 +483,11 @@ impl<'bump> DiffState<'bump> {
             // Check the most common cases first
             // these are *actual* elements, not wrappers around lists
             (Text(old), Text(new)) => {
+                if std::ptr::eq(old, new) {
+                    log::trace!("skipping node diff - text are the sames");
+                    return;
+                }
+
                 if let Some(root) = old.id.get() {
                     if old.text != new.text {
                         self.mutations.set_text(new.text, root.as_u64());
@@ -487,24 +499,46 @@ impl<'bump> DiffState<'bump> {
             }
 
             (Placeholder(old), Placeholder(new)) => {
+                if std::ptr::eq(old, new) {
+                    log::trace!("skipping node diff - placeholder are the sames");
+                    return;
+                }
+
                 if let Some(root) = old.id.get() {
                     self.scopes.update_node(new_node, root);
                     new.id.set(Some(root))
                 }
             }
 
-            (Element(old), Element(new)) => self.diff_element_nodes(old, new, old_node, new_node),
+            (Element(old), Element(new)) => {
+                if std::ptr::eq(old, new) {
+                    log::trace!("skipping node diff - element are the sames");
+                    return;
+                }
+                self.diff_element_nodes(old, new, old_node, new_node)
+            }
 
             // These two sets are pointers to nodes but are not actually nodes themselves
             (Component(old), Component(new)) => {
+                if std::ptr::eq(old, new) {
+                    log::trace!("skipping node diff - placeholder are the sames");
+                    return;
+                }
                 self.diff_component_nodes(old_node, new_node, *old, *new)
             }
 
-            (Fragment(old), Fragment(new)) => self.diff_fragment_nodes(old, new),
+            (Fragment(old), Fragment(new)) => {
+                if std::ptr::eq(old, new) {
+                    log::trace!("skipping node diff - fragment are the sames");
+                    return;
+                }
+                self.diff_fragment_nodes(old, new)
+            }
 
             // The normal pathway still works, but generates slightly weird instructions
             // This pathway ensures uses the ReplaceAll, not the InsertAfter and remove
             (Placeholder(_), Fragment(new)) => {
+                log::debug!("replacing placeholder with fragment {:?}", new_node);
                 self.stack
                     .create_children(new.children, MountType::Replace { old: old_node });
             }
@@ -686,7 +720,11 @@ impl<'bump> DiffState<'bump> {
         new: &'bump VComponent<'bump>,
     ) {
         let scope_addr = old.scope.get().unwrap();
-        log::trace!("diff_component_nodes: {:?}", scope_addr);
+        log::trace!(
+            "diff_component_nodes. old:  {:#?} new: {:#?}",
+            old_node,
+            new_node
+        );
 
         if std::ptr::eq(old, new) {
             log::trace!("skipping component diff - component is the sames");
@@ -747,6 +785,8 @@ impl<'bump> DiffState<'bump> {
 
             self.stack.scope_stack.pop();
         } else {
+            //
+            log::debug!("scope stack is {:#?}", self.stack.scope_stack);
             self.stack
                 .create_node(new_node, MountType::Replace { old: old_node });
         }
@@ -790,7 +830,10 @@ impl<'bump> DiffState<'bump> {
         match (old, new) {
             ([], []) => {}
             ([], _) => self.stack.create_children(new, MountType::Append),
-            (_, []) => self.remove_nodes(old, true),
+            (_, []) => {
+                log::debug!("removing nodes {:?}", old);
+                self.remove_nodes(old, true)
+            }
             _ => {
                 let new_is_keyed = new[0].key().is_some();
                 let old_is_keyed = old[0].key().is_some();
@@ -1216,6 +1259,7 @@ impl<'bump> DiffState<'bump> {
     }
 
     fn replace_node(&mut self, old: &'bump VNode<'bump>, nodes_created: usize) {
+        log::debug!("Replacing node {:?}", old);
         match old {
             VNode::Element(el) => {
                 let id = old
@@ -1262,11 +1306,12 @@ impl<'bump> DiffState<'bump> {
     ) {
         // or cache the vec on the diff machine
         for node in nodes {
+            log::debug!("removing {:?}", node);
             match node {
                 VNode::Text(t) => {
                     // this check exists because our null node will be removed but does not have an ID
                     if let Some(id) = t.id.get() {
-                        self.scopes.collect_garbage(id);
+                        // self.scopes.collect_garbage(id);
 
                         if gen_muts {
                             self.mutations.remove(id.as_u64());
@@ -1275,7 +1320,7 @@ impl<'bump> DiffState<'bump> {
                 }
                 VNode::Placeholder(a) => {
                     let id = a.id.get().unwrap();
-                    self.scopes.collect_garbage(id);
+                    // self.scopes.collect_garbage(id);
 
                     if gen_muts {
                         self.mutations.remove(id.as_u64());
@@ -1289,6 +1334,8 @@ impl<'bump> DiffState<'bump> {
                     }
 
                     self.remove_nodes(e.children, false);
+
+                    // self.scopes.collect_garbage(id);
                 }
 
                 VNode::Fragment(f) => {
