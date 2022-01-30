@@ -51,10 +51,12 @@
 //! Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
 
 pub mod cfg;
+pub mod desktop_context;
 pub mod escape;
 pub mod events;
 
 use cfg::DesktopConfig;
+use desktop_context::DesktopContext;
 use dioxus_core::*;
 use std::{
     collections::{HashMap, VecDeque},
@@ -282,6 +284,27 @@ pub fn launch_with_props<P: 'static + Send>(
                 //
                 match _evt {
                     UserWindowEvent::Update => desktop.try_load_ready_webviews(),
+                    UserWindowEvent::DragWindow => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.drag_window().unwrap();
+                        }
+                    }
+                    UserWindowEvent::Minimized(state) => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_minimized(state);
+                        }
+                    }
+                    UserWindowEvent::Maximized(state) => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_maximized(state);
+                        }
+                    }
                 }
             }
             Event::MainEventsCleared => {}
@@ -296,6 +319,9 @@ pub fn launch_with_props<P: 'static + Send>(
 
 pub enum UserWindowEvent {
     Update,
+    DragWindow,
+    Minimized(bool),
+    Maximized(bool),
 }
 
 pub struct DesktopController {
@@ -322,6 +348,7 @@ impl DesktopController {
         let return_sender = sender.clone();
         let proxy = evt.clone();
 
+        let desktop_context_proxy = proxy.clone();
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "spawn" onto multiple threads
             let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -332,6 +359,10 @@ impl DesktopController {
             runtime.block_on(async move {
                 let mut dom =
                     VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
+
+                let window_context = DesktopContext::new(desktop_context_proxy);
+
+                dom.base_scope().provide_context(window_context);
 
                 let edits = dom.rebuild();
 

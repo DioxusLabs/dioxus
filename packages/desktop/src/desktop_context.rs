@@ -1,100 +1,28 @@
-use std::cell::RefCell;
+use wry::application::event_loop::EventLoopProxy;
 
-use dioxus::prelude::Scope;
-use dioxus_core as dioxus;
-use dioxus_core::{Context, Element, LazyNodes, NodeFactory, Properties};
-use dioxus_core_macro::Props;
+use crate::UserWindowEvent;
 
-/*
-This module provides a set of Dioxus components to easily manage windows, tabs, etc.
+type ProxyType = EventLoopProxy<UserWindowEvent>;
 
-Windows can be created anywhere in the tree, making them very flexible for things like modals, etc.
-
-*/
-pub struct DesktopContext {}
+#[derive(Clone)]
+pub struct DesktopContext {
+    proxy: ProxyType,
+}
 
 impl DesktopContext {
-    fn add_window(&mut self) {
-        //
+    pub fn new(proxy: ProxyType) -> Self {
+        Self { proxy }
     }
-    fn close_window(&mut self) {
-        //
+
+    pub fn drag_window(&self) {
+        let _ = self.proxy.send_event(UserWindowEvent::DragWindow);
     }
-}
 
-enum WindowHandlers {
-    Resized(Box<dyn Fn()>),
-    Moved(Box<dyn Fn()>),
-    CloseRequested(Box<dyn Fn()>),
-    Destroyed(Box<dyn Fn()>),
-    DroppedFile(Box<dyn Fn()>),
-    HoveredFile(Box<dyn Fn()>),
-    HoverFileCancelled(Box<dyn Fn()>),
-    ReceivedTimeText(Box<dyn Fn()>),
-    Focused(Box<dyn Fn()>),
-}
+    pub fn minimized(&self, minimized: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::Minimized(minimized));
+    }
 
-#[derive(Props)]
-pub struct WebviewWindowProps<'a> {
-    onclose: &'a dyn FnMut(()),
-
-    onopen: &'a dyn FnMut(()),
-
-    /// focuse me
-    onfocused: &'a dyn FnMut(()),
-
-    children: Element,
-}
-
-/// A handle to a
-///
-///
-///
-///
-///
-///
-///
-///
-///
-pub fn WebviewWindow(cx: Scope<WebviewWindowProps>) -> Element {
-    let dtcx = cx.consume_state::<RefCell<DesktopContext>>()?;
-
-    cx.use_hook(|_| {});
-
-    // render the children directly
-    todo!()
-    // cx.render(LazyNodes::new(move |f: NodeFactory| {
-    //     f.fragment_from_iter(cx.children())
-    // }))
-}
-
-pub struct WindowHandle {}
-
-/// Get a handle to the current window from inside a component
-pub fn use_current_window(cx: Scope) -> Option<WindowHandle> {
-    todo!()
-}
-
-#[test]
-fn syntax_works() {
-    use dioxus_core as dioxus;
-    use dioxus_core::prelude::*;
-    use dioxus_core_macro::*;
-    use dioxus_hooks::*;
-    use dioxus_html as dioxus_elements;
-
-    static App: Component = |cx| {
-        cx.render(rsx! {
-            // left window
-            WebviewWindow {
-                onclose: move |evt| {}
-                onopen: move |evt| {}
-                onfocused: move |evt| {}
-
-                div {
-
-                }
-            }
-        })
-    };
+    pub fn maximized(&self, maximized: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::Maximized(maximized));
+    }
 }
