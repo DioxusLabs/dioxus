@@ -288,20 +288,28 @@ pub fn launch_with_props<P: 'static + Send>(
                         // this loop just run once, because dioxus-desktop is unsupport multi-window.
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
-                            window.drag_window().unwrap();
+                            // start to drag the window.
+                            // if the drag_window have any err. we don't do anything.
+                            let _ = window.drag_window();
                         }
                     }
-                    UserWindowEvent::Minimized(state) => {
+                    UserWindowEvent::CloseWindow => {
+                        // close window
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    UserWindowEvent::Minimize(state) => {
                         // this loop just run once, because dioxus-desktop is unsupport multi-window.
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
+                            // change window minimized state.
                             window.set_minimized(state);
                         }
                     }
-                    UserWindowEvent::Maximized(state) => {
+                    UserWindowEvent::Maximize(state) => {
                         // this loop just run once, because dioxus-desktop is unsupport multi-window.
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
+                            // change window maximized state.
                             window.set_maximized(state);
                         }
                     }
@@ -320,8 +328,9 @@ pub fn launch_with_props<P: 'static + Send>(
 pub enum UserWindowEvent {
     Update,
     DragWindow,
-    Minimized(bool),
-    Maximized(bool),
+    CloseWindow,
+    Minimize(bool),
+    Maximize(bool),
 }
 
 pub struct DesktopController {
