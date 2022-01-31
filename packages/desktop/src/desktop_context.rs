@@ -1,3 +1,6 @@
+use std::rc::Rc;
+
+use dioxus_core::ScopeState;
 use wry::application::event_loop::EventLoopProxy;
 
 use crate::UserWindowEvent;
@@ -49,4 +52,11 @@ impl DesktopContext {
     pub fn close(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::CloseWindow);
     }
+}
+
+/// use this function can get the `DesktopContext` context.
+pub fn use_desktop_context(cx: &ScopeState) -> &Rc<DesktopContext> {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
+        .as_ref()
+        .unwrap()
 }
