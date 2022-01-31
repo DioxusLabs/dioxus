@@ -52,6 +52,11 @@ impl DesktopContext {
     pub fn close(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::CloseWindow);
     }
+
+    /// set window to focus
+    pub fn focus(&self) {
+        let _ = self.proxy.send_event(UserWindowEvent::FocusWindow);
+    }
 }
 
 /// use this function can get the `DesktopContext` context.

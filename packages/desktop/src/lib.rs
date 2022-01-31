@@ -313,6 +313,12 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_maximized(state);
                         }
                     }
+                    UserWindowEvent::FocusWindow => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_focus();
+                        }
+                    }
                 }
             }
             Event::MainEventsCleared => {}
@@ -329,6 +335,7 @@ pub enum UserWindowEvent {
     Update,
     DragWindow,
     CloseWindow,
+    FocusWindow,
     Minimize(bool),
     Maximize(bool),
 }
