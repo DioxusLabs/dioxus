@@ -2,7 +2,7 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::diff::AsyncDiffState as DiffState;
+use crate::diff::DiffState;
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{future::poll_fn, StreamExt};
@@ -455,7 +455,7 @@ impl VirtualDom {
 
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
-            let mut diff_state = AsyncDiffState::new(scopes);
+            let mut diff_state = DiffState::new(scopes);
 
             let mut ran_scopes = FxHashSet::default();
 
@@ -479,7 +479,7 @@ impl VirtualDom {
 
                     diff_state.diff_scope(scopeid);
 
-                    let AsyncDiffState { mutations, .. } = diff_state;
+                    let DiffState { mutations, .. } = diff_state;
 
                     log::debug!("succesffuly resolved scopes {:?}", mutations.dirty_scopes);
                     for scope in &mutations.dirty_scopes {

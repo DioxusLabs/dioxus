@@ -186,7 +186,7 @@ impl ScopeArena {
         let scope = unsafe { &mut *self.scopes.borrow_mut().remove(&id).unwrap() };
         scope.reset();
 
-        // self.free_scopes.borrow_mut().push(scope);
+        self.free_scopes.borrow_mut().push(scope);
 
         Some(())
     }
@@ -202,14 +202,11 @@ impl ScopeArena {
     }
 
     pub fn update_node<'a>(&self, node: &'a VNode<'a>, id: ElementId) {
-        let node = unsafe { extend_vnode(node) };
-
-        let mut nodes = self.nodes.borrow_mut();
-        let entry = nodes.get_mut(id.0);
-        match entry {
-            Some(_node) => *_node = node,
-            None => panic!("cannot update node {}", id),
-        }
+        *self
+            .nodes
+            .borrow_mut()
+            .get_mut(id.0)
+            .expect("node to exist if it's being updated") = unsafe { extend_vnode(node) };
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
@@ -259,24 +256,13 @@ impl ScopeArena {
         // todo: we *know* that this is aliased by the contents of the scope itself
         let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
 
-        // if cfg!(debug_assertions) {
-        // log::debug!("running scope {:?} symbol: {:?}", id, scope.fnptr);
-
-        // todo: resolve frames properly
-        backtrace::resolve(scope.fnptr, |symbol| {
-            // backtrace::resolve(scope.fnptr as *mut std::os::raw::c_void, |symbol| {
-            // panic!("asd");
-            // log::trace!("Running scope {:?}, ptr {:?}", id, scope.fnptr);
-            log::debug!("running scope {:?} symbol: {:?}", id, symbol.name());
-        });
-        // }
+        log::trace!("running scope {:?} symbol: {:?}", id, scope.fnptr);
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
         // - All children nodes that rely on &mut T are replaced with a new reference
         scope.hook_idx.set(0);
 
-        // book keeping to ensure safety around the borrowed data
         {
             // Safety:
             // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
@@ -288,8 +274,6 @@ impl ScopeArena {
             debug_assert!(items.listeners.is_empty());
             debug_assert!(items.borrowed_props.is_empty());
         }
-
-        // safety: this is definitely not dropped
 
         /*
         If the component returns None, then we fill in a placeholder node. This will wipe what was there.
@@ -332,14 +316,10 @@ impl ScopeArena {
 
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
-                log::trace!("Found valid receiver element");
-
                 let real_el = unsafe { &**el };
                 if let VNode::Element(real_el) = real_el {
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
-                            log::trace!("Found valid receiver event");
-
                             if state.canceled.get() {
                                 // stop bubbling if canceled
                                 break;

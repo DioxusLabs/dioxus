@@ -2,7 +2,7 @@ use crate::innerlude::*;
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-pub(crate) struct AsyncDiffState<'bump> {
+pub(crate) struct DiffState<'bump> {
     pub(crate) scopes: &'bump ScopeArena,
     pub(crate) mutations: Mutations<'bump>,
     pub(crate) force_diff: bool,
@@ -10,7 +10,7 @@ pub(crate) struct AsyncDiffState<'bump> {
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
 }
 
-impl<'b> AsyncDiffState<'b> {
+impl<'b> DiffState<'b> {
     pub fn new(scopes: &'b ScopeArena) -> Self {
         Self {
             scopes,
