@@ -10,10 +10,7 @@ pub struct ElementIdIterator<'a> {
 
 impl<'a> ElementIdIterator<'a> {
     pub fn new(vdom: &'a VirtualDom, node: &'a VNode<'a>) -> Self {
-        Self {
-            vdom,
-            stack: smallvec::smallvec![(0, node)],
-        }
+        Self { vdom, stack: smallvec::smallvec![(0, node)] }
     }
 }
 

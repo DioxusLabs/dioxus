@@ -580,7 +580,6 @@ fn keyed_diffing_additions_and_moves_in_middle() {
         })
     });
 
-
     // LIS: 4, 5, 6
     let (_, change) = dom.diff_lazynodes(left, right);
     log::debug!("{:#?}", change);

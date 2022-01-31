@@ -152,12 +152,7 @@ fn free_works_on_root_props() {
         }
     }
 
-    let mut dom = new_dom(
-        app,
-        Custom {
-            val: String::from("asd"),
-        },
-    );
+    let mut dom = new_dom(app, Custom { val: String::from("asd") });
     dom.rebuild();
 }
 

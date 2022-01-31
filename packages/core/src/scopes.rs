@@ -14,8 +14,8 @@ use std::{
 };
 
 /// for traceability, we use the raw fn pointer to identify the function
-/// we can use this with the traceback crate to resolve funciton names
-pub(crate) type FcSlot = *mut std::os::raw::c_void;
+/// we also get the component name, but that's not necessarily unique in the app
+pub(crate) type ComponentPtr = *mut std::os::raw::c_void;
 
 pub(crate) struct Heuristic {
     hook_arena_size: usize,
@@ -30,7 +30,7 @@ pub(crate) struct ScopeArena {
     pub scope_gen: Cell<usize>,
     pub bump: Bump,
     pub scopes: RefCell<FxHashMap<ScopeId, *mut ScopeState>>,
-    pub heuristics: RefCell<FxHashMap<FcSlot, Heuristic>>,
+    pub heuristics: RefCell<FxHashMap<ComponentPtr, Heuristic>>,
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
@@ -84,7 +84,7 @@ impl ScopeArena {
 
     pub(crate) fn new_with_key(
         &self,
-        fc_ptr: FcSlot,
+        fc_ptr: ComponentPtr,
         vcomp: Box<dyn AnyProps>,
         parent_scope: Option<ScopeId>,
         container: ElementId,
@@ -469,7 +469,7 @@ pub struct ScopeState {
     pub(crate) container: ElementId,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
-    pub(crate) fnptr: FcSlot,
+    pub(crate) fnptr: ComponentPtr,
 
     // todo: subtrees
     pub(crate) is_subtree_root: Cell<bool>,

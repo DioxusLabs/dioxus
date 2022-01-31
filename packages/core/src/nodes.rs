@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{Element, FcSlot, Properties, Scope, ScopeId, ScopeState},
+    innerlude::{ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
     AnyEvent, Component,
 };
@@ -390,7 +390,7 @@ pub struct VComponent<'src> {
     pub originator: ScopeId,
     pub scope: Cell<Option<ScopeId>>,
     pub can_memoize: bool,
-    pub user_fc: FcSlot,
+    pub user_fc: ComponentPtr,
     pub fn_name: &'static str,
     pub props: RefCell<Option<Box<dyn AnyProps + 'src>>>,
 }
@@ -551,7 +551,7 @@ impl<'a> NodeFactory<'a> {
             key: key.map(|f| self.raw_text(f).0),
             scope: Default::default(),
             can_memoize: P::IS_STATIC,
-            user_fc: component as *mut std::os::raw::c_void,
+            user_fc: component as ComponentPtr,
             originator: self.scope.scope_id(),
             fn_name,
             props: RefCell::new(Some(Box::new(VComponentProps {
