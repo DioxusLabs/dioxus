@@ -39,16 +39,17 @@ pub fn use_state<'a, T: 'static>(
         let setter = Rc::new({
             crate::to_owned![update_callback, slot];
             move |new| {
-                let mut slot = slot.borrow_mut();
+                {
+                    let mut slot = slot.borrow_mut();
 
-                // if there's only one reference (weak or otherwise), we can just swap the values
-                // Typically happens when the state is set multiple times - we don't want to create a new Rc for each new value
-                if let Some(val) = Rc::get_mut(&mut slot) {
-                    *val = new;
-                } else {
-                    *slot = Rc::new(new);
+                    // if there's only one reference (weak or otherwise), we can just swap the values
+                    // Typically happens when the state is set multiple times - we don't want to create a new Rc for each new value
+                    if let Some(val) = Rc::get_mut(&mut slot) {
+                        *val = new;
+                    } else {
+                        *slot = Rc::new(new);
+                    }
                 }
-
                 update_callback();
             }
         });
@@ -92,7 +93,7 @@ impl<T: 'static> UseState<T> {
     ///         }
     ///     })
     /// }
-    /// ```    
+    /// ```
     #[must_use]
     pub fn current(&self) -> Rc<T> {
         self.slot.borrow().clone()
@@ -137,10 +138,10 @@ impl<T: 'static> UseState<T> {
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
     ///     let (value, set_value) = use_state(&cx, || 0);
-    ///    
+    ///
     ///     // to increment the value
     ///     set_value.modify(|v| v + 1);
-    ///    
+    ///
     ///     // usage in async
     ///     cx.spawn({
     ///         let set_value = set_value.to_owned();
@@ -153,8 +154,10 @@ impl<T: 'static> UseState<T> {
     /// }
     /// ```
     pub fn modify(&self, f: impl FnOnce(&T) -> T) {
-        let current = self.slot.borrow();
-        let new_val = f(current.as_ref());
+        let new_val = {
+            let current = self.slot.borrow();
+            f(current.as_ref())
+        };
         (self.setter)(new_val);
     }
 
@@ -176,7 +179,7 @@ impl<T: 'static> UseState<T> {
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
     ///     let (value, set_value) = use_state(&cx, || 0);
-    ///    
+    ///
     ///     let as_rc = set_value.get();
     ///     assert_eq!(as_rc.as_ref(), &0);
     ///
@@ -201,7 +204,7 @@ impl<T: 'static> UseState<T> {
     ///         }
     ///     })
     /// }
-    /// ```   
+    /// ```
     pub fn needs_update(&self) {
         (self.update_callback)();
     }
