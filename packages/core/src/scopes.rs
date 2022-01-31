@@ -13,7 +13,7 @@ use std::{
     rc::Rc,
 };
 
-pub(crate) type FcSlot = *const ();
+pub(crate) type ComponentPtr = *mut std::os::raw::c_void;
 
 pub(crate) struct Heuristic {
     hook_arena_size: usize,
@@ -28,7 +28,7 @@ pub(crate) struct ScopeArena {
     pub scope_gen: Cell<usize>,
     pub bump: Bump,
     pub scopes: RefCell<FxHashMap<ScopeId, *mut ScopeState>>,
-    pub heuristics: RefCell<FxHashMap<FcSlot, Heuristic>>,
+    pub heuristics: RefCell<FxHashMap<ComponentPtr, Heuristic>>,
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
@@ -82,7 +82,7 @@ impl ScopeArena {
 
     pub(crate) fn new_with_key(
         &self,
-        fc_ptr: *const (),
+        fc_ptr: ComponentPtr,
         vcomp: Box<dyn AnyProps>,
         parent_scope: Option<ScopeId>,
         container: ElementId,
