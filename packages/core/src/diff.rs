@@ -1,4 +1,10 @@
-use crate::innerlude::*;
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+
+use crate::innerlude::{
+    AnyProps, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement, VFragment, VNode,
+    VPlaceholder, VText,
+};
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
@@ -33,7 +39,7 @@ impl<'b> DiffState<'b> {
     }
 
     pub fn diff_node(&mut self, old_node: &'b VNode<'b>, new_node: &'b VNode<'b>) {
-        use VNode::*;
+        use VNode::{Component, Element, Fragment, Placeholder, Text};
         match (old_node, new_node) {
             // Check the most common cases first
             // these are *actual* elements, not wrappers around lists
@@ -61,7 +67,7 @@ impl<'b> DiffState<'b> {
 
                 if let Some(root) = old.id.get() {
                     self.scopes.update_node(new_node, root);
-                    new.id.set(Some(root))
+                    new.id.set(Some(root));
                 }
             }
 
@@ -70,7 +76,7 @@ impl<'b> DiffState<'b> {
                     log::trace!("skipping node diff - element are the sames");
                     return;
                 }
-                self.diff_element_nodes(old, new, old_node, new_node)
+                self.diff_element_nodes(old, new, old_node, new_node);
             }
 
             // These two sets are pointers to nodes but are not actually nodes themselves
@@ -79,7 +85,7 @@ impl<'b> DiffState<'b> {
                     log::trace!("skipping node diff - placeholder are the sames");
                     return;
                 }
-                self.diff_component_nodes(old_node, new_node, *old, *new)
+                self.diff_component_nodes(old_node, new_node, *old, *new);
             }
 
             (Fragment(old), Fragment(new)) => {
@@ -87,7 +93,7 @@ impl<'b> DiffState<'b> {
                     log::trace!("skipping node diff - fragment are the sames");
                     return;
                 }
-                self.diff_fragment_nodes(old, new)
+                self.diff_fragment_nodes(old, new);
             }
 
             // Anything else is just a basic replace and create
@@ -136,16 +142,14 @@ impl<'b> DiffState<'b> {
             ..
         } = element;
 
-        // set the parent ID for event bubbling
-        // self.stack.instructions.push(DiffInstruction::PopElement);
-
         let parent = self.element_stack.last().unwrap();
         parent_id.set(Some(*parent));
 
         // set the id of the element
         let real_id = self.scopes.reserve_node(node);
-        self.element_stack.push(real_id);
         dom_id.set(Some(real_id));
+
+        self.element_stack.push(real_id);
 
         self.mutations.create_element(tag_name, *namespace, real_id);
 
@@ -155,7 +159,7 @@ impl<'b> DiffState<'b> {
                 self.mutations.new_event_listener(listener, cur_scope_id);
             }
         } else {
-            log::warn!("create element called with no scope on the stack - this is an error for a live dom");
+            log::trace!("create element called with no scope on the stack - this is an error for a live dom");
         }
 
         for attr in *attributes {
@@ -198,7 +202,7 @@ impl<'b> DiffState<'b> {
             new_idx
         };
 
-        log::info!(
+        log::trace!(
             "created component \"{}\", id: {:?} parent {:?} orig: {:?}",
             vcomponent.fn_name,
             new_idx,
@@ -209,14 +213,11 @@ impl<'b> DiffState<'b> {
         // Actually initialize the caller's slot with the right address
         vcomponent.scope.set(Some(new_idx));
 
-        match vcomponent.can_memoize {
-            true => {
-                // todo: implement promotion logic. save us from boxing props that we don't need
-            }
-            false => {
-                // track this component internally so we know the right drop order
-            }
-        }
+        // if vcomponent.can_memoize {
+        //     // todo: implement promotion logic. save us from boxing props that we don't need
+        // } else {
+        //     // track this component internally so we know the right drop order
+        // }
 
         self.enter_scope(new_idx);
 
@@ -278,7 +279,7 @@ impl<'b> DiffState<'b> {
                 self.mutations.remove_attribute(attribute, root.as_u64());
             }
             for attribute in new.attributes {
-                self.mutations.set_attribute(attribute, root.as_u64())
+                self.mutations.set_attribute(attribute, root.as_u64());
             }
         }
 
@@ -318,9 +319,7 @@ impl<'b> DiffState<'b> {
                 let created = self.create_children(new.children);
                 self.mutations.append_children(created as u32);
             }
-            (_, _) => {
-                self.diff_children(old.children, new.children);
-            }
+            (_, _) => self.diff_children(old.children, new.children),
         };
     }
 
@@ -332,14 +331,8 @@ impl<'b> DiffState<'b> {
         new: &'b VComponent<'b>,
     ) {
         let scope_addr = old.scope.get().unwrap();
-        log::trace!(
-            "diff_component_nodes. old:  {:#?} new: {:#?}",
-            old_node,
-            new_node
-        );
 
         if std::ptr::eq(old, new) {
-            log::trace!("skipping component diff - component is the sames");
             return;
         }
 
@@ -397,7 +390,6 @@ impl<'b> DiffState<'b> {
 
             self.leave_scope();
         } else {
-            log::debug!("scope stack is {:#?}", self.scope_stack);
             self.replace_node(old_node, new_node);
         }
     }
@@ -405,14 +397,12 @@ impl<'b> DiffState<'b> {
     fn diff_fragment_nodes(&mut self, old: &'b VFragment<'b>, new: &'b VFragment<'b>) {
         // This is the case where options or direct vnodes might be used.
         // In this case, it's faster to just skip ahead to their diff
-        // if old.children.len() == 1 && new.children.len() == 1 {
-        //     if std::ptr::eq(old, new) {
-        //         log::debug!("skipping fragment diff - fragment is the same");
-        //         return;
-        //     }
-        //     self.diff_node(&old.children[0], &new.children[0]);
-        //     return;
-        // }
+        if old.children.len() == 1 && new.children.len() == 1 {
+            if !std::ptr::eq(old, new) {
+                self.diff_node(&old.children[0], &new.children[0]);
+            }
+            return;
+        }
 
         debug_assert!(!old.children.is_empty());
         debug_assert!(!new.children.is_empty());
@@ -441,7 +431,6 @@ impl<'b> DiffState<'b> {
     // to an element, and appending makes sense.
     fn diff_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         if std::ptr::eq(old, new) {
-            log::debug!("skipping fragment diff - fragment is the same {:?}", old);
             return;
         }
 
@@ -481,24 +470,19 @@ impl<'b> DiffState<'b> {
     //
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
+        use std::cmp::Ordering;
+
         // Handled these cases in `diff_children` before calling this function.
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
-        use std::cmp::Ordering;
         match old.len().cmp(&new.len()) {
             Ordering::Greater => self.remove_nodes(&old[new.len()..], true),
             Ordering::Less => self.create_and_insert_after(&new[old.len()..], old.last().unwrap()),
             Ordering::Equal => {}
         }
 
-        // panic!(
-        //     "diff_children: new_is_keyed: {:#?}, old_is_keyed: {:#?}. stack: {:#?}, oldptr: {:#?}, newptr: {:#?}",
-        //     old, new, self.scope_stack, old as *const _, new as *const _
-        // );
-
         for (new, old) in new.iter().zip(old.iter()) {
-            // log::debug!("diffing nonkeyed {:#?} {:#?}", old, new);
             self.diff_node(old, new);
         }
     }
@@ -650,6 +634,7 @@ impl<'b> DiffState<'b> {
     // This function will load the appropriate nodes onto the stack and do diffing in place.
     //
     // Upon exit from this function, it will be restored to that same self.
+    #[allow(clippy::too_many_lines)]
     fn diff_keyed_middle(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
@@ -675,8 +660,8 @@ impl<'b> DiffState<'b> {
 
         // 0. Debug sanity checks
         // Should have already diffed the shared-key prefixes and suffixes.
-        debug_assert_ne!(new.first().map(|n| n.key()), old.first().map(|o| o.key()));
-        debug_assert_ne!(new.last().map(|n| n.key()), old.last().map(|o| o.key()));
+        debug_assert_ne!(new.first().map(VNode::key), old.first().map(VNode::key));
+        debug_assert_ne!(new.last().map(VNode::key), old.last().map(VNode::key));
 
         // 1. Map the old keys into a numerical ordering based on indices.
         // 2. Create a map of old key to its index
@@ -741,7 +726,7 @@ impl<'b> DiffState<'b> {
             lis_sequence.pop();
         }
 
-        for idx in lis_sequence.iter() {
+        for idx in &lis_sequence {
             self.diff_node(&old[new_index_to_old_index[*idx]], &new[*idx]);
         }
 
@@ -775,7 +760,6 @@ impl<'b> DiffState<'b> {
             if last - next > 1 {
                 for (idx, new_node) in new[(next + 1)..last].iter().enumerate() {
                     let new_idx = idx + next + 1;
-
                     let old_index = new_index_to_old_index[new_idx];
                     if old_index == u32::MAX as usize {
                         nodes_created += self.create_node(new_node);
@@ -816,7 +800,6 @@ impl<'b> DiffState<'b> {
     }
 
     fn replace_node(&mut self, old: &'b VNode<'b>, new: &'b VNode<'b>) {
-        log::debug!("Replacing node\n old: {:?}\n new: {:?}", old, new);
         let nodes_created = self.create_node(new);
         self.replace_inner(old, nodes_created);
     }
@@ -848,7 +831,7 @@ impl<'b> DiffState<'b> {
             }
 
             VNode::Component(c) => {
-                log::info!("Replacing component {:?}", old);
+                log::trace!("Replacing component {:?}", old);
                 let scope_id = c.scope.get().unwrap();
                 let node = self.scopes.fin_head(scope_id);
 
@@ -856,11 +839,11 @@ impl<'b> DiffState<'b> {
 
                 self.replace_inner(node, nodes_created);
 
-                log::info!("Replacing component x2 {:?}", old);
+                log::trace!("Replacing component x2 {:?}", old);
 
                 // we can only remove components if they are actively being diffed
                 if self.scope_stack.contains(&c.originator) {
-                    log::debug!("Removing component {:?}", old);
+                    log::trace!("Removing component {:?}", old);
 
                     self.scopes.try_remove(scope_id).unwrap();
                 }
@@ -913,7 +896,7 @@ impl<'b> DiffState<'b> {
                     let root = self.scopes.root_node(scope_id);
                     self.remove_nodes([root], gen_muts);
 
-                    log::info!(
+                    log::trace!(
                         "trying to remove scope {:?}, stack is {:#?}, originator is {:?}",
                         scope_id,
                         self.scope_stack,
@@ -922,7 +905,7 @@ impl<'b> DiffState<'b> {
 
                     // we can only remove this node if the originator is actively
                     if self.scope_stack.contains(&c.originator) {
-                        log::debug!("I am allowed to remove component because scope stack contains originator. Scope stack: {:#?} {:#?} {:#?}", self.scope_stack, c.originator, c.scope);
+                        log::trace!("I am allowed to remove component because scope stack contains originator. Scope stack: {:#?} {:#?} {:#?}", self.scope_stack, c.originator, c.scope);
                         self.scopes.try_remove(scope_id).unwrap();
                     }
                     self.leave_scope();
@@ -970,15 +953,12 @@ impl<'b> DiffState<'b> {
 
     fn find_last_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
-
         loop {
             match &search_node.take().unwrap() {
                 VNode::Text(t) => break t.id.get(),
                 VNode::Element(t) => break t.id.get(),
                 VNode::Placeholder(t) => break t.id.get(),
-                VNode::Fragment(frag) => {
-                    search_node = frag.children.last();
-                }
+                VNode::Fragment(frag) => search_node = frag.children.last(),
                 VNode::Component(el) => {
                     let scope_id = el.scope.get().unwrap();
                     search_node = Some(self.scopes.root_node(scope_id));
@@ -989,20 +969,16 @@ impl<'b> DiffState<'b> {
 
     fn find_first_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
-
         loop {
-            match &search_node.take().unwrap() {
-                // the ones that have a direct id
-                VNode::Fragment(frag) => {
-                    search_node = Some(&frag.children[0]);
-                }
-                VNode::Component(el) => {
-                    let scope_id = el.scope.get().unwrap();
-                    search_node = Some(self.scopes.root_node(scope_id));
-                }
+            match &search_node.take().expect("search node to have an ID") {
                 VNode::Text(t) => break t.id.get(),
                 VNode::Element(t) => break t.id.get(),
                 VNode::Placeholder(t) => break t.id.get(),
+                VNode::Fragment(frag) => search_node = Some(&frag.children[0]),
+                VNode::Component(el) => {
+                    let scope = el.scope.get().expect("element to have a scope assigned");
+                    search_node = Some(self.scopes.root_node(scope));
+                }
             }
         }
     }
@@ -1015,13 +991,18 @@ impl<'b> DiffState<'b> {
                 1
             }
 
-            VNode::Fragment(_) | VNode::Component(_) => {
-                //
+            VNode::Fragment(frag) => {
                 let mut added = 0;
-                for child in node.children() {
+                for child in frag.children {
                     added += self.push_all_nodes(child);
                 }
                 added
+            }
+
+            VNode::Component(c) => {
+                let scope_id = c.scope.get().unwrap();
+                let root = self.scopes.root_node(scope_id);
+                self.push_all_nodes(root)
             }
 
             VNode::Element(el) => {
@@ -1029,6 +1010,7 @@ impl<'b> DiffState<'b> {
                 for child in el.children.iter() {
                     num_on_stack += self.push_all_nodes(child);
                 }
+
                 self.mutations.push_root(el.id.get().unwrap());
 
                 num_on_stack + 1

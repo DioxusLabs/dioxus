@@ -147,13 +147,6 @@ impl<'src> VNode<'src> {
         }
     }
 
-    pub(crate) fn children(&self) -> &[VNode<'src>] {
-        match &self {
-            VNode::Fragment(f) => f.children,
-            _ => &[],
-        }
-    }
-
     // Create an "owned" version of the vnode.
     pub fn decouple(&self) -> VNode<'src> {
         match *self {
