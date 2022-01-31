@@ -385,6 +385,7 @@ pub struct VComponent<'src> {
     pub scope: Cell<Option<ScopeId>>,
     pub can_memoize: bool,
     pub user_fc: *const (),
+    pub fn_name: &'static str,
     pub props: RefCell<Option<Box<dyn AnyProps + 'src>>>,
 }
 
@@ -549,6 +550,7 @@ impl<'a> NodeFactory<'a> {
         component: fn(Scope<'a, P>) -> Element,
         props: P,
         key: Option<Arguments>,
+        fn_name: &'static str,
     ) -> VNode<'a>
     where
         P: Properties + 'a,
@@ -559,6 +561,7 @@ impl<'a> NodeFactory<'a> {
             can_memoize: P::IS_STATIC,
             user_fc: component as *const (),
             originator: self.scope.scope_id(),
+            fn_name,
             props: RefCell::new(Some(Box::new(VComponentProps {
                 // local_props: RefCell::new(Some(props)),
                 // heap_props: RefCell::new(None),
