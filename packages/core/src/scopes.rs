@@ -113,13 +113,22 @@ impl ScopeArena {
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             // reuse the old scope
             let scope = unsafe { &mut *old_scope };
-            scope.props.get_mut().replace(vcomp);
+
+            scope.container = container;
+            scope.our_arena_idx = new_scope_id;
             scope.parent_scope = parent_scope;
             scope.height = height;
-            scope.subtree.set(subtree);
-            scope.our_arena_idx = new_scope_id;
-            scope.container = container;
             scope.fnptr = fc_ptr;
+            scope.props.get_mut().replace(vcomp);
+            scope.subtree.set(subtree);
+            scope.frames[0].reset();
+            scope.frames[1].reset();
+            scope.shared_contexts.get_mut().clear();
+            scope.items.get_mut().listeners.clear();
+            scope.items.get_mut().borrowed_props.clear();
+            scope.hook_idx.set(0);
+            scope.hook_vals.get_mut().clear();
+
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
             debug_assert!(any_item.is_none());
         } else {
@@ -177,7 +186,7 @@ impl ScopeArena {
         let scope = unsafe { &mut *self.scopes.borrow_mut().remove(&id).unwrap() };
         scope.reset();
 
-        self.free_scopes.borrow_mut().push(scope);
+        // self.free_scopes.borrow_mut().push(scope);
 
         Some(())
     }
@@ -204,8 +213,9 @@ impl ScopeArena {
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
-        let node = self.nodes.borrow_mut().remove(id.0);
-        log::debug!("collecting garbage for {:?}, {:?}", id, unsafe { &*node });
+        let node = self.nodes.borrow_mut().get(id.0).unwrap().clone();
+        // let node = self.nodes.borrow_mut().remove(id.0);
+        // log::debug!("collecting garbage for {:?}, {:?}", id, unsafe { &*node });
     }
 
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from

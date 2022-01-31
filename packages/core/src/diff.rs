@@ -26,7 +26,10 @@ impl<'b> AsyncDiffState<'b> {
         self.scope_stack.push(scopeid);
         let scope = self.scopes.get_scope(scopeid).unwrap();
         self.element_stack.push(scope.container);
+
         self.diff_node(old, new);
+
+        self.mutations.mark_dirty_scope(scopeid);
     }
 
     pub fn diff_node(&mut self, old_node: &'b VNode<'b>, new_node: &'b VNode<'b>) {
@@ -85,13 +88,6 @@ impl<'b> AsyncDiffState<'b> {
                     return;
                 }
                 self.diff_fragment_nodes(old, new)
-            }
-
-            // The normal pathway still works, but generates slightly weird instructions
-            // This pathway ensures uses the ReplaceAll, not the InsertAfter and remove
-            (Placeholder(_), Fragment(_)) => {
-                log::debug!("replacing placeholder with fragment {:?}", new_node);
-                self.replace_node(old_node, new_node);
             }
 
             // Anything else is just a basic replace and create
@@ -201,7 +197,8 @@ impl<'b> AsyncDiffState<'b> {
         };
 
         log::info!(
-            "created component {:?} with parent {:?} and originator {:?}",
+            "created component \"{}\", id: {:?} parent {:?} orig: {:?}",
+            vcomponent.fn_name,
             new_idx,
             parent_idx,
             vcomponent.originator
@@ -442,7 +439,7 @@ impl<'b> AsyncDiffState<'b> {
     // to an element, and appending makes sense.
     fn diff_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         if std::ptr::eq(old, new) {
-            log::debug!("skipping fragment diff - fragment is the same");
+            log::debug!("skipping fragment diff - fragment is the same {:?}", old);
             return;
         }
 
@@ -499,7 +496,7 @@ impl<'b> AsyncDiffState<'b> {
         // );
 
         for (new, old) in new.iter().zip(old.iter()) {
-            log::debug!("diffing nonkeyed {:#?} {:#?}", old, new);
+            // log::debug!("diffing nonkeyed {:#?} {:#?}", old, new);
             self.diff_node(old, new);
         }
     }
@@ -849,10 +846,15 @@ impl<'b> AsyncDiffState<'b> {
             }
 
             VNode::Component(c) => {
-                let node = self.scopes.fin_head(c.scope.get().unwrap());
+                log::info!("Replacing component {:?}", old);
+                let scope_id = c.scope.get().unwrap();
+                let node = self.scopes.fin_head(scope_id);
+
+                self.enter_scope(scope_id);
+
                 self.replace_inner(node, nodes_created);
 
-                let scope_id = c.scope.get().unwrap();
+                log::info!("Replacing component x2 {:?}", old);
 
                 // we can only remove components if they are actively being diffed
                 if self.scope_stack.contains(&c.originator) {
@@ -860,6 +862,7 @@ impl<'b> AsyncDiffState<'b> {
 
                     self.scopes.try_remove(scope_id).unwrap();
                 }
+                self.leave_scope();
             }
         }
     }
@@ -902,15 +905,25 @@ impl<'b> AsyncDiffState<'b> {
                 }
 
                 VNode::Component(c) => {
+                    self.enter_scope(c.scope.get().unwrap());
+
                     let scope_id = c.scope.get().unwrap();
                     let root = self.scopes.root_node(scope_id);
                     self.remove_nodes([root], gen_muts);
+
+                    log::info!(
+                        "trying to remove scope {:?}, stack is {:#?}, originator is {:?}",
+                        scope_id,
+                        self.scope_stack,
+                        c.originator
+                    );
 
                     // we can only remove this node if the originator is actively
                     if self.scope_stack.contains(&c.originator) {
                         log::debug!("I am allowed to remove component because scope stack contains originator. Scope stack: {:#?} {:#?} {:#?}", self.scope_stack, c.originator, c.scope);
                         self.scopes.try_remove(scope_id).unwrap();
                     }
+                    self.leave_scope();
                 }
             }
         }

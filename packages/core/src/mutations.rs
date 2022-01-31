@@ -17,7 +17,7 @@ use std::{any::Any, fmt::Debug};
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
 pub struct Mutations<'a> {
     pub edits: Vec<DomEdit<'a>>,
-    pub dirty_scopes: FxHashSet<ScopeId>,
+    pub diffed_scopes: FxHashSet<ScopeId>,
     pub refs: Vec<NodeRefMutation<'a>>,
 }
 
@@ -118,7 +118,7 @@ impl<'a> Mutations<'a> {
         Self {
             edits: Vec::new(),
             refs: Vec::new(),
-            dirty_scopes: Default::default(),
+            diffed_scopes: Default::default(),
         }
     }
 
@@ -223,7 +223,7 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn mark_dirty_scope(&mut self, scope: ScopeId) {
-        self.dirty_scopes.insert(scope);
+        self.diffed_scopes.insert(scope);
     }
 }
 

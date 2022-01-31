@@ -462,14 +462,6 @@ impl VirtualDom {
             self.dirty_scopes
                 .retain(|id| scopes.get_scope(*id).is_some());
 
-            log::debug!("dirty_scopes: {:?}", self.dirty_scopes);
-
-            for id in &self.dirty_scopes {
-                let scope = scopes.get_scope(*id).unwrap();
-
-                log::debug!("dirty scope: {:?} with height {:?}", id, scope.height);
-            }
-
             self.dirty_scopes.sort_by(|a, b| {
                 let h1 = scopes.get_scope(*a).unwrap().height;
                 let h2 = scopes.get_scope(*b).unwrap().height;
@@ -479,10 +471,7 @@ impl VirtualDom {
             log::debug!("dirty_scopes: {:?}", self.dirty_scopes);
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                log::debug!("diffing scope {:?}", scopeid);
                 if !ran_scopes.contains(&scopeid) {
-                    log::debug!("running scope scope {:?}", scopeid);
-
                     ran_scopes.insert(scopeid);
 
                     self.scopes.run_scope(scopeid);
@@ -491,7 +480,8 @@ impl VirtualDom {
 
                     let AsyncDiffState { mutations, .. } = diff_state;
 
-                    for scope in &mutations.dirty_scopes {
+                    log::debug!("succesffuly resolved scopes {:?}", mutations.diffed_scopes);
+                    for scope in &mutations.diffed_scopes {
                         self.dirty_scopes.remove(scope);
                     }
 
