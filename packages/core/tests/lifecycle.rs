@@ -27,12 +27,7 @@ fn manual_diffing() {
     };
 
     let value = Arc::new(Mutex::new("Hello"));
-    let mut dom = VirtualDom::new_with_props(
-        App,
-        AppProps {
-            value: value.clone(),
-        },
-    );
+    let mut dom = VirtualDom::new_with_props(App, AppProps { value: value.clone() });
 
     let _ = dom.rebuild();
 
@@ -74,28 +69,12 @@ fn events_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement {
-                tag: "div",
-                root: 1,
-            },
-            NewEventListener {
-                event_name: "click",
-                scope: ScopeId(0),
-                root: 1,
-            },
-            CreateElement {
-                tag: "div",
-                root: 2,
-            },
-            CreateTextNode {
-                text: "nested",
-                root: 3,
-            },
+            CreateElement { tag: "div", root: 1 },
+            NewEventListener { event_name: "click", scope: ScopeId(0), root: 1 },
+            CreateElement { tag: "div", root: 2 },
+            CreateTextNode { text: "nested", root: 3 },
             AppendChildren { many: 1 },
-            CreateTextNode {
-                text: "Click me!",
-                root: 4,
-            },
+            CreateTextNode { text: "Click me!", root: 4 },
             AppendChildren { many: 2 },
             AppendChildren { many: 1 },
         ]
@@ -132,10 +111,7 @@ fn components_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateTextNode {
-                text: "Text0",
-                root: 1,
-            },
+            CreateTextNode { text: "Text0", root: 1 },
             AppendChildren { many: 1 },
         ]
     );
@@ -144,10 +120,7 @@ fn components_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement {
-                tag: "div",
-                root: 2,
-            },
+            CreateElement { tag: "div", root: 2 },
             ReplaceWith { root: 1, m: 1 },
         ]
     );
@@ -156,10 +129,7 @@ fn components_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateTextNode {
-                text: "Text2",
-                root: 3,
-            },
+            CreateTextNode { text: "Text2", root: 3 },
             ReplaceWith { root: 2, m: 1 },
         ]
     );
@@ -183,10 +153,7 @@ fn components_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateTextNode {
-                text: "text 3",
-                root: 6,
-            },
+            CreateTextNode { text: "text 3", root: 6 },
             ReplaceWith { root: 5, m: 1 },
         ]
     );
@@ -195,14 +162,8 @@ fn components_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateTextNode {
-                text: "text 0",
-                root: 7,
-            },
-            CreateTextNode {
-                text: "text 1",
-                root: 8,
-            },
+            CreateTextNode { text: "text 0", root: 7 },
+            CreateTextNode { text: "text 1", root: 8 },
             ReplaceWith { root: 6, m: 2 },
         ]
     );

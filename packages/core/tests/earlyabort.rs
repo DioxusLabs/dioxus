@@ -42,14 +42,8 @@ fn test_early_abort() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement {
-                tag: "div",
-                root: 1,
-            },
-            CreateTextNode {
-                text: "Hello, world!",
-                root: 2,
-            },
+            CreateElement { tag: "div", root: 1 },
+            CreateTextNode { text: "Hello, world!", root: 2 },
             AppendChildren { many: 1 },
             AppendChildren { many: 1 },
         ]
@@ -65,14 +59,8 @@ fn test_early_abort() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement {
-                tag: "div",
-                root: 2,
-            },
-            CreateTextNode {
-                text: "Hello, world!",
-                root: 4,
-            },
+            CreateElement { tag: "div", root: 2 },
+            CreateTextNode { text: "Hello, world!", root: 4 },
             AppendChildren { many: 1 },
             ReplaceWith { root: 3, m: 1 },
         ]
