@@ -406,10 +406,14 @@ impl<'b> AsyncDiffState<'b> {
     fn diff_fragment_nodes(&mut self, old: &'b VFragment<'b>, new: &'b VFragment<'b>) {
         // This is the case where options or direct vnodes might be used.
         // In this case, it's faster to just skip ahead to their diff
-        if old.children.len() == 1 && new.children.len() == 1 {
-            self.diff_node(&old.children[0], &new.children[0]);
-            return;
-        }
+        // if old.children.len() == 1 && new.children.len() == 1 {
+        //     if std::ptr::eq(old, new) {
+        //         log::debug!("skipping fragment diff - fragment is the same");
+        //         return;
+        //     }
+        //     self.diff_node(&old.children[0], &new.children[0]);
+        //     return;
+        // }
 
         debug_assert!(!old.children.is_empty());
         debug_assert!(!new.children.is_empty());
@@ -437,6 +441,11 @@ impl<'b> AsyncDiffState<'b> {
     // Fragment nodes cannot generate empty children lists, so we can assume that when a list is empty, it belongs only
     // to an element, and appending makes sense.
     fn diff_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
+        if std::ptr::eq(old, new) {
+            log::debug!("skipping fragment diff - fragment is the same");
+            return;
+        }
+
         // Remember, fragments can never be empty (they always have a single child)
         match (old, new) {
             ([], []) => {}
@@ -484,7 +493,13 @@ impl<'b> AsyncDiffState<'b> {
             Ordering::Equal => {}
         }
 
+        // panic!(
+        //     "diff_children: new_is_keyed: {:#?}, old_is_keyed: {:#?}. stack: {:#?}, oldptr: {:#?}, newptr: {:#?}",
+        //     old, new, self.scope_stack, old as *const _, new as *const _
+        // );
+
         for (new, old) in new.iter().zip(old.iter()) {
+            log::debug!("diffing nonkeyed {:#?} {:#?}", old, new);
             self.diff_node(old, new);
         }
     }
@@ -893,6 +908,7 @@ impl<'b> AsyncDiffState<'b> {
 
                     // we can only remove this node if the originator is actively
                     if self.scope_stack.contains(&c.originator) {
+                        log::debug!("I am allowed to remove component because scope stack contains originator. Scope stack: {:#?} {:#?} {:#?}", self.scope_stack, c.originator, c.scope);
                         self.scopes.try_remove(scope_id).unwrap();
                     }
                 }

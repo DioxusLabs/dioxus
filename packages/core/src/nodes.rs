@@ -182,15 +182,13 @@ impl Debug for VNode<'_> {
             VNode::Fragment(frag) => {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
-            VNode::Component(comp) => {
-                s.debug_struct("VNode::VComponent")
-                    .field("fnptr", &comp.user_fc)
-                    .field("key", &comp.key)
-                    .field("scope", &comp.scope)
-                    .field("originator", &comp.originator)
-                    .finish()
-                //write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc)
-            }
+            VNode::Component(comp) => s
+                .debug_struct("VNode::VComponent")
+                .field("fnptr", &comp.user_fc)
+                .field("key", &comp.key)
+                .field("scope", &comp.scope)
+                .field("originator", &comp.originator)
+                .finish(),
         }
     }
 }

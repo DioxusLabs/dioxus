@@ -98,7 +98,8 @@ impl ScopeArena {
         let height = parent_scope
             .map(|id| self.get_scope(id).map(|scope| scope.height))
             .flatten()
-            .unwrap_or_default();
+            .unwrap_or_default()
+            + 1;
 
         let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
 
@@ -203,9 +204,8 @@ impl ScopeArena {
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
-        // println!("collecting garbage for {:?}", id);
-        // log::debug!("collecting garbage for {:?}", id);
-        self.nodes.borrow_mut().remove(id.0);
+        let node = self.nodes.borrow_mut().remove(id.0);
+        log::debug!("collecting garbage for {:?}, {:?}", id, unsafe { &*node });
     }
 
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
