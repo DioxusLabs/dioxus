@@ -96,10 +96,9 @@ impl ScopeArena {
 
         // Get the height of the scope
         let height = parent_scope
-            .map(|id| self.get_scope(id).map(|scope| scope.height))
+            .map(|id| self.get_scope(id).map(|scope| scope.height + 1))
             .flatten()
-            .unwrap_or_default()
-            + 1;
+            .unwrap_or_default();
 
         let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
 
@@ -202,11 +201,8 @@ impl ScopeArena {
     }
 
     pub fn update_node<'a>(&self, node: &'a VNode<'a>, id: ElementId) {
-        *self
-            .nodes
-            .borrow_mut()
-            .get_mut(id.0)
-            .expect("node to exist if it's being updated") = unsafe { extend_vnode(node) };
+        let node = unsafe { extend_vnode(node) };
+        *self.nodes.borrow_mut().get_mut(id.0).unwrap() = node;
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
@@ -317,9 +313,12 @@ impl ScopeArena {
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
                 let real_el = unsafe { &**el };
+                log::debug!("looking for listener on {:?}", real_el);
+
                 if let VNode::Element(real_el) = real_el {
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
+                            log::debug!("calling listener {:?}", listener.event);
                             if state.canceled.get() {
                                 // stop bubbling if canceled
                                 break;

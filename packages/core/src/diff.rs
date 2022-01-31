@@ -166,6 +166,8 @@ impl<'b> DiffState<'b> {
             self.create_and_append_children(children);
         }
 
+        self.element_stack.pop();
+
         1
     }
 
