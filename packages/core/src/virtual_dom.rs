@@ -449,6 +449,7 @@ impl VirtualDom {
     ///     apply_mutations(mutations);
     /// }
     /// ```
+    #[allow(unused)]
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
 
@@ -487,13 +488,12 @@ impl VirtualDom {
 
                     committed_mutations.push(mutations);
 
+                    // todo: pause the diff machine
                     // if diff_state.work(&mut deadline) {
                     //     let DiffState { mutations, .. } = diff_state;
-
                     //     for scope in &mutations.dirty_scopes {
                     //         self.dirty_scopes.remove(scope);
                     //     }
-
                     //     committed_mutations.push(mutations);
                     // } else {
                     //     // leave the work in an incomplete state

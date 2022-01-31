@@ -213,9 +213,7 @@ impl ScopeArena {
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
-        let node = self.nodes.borrow_mut().get(id.0).unwrap().clone();
-        // let node = self.nodes.borrow_mut().remove(id.0);
-        // log::debug!("collecting garbage for {:?}, {:?}", id, unsafe { &*node });
+        self.nodes.borrow_mut().remove(id.0);
     }
 
     /// This method cleans up any references to data held within our hook list. This prevents mutable aliasing from
@@ -231,8 +229,6 @@ impl ScopeArena {
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
     pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
-        // log::trace!("Ensuring drop safety for scope {:?}", scope_id);
-
         if let Some(scope) = self.get_scope(scope_id) {
             let mut items = scope.items.borrow_mut();
 
@@ -243,7 +239,6 @@ impl ScopeArena {
                 if let Some(scope_id) = comp.scope.get() {
                     self.ensure_drop_safety(scope_id);
                 }
-
                 drop(comp.props.take());
             });
 
