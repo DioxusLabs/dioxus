@@ -213,7 +213,7 @@ impl VirtualDom {
         let scopes = ScopeArena::new(channel.0.clone());
 
         scopes.new_with_key(
-            root as *mut std::os::raw::c_void,
+            root as ComponentPtr,
             Box::new(VComponentProps {
                 props: root_props,
                 memo: |_a, _b| unreachable!("memo on root will neve be run"),
