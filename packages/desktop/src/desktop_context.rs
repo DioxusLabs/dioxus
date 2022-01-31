@@ -20,7 +20,7 @@ pub struct DesktopContext {
 
 impl DesktopContext {
 
-    pub fn new(proxy: ProxyType) -> Self {
+    pub(crate) fn new(proxy: ProxyType) -> Self {
         Self { proxy }
     }
 
@@ -36,14 +36,17 @@ impl DesktopContext {
         let _ = self.proxy.send_event(UserWindowEvent::DragWindow);
     }
 
+    /// set window minimize state
     pub fn minimize(&self, minimized: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Minimize(minimized));
     }
 
+    /// set window maximize state
     pub fn maximize(&self, maximized: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Maximize(maximized));
     }
 
+    /// close window
     pub fn close(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::CloseWindow);
     }
