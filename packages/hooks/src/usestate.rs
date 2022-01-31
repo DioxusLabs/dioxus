@@ -153,8 +153,8 @@ impl<T: 'static> UseState<T> {
     /// }
     /// ```
     pub fn modify(&self, f: impl FnOnce(&T) -> T) {
-        let curernt = self.slot.borrow();
-        let new_val = f(curernt.as_ref());
+        let current = self.slot.borrow();
+        let new_val = f(current.as_ref());
         (self.setter)(new_val);
     }
 
