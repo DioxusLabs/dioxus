@@ -5,11 +5,11 @@ use crate::UserWindowEvent;
 type ProxyType = EventLoopProxy<UserWindowEvent>;
 
 /// Desktop-Window handle api context
-/// 
+///
 /// you can use this context control some window event
-/// 
+///
 /// you can use `cx.consume_context::<DesktopContext>` to get this context
-/// 
+///
 /// ```rust
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
@@ -19,15 +19,14 @@ pub struct DesktopContext {
 }
 
 impl DesktopContext {
-
     pub(crate) fn new(proxy: ProxyType) -> Self {
         Self { proxy }
     }
 
     /// trigger the drag-window event
-    /// 
+    ///
     /// Moves the window with the left mouse button until the button is released.
-    /// 
+    ///
     /// you need use it in `onmousedown` event:
     /// ```rust
     /// onmousedown: move |_| { desktop.drag_window(); }
@@ -50,5 +49,4 @@ impl DesktopContext {
     pub fn close(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::CloseWindow);
     }
-
 }

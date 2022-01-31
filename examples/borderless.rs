@@ -1,4 +1,4 @@
-use dioxus::{events::onmousedown, prelude::*};
+use dioxus::prelude::*;
 use dioxus_desktop::desktop_context::DesktopContext;
 
 fn main() {
@@ -12,11 +12,10 @@ fn app(cx: Scope) -> Element {
 
     let drag = desktop.clone();
     let close = desktop.clone();
-    let min = desktop.clone();
 
     cx.render(rsx!(
         link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
-        header { 
+        header {
             class: "text-gray-400 bg-gray-900 body-font",
             onmousedown: move |_| drag.drag_window(),
             div {
@@ -24,16 +23,11 @@ fn app(cx: Scope) -> Element {
                 a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
                     span { class: "ml-3 text-xl", "Dioxus"}
                 }
-                nav { class: "md:ml-auto flex flex-wrap items-center text-base justify-center",
-                //     a { class: "mr-5 hover:text-white", "First Link"}
-                //     a { class: "mr-5 hover:text-white", "Second Link"}
-                //     a { class: "mr-5 hover:text-white", "Third Link"}
-                //     a { class: "mr-5 hover:text-white", "Fourth Link"}
-                }
+                nav { class: "md:ml-auto flex flex-wrap items-center text-base justify-center" }
                 button {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
                     onmousedown: |evt| evt.cancel_bubble(),
-                    onclick: move |_| min.minimize(true),
+                    onclick: move |_| desktop.minimize(true),
                     "Minimize"
                 }
                 button {
