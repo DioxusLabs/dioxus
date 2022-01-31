@@ -365,7 +365,9 @@ pub struct EventHandler<'bump, T = ()> {
 
 impl<'a, T> Default for EventHandler<'a, T> {
     fn default() -> Self {
-        Self { callback: RefCell::new(None) }
+        Self {
+            callback: RefCell::new(None),
+        }
     }
 }
 
@@ -440,7 +442,10 @@ pub struct NodeFactory<'a> {
 
 impl<'a> NodeFactory<'a> {
     pub fn new(scope: &'a ScopeState) -> NodeFactory<'a> {
-        NodeFactory { scope, bump: &scope.wip_frame().bump }
+        NodeFactory {
+            scope,
+            bump: &scope.wip_frame().bump,
+        }
     }
 
     #[inline]
@@ -450,10 +455,11 @@ impl<'a> NodeFactory<'a> {
 
     /// Directly pass in text blocks without the need to use the format_args macro.
     pub fn static_text(&self, text: &'static str) -> VNode<'a> {
-        VNode::Text(
-            self.bump
-                .alloc(VText { id: empty_cell(), text, is_static: true }),
-        )
+        VNode::Text(self.bump.alloc(VText {
+            id: empty_cell(),
+            text,
+            is_static: true,
+        }))
     }
 
     /// Parses a lazy text Arguments and returns a string and a flag indicating if the text is 'static
@@ -476,7 +482,11 @@ impl<'a> NodeFactory<'a> {
     pub fn text(&self, args: Arguments) -> VNode<'a> {
         let (text, is_static) = self.raw_text(args);
 
-        VNode::Text(self.bump.alloc(VText { text, is_static, id: empty_cell() }))
+        VNode::Text(self.bump.alloc(VText {
+            text,
+            is_static,
+            id: empty_cell(),
+        }))
     }
 
     pub fn element(
@@ -534,7 +544,13 @@ impl<'a> NodeFactory<'a> {
         is_volatile: bool,
     ) -> Attribute<'a> {
         let (value, is_static) = self.raw_text(val);
-        Attribute { name, value, is_static, namespace, is_volatile }
+        Attribute {
+            name,
+            value,
+            is_static,
+            namespace,
+            is_volatile,
+        }
     }
 
     pub fn component<P>(
@@ -578,7 +594,11 @@ impl<'a> NodeFactory<'a> {
     }
 
     pub fn listener(self, event: &'static str, callback: InternalHandler<'a>) -> Listener<'a> {
-        Listener { event, mounted_node: Cell::new(None), callback }
+        Listener {
+            event,
+            mounted_node: Cell::new(None),
+            callback,
+        }
     }
 
     pub fn fragment_root<'b, 'c>(
@@ -594,10 +614,10 @@ impl<'a> NodeFactory<'a> {
         if nodes.is_empty() {
             VNode::Placeholder(self.bump.alloc(VPlaceholder { id: empty_cell() }))
         } else {
-            VNode::Fragment(
-                self.bump
-                    .alloc(VFragment { children: nodes.into_bump_slice(), key: None }),
-            )
+            VNode::Fragment(self.bump.alloc(VFragment {
+                children: nodes.into_bump_slice(),
+                key: None,
+            }))
         }
     }
 
@@ -633,7 +653,10 @@ impl<'a> NodeFactory<'a> {
                 );
             }
 
-            VNode::Fragment(self.bump.alloc(VFragment { children, key: None }))
+            VNode::Fragment(self.bump.alloc(VFragment {
+                children,
+                key: None,
+            }))
         }
     }
 
@@ -656,9 +679,10 @@ impl<'a> NodeFactory<'a> {
         } else {
             let children = nodes.into_bump_slice();
 
-            Some(VNode::Fragment(
-                self.bump.alloc(VFragment { children, key: None }),
-            ))
+            Some(VNode::Fragment(self.bump.alloc(VFragment {
+                children,
+                key: None,
+            })))
         }
     }
 

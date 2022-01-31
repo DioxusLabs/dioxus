@@ -55,7 +55,9 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
             fac.map(inner)
         };
 
-        Self { inner: StackNodeStorage::Heap(Box::new(val)) }
+        Self {
+            inner: StackNodeStorage::Heap(Box::new(val)),
+        }
     }
 
     pub fn new(_val: impl FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b) -> Self {
@@ -69,7 +71,9 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
 
         // miri does not know how to work with mucking directly into bytes
         if cfg!(miri) {
-            Self { inner: StackNodeStorage::Heap(Box::new(val)) }
+            Self {
+                inner: StackNodeStorage::Heap(Box::new(val)),
+            }
         } else {
             unsafe { LazyNodes::new_inner(val) }
         }
@@ -113,7 +117,9 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         let max_size = mem::size_of::<StackHeapSize>();
 
         if stored_size > max_size {
-            Self { inner: StackNodeStorage::Heap(Box::new(val)) }
+            Self {
+                inner: StackNodeStorage::Heap(Box::new(val)),
+            }
         } else {
             let mut buf: StackHeapSize = StackHeapSize::default();
 
@@ -137,7 +143,13 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
 
             std::mem::forget(val);
 
-            Self { inner: StackNodeStorage::Stack(LazyStack { _align: [], buf, dropped: false }) }
+            Self {
+                inner: StackNodeStorage::Stack(LazyStack {
+                    _align: [],
+                    buf,
+                    dropped: false,
+                }),
+            }
         }
     }
 
@@ -286,7 +298,12 @@ mod tests {
         }
 
         let inner = Rc::new(0);
-        let mut dom = VirtualDom::new_with_props(app, AppProps { inner: inner.clone() });
+        let mut dom = VirtualDom::new_with_props(
+            app,
+            AppProps {
+                inner: inner.clone(),
+            },
+        );
         dom.rebuild();
 
         drop(dom);

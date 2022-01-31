@@ -115,7 +115,11 @@ use DomEdit::*;
 
 impl<'a> Mutations<'a> {
     pub(crate) fn new() -> Self {
-        Self { edits: Vec::new(), refs: Vec::new(), diffed_scopes: Default::default() }
+        Self {
+            edits: Vec::new(),
+            refs: Vec::new(),
+            diffed_scopes: Default::default(),
+        }
     }
 
     // Navigation
@@ -174,12 +178,19 @@ impl<'a> Mutations<'a> {
 
     // events
     pub(crate) fn new_event_listener(&mut self, listener: &Listener, scope: ScopeId) {
-        let Listener { event, mounted_node, .. } = listener;
+        let Listener {
+            event,
+            mounted_node,
+            ..
+        } = listener;
 
         let element_id = mounted_node.get().unwrap().as_u64();
 
-        self.edits
-            .push(NewEventListener { scope, event_name: event, root: element_id });
+        self.edits.push(NewEventListener {
+            scope,
+            event_name: event,
+            root: element_id,
+        });
     }
     pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: u64) {
         self.edits.push(RemoveEventListener { event, root });
@@ -191,10 +202,19 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute, root: u64) {
-        let Attribute { name, value, namespace, .. } = attribute;
+        let Attribute {
+            name,
+            value,
+            namespace,
+            ..
+        } = attribute;
 
-        self.edits
-            .push(SetAttribute { field: name, value, ns: *namespace, root });
+        self.edits.push(SetAttribute {
+            field: name,
+            value,
+            ns: *namespace,
+            root,
+        });
     }
 
     pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {

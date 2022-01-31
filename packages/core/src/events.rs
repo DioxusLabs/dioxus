@@ -12,7 +12,9 @@ pub(crate) struct BubbleState {
 
 impl BubbleState {
     pub fn new() -> Self {
-        Self { canceled: Cell::new(false) }
+        Self {
+            canceled: Cell::new(false),
+        }
     }
 }
 
