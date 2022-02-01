@@ -8,6 +8,8 @@
             "es6",
             "dom"
         ],
+        "rootDir": "src",
         "strict": true,
+        "outDir": "gen",
     }
 }

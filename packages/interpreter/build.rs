@@ -2,6 +2,7 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=interpreter.ts");
+
     match Command::new("tsc").spawn() {
         Ok(_) => println!("Was spawned :)"),
         Err(e) => {
