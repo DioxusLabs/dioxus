@@ -4,4 +4,5 @@
     "desktop",
     "router"
   ],
+  "editor.formatOnSave": false
 }
