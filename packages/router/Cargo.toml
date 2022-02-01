@@ -1,51 +1,51 @@
 [package]
-name = "dioxus-router"
-version = "0.1.1"
-edition = "2018"
 description = "Dioxus VirtualDOM renderer for the web browser using websys"
-license = "MIT/Apache-2.0"
-repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
+edition = "2018"
+homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
+license = "MIT/Apache-2.0"
+name = "dioxus-router"
+repository = "https://github.com/DioxusLabs/dioxus/"
+version = "0.1.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.1.9", default-features = false }
-dioxus-html = { path = "../html", version = "^0.1.6", default-features = false }
-dioxus-core-macro = { path = "../core-macro", version = "^0.1.7" }
+dioxus-core = {path = "../core", version = "^0.1.9", default-features = false}
+dioxus-core-macro = {path = "../core-macro", version = "^0.1.7"}
+dioxus-html = {path = "../html", version = "^0.1.6", default-features = false}
 
 serde = "1"
-url = "2.2.2"
 serde_urlencoded = "0.7"
+url = "2.2.2"
 
 # for wasm
-web-sys = { version = "0.3", features = [
-    "Attr",
-    "Document",
-    "History",
-    "HtmlBaseElement",
-    "Event",
-    "NamedNodeMap",
-    "Url",
-    "UrlSearchParams",
-    "Window",
-], optional = true }
-wasm-bindgen = { version = "0.2", optional = true }
-js-sys = { version = "0.3", optional = true }
-gloo = { version = "0.5", optional = true }
+gloo = {version = "0.5", optional = true}
+js-sys = {version = "0.3", optional = true}
 log = "0.4.14"
-
+wasm-bindgen = {version = "0.2", optional = true}
+web-sys = {version = "0.3", features = [
+  "Attr",
+  "Document",
+  "History",
+  "HtmlBaseElement",
+  "Event",
+  "NamedNodeMap",
+  "Url",
+  "UrlSearchParams",
+  "Window",
+], optional = true}
 
 [features]
 default = ["derive", "web"]
-web = ["web-sys", "gloo", "js-sys", "wasm-bindgen"]
+derive = []
 desktop = []
 mobile = []
-derive = []
+web = ["web-sys", "gloo", "js-sys", "wasm-bindgen"]
 
 [dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-web = { path = "../web" }
+dioxus-web = {path = "../web"}
 log = "0.4.14"
+wasm-bindgen-test = "0.3"
 wasm-logger = "0.2.0"

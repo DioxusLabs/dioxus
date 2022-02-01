@@ -1,0 +1,42 @@
+[config]
+default_to_workspace = false
+min_version = "0.32.4"
+
+[env]
+CARGO_MAKE_CLIPPY_ARGS = "-- --deny=warnings"
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[config.modify_core_tasks]
+namespace = "core"
+private = true
+
+[tasks.tests]
+category = "Testing"
+dependencies = ["tests-setup"]
+description = "Run all tests"
+env = {CARGO_MAKE_WORKSPACE_SKIP_MEMBERS = ["**/examples/*", "**/packages/changelog"]}
+run_task = {name = ["test-flow"], fork = true}
+
+[tasks.tests-setup]
+private = true
+script = [
+  """
+    test_flags = array --headless --firefox
+    dioxus_test_features = set wasm_test
+    dioxus_test_flags = array_join ${test_flags} " "
+    echo "running tests with flags: ${dioxus_test_flags} and features: ${dioxus_test_features}"
+    set_env DIOXUS_TEST_FLAGS ${dioxus_test_flags}
+    set_env DIOXUS_TEST_FEATURES ${dioxus_test_features}
+    """,
+]
+script_runner = "@duckscript"
+
+[tasks.test-flow]
+dependencies = ["test"]
+private = true
+workspace = true
+
+[tasks.test]
+args = ["test", "--all-targets"]
+command = "cargo"
+private = true
