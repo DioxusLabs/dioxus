@@ -4,5 +4,8 @@
     "desktop",
     "router"
   ],
-  "editor.formatOnSave": false
+  "editor.formatOnSave": true,
+  "[toml]": {
+    "editor.formatOnSave": false
+  }
 }
