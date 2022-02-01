@@ -1,6 +1,96 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 
+//! This module contains the stateful [`DiffState`] and all methods to diff [`VNodes`], their properties, and their children.
+//!
+//! The [`DiffState`] calculates the diffs between the old and new frames, updates the new nodes, and generates a set
+//! of mutations for the [`RealDom`] to apply.
+//!
+//! ## Notice:
+//!
+//! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
+//! Components, Fragments, Suspense, [`SubTree`] memoization, incremental diffing, cancellation, [`NodeRefs`], pausing, priority
+//! scheduling, and additional batching operations.
+//!
+//! ## Implementation Details:
+//!
+//! ### IDs for elements
+//! --------------------
+//! All nodes are addressed by their IDs. The [`RealDom`] provides an imperative interface for making changes to these nodes.
+//! We don't necessarily require that DOM changes happen instantly during the diffing process, so the implementor may choose
+//! to batch nodes if it is more performant for their application. The element IDs are indices into the internal element
+//! array. The expectation is that implementors will use the ID as an index into a Vec of real nodes, allowing for passive
+//! garbage collection as the [`VirtualDOM`] replaces old nodes.
+//!
+//! When new vnodes are created through `cx.render`, they won't know which real node they correspond to. During diffing,
+//! we always make sure to copy over the ID. If we don't do this properly, the [`ElementId`] will be populated incorrectly
+//! and brick the user's page.
+//!
+//! ### Fragment Support
+//! --------------------
+//! Fragments (nodes without a parent) are supported through a combination of "replace with" and anchor vnodes. Fragments
+//! can be particularly challenging when they are empty, so the anchor node lets us "reserve" a spot for the empty
+//! fragment to be replaced with when it is no longer empty. This is guaranteed by logic in the [`NodeFactory`] - it is
+//! impossible to craft a fragment with 0 elements - they must always have at least a single placeholder element. Adding
+//! "dummy" nodes _is_ inefficient, but it makes our diffing algorithm faster and the implementation is completely up to
+//! the platform.
+//!
+//! Other implementations either don't support fragments or use a "child + sibling" pattern to represent them. Our code is
+//! vastly simpler and more performant when we can just create a placeholder element while the fragment has no children.
+//!
+//! ### Suspense
+//! ------------
+//! Dioxus implements Suspense slightly differently than React. In React, each fiber is manually progressed until it runs
+//! into a promise-like value. React will then work on the next "ready" fiber, checking back on the previous fiber once
+//! it has finished its new work. In Dioxus, we use a similar approach, but try to completely render the tree before
+//! switching sub-fibers. Instead, each future is submitted into a futures-queue and the node is manually loaded later on.
+//! Due to the frequent calls to [`yield_now`] we can get the pure "fetch-as-you-render" behavior of React Fiber.
+//!
+//! We're able to use this approach because we use placeholder nodes - futures that aren't ready still get submitted to
+//! DOM, but as a placeholder.
+//!
+//! Right now, the "suspense" queue is intertwined with hooks. In the future, we should allow any future to drive attributes
+//! and contents, without the need for the [`use_suspense`] hook. In the interim, this is the quickest way to get Suspense working.
+//!
+//! ## Subtree Memoization
+//! -----------------------
+//! We also employ "subtree memoization" which saves us from having to check trees which hold no dynamic content. We can
+//! detect if a subtree is "static" by checking if its children are "static". Since we dive into the tree depth-first, the
+//! calls to "create" propagate this information upwards. Structures like the one below are entirely static:
+//! ```rust, ignore
+//! rsx!( div { class: "hello world", "this node is entirely static" } )
+//! ```
+//! Because the subtrees won't be diffed, their "real node" data will be stale (invalid), so it's up to the reconciler to
+//! track nodes created in a scope and clean up all relevant data. Support for this is currently WIP and depends on comp-time
+//! hashing of the subtree from the rsx! macro. We do a very limited form of static analysis via static string pointers as
+//! a way of short-circuiting the most expensive checks.
+//!
+//! ## Bloom Filter and Heuristics
+//! ------------------------------
+//! For all components, we employ some basic heuristics to speed up allocations and pre-size bump arenas. The heuristics are
+//! currently very rough, but will get better as time goes on. The information currently tracked includes the size of a
+//! bump arena after first render, the number of hooks, and the number of nodes in the tree.
+//!
+//! ## Garbage Collection
+//! ---------------------
+//! Dioxus uses a passive garbage collection system to clean up old nodes once the work has been completed. This garbage
+//! collection is done internally once the main diffing work is complete. After the "garbage" is collected, Dioxus will then
+//! start to re-use old keys for new nodes. This results in a passive memory management system that is very efficient.
+//!
+//! The IDs used by the key/map are just an index into a Vec. This means that Dioxus will drive the key allocation strategy
+//! so the client only needs to maintain a simple list of nodes. By default, Dioxus will not manually clean up old nodes
+//! for the client. As new nodes are created, old nodes will be over-written.
+//!
+//! ## Further Reading and Thoughts
+//! ----------------------------
+//! There are more ways of increasing diff performance here that are currently not implemented.
+//! - Strong memoization of subtrees.
+//! - Guided diffing.
+//! - Certain web-dom-specific optimizations.
+//!
+//! More info on how to improve this diffing algorithm:
+//!  - <https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/>
+
 use crate::innerlude::{
     AnyProps, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement, VFragment, VNode,
     VPlaceholder, VText,
@@ -45,35 +135,38 @@ impl<'b> DiffState<'b> {
             // these are *actual* elements, not wrappers around lists
             (Text(old), Text(new)) => {
                 if std::ptr::eq(old, new) {
-                    log::trace!("skipping node diff - text are the sames");
                     return;
                 }
 
-                if let Some(root) = old.id.get() {
-                    if old.text != new.text {
-                        self.mutations.set_text(new.text, root.as_u64());
-                    }
-                    self.scopes.update_node(new_node, root);
+                let root = old
+                    .id
+                    .get()
+                    .expect("existing text nodes should have an ElementId");
 
-                    new.id.set(Some(root));
+                if old.text != new.text {
+                    self.mutations.set_text(new.text, root.as_u64());
                 }
+                self.scopes.update_node(new_node, root);
+
+                new.id.set(Some(root));
             }
 
             (Placeholder(old), Placeholder(new)) => {
                 if std::ptr::eq(old, new) {
-                    log::trace!("skipping node diff - placeholder are the sames");
                     return;
                 }
 
-                if let Some(root) = old.id.get() {
-                    self.scopes.update_node(new_node, root);
-                    new.id.set(Some(root));
-                }
+                let root = old
+                    .id
+                    .get()
+                    .expect("existing placeholder nodes should have an ElementId");
+
+                self.scopes.update_node(new_node, root);
+                new.id.set(Some(root));
             }
 
             (Element(old), Element(new)) => {
                 if std::ptr::eq(old, new) {
-                    log::trace!("skipping node diff - element are the sames");
                     return;
                 }
                 self.diff_element_nodes(old, new, old_node, new_node);
@@ -82,7 +175,6 @@ impl<'b> DiffState<'b> {
             // These two sets are pointers to nodes but are not actually nodes themselves
             (Component(old), Component(new)) => {
                 if std::ptr::eq(old, new) {
-                    log::trace!("skipping node diff - placeholder are the sames");
                     return;
                 }
                 self.diff_component_nodes(old_node, new_node, *old, *new);
@@ -90,7 +182,6 @@ impl<'b> DiffState<'b> {
 
             (Fragment(old), Fragment(new)) => {
                 if std::ptr::eq(old, new) {
-                    log::trace!("skipping node diff - fragment are the sames");
                     return;
                 }
                 self.diff_fragment_nodes(old, new);
@@ -114,19 +205,17 @@ impl<'b> DiffState<'b> {
         }
     }
 
-    fn create_text_node(&mut self, vtext: &'b VText<'b>, node: &'b VNode<'b>) -> usize {
+    fn create_text_node(&mut self, text: &'b VText<'b>, node: &'b VNode<'b>) -> usize {
         let real_id = self.scopes.reserve_node(node);
-        self.mutations.create_text_node(vtext.text, real_id);
-        vtext.id.set(Some(real_id));
-
+        text.id.set(Some(real_id));
+        self.mutations.create_text_node(text.text, real_id);
         1
     }
 
     fn create_anchor_node(&mut self, anchor: &'b VPlaceholder, node: &'b VNode<'b>) -> usize {
         let real_id = self.scopes.reserve_node(node);
-        self.mutations.create_placeholder(real_id);
         anchor.id.set(Some(real_id));
-
+        self.mutations.create_placeholder(real_id);
         1
     }
 
@@ -140,36 +229,35 @@ impl<'b> DiffState<'b> {
             id: dom_id,
             parent: parent_id,
             ..
-        } = element;
+        } = &element;
 
-        let parent = self.element_stack.last().unwrap();
-        parent_id.set(Some(*parent));
+        parent_id.set(self.element_stack.last().copied());
 
-        // set the id of the element
         let real_id = self.scopes.reserve_node(node);
+
         dom_id.set(Some(real_id));
 
         self.element_stack.push(real_id);
+        {
+            self.mutations.create_element(tag_name, *namespace, real_id);
 
-        self.mutations.create_element(tag_name, *namespace, real_id);
+            let cur_scope_id = self
+                .current_scope()
+                .expect("diffing should always have a scope");
 
-        if let Some(cur_scope_id) = self.current_scope() {
-            for listener in *listeners {
+            for listener in listeners.iter() {
                 listener.mounted_node.set(Some(real_id));
                 self.mutations.new_event_listener(listener, cur_scope_id);
             }
-        } else {
-            log::trace!("create element called with no scope on the stack - this is an error for a live dom");
-        }
 
-        for attr in *attributes {
-            self.mutations.set_attribute(attr, real_id.as_u64());
-        }
+            for attr in attributes.iter() {
+                self.mutations.set_attribute(attr, real_id.as_u64());
+            }
 
-        if !children.is_empty() {
-            self.create_and_append_children(children);
+            if !children.is_empty() {
+                self.create_and_append_children(children);
+            }
         }
-
         self.element_stack.pop();
 
         1
@@ -182,25 +270,29 @@ impl<'b> DiffState<'b> {
     fn create_component_node(&mut self, vcomponent: &'b VComponent<'b>) -> usize {
         let parent_idx = self.current_scope().unwrap();
 
-        // the component might already exist - if it does, we need to reuse it
-        // this makes figure out when to drop the component more complicated
-        let new_idx = if let Some(idx) = vcomponent.scope.get() {
-            assert!(self.scopes.get_scope(idx).is_some());
-            idx
-        } else {
-            // Insert a new scope into our component list
-            let props: Box<dyn AnyProps + 'b> = vcomponent.props.borrow_mut().take().unwrap();
-            let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
-            let new_idx = self.scopes.new_with_key(
-                vcomponent.user_fc,
-                props,
-                Some(parent_idx),
-                self.element_stack.last().copied().unwrap(),
-                0,
-            );
+        // ensure this scope doesn't already exist if we're trying to create it
+        debug_assert!(
+            vcomponent
+                .scope
+                .get()
+                .and_then(|f| self.scopes.get_scope(f))
+                .is_none(),
+            "component scope already exists"
+        );
 
-            new_idx
-        };
+        // Insert a new scope into our component list
+        let props: Box<dyn AnyProps + 'b> = vcomponent.props.borrow_mut().take().unwrap();
+        let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
+        let new_idx = self.scopes.new_with_key(
+            vcomponent.user_fc,
+            props,
+            Some(parent_idx),
+            self.element_stack.last().copied().unwrap(),
+            0,
+        );
+
+        // Actually initialize the caller's slot with the right address
+        vcomponent.scope.set(Some(new_idx));
 
         log::trace!(
             "created component \"{}\", id: {:?} parent {:?} orig: {:?}",
@@ -210,9 +302,6 @@ impl<'b> DiffState<'b> {
             vcomponent.originator
         );
 
-        // Actually initialize the caller's slot with the right address
-        vcomponent.scope.set(Some(new_idx));
-
         // if vcomponent.can_memoize {
         //     // todo: implement promotion logic. save us from boxing props that we don't need
         // } else {
@@ -221,13 +310,15 @@ impl<'b> DiffState<'b> {
 
         self.enter_scope(new_idx);
 
-        // Run the scope for one iteration to initialize it
-        self.scopes.run_scope(new_idx);
-        self.mutations.mark_dirty_scope(new_idx);
+        let created = {
+            // Run the scope for one iteration to initialize it
+            self.scopes.run_scope(new_idx);
+            self.mutations.mark_dirty_scope(new_idx);
 
-        // Take the node that was just generated from running the component
-        let nextnode = self.scopes.fin_head(new_idx);
-        let created = self.create_node(nextnode);
+            // Take the node that was just generated from running the component
+            let nextnode = self.scopes.fin_head(new_idx);
+            self.create_node(nextnode)
+        };
 
         self.leave_scope();
 
@@ -241,7 +332,10 @@ impl<'b> DiffState<'b> {
         old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
     ) {
-        let root = old.id.get().unwrap();
+        let root = old
+            .id
+            .get()
+            .expect("existing element nodes should have an ElementId");
 
         // If the element type is completely different, the element needs to be re-rendered completely
         // This is an optimization React makes due to how users structure their code
@@ -330,7 +424,10 @@ impl<'b> DiffState<'b> {
         old: &'b VComponent<'b>,
         new: &'b VComponent<'b>,
     ) {
-        let scope_addr = old.scope.get().unwrap();
+        let scope_addr = old
+            .scope
+            .get()
+            .expect("existing component nodes should have a scope");
 
         if std::ptr::eq(old, new) {
             return;
@@ -339,55 +436,55 @@ impl<'b> DiffState<'b> {
         // Make sure we're dealing with the same component (by function pointer)
         if old.user_fc == new.user_fc {
             self.enter_scope(scope_addr);
+            {
+                // Make sure the new component vnode is referencing the right scope id
+                new.scope.set(Some(scope_addr));
 
-            // Make sure the new component vnode is referencing the right scope id
-            new.scope.set(Some(scope_addr));
+                // make sure the component's caller function is up to date
+                let scope = self
+                    .scopes
+                    .get_scope(scope_addr)
+                    .unwrap_or_else(|| panic!("could not find {:?}", scope_addr));
 
-            // make sure the component's caller function is up to date
-            let scope = self
-                .scopes
-                .get_scope(scope_addr)
-                .unwrap_or_else(|| panic!("could not find {:?}", scope_addr));
-
-            // take the new props out regardless
-            // when memoizing, push to the existing scope if memoization happens
-            let new_props = new.props.borrow_mut().take().unwrap();
-
-            let should_run = {
-                if old.can_memoize {
-                    let props_are_the_same = unsafe {
-                        scope
-                            .props
-                            .borrow()
-                            .as_ref()
-                            .unwrap()
-                            .memoize(new_props.as_ref())
-                    };
-                    !props_are_the_same || self.force_diff
-                } else {
-                    true
-                }
-            };
-
-            if should_run {
-                let _old_props = scope
+                // take the new props out regardless
+                // when memoizing, push to the existing scope if memoization happens
+                let new_props = new
                     .props
-                    .replace(unsafe { std::mem::transmute(Some(new_props)) });
+                    .borrow_mut()
+                    .take()
+                    .expect("new component props should exist");
 
-                // this should auto drop the previous props
-                self.scopes.run_scope(scope_addr);
-                self.mutations.mark_dirty_scope(scope_addr);
+                let should_diff = {
+                    if old.can_memoize {
+                        // safety: we trust the implementation of "memoize"
+                        let props_are_the_same = unsafe {
+                            let new_ref = new_props.as_ref();
+                            scope.props.borrow().as_ref().unwrap().memoize(new_ref)
+                        };
+                        !props_are_the_same || self.force_diff
+                    } else {
+                        true
+                    }
+                };
 
-                self.diff_node(
-                    self.scopes.wip_head(scope_addr),
-                    self.scopes.fin_head(scope_addr),
-                );
-            } else {
-                log::trace!("memoized");
-                // memoization has taken place
-                drop(new_props);
-            };
+                if should_diff {
+                    let _old_props = scope
+                        .props
+                        .replace(unsafe { std::mem::transmute(Some(new_props)) });
 
+                    // this should auto drop the previous props
+                    self.scopes.run_scope(scope_addr);
+                    self.mutations.mark_dirty_scope(scope_addr);
+
+                    self.diff_node(
+                        self.scopes.wip_head(scope_addr),
+                        self.scopes.fin_head(scope_addr),
+                    );
+                } else {
+                    // memoization has taken place
+                    drop(new_props);
+                };
+            }
             self.leave_scope();
         } else {
             self.replace_node(old_node, new_node);
@@ -409,10 +506,6 @@ impl<'b> DiffState<'b> {
 
         self.diff_children(old.children, new.children);
     }
-
-    // =============================================
-    //  Utilities for creating new diff instructions
-    // =============================================
 
     // Diff the given set of old and new children.
     //
@@ -836,16 +929,17 @@ impl<'b> DiffState<'b> {
                 let node = self.scopes.fin_head(scope_id);
 
                 self.enter_scope(scope_id);
+                {
+                    self.replace_inner(node, nodes_created);
 
-                self.replace_inner(node, nodes_created);
+                    log::trace!("Replacing component x2 {:?}", old);
 
-                log::trace!("Replacing component x2 {:?}", old);
+                    // we can only remove components if they are actively being diffed
+                    if self.scope_stack.contains(&c.originator) {
+                        log::trace!("Removing component {:?}", old);
 
-                // we can only remove components if they are actively being diffed
-                if self.scope_stack.contains(&c.originator) {
-                    log::trace!("Removing component {:?}", old);
-
-                    self.scopes.try_remove(scope_id).unwrap();
+                        self.scopes.try_remove(scope_id).unwrap();
+                    }
                 }
                 self.leave_scope();
             }
@@ -891,22 +985,15 @@ impl<'b> DiffState<'b> {
 
                 VNode::Component(c) => {
                     self.enter_scope(c.scope.get().unwrap());
+                    {
+                        let scope_id = c.scope.get().unwrap();
+                        let root = self.scopes.root_node(scope_id);
+                        self.remove_nodes([root], gen_muts);
 
-                    let scope_id = c.scope.get().unwrap();
-                    let root = self.scopes.root_node(scope_id);
-                    self.remove_nodes([root], gen_muts);
-
-                    log::trace!(
-                        "trying to remove scope {:?}, stack is {:#?}, originator is {:?}",
-                        scope_id,
-                        self.scope_stack,
-                        c.originator
-                    );
-
-                    // we can only remove this node if the originator is actively
-                    if self.scope_stack.contains(&c.originator) {
-                        log::trace!("I am allowed to remove component because scope stack contains originator. Scope stack: {:#?} {:#?} {:#?}", self.scope_stack, c.originator, c.scope);
-                        self.scopes.try_remove(scope_id).unwrap();
+                        // we can only remove this node if the originator is actively in our stackß
+                        if self.scope_stack.contains(&c.originator) {
+                            self.scopes.try_remove(scope_id).unwrap();
+                        }
                     }
                     self.leave_scope();
                 }
