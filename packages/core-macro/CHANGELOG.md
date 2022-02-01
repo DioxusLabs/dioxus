@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### New Features
+
+ - <csr-id-d2372717bd01fcff50af0572360e3f763d4c869d/> flatten props attrs
+ - <csr-id-47bc4e4a44a7d08d4f42102d13f0766d9d6bf358/> add "optional" flag for props
+
+### Bug Fixes
+
+ - <csr-id-90abd9c9a08c165384fae9c1f7c3fd098d512c48/> detection of f-string formatting in components
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 9 commits contributed to the release over the course of 12 calendar days.
+ - 3 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #95 from DioxusLabs/jk/filedragindrop ([`ca0dd4a`](https://github.comgit//DioxusLabs/dioxus/commit/ca0dd4aa7192d483a195d420363f39d771f3e471))
+    - Fix various typos and grammar nits ([`9e4ec43`](https://github.comgit//DioxusLabs/dioxus/commit/9e4ec43b1e78d355c56a38e4c092170b2b01b20d))
+    - flatten props attrs ([`d237271`](https://github.comgit//DioxusLabs/dioxus/commit/d2372717bd01fcff50af0572360e3f763d4c869d))
+    - Merge pull request #108 from DioxusLabs/jk/fstring-component-fields ([`f4132d1`](https://github.comgit//DioxusLabs/dioxus/commit/f4132d1874f7495049fac23ba0a022ac137ad74f))
+    - detection of f-string formatting in components ([`90abd9c`](https://github.comgit//DioxusLabs/dioxus/commit/90abd9c9a08c165384fae9c1f7c3fd098d512c48))
+    - Enable clippy ([`b6903bf`](https://github.comgit//DioxusLabs/dioxus/commit/b6903bf558bc7a3d0fe6794a137c44fca0957d11))
+    - Merge pull request #107 from autarch/autarch/half-assed-router ([`8d3ac3f`](https://github.comgit//DioxusLabs/dioxus/commit/8d3ac3ff148aef9d10a393eda453a11c1e882f58))
+    - Merge pull request #127 from DioxusLabs/jk/handler-tweak ([`5bce294`](https://github.comgit//DioxusLabs/dioxus/commit/5bce294a86941090660b1cfd87809a2b0b76d2ce))
+    - add "optional" flag for props ([`47bc4e4`](https://github.comgit//DioxusLabs/dioxus/commit/47bc4e4a44a7d08d4f42102d13f0766d9d6bf358))
+</details>
+
 ## v0.1.6 (2022-01-08)
 
 ### Documentation
@@ -64,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 138 commits contributed to the release over the course of 352 calendar days.
+ - 139 commits contributed to the release over the course of 352 calendar days.
  - 123 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -75,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dioxus-core-macro v0.1.6 ([`db0a5bd`](https://github.comgit//DioxusLabs/dioxus/commit/db0a5bd6ec93803cddb3c6fda4172257b9c301c6))
     - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
     - component pass thru events ([`c439b0a`](https://github.comgit//DioxusLabs/dioxus/commit/c439b0ac7e09f70a04262b7c29938d8c52197b76))
     - Merge pull request #74 from mrxiaozhuox/master ([`47056fd`](https://github.comgit//DioxusLabs/dioxus/commit/47056fda4577bcbdaa2a6f63d82eec876e5a5aee))

@@ -35,7 +35,7 @@
   </a>
   <!-- Discord -->
   <a href="https://discord.gg/XgGxMSkvUM">
-    <img src="https://badgen.net/discord/members/XgGxMSkvUM" alt="Awesome Page" />
+    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
   </a>
 </div>
 
@@ -113,7 +113,7 @@ cargo run --example EXAMPLE
 
 ## Dioxus 项目
 
-| 文件浏览器 (桌面应用)                                                                                                                                                        | WiFi 扫描器 (桌面应用)                                                                                                                                                                 | Todo管理 (所有平台)                                                                                                                                                 | 商城系统 (SSR/liveview)                                                                                                                                                 |
+| 文件浏览器 (桌面应用)                                                                                                                                                           | WiFi 扫描器 (桌面应用)                                                                                                                                                                 | Todo管理 (所有平台)                                                                                                                                                     | 商城系统 (SSR/liveview)                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![File Explorer](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![E-commerce Example](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
 

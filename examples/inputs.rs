@@ -2,8 +2,6 @@
 //!
 //! There is some conversion happening when input types are checkbox/radio/select/textarea etc.
 
-use std::sync::Arc;
-
 use dioxus::{events::FormEvent, prelude::*};
 
 fn main() {

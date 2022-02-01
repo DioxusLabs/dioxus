@@ -5,7 +5,7 @@ This document is mostly a brain-dump on how things work. A lot of this informati
 Main topics covered here:
 - Fiber, Concurrency, and Cooperative Scheduling
 - Suspense
-- Signals 
+- Signals
 - Patches
 - Diffing
 - Const/Static structures
@@ -25,7 +25,7 @@ During diffing, the "caller" closure is updated if the props are not `static. Th
 
 Hooks are a form of state that's slightly more finicky than structs but more extensible overall. Hooks cannot be used in conditionals, but are portable enough to run on most targets.
 
-The Dioxus hook model uses a Bump arena where user's data lives. 
+The Dioxus hook model uses a Bump arena where user's data lives.
 
 Initializing hooks:
 - The component is created
@@ -38,7 +38,7 @@ Initializing hooks:
 
 Running hooks:
 - Each time use_hook is called, the internal hook state is fetched as &mut T
-- We are guaranteed that our &mut T is not aliasing by re-generating any &mut T dependencies 
+- We are guaranteed that our &mut T is not aliasing by re-generating any &mut T dependencies
 - The hook counter is incremented
 
 
@@ -62,7 +62,7 @@ The diffing engine in Dioxus expects the RealDom
 
 Dioxus uses patches - not imperative methods - to modify the real dom. This speeds up the diffing operation and makes diffing cancelable which is useful for cooperative scheduling. In general, the RealDom trait exists so renderers can share "Node pointers" across runtime boundaries.
 
-There are no contractual obligations between the VirtualDOM and RealDOM. When the VirtualDOM finishes its work, it releases a Vec of Edits (patches) which the RealDOM can use to update itself. 
+There are no contractual obligations between the VirtualDOM and RealDOM. When the VirtualDOM finishes its work, it releases a Vec of Edits (patches) which the RealDOM can use to update itself.
 
 
 
@@ -70,11 +70,11 @@ There are no contractual obligations between the VirtualDOM and RealDOM. When th
 
 When an EventTrigger enters the queue and "progress" is called (an async function), Dioxus will get to work running scopes and diffing nodes. Scopes are run and nodes are diffed together. Dioxus records which scopes get diffed to track the progress of its work.
 
-While descending through the stack frame, Dioxus will query the RealDom for "time remaining." When the time runs out, Dioxus will escape the stack frame by queuing whatever work it didn't get to, and then bubbling up out of "diff_node". Dioxus will also bubble out of "diff_node" if more important work gets queued while it was descending. 
+While descending through the stack frame, Dioxus will query the RealDom for "time remaining." When the time runs out, Dioxus will escape the stack frame by queuing whatever work it didn't get to, and then bubbling up out of "diff_node". Dioxus will also bubble out of "diff_node" if more important work gets queued while it was descending.
 
-Once bubbled out of diff_node, Dioxus will request the next idle callback and await for it to become available. The return of this callback is a "Deadline" object which Dioxus queries through the RealDom. 
+Once bubbled out of diff_node, Dioxus will request the next idle callback and await for it to become available. The return of this callback is a "Deadline" object which Dioxus queries through the RealDom.
 
-All of this is orchestrated to keep high priority events moving through the VirtualDOM and scheduling lower-priority work around the RealDOM's animations and periodic tasks. 
+All of this is orchestrated to keep high priority events moving through the VirtualDOM and scheduling lower-priority work around the RealDOM's animations and periodic tasks.
 ```js
 // returns a "deadline" object
 function idle() {
@@ -83,7 +83,7 @@ function idle() {
 ```
 
 ## Suspense
-In React, "suspense" is the ability render nodes outside of the traditional lifecycle. React will wait on a future to complete, and once the data is ready, will render those nodes. React's version of suspense is designed to make working with promises in components easier. 
+In React, "suspense" is the ability render nodes outside of the traditional lifecycle. React will wait on a future to complete, and once the data is ready, will render those nodes. React's version of suspense is designed to make working with promises in components easier.
 
 
 In Dioxus, we have similar philosophy, but the use and details of suspense is slightly different. For starters, we don't currently allow using futures in the element structure. Technically, we can allow futures - and we do with "Signals" - but the "suspense" feature itself is meant to be self-contained within a single component. This forces you to handle all the loading states within your component, instead of outside the component, keeping things a bit more containerized.

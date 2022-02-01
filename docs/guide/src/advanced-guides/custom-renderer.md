@@ -20,7 +20,7 @@ For reference, check out the WebSys renderer as a starting point for your custom
 
 ## Trait implementation and DomEdits
 
-The current `RealDom` trait lives in `dioxus_core/diff`. A version of it is provided here (but might not be up-to-date):
+The current `RealDom` trait lives in `dioxus-core/diff`. A version of it is provided here (but might not be up-to-date):
 
 ```rust
 pub trait RealDom<'a> {

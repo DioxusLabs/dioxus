@@ -11,7 +11,7 @@ pub struct LinkProps<'a> {
 
     /// The url that gets pushed to the history stack
     ///
-    /// You can either put it your own inline method or just autoderive the route using `derive(Routable)`
+    /// You can either put in your own inline method or just autoderive the route using `derive(Routable)`
     ///
     /// ```rust, ignore
     ///
@@ -41,7 +41,7 @@ pub struct LinkProps<'a> {
 }
 
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    log::debug!("render Link to {}", cx.props.to);
+    // log::trace!("render Link to {}", cx.props.to);
     if let Some(service) = cx.consume_context::<RouterService>() {
         return cx.render(rsx! {
             a {

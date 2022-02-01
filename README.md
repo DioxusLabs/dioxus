@@ -35,9 +35,10 @@
   </a>
   <!-- Discord -->
   <a href="https://discord.gg/XgGxMSkvUM">
-    <img src="https://badgen.net/discord/members/XgGxMSkvUM" alt="Awesome Page" />
+    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
   </a>
 </div>
+
 
 
 <div align="center">
@@ -64,12 +65,12 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let (count, set_count) = use_state(&cx, || 0);
 
     cx.render(rsx!(
         h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
-        button { onclick: move |_| count -= 1, "Down low!" }
+        button { onclick: move |_| set_count(count + 1), "Up high!" }
+        button { onclick: move |_| set_count(count - 1), "Down low!" }
     ))
 }
 ```
@@ -84,7 +85,7 @@ If you know React, then you already know Dioxus.
 - Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
 - Extremely memory efficient - 0 global allocations for steady-state components.
 - Multi-channel asynchronous scheduler for first-class async support.
-- And more! Read the [full release post here](https://dioxuslabs.com/blog/introducing-dioxus/).
+- And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 
 ### Examples
@@ -121,9 +122,9 @@ See the [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) page for 
 
 ## Why Dioxus and why Rust?
 
-TypeScript is a fantastic addition to JavaScript, but it's still fundamentally JavaScript. TS code runs slightly slower, has tons of configuration options, and not every package is properly typed. 
+TypeScript is a fantastic addition to JavaScript, but it's still fundamentally JavaScript. TS code runs slightly slower, has tons of configuration options, and not every package is properly typed.
 
-In contrast, Dioxus is written in Rust - which is almost like "TypeScript on steroids". 
+In contrast, Dioxus is written in Rust - which is almost like "TypeScript on steroids".
 
 By using Rust, we gain:
 
@@ -141,76 +142,56 @@ By using Rust, we gain:
 
 Specifically, Dioxus provides us many other assurances:
 
-- Proper use of immutable datastructures
-- Guaranteed error handling (so you can sleep easy at night not worrying about `cannot read property of undefined`) 
+- Proper use of immutable data structures
+- Guaranteed error handling (so you can sleep easy at night not worrying about `cannot read property of undefined`)
 - Native performance on mobile
 - Direct access to system IO
 
-And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time. 
+And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time.
 
-### Why NOT Dioxus?
+## Why NOT Dioxus?
 You shouldn't use Dioxus if:
 
 - You don't like the React Hooks approach to frontend
 - You need a no-std renderer
 - You want to support browsers where Wasm or asm.js are not supported.
-- You need a Send+Sync UI solution (Dioxus is not currently ThreadSafe)
+- You need a Send+Sync UI solution (Dioxus is not currently thread-safe)
 
-### Comparison with other Rust UI frameworks
-Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**. 
+## Comparison with other Rust UI frameworks
+Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**.
 
 - [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead of React-hooks, no borrowed props, supports SSR (no hydration).
-- [Percy](https://github.com/chinedufn/percy): Supports SSR but less emphasis on state management and event handling.
+- [Percy](https://github.com/chinedufn/percy): Supports SSR but with less emphasis on state management and event handling.
 - [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but lacking in ergonomics.
 - [Dominator](https://github.com/Pauan/rust-dominator): Signal-based zero-cost alternative, less emphasis on community and docs.
+- [Azul](https://azul.rs): Fully native HTML/CSS renderer for desktop applications, no support for web/ssr
 
 
-# Parity with React
+## Parity with React & Roadmap
 
-Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. This parity table does not necessarily include important ecosystem crates like code blocks, markdown, resizing hooks, etc.
+Dioxus is heavily inspired by React, but we want your transition to feel like an upgrade. Dioxus is _most_ of the way there, but missing a few key features. These include:
 
+- Portals
+- Suspense integration with SSR
+- Server Components / Bundle Splitting / Lazy
 
-| Feature                   | Dioxus | React | Notes for Dioxus                                                     |
-| ------------------------- | ------ | ----- | -------------------------------------------------------------------- |
-| Conditional Rendering     | ✅      | ✅     | if/then to hide/show component                                       |
-| Map, Iterator             | ✅      | ✅     | map/filter/reduce to produce rsx!                                    |
-| Keyed Components          | ✅      | ✅     | advanced diffing with keys                                           |
-| Web                       | ✅      | ✅     | renderer for web browser                                             |
-| Desktop (webview)         | ✅      | ✅     | renderer for desktop                                                 |
-| Shared State (Context)    | ✅      | ✅     | share state through the tree                                         |
-| Hooks                     | ✅      | ✅     | memory cells in components                                           |
-| SSR                       | ✅      | ✅     | render directly to string                                            |
-| Component Children        | ✅      | ✅     | cx.children() as a list of nodes                                     |
-| Headless components       | ✅      | ✅     | components that don't return real elements                           |
-| Fragments                 | ✅      | ✅     | multiple elements without a real root                                |
-| Manual Props              | ✅      | ✅     | Manually pass in props with spread syntax                            |
-| Controlled Inputs         | ✅      | ✅     | stateful wrappers around inputs                                      |
-| CSS/Inline Styles         | ✅      | ✅     | syntax for inline styles/attribute groups                            |
-| Custom elements           | ✅      | ✅     | Define new element primitives                                        |
-| Suspense                  | ✅      | ✅     | schedule future render from future/promise                           |
-| Integrated error handling | ✅      | ✅     | Gracefully handle errors with ? syntax                               |
-| NodeRef                   | ✅      | ✅     | gain direct access to nodes                                          |
-| Re-hydration              | ✅      | ✅     | Pre-render to HTML to speed up first contentful paint                |
-| Jank-Free Rendering       | ✅      | ✅     | Large diffs are segmented across frames for silky-smooth transitions |
-| Effects                   | ✅      | ✅     | Run effects after a component has been committed to render           |
-| Portals                   | 🛠      | ✅     | Render nodes outside of the traditional tree structure               |
-| Cooperative Scheduling    | 🛠      | ✅     | Prioritize important events over non-important events                |
-| Server Components         | 🛠      | ✅     | Hybrid components for SPA and Server                                 |
-| Bundle Splitting          | 👀      | ✅     | Efficiently and asynchronously load the app                          |
-| Lazy Components           | 👀      | ✅     | Dynamically load the new components as the page is loaded            |
-| 1st class global state    | ✅      | ✅     | redux/recoil/mobx on top of context                                  |
-| Runs natively             | ✅      | ❓     | runs as a portable binary w/o a runtime (Node)                       |
-| Subtree Memoization       | ✅      | ❓     | skip diffing static element subtrees                                 |
-| High-efficiency templates | 🛠      | ❓     | rsx! calls are translated to templates on the DOM's side             |
-| Compile-time correct      | ✅      | ❓     | Throw errors on invalid template layouts                             |
-| Heuristic Engine          | ✅      | ❓     | track component memory usage to minimize future allocations          |
-| Fine-grained reactivity   | 👀      | ❓     | Skip diffing for fine-grain updates                                  |
+Dioxus is unique in the Rust ecosystem in that it supports:
 
-- ✅ = implemented and working
-- 🛠 = actively being worked on
-- 👀 = not yet implemented or being worked on
-- ❓ = not sure if will or can implement
+- Components with props that borrow from their parent
+- Server-side-rendering with client-side hydration
+- Support for desktop applications
 
+For more information on what features are currently available and the roadmap for the future, be sure to check out [the guide](https://dioxuslabs.com/guide/).
+
+## Projects in the ecosystem
+
+Want to jump in and help build the future of Rust frontend? There's plenty of places where your contributions can make a huge difference:
+
+- [TUI renderer](https://github.com/dioxusLabs/rink)
+- [CLI Tooling](https://github.com/dioxusLabs/cli)
+- [Documentation and Example Projects](https://github.com/dioxusLabs/docsite)
+- LiveView and Web Server
+- Asset System
 
 ## License
 

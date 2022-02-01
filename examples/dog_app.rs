@@ -1,5 +1,6 @@
+#![allow(non_snake_case)]
+
 //! Render a bunch of doggos!
-//!
 
 use std::collections::HashMap;
 
@@ -15,7 +16,7 @@ struct ListBreeds {
 }
 
 fn app(cx: Scope) -> Element {
-    let fut = use_future(&cx, || async move {
+    let breeds = use_future(&cx, || async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -23,9 +24,9 @@ fn app(cx: Scope) -> Element {
             .await
     });
 
-    let selected_breed = use_state(&cx, || None);
+    let (breed, set_breed) = use_state(&cx, || None);
 
-    match fut.value() {
+    match breeds.value() {
         Some(Ok(breeds)) => cx.render(rsx! {
             div {
                 h1 {"Select a dog breed!"}
@@ -35,14 +36,14 @@ fn app(cx: Scope) -> Element {
                         breeds.message.keys().map(|breed| rsx!(
                             li {
                                 button {
-                                    onclick: move |_| selected_breed.set(Some(breed.clone())),
+                                    onclick: move |_| set_breed(Some(breed.clone())),
                                     "{breed}"
                                 }
                             }
                         ))
                     }
                     div { flex: "50%",
-                        match &*selected_breed {
+                        match breed {
                             Some(breed) => rsx!( Breed { breed: breed.clone() } ),
                             None => rsx!("No Breed selected"),
                         }
@@ -50,7 +51,7 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }),
-        Some(Err(e)) => cx.render(rsx! {
+        Some(Err(_e)) => cx.render(rsx! {
             div { "Error fetching breeds" }
         }),
         None => cx.render(rsx! {
@@ -72,9 +73,9 @@ fn Breed(cx: Scope, breed: String) -> Element {
         reqwest::get(endpoint).await.unwrap().json::<DogApi>().await
     });
 
-    let breed_name = use_state(&cx, || breed.clone());
-    if breed_name.get() != breed {
-        breed_name.set(breed.clone());
+    let (name, set_name) = use_state(&cx, || breed.clone());
+    if name != breed {
+        set_name(breed.clone());
         fut.restart();
     }
 

@@ -25,27 +25,27 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
-fn App(Scope) -> Element {} 
+fn App(Scope) -> Element {}
 
 #[derive(PartialEq, Props)]
 struct PostProps{}
-fn Post(Scope<PostProps>) -> Element {} 
+fn Post(Scope<PostProps>) -> Element {}
 
 #[derive(PartialEq, Props)]
 struct VoteButtonsProps {}
-fn VoteButtons(Scope<VoteButtonsProps>) -> Element {} 
+fn VoteButtons(Scope<VoteButtonsProps>) -> Element {}
 
 #[derive(PartialEq, Props)]
 struct TitleCardProps {}
-fn TitleCard(Scope<TitleCardProps>) -> Element {} 
+fn TitleCard(Scope<TitleCardProps>) -> Element {}
 
 #[derive(PartialEq, Props)]
 struct MetaCardProps {}
-fn MetaCard(Scope<MetaCardProps>) -> Element {} 
+fn MetaCard(Scope<MetaCardProps>) -> Element {}
 
 #[derive(PartialEq, Props)]
 struct ActionCardProps {}
-fn ActionCard(Scope<ActionCardProps>) -> Element {} 
+fn ActionCard(Scope<ActionCardProps>) -> Element {}
 ```
 
 That's a lot of components for one file! We've successfully refactored our app into components, but we should probably start breaking it up into a file for each component.
@@ -61,7 +61,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 struct ActionCardProps {}
-fn ActionCard(Scope<ActionCardProps>) -> Element {} 
+fn ActionCard(Scope<ActionCardProps>) -> Element {}
 ```
 
 We should also create a `mod.rs` file in the `post` folder so we can use it from our `main.rs`. Our `Post` component and its props will go into this file.
@@ -104,10 +104,10 @@ fn App(Scope) -> Element {
             original_poster: "me".to_string()
         }
     })
-} 
+}
 ```
 
-If you tried to build this app right now, you'll get an error message saying that `Post is private, trying changing it to public`. This is because we haven't properly exported our component! To fix this, we need to make sure both the Props and Component are declared as "public":
+If you tried to build this app right now, you'll get an error message saying that `Post is private, try changing it to public`. This is because we haven't properly exported our component! To fix this, we need to make sure both the Props and Component are declared as "public":
 
 ```rust
 // src/post/mod.rs
@@ -116,7 +116,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct PostProps {}
-pub fn Post(Scope<PostProps>) -> Element {} 
+pub fn Post(Scope<PostProps>) -> Element {}
 ```
 
 While we're here, we also need to make sure each of our subcomponents are included as modules and exported.
@@ -203,7 +203,7 @@ fn App(Scope) -> Element {
             original_poster: "me".to_string()
         }
     })
-} 
+}
 ```
 
 
@@ -255,7 +255,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct VoteButtonsProps {}
-pub fn VoteButtons(Scope<VoteButtonsProps>) -> Element {} 
+pub fn VoteButtons(Scope<VoteButtonsProps>) -> Element {}
 ```
 
 ```rust
@@ -264,7 +264,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct TitleCardProps {}
-pub fn TitleCard(Scope<TitleCardProps>) -> Element {} 
+pub fn TitleCard(Scope<TitleCardProps>) -> Element {}
 ```
 
 ```rust
@@ -273,7 +273,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct MetaCardProps {}
-pub fn MetaCard(Scope<MetaCardProps>) -> Element {} 
+pub fn MetaCard(Scope<MetaCardProps>) -> Element {}
 ```
 
 ```rust
@@ -282,7 +282,7 @@ use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
 pub struct ActionCardProps {}
-pub fn ActionCard(Scope<ActionCardProps>) -> Element {} 
+pub fn ActionCard(Scope<ActionCardProps>) -> Element {}
 ```
 
 ## Moving forward

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-web"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for the web browser using websys"
@@ -11,8 +11,8 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.1.7" }
-dioxus-html = { path = "../html", version = "^0.1.4" }
+dioxus-core = { path = "../core", version = "^0.1.9" }
+dioxus-html = { path = "../html", version = "^0.1.6" }
 js-sys = "0.3"
 wasm-bindgen = { version = "0.2.78", features = ["enable-interning"] }
 lazy_static = "1.4.0"
@@ -20,7 +20,7 @@ wasm-bindgen-futures = "0.4.20"
 log = { version = "0.4.14", features = ["release_max_level_off"] }
 fxhash = "0.2.1"
 wasm-logger = "0.2.0"
-console_error_panic_hook = "0.1.6"
+console_error_panic_hook = { version = "0.1.7", optional = true }
 wasm-bindgen-test = "0.3.21"
 once_cell = "1.8"
 async-channel = "1.6.1"
@@ -70,22 +70,11 @@ features = [
     "IdleDeadline",
 ]
 
-
-# [lib]
-# crate-type = ["cdylib", "rlib"]
+[features]
+default = ["panic_hook"]
+panic_hook = ["console_error_panic_hook"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
 wasm-bindgen-test = "0.3.28"
 dioxus-ssr = { path = "../ssr" }
-# im-rc = "15.0.0"
-# separator = "0.4.1"
-# uuid = { version = "0.8.2", features = ["v4", "wasm-bindgen"] }
-# serde = { version = "1.0.126", features = ["derive"] }
-# reqwest = { version = "0.11", features = ["json"] }
-# dioxus-hooks = { path = "../hooks" }
-# rand = { version = "0.8.4", features = ["small_rng"] }
-
-# [dev-dependencies.getrandom]
-# version = "0.2"
-# features = ["js"]

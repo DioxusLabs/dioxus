@@ -52,7 +52,7 @@ let content = dioxus::ssr::render_vdom(&dom);
 ```
 
 ## Configuring output
-It's possible to configure the output of the generated HTML. 
+It's possible to configure the output of the generated HTML.
 
 ```rust, ignore
 let content = dioxus::ssr::render_vdom(&dom, |config| config.pretty(true).prerender(true));
@@ -82,7 +82,7 @@ buf.write_fmt!(format_args!("{}", args));
 
 
 
-## Usage in pre-rendering 
+## Usage in pre-rendering
 
 This crate is particularly useful in pre-generating pages server-side and then selectively loading dioxus client-side to pick up the reactive elements.
 
