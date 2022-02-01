@@ -275,10 +275,8 @@ impl<T: Clone> UseState<T> {
     }
 }
 
-impl<T: 'static> ToOwned for UseState<T> {
-    type Owned = UseState<T>;
-
-    fn to_owned(&self) -> Self::Owned {
+impl<T: 'static> Clone for UseState<T> {
+    fn clone(&self) -> Self {
         UseState {
             current_val: self.current_val.clone(),
             update_callback: self.update_callback.clone(),
