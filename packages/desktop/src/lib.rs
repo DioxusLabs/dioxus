@@ -56,6 +56,7 @@ pub mod escape;
 pub mod events;
 
 use cfg::DesktopConfig;
+pub use desktop_context::use_window;
 use desktop_context::DesktopContext;
 use dioxus_core::*;
 use std::{

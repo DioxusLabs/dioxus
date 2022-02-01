@@ -7,7 +7,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let window = dioxus::desktop::desktop_context::use_window(&cx);
+    let window = dioxus::desktop::use_window(&cx);
 
     cx.render(rsx!(
         link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
