@@ -1,7 +1,3 @@
-
-
-
-
 export function main() {
   let root = window.document.getElementById("main");
   if (root != null) {
@@ -245,7 +241,7 @@ export class Interpreter {
       case "NewEventListener":
 
 
-        // this handler is only provided on desktop implementations since this 
+        // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event: Event) => {
           let target = event.target as Element | null;
