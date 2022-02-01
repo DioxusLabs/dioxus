@@ -13,6 +13,8 @@ use std::{
     rc::Rc,
 };
 
+/// for traceability, we use the raw fn pointer to identify the function
+/// we also get the component name, but that's not necessarily unique in the app
 pub(crate) type ComponentPtr = *mut std::os::raw::c_void;
 
 pub(crate) struct Heuristic {
@@ -94,7 +96,7 @@ impl ScopeArena {
 
         // Get the height of the scope
         let height = parent_scope
-            .map(|id| self.get_scope(id).map(|scope| scope.height))
+            .map(|id| self.get_scope(id).map(|scope| scope.height + 1))
             .flatten()
             .unwrap_or_default();
 
@@ -110,31 +112,62 @@ impl ScopeArena {
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             // reuse the old scope
             let scope = unsafe { &mut *old_scope };
-            scope.props.get_mut().replace(vcomp);
+
+            scope.container = container;
+            scope.our_arena_idx = new_scope_id;
             scope.parent_scope = parent_scope;
             scope.height = height;
+            scope.fnptr = fc_ptr;
+            scope.props.get_mut().replace(vcomp);
             scope.subtree.set(subtree);
-            scope.our_arena_idx = new_scope_id;
-            scope.container = container;
+            scope.frames[0].reset();
+            scope.frames[1].reset();
+            scope.shared_contexts.get_mut().clear();
+            scope.items.get_mut().listeners.clear();
+            scope.items.get_mut().borrowed_props.clear();
+            scope.hook_idx.set(0);
+            scope.hook_vals.get_mut().clear();
+
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
             debug_assert!(any_item.is_none());
         } else {
             // else create a new scope
+            let (node_capacity, hook_capacity) = self
+                .heuristics
+                .borrow()
+                .get(&fc_ptr)
+                .map(|h| (h.node_arena_size, h.hook_arena_size))
+                .unwrap_or_default();
+
             self.scopes.borrow_mut().insert(
                 new_scope_id,
-                self.bump.alloc(ScopeState::new(
-                    height,
+                self.bump.alloc(ScopeState {
                     container,
-                    new_scope_id,
+                    our_arena_idx: new_scope_id,
                     parent_scope,
-                    vcomp,
-                    self.tasks.clone(),
-                    self.heuristics
-                        .borrow()
-                        .get(&fc_ptr)
-                        .map(|h| (h.node_arena_size, h.hook_arena_size))
-                        .unwrap_or_default(),
-                )),
+                    height,
+                    fnptr: fc_ptr,
+                    props: RefCell::new(Some(vcomp)),
+                    frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
+
+                    // todo: subtrees
+                    subtree: Cell::new(0),
+                    is_subtree_root: Cell::new(false),
+
+                    generation: 0.into(),
+
+                    tasks: self.tasks.clone(),
+                    shared_contexts: Default::default(),
+
+                    items: RefCell::new(SelfReferentialItems {
+                        listeners: Default::default(),
+                        borrowed_props: Default::default(),
+                    }),
+
+                    hook_arena: Bump::new(),
+                    hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
+                    hook_idx: Default::default(),
+                }),
             );
         }
 
@@ -189,8 +222,6 @@ impl ScopeArena {
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
     pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
-        log::trace!("Ensuring drop safety for scope {:?}", scope_id);
-
         if let Some(scope) = self.get_scope(scope_id) {
             let mut items = scope.items.borrow_mut();
 
@@ -201,7 +232,6 @@ impl ScopeArena {
                 if let Some(scope_id) = comp.scope.get() {
                     self.ensure_drop_safety(scope_id);
                 }
-
                 drop(comp.props.take());
             });
 
@@ -217,18 +247,18 @@ impl ScopeArena {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
-        log::trace!("Running scope {:?}", id);
         self.ensure_drop_safety(id);
 
         // todo: we *know* that this is aliased by the contents of the scope itself
         let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
+
+        log::trace!("running scope {:?} symbol: {:?}", id, scope.fnptr);
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
         // - All children nodes that rely on &mut T are replaced with a new reference
         scope.hook_idx.set(0);
 
-        // book keeping to ensure safety around the borrowed data
         {
             // Safety:
             // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
@@ -240,8 +270,6 @@ impl ScopeArena {
             debug_assert!(items.listeners.is_empty());
             debug_assert!(items.borrowed_props.is_empty());
         }
-
-        // safety: this is definitely not dropped
 
         /*
         If the component returns None, then we fill in a placeholder node. This will wipe what was there.
@@ -284,14 +312,13 @@ impl ScopeArena {
 
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
-                log::trace!("Found valid receiver element");
-
                 let real_el = unsafe { &**el };
+                log::debug!("looking for listener on {:?}", real_el);
+
                 if let VNode::Element(real_el) = real_el {
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
-                            log::trace!("Found valid receiver event");
-
+                            log::debug!("calling listener {:?}", listener.event);
                             if state.canceled.get() {
                                 // stop bubbling if canceled
                                 break;
@@ -421,6 +448,7 @@ pub struct ScopeState {
     pub(crate) container: ElementId,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
+    pub(crate) fnptr: ComponentPtr,
 
     // todo: subtrees
     pub(crate) is_subtree_root: Cell<bool>,
@@ -449,43 +477,6 @@ pub struct SelfReferentialItems<'a> {
 
 // Public methods exposed to libraries and components
 impl ScopeState {
-    fn new(
-        height: u32,
-        container: ElementId,
-        our_arena_idx: ScopeId,
-        parent_scope: Option<*mut ScopeState>,
-        vcomp: Box<dyn AnyProps>,
-        tasks: Rc<TaskQueue>,
-        (node_capacity, hook_capacity): (usize, usize),
-    ) -> Self {
-        ScopeState {
-            container,
-            our_arena_idx,
-            parent_scope,
-            height,
-            props: RefCell::new(Some(vcomp)),
-            frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
-
-            // todo: subtrees
-            subtree: Cell::new(0),
-            is_subtree_root: Cell::new(false),
-
-            generation: 0.into(),
-
-            tasks,
-            shared_contexts: Default::default(),
-
-            items: RefCell::new(SelfReferentialItems {
-                listeners: Default::default(),
-                borrowed_props: Default::default(),
-            }),
-
-            hook_arena: Bump::new(),
-            hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
-            hook_idx: Default::default(),
-        }
-    }
-
     /// Get the subtree ID that this scope belongs to.
     ///
     /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route

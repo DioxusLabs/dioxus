@@ -147,13 +147,6 @@ impl<'src> VNode<'src> {
         }
     }
 
-    pub(crate) fn children(&self) -> &[VNode<'src>] {
-        match &self {
-            VNode::Fragment(f) => f.children,
-            _ => &[],
-        }
-    }
-
     // Create an "owned" version of the vnode.
     pub fn decouple(&self) -> VNode<'src> {
         match *self {
@@ -175,6 +168,7 @@ impl Debug for VNode<'_> {
                 .field("key", &el.key)
                 .field("attrs", &el.attributes)
                 .field("children", &el.children)
+                .field("id", &el.id)
                 .finish(),
             VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
             VNode::Placeholder(t) => write!(s, "VNode::VPlaceholder {{ id: {:?} }}", t.id),
