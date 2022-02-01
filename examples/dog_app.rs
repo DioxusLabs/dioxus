@@ -16,7 +16,7 @@ struct ListBreeds {
 }
 
 fn app(cx: Scope) -> Element {
-    let fut = use_future(&cx, || async move {
+    let breeds = use_future(&cx, || async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -26,7 +26,7 @@ fn app(cx: Scope) -> Element {
 
     let (breed, set_breed) = use_state(&cx, || None);
 
-    match fut.value() {
+    match breeds.value() {
         Some(Ok(breeds)) => cx.render(rsx! {
             div {
                 h1 {"Select a dog breed!"}

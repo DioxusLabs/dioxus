@@ -188,6 +188,7 @@ pub fn launch_with_props<P: 'static + Send>(
                                 let _ = proxy.send_event(UserWindowEvent::Update);
                             }
                             "browser_open" => {
+                                println!("browser_open");
                                 let data = req.params.unwrap();
                                 log::trace!("Open browser: {:?}", data);
                                 if let Some(arr) = data.as_array() {
