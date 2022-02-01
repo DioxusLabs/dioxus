@@ -37,6 +37,6 @@ private = true
 workspace = true
 
 [tasks.test]
-args = ["test", "--all-targets"]
+args = ["test", "--all-targets", "--workspace", "--exclude", "dioxus-mobile"]
 command = "cargo"
 private = true
