@@ -248,7 +248,7 @@ pub fn launch_with_props<P: 'static + Send>(
 
                             // do not let path searching to go two layers beyond the caller level
                             let data = read(path_buf)?;
-                            let meta = format!("{mime}");
+                            let meta = format!("{}", mime);
 
                             wry::http::ResponseBuilder::new().mimetype(&meta).body(data)
                         }
