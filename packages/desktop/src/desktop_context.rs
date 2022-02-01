@@ -34,7 +34,7 @@ impl DesktopContext {
     /// ```rust
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
-    pub fn drag_window(&self) {
+    pub fn drag(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::DragWindow);
     }
 
@@ -60,7 +60,7 @@ impl DesktopContext {
 }
 
 /// use this function can get the `DesktopContext` context.
-pub fn use_desktop_context(cx: &ScopeState) -> &Rc<DesktopContext> {
+pub fn use_window(cx: &ScopeState) -> &Rc<DesktopContext> {
     cx.use_hook(|_| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
