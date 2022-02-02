@@ -270,26 +270,23 @@ impl<'b> DiffState<'b> {
     fn create_component_node(&mut self, vcomponent: &'b VComponent<'b>) -> usize {
         let parent_idx = self.current_scope().unwrap();
 
-        // ensure this scope doesn't already exist if we're trying to create it
-        debug_assert!(
-            vcomponent
-                .scope
-                .get()
-                .and_then(|f| self.scopes.get_scope(f))
-                .is_none(),
-            "component scope already exists"
-        );
-
-        // Insert a new scope into our component list
-        let props: Box<dyn AnyProps + 'b> = vcomponent.props.borrow_mut().take().unwrap();
-        let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
-        let new_idx = self.scopes.new_with_key(
-            vcomponent.user_fc,
-            props,
-            Some(parent_idx),
-            self.element_stack.last().copied().unwrap(),
-            0,
-        );
+        // the component might already exist - if it does, we need to reuse it
+        // this makes figure out when to drop the component more complicated
+        let new_idx = if let Some(idx) = vcomponent.scope.get() {
+            assert!(self.scopes.get_scope(idx).is_some());
+            idx
+        } else {
+            // Insert a new scope into our component list
+            let props: Box<dyn AnyProps + 'b> = vcomponent.props.borrow_mut().take().unwrap();
+            let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
+            self.scopes.new_with_key(
+                vcomponent.user_fc,
+                props,
+                Some(parent_idx),
+                self.element_stack.last().copied().unwrap(),
+                0,
+            )
+        };
 
         // Actually initialize the caller's slot with the right address
         vcomponent.scope.set(Some(new_idx));
