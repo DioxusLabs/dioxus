@@ -52,17 +52,12 @@ fn simple_test() {
 
         cx.render(rsx! {
             div {
-                id: "test1",
-                id
+
             }
         })
     }
 
     main();
 
-    let element = gloo_utils::document()
-        .get_element_by_id("test1")
-        .expect("No result found. Most likely, the application crashed")
-        .inner_html();
-    assert!(element, "");
+    let element = gloo_utils::document();
 }

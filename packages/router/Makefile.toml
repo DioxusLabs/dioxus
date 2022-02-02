@@ -1,4 +1,6 @@
 [tasks.test]
+extend = "core::wasm-pack-base"
+command = "wasm-pack"
 args = [
   "test",
   "@@split(DIOXUS_TEST_FLAGS, )",
@@ -6,5 +8,3 @@ args = [
   "--features",
   "${DIOXUS_TEST_FEATURES}",
 ]
-command = "wasm-pack"
-extend = "core::wasm-pack-base"
