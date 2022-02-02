@@ -198,6 +198,8 @@ export class Interpreter {
                 this.RemoveEventListener(edit.root, edit.event_name);
                 break;
             case "NewEventListener":
+                // this handler is only provided on desktop implementations since this
+                // method is not used by the web implementation
                 let handler = (event) => {
                     let target = event.target;
                     if (target != null) {

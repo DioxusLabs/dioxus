@@ -215,7 +215,36 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 })
                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-            let values = std::collections::HashMap::new();
+            let mut values = std::collections::HashMap::new();
+
+            if let Some(form) = target.dyn_ref::<web_sys::HtmlFormElement>() {
+                let elements = form.elements();
+                for x in 0..elements.length() {
+                    let element = elements.item(x).unwrap();
+                    if let Some(name) = element.get_attribute("name") {
+                        let value: String = (&element)
+                            .dyn_ref()
+                            .map(|input: &web_sys::HtmlInputElement| {
+                                match input.type_().as_str() {
+                                    "checkbox" => {
+                                        match input.checked() {
+                                            true => "true".to_string(),
+                                            false => "false".to_string(),
+                                        }
+                                    },
+                                    _ => input.value()
+                                }
+                            })
+                            .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| input.value()))
+                            .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlSelectElement| input.value()))
+                            .or_else(|| target.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content())
+                            .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
+
+                        values.insert(name, value);
+                    }
+                }
+            }
+
             Arc::new(FormData { value, values })
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
