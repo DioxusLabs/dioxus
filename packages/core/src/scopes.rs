@@ -152,6 +152,7 @@ impl ScopeArena {
                     fnptr: fc_ptr,
                     fnname,
                     originator,
+                    active: Cell::new(true),
 
                     props: RefCell::new(Some(vcomp)),
                     frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
@@ -161,7 +162,6 @@ impl ScopeArena {
                     is_subtree_root: Cell::new(false),
 
                     generation: 0.into(),
-
 
                     tasks: self.tasks.clone(),
                     shared_contexts: Default::default(),
@@ -251,13 +251,15 @@ impl ScopeArena {
     }
 
     pub(crate) fn run_scope(&self, id: ScopeId) {
+        // todo: we *know* that this is aliased by the contents of the scope itself
+        let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
+
+        assert!(scope.active.get());
+
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
         self.ensure_drop_safety(id);
-
-        // todo: we *know* that this is aliased by the contents of the scope itself
-        let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
 
         log::trace!("running scope {:?} name: {:?}", id, scope.fnname);
 
@@ -382,6 +384,11 @@ impl ScopeArena {
             None => None,
         }
     }
+
+    pub(crate) fn set_active(&self, scope_id: ScopeId, arg: bool) {
+        let scope = self.get_scope(scope_id).unwrap();
+        scope.active.set(arg);
+    }
 }
 
 /// Components in Dioxus use the "Context" object to interact with their lifecycle.
@@ -458,6 +465,7 @@ pub struct ScopeState {
     pub(crate) fnptr: ComponentPtr,
     pub(crate) fnname: &'static str,
     pub(crate) originator: ScopeId,
+    pub(crate) active: Cell<bool>,
 
     // todo: subtrees
     pub(crate) is_subtree_root: Cell<bool>,
@@ -569,6 +577,22 @@ impl ScopeState {
     pub fn parent(&self) -> Option<ScopeId> {
         // safety: the pointer to our parent is *always* valid thanks to the bump arena
         self.parent_scope.map(|p| unsafe { &*p }.our_arena_idx)
+    }
+
+    pub fn container(&self) -> ElementId {
+        self.container
+    }
+
+    pub fn fnptr(&self) -> ComponentPtr {
+        self.fnptr
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.fnname
+    }
+
+    pub fn originator(&self) -> ScopeId {
+        self.originator
     }
 
     /// Get the ID of this Scope within this Dioxus VirtualDOM.

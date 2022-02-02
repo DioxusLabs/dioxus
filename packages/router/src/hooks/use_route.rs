@@ -61,7 +61,7 @@ impl UseRoute {
         self.router.current_location()
     }
 
-    fn path_segments(&self) -> Vec<String> {
+    pub fn path_segments(&self) -> Vec<String> {
         let location = self.router.current_location();
         let path = location.path();
         if path == "/" {

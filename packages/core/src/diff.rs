@@ -279,6 +279,7 @@ impl<'b> DiffState<'b> {
         // this makes figure out when to drop the component more complicated
         let new_idx = if let Some(idx) = vcomponent.scope.get() {
             assert!(self.scopes.get_scope(idx).is_some());
+            self.scopes.set_active(idx, true);
             idx
         } else {
             // Insert a new scope into our component list
@@ -963,12 +964,12 @@ impl<'b> DiffState<'b> {
                         self.mutations.dirty_scopes
                     );
 
-                    if self.scope_stack.contains(&c.originator)
-                        || self.mutations.dirty_scopes.contains(&c.originator)
-                    {
+                    if self.scope_stack.contains(&c.originator) {
                         log::trace!("Removing component {:?}", old);
 
                         self.scopes.try_remove(scope_id).unwrap();
+                    } else {
+                        self.scopes.set_active(scope_id, false);
                     }
                 }
                 self.leave_scope();
@@ -1021,10 +1022,10 @@ impl<'b> DiffState<'b> {
                         self.remove_nodes([root], gen_muts);
 
                         // we can only remove this node if the originator is actively in our stackß
-                        if self.scope_stack.contains(&c.originator)
-                            || self.mutations.dirty_scopes.contains(&c.originator)
-                        {
+                        if self.scope_stack.contains(&c.originator) {
                             self.scopes.try_remove(scope_id).unwrap();
+                        } else {
+                            self.scopes.set_active(scope_id, false);
                         }
                     }
                     self.leave_scope();

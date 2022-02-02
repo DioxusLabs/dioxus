@@ -42,17 +42,19 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         router_root.register_total_route(
             route_context.total_route.clone(),
             cx.scope_id(),
+            cx.name(),
             cx.props.fallback,
         );
 
         Some(RouteInner {})
     });
 
-    // log::trace!("Checking route {}", cx.props.to);
-
     if router_root.should_render(cx.scope_id()) {
+        log::trace!("Route {} should render", cx.props.to);
+
         cx.render(rsx!(&cx.props.children))
     } else {
+        log::trace!("Route {} should not render", cx.props.to);
         None
     }
 }

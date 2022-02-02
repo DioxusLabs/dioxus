@@ -12,7 +12,7 @@ use crate::platform::RouterProvider;
 pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
     pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
-    slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
+    slots: Rc<RefCell<Vec<Slot>>>,
     onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
     root_found: Rc<Cell<Option<ScopeId>>>,
     cur_path_params: Rc<RefCell<HashMap<String, String>>>,
@@ -28,17 +28,10 @@ pub enum RouteEvent {
     Push,
 }
 
-enum RouteSlot {
-    Routes {
-        // the partial route
-        partial: String,
-
-        // the total route
-        total: String,
-
-        // Connections to other routs
-        rest: Vec<RouteSlot>,
-    },
+struct Slot {
+    id: ScopeId,
+    name: &'static str,
+    route: String,
 }
 
 impl RouterService {
@@ -48,7 +41,7 @@ impl RouterService {
         let path = location.path();
 
         let onchange_listeners = Rc::new(RefCell::new(HashSet::new()));
-        let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
+        let slots: Rc<RefCell<Vec<Slot>>> = Default::default();
         let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
         let root_found = Rc::new(Cell::new(None));
 
@@ -61,8 +54,8 @@ impl RouterService {
             move || {
                 root_found.set(None);
                 // checking if the route is valid is cheap, so we do it
-                for (slot, root) in slots.borrow_mut().iter().rev() {
-                    regen_route(*slot);
+                for slot in slots.borrow_mut().iter().rev() {
+                    regen_route(slot.id);
                 }
 
                 for listener in onchange_listeners.borrow_mut().iter() {
@@ -92,9 +85,20 @@ impl RouterService {
         self.history.borrow_mut().push(route);
     }
 
-    pub fn register_total_route(&self, route: String, scope: ScopeId, fallback: bool) {
+    pub fn register_total_route(
+        &self,
+        route: String,
+        scope: ScopeId,
+        scopename: &'static str,
+        fallback: bool,
+    ) {
         let clean = clean_route(route);
-        self.slots.borrow_mut().push((scope, clean));
+
+        self.slots.borrow_mut().push(Slot {
+            id: scope,
+            name: scopename,
+            route: clean,
+        });
     }
 
     pub fn should_render(&self, scope: ScopeId) -> bool {
@@ -110,11 +114,11 @@ impl RouterService {
 
         let roots = self.slots.borrow();
 
-        let root = roots.iter().find(|(id, route)| id == &scope);
+        let root = roots.iter().find(|slot| slot.id == scope);
 
         // fallback logic
         match root {
-            Some((id, route)) => {
+            Some(Slot { id, name, route }) => {
                 if let Some(params) = route_matches_path(route, path) {
                     self.root_found.set(Some(*id));
                     *self.cur_path_params.borrow_mut() = params;

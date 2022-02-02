@@ -474,7 +474,10 @@ impl VirtualDom {
             log::debug!("dirty_scopes: {:?}", self.dirty_scopes);
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                if !ran_scopes.contains(&scopeid) {
+                let scope = scopes.get_scope(scopeid).unwrap();
+                let is_active = scope.active.get();
+
+                if !ran_scopes.contains(&scopeid) && is_active {
                     ran_scopes.insert(scopeid);
 
                     self.scopes.run_scope(scopeid);
