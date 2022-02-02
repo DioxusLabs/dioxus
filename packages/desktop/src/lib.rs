@@ -224,7 +224,7 @@ pub fn launch_with_props<P: 'static + Send>(
                         } else if trimmed == "index.js" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/javascript")
-                                .body(include_bytes!("./interpreter.js").to_vec())
+                                .body(dioxus_interpreter_js::INTERPRTER_JS.as_bytes().to_vec())
                         } else {
                             // Read the file content from file path
                             use std::fs::read;
