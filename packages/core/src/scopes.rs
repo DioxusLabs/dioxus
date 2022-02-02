@@ -121,6 +121,7 @@ impl ScopeArena {
             scope.height = height;
             scope.fnptr = fc_ptr;
             scope.fnname = fnname;
+            scope.active.set(true);
             scope.props.get_mut().replace(vcomp);
             scope.subtree.set(subtree);
             scope.frames[0].reset();

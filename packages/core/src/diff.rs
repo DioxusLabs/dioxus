@@ -452,6 +452,8 @@ impl<'b> DiffState<'b> {
                     .get_scope(scope_addr)
                     .unwrap_or_else(|| panic!("could not find {:?}", scope_addr));
 
+                scope.active.set(true);
+
                 // take the new props out regardless
                 // when memoizing, push to the existing scope if memoization happens
                 let new_props = new
