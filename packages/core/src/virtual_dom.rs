@@ -222,6 +222,8 @@ impl VirtualDom {
             None,
             ElementId(0),
             0,
+            "app",
+            ScopeId(0),
         );
 
         Self {

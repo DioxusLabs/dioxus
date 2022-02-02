@@ -89,6 +89,8 @@ impl ScopeArena {
         parent_scope: Option<ScopeId>,
         container: ElementId,
         subtree: u32,
+        fnname: &'static str,
+        originator: ScopeId,
     ) -> ScopeId {
         // Increment the ScopeId system. ScopeIDs are never reused
         let new_scope_id = ScopeId(self.scope_gen.get());
@@ -118,6 +120,7 @@ impl ScopeArena {
             scope.parent_scope = parent_scope;
             scope.height = height;
             scope.fnptr = fc_ptr;
+            scope.fnname = fnname;
             scope.props.get_mut().replace(vcomp);
             scope.subtree.set(subtree);
             scope.frames[0].reset();
@@ -147,6 +150,9 @@ impl ScopeArena {
                     parent_scope,
                     height,
                     fnptr: fc_ptr,
+                    fnname,
+                    originator,
+
                     props: RefCell::new(Some(vcomp)),
                     frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
 
@@ -155,6 +161,7 @@ impl ScopeArena {
                     is_subtree_root: Cell::new(false),
 
                     generation: 0.into(),
+
 
                     tasks: self.tasks.clone(),
                     shared_contexts: Default::default(),
@@ -252,7 +259,7 @@ impl ScopeArena {
         // todo: we *know* that this is aliased by the contents of the scope itself
         let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
 
-        log::trace!("running scope {:?} symbol: {:?}", id, scope.fnptr);
+        log::trace!("running scope {:?} name: {:?}", id, scope.fnname);
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
@@ -449,6 +456,8 @@ pub struct ScopeState {
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
     pub(crate) fnptr: ComponentPtr,
+    pub(crate) fnname: &'static str,
+    pub(crate) originator: ScopeId,
 
     // todo: subtrees
     pub(crate) is_subtree_root: Cell<bool>,

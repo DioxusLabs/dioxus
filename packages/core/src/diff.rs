@@ -135,6 +135,7 @@ impl<'b> DiffState<'b> {
             // these are *actual* elements, not wrappers around lists
             (Text(old), Text(new)) => {
                 if std::ptr::eq(old, new) {
+                    log::debug!("ptrs are equal, skipping diff");
                     return;
                 }
 
@@ -153,6 +154,7 @@ impl<'b> DiffState<'b> {
 
             (Placeholder(old), Placeholder(new)) => {
                 if std::ptr::eq(old, new) {
+                    log::debug!("ptrs are equal, skipping diff");
                     return;
                 }
 
@@ -167,6 +169,7 @@ impl<'b> DiffState<'b> {
 
             (Element(old), Element(new)) => {
                 if std::ptr::eq(old, new) {
+                    log::debug!("ptrs are equal, skipping diff");
                     return;
                 }
                 self.diff_element_nodes(old, new, old_node, new_node);
@@ -175,6 +178,7 @@ impl<'b> DiffState<'b> {
             // These two sets are pointers to nodes but are not actually nodes themselves
             (Component(old), Component(new)) => {
                 if std::ptr::eq(old, new) {
+                    log::debug!("ptrs are equal, skipping diff");
                     return;
                 }
                 self.diff_component_nodes(old_node, new_node, *old, *new);
@@ -182,6 +186,7 @@ impl<'b> DiffState<'b> {
 
             (Fragment(old), Fragment(new)) => {
                 if std::ptr::eq(old, new) {
+                    log::debug!("ptrs are equal, skipping diff");
                     return;
                 }
                 self.diff_fragment_nodes(old, new);
@@ -285,6 +290,8 @@ impl<'b> DiffState<'b> {
                 Some(parent_idx),
                 self.element_stack.last().copied().unwrap(),
                 0,
+                vcomponent.fn_name,
+                vcomponent.originator,
             )
         };
 
@@ -427,6 +434,7 @@ impl<'b> DiffState<'b> {
             .expect("existing component nodes should have a scope");
 
         if std::ptr::eq(old, new) {
+            log::debug!("ptrs are equal, skipping diff");
             return;
         }
 
@@ -473,10 +481,17 @@ impl<'b> DiffState<'b> {
                     self.scopes.run_scope(scope_addr);
                     self.mutations.mark_dirty_scope(scope_addr);
 
-                    self.diff_node(
-                        self.scopes.wip_head(scope_addr),
-                        self.scopes.fin_head(scope_addr),
+                    let old_head = self.scopes.wip_head(scope_addr);
+                    let new_head = self.scopes.fin_head(scope_addr);
+
+                    log::debug!(
+                        "running component diff {:?}, {:?}, {:?}",
+                        new.fn_name,
+                        old_head as *const _,
+                        new_head as *const _
                     );
+
+                    self.diff_node(old_head, new_head);
                 } else {
                     // memoization has taken place
                     drop(new_props);
@@ -484,6 +499,11 @@ impl<'b> DiffState<'b> {
             }
             self.leave_scope();
         } else {
+            log::warn!(
+                "component nodes with different components {:?}, {:?}",
+                old_node,
+                new_node
+            );
             self.replace_node(old_node, new_node);
         }
     }
@@ -521,6 +541,11 @@ impl<'b> DiffState<'b> {
     // to an element, and appending makes sense.
     fn diff_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         if std::ptr::eq(old, new) {
+            log::debug!(
+                "ptrs are equal, skipping diff {:?}, {:?}",
+                old as *const _,
+                new as *const _
+            );
             return;
         }
 
@@ -890,6 +915,7 @@ impl<'b> DiffState<'b> {
     }
 
     fn replace_node(&mut self, old: &'b VNode<'b>, new: &'b VNode<'b>) {
+        log::debug!("replace_node: {:?} {:?}", old, new);
         let nodes_created = self.create_node(new);
         self.replace_inner(old, nodes_created);
     }
@@ -903,7 +929,7 @@ impl<'b> DiffState<'b> {
 
                 self.mutations.replace_with(id, nodes_created as u32);
                 self.remove_nodes(el.children, false);
-                self.scopes.collect_garbage(id);
+                self.collect_garbage(id);
             }
 
             VNode::Text(_) | VNode::Placeholder(_) => {
@@ -912,7 +938,7 @@ impl<'b> DiffState<'b> {
                     .unwrap_or_else(|| panic!("broke on {:?}", old));
 
                 self.mutations.replace_with(id, nodes_created as u32);
-                self.scopes.collect_garbage(id);
+                self.collect_garbage(id);
             }
 
             VNode::Fragment(f) => {
@@ -929,10 +955,17 @@ impl<'b> DiffState<'b> {
                 {
                     self.replace_inner(node, nodes_created);
 
-                    log::trace!("Replacing component x2 {:?}", old);
-
                     // we can only remove components if they are actively being diffed
-                    if self.scope_stack.contains(&c.originator) {
+                    log::debug!(
+                        "attempting to remove component {:?}, {:?}, {:?}",
+                        old,
+                        self.scope_stack,
+                        self.mutations.dirty_scopes
+                    );
+
+                    if self.scope_stack.contains(&c.originator)
+                        || self.mutations.dirty_scopes.contains(&c.originator)
+                    {
                         log::trace!("Removing component {:?}", old);
 
                         self.scopes.try_remove(scope_id).unwrap();
@@ -949,7 +982,7 @@ impl<'b> DiffState<'b> {
                 VNode::Text(t) => {
                     // this check exists because our null node will be removed but does not have an ID
                     if let Some(id) = t.id.get() {
-                        self.scopes.collect_garbage(id);
+                        self.collect_garbage(id);
 
                         if gen_muts {
                             self.mutations.remove(id.as_u64());
@@ -958,7 +991,7 @@ impl<'b> DiffState<'b> {
                 }
                 VNode::Placeholder(a) => {
                     let id = a.id.get().unwrap();
-                    self.scopes.collect_garbage(id);
+                    self.collect_garbage(id);
 
                     if gen_muts {
                         self.mutations.remove(id.as_u64());
@@ -971,7 +1004,7 @@ impl<'b> DiffState<'b> {
                         self.mutations.remove(id.as_u64());
                     }
 
-                    self.scopes.collect_garbage(id);
+                    self.collect_garbage(id);
 
                     self.remove_nodes(e.children, false);
                 }
@@ -988,7 +1021,9 @@ impl<'b> DiffState<'b> {
                         self.remove_nodes([root], gen_muts);
 
                         // we can only remove this node if the originator is actively in our stackß
-                        if self.scope_stack.contains(&c.originator) {
+                        if self.scope_stack.contains(&c.originator)
+                            || self.mutations.dirty_scopes.contains(&c.originator)
+                        {
                             self.scopes.try_remove(scope_id).unwrap();
                         }
                     }
@@ -1033,6 +1068,10 @@ impl<'b> DiffState<'b> {
 
     fn leave_scope(&mut self) {
         self.scope_stack.pop();
+    }
+
+    fn collect_garbage(&mut self, element: ElementId) {
+        // self.scopes.collect_garbage(element);
     }
 
     fn find_last_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
