@@ -476,8 +476,12 @@ impl VirtualDom {
             if let Some(scopeid) = self.dirty_scopes.pop() {
                 let scope = scopes.get_scope(scopeid).unwrap();
                 let is_active = scope.active.get();
+                if !is_active {
+                    log::debug!("dirty scope {:?} is not active", scopeid);
+                    continue;
+                }
 
-                if !ran_scopes.contains(&scopeid) && is_active {
+                if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
 
                     self.scopes.run_scope(scopeid);
