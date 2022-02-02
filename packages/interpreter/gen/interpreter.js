@@ -198,38 +198,36 @@ export class Interpreter {
                 this.RemoveEventListener(edit.root, edit.event_name);
                 break;
             case "NewEventListener":
-                // this handler is only provided on desktop implementations since this 
+                // this handler is only provided on desktop implementations since this
                 // method is not used by the web implementation
                 let handler = (event) => {
                     let target = event.target;
                     if (target != null) {
                         let realId = target.getAttribute(`data-dioxus-id`);
+                        let shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
+                        if (event.type == "click") {
+                            event.preventDefault();
+                            if (shouldPreventDefault !== `onclick`) {
+                                if (target.tagName == "A") {
+                                    const href = target.getAttribute("href");
+                                    if (href !== "" && href !== null && href !== undefined) {
+                                        window.rpc.call("browser_open", { href });
+                                    }
+                                }
+                            }
+                        }
                         // walk the tree to find the real element
                         while (realId == null && target.parentElement != null) {
                             target = target.parentElement;
                             realId = target.getAttribute(`data-dioxus-id`);
                         }
-                        const shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
+                        shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
                         let contents = serialize_event(event);
                         if (shouldPreventDefault === `on${event.type}`) {
                             event.preventDefault();
                         }
                         if (event.type == "submit") {
                             event.preventDefault();
-                        }
-                        if (event.type == "click") {
-                            event.preventDefault();
-                            if (shouldPreventDefault !== `onclick`) {
-                                if (target.tagName == "A") {
-                                    const href = target.getAttribute("href");
-                                    if (href !== "" && href !== null && href !== undefined && realId != null) {
-                                        window.rpc.call("browser_open", {
-                                            mounted_dom_id: parseInt(realId),
-                                            href
-                                        });
-                                    }
-                                }
-                            }
                         }
                         if (realId == null) {
                             return;
