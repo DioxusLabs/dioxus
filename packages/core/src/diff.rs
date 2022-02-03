@@ -119,11 +119,15 @@ impl<'b> DiffState<'b> {
 
     pub fn diff_scope(&mut self, scopeid: ScopeId) {
         let (old, new) = (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
-        self.scope_stack.push(scopeid);
         let scope = self.scopes.get_scope(scopeid).unwrap();
-        self.element_stack.push(scope.container);
 
-        self.diff_node(old, new);
+        self.scope_stack.push(scopeid);
+        self.element_stack.push(scope.container);
+        {
+            self.diff_node(old, new);
+        }
+        self.element_stack.pop();
+        self.scope_stack.pop();
 
         self.mutations.mark_dirty_scope(scopeid);
     }
@@ -131,63 +135,26 @@ impl<'b> DiffState<'b> {
     pub fn diff_node(&mut self, old_node: &'b VNode<'b>, new_node: &'b VNode<'b>) {
         use VNode::{Component, Element, Fragment, Placeholder, Text};
         match (old_node, new_node) {
-            // Check the most common cases first
-            // these are *actual* elements, not wrappers around lists
             (Text(old), Text(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
-
-                let root = old
-                    .id
-                    .get()
-                    .expect("existing text nodes should have an ElementId");
-
-                if old.text != new.text {
-                    self.mutations.set_text(new.text, root.as_u64());
-                }
-                self.scopes.update_node(new_node, root);
-
-                new.id.set(Some(root));
+                self.diff_text_nodes(old, new, old_node, new_node);
             }
 
             (Placeholder(old), Placeholder(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
-
-                let root = old
-                    .id
-                    .get()
-                    .expect("existing placeholder nodes should have an ElementId");
-
-                self.scopes.update_node(new_node, root);
-                new.id.set(Some(root));
+                self.diff_placeholder_nodes(old, new, old_node, new_node);
             }
 
             (Element(old), Element(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
                 self.diff_element_nodes(old, new, old_node, new_node);
             }
 
-            // These two sets are pointers to nodes but are not actually nodes themselves
             (Component(old), Component(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
                 self.diff_component_nodes(old_node, new_node, *old, *new);
             }
 
             (Fragment(old), Fragment(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
                 self.diff_fragment_nodes(old, new);
             }
 
-            // Anything else is just a basic replace and create
             (
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
@@ -322,6 +289,53 @@ impl<'b> DiffState<'b> {
         created
     }
 
+    pub(crate) fn diff_text_nodes(
+        &mut self,
+        old: &'b VText<'b>,
+        new: &'b VText<'b>,
+        _old_node: &'b VNode<'b>,
+        new_node: &'b VNode<'b>,
+    ) {
+        if std::ptr::eq(old, new) {
+            return;
+        }
+
+        // if the node is comming back not assigned, that means it was borrowed but removed
+        let root = match old.id.get() {
+            Some(id) => id,
+            None => self.scopes.reserve_node(new_node),
+        };
+
+        if old.text != new.text {
+            self.mutations.set_text(new.text, root.as_u64());
+        }
+
+        self.scopes.update_node(new_node, root);
+
+        new.id.set(Some(root));
+    }
+
+    pub(crate) fn diff_placeholder_nodes(
+        &mut self,
+        old: &'b VPlaceholder,
+        new: &'b VPlaceholder,
+        _old_node: &'b VNode<'b>,
+        new_node: &'b VNode<'b>,
+    ) {
+        if std::ptr::eq(old, new) {
+            return;
+        }
+
+        // if the node is comming back not assigned, that means it was borrowed but removed
+        let root = match old.id.get() {
+            Some(id) => id,
+            None => self.scopes.reserve_node(new_node),
+        };
+
+        self.scopes.update_node(new_node, root);
+        new.id.set(Some(root));
+    }
+
     fn diff_element_nodes(
         &mut self,
         old: &'b VElement<'b>,
@@ -329,6 +343,10 @@ impl<'b> DiffState<'b> {
         old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
     ) {
+        if std::ptr::eq(old, new) {
+            return;
+        }
+
         // if the node is comming back not assigned, that means it was borrowed but removed
         let root = match old.id.get() {
             Some(id) => id,
@@ -490,6 +508,10 @@ impl<'b> DiffState<'b> {
     }
 
     fn diff_fragment_nodes(&mut self, old: &'b VFragment<'b>, new: &'b VFragment<'b>) {
+        if std::ptr::eq(old, new) {
+            return;
+        }
+
         // This is the case where options or direct vnodes might be used.
         // In this case, it's faster to just skip ahead to their diff
         if old.children.len() == 1 && new.children.len() == 1 {
@@ -1106,9 +1128,7 @@ impl<'b> DiffState<'b> {
                 for child in el.children.iter() {
                     num_on_stack += self.push_all_nodes(child);
                 }
-
                 self.mutations.push_root(el.id.get().unwrap());
-
                 num_on_stack + 1
             }
         }
