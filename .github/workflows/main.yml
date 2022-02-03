@@ -33,10 +33,16 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev
-      - uses: actions-rs/cargo@v1
+      - name: Install cargo-make
+        uses: actions-rs/cargo@v1
         with:
-          command: test
-          args: --features "desktop, ssr, router"
+          command: install
+          args: --debug cargo-make
+      - uses: actions-rs/cargo@v1
+      - uses: browser-actions/setup-firefox@latest
+        with:
+          command: make
+          args: tests
 
   fmt:
     name: Rustfmt

@@ -1,0 +1,8 @@
+FROM dioxus-base-test-image
+
+RUN mkdir run_test
+COPY tmp /run_test
+WORKDIR /run_test
+RUN cargo make tests
+
+CMD ["exit"]
