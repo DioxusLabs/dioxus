@@ -386,7 +386,30 @@ fn apply_background(name: &str, value: &str, style: &mut StyleModifer) {
                 "magenta" => style.tui_style.bg.replace(Color::Magenta),
                 "white" => style.tui_style.bg.replace(Color::White),
                 "black" => style.tui_style.bg.replace(Color::Black),
-                _ => None,
+                _ => {
+                    if value.len() == 7{
+                        let mut values = [0, 0, 0];
+                        let mut color_ok = true;
+                        for i in 0..values.len(){
+                            if let Ok(v) = u8::from_str_radix(&value[(1+2*i)..(1+2*(i+1))], 16){
+                                values[i] = v;
+                            }
+                            else{
+                                color_ok = false;
+                            }
+                        }
+                        if color_ok{
+                            let color = Color::Rgb(values[0], values[1], values[2]);
+                            style.tui_style.bg.replace(color)
+                        }
+                        else{
+                            None
+                        }
+                    }
+                    else{
+                        None
+                    }
+                },
             };
         }
         "background" => {}
