@@ -208,9 +208,7 @@ impl<'b> DiffState<'b> {
         {
             self.mutations.create_element(tag_name, *namespace, real_id);
 
-            let cur_scope_id = self
-                .current_scope()
-                .expect("diffing should always have a scope");
+            let cur_scope_id = self.current_scope();
 
             for listener in listeners.iter() {
                 listener.mounted_node.set(Some(real_id));
@@ -235,7 +233,7 @@ impl<'b> DiffState<'b> {
     }
 
     fn create_component_node(&mut self, vcomponent: &'b VComponent<'b>) -> usize {
-        let parent_idx = self.current_scope().unwrap();
+        let parent_idx = self.current_scope();
 
         // the component might already exist - if it does, we need to reuse it
         // this makes figure out when to drop the component more complicated
@@ -401,25 +399,25 @@ impl<'b> DiffState<'b> {
         // We also need to make sure that all listeners are properly attached to the parent scope (fix_listener)
         //
         // TODO: take a more efficient path than this
-        if let Some(cur_scope_id) = self.current_scope() {
-            if old.listeners.len() == new.listeners.len() {
-                for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
-                    if old_l.event != new_l.event {
-                        self.mutations
-                            .remove_event_listener(old_l.event, root.as_u64());
-                        self.mutations.new_event_listener(new_l, cur_scope_id);
-                    }
-                    new_l.mounted_node.set(old_l.mounted_node.get());
-                }
-            } else {
-                for listener in old.listeners {
+        let cur_scope_id = self.current_scope();
+
+        if old.listeners.len() == new.listeners.len() {
+            for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
+                if old_l.event != new_l.event {
                     self.mutations
-                        .remove_event_listener(listener.event, root.as_u64());
+                        .remove_event_listener(old_l.event, root.as_u64());
+                    self.mutations.new_event_listener(new_l, cur_scope_id);
                 }
-                for listener in new.listeners {
-                    listener.mounted_node.set(Some(root));
-                    self.mutations.new_event_listener(listener, cur_scope_id);
-                }
+                new_l.mounted_node.set(old_l.mounted_node.get());
+            }
+        } else {
+            for listener in old.listeners {
+                self.mutations
+                    .remove_event_listener(listener.event, root.as_u64());
+            }
+            for listener in new.listeners {
+                listener.mounted_node.set(Some(root));
+                self.mutations.new_event_listener(listener, cur_scope_id);
             }
         }
 
@@ -1057,8 +1055,8 @@ impl<'b> DiffState<'b> {
         self.mutations.insert_before(first, created as u32);
     }
 
-    fn current_scope(&self) -> Option<ScopeId> {
-        self.scope_stack.last().copied()
+    fn current_scope(&self) -> ScopeId {
+        self.scope_stack.last().copied().expect("no current scope")
     }
 
     fn enter_scope(&mut self, scope: ScopeId) {
