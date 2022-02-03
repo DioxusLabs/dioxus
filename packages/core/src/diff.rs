@@ -119,11 +119,15 @@ impl<'b> DiffState<'b> {
 
     pub fn diff_scope(&mut self, scopeid: ScopeId) {
         let (old, new) = (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
-        self.scope_stack.push(scopeid);
         let scope = self.scopes.get_scope(scopeid).unwrap();
-        self.element_stack.push(scope.container);
 
-        self.diff_node(old, new);
+        self.scope_stack.push(scopeid);
+        self.element_stack.push(scope.container);
+        {
+            self.diff_node(old, new);
+        }
+        self.element_stack.pop();
+        self.scope_stack.pop();
 
         self.mutations.mark_dirty_scope(scopeid);
     }
@@ -131,63 +135,26 @@ impl<'b> DiffState<'b> {
     pub fn diff_node(&mut self, old_node: &'b VNode<'b>, new_node: &'b VNode<'b>) {
         use VNode::{Component, Element, Fragment, Placeholder, Text};
         match (old_node, new_node) {
-            // Check the most common cases first
-            // these are *actual* elements, not wrappers around lists
             (Text(old), Text(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
-
-                let root = old
-                    .id
-                    .get()
-                    .expect("existing text nodes should have an ElementId");
-
-                if old.text != new.text {
-                    self.mutations.set_text(new.text, root.as_u64());
-                }
-                self.scopes.update_node(new_node, root);
-
-                new.id.set(Some(root));
+                self.diff_text_nodes(old, new, old_node, new_node);
             }
 
             (Placeholder(old), Placeholder(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
-
-                let root = old
-                    .id
-                    .get()
-                    .expect("existing placeholder nodes should have an ElementId");
-
-                self.scopes.update_node(new_node, root);
-                new.id.set(Some(root));
+                self.diff_placeholder_nodes(old, new, old_node, new_node);
             }
 
             (Element(old), Element(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
                 self.diff_element_nodes(old, new, old_node, new_node);
             }
 
-            // These two sets are pointers to nodes but are not actually nodes themselves
             (Component(old), Component(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
                 self.diff_component_nodes(old_node, new_node, *old, *new);
             }
 
             (Fragment(old), Fragment(new)) => {
-                if std::ptr::eq(old, new) {
-                    return;
-                }
                 self.diff_fragment_nodes(old, new);
             }
 
-            // Anything else is just a basic replace and create
             (
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
@@ -241,9 +208,7 @@ impl<'b> DiffState<'b> {
         {
             self.mutations.create_element(tag_name, *namespace, real_id);
 
-            let cur_scope_id = self
-                .current_scope()
-                .expect("diffing should always have a scope");
+            let cur_scope_id = self.current_scope();
 
             for listener in listeners.iter() {
                 listener.mounted_node.set(Some(real_id));
@@ -268,7 +233,7 @@ impl<'b> DiffState<'b> {
     }
 
     fn create_component_node(&mut self, vcomponent: &'b VComponent<'b>) -> usize {
-        let parent_idx = self.current_scope().unwrap();
+        let parent_idx = self.current_scope();
 
         // the component might already exist - if it does, we need to reuse it
         // this makes figure out when to drop the component more complicated
@@ -322,6 +287,53 @@ impl<'b> DiffState<'b> {
         created
     }
 
+    pub(crate) fn diff_text_nodes(
+        &mut self,
+        old: &'b VText<'b>,
+        new: &'b VText<'b>,
+        _old_node: &'b VNode<'b>,
+        new_node: &'b VNode<'b>,
+    ) {
+        if std::ptr::eq(old, new) {
+            return;
+        }
+
+        // if the node is comming back not assigned, that means it was borrowed but removed
+        let root = match old.id.get() {
+            Some(id) => id,
+            None => self.scopes.reserve_node(new_node),
+        };
+
+        if old.text != new.text {
+            self.mutations.set_text(new.text, root.as_u64());
+        }
+
+        self.scopes.update_node(new_node, root);
+
+        new.id.set(Some(root));
+    }
+
+    pub(crate) fn diff_placeholder_nodes(
+        &mut self,
+        old: &'b VPlaceholder,
+        new: &'b VPlaceholder,
+        _old_node: &'b VNode<'b>,
+        new_node: &'b VNode<'b>,
+    ) {
+        if std::ptr::eq(old, new) {
+            return;
+        }
+
+        // if the node is comming back not assigned, that means it was borrowed but removed
+        let root = match old.id.get() {
+            Some(id) => id,
+            None => self.scopes.reserve_node(new_node),
+        };
+
+        self.scopes.update_node(new_node, root);
+        new.id.set(Some(root));
+    }
+
     fn diff_element_nodes(
         &mut self,
         old: &'b VElement<'b>,
@@ -329,10 +341,15 @@ impl<'b> DiffState<'b> {
         old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
     ) {
-        let root = old
-            .id
-            .get()
-            .expect("existing element nodes should have an ElementId");
+        if std::ptr::eq(old, new) {
+            return;
+        }
+
+        // if the node is comming back not assigned, that means it was borrowed but removed
+        let root = match old.id.get() {
+            Some(id) => id,
+            None => self.scopes.reserve_node(new_node),
+        };
 
         // If the element type is completely different, the element needs to be re-rendered completely
         // This is an optimization React makes due to how users structure their code
@@ -382,25 +399,25 @@ impl<'b> DiffState<'b> {
         // We also need to make sure that all listeners are properly attached to the parent scope (fix_listener)
         //
         // TODO: take a more efficient path than this
-        if let Some(cur_scope_id) = self.current_scope() {
-            if old.listeners.len() == new.listeners.len() {
-                for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
-                    if old_l.event != new_l.event {
-                        self.mutations
-                            .remove_event_listener(old_l.event, root.as_u64());
-                        self.mutations.new_event_listener(new_l, cur_scope_id);
-                    }
-                    new_l.mounted_node.set(old_l.mounted_node.get());
-                }
-            } else {
-                for listener in old.listeners {
+        let cur_scope_id = self.current_scope();
+
+        if old.listeners.len() == new.listeners.len() {
+            for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
+                if old_l.event != new_l.event {
                     self.mutations
-                        .remove_event_listener(listener.event, root.as_u64());
+                        .remove_event_listener(old_l.event, root.as_u64());
+                    self.mutations.new_event_listener(new_l, cur_scope_id);
                 }
-                for listener in new.listeners {
-                    listener.mounted_node.set(Some(root));
-                    self.mutations.new_event_listener(listener, cur_scope_id);
-                }
+                new_l.mounted_node.set(old_l.mounted_node.get());
+            }
+        } else {
+            for listener in old.listeners {
+                self.mutations
+                    .remove_event_listener(listener.event, root.as_u64());
+            }
+            for listener in new.listeners {
+                listener.mounted_node.set(Some(root));
+                self.mutations.new_event_listener(listener, cur_scope_id);
             }
         }
 
@@ -489,6 +506,10 @@ impl<'b> DiffState<'b> {
     }
 
     fn diff_fragment_nodes(&mut self, old: &'b VFragment<'b>, new: &'b VFragment<'b>) {
+        if std::ptr::eq(old, new) {
+            return;
+        }
+
         // This is the case where options or direct vnodes might be used.
         // In this case, it's faster to just skip ahead to their diff
         if old.children.len() == 1 && new.children.len() == 1 {
@@ -931,12 +952,18 @@ impl<'b> DiffState<'b> {
 
                     log::trace!("Replacing component x2 {:?}", old);
 
-                    // we can only remove components if they are actively being diffed
-                    if self.scope_stack.contains(&c.originator) {
-                        log::trace!("Removing component {:?}", old);
+                    let scope = self.scopes.get_scope(scope_id).unwrap();
+                    c.scope.set(None);
+                    let props = scope.props.take().unwrap();
+                    c.props.borrow_mut().replace(props);
+                    self.scopes.try_remove(scope_id).unwrap();
 
-                        self.scopes.try_remove(scope_id).unwrap();
-                    }
+                    // // we can only remove components if they are actively being diffed
+                    // if self.scope_stack.contains(&c.originator) {
+                    //     log::trace!("Removing component {:?}", old);
+
+                    //     self.scopes.try_remove(scope_id).unwrap();
+                    // }
                 }
                 self.leave_scope();
             }
@@ -950,6 +977,7 @@ impl<'b> DiffState<'b> {
                     // this check exists because our null node will be removed but does not have an ID
                     if let Some(id) = t.id.get() {
                         self.scopes.collect_garbage(id);
+                        t.id.set(None);
 
                         if gen_muts {
                             self.mutations.remove(id.as_u64());
@@ -959,6 +987,7 @@ impl<'b> DiffState<'b> {
                 VNode::Placeholder(a) => {
                     let id = a.id.get().unwrap();
                     self.scopes.collect_garbage(id);
+                    a.id.set(None);
 
                     if gen_muts {
                         self.mutations.remove(id.as_u64());
@@ -972,6 +1001,7 @@ impl<'b> DiffState<'b> {
                     }
 
                     self.scopes.collect_garbage(id);
+                    e.id.set(None);
 
                     self.remove_nodes(e.children, false);
                 }
@@ -987,10 +1017,12 @@ impl<'b> DiffState<'b> {
                         let root = self.scopes.root_node(scope_id);
                         self.remove_nodes([root], gen_muts);
 
-                        // we can only remove this node if the originator is actively in our stackß
-                        if self.scope_stack.contains(&c.originator) {
-                            self.scopes.try_remove(scope_id).unwrap();
-                        }
+                        let scope = self.scopes.get_scope(scope_id).unwrap();
+                        c.scope.set(None);
+
+                        let props = scope.props.take().unwrap();
+                        c.props.borrow_mut().replace(props);
+                        self.scopes.try_remove(scope_id).unwrap();
                     }
                     self.leave_scope();
                 }
@@ -1023,8 +1055,8 @@ impl<'b> DiffState<'b> {
         self.mutations.insert_before(first, created as u32);
     }
 
-    fn current_scope(&self) -> Option<ScopeId> {
-        self.scope_stack.last().copied()
+    fn current_scope(&self) -> ScopeId {
+        self.scope_stack.last().copied().expect("no current scope")
     }
 
     fn enter_scope(&mut self, scope: ScopeId) {
@@ -1094,9 +1126,7 @@ impl<'b> DiffState<'b> {
                 for child in el.children.iter() {
                     num_on_stack += self.push_all_nodes(child);
                 }
-
                 self.mutations.push_root(el.id.get().unwrap());
-
                 num_on_stack + 1
             }
         }
