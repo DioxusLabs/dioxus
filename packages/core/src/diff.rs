@@ -329,10 +329,11 @@ impl<'b> DiffState<'b> {
         old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
     ) {
-        let root = old
-            .id
-            .get()
-            .expect("existing element nodes should have an ElementId");
+        // if the node is comming back not assigned, that means it was borrowed but removed
+        let root = match old.id.get() {
+            Some(id) => id,
+            None => self.scopes.reserve_node(new_node),
+        };
 
         // If the element type is completely different, the element needs to be re-rendered completely
         // This is an optimization React makes due to how users structure their code
@@ -931,12 +932,18 @@ impl<'b> DiffState<'b> {
 
                     log::trace!("Replacing component x2 {:?}", old);
 
-                    // we can only remove components if they are actively being diffed
-                    if self.scope_stack.contains(&c.originator) {
-                        log::trace!("Removing component {:?}", old);
+                    let scope = self.scopes.get_scope(scope_id).unwrap();
+                    c.scope.set(None);
+                    let props = scope.props.take().unwrap();
+                    c.props.borrow_mut().replace(props);
+                    self.scopes.try_remove(scope_id).unwrap();
 
-                        self.scopes.try_remove(scope_id).unwrap();
-                    }
+                    // // we can only remove components if they are actively being diffed
+                    // if self.scope_stack.contains(&c.originator) {
+                    //     log::trace!("Removing component {:?}", old);
+
+                    //     self.scopes.try_remove(scope_id).unwrap();
+                    // }
                 }
                 self.leave_scope();
             }
@@ -950,6 +957,7 @@ impl<'b> DiffState<'b> {
                     // this check exists because our null node will be removed but does not have an ID
                     if let Some(id) = t.id.get() {
                         self.scopes.collect_garbage(id);
+                        t.id.set(None);
 
                         if gen_muts {
                             self.mutations.remove(id.as_u64());
@@ -959,6 +967,7 @@ impl<'b> DiffState<'b> {
                 VNode::Placeholder(a) => {
                     let id = a.id.get().unwrap();
                     self.scopes.collect_garbage(id);
+                    a.id.set(None);
 
                     if gen_muts {
                         self.mutations.remove(id.as_u64());
@@ -972,6 +981,7 @@ impl<'b> DiffState<'b> {
                     }
 
                     self.scopes.collect_garbage(id);
+                    e.id.set(None);
 
                     self.remove_nodes(e.children, false);
                 }
@@ -987,10 +997,12 @@ impl<'b> DiffState<'b> {
                         let root = self.scopes.root_node(scope_id);
                         self.remove_nodes([root], gen_muts);
 
-                        // we can only remove this node if the originator is actively in our stackß
-                        if self.scope_stack.contains(&c.originator) {
-                            self.scopes.try_remove(scope_id).unwrap();
-                        }
+                        let scope = self.scopes.get_scope(scope_id).unwrap();
+                        c.scope.set(None);
+
+                        let props = scope.props.take().unwrap();
+                        c.props.borrow_mut().replace(props);
+                        self.scopes.try_remove(scope_id).unwrap();
                     }
                     self.leave_scope();
                 }
