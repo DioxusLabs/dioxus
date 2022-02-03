@@ -6,11 +6,8 @@ function run_script {
     if [[ -d tmp ]]
     then
         rm -rf tmp
-        mkdir tmp
-    else
-        mkdir tmp
     fi
-
+    mkdir tmp
     # copy files first
     rsync -a --progress ../ tmp --exclude target --exclude docker
 
@@ -21,16 +18,21 @@ function run_script {
 
     # clean up
     rm -rf tmp
-    if [ $1 = "--with-full-docker-cleanup" ]
+    if [ $# -ge 1 ]
     then
-    docker image rm dioxus-base-test-image
-    docker image rm dioxus-test-image
-    docker system prune -a --force
+        echo "Got some parameter"
+        if [ $1 = "--with-full-docker-cleanup" ]
+        then
+        docker image rm dioxus-base-test-image
+        docker image rm dioxus-test-image
+        docker system prune -af
+        fi
     fi
 }
 
-run_script || echo "Error occured.. cleaning a bit." && 
-    docker system prune -a --force && \
-    rm -rf tmp;
+run_script || echo "Error occured.. cleaning a bit." && \
+    docker system prune -af;
+
+docker system prune -af
 
 echo "Script finished to execute"
