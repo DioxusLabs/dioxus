@@ -226,7 +226,11 @@ export class Interpreter {
                             }
                         }
                         // walk the tree to find the real element
-                        while (realId == null && target.parentElement != null) {
+                        while (realId == null) {
+                            // we've reached the root we don't want to send an event
+                            if (target.parentElement === null) {
+                                return;
+                            }
                             target = target.parentElement;
                             realId = target.getAttribute(`data-dioxus-id`);
                         }
@@ -279,7 +283,7 @@ export class Interpreter {
         }
     }
 }
-function serialize_event(event) {
+export function serialize_event(event) {
     switch (event.type) {
         case "copy":
         case "cut":
