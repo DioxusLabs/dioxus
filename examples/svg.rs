@@ -1,3 +1,5 @@
+// Thanks to @japsu and their project https://github.com/japsu/jatsi for the example!
+
 use dioxus::{events::MouseEvent, prelude::*};
 
 fn main() {
