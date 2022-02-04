@@ -12,6 +12,7 @@ fn app(cx: Scope) -> Element {
     let (key, set_key) = use_state(&cx, || KeyCode::Null);
     let (mouse, set_mouse) = use_state(&cx, || (0, 0));
     let (size, set_size) = use_state(&cx, || (0, 0));
+    let (count, set_count) = use_state(&cx, || 0);
 
     cx.render(rsx! {
         div {
@@ -24,20 +25,25 @@ fn app(cx: Scope) -> Element {
 
             rink::InputHandler {
                 onkeydown: move |evt: KeyEvent| {
+                    use crossterm::event::KeyCode::*;
+                    match evt.code {
+                        Left => set_count(count + 1),
+                        Right => set_count(count - 1),
+                        Up => set_count(count + 10),
+                        Down => set_count(count - 10),
+                        _ => {},
+                    }
                     set_key(evt.code);
                 },
-            },
-            rink::InputHandler {
                 onmousedown: move |evt: MouseEvent| {
                     set_mouse((evt.row, evt.column));
                 },
-            },
-            rink::InputHandler {
                 onresize: move |dims| {
                     set_size(dims);
                 },
             },
-            "keyboard: {key:?}",
+            "count: {count:?}",
+            "key: {key:?}",
             "mouse: {mouse:?}",
             "resize: {size:?}",
         }
