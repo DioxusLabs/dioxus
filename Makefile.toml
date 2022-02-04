@@ -10,13 +10,6 @@ CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 namespace = "core"
 private = true
 
-[tasks.tests]
-category = "Testing"
-dependencies = ["tests-setup"]
-description = "Run all tests"
-env = {CARGO_MAKE_WORKSPACE_SKIP_MEMBERS = ["**/examples/*", "**/packages/changelog"]}
-run_task = {name = ["test-flow"], fork = true}
-
 [tasks.tests-setup]
 private = true
 script = [
@@ -31,12 +24,28 @@ script = [
 ]
 script_runner = "@duckscript"
 
+[tasks.tests]
+category = "Testing"
+dependencies = ["tests-setup"]
+description = "Run all tests"
+env = {CARGO_MAKE_WORKSPACE_SKIP_MEMBERS = ["**/examples/*"]}
+run_task = {name = ["test-flow", "test-with-browser"], fork = true}
+
+[tasks.build]
+command = "cargo"
+args = ["build"]
+
 [tasks.test-flow]
 dependencies = ["test"]
 private = true
-workspace = true
 
 [tasks.test]
-args = ["test", "--all-targets", "--workspace", "--exclude", "dioxus-mobile"]
+dependencies = ["build"]
 command = "cargo"
+args = ["test", "--all-targets", "--workspace", "--exclude", "dioxus-router"]
 private = true
+
+[tasks.test-with-browser]
+env = { CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS = ["**/packages/router"] }
+private = true
+workspace = true
