@@ -69,9 +69,13 @@ cx.render(rsx! {
 
 ### Navigating with `Links`
 
+To navigate your app, regular, old, `a` tags are not going to work. We provide the `Link` component that wraps an `a` tag with the appropriate `href` attribute that generates semantic HTML. You can pass any children into this component and they will become clickable to the appropriate route.
 
-
-
+```rust
+Link { to: "/blog/welcome",
+    h1 { "Welcome to my blog!" }
+}
+```
 
 ### Segments
 
