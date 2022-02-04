@@ -7,8 +7,8 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use crate::bindings::Interpreter;
 use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
+use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
 use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
