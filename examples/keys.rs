@@ -9,7 +9,9 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let (count, set_count) = use_state(&cx, || 0);
+    let (key, set_key) = use_state(&cx, || "".to_string());
+    let (mouse, set_mouse) = use_state(&cx, || "".to_string());
+    let (size, set_size) = use_state(&cx, || "".to_string());
 
     cx.render(rsx! {
         div {
@@ -18,25 +20,25 @@ fn app(cx: Scope) -> Element {
             background_color: "red",
             justify_content: "center",
             align_items: "center",
-            "Hello world!",
 
-            // todo: enabling this will panic
-            // rink::InputHandler {
-            //     onkeydown: move |evt: KeyEvent| {
-            //         use crossterm::event::KeyCode::*;
-            //         match evt.code {
-            //             Left => set_count(count + 1),
-            //             Right => set_count(count - 1),
-            //             Up => set_count(count + 10),
-            //             Down => set_count(count - 10),
-            //             _ => {},
-            //         }
-            //     },
-            //     onmousedown: move |evt| {},
-            //     onresize: move |dims| {
-            //         println!("{:?}", dims);
-            //     },
-            // }
+            rink::InputHandler {
+                onkeydown: move |evt: KeyEvent| {
+                    set_key(format!("{evt:?}"));
+                },
+            },
+            rink::InputHandler {
+                onmousedown: move |evt| {
+                    set_mouse(format!("{evt:?}"));
+                },
+            },
+            rink::InputHandler {
+                onresize: move |dims| {
+                    set_size(format!("{dims:?}"));
+                },
+            },
+            "keyboard: {key}
+            mouse: {mouse}
+            resize: {size}",
         }
     })
 }
