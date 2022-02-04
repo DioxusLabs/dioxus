@@ -40,10 +40,10 @@
 
 <br/>
 
-Leverage React-like patterns to build beautiful, portable, terminal user interfaces with Dioxus and Rust.
+Leverage React-like patterns, CSS, HTML, and Rust to build beautiful, portable, terminal user interfaces with Dioxus.
 
 ```rust
-static App: FC<()> = |cx| {
+fn app(cx: Scope) -> Element {
     cx.render(rsx!{
         div {
             width: "100%",
@@ -51,7 +51,6 @@ static App: FC<()> = |cx| {
             background_color: "red",
             justify_content: "center",
             align_items: "center",
-
             "Hello world!"
         }
     })
