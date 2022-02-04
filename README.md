@@ -1,7 +1,7 @@
 <div align="center">
   <h1>Rink</h1>
   <p>
-    <strong>Beautiful terminal user interfaces in Rust with [`Dioxus`](https://dioxuslabs.com/).</strong>
+    <strong>Beautiful terminal user interfaces in Rust with <a href="https://dioxuslabs.com/">Dioxus </a>.</strong>
   </p>
 </div>
 
