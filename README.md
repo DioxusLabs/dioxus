@@ -1,30 +1,13 @@
 # Rink: Like "Ink" but for Rust and Dioxus
 
-The fastest portable TUIs in the west 
- 🔫🤠🔫
-   🐎🔥🔥🔥
+Rink lets you build terminal user interfaces in Rust with [`Dioxus`](https://dioxuslabs.com/).
 
-Rink lets you build terminal user interfaces in Rust with [`Dioxus`](https://dioxuslabs.com/). 
 
-You can use Html-like semantics with stylesheets, inline styles, tree hierarchy, components, and more in your  [`text-based user interface (TUI)`](https://en.wikipedia.org/wiki/Text-based_user_interface) application. 
-
-Rink is basically a port of [Ink](https://github.com/vadimdemedes/ink) but for [`Rust`](https://www.rust-lang.org/) and [`Dioxus`](https://dioxuslabs.com/). Rink doesn't depend on Node.js or any other JavaScript runtime, so your binaries are portable and beautiful.
-
-## Limitations
-
-- **Subset of Html**
-Terminals can only render a subset of HTML. We support as much as we can.
-- **Particular frontend design**
-Terminals and browsers are and look different. Therefore, the same design might not be the best to cover both renderers.
-
-## Example
-
-Let's print `Hello world!` in the center of the screen.
 ```rust
 static App: FC<()> = |cx| {
     cx.render(rsx!{
-        div { 
-            width: "100%", 
+        div {
+            width: "100%",
             height: "10px",
             background_color: "red",
             justify_content: "center",
@@ -37,6 +20,19 @@ static App: FC<()> = |cx| {
 ```
 
 ![demo app](examples/example.png)
+
+## Background
+
+You can use Html-like semantics with stylesheets, inline styles, tree hierarchy, components, and more in your  [`text-based user interface (TUI)`](https://en.wikipedia.org/wiki/Text-based_user_interface) application.
+
+Rink is basically a port of [Ink](https://github.com/vadimdemedes/ink) but for [`Rust`](https://www.rust-lang.org/) and [`Dioxus`](https://dioxuslabs.com/). Rink doesn't depend on Node.js or any other JavaScript runtime, so your binaries are portable and beautiful.
+
+## Limitations
+
+- **Subset of Html**
+Terminals can only render a subset of HTML. We support as much as we can.
+- **Particular frontend design**
+Terminals and browsers are and look different. Therefore, the same design might not be the best to cover both renderers.
 
 
 ## Status

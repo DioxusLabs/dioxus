@@ -1,8 +1,5 @@
-use std::cell::RefCell;
-
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use dioxus::prelude::*;
-use rink::InputHandler;
 
 fn main() {
     rink::launch(app);

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use dioxus::{core::ElementId, prelude::*};
-use rink::TuiNode;
+use dioxus::prelude::*;
 
 fn main() {
     let mut dom = VirtualDom::new(app);
@@ -19,7 +18,7 @@ fn main() {
         .compute_layout(node.layout, stretch2::geometry::Size::undefined())
         .unwrap();
 
-    for (id, node) in nodes.drain() {
+    for (_id, node) in nodes.drain() {
         println!("{:?}", layout.layout(node.layout));
     }
 }

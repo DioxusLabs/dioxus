@@ -1,22 +1,8 @@
-use anyhow::Result;
-use crossterm::{
-    event,
-    event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyEvent},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
 use dioxus::core::*;
-use std::{
-    collections::HashMap,
-    io::{self, Stdout},
-    sync::mpsc,
-    thread,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, io::Stdout};
 use stretch2::{
     geometry::Point,
     prelude::{Layout, Size},
-    style::Style as StretchStyle,
     Stretch,
 };
 use tui::{
@@ -24,9 +10,7 @@ use tui::{
     buffer::Buffer,
     layout::Rect,
     style::Style as TuiStyle,
-    text::Span,
-    widgets::{canvas::Label, Block, BorderType, Borders, Widget},
-    Terminal,
+    widgets::{Block, Widget},
 };
 
 use crate::TuiNode;
