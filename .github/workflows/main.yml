@@ -38,8 +38,8 @@ jobs:
         with:
           command: install
           args: --debug cargo-make
-      - uses: actions-rs/cargo@v1
       - uses: browser-actions/setup-firefox@latest
+      - uses: actions-rs/cargo@v1
         with:
           command: make
           args: tests
