@@ -1,16 +1,5 @@
 #![allow(warnings)]
-//! Dioxus-Router
-//!
-//! A simple match-based router and router service for most routing needs.
-//!
-//! Dioxus-Router is not a *declarative* router. Instead it uses a simple parse-match
-//! pattern which can be derived via a macro.
-//!
-//! ```rust
-//! fn app(cx: Scope) -> Element {
-//!     
-//! }
-//! ```
+#![doc = include_str!("../README.md")]
 
 mod hooks {
     mod use_route;
