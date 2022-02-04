@@ -229,12 +229,14 @@ export class Interpreter {
             shouldPreventDefault = target.getAttribute(
               `dioxus-prevent-default`
             );
+
             let contents = serialize_event(event);
+
             if (shouldPreventDefault === `on${event.type}`) {
-              //   event.preventDefault();
+              event.preventDefault();
             }
             if (event.type == "submit") {
-              //   event.preventDefault();
+              event.preventDefault();
             }
 
             if (target.tagName == "FORM") {
