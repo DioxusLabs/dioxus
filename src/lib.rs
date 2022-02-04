@@ -35,7 +35,10 @@ pub fn launch(app: Component<()>) {
     let mut dom = VirtualDom::new(app);
     let (tx, rx) = unbounded();
 
-    dom.base_scope().provide_context(RinkContext::new(rx));
+    let cx = dom.base_scope();
+
+    cx.provide_root_context(RinkContext::new(rx, cx));
+
     dom.rebuild();
 
     render_vdom(&mut dom, tx).unwrap();

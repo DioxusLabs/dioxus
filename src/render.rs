@@ -53,7 +53,9 @@ pub fn render_vnode<'a>(
             return;
         }
 
-        VNode::Placeholder(_) | VNode::Element(_) | VNode::Text(_) => {}
+        VNode::Placeholder(_) => return,
+
+        VNode::Element(_) | VNode::Text(_) => {}
     }
 
     let id = node.try_mounted_id().unwrap();
