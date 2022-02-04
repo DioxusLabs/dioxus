@@ -49,6 +49,10 @@ macro_rules! aria_trait_methods {
 }
 
 pub trait GlobalAttributes {
+    /// Prevent the default action for this element.
+    ///
+    /// For more information, see the MDN docs:
+    /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
     fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("dioxus-prevent-default", val, None, false)
     }
@@ -603,6 +607,11 @@ pub trait GlobalAttributes {
         /// Specifies the speed curve of the transition effect.
         transition_timing_function: "transition-timing-function",
 
+        /// The user-select CSS property controls whether the user can select text.
+        /// This doesn't have any effect on content loaded as part of a browser's user interface (its chrome), except in textboxes.
+        user_select: "user-select",
+        webkit_user_select: "-webkit-user-select",
+
         /// Sets the vertical positioning of an element relative to the current text baseline.
         vertical_align: "vertical-align",
 
@@ -685,6 +694,13 @@ pub trait GlobalAttributes {
 }
 
 pub trait SvgAttributes {
+    /// Prevent the default action for this element.
+    ///
+    /// For more information, see the MDN docs:
+    /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
+    fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
+        cx.attr("dioxus-prevent-default", val, None, false)
+    }
     aria_trait_methods! {
         accent_height: "accent-height",
         accumulate: "accumulate",
