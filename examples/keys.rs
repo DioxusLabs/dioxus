@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
+    let (count, set_count) = use_state(&cx, || 0);
 
     cx.render(rsx! {
         div {
@@ -25,10 +25,10 @@ fn app(cx: Scope) -> Element {
             //     onkeydown: move |evt: KeyEvent| {
             //         use crossterm::event::KeyCode::*;
             //         match evt.code {
-            //             Left => count += 1,
-            //             Right => count -= 1,
-            //             Up => count += 10,
-            //             Down => count -= 10,
+            //             Left => set_count(count + 1),
+            //             Right => set_count(count - 1),
+            //             Up => set_count(count + 10),
+            //             Down => set_count(count - 10),
             //             _ => {},
             //         }
             //     },
@@ -42,7 +42,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn app2<'a>(cx: Scope<'a>) -> Element<'a> {
-    let mut count = use_state(&cx, || 0);
+    let (count, set_count) = use_state(&cx, || 0);
 
     cx.render(rsx! {
         div {
@@ -51,7 +51,7 @@ fn app2<'a>(cx: Scope<'a>) -> Element<'a> {
             background_color: "red",
             justify_content: "center",
             align_items: "center",
-            oninput: move |_| count += 1,
+            oninput: move |_| set_count(count + 1),
             "Hello world!",
             h1 {},
         }

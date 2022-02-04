@@ -38,13 +38,13 @@ impl RinkContext {
 
 #[derive(Props)]
 pub struct AppHandlerProps<'a> {
-    // #[props(setter(strip_option), default)]
+    #[props(default)]
     onkeydown: EventHandler<'a, KeyEvent>,
 
-    // #[props(setter(strip_option), default)]
+    #[props(default)]
     onmousedown: EventHandler<'a, MouseEvent>,
 
-    #[props(setter(strip_option), default)]
+    #[props(default)]
     onresize: Option<EventHandler<'a, (u16, u16)>>,
 }
 
