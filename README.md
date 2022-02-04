@@ -1,7 +1,46 @@
-# Rink: Like "Ink" but for Rust and Dioxus
+<div align="center">
+  <h1>Rink</h1>
+  <p>
+    <strong>Beautiful terminal user interfaces in Rust with [`Dioxus`](https://dioxuslabs.com/).</strong>
+  </p>
+</div>
 
-Rink lets you build terminal user interfaces in Rust with [`Dioxus`](https://dioxuslabs.com/).
+<div align="center">
+  <!-- Crates version -->
+  <a href="https://crates.io/crates/dioxus">
+    <img src="https://img.shields.io/crates/v/dioxus.svg?style=flat-square"
+    alt="Crates.io version" />
+  </a>
+  <!-- Downloads -->
+  <a href="https://crates.io/crates/dioxus">
+    <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square"
+      alt="Download" />
+  </a>
+  <!-- docs -->
+  <a href="https://docs.rs/dioxus">
+    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
+      alt="docs.rs docs" />
+  </a>
+  <!-- CI -->
+  <a href="https://github.com/jkelleyrtp/dioxus/actions">
+    <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
+      alt="CI status" />
+  </a>
 
+  <!--Awesome -->
+  <a href="https://github.com/dioxuslabs/awesome-dioxus">
+    <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
+  </a>
+  <!-- Discord -->
+  <a href="https://discord.gg/XgGxMSkvUM">
+    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
+  </a>
+</div>
+
+
+<br/>
+
+Leverage React-like patterns to build beautiful, portable, terminal user interfaces with Dioxus and Rust.
 
 ```rust
 static App: FC<()> = |cx| {
