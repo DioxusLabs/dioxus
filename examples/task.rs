@@ -5,17 +5,15 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
+    let (count, set_count) = use_state(&cx, || 0);
 
-    use_future(&cx, || {
-        let set_count = count.setter();
-        let mut mycount = 0;
+    use_future(&cx, move || {
+        let set_count = set_count.to_owned();
         let update = cx.schedule_update();
         async move {
             loop {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                mycount += 1;
-                set_count(mycount);
+                set_count.with_mut(|f| *f += 1);
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                 update();
             }
         }

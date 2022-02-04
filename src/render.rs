@@ -45,7 +45,13 @@ pub fn render_vnode<'a>(
             }
             return;
         }
-        VNode::Component(_) => todo!(),
+
+        VNode::Component(vcomp) => {
+            let idx = vcomp.scope.get().unwrap();
+            let new_node = vdom.get_scope(idx).unwrap().root_node();
+            render_vnode(frame, layout, layouts, vdom, new_node);
+            return;
+        }
 
         VNode::Placeholder(_) | VNode::Element(_) | VNode::Text(_) => {}
     }
