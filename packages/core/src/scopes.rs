@@ -7,7 +7,7 @@ use std::{
     any::{Any, TypeId},
     borrow::Borrow,
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
     rc::Rc,
@@ -178,6 +178,9 @@ impl ScopeArena {
     pub fn try_remove(&self, id: ScopeId) -> Option<()> {
         log::trace!("removing scope {:?}", id);
         self.ensure_drop_safety(id);
+
+        //
+        let tasks = self.tasks.tasks.borrow_mut();
 
         // Safety:
         // - ensure_drop_safety ensures that no references to this scope are in use
@@ -933,14 +936,17 @@ impl BumpFrame {
 
 pub(crate) struct TaskQueue {
     pub(crate) tasks: RefCell<FxHashMap<TaskId, InnerTask>>,
+    pub(crate) task_map: RefCell<FxHashMap<ScopeId, HashSet<TaskId>>>,
     gen: Cell<usize>,
     sender: UnboundedSender<SchedulerMsg>,
 }
+
 pub(crate) type InnerTask = Pin<Box<dyn Future<Output = ()>>>;
 impl TaskQueue {
     fn new(sender: UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Self {
             tasks: RefCell::new(FxHashMap::default()),
+            task_map: RefCell::new(FxHashMap::default()),
             gen: Cell::new(0),
             sender,
         })
@@ -957,10 +963,6 @@ impl TaskQueue {
     fn remove_fut(&self, id: TaskId) {
         if let Ok(mut tasks) = self.tasks.try_borrow_mut() {
             let _ = tasks.remove(&id);
-        } else {
-            // todo: it should be okay to remote a fut while the queue is being polled
-            // However, it's not currently possible to do that.
-            log::trace!("Unable to remove task from task queue. This is probably a bug.");
         }
     }
     pub(crate) fn has_tasks(&self) -> bool {
