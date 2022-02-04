@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use dioxus::prelude::*;
 use rink::InputHandler;
 
@@ -9,9 +9,9 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let (key, set_key) = use_state(&cx, || "".to_string());
-    let (mouse, set_mouse) = use_state(&cx, || "".to_string());
-    let (size, set_size) = use_state(&cx, || "".to_string());
+    let (key, set_key) = use_state(&cx, || KeyCode::Null);
+    let (mouse, set_mouse) = use_state(&cx, || (0, 0));
+    let (size, set_size) = use_state(&cx, || (0, 0));
 
     cx.render(rsx! {
         div {
@@ -20,25 +20,26 @@ fn app(cx: Scope) -> Element {
             background_color: "red",
             justify_content: "center",
             align_items: "center",
+            flex_direction: "column",
 
             rink::InputHandler {
                 onkeydown: move |evt: KeyEvent| {
-                    set_key(format!("{evt:?}"));
+                    set_key(evt.code);
                 },
             },
             rink::InputHandler {
-                onmousedown: move |evt| {
-                    set_mouse(format!("{evt:?}"));
+                onmousedown: move |evt: MouseEvent| {
+                    set_mouse((evt.row, evt.column));
                 },
             },
             rink::InputHandler {
                 onresize: move |dims| {
-                    set_size(format!("{dims:?}"));
+                    set_size(dims);
                 },
             },
-            "keyboard: {key}
-            mouse: {mouse}
-            resize: {size}",
+            "keyboard: {key:?}",
+            "mouse: {mouse:?}",
+            "resize: {size:?}",
         }
     })
 }
