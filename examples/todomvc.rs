@@ -120,15 +120,18 @@ pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
 
     rsx!(cx, li {
         class: "{completed} {editing}",
-        onclick: move |_| set_is_editing(true),
-        onfocusout: move |_| set_is_editing(false),
         div { class: "view",
             input { class: "toggle", r#type: "checkbox", id: "cbg-{todo.id}", checked: "{todo.checked}",
                 onchange: move |evt| {
                     cx.props.set_todos.make_mut()[&cx.props.id].checked = evt.value.parse().unwrap();
                 }
             }
-            label { r#for: "cbg-{todo.id}", pointer_events: "none", "{todo.contents}" }
+            label {
+                r#for: "cbg-{todo.id}",
+                onclick: move |_| set_is_editing(true),
+                onfocusout: move |_| set_is_editing(false),
+                "{todo.contents}"
+            }
         }
         is_editing.then(|| rsx!{
             input {
