@@ -25,14 +25,13 @@ function run_script {
         then
         docker image rm dioxus-base-test-image
         docker image rm dioxus-test-image
-        docker system prune -af
         fi
     fi
 }
 
 run_script || echo "Error occured.. cleaning a bit." && \
-    docker system prune -af;
+    docker system prune -f;
 
-docker system prune -af
+docker system prune -f
 
 echo "Script finished to execute"
