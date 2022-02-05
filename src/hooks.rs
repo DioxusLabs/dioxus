@@ -1,24 +1,12 @@
-use anyhow::Result;
-use crossterm::{
-    event::{
-        DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyEvent, MouseEvent,
-    },
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use dioxus::{core::exports::futures_channel::mpsc::unbounded, prelude::Props};
-use dioxus::{core::*, prelude::*};
-use futures::{channel::mpsc::UnboundedReceiver, future::Either, pin_mut, StreamExt};
+use crossterm::event::{Event as TermEvent, KeyEvent, MouseEvent};
+use dioxus::core::*;
+use dioxus::prelude::Props;
+use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
-    io,
     rc::Rc,
-    time::{Duration, Instant},
 };
-use stretch2::{prelude::Size, Stretch};
-use tokio::sync::broadcast::Receiver;
-use tui::{backend::CrosstermBackend, style::Style as TuiStyle, Terminal};
 
 pub struct RinkContext {
     last_event: Rc<Cell<Option<TermEvent>>>,
@@ -44,8 +32,8 @@ impl RinkContext {
         });
 
         Self {
-            last_event: last_event,
-            subscribers: subscribers,
+            last_event,
+            subscribers,
         }
     }
 

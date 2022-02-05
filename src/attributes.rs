@@ -343,7 +343,7 @@ fn apply_overflow(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_display(name: &str, value: &str, style: &mut StyleModifer) {
+fn apply_display(_name: &str, value: &str, style: &mut StyleModifer) {
     use stretch2::style::Display;
     style.style.display = match value {
         "flex" => Display::Flex,
@@ -387,29 +387,28 @@ fn apply_background(name: &str, value: &str, style: &mut StyleModifer) {
                 "white" => style.tui_style.bg.replace(Color::White),
                 "black" => style.tui_style.bg.replace(Color::Black),
                 _ => {
-                    if value.len() == 7{
+                    if value.len() == 7 {
                         let mut values = [0, 0, 0];
                         let mut color_ok = true;
-                        for i in 0..values.len(){
-                            if let Ok(v) = u8::from_str_radix(&value[(1+2*i)..(1+2*(i+1))], 16){
+                        for i in 0..values.len() {
+                            if let Ok(v) =
+                                u8::from_str_radix(&value[(1 + 2 * i)..(1 + 2 * (i + 1))], 16)
+                            {
                                 values[i] = v;
-                            }
-                            else{
+                            } else {
                                 color_ok = false;
                             }
                         }
-                        if color_ok{
+                        if color_ok {
                             let color = Color::Rgb(values[0], values[1], values[2]);
                             style.tui_style.bg.replace(color)
-                        }
-                        else{
+                        } else {
                             None
                         }
-                    }
-                    else{
+                    } else {
                         None
                     }
-                },
+                }
             };
         }
         "background" => {}
@@ -424,7 +423,7 @@ fn apply_background(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
+fn apply_border(name: &str, value: &str, _style: &mut StyleModifer) {
     match name {
         "border" => {}
         "border-bottom" => {}
@@ -459,7 +458,7 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         "border-top-style" => {}
         "border-top-width" => {}
         "border-width" => {
-            if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
+            if let Ok(_px) = value.trim_end_matches("px").parse::<f32>() {
                 // tuistyle = px;
             }
         }
@@ -467,7 +466,7 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_animation(name: &str, value: &str, style: &mut StyleModifer) {
+fn apply_animation(name: &str, _value: &str, _style: &mut StyleModifer) {
     match name {
         "animation" => {}
         "animation-delay" => {}
@@ -482,7 +481,7 @@ fn apply_animation(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_column(name: &str, value: &str, style: &mut StyleModifer) {
+fn apply_column(name: &str, _value: &str, _style: &mut StyleModifer) {
     match name {
         "column-count" => {}
         "column-fill" => {}
@@ -551,7 +550,7 @@ fn apply_flex(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_font(name: &str, value: &str, style: &mut StyleModifer) {
+fn apply_font(_name: &str, _value: &str, _style: &mut StyleModifer) {
     todo!()
 }
 
@@ -588,15 +587,15 @@ fn apply_padding(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_text(name: &str, value: &str, style: &mut StyleModifer) {
+fn apply_text(_name: &str, _value: &str, _style: &mut StyleModifer) {
     todo!()
 }
 
-fn apply_transform(name: &str, value: &str, style: &mut StyleModifer) {
+fn apply_transform(_name: &str, _value: &str, _style: &mut StyleModifer) {
     todo!()
 }
 
-fn apply_transition(name: &str, value: &str, style: &mut StyleModifer) {
+fn apply_transition(_name: &str, _value: &str, _style: &mut StyleModifer) {
     todo!()
 }
 
@@ -640,7 +639,7 @@ fn apply_align(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-pub fn apply_size(name: &str, value: &str, style: &mut StyleModifer) {
+pub fn apply_size(_name: &str, _value: &str, _style: &mut StyleModifer) {
     //
 }
 

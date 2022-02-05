@@ -7,10 +7,10 @@ fn main() {
 #[derive(Props, PartialEq)]
 struct QuadrentProps {
     color: String,
-    text: String
+    text: String,
 }
 
-fn Quadrent(cx: Scope<QuadrentProps>) -> Element{
+fn Quadrent(cx: Scope<QuadrentProps>) -> Element {
     cx.render(rsx! {
         div {
             border_width: "1px",

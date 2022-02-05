@@ -1,21 +1,15 @@
 use anyhow::Result;
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyEvent},
+    event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use dioxus::{core::exports::futures_channel::mpsc::unbounded, prelude::Props};
-use dioxus::{core::*, prelude::*};
-use futures::{
-    channel::mpsc::{UnboundedReceiver, UnboundedSender},
-    future::Either,
-    pin_mut, StreamExt,
-};
+use dioxus::core::exports::futures_channel::mpsc::unbounded;
+use dioxus::core::*;
+use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
 use std::{
-    cell::Cell,
     collections::HashMap,
     io,
-    rc::Rc,
     time::{Duration, Instant},
 };
 use stretch2::{prelude::Size, Stretch};
@@ -137,17 +131,17 @@ pub fn render_vdom(vdom: &mut VirtualDom, ctx: UnboundedSender<TermEvent>) -> Re
                     pin_mut!(wait);
 
                     match select(wait, rx.next()).await {
-                        Either::Left((a, b)) => {
+                        Either::Left((_a, _b)) => {
                             //
                         }
-                        Either::Right((evt, o)) => {
-                            //
+                        Either::Right((evt, _o)) => {
                             match evt.as_ref().unwrap() {
                                 InputEvent::UserInput(event) => match event {
                                     TermEvent::Key(key) => {
-                                        match key.code {
-                                            KeyCode::Char('q') => break,
-                                            _ => {} // handle event
+                                        if matches!(key.code, KeyCode::Char('c'))
+                                            && key.modifiers.contains(KeyModifiers::CONTROL)
+                                        {
+                                            break;
                                         }
                                     }
                                     TermEvent::Resize(_, _) | TermEvent::Mouse(_) => {}
