@@ -160,6 +160,15 @@ Dioxus 使 Rust 应用程序的编写速度和 React 应用程序一样快，但
 - 您希望应用运行在 `不支持 Wasm 或 asm.js` 的浏览器。
 - 您需要一个 `Send + Sync` UI 解决方案（目前不支持）。
 
+### 项目生态
+
+想要加入我们一起为 Dioxus 生态努力吗？有很多项目都能在您的帮助下获得改变：
+
+- [TUI 渲染器](https://github.com/dioxusLabs/rink)
+- [CLI 开发工具](https://github.com/dioxusLabs/cli)
+- [官网及文档](https://github.com/dioxusLabs/docsite)
+- 动态网站 及 Web 服务器
+- 资源系统
 
 ## 协议
 
