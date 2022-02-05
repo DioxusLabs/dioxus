@@ -152,7 +152,7 @@ pub struct RinkInputHandler {
 
 impl RinkInputHandler {
     /// global context that handles events
-    /// limitations: GUI key modifier is never detected
+    /// limitations: GUI key modifier is never detected, key up events are not detected, and mouse up events are not specific to a key
     pub fn new(
         mut receiver: UnboundedReceiver<TermEvent>,
         cx: &ScopeState,
