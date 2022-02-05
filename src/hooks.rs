@@ -315,8 +315,8 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                 MouseEventKind::Up(b) => ("mouseup", get_mouse_data(Some(b))),
                 MouseEventKind::Drag(b) => ("drag", get_mouse_data(Some(b))),
                 MouseEventKind::Moved => ("mousemove", get_mouse_data(None)),
-                MouseEventKind::ScrollDown => ("scroll", get_wheel_data(false)),
-                MouseEventKind::ScrollUp => ("scroll", get_wheel_data(true)),
+                MouseEventKind::ScrollDown => ("wheel", get_wheel_data(false)),
+                MouseEventKind::ScrollUp => ("wheel", get_wheel_data(true)),
             }
         }
         TermEvent::Resize(x, y) => ("resize", EventData::Screen((x, y))),

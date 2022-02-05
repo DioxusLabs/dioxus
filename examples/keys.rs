@@ -1,3 +1,4 @@
+use dioxus::events::WheelEvent;
 use dioxus::prelude::*;
 use dioxus_html::on::{KeyboardEvent, MouseEvent};
 use dioxus_html::KeyCode;
@@ -30,6 +31,12 @@ fn app(cx: Scope) -> Element {
                     _ => {},
                 }
                 set_key(evt.key_code);
+            },
+            onwheel: move |evt: WheelEvent| {
+                set_count(count + evt.data.delta_y as i64);
+            },
+            ondrag: move |evt: MouseEvent| {
+                set_mouse((evt.data.screen_x, evt.data.screen_y));
             },
             onmousedown: move |evt: MouseEvent| {
                 set_mouse((evt.data.screen_x, evt.data.screen_y));
