@@ -216,7 +216,12 @@ export class Interpreter {
               }
             }
             // walk the tree to find the real element
-            while (realId == null && target.parentElement != null) {
+            while (realId == null) {
+              // we've reached the root we don't want to send an event
+              if (target.parentElement === null) {
+                return;
+              }
+
               target = target.parentElement;
               realId = target.getAttribute(`data-dioxus-id`);
             }
@@ -224,13 +229,33 @@ export class Interpreter {
             shouldPreventDefault = target.getAttribute(
               `dioxus-prevent-default`
             );
+
             let contents = serialize_event(event);
+
             if (shouldPreventDefault === `on${event.type}`) {
-              //   event.preventDefault();
+              event.preventDefault();
             }
             if (event.type == "submit") {
-              //   event.preventDefault();
+              event.preventDefault();
             }
+
+            if (target.tagName == "FORM") {
+              for (let x = 0; x < target.elements.length; x++) {
+                let element = target.elements[x];
+                let name = element.getAttribute("name");
+                if (name != null) {
+                  if (element.getAttribute("type") == "checkbox") {
+                    // @ts-ignore
+                    contents.values[name] = element.checked ? "true" : "false";
+                  } else {
+                    // @ts-ignore
+                    contents.values[name] =
+                      element.value ?? element.textContent;
+                  }
+                }
+              }
+            }
+
             if (realId == null) {
               return;
             }
@@ -255,7 +280,8 @@ export class Interpreter {
     }
   }
 }
-function serialize_event(event) {
+
+export function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":
@@ -326,6 +352,7 @@ function serialize_event(event) {
       }
       return {
         value: value,
+        values: {},
       };
     }
     case "click":
