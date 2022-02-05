@@ -31,11 +31,13 @@ pub fn launch(app: Component<()>) {
 
     let cx = dom.base_scope();
 
-    cx.provide_root_context(RinkContext::new(rx, cx));
+    let (handler, state) = RinkInputHandler::new(rx, cx);
+
+    cx.provide_root_context(state);
 
     dom.rebuild();
 
-    render_vdom(&mut dom, tx).unwrap();
+    render_vdom(&mut dom, tx, handler).unwrap();
 }
 
 pub struct TuiNode<'a> {
@@ -44,7 +46,11 @@ pub struct TuiNode<'a> {
     pub node: &'a VNode<'a>,
 }
 
-pub fn render_vdom(vdom: &mut VirtualDom, ctx: UnboundedSender<TermEvent>) -> Result<()> {
+pub fn render_vdom(
+    vdom: &mut VirtualDom,
+    ctx: UnboundedSender<TermEvent>,
+    handler: RinkInputHandler,
+) -> Result<()> {
     // Setup input handling
     let (tx, mut rx) = unbounded();
     std::thread::spawn(move || {
@@ -84,6 +90,9 @@ pub fn render_vdom(vdom: &mut VirtualDom, ctx: UnboundedSender<TermEvent>) -> Re
             terminal.clear().unwrap();
 
             loop {
+                // resolve events before rendering
+                handler.resolve_events(vdom);
+
                 /*
                 -> collect all the nodes with their layout
                 -> solve their layout

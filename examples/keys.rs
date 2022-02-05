@@ -1,15 +1,17 @@
-use crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use dioxus::prelude::*;
+use dioxus_html::on::{KeyboardEvent, MouseEvent};
+use dioxus_html::KeyCode;
 
 fn main() {
     rink::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
-    let (key, set_key) = use_state(&cx, || KeyCode::Null);
+    let (key, set_key) = use_state(&cx, || KeyCode::Space);
     let (mouse, set_mouse) = use_state(&cx, || (0, 0));
-    let (size, set_size) = use_state(&cx, || (0, 0));
     let (count, set_count) = use_state(&cx, || 0);
+    let (buttons, set_buttons) = use_state(&cx, || 0);
+    let (mouse_clicked, set_mouse_clicked) = use_state(&cx, || false);
 
     cx.render(rsx! {
         div {
@@ -19,30 +21,31 @@ fn app(cx: Scope) -> Element {
             justify_content: "center",
             align_items: "center",
             flex_direction: "column",
-
-            rink::InputHandler {
-                onkeydown: move |evt: KeyEvent| {
-                    use crossterm::event::KeyCode::*;
-                    match evt.code {
-                        Left => set_count(count + 1),
-                        Right => set_count(count - 1),
-                        Up => set_count(count + 10),
-                        Down => set_count(count - 10),
-                        _ => {},
-                    }
-                    set_key(evt.code);
-                },
-                onmousedown: move |evt: MouseEvent| {
-                    set_mouse((evt.row, evt.column));
-                },
-                onresize: move |dims| {
-                    set_size(dims);
-                },
+            onkeydown: move |evt: KeyboardEvent| {
+                match evt.data.key_code {
+                    KeyCode::LeftArrow => set_count(count + 1),
+                    KeyCode::RightArrow => set_count(count - 1),
+                    KeyCode::UpArrow => set_count(count + 10),
+                    KeyCode::DownArrow => set_count(count - 10),
+                    _ => {},
+                }
+                set_key(evt.key_code);
             },
+            onmousedown: move |evt: MouseEvent| {
+                set_mouse((evt.data.screen_x, evt.data.screen_y));
+                set_buttons(evt.data.buttons);
+                set_mouse_clicked(true);
+            },
+            onmouseup: move |evt: MouseEvent| {
+                set_buttons(evt.data.buttons);
+                set_mouse_clicked(false);
+            },
+
             "count: {count:?}",
             "key: {key:?}",
-            "mouse: {mouse:?}",
-            "resize: {size:?}",
+            "mouse buttons: {buttons:b}",
+            "mouse pos: {mouse:?}",
+            "mouse button pressed: {mouse_clicked}"
         }
     })
 }
