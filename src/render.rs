@@ -70,13 +70,19 @@ pub fn render_vnode<'a>(
             let label = Label { text: t.text };
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
 
-            frame.render_widget(label, area);
+            // the renderer will panic if a node is rendered out of range even if the size is zero
+            if area.width > 0 && area.height > 0 {
+                frame.render_widget(label, area);
+            }
         }
         VNode::Element(el) => {
             let block = Block::default().style(node.block_style);
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
 
-            frame.render_widget(block, area);
+            // the renderer will panic if a node is rendered out of range even if the size is zero
+            if area.width > 0 && area.height > 0 {
+                frame.render_widget(block, area);
+            }
 
             for el in el.children {
                 render_vnode(frame, layout, layouts, vdom, el);

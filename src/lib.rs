@@ -84,10 +84,6 @@ pub fn render_vdom(vdom: &mut VirtualDom, ctx: UnboundedSender<TermEvent>) -> Re
             terminal.clear().unwrap();
 
             loop {
-                let dims = terminal.size().unwrap();
-                let width = dims.width;
-                let height = dims.height;
-
                 /*
                 -> collect all the nodes with their layout
                 -> solve their layout
@@ -110,16 +106,21 @@ pub fn render_vdom(vdom: &mut VirtualDom, ctx: UnboundedSender<TermEvent>) -> Re
                 */
                 let node_id = root_node.try_mounted_id().unwrap();
                 let root_layout = nodes[&node_id].layout;
-                layout.compute_layout(
-                    root_layout,
-                    Size {
-                        width: stretch2::prelude::Number::Defined(width as f32),
-                        height: stretch2::prelude::Number::Defined(height as f32),
-                    },
-                )?;
 
                 terminal.draw(|frame| {
-                    //
+                    // size is guaranteed to not change when rendering
+                    let dims = frame.size();
+                    let width = dims.width;
+                    let height = dims.height;
+                    layout
+                        .compute_layout(
+                            root_layout,
+                            Size {
+                                width: stretch2::prelude::Number::Defined(width as f32),
+                                height: stretch2::prelude::Number::Defined(height as f32),
+                            },
+                        )
+                        .unwrap();
                     render::render_vnode(frame, &layout, &mut nodes, vdom, root_node);
                     assert!(nodes.is_empty());
                 })?;
