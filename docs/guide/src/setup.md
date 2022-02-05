@@ -19,7 +19,7 @@ Dioxus requires a few main things to get up and running:
 
 Dioxus integrates very well with the Rust-Analyzer IDE plugin which will provide appropriate syntax highlighting, code navigation, folding, and more.
 
-### Installing Rust
+## Installing Rust
 
 Head over to [https://rust-lang.org](http://rust-lang.org) and install the Rust compiler.
 
@@ -29,24 +29,39 @@ Once installed, make sure to install wasm32-unknown-unknown as a target if you'r
 rustup target add wasm32-unknown-unknown
 ```
 
-### Platform-Specific Dependencies
+## Platform-Specific Dependencies
 
 If you are running a modern, mainstream operating system, you should need no additional setup to build WebView-based Desktop apps. However, if you are running an older version of Windows or a flavor of Linux with no default web rendering engine, you might need to install some additional dependencies.
 
-For windows users: download the [bootstrapper for Webview2 from Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
 
-For linux users, we need the development libraries for libgtk.
+### Windows
+
+Windows Desktop apps depend on WebView2 - a library which should be installed in all modern Windows distributions. If you have Edge installed, then Dioxus will work fine. If you *don't* have Webview2, [then you can install it through Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/). MS provides 3 options:
+
+1. A tiny "evergreen" *bootstrapper* which will fetch an installer from Microsoft's CDN
+2. A tiny *installer* which will fetch Webview2 from Microsoft's CDN
+3. A statically linked version of Webview2 in your final binary for offline users
+
+For development purposes, use Option 1. 
+
+### Linux
+
+Webview Linux apps require WebkitGtk. When distributing, this can be part of your dependency tree in your `.rpm` or `.deb`. However, it's very likely that your users will already have WebkitGtk.
 
 ```
 sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libappindicator3-dev
 ```
 
-When distributing onto older Windows platforms or less-mainstream 
+
+If you run into issues, make sure you have all the basics installed, as outlined in the [Tauri docs](https://tauri.studio/en/docs/get-started/setup-linux).
 
 
+### macOS
+
+Currently - everything for macOS is built right in! However, you might run into an issue if you're using nightly Rust due to some permissions issues in our Tao dependency (which have been resolved but not published).
 
 
-### Dioxus-CLI for dev server, bundling, etc.
+## Dioxus-CLI for dev server, bundling, etc.
 
 We also recommend installing the Dioxus CLI. The Dioxus CLI automates building and packaging for various targets and integrates with simulators, development servers, and app deployment. To install the CLI, you'll need cargo (which should be automatically installed with Rust):
 
@@ -62,7 +77,7 @@ $ cargo install --force dioxus-cli
 
 We provide this 1st-party tool to save you from having to run potentially untrusted code every time you add a crate to your project - as is standard in the NPM ecosystem.
 
-### Suggested extensions
+## Suggested extensions
 
 If you want to keep your traditional `npm install XXX` workflow for adding packages, you might want to install `cargo-edit` and a few other fun `cargo` extensions:
 

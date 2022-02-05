@@ -10,14 +10,24 @@ In this chapter, you will learn:
 
 ## Rendering data from lists
 
-Thinking back to our analysis of the `r/reddit` page, we notice a list of data that needs to be rendered: the list of posts. This list of posts is always changing, so we cannot just hardcode the lists into our app like:
+If we wanted to build the Reddit app, then we need to implement a list of data that needs to be rendered: the list of posts. This list of posts is always changing, so we cannot just hardcode the lists into our app directly, like so:
 
 ```rust
+// we shouldn't ship our app with posts that don't update!
 rsx!(
     div {
-        Post {/* some properties */}
-        Post {/* some properties */}
-        Post {/* some properties */}
+        Post {
+            title: "Post A",
+            votes: 120,
+        }
+        Post {
+            title: "Post B",
+            votes: 14,
+        }
+        Post {
+            title: "Post C",
+            votes: 999,
+        }
     }
 )
 ```
@@ -45,10 +55,21 @@ Finally, we can include this list in the final structure:
 ```rust
 rsx!(
     ul {
-        {name_list}
+        name_list
     }
 )
 ```
+Or, we can include the iterator inline:
+```rust
+rsx!(
+    ul {
+        names.iter().map(|name| rsx!(
+            li { "{name}" } 
+        ))
+    }
+)
+```
+
 The HTML-rendered version of this list would follow what you would expect:
 ```html
 <ul>
@@ -157,7 +178,7 @@ File names in a folder and Element keys in an array serve a similar purpose. The
 ### Gotcha
 You might be tempted to use an item’s index in the array as its key. In fact, that’s what Dioxus will use if you don’t specify a key at all. But the order in which you render items will change over time if an item is inserted, deleted, or if the array gets reordered. Index as a key often leads to subtle and confusing bugs.
 
-Similarly, do not generate keys on the fly, `gen_random`. This will cause keys to never match up between renders, leading to all your components and DOM being recreated every time. Not only is this slow, but it will also lose any user input inside the list items. Instead, use a stable ID based on the data.
+Similarly, do not generate keys on the fly, like `gen_random`. This will cause keys to never match up between renders, leading to all your components and DOM being recreated every time. Not only is this slow, but it will also lose any user input inside the list items. Instead, use a stable ID based on the data.
 
 Note that your components won’t receive key as a prop. It’s only used as a hint by Dioxus itself. If your component needs an ID, you have to pass it as a separate prop:
 ```rust

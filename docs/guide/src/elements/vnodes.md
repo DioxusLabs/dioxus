@@ -81,13 +81,13 @@ let name = "Bob";
 rsx! ( "hello {name}" )
 ```
 
-Unfortunately, you cannot drop in arbitrary expressions directly into the string literal. In the cases where we need to compute a complex value, we'll want to use `format_args!` directly. Due to specifics of how the `rsx!` macro (we'll cover later), our call to `format_args` must be contained within curly braces *and* square braces.
+Unfortunately, you cannot drop in arbitrary expressions directly into the string literal. In the cases where we need to compute a complex value, we'll want to use `format_args!` directly. Due to specifics of how the `rsx!` macro (we'll cover later), our call to `format_args` must be contained within  square braces.
 
 ```rust
-rsx!( {[format_args!("Hello {}", if enabled { "Jack" } else { "Bob" } )]} )
+rsx!( {format_args!("Hello {}", if enabled { "Jack" } else { "Bob" } )] )
 ```
 
-Alternatively, `&str` can be included directly, though it must be inside of an array:
+Alternatively, `&str` can be included directly, though it must be inside of square braces:
 
 ```rust
 rsx!( "Hello ",  [if enabled { "Jack" } else { "Bob" }] )
@@ -170,4 +170,4 @@ We learned:
 - Elements can either be a named container or text
 - Some Elements have properties that the renderer can use to draw the UI to the screen
 
-Next, we'll compose Elements together to form components.
+Next, we'll compose Elements together using Rust-based logic.

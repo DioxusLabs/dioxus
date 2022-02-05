@@ -137,7 +137,7 @@ fn clickable(cx: Scope<ClickableProps>) -> Element {
 }
 ```
 
-## Passing attributes
+<!-- ## Passing attributes
 
 In the cases where you need to pass arbitrary element properties into a component - say to add more functionality to the `<a>` tag, Dioxus will accept any quoted fields. This is similar to adding arbitrary fields to regular elements using quotes.
 
@@ -171,7 +171,7 @@ fn clickable(cx: Scope<ClickableProps>) -> Element {
 ```
 
 The quoted escapes are a great way to make your components more flexible.
-
+ -->
 
 ## Passing handlers
 
