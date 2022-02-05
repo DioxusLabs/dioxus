@@ -17,9 +17,9 @@ impl Label {
     fn new_list(num: usize) -> Vec<Self> {
         let mut rng = SmallRng::from_entropy();
         let mut labels = Vec::with_capacity(num);
-        for _ in 0..num {
+        for x in 0..num {
             labels.push(Label {
-                key: 0,
+                key: x,
                 labels: [
                     ADJECTIVES.choose(&mut rng).unwrap(),
                     COLOURS.choose(&mut rng).unwrap(),

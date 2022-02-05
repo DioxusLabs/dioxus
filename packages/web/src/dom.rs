@@ -7,8 +7,8 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use crate::bindings::Interpreter;
 use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
+use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
 use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -28,17 +28,54 @@ impl WebsysDom {
     pub fn new(cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         // eventually, we just want to let the interpreter do all the work of decoding events into our event type
         let callback: Box<dyn FnMut(&Event)> = Box::new(move |event: &web_sys::Event| {
-            if let Ok(synthetic_event) = decode_trigger(event) {
+            let mut target = event
+                .target()
+                .expect("missing target")
+                .dyn_into::<Element>()
+                .expect("not a valid element");
+
+            let typ = event.type_();
+
+            let decoded: anyhow::Result<UserEvent> = loop {
+                match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
+                    Some(Ok(id)) => {
+                        break Ok(UserEvent {
+                            name: event_name_from_typ(&typ),
+                            data: virtual_event_from_websys_event(event.clone()),
+                            element: Some(ElementId(id)),
+                            scope_id: None,
+                            priority: dioxus_core::EventPriority::Medium,
+                        });
+                    }
+                    Some(Err(e)) => {
+                        break Err(e.into());
+                    }
+                    None => {
+                        // walk the tree upwards until we actually find an event target
+                        if let Some(parent) = target.parent_element() {
+                            target = parent;
+                        } else {
+                            break Ok(UserEvent {
+                                name: event_name_from_typ(&typ),
+                                data: virtual_event_from_websys_event(event.clone()),
+                                element: None,
+                                scope_id: None,
+                                priority: dioxus_core::EventPriority::Low,
+                            });
+                        }
+                    }
+                }
+            };
+
+            if let Ok(synthetic_event) = decoded {
                 // Try to prevent default if the attribute is set
-                if let Some(target) = event.target() {
-                    if let Some(node) = target.dyn_ref::<HtmlElement>() {
-                        if let Some(name) = node.get_attribute("dioxus-prevent-default") {
-                            if name == synthetic_event.name
-                                || name.trim_start_matches("on") == synthetic_event.name
-                            {
-                                log::trace!("Preventing default");
-                                event.prevent_default();
-                            }
+                if let Some(node) = target.dyn_ref::<HtmlElement>() {
+                    if let Some(name) = node.get_attribute("dioxus-prevent-default") {
+                        if name == synthetic_event.name
+                            || name.trim_start_matches("on") == synthetic_event.name
+                        {
+                            log::trace!("Preventing default");
+                            event.prevent_default();
                         }
                     }
                 }
@@ -271,49 +308,6 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
         | "timeupdate" | "volumechange" | "waiting" => Arc::new(MediaData {}),
         "toggle" => Arc::new(ToggleData {}),
         _ => Arc::new(()),
-    }
-}
-
-/// This function decodes a websys event and produces an EventTrigger
-/// With the websys implementation, we attach a unique key to the nodes
-fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
-    let mut target = event
-        .target()
-        .expect("missing target")
-        .dyn_into::<Element>()
-        .expect("not a valid element");
-
-    let typ = event.type_();
-
-    loop {
-        match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
-            Some(Ok(id)) => {
-                return Ok(UserEvent {
-                    name: event_name_from_typ(&typ),
-                    data: virtual_event_from_websys_event(event.clone()),
-                    element: Some(ElementId(id)),
-                    scope_id: None,
-                    priority: dioxus_core::EventPriority::Medium,
-                });
-            }
-            Some(Err(e)) => {
-                return Err(e.into());
-            }
-            None => {
-                // walk the tree upwards until we actually find an event target
-                if let Some(parent) = target.parent_element() {
-                    target = parent;
-                } else {
-                    return Ok(UserEvent {
-                        name: event_name_from_typ(&typ),
-                        data: virtual_event_from_websys_event(event.clone()),
-                        element: None,
-                        scope_id: None,
-                        priority: dioxus_core::EventPriority::Low,
-                    });
-                }
-            }
-        }
     }
 }
 

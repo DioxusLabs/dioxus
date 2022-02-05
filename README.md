@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🌗🚀 Dioxus</h1>
+  <h1>Dioxus</h1>
   <p>
     <strong>Frontend that scales.</strong>
   </p>
@@ -26,9 +26,7 @@
     <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
       alt="CI status" />
   </a>
-</div>
 
-<div align="center">
   <!--Awesome -->
   <a href="https://github.com/dioxuslabs/awesome-dioxus">
     <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />

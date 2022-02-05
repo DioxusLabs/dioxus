@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-router"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for the web browser using websys"
 license = "MIT/Apache-2.0"
@@ -11,9 +11,9 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version ="^0.1.7", default-features = false }
-dioxus-html = { path = "../html", version ="^0.1.4", default-features = false }
-dioxus-core-macro = { path = "../core-macro", version ="^0.1.6"}
+dioxus-core = { path = "../core", version = "^0.1.9", default-features = false }
+dioxus-html = { path = "../html", version = "^0.1.6", default-features = false }
+dioxus-core-macro = { path = "../core-macro", version = "^0.1.7" }
 
 serde = "1"
 url = "2.2.2"
@@ -43,9 +43,18 @@ web = ["web-sys", "gloo", "js-sys", "wasm-bindgen"]
 desktop = []
 mobile = []
 derive = []
+wasm_test = []
 
 [dev-dependencies]
 console_error_panic_hook = "0.1.7"
 dioxus-web = { path = "../web" }
 log = "0.4.14"
 wasm-logger = "0.2.0"
+wasm-bindgen-test = "0.3"
+gloo-utils = "0.1.2"
+
+[dev-dependencies.web-sys]
+version = "0.3"
+features = [
+    "Document",
+]

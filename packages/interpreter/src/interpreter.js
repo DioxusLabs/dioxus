@@ -1,7 +1,3 @@
-
-
-
-
 export function main() {
   let root = window.document.getElementById("main");
   if (root != null) {
@@ -9,25 +5,14 @@ export function main() {
     window.rpc.call("initialize");
   }
 }
-
-declare global {
-  interface Window {
-    interpreter: Interpreter;
-    rpc: { call: (method: string, args?: any) => void };
-  }
-}
-
-
 export class Interpreter {
-  root: Element;
-  stack: Element[];
-  listeners: { [key: string]: number };
-  handlers: { [key: string]: (evt: Event) => void };
-  lastNodeWasText: boolean;
-  nodes: Element[];
-
-
-  constructor(root: Element) {
+  root;
+  stack;
+  listeners;
+  handlers;
+  lastNodeWasText;
+  nodes;
+  constructor(root) {
     this.root = root;
     this.stack = [root];
     this.listeners = {};
@@ -35,88 +20,70 @@ export class Interpreter {
     this.lastNodeWasText = false;
     this.nodes = [root];
   }
-
   top() {
     return this.stack[this.stack.length - 1];
   }
-
   pop() {
     return this.stack.pop();
   }
-
-  PushRoot(root: number) {
+  PushRoot(root) {
     const node = this.nodes[root];
     this.stack.push(node);
   }
-
-  AppendChildren(many: number) {
+  AppendChildren(many) {
     let root = this.stack[this.stack.length - (1 + many)];
-
     let to_add = this.stack.splice(this.stack.length - many);
-
     for (let i = 0; i < many; i++) {
       root.appendChild(to_add[i]);
     }
   }
-
-  ReplaceWith(root_id: number, m: number) {
-    let root = this.nodes[root_id] as Element;
+  ReplaceWith(root_id, m) {
+    let root = this.nodes[root_id];
     let els = this.stack.splice(this.stack.length - m);
-
     root.replaceWith(...els);
   }
-
-  InsertAfter(root: number, n: number) {
-    let old = this.nodes[root] as Element;
+  InsertAfter(root, n) {
+    let old = this.nodes[root];
     let new_nodes = this.stack.splice(this.stack.length - n);
     old.after(...new_nodes);
   }
-
-  InsertBefore(root: number, n: number) {
-    let old = this.nodes[root] as Element;
+  InsertBefore(root, n) {
+    let old = this.nodes[root];
     let new_nodes = this.stack.splice(this.stack.length - n);
     old.before(...new_nodes);
   }
-
-  Remove(root: number) {
-    let node = this.nodes[root] as Element;
+  Remove(root) {
+    let node = this.nodes[root];
     if (node !== undefined) {
       node.remove();
     }
   }
-
-  CreateTextNode(text: string, root: number) {
+  CreateTextNode(text, root) {
     // todo: make it so the types are okay
-    const node = document.createTextNode(text) as any as Element;
+    const node = document.createTextNode(text);
     this.nodes[root] = node;
     this.stack.push(node);
   }
-
-  CreateElement(tag: string, root: number) {
+  CreateElement(tag, root) {
     const el = document.createElement(tag);
     // el.setAttribute("data-dioxus-id", `${root}`);
-
     this.nodes[root] = el;
     this.stack.push(el);
   }
-
-  CreateElementNs(tag: string, root: number, ns: string) {
+  CreateElementNs(tag, root, ns) {
     let el = document.createElementNS(ns, tag);
     this.stack.push(el);
     this.nodes[root] = el;
   }
-
-  CreatePlaceholder(root: number) {
+  CreatePlaceholder(root) {
     let el = document.createElement("pre");
     el.hidden = true;
     this.stack.push(el);
     this.nodes[root] = el;
   }
-
-  NewEventListener(event_name: string, root: number, handler: (evt: Event) => void) {
+  NewEventListener(event_name, root, handler) {
     const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
-
     if (this.listeners[event_name] === undefined) {
       this.listeners[event_name] = 0;
       this.handlers[event_name] = handler;
@@ -125,48 +92,39 @@ export class Interpreter {
       this.listeners[event_name]++;
     }
   }
-
-  RemoveEventListener(root: number, event_name: string) {
+  RemoveEventListener(root, event_name) {
     const element = this.nodes[root];
     element.removeAttribute(`data-dioxus-id`);
-
     this.listeners[event_name]--;
-
     if (this.listeners[event_name] === 0) {
       this.root.removeEventListener(event_name, this.handlers[event_name]);
       delete this.listeners[event_name];
       delete this.handlers[event_name];
     }
   }
-
-
-  SetText(root: number, text: string) {
+  SetText(root, text) {
     this.nodes[root].textContent = text;
   }
-
-  SetAttribute(root: number, field: string, value: string, ns: string | undefined) {
+  SetAttribute(root, field, value, ns) {
     const name = field;
     const node = this.nodes[root];
-
     if (ns == "style") {
-
       // @ts-ignore
-      (node as HTMLElement).style[name] = value;
-
+      node.style[name] = value;
     } else if (ns != null || ns != undefined) {
       node.setAttributeNS(ns, name, value);
     } else {
       switch (name) {
         case "value":
-          if (value != (node as HTMLInputElement).value) {
-            (node as HTMLInputElement).value = value;
+          if (value != node.value) {
+            node.value = value;
           }
           break;
         case "checked":
-          (node as HTMLInputElement).checked = value === "true";
+          node.checked = value === "true";
           break;
         case "selected":
-          (node as HTMLOptionElement).selected = value === "true";
+          node.selected = value === "true";
           break;
         case "dangerous_inner_html":
           node.innerHTML = value;
@@ -181,33 +139,26 @@ export class Interpreter {
       }
     }
   }
-  RemoveAttribute(root: number, name: string) {
-
+  RemoveAttribute(root, name) {
     const node = this.nodes[root];
     node.removeAttribute(name);
-
     if (name === "value") {
-      (node as HTMLInputElement).value = "";
+      node.value = "";
     }
-
     if (name === "checked") {
-      (node as HTMLInputElement).checked = false;
+      node.checked = false;
     }
-
     if (name === "selected") {
-      (node as HTMLOptionElement).selected = false;
+      node.selected = false;
     }
   }
-
-  handleEdits(edits: DomEdit[]) {
+  handleEdits(edits) {
     this.stack.push(this.root);
-
     for (let edit of edits) {
       this.handleEdit(edit);
     }
   }
-
-  handleEdit(edit: DomEdit) {
+  handleEdit(edit) {
     switch (edit.type) {
       case "PushRoot":
         this.PushRoot(edit.root);
@@ -243,55 +194,48 @@ export class Interpreter {
         this.RemoveEventListener(edit.root, edit.event_name);
         break;
       case "NewEventListener":
-
-
-        // this handler is only provided on desktop implementations since this 
+        // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
-        let handler = (event: Event) => {
-          let target = event.target as Element | null;
-
+        let handler = (event) => {
+          let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
+            let shouldPreventDefault = target.getAttribute(
+              `dioxus-prevent-default`
+            );
 
+            if (event.type == "click") {
+              // todo call prevent default if it's the right type of event
+              if (shouldPreventDefault !== `onclick`) {
+                if (target.tagName == "A") {
+                  const href = target.getAttribute("href");
+                  if (href !== "" && href !== null && href !== undefined) {
+                    window.rpc.call("browser_open", { href });
+                  }
+                }
+              }
+            }
             // walk the tree to find the real element
             while (realId == null && target.parentElement != null) {
               target = target.parentElement;
               realId = target.getAttribute(`data-dioxus-id`);
             }
 
-            const shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
-
+            shouldPreventDefault = target.getAttribute(
+              `dioxus-prevent-default`
+            );
             let contents = serialize_event(event);
-
             if (shouldPreventDefault === `on${event.type}`) {
-              event.preventDefault();
+              //   event.preventDefault();
             }
-
             if (event.type == "submit") {
-              event.preventDefault();
+              //   event.preventDefault();
             }
-
-            if (event.type == "click") {
-              event.preventDefault();
-              if (shouldPreventDefault !== `onclick`) {
-                if (target.tagName == "A") {
-                  const href = target.getAttribute("href")
-                  if (href !== "" && href !== null && href !== undefined && realId != null) {
-                    window.rpc.call("browser_open", {
-                      mounted_dom_id: parseInt(realId),
-                      href
-                    });
-                  }
-                }
-              }
-            }
-
             if (realId == null) {
               return;
             }
-
             window.rpc.call("user_event", {
-              event: (edit as NewEventListener).event_name,
+              event: edit.event_name,
               mounted_dom_id: parseInt(realId),
               contents: contents,
             });
@@ -311,26 +255,21 @@ export class Interpreter {
     }
   }
 }
-
-
-
-function serialize_event(event: Event) {
+function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":
     case "past": {
       return {};
     }
-
     case "compositionend":
     case "compositionstart":
     case "compositionupdate": {
-      let { data } = (event as CompositionEvent);
+      let { data } = event;
       return {
         data,
       };
     }
-
     case "keydown":
     case "keypress":
     case "keyup": {
@@ -345,8 +284,7 @@ function serialize_event(event: Event) {
         location,
         repeat,
         which,
-      } = (event as KeyboardEvent);
-
+      } = event;
       return {
         char_code: charCode,
         key: key,
@@ -361,42 +299,35 @@ function serialize_event(event: Event) {
         locale: "locale",
       };
     }
-
     case "focus":
     case "blur": {
       return {};
     }
-
     case "change": {
-      let target = event.target as HTMLInputElement;
+      let target = event.target;
       let value;
       if (target.type === "checkbox" || target.type === "radio") {
         value = target.checked ? "true" : "false";
       } else {
         value = target.value ?? target.textContent;
       }
-
       return {
         value: value,
       };
     }
-
     case "input":
     case "invalid":
     case "reset":
     case "submit": {
-      let target = event.target as HTMLFormElement;
+      let target = event.target;
       let value = target.value ?? target.textContent;
-
       if (target.type == "checkbox") {
         value = target.checked ? "true" : "false";
       }
-
       return {
         value: value,
       };
     }
-
     case "click":
     case "contextmenu":
     case "doubleclick":
@@ -428,8 +359,7 @@ function serialize_event(event: Event) {
         screenX,
         screenY,
         shiftKey,
-      } = event as MouseEvent;
-
+      } = event;
       return {
         alt_key: altKey,
         button: button,
@@ -445,7 +375,6 @@ function serialize_event(event: Event) {
         shift_key: shiftKey,
       };
     }
-
     case "pointerdown":
     case "pointermove":
     case "pointerup":
@@ -479,7 +408,7 @@ function serialize_event(event: Event) {
         twist,
         pointerType,
         isPrimary,
-      } = event as PointerEvent;
+      } = event;
       return {
         alt_key: altKey,
         button: button,
@@ -505,21 +434,14 @@ function serialize_event(event: Event) {
         is_primary: isPrimary,
       };
     }
-
     case "select": {
       return {};
     }
-
     case "touchcancel":
     case "touchend":
     case "touchmove":
     case "touchstart": {
-      const {
-        altKey,
-        ctrlKey,
-        metaKey,
-        shiftKey,
-      } = event as TouchEvent;
+      const { altKey, ctrlKey, metaKey, shiftKey } = event;
       return {
         // changed_touches: event.changedTouches,
         // target_touches: event.targetTouches,
@@ -530,18 +452,11 @@ function serialize_event(event: Event) {
         shift_key: shiftKey,
       };
     }
-
     case "scroll": {
       return {};
     }
-
     case "wheel": {
-      const {
-        deltaX,
-        deltaY,
-        deltaZ,
-        deltaMode,
-      } = event as WheelEvent;
+      const { deltaX, deltaY, deltaZ, deltaMode } = event;
       return {
         delta_x: deltaX,
         delta_y: deltaY,
@@ -549,35 +464,24 @@ function serialize_event(event: Event) {
         delta_mode: deltaMode,
       };
     }
-
     case "animationstart":
     case "animationend":
     case "animationiteration": {
-      const {
-        animationName,
-        elapsedTime,
-        pseudoElement,
-      } = event as AnimationEvent;
+      const { animationName, elapsedTime, pseudoElement } = event;
       return {
         animation_name: animationName,
         elapsed_time: elapsedTime,
         pseudo_element: pseudoElement,
       };
     }
-
     case "transitionend": {
-      const {
-        propertyName,
-        elapsedTime,
-        pseudoElement,
-      } = event as TransitionEvent;
+      const { propertyName, elapsedTime, pseudoElement } = event;
       return {
         property_name: propertyName,
         elapsed_time: elapsedTime,
         pseudo_element: pseudoElement,
       };
     }
-
     case "abort":
     case "canplay":
     case "canplaythrough":
@@ -603,17 +507,14 @@ function serialize_event(event: Event) {
     case "waiting": {
       return {};
     }
-
     case "toggle": {
       return {};
     }
-
     default: {
       return {};
     }
   }
 }
-
 const bool_attrs = {
   allowfullscreen: true,
   allowpaymentrequest: true,
@@ -642,39 +543,3 @@ const bool_attrs = {
   selected: true,
   truespeed: true,
 };
-
-
-
-type PushRoot = { type: "PushRoot", root: number };
-type AppendChildren = { type: "AppendChildren", many: number };
-type ReplaceWith = { type: "ReplaceWith", root: number, m: number };
-type InsertAfter = { type: "InsertAfter", root: number, n: number };
-type InsertBefore = { type: "InsertBefore", root: number, n: number };
-type Remove = { type: "Remove", root: number };
-type CreateTextNode = { type: "CreateTextNode", text: string, root: number };
-type CreateElement = { type: "CreateElement", tag: string, root: number };
-type CreateElementNs = { type: "CreateElementNs", tag: string, root: number, ns: string };
-type CreatePlaceholder = { type: "CreatePlaceholder", root: number };
-type NewEventListener = { type: "NewEventListener", root: number, event_name: string, scope: number };
-type RemoveEventListener = { type: "RemoveEventListener", event_name: string, scope: number, root: number };
-type SetText = { type: "SetText", root: number, text: string };
-type SetAttribute = { type: "SetAttribute", root: number, field: string, value: string, ns: string | undefined };
-type RemoveAttribute = { type: "RemoveAttribute", root: number, name: string };
-
-
-type DomEdit =
-  PushRoot |
-  AppendChildren |
-  ReplaceWith |
-  InsertAfter |
-  InsertBefore |
-  Remove |
-  CreateTextNode |
-  CreateElement |
-  CreateElementNs |
-  CreatePlaceholder |
-  NewEventListener |
-  RemoveEventListener |
-  SetText |
-  SetAttribute |
-  RemoveAttribute;

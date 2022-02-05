@@ -1,0 +1,20 @@
+FROM rust:1.58-buster
+
+RUN apt update
+RUN apt install -y \
+    libglib2.0-dev \
+    libgtk-3-dev \
+    libsoup2.4-dev \
+    libappindicator3-dev \
+    libwebkit2gtk-4.0-dev \
+    firefox-esr
+# for kcov and Tarpaulin
+#liblzma-dev binutils-dev libcurl4-openssl-dev libdw-dev libelf-dev
+
+RUN cargo install cargo-make --debug
+# for test coverage
+#RUN cargo install cargo-tarpaulin
+# clean up a bit
+RUN cargo install cargo-cache && cargo cache -a
+
+CMD ["exit"]

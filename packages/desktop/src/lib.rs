@@ -51,10 +51,13 @@
 //! Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
 
 pub mod cfg;
+pub mod desktop_context;
 pub mod escape;
 pub mod events;
 
 use cfg::DesktopConfig;
+pub use desktop_context::use_window;
+use desktop_context::DesktopContext;
 use dioxus_core::*;
 use std::{
     collections::{HashMap, VecDeque},
@@ -188,6 +191,7 @@ pub fn launch_with_props<P: 'static + Send>(
                                 let _ = proxy.send_event(UserWindowEvent::Update);
                             }
                             "browser_open" => {
+                                println!("browser_open");
                                 let data = req.params.unwrap();
                                 log::trace!("Open browser: {:?}", data);
                                 if let Some(arr) = data.as_array() {
@@ -220,7 +224,7 @@ pub fn launch_with_props<P: 'static + Send>(
                         } else if trimmed == "index.js" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/javascript")
-                                .body(include_bytes!("../../jsinterpreter/interpreter.js").to_vec())
+                                .body(dioxus_interpreter_js::INTERPRTER_JS.as_bytes().to_vec())
                         } else {
                             // Read the file content from file path
                             use std::fs::read;
@@ -244,7 +248,7 @@ pub fn launch_with_props<P: 'static + Send>(
 
                             // do not let path searching to go two layers beyond the caller level
                             let data = read(path_buf)?;
-                            let meta = format!("{mime}");
+                            let meta = format!("{}", mime);
 
                             wry::http::ResponseBuilder::new().mimetype(&meta).body(data)
                         }
@@ -282,6 +286,41 @@ pub fn launch_with_props<P: 'static + Send>(
                 //
                 match _evt {
                     UserWindowEvent::Update => desktop.try_load_ready_webviews(),
+                    UserWindowEvent::DragWindow => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            // start to drag the window.
+                            // if the drag_window have any err. we don't do anything.
+                            let _ = window.drag_window();
+                        }
+                    }
+                    UserWindowEvent::CloseWindow => {
+                        // close window
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    UserWindowEvent::Minimize(state) => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            // change window minimized state.
+                            window.set_minimized(state);
+                        }
+                    }
+                    UserWindowEvent::Maximize(state) => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            // change window maximized state.
+                            window.set_maximized(state);
+                        }
+                    }
+                    UserWindowEvent::FocusWindow => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_focus();
+                        }
+                    }
                 }
             }
             Event::MainEventsCleared => {}
@@ -296,6 +335,11 @@ pub fn launch_with_props<P: 'static + Send>(
 
 pub enum UserWindowEvent {
     Update,
+    DragWindow,
+    CloseWindow,
+    FocusWindow,
+    Minimize(bool),
+    Maximize(bool),
 }
 
 pub struct DesktopController {
@@ -322,6 +366,7 @@ impl DesktopController {
         let return_sender = sender.clone();
         let proxy = evt.clone();
 
+        let desktop_context_proxy = proxy.clone();
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "spawn" onto multiple threads
             let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -332,6 +377,10 @@ impl DesktopController {
             runtime.block_on(async move {
                 let mut dom =
                     VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
+
+                let window_context = DesktopContext::new(desktop_context_proxy);
+
+                dom.base_scope().provide_context(window_context);
 
                 let edits = dom.rebuild();
 

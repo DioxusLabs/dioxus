@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{Element, Properties, Scope, ScopeId, ScopeState},
+    innerlude::{ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
     AnyEvent, Component,
 };
@@ -147,13 +147,6 @@ impl<'src> VNode<'src> {
         }
     }
 
-    pub(crate) fn children(&self) -> &[VNode<'src>] {
-        match &self {
-            VNode::Fragment(f) => f.children,
-            _ => &[],
-        }
-    }
-
     // Create an "owned" version of the vnode.
     pub fn decouple(&self) -> VNode<'src> {
         match *self {
@@ -175,13 +168,21 @@ impl Debug for VNode<'_> {
                 .field("key", &el.key)
                 .field("attrs", &el.attributes)
                 .field("children", &el.children)
+                .field("id", &el.id)
                 .finish(),
             VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
-            VNode::Placeholder(_) => write!(s, "VNode::VPlaceholder"),
+            VNode::Placeholder(t) => write!(s, "VNode::VPlaceholder {{ id: {:?} }}", t.id),
             VNode::Fragment(frag) => {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
-            VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
+            VNode::Component(comp) => s
+                .debug_struct("VNode::VComponent")
+                .field("name", &comp.fn_name)
+                .field("fnptr", &comp.user_fc)
+                .field("key", &comp.key)
+                .field("scope", &comp.scope)
+                .field("originator", &comp.originator)
+                .finish(),
         }
     }
 }
@@ -351,9 +352,16 @@ type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 /// }
 ///
 /// ```
-#[derive(Default)]
 pub struct EventHandler<'bump, T = ()> {
     pub callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+}
+
+impl<'a, T> Default for EventHandler<'a, T> {
+    fn default() -> Self {
+        Self {
+            callback: RefCell::new(None),
+        }
+    }
 }
 
 impl<T> EventHandler<'_, T> {
@@ -377,7 +385,8 @@ pub struct VComponent<'src> {
     pub originator: ScopeId,
     pub scope: Cell<Option<ScopeId>>,
     pub can_memoize: bool,
-    pub user_fc: *const (),
+    pub user_fc: ComponentPtr,
+    pub fn_name: &'static str,
     pub props: RefCell<Option<Box<dyn AnyProps + 'src>>>,
 }
 
@@ -542,6 +551,7 @@ impl<'a> NodeFactory<'a> {
         component: fn(Scope<'a, P>) -> Element,
         props: P,
         key: Option<Arguments>,
+        fn_name: &'static str,
     ) -> VNode<'a>
     where
         P: Properties + 'a,
@@ -550,8 +560,9 @@ impl<'a> NodeFactory<'a> {
             key: key.map(|f| self.raw_text(f).0),
             scope: Default::default(),
             can_memoize: P::IS_STATIC,
-            user_fc: component as *const (),
+            user_fc: component as ComponentPtr,
             originator: self.scope.scope_id(),
+            fn_name,
             props: RefCell::new(Some(Box::new(VComponentProps {
                 // local_props: RefCell::new(Some(props)),
                 // heap_props: RefCell::new(None),
