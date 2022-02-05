@@ -44,7 +44,7 @@
   <h3>
     <a href="https://dioxuslabs.com"> 官网 </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> 手册 </a>
+    <a href="https://dioxus.mrxzx.info/"> 手册 </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> 示例 </a>
   </h3>
