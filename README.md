@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🌗🚀 Dioxus</h1>
+  <h1>Dioxus</h1>
   <p>
     <strong>Frontend that scales.</strong>
   </p>
