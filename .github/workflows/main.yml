@@ -78,7 +78,7 @@ jobs:
           args: -- -D warnings
 
   coverage:
-    name: coverage
+    name: Coverage
     runs-on: ubuntu-latest
     container:
       image: xd009642/tarpaulin:develop-nightly
@@ -90,6 +90,6 @@ jobs:
         run: |
           apt-get update &&\
           apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev -y &&\
-          cargo +nightly tarpaulin --verbose --tests --all-features --workspace --timeout 120 --out Xml
+          cargo +nightly tarpaulin --target wasm32-unknown-unknown --verbose --tests --all-features --workspace --timeout 120 --out Xml
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
