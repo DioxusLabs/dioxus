@@ -23,8 +23,6 @@ function run_script {
     cd .. && \
     echo "rustup default nightly && cargo +nightly tarpaulin --verbose --all-features --tests --workspace --exclude core-macro --timeout 120 --out Html" | docker run -i --rm --security-opt seccomp=unconfined -v "/home/elios/project/prs/dioxus/:/run_test" dioxus-code-coverage
 
-    #firefox tarpaulin-report.html
-
     # clean up
     rm -rf tmp
     if [ $# -ge 1 ]
