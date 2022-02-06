@@ -8,7 +8,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let (key, set_key) = use_state(&cx, || KeyCode::Space);
+    let (key, set_key) = use_state(&cx, || "".to_string());
     let (mouse, set_mouse) = use_state(&cx, || (0, 0));
     let (count, set_count) = use_state(&cx, || 0);
     let (buttons, set_buttons) = use_state(&cx, || 0);
@@ -30,7 +30,7 @@ fn app(cx: Scope) -> Element {
                     KeyCode::DownArrow => set_count(count - 10),
                     _ => {},
                 }
-                set_key(evt.key_code);
+                set_key(format!("{:?} repeating: {:?}", evt.key, evt.repeat));
             },
             onwheel: move |evt: WheelEvent| {
                 set_count(count + evt.data.delta_y as i64);
@@ -49,7 +49,7 @@ fn app(cx: Scope) -> Element {
             },
 
             "count: {count:?}",
-            "key: {key:?}",
+            "key: {key}",
             "mouse buttons: {buttons:b}",
             "mouse pos: {mouse:?}",
             "mouse button pressed: {mouse_clicked}"

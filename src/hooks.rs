@@ -72,7 +72,7 @@ impl EventData {
 const MAX_REPEAT_TIME: Duration = Duration::from_millis(100);
 
 pub struct InnerInputState {
-    mouse: Option<MouseData>,
+    mouse: Option<(MouseData, Vec<u16>)>,
     wheel: Option<WheelData>,
     last_key_pressed: Option<(KeyboardData, Instant)>,
     screen: Option<(u16, u16)>,
@@ -93,26 +93,53 @@ impl InnerInputState {
     // stores current input state and transforms events based on that state
     fn apply_event(&mut self, evt: &mut EventCore) {
         match evt.1 {
+            // limitations: only two buttons may be held at once
             EventData::Mouse(ref mut m) => match &mut self.mouse {
                 Some(state) => {
-                    *state = clone_mouse_data(m);
-                    // crossterm always outputs the left mouse button on mouse up
-                    // let mut buttons = state.buttons;
-                    // *state = clone_mouse_data(m);
-                    // match evt.0 {
-                    //     "mouseup" => {
-                    //         buttons &= !m.buttons;
-                    //     }
-                    //     "mousedown" => {
-                    //         buttons |= m.buttons;
-                    //     }
-                    //     _ => (),
-                    // }
-                    // state.buttons = buttons;
-                    // m.buttons = buttons;
+                    let mut buttons = state.0.buttons;
+                    state.0 = clone_mouse_data(m);
+                    match evt.0 {
+                        // this code only runs when there are no buttons down
+                        "mouseup" => {
+                            buttons = 0;
+                            state.1 = Vec::new();
+                        }
+                        "mousedown" => {
+                            if state.1.contains(&m.buttons) {
+                                // if we already pressed a button and there is another button released the button crossterm sends is the button remaining
+                                if state.1.len() > 1 {
+                                    state.1 = vec![m.buttons];
+                                }
+                                // otherwise some other button was pressed. In testing it was consistantly this mapping
+                                else {
+                                    match m.buttons {
+                                        0x01 => state.1.push(0x02),
+                                        0x02 => state.1.push(0x01),
+                                        0x04 => state.1.push(0x01),
+                                        _ => (),
+                                    }
+                                }
+                            } else {
+                                state.1.push(m.buttons);
+                            }
+
+                            buttons = state.1.iter().copied().reduce(|a, b| a | b).unwrap();
+                        }
+                        _ => (),
+                    }
+                    state.0.buttons = buttons;
+                    m.buttons = buttons;
+                    // println!("{buttons}")
                 }
                 None => {
-                    self.mouse = Some(clone_mouse_data(m));
+                    self.mouse = Some((
+                        clone_mouse_data(m),
+                        if m.buttons == 0 {
+                            Vec::new()
+                        } else {
+                            vec![m.buttons]
+                        },
+                    ));
                 }
             },
             EventData::Wheel(ref w) => self.wheel = Some(clone_wheel_data(w)),
@@ -152,7 +179,7 @@ pub struct RinkInputHandler {
 
 impl RinkInputHandler {
     /// global context that handles events
-    /// limitations: GUI key modifier is never detected, key up events are not detected, and mouse up events are not specific to a key
+    /// limitations: GUI key modifier is never detected, key up events are not detected, and only two mouse buttons may be pressed at once
     pub fn new(
         mut receiver: UnboundedReceiver<TermEvent>,
         cx: &ScopeState,
