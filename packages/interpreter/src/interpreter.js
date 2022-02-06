@@ -141,15 +141,17 @@ export class Interpreter {
   }
   RemoveAttribute(root, name) {
     const node = this.nodes[root];
-    node.removeAttribute(name);
+
     if (name === "value") {
       node.value = "";
-    }
-    if (name === "checked") {
+    } else if (name === "checked") {
       node.checked = false;
-    }
-    if (name === "selected") {
+    } else if (name === "selected") {
       node.selected = false;
+    } else if (name == "dangerous_inner_html") {
+      node.innerHTML = "";
+    } else {
+      node.removeAttribute(name);
     }
   }
   handleEdits(edits) {
