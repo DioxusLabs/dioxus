@@ -148,7 +148,7 @@ export class Interpreter {
       node.checked = false;
     } else if (name === "selected") {
       node.selected = false;
-    } else if (name == "dangerous_innter_html") {
+    } else if (name == "dangerous_inner_html") {
       node.innerHTML = "";
     } else {
       node.removeAttribute(name);
