@@ -11,6 +11,7 @@ crossterm = "0.22.1"
 anyhow = "1.0.42"
 thiserror = "1.0.24"
 dioxus = "0.1.8"
+dioxus-html = "0.1.6"
 hecs = "0.7.3"
 ctrlc = "3.2.1"
 bumpalo = { version = "3.8.0", features = ["boxed"] }
