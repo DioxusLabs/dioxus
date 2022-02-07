@@ -31,7 +31,7 @@ extern "C" {
     pub fn Remove(this: &Interpreter, root: u64);
 
     #[wasm_bindgen(method)]
-    pub fn CreateTextNode(this: &Interpreter, text: &str, root: u64);
+    pub fn CreateTextNode(this: &Interpreter, text: JsValue, root: u64);
 
     #[wasm_bindgen(method)]
     pub fn CreateElement(this: &Interpreter, tag: &str, root: u64);
@@ -49,10 +49,16 @@ extern "C" {
     pub fn RemoveEventListener(this: &Interpreter, root: u64, name: &str);
 
     #[wasm_bindgen(method)]
-    pub fn SetText(this: &Interpreter, root: u64, text: &str);
+    pub fn SetText(this: &Interpreter, root: u64, text: JsValue);
 
     #[wasm_bindgen(method)]
-    pub fn SetAttribute(this: &Interpreter, root: u64, field: &str, value: &str, ns: Option<&str>);
+    pub fn SetAttribute(
+        this: &Interpreter,
+        root: u64,
+        field: &str,
+        value: JsValue,
+        ns: Option<&str>,
+    );
 
     #[wasm_bindgen(method)]
     pub fn RemoveAttribute(this: &Interpreter, root: u64, field: &str);

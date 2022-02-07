@@ -105,9 +105,7 @@ impl WebsysDom {
                 DomEdit::InsertAfter { root, n } => self.interpreter.InsertAfter(root, n),
                 DomEdit::InsertBefore { root, n } => self.interpreter.InsertBefore(root, n),
                 DomEdit::Remove { root } => self.interpreter.Remove(root),
-                DomEdit::CreateTextNode { text, root } => {
-                    self.interpreter.CreateTextNode(text, root)
-                }
+
                 DomEdit::CreateElement { tag, root } => self.interpreter.CreateElement(tag, root),
                 DomEdit::CreateElementNs { tag, root, ns } => {
                     self.interpreter.CreateElementNs(tag, root, ns)
@@ -123,15 +121,27 @@ impl WebsysDom {
                 DomEdit::RemoveEventListener { root, event } => {
                     self.interpreter.RemoveEventListener(root, event)
                 }
-                DomEdit::SetText { root, text } => self.interpreter.SetText(root, text),
+
+                DomEdit::RemoveAttribute { root, name } => {
+                    self.interpreter.RemoveAttribute(root, name)
+                }
+
+                DomEdit::CreateTextNode { text, root } => {
+                    let text = serde_wasm_bindgen::to_value(text).unwrap();
+                    self.interpreter.CreateTextNode(text, root)
+                }
+                DomEdit::SetText { root, text } => {
+                    let text = serde_wasm_bindgen::to_value(text).unwrap();
+                    self.interpreter.SetText(root, text)
+                }
                 DomEdit::SetAttribute {
                     root,
                     field,
                     value,
                     ns,
-                } => self.interpreter.SetAttribute(root, field, value, ns),
-                DomEdit::RemoveAttribute { root, name } => {
-                    self.interpreter.RemoveAttribute(root, name)
+                } => {
+                    let value = serde_wasm_bindgen::to_value(value).unwrap();
+                    self.interpreter.SetAttribute(root, field, value, ns)
                 }
             }
         }
