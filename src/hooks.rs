@@ -7,12 +7,15 @@ use dioxus_html::{on::*, KeyCode};
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use std::{
     any::Any,
-    borrow::BorrowMut,
     cell::RefCell,
+    collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
+use stretch2::{prelude::Layout, Stretch};
+
+use crate::TuiNode;
 
 // a wrapper around the input state for easier access
 // todo: fix loop
@@ -108,6 +111,7 @@ impl InnerInputState {
                             if state.1.contains(&m.buttons) {
                                 // if we already pressed a button and there is another button released the button crossterm sends is the button remaining
                                 if state.1.len() > 1 {
+                                    evt.0 = "mouseup";
                                     state.1 = vec![m.buttons];
                                 }
                                 // otherwise some other button was pressed. In testing it was consistantly this mapping
@@ -129,7 +133,6 @@ impl InnerInputState {
                     }
                     state.0.buttons = buttons;
                     m.buttons = buttons;
-                    // println!("{buttons}")
                 }
                 None => {
                     self.mouse = Some((
@@ -151,17 +154,194 @@ impl InnerInputState {
                     .filter(|k2| k2.0.key == k.key && k2.1.elapsed() < MAX_REPEAT_TIME)
                     .is_some();
                 k.repeat = repeat;
-                let mut new = clone_keyboard_data(k);
-                new.repeat = repeat;
+                let new = clone_keyboard_data(k);
                 self.last_key_pressed = Some((new, Instant::now()));
             }
         }
     }
 
-    fn update(&mut self, evts: &mut [EventCore]) {
-        for e in evts {
-            self.apply_event(e)
+    fn update<'a>(
+        &mut self,
+        dom: &'a VirtualDom,
+        evts: &mut Vec<EventCore>,
+        resolved_events: &mut Vec<UserEvent>,
+        layout: &Stretch,
+        layouts: &mut HashMap<ElementId, TuiNode<'a>>,
+        node: &'a VNode<'a>,
+    ) {
+        struct Data<'b> {
+            new_pos: (i32, i32),
+            old_pos: Option<(i32, i32)>,
+            clicked: bool,
+            released: bool,
+            wheel_delta: f64,
+            mouse_data: &'b MouseData,
+            wheel_data: &'b Option<WheelData>,
+        };
+
+        fn layout_contains_point(layout: &Layout, point: (i32, i32)) -> bool {
+            layout.location.x as i32 <= point.0
+                && layout.location.x as i32 + layout.size.width as i32 >= point.0
+                && layout.location.y as i32 <= point.1
+                && layout.location.y as i32 + layout.size.height as i32 >= point.1
         }
+
+        fn get_mouse_events<'c, 'd>(
+            dom: &'c VirtualDom,
+            resolved_events: &mut Vec<UserEvent>,
+            layout: &Stretch,
+            layouts: &HashMap<ElementId, TuiNode<'c>>,
+            node: &'c VNode<'c>,
+            data: &'d Data<'d>,
+        ) -> HashSet<&'static str> {
+            match node {
+                VNode::Fragment(f) => {
+                    let mut union = HashSet::new();
+                    for child in f.children {
+                        union = union
+                            .union(&get_mouse_events(
+                                dom,
+                                resolved_events,
+                                layout,
+                                layouts,
+                                child,
+                                data,
+                            ))
+                            .copied()
+                            .collect();
+                    }
+                    return union;
+                }
+
+                VNode::Component(vcomp) => {
+                    let idx = vcomp.scope.get().unwrap();
+                    let new_node = dom.get_scope(idx).unwrap().root_node();
+                    return get_mouse_events(dom, resolved_events, layout, layouts, new_node, data);
+                }
+
+                VNode::Placeholder(_) => return HashSet::new(),
+
+                VNode::Element(_) | VNode::Text(_) => {}
+            }
+
+            let id = node.try_mounted_id().unwrap();
+            let node = layouts.get(&id).unwrap();
+
+            let node_layout = layout.layout(node.layout).unwrap();
+
+            let previously_contained = data
+                .old_pos
+                .filter(|pos| layout_contains_point(node_layout, *pos))
+                .is_some();
+            let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+            match node.node {
+                VNode::Element(el) => {
+                    let mut events = HashSet::new();
+                    if previously_contained || currently_contains {
+                        for c in el.children {
+                            events = events
+                                .union(&get_mouse_events(
+                                    dom,
+                                    resolved_events,
+                                    layout,
+                                    layouts,
+                                    c,
+                                    data,
+                                ))
+                                .copied()
+                                .collect();
+                        }
+                    }
+                    let mut try_create_event = |name| {
+                        // only trigger event if the event was not triggered already by a child
+                        if events.insert(name) {
+                            resolved_events.push(UserEvent {
+                                scope_id: None,
+                                priority: EventPriority::Medium,
+                                name,
+                                element: Some(el.id.get().unwrap()),
+                                data: Arc::new(clone_mouse_data(data.mouse_data)),
+                            })
+                        }
+                    };
+                    if currently_contains {
+                        if !previously_contained {
+                            try_create_event("mouseenter");
+                            try_create_event("mouseover");
+                        }
+                        if data.clicked {
+                            try_create_event("mousedown");
+                        }
+                        if data.released {
+                            try_create_event("mouseup");
+                            match data.mouse_data.button {
+                                0 => try_create_event("click"),
+                                2 => try_create_event("contextmenu"),
+                                _ => (),
+                            }
+                        }
+                        if let Some(w) = data.wheel_data {
+                            if data.wheel_delta != 0.0 {
+                                resolved_events.push(UserEvent {
+                                    scope_id: None,
+                                    priority: EventPriority::Medium,
+                                    name: "wheel",
+                                    element: Some(el.id.get().unwrap()),
+                                    data: Arc::new(clone_wheel_data(w)),
+                                })
+                            }
+                        }
+                    } else {
+                        if previously_contained {
+                            try_create_event("mouseleave");
+                            try_create_event("mouseout");
+                        }
+                    }
+                    events
+                }
+                VNode::Text(_) => HashSet::new(),
+                _ => todo!(),
+            }
+        }
+
+        let previous_mouse = self
+            .mouse
+            .as_ref()
+            .map(|m| (clone_mouse_data(&m.0), m.1.clone()));
+        // println!("{previous_mouse:?}");
+
+        self.wheel = None;
+
+        for e in evts.iter_mut() {
+            self.apply_event(e);
+        }
+
+        // resolve hover events
+        if let Some(mouse) = &self.mouse {
+            let new_pos = (mouse.0.screen_x, mouse.0.screen_y);
+            let old_pos = previous_mouse
+                .as_ref()
+                .map(|m| (m.0.screen_x, m.0.screen_y));
+            let clicked =
+                (!mouse.0.buttons & previous_mouse.as_ref().map(|m| m.0.buttons).unwrap_or(0)) > 0;
+            let released =
+                (mouse.0.buttons & !previous_mouse.map(|m| m.0.buttons).unwrap_or(0)) > 0;
+            let wheel_delta = self.wheel.as_ref().map_or(0.0, |w| w.delta_y);
+            let mouse_data = &mouse.0;
+            let wheel_data = &self.wheel;
+            let data = Data {
+                new_pos,
+                old_pos,
+                clicked,
+                released,
+                wheel_delta,
+                mouse_data,
+                wheel_data,
+            };
+            get_mouse_events(dom, resolved_events, layout, layouts, node, &data);
+        }
+
         // for s in &self.subscribers {
         //     s();
         // }
@@ -210,7 +390,13 @@ impl RinkInputHandler {
         )
     }
 
-    pub fn resolve_events(&self, dom: &mut VirtualDom) {
+    pub fn get_events<'a>(
+        &self,
+        dom: &'a VirtualDom,
+        layout: &Stretch,
+        layouts: &mut HashMap<ElementId, TuiNode<'a>>,
+        node: &'a VNode<'a>,
+    ) -> Vec<UserEvent> {
         // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
         fn inner(
             queue: &Vec<(&'static str, Arc<dyn Any + Send + Sync>)>,
@@ -249,25 +435,31 @@ impl RinkInputHandler {
 
         let mut resolved_events = Vec::new();
 
-        (*self.state)
-            .borrow_mut()
-            .update(&mut (*self.queued_events).borrow_mut());
+        (*self.state).borrow_mut().update(
+            dom,
+            &mut (*self.queued_events).borrow_mut(),
+            &mut resolved_events,
+            layout,
+            layouts,
+            node,
+        );
 
         let events: Vec<_> = self
             .queued_events
             .replace(Vec::new())
             .into_iter()
+            // these events were added in the update stage
+            .filter(|e| !["mousedown", "mouseup", "mousemove", "drag", "wheel"].contains(&e.0))
             .map(|e| (e.0, e.1.into_any()))
             .collect();
 
-        inner(&events, &mut resolved_events, dom.base_scope().root_node());
+        inner(&events, &mut resolved_events, node);
 
-        for e in resolved_events {
-            dom.handle_message(SchedulerMsg::Event(e));
-        }
+        resolved_events
     }
 }
 
+// translate crossterm events into dioxus events
 fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
     let (name, data): (&str, EventData) = match evt {
         TermEvent::Key(k) => {

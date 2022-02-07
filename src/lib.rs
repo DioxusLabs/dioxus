@@ -90,12 +90,10 @@ pub fn render_vdom(
             terminal.clear().unwrap();
 
             loop {
-                // resolve events before rendering
-                handler.resolve_events(vdom);
-
                 /*
                 -> collect all the nodes with their layout
                 -> solve their layout
+                -> resolve events
                 -> render the nodes in the right place with tui/crosstream
                 -> while rendering, apply styling
 
@@ -111,10 +109,11 @@ pub fn render_vdom(
                 let root_node = vdom.base_scope().root_node();
                 layout::collect_layout(&mut layout, &mut nodes, vdom, root_node);
                 /*
-                Compute the layout given th terminal size
+                Compute the layout given the terminal size
                 */
                 let node_id = root_node.try_mounted_id().unwrap();
                 let root_layout = nodes[&node_id].layout;
+                let mut events = Vec::new();
 
                 terminal.draw(|frame| {
                     // size is guaranteed to not change when rendering
@@ -130,9 +129,16 @@ pub fn render_vdom(
                             },
                         )
                         .unwrap();
+
+                    // resolve events before rendering
+                    events = handler.get_events(vdom, &layout, &mut nodes, root_node);
                     render::render_vnode(frame, &layout, &mut nodes, vdom, root_node);
                     assert!(nodes.is_empty());
                 })?;
+
+                for e in events {
+                    vdom.handle_message(SchedulerMsg::Event(e));
+                }
 
                 use futures::future::{select, Either};
                 {
