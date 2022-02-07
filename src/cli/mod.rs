@@ -1,5 +1,3 @@
-use structopt::StructOpt;
-
 pub mod build;
 pub mod cfg;
 pub mod clean;
@@ -8,17 +6,38 @@ pub mod create;
 pub mod serve;
 pub mod translate;
 
+use std::{io::Write, path::PathBuf};
+use crate::{cfg::ConfigOptsBuild, gen_page};
+use clap::{Parser};
+use serde::Deserialize;
+use std::{
+    fs::remove_dir_all,
+    process::{Command, Stdio},
+};
+use std::{fs::File};
+use std::{
+    io::{Read},
+};
+use regex::Regex;
+use crate::{error::Result, Error};
+use crate::{cfg::ConfigOptsServe, server, CrateConfig};
+use html_parser::Dom;
+use html_parser::Element;
+use html_parser::Node;
+use std::fmt::{Display, Formatter};
+use std::process::exit;
+
 /// Build, bundle, & ship your Dioxus app.
 ///
 ///
-#[derive(StructOpt)]
-#[structopt(name = "dioxus")]
+#[derive(Parser, Debug)]
+#[clap(name = "dioxus")]
 pub struct Cli {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     pub action: Commands,
 
     /// Enable verbose logging.
-    #[structopt(short)]
+    #[clap(short)]
     pub v: bool,
     //
     // // note: dioxus is still roughly compatible with trunk
@@ -27,7 +46,7 @@ pub struct Cli {
     // pub config: Option<PathBuf>,
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub enum Commands {
     /// Build the Rust WASM app and all of its assets.
     Build(build::Build),

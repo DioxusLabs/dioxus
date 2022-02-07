@@ -1,15 +1,4 @@
-use std::{
-    fs::File,
-    io::{Read, Write},
-    path::PathBuf,
-    process::{Command, Stdio},
-};
-
-use regex::Regex;
-use serde::Deserialize;
-use structopt::StructOpt;
-
-use crate::{error::Result, Error};
+use super::*;
 
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Default, Deserialize, StructOpt)]

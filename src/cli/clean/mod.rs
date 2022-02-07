@@ -1,13 +1,7 @@
-use std::{
-    fs::remove_dir_all,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
-
-use structopt::StructOpt;
+use super::*;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, Parser)]
 #[structopt(name = "clean")]
 pub struct Clean {}
 

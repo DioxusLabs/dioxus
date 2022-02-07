@@ -1,10 +1,7 @@
-use std::{fs::File, io::Write};
-
-use serde::Deserialize;
-use structopt::StructOpt;
+use super::*;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, Deserialize, StructOpt)]
+#[derive(Clone, Debug, Deserialize, Parser)]
 #[structopt(name = "config")]
 pub enum Config {
     /// Init `Dioxus.toml` for project/folder.

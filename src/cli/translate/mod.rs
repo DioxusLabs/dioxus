@@ -1,16 +1,7 @@
-use anyhow::Result;
-use html_parser::Dom;
-use html_parser::Element;
-use html_parser::Node;
-#[allow(unused_imports)]
-use std::fmt::{Display, Formatter};
-use std::io::Read;
-use std::path::PathBuf;
-use std::process::exit;
-use structopt::StructOpt;
+use super::*;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, Parser)]
 #[structopt(name = "translate")]
 pub struct Translate {
     /// Activate debug mode

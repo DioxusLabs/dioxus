@@ -1,10 +1,7 @@
-use std::path::PathBuf;
-use structopt::StructOpt;
-
-use serde::Deserialize;
+use super::*;
 
 /// Config options for the build system.
-#[derive(Clone, Debug, Default, Deserialize, StructOpt)]
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBuild {
     /// The index HTML file to drive the bundling process [default: index.html]
     #[structopt(parse(from_os_str))]
@@ -24,7 +21,7 @@ pub struct ConfigOptsBuild {
     pub platform: String,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, StructOpt)]
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsServe {
     /// The index HTML file to drive the bundling process [default: index.html]
     #[structopt(parse(from_os_str))]

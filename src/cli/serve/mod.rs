@@ -1,9 +1,7 @@
-use crate::{cfg::ConfigOptsServe, gen_page, server, CrateConfig};
-use std::{io::Write, path::PathBuf, process::{Command, Stdio}};
-use structopt::StructOpt;
+use super::*;
 
 /// Run the WASM project on dev-server
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, Parser)]
 #[structopt(name = "serve")]
 pub struct Serve {
     #[structopt(flatten)]
