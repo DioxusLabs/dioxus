@@ -1,3 +1,5 @@
+#![allow(clippy::unused_unit)]
+
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
 use web_sys::{Element, Node};

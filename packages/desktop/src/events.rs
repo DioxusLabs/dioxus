@@ -15,15 +15,11 @@ struct ImEvent {
     contents: serde_json::Value,
 }
 
-pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
-    let ims: Vec<ImEvent> = serde_json::from_value(val).unwrap();
-
-    let ImEvent {
-        event,
-        mounted_dom_id,
-        contents,
-    } = ims.into_iter().next().unwrap();
-
+pub fn trigger_from_serialized(
+    event: String,
+    mounted_dom_id: u64,
+    contents: serde_json::Value,
+) -> UserEvent {
     // let scope_id = ScopeId(scope as usize);
     let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
 

@@ -73,7 +73,6 @@ pub use wry;
 pub use wry::application as tao;
 use wry::{
     application::event_loop::EventLoopProxy,
-    webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
 
@@ -179,35 +178,49 @@ pub fn launch_with_props<P: 'static + Send>(
                     .unwrap()
                     .with_url("dioxus://index.html/")
                     .unwrap()
-                    .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
-                        match req.method.as_str() {
-                            "user_event" => {
-                                let event = events::trigger_from_serialized(req.params.unwrap());
+                    .with_ipc_handler(move |_window: &Window, req| {
+                        #[derive(serde::Serialize, serde::Deserialize)]
+                        #[serde(tag = "type")]
+                        enum RpcEvent {
+                            #[serde(rename = "user_event")]
+                            UserEvent {
+                                event: String,
+                                mounted_dom_id: u64,
+                                contents: serde_json::Value,
+                            },
+
+                            #[serde(rename = "browser_open")]
+                            BrowserOpen { href: String },
+
+                            #[serde(rename = "initialize")]
+                            Initialize,
+                        }
+
+                        match serde_json::from_str(&req).unwrap() {
+                            RpcEvent::UserEvent {
+                                event,
+                                mounted_dom_id,
+                                contents,
+                            } => {
+                                let event = events::trigger_from_serialized(
+                                    event,
+                                    mounted_dom_id,
+                                    contents,
+                                );
                                 log::trace!("User event: {:?}", event);
                                 sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
                             }
-                            "initialize" => {
+                            RpcEvent::Initialize => {
                                 is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let _ = proxy.send_event(UserWindowEvent::Update);
                             }
-                            "browser_open" => {
-                                println!("browser_open");
-                                let data = req.params.unwrap();
-                                log::trace!("Open browser: {:?}", data);
-                                if let Some(arr) = data.as_array() {
-                                    if let Some(temp) = arr[0].as_object() {
-                                        if temp.contains_key("href") {
-                                            let url = temp.get("href").unwrap().as_str().unwrap();
-                                            if let Err(e) = webbrowser::open(url) {
-                                                log::error!("Open Browser error: {:?}", e);
-                                            }
-                                        }
-                                    }
+                            RpcEvent::BrowserOpen { href } => {
+                                log::trace!("Open browser: {:?}", href);
+                                if let Err(e) = webbrowser::open(&href) {
+                                    log::error!("Open Browser error: {:?}", e);
                                 }
                             }
-                            _ => {}
                         }
-                        None
                     })
                     .with_custom_protocol(String::from("dioxus"), move |request| {
                         // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
@@ -258,7 +271,8 @@ pub fn launch_with_props<P: 'static + Send>(
                             .as_ref()
                             .map(|handler| handler(window, evet))
                             .unwrap_or_default()
-                    });
+                    })
+                    .with_dev_tool(true);
 
                 for (name, handler) in cfg.protocos.drain(..) {
                     webview = webview.with_custom_protocol(name, handler)

@@ -2,7 +2,7 @@ export function main() {
   let root = window.document.getElementById("main");
   if (root != null) {
     window.interpreter = new Interpreter(root);
-    window.rpc.call("initialize");
+    window.ipc.postMessage(JSON.stringify({ type: "initialize" }));
   }
 }
 export class Interpreter {
@@ -204,11 +204,22 @@ export class Interpreter {
               // todo call prevent default if it's the right type of event
               if (shouldPreventDefault !== `onclick`) {
                 if (target.tagName == "A") {
+                  event.preventDefault();
                   const href = target.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
-                    window.rpc.call("browser_open", { href });
+                    window.ipc.postMessage(
+                      JSON.stringify({
+                        type: "browser_open",
+                        href,
+                      })
+                    );
                   }
                 }
+              }
+
+              // also prevent buttons from submitting
+              if (target.tagName == "BUTTON") {
+                event.preventDefault();
               }
             }
             // walk the tree to find the real element
@@ -255,11 +266,15 @@ export class Interpreter {
             if (realId == null) {
               return;
             }
-            window.rpc.call("user_event", {
-              event: edit.event_name,
-              mounted_dom_id: parseInt(realId),
-              contents: contents,
-            });
+
+            window.ipc.postMessage(
+              JSON.stringify({
+                type: "user_event",
+                event: edit.event_name,
+                mounted_dom_id: parseInt(realId),
+                contents: contents,
+              })
+            );
           }
         };
         this.NewEventListener(edit.event_name, edit.root, handler);
