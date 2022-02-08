@@ -204,11 +204,17 @@ export class Interpreter {
               // todo call prevent default if it's the right type of event
               if (shouldPreventDefault !== `onclick`) {
                 if (target.tagName == "A") {
+                  event.preventDefault();
                   const href = target.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
                     window.rpc.call("browser_open", { href });
                   }
                 }
+              }
+
+              // also prevent buttons from submitting
+              if (target.tagName == "BUTTON") {
+                event.preventDefault();
               }
             }
             // walk the tree to find the real element
