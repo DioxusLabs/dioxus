@@ -271,11 +271,14 @@ pub fn launch_with_props<P: 'static + Send>(
                             .as_ref()
                             .map(|handler| handler(window, evet))
                             .unwrap_or_default()
-                    })
-                    .with_dev_tool(true);
+                    });
 
                 for (name, handler) in cfg.protocos.drain(..) {
                     webview = webview.with_custom_protocol(name, handler)
+                }
+
+                if cfg!(debug_assertions) {
+                    webview = webview.with_dev_tool(true);
                 }
 
                 desktop.webviews.insert(window_id, webview.build().unwrap());
