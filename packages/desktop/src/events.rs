@@ -5,7 +5,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use dioxus_core::{ElementId, EventPriority, UserEvent};
-use dioxus_html::on::*;
+use dioxus_html::on::{
+    AnimationData, ClipboardData, CompositionData, FocusData, FormData, KeyboardData, MediaData,
+    MouseData, PointerData, SelectionData, ToggleData, TouchData, TransitionData, WheelData,
+};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImEvent {
@@ -15,16 +18,16 @@ struct ImEvent {
     contents: serde_json::Value,
 }
 
-pub fn trigger_from_serialized(
-    event: String,
+pub(crate) fn trigger_from_serialized(
+    event: &str,
     mounted_dom_id: u64,
     contents: serde_json::Value,
 ) -> UserEvent {
     // let scope_id = ScopeId(scope as usize);
     let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
 
-    let name = event_name_from_typ(&event);
-    let event = make_synthetic_event(&event, contents);
+    let name = event_name_from_typ(event);
+    let event = make_synthetic_event(event, contents);
 
     UserEvent {
         name,
@@ -36,11 +39,9 @@ pub fn trigger_from_serialized(
 }
 
 fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Send + Sync> {
+    #[allow(clippy::match_same_arms)]
     match name {
-        "copy" | "cut" | "paste" => {
-            //
-            Arc::new(ClipboardData {})
-        }
+        "copy" | "cut" | "paste" => Arc::new(ClipboardData {}),
         "compositionend" | "compositionstart" | "compositionupdate" => {
             Arc::new(serde_json::from_value::<CompositionData>(val).unwrap())
         }
@@ -48,10 +49,7 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
             let evt = serde_json::from_value::<KeyboardData>(val).unwrap();
             Arc::new(evt)
         }
-        "focus" | "blur" | "focusout" | "focusin" => {
-            //
-            Arc::new(FocusData {})
-        }
+        "focus" | "blur" | "focusout" | "focusin" => Arc::new(FocusData {}),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
@@ -68,10 +66,7 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             Arc::new(serde_json::from_value::<PointerData>(val).unwrap())
         }
-        "select" => {
-            //
-            Arc::new(serde_json::from_value::<SelectionData>(val).unwrap())
-        }
+        "select" => Arc::new(serde_json::from_value::<SelectionData>(val).unwrap()),
 
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
             Arc::new(serde_json::from_value::<TouchData>(val).unwrap())

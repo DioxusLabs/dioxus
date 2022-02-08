@@ -1,6 +1,6 @@
 //! Dioxus Desktop Renderer
 //!
-//! Render the Dioxus VirtualDom using the platform's native WebView implementation.
+//! Render the Dioxus [`VirtualDom`] using the platform's native [`WebView`] implementation.
 //!
 //! # Desktop
 //!
@@ -58,7 +58,7 @@ pub mod events;
 use cfg::DesktopConfig;
 pub use desktop_context::use_window;
 use desktop_context::DesktopContext;
-use dioxus_core::*;
+use dioxus_core::{Component, SchedulerMsg, VirtualDom};
 use std::{
     collections::{HashMap, VecDeque},
     sync::atomic::AtomicBool,
@@ -76,9 +76,9 @@ use wry::{
     webview::{WebView, WebViewBuilder},
 };
 
-/// Launch the WebView and run the event loop.
+/// Launch the [`WebView`] and run the event loop.
 ///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
+/// This function will start a multithreaded Tokio runtime as well the [`WebView`] event loop.
 ///
 /// ```rust
 /// use dioxus::prelude::*;
@@ -94,14 +94,14 @@ use wry::{
 /// }
 /// ```
 pub fn launch(root: Component) {
-    launch_with_props(root, (), |c| c)
+    launch_with_props(root, (), |c| c);
 }
 
-/// Launch the WebView and run the event loop, with configuration.
+/// Launch the [`WebView`] and run the event loop, with configuration.
 ///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
+/// This function will start a multithreaded Tokio runtime as well the [`WebView`] event loop.
 ///
-/// You can configure the WebView window with a configuration closure
+/// You can configure the [`WebView`] window with a configuration closure
 ///
 /// ```rust
 /// use dioxus::prelude::*;
@@ -120,15 +120,20 @@ pub fn launch_cfg(
     root: Component,
     config_builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
-    launch_with_props(root, (), config_builder)
+    launch_with_props(root, (), config_builder);
 }
 
-/// Launch the WebView and run the event loop, with configuration and root props.
+/// Launch the [`WebView`] and run the event loop, with configuration and root props.
 ///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
+/// This function will start a multithreaded Tokio runtime as well the [`WebView`] event loop.
 ///
-/// You can configure the WebView window with a configuration closure
+/// You can configure the [`WebView`] window with a configuration closure
 ///
+/// ## Panics
+///
+///
+///
+/// ## Example
 /// ```rust
 /// use dioxus::prelude::*;
 ///
@@ -146,6 +151,7 @@ pub fn launch_cfg(
 ///     })
 /// }
 /// ```
+#[allow(clippy::too_many_lines)]
 pub fn launch_with_props<P: 'static + Send>(
     root: Component<P>,
     props: P,
@@ -202,70 +208,28 @@ pub fn launch_with_props<P: 'static + Send>(
                                 mounted_dom_id,
                                 contents,
                             } => {
-                                let event = events::trigger_from_serialized(
-                                    event,
-                                    mounted_dom_id,
-                                    contents,
-                                );
-                                log::trace!("User event: {:?}", event);
-                                sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
+                                sender
+                                    .unbounded_send(SchedulerMsg::Event(
+                                        events::trigger_from_serialized(
+                                            &event,
+                                            mounted_dom_id,
+                                            contents,
+                                        ),
+                                    ))
+                                    .expect("Sending scheduler should never fail");
                             }
                             RpcEvent::Initialize => {
                                 is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let _ = proxy.send_event(UserWindowEvent::Update);
                             }
                             RpcEvent::BrowserOpen { href } => {
-                                log::trace!("Open browser: {:?}", href);
                                 if let Err(e) = webbrowser::open(&href) {
                                     log::error!("Open Browser error: {:?}", e);
                                 }
                             }
                         }
                     })
-                    .with_custom_protocol(String::from("dioxus"), move |request| {
-                        // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
-                        // For now, we only serve two pieces of content which get included as bytes into the final binary.
-                        let path = request.uri().replace("dioxus://", "");
-
-                        // all assets shouldbe called from index.html
-                        let trimmed = path.trim_start_matches("index.html/");
-
-                        if trimmed.is_empty() {
-                            wry::http::ResponseBuilder::new()
-                                .mimetype("text/html")
-                                .body(include_bytes!("./index.html").to_vec())
-                        } else if trimmed == "index.js" {
-                            wry::http::ResponseBuilder::new()
-                                .mimetype("text/javascript")
-                                .body(dioxus_interpreter_js::INTERPRTER_JS.as_bytes().to_vec())
-                        } else {
-                            // Read the file content from file path
-                            use std::fs::read;
-
-                            let path_buf = std::path::Path::new(trimmed).canonicalize()?;
-                            let cur_path = std::path::Path::new(".").canonicalize()?;
-
-                            if !path_buf.starts_with(cur_path) {
-                                return wry::http::ResponseBuilder::new()
-                                    .status(wry::http::status::StatusCode::FORBIDDEN)
-                                    .body(String::from("Forbidden").into_bytes());
-                            }
-
-                            if !path_buf.exists() {
-                                return wry::http::ResponseBuilder::new()
-                                    .status(wry::http::status::StatusCode::NOT_FOUND)
-                                    .body(String::from("Not Found").into_bytes());
-                            }
-
-                            let mime = mime_guess::from_path(&path_buf).first_or_octet_stream();
-
-                            // do not let path searching to go two layers beyond the caller level
-                            let data = read(path_buf)?;
-                            let meta = format!("{}", mime);
-
-                            wry::http::ResponseBuilder::new().mimetype(&meta).body(data)
-                        }
-                    })
+                    .with_custom_protocol(String::from("dioxus"), dioxus_protocol)
                     .with_file_drop_handler(move |window, evet| {
                         file_handler
                             .as_ref()
@@ -274,7 +238,7 @@ pub fn launch_with_props<P: 'static + Send>(
                     });
 
                 for (name, handler) in cfg.protocos.drain(..) {
-                    webview = webview.with_custom_protocol(name, handler)
+                    webview = webview.with_custom_protocol(name, handler);
                 }
 
                 if cfg!(debug_assertions) {
@@ -289,19 +253,18 @@ pub fn launch_with_props<P: 'static + Send>(
             } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
-
                 WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
                     if let Some(view) = desktop.webviews.get_mut(&window_id) {
-                        let _ = view.resize();
+                        if let Err(e) = view.resize() {
+                            log::error!("Failed to resize webview {:?}", e);
+                        }
                     }
                 }
-
                 _ => {}
             },
 
-            Event::UserEvent(_evt) => {
-                //
-                match _evt {
+            Event::UserEvent(user_window_event) => {
+                match user_window_event {
                     UserWindowEvent::Update => desktop.try_load_ready_webviews(),
                     UserWindowEvent::DragWindow => {
                         // this loop just run once, because dioxus-desktop is unsupport multi-window.
@@ -340,11 +303,6 @@ pub fn launch_with_props<P: 'static + Send>(
                     }
                 }
             }
-            Event::MainEventsCleared => {}
-            Event::Resumed => {}
-            Event::Suspended => {}
-            Event::LoopDestroyed => {}
-            Event::RedrawRequested(_id) => {}
             _ => {}
         }
     })
@@ -371,7 +329,7 @@ pub struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub fn new_on_tokio<P: Send + 'static>(
+    fn new_on_tokio<P: Send + 'static>(
         root: Component<P>,
         props: P,
         evt: EventLoopProxy<UserWindowEvent>,
@@ -419,7 +377,7 @@ impl DesktopController {
 
                     let _ = evt.send_event(UserWindowEvent::Update);
                 }
-            })
+            });
         });
 
         Self {
@@ -440,17 +398,62 @@ impl DesktopController {
         }
     }
 
-    pub fn try_load_ready_webviews(&mut self) {
+    fn try_load_ready_webviews(&mut self) {
         if self.is_ready.load(std::sync::atomic::Ordering::Relaxed) {
             let mut queue = self.pending_edits.write().unwrap();
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
 
             while let Some(edit) = queue.pop_back() {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
-                    .unwrap();
+                    .expect("Internal scripts should not fail");
             }
         } else {
             println!("waiting for ready");
         }
+    }
+}
+
+fn dioxus_protocol(request: &wry::http::Request) -> wry::Result<wry::http::Response> {
+    // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
+    // For now, we only serve two pieces of content which get included as bytes into the final binary.
+    let path = request.uri().replace("dioxus://", "");
+
+    // all assets shouldbe called from index.html
+    let trimmed = path.trim_start_matches("index.html/");
+
+    if trimmed.is_empty() {
+        wry::http::ResponseBuilder::new()
+            .mimetype("text/html")
+            .body(include_bytes!("./index.html").to_vec())
+    } else if trimmed == "index.js" {
+        wry::http::ResponseBuilder::new()
+            .mimetype("text/javascript")
+            .body(dioxus_interpreter_js::INTERPRTER_JS.as_bytes().to_vec())
+    } else {
+        // Read the file content from file path
+        use std::fs::read;
+
+        let path_buf = std::path::Path::new(trimmed).canonicalize()?;
+        let cur_path = std::path::Path::new(".").canonicalize()?;
+
+        if !path_buf.starts_with(cur_path) {
+            return wry::http::ResponseBuilder::new()
+                .status(wry::http::status::StatusCode::FORBIDDEN)
+                .body(String::from("Forbidden").into_bytes());
+        }
+
+        if !path_buf.exists() {
+            return wry::http::ResponseBuilder::new()
+                .status(wry::http::status::StatusCode::NOT_FOUND)
+                .body(String::from("Not Found").into_bytes());
+        }
+
+        let mime = mime_guess::from_path(&path_buf).first_or_octet_stream();
+
+        // do not let path searching to go two layers beyond the caller level
+        let data = read(path_buf)?;
+        let meta = format!("{}", mime);
+
+        wry::http::ResponseBuilder::new().mimetype(&meta).body(data)
     }
 }
