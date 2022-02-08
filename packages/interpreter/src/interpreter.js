@@ -210,6 +210,7 @@ export class Interpreter {
               // todo call prevent default if it's the right type of event
               if (shouldPreventDefault !== `onclick`) {
                 if (target.tagName == "A") {
+                  event.preventDefault();
                   const href = target.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
                     window.rpc.call("browser_open", { href });
