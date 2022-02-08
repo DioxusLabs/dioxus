@@ -6,12 +6,6 @@ export function main() {
   }
 }
 export class Interpreter {
-  root;
-  stack;
-  listeners;
-  handlers;
-  lastNodeWasText;
-  nodes;
   constructor(root) {
     this.root = root;
     this.stack = [root];
