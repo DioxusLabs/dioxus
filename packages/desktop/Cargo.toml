@@ -37,7 +37,7 @@ dioxus-interpreter-js = { path = "../interpreter", version = "^0.0.0" }
 [features]
 default = ["tokio_runtime"]
 tokio_runtime = ["tokio"]
-deb11 = ["wry/ayatana"]
+ayatana = ["wry/ayatana"]
 
 
 [dev-dependencies]
