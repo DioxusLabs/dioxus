@@ -217,6 +217,11 @@ export class Interpreter {
                   }
                 }
               }
+
+              // also prevent buttons from submitting
+              if (target.tagName == "BUTTON") {
+                event.preventDefault();
+              }
             }
             // walk the tree to find the real element
             while (realId == null) {
