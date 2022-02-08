@@ -39,7 +39,8 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
     {
-        Self::new(_val)
+        Self::new_boxed(_val)
+        // Self::new(_val)
     }
 
     /// force this call onto the stack
