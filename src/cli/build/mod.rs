@@ -1,16 +1,15 @@
 use super::*;
 
-
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Parser)]
-#[structopt(name = "build")]
+#[clap(name = "build")]
 pub struct Build {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub build: ConfigOptsBuild,
 }
 
 impl Build {
-    pub fn build(self) -> anyhow::Result<()> {
+    pub fn build(self) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the release state.
@@ -28,7 +27,7 @@ impl Build {
                 crate::builder::build_desktop(&crate_config)?;
             }
             _ => {
-                return Err(anyhow::anyhow!("Unsoppurt platform target."));
+                return custom_error!("Unsoppurt platform target.");
             }
         }
 

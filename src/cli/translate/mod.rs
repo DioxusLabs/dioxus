@@ -2,24 +2,24 @@ use super::*;
 
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Parser)]
-#[structopt(name = "translate")]
+#[clap(name = "translate")]
 pub struct Translate {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub component: bool,
 
     /// Input file
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub file: Option<String>,
 
     /// Output file, stdout if not present
-    #[structopt(parse(from_os_str))]
+    #[clap(parse(from_os_str))]
     pub output: Option<PathBuf>,
 }
 
 impl Translate {
-    pub fn translate(self) -> anyhow::Result<()> {
+    pub fn translate(self) -> Result<()> {
         let Translate {
             component,
             output,

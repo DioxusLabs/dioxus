@@ -2,14 +2,14 @@ use super::*;
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
-#[structopt(name = "serve")]
+#[clap(name = "serve")]
 pub struct Serve {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub serve: ConfigOptsServe,
 }
 
 impl Serve {
-    pub async fn serve(self) -> anyhow::Result<()> {
+    pub async fn serve(self) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the relase state.
@@ -49,7 +49,7 @@ impl Serve {
                 return Ok(());
             }
             _ => {
-                return Err(anyhow::anyhow!("Unsoppurt platform target."));
+                return custom_error!("Unsoppurt platform target.");
             }
         }
 
@@ -62,7 +62,7 @@ impl Serve {
         Ok(())
     }
 
-    pub fn regen_dev_page(crate_config: &CrateConfig) -> anyhow::Result<()> {
+    pub fn regen_dev_page(crate_config: &CrateConfig) -> Result<()> {
         let serve_html = gen_page(&crate_config.dioxus_config, true);
 
         let mut file = std::fs::File::create(

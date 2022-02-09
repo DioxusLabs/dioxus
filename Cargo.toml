@@ -31,6 +31,8 @@ tokio = { version = "1.16.1", features = ["full"] }
 atty = "0.2.14"
 regex = "1.5.4"
 chrono = "0.4.19"
+anyhow = "1.0.53"
+hyper = "0.14.17"
 
 axum = { version = "0.4.5", features = ["ws", "headers"] }
 tower-http = { version = "0.2.2", features = ["fs", "trace"] }
