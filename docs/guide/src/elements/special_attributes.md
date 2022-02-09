@@ -15,7 +15,7 @@ In this section, we'll cover special attributes built into Dioxus:
 
 One thing you might've missed from React is the ability to render raw HTML directly to the DOM. If you're working with pre-rendered assets, output from templates, or output from a JS library, then you might want to pass HTML directly instead of going through Dioxus. In these instances, reach for `dangerous_inner_html`.
 
-For example, shipping a markdown-to-Dioxus converter might significantly bloat your final application size. Instead, you'll want to pre-render your markdown to HTML and then include the HTML directly in your output. We use this approach for the `http://dioxuslabs.com` site:
+For example, shipping a markdown-to-Dioxus converter might significantly bloat your final application size. Instead, you'll want to pre-render your markdown to HTML and then include the HTML directly in your output. We use this approach for the [Dioxus homepage](https://dioxuslabs.com):
 
 
 ```rust
@@ -30,14 +30,16 @@ fn BlogPost(cx: Scope) -> Element {
 }
 ```
 
-> Note! This attribute is called "dangerous_inner_html" because it is DANGEROUS. If you're not careful, you can easily expose cross-site-scripting (XSS) attacks to your users. If you're handling untrusted input, make sure to escape your HTML before passing it into `dangerous_inner_html`.
+> Note! This attribute is called "dangerous_inner_html" because it is **dangerous** to pass it data you don't trust. If you're not careful, you can easily expose cross-site-scripting (XSS) attacks to your users.
+> 
+> If you're handling untrusted input, make sure to sanitize your HTML before passing it into `dangerous_inner_html` – or just pass it to a Text Element to escape any HTML tags.
 
 
 ## Boolean Attributes
 
 Most attributes, when rendered, will be rendered exactly as the input you provided. However, some attributes are considered "boolean" attributes and just their presence determines whether or not they affect the output. For these attributes, a provided value of `"false"` will cause them to be removed from the target element.
 
-So the input of:
+So this RSX:
 
 ```rust
 rsx!{
@@ -47,14 +49,12 @@ rsx!{
     }
 }
 ```
-would actually render an output of 
+wouldn't actually render the `hidden` attribute: 
 ```html
 <div>hello</div> 
 ```
 
-Notice how `hidden` is not present in the final output?
-
-Not all attributes work like this however. Only *these specific attributes* are whitelisted to have this behavior:
+Not all attributes work like this however. *Only the following attributes* have this behavior:
 
 - `allowfullscreen`
 - `allowpaymentrequest`
@@ -131,7 +131,7 @@ pub fn StateInput<'a>(cx: Scope<'a, InputProps<'a>>) -> Element {
 
 ## Controlled inputs and `value`, `checked`, and `selected`
 
-In Dioxus, there is a distinction between controlled and uncontrolled inputs. Most inputs you'll use are "controlled," meaning we both drive the `value` of the input and react to the `oninput`.
+In Dioxus, there is a distinction between controlled and uncontrolled inputs. Most inputs you'll use are controlled, meaning we both drive the `value` of the input and react to the `oninput`.
 
 Controlled components:
 ```rust
@@ -153,7 +153,7 @@ let value = use_ref(&cx, || String::from("hello world"));
 rsx! {
     input {
         oninput: move |evt| *value.write_silent() = evt.value.clone(),
-        // no "value" is driven
+        // no "value" is driven here – the input keeps track of its own value, and you can't change it
     }
 }
 ```
@@ -162,7 +162,7 @@ rsx! {
 
 For element fields that take a handler like `onclick` or `oninput`, Dioxus will let you attach a closure. Alternatively, you can also pass a string using normal attribute syntax and assign this attribute on the DOM.
 
-This lets you escape into JavaScript (only if your renderer can execute JavaScript).
+This lets you use JavaScript (only if your renderer can execute JavaScript).
 
 ```rust
 rsx!{
@@ -179,14 +179,14 @@ rsx!{
 
 ## Wrapping up
 
-We've reached just about the end of what you can do with elements without venturing into "advanced" territory.
-
 In this chapter, we learned:
 - How to declare elements
 - How to conditionally render parts of your UI
 - How to render lists
 - Which attributes are "special"
 
+<!-- todo
 There's more to elements! For further reading, check out:
 
-- [Custom Elements]()
+- [Custom Elements]() 
+-->
