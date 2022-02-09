@@ -38,7 +38,7 @@ impl Serve {
                 crate::builder::build(&crate_config)?;
             }
             "desktop" => {
-                crate::builder::build_desktop(&crate_config)?;
+                crate::builder::build_desktop(&crate_config, true)?;
 
                 match &crate_config.executable {
                     crate::ExecutableType::Binary(name)

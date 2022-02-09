@@ -35,7 +35,7 @@ impl Build {
                 crate::builder::build(&crate_config)?;
             }
             "desktop" => {
-                crate::builder::build_desktop(&crate_config)?;
+                crate::builder::build_desktop(&crate_config, false)?;
             }
             _ => {
                 return Err(anyhow::anyhow!("Unsoppurt platform target."));

@@ -120,7 +120,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     Ok(())
 }
 
-pub fn build_desktop(config: &CrateConfig) -> Result<()> {
+pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
     log::info!("🚅 Running build [Desktop] command...");
 
     let mut cmd = Command::new("cargo");
@@ -146,7 +146,9 @@ pub fn build_desktop(config: &CrateConfig) -> Result<()> {
     }
 
     if output.status.success() {
-        if config.out_dir.is_dir() {
+        // this code will clean the output dir.
+        // if using the serve, we will not clean the out_dir.
+        if config.out_dir.is_dir() && !is_serve {
             remove_dir_all(&config.out_dir)?;
         }
 
