@@ -1,5 +1,9 @@
 use crate::{cfg::ConfigOptsServe, gen_page, server, CrateConfig};
-use std::{io::Write, path::PathBuf, process::{Command, Stdio}};
+use std::{
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 use structopt::StructOpt;
 
 /// Run the WASM project on dev-server
@@ -21,7 +25,15 @@ impl Serve {
             crate_config.as_example(self.serve.example.unwrap());
         }
 
-        match self.serve.platform.as_str() {
+        let platform = self.serve.platform.unwrap_or_else(|| {
+            crate_config
+                .dioxus_config
+                .application
+                .default_platform
+                .clone()
+        });
+
+        match platform.as_str() {
             "web" => {
                 crate::builder::build(&crate_config)?;
             }

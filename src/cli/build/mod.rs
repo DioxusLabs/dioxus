@@ -22,7 +22,15 @@ impl Build {
             crate_config.as_example(self.build.example.unwrap());
         }
 
-        match self.build.platform.as_str() {
+        let platform = self.build.platform.unwrap_or_else(|| {
+            crate_config
+                .dioxus_config
+                .application
+                .default_platform
+                .clone()
+        });
+
+        match platform.as_str() {
             "web" => {
                 crate::builder::build(&crate_config)?;
             }

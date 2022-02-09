@@ -31,7 +31,7 @@ impl Default for DioxusConfig {
         Self {
             application: ApplicationConfig {
                 name: "dioxus".into(),
-                platforms: vec![String::from("web")],
+                default_platform: "web".to_string(),
                 out_dir: Some(PathBuf::from("dist")),
             },
             web: WebConfig {
@@ -59,7 +59,7 @@ impl Default for DioxusConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfig {
     pub name: String,
-    pub platforms: Vec<String>,
+    pub default_platform: String,
     pub out_dir: Option<PathBuf>,
 }
 
