@@ -6,30 +6,25 @@ pub mod create;
 pub mod serve;
 pub mod translate;
 
-use crate::custom_error;
-use crate::{cfg::ConfigOptsBuild, gen_page};
-use crate::{cfg::ConfigOptsServe, server, CrateConfig};
-use crate::{error::Result, Error};
-use clap::Parser;
-use html_parser::Dom;
-use html_parser::Element;
-use html_parser::Node;
+use crate::{
+    cfg::{ConfigOptsBuild, ConfigOptsServe},
+    custom_error,
+    error::Result,
+    gen_page, server, CrateConfig, Error,
+};
+use clap::{Parser, Subcommand};
+use html_parser::{Dom, Element, Node};
 use regex::Regex;
 use serde::Deserialize;
-use std::fmt::{Display, Formatter};
-use std::fs::File;
-use std::io::Read;
-use std::process::exit;
 use std::{
-    fs::remove_dir_all,
-    process::{Command, Stdio},
+    fmt::{Display, Formatter},
+    fs::{remove_dir_all, File},
+    io::{Read, Write},
+    path::PathBuf,
+    process::{exit, Command, Stdio},
 };
-use std::{io::Write, path::PathBuf};
-use clap::{Subcommand};
 
 /// Build, bundle, & ship your Dioxus app.
-///
-///
 #[derive(Parser)]
 #[clap(name = "dioxus")]
 pub struct Cli {
@@ -39,7 +34,6 @@ pub struct Cli {
     /// Enable verbose logging.
     #[clap(short)]
     pub v: bool,
-    //
     // // note: dioxus is still roughly compatible with trunk
     // /// Path to the Trunk config file [default: Trunk.toml]
     // #[clap(long, parse(from_os_str), env = "TRUNK_CONFIG")]

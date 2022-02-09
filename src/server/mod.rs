@@ -10,8 +10,7 @@ use notify::{RecommendedWatcher, Watcher};
 use std::{path::PathBuf, sync::Arc};
 use tower_http::services::ServeDir;
 
-use crate::Result;
-use crate::{builder, serve::Serve, CrateConfig};
+use crate::{builder, serve::Serve, CrateConfig, Result};
 use tokio::sync::broadcast;
 
 struct WsRelodState {

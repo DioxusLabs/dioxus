@@ -1,6 +1,5 @@
 use super::*;
 
-
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Deserialize, Subcommand)]
 #[clap(name = "config")]
