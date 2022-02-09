@@ -91,6 +91,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         .out_name(&dioxus_config.application.name)
         .generate(&bindgen_outdir)?;
 
+    // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
         overwrite: true,
         skip_exist: false,
@@ -183,8 +184,36 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
             file_name
         };
 
-        create_dir_all(&config.out_dir)?;
+        if !config.out_dir.is_dir() {
+            create_dir_all(&config.out_dir)?;
+        }
         copy(res_path, &config.out_dir.join(target_file))?;
+
+        // this code will copy all public file to the output dir
+        if config.public_dir.is_dir() {
+            let copy_options = fs_extra::dir::CopyOptions {
+                overwrite: true,
+                skip_exist: false,
+                buffer_size: 64000,
+                copy_inside: false,
+                content_only: false,
+                depth: 0,
+            };
+
+            for entry in std::fs::read_dir(&config.public_dir)? {
+                let path = entry?.path();
+                if path.is_file() {
+                    std::fs::copy(&path, &config.out_dir.join(path.file_name().unwrap()))?;
+                } else {
+                    match fs_extra::dir::copy(&path, &config.out_dir, &copy_options) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::warn!("Error copying dir: {}", e);
+                        }
+                    }
+                }
+            }
+        }
 
         log::info!(
             "🚩 Build completed: [./{}]",
