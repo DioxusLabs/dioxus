@@ -6,10 +6,12 @@ on:
       - master
     paths:
       - docs/**
+      - .github/workflows/docs.yml
 
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    environment: docs
     steps:
       - uses: actions/checkout@v2
 
@@ -32,4 +34,4 @@ jobs:
           target-folder: docs/nightly
           repository-name: dioxuslabs/docsite
           clean: false
-          # token: ${{ secrets.DEPLOY_KEY }} # let's pretend I don't need it for now
+          token: ${{ secrets.DEPLOY_KEY }} # let's pretend I don't need it for now
