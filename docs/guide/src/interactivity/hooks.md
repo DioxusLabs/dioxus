@@ -80,7 +80,7 @@ This pattern might seem strange at first, but it can be a significant upgrade ov
 ## Rules of hooks
 
 Hooks are sensitive to how they are used. To use hooks, you must abide by the
-"rules of hooks" (borrowed from react)](https://reactjs.org/docs/hooks-rules.html):
+"rules of hooks" ([borrowed from react](https://reactjs.org/docs/hooks-rules.html)):
 
 - Functions with "use_" should not be called in callbacks
 - Functions with "use_" should not be called out of order
@@ -245,19 +245,10 @@ fn example(cx: Scope) -> Element {
 
 By default, we bundle a handful of hooks in the Dioxus-Hooks package. Feel free to click on each hook to view its definition and associated documentation.
 
-- [use_state](https://docs.rs/dioxus_hooks/use_state) - store state with ergonomic updates
-- [use_ref](https://docs.rs/dioxus_hooks/use_ref) - store non-clone state with a refcell
-- [use_future](https://docs.rs/dioxus_hooks/use_future) - store a future to be polled after initialization
-- [use_coroutine](https://docs.rs/dioxus_hooks/use_coroutine) - store a future that can be stopped/started/communicated with
-- [use_noderef](https://docs.rs/dioxus_hooks/use_noderef) - store a handle to the native element
-- [use_callback](https://docs.rs/dioxus_hooks/use_callback) - store a callback that implements PartialEq for memoization
-- [use_provide_context](https://docs.rs/dioxus_hooks/use_provide_context) - expose state to descendent components
-- [use_context](https://docs.rs/dioxus_hooks/use_context) - consume state provided by `use_provide_context`
-
-For a more in-depth guide to building new hooks, checkout out the advanced hook building guide in the reference.
-
-## Wrapping up
-
-In this chapter, we learned about the mechanics and intricacies of storing state inside a component.
-
-In the next chapter, we'll cover event listeners in similar depth, and how to combine the two to build interactive components.
+- [use_state](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_state.html) - store state with ergonomic updates
+- [use_ref](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_ref.html) - store non-clone state with a refcell
+- [use_future](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_future.html) - store a future to be polled after initialization
+- [use_coroutine](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_coroutine.html) - store a future that can be stopped/started/communicated with
+- [use_context_provider](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_context_provider.html) - expose state to descendent components
+- [use_context](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_context.html) - consume state provided by `use_provide_context`
+- [use_suspense](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_suspense.html)
