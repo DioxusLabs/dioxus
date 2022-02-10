@@ -8,6 +8,7 @@ on:
       - src
       - lib.rs
       - Cargo.toml
+      - .github
   pull_request:
 
 jobs:
