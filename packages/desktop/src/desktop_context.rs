@@ -48,6 +48,10 @@ impl DesktopContext {
         let _ = self.proxy.send_event(UserWindowEvent::Maximize(maximized));
     }
 
+    pub fn visible(&self, visible: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::Visible(visible));
+    }
+
     /// close window
     pub fn close(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::CloseWindow);
@@ -61,6 +65,16 @@ impl DesktopContext {
     /// set resizable state
     pub fn resizable(&self, resizable: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Resizable(resizable));
+    }
+
+    pub fn always_on_top(&self, top: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::AlwaysOnTop(top));
+    }
+
+    pub fn cursor_visible(&self, visible: bool) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::CursorVisible(visible));
     }
 
     /// set window title

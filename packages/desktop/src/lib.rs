@@ -299,6 +299,12 @@ pub fn launch_with_props<P: 'static + Send>(
                         // close window
                         *control_flow = ControlFlow::Exit;
                     }
+                    UserWindowEvent::Visible(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_visible(state);
+                        }
+                    }
                     UserWindowEvent::Minimize(state) => {
                         // this loop just run once, because dioxus-desktop is unsupport multi-window.
                         for webview in desktop.webviews.values() {
@@ -333,6 +339,19 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_resizable(state);
                         }
                     }
+                    UserWindowEvent::AlwaysOnTop(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_always_on_top(state);
+                        }
+                    }
+
+                    UserWindowEvent::CursorVisible(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_cursor_visible(state);
+                        }
+                    }
 
                     UserWindowEvent::SetTitle(content) => {
                         for webview in desktop.webviews.values() {
@@ -363,10 +382,14 @@ pub enum UserWindowEvent {
     DragWindow,
     CloseWindow,
     FocusWindow,
+    Visible(bool),
     Minimize(bool),
     Maximize(bool),
     Resizable(bool),
+    AlwaysOnTop(bool),
     Fullscreen(Box<Option<Fullscreen>>),
+
+    CursorVisible(bool),
 
     SetTitle(String),
     SetDecorations(bool),
