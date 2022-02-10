@@ -1,6 +1,6 @@
 # Adding Interactivity
 
-So far, we've learned how to describe the structure and properties of our user interfaces. Unfortunately, they're static and quite a bit uninteresting. In this chapter, we're going to learn how to add interactivity through events, state, and tasks.
+So far, we've learned how to describe the structure and properties of our user interfaces. Unfortunately, they're static and quite uninteresting. In this chapter, we're going to learn how to add interactivity through events, state, and tasks.
 
 ## Primer on interactivity
 
@@ -178,6 +178,30 @@ In general, Dioxus should be plenty fast for most use cases. However, there are 
 - 3) **Move local state down**. Dioxus will need to re-check child components of your app if the root component is constantly being updated. You'll get best results if rapidly-changing state does not cause major re-renders.
 
 Don't worry - Dioxus is fast. But, if your app needs *extreme performance*, then take a look at the `Performance Tuning` in the `Advanced Guides` book.
+
+## The `Scope` object
+
+Though very similar to React, Dioxus is different in a few ways. Most notably, React components will not have a `Scope` parameter in the component declaration.
+
+Have you ever wondered how the `useState()` call works in React without a `this` object to actually store the state?
+
+```javascript
+// in React:
+function Component(props) {
+    // This state persists between component renders, but where does it live?
+    let [state, set_state] = useState(10);
+}
+```
+
+React uses global variables to store this information. However, global mutable variables must be carefully managed and are broadly discouraged in Rust programs. Because Dioxus needs to work with the rules of Rust it uses the `Scope` rather than a global state object to maintain some internal bookkeeping.
+
+That's what the `Scope` object is: a place for the Component to store state, manage listeners, and allocate elements. Advanced users of Dioxus will want to learn how to properly leverage the `Scope` object to build robust and performant extensions for Dioxus.
+
+```rust
+fn Post(cx: Scope<PostProps>) -> Element {
+    cx.render(rsx!("hello"))
+}
+```
 
 ## Moving On
 

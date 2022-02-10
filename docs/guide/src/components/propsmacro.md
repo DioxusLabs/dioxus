@@ -1,81 +1,77 @@
 # Component Properties
+Dioxus components are functions that accept Props as input and output an Element. In fact, the `App` function you saw in the previous chapter was a component with no Props! Most components, however, will need to take some Props to render something useful – so, in this section, we'll learn about props:
 
-All component `properties` must implement the `Properties` trait. The `Props` macro automatically derives this trait but adds some additional functionality. In this section, we'll learn about:
-
-- Using the props macro
+- Deriving the Props trait
 - Memoization through PartialEq
 - Optional fields on props
 - The inline_props macro    
 
+## Props
+All properties that your components take must implement the `Props` trait. We can derive this trait on our own structs to define a Component's props.
 
+> Dioxus `Props` is very similar to [@idanarye](https://github.com/idanarye)'s [TypedBuilder crate](https://github.com/idanarye/rust-typed-builder) and supports many of the same parameters.
 
-## Using the Props Macro
+There are 2 flavors of Props: owned and borrowed.
 
-All `properties` that your components take must implement the `Properties` trait. The simplest props you can use is simply `()` - or no value at all. `Scope` is generic over your component's props and actually defaults to `()`.
+- All Owned Props must implement `PartialEq`
+- Borrowed props [borrow](https://doc.rust-lang.org/beta/rust-by-example/scope/borrow.html) values from the parent Component
 
-```rust
-// this scope
-Scope<()> 
+### Owned Props
 
-// is the same as this scope
-Scope
-```
-
-If we wanted to define a component with its own props, we would create a new struct and tack on the `Props` derive macro:
-
-```rust
-#[derive(Props)]
-struct MyProps {
-    name: String
-}
-```
-This particular code will not compile - all `Props` must either a) borrow from their parent or b) implement `PartialEq`. Since our props do not borrow from their parent, they are `'static` and must implement PartialEq.
-
-For an owned example:
+Owned Props are very simple – they don't borrow anything. Example:
 ```rust
 #[derive(Props, PartialEq)]
 struct MyProps {
     name: String
 }
-```
 
-For a borrowed example:
-```rust
-#[derive(Props)]
-struct MyProps<'a> {
-    name: &'a str
-}
-```
-
-Then, to use these props in our component, we simply swap out the generic parameter on scope.
-
-For owned props, we just drop it in:
-
-```rust
 fn Demo(cx: Scope<MyProps>) -> Element {
     todo!()
 }
 ```
 
-However, for props that borrow data, we need to explicitly declare lifetimes. Rust does not know that our props and our component share the same lifetime, so must explicitly attach a lifetime in two places:
+> The simplest Owned Props you can have is `()` - or no value at all. This is what the `App` Component takes as props. `Scope` accepts a generic for the Props which defaults to `()`.
+> 
+> ```rust
+>// this scope
+>Scope<()> 
+>
+>// is the same as this scope
+>Scope
+>```
+
+### Borrowed Props
+
+Owning a string works well as long as you only need it in one place. But what if we need to pass a String from a `Post` Component to a `TitleCard` subcomponent? A naive solution might be to [`.clone()`](https://doc.rust-lang.org/std/clone/trait.Clone.html) the String, creating a copy of it – but this would be inefficient, especially for larger Strings.
+
+Rust allows for something more efficient – borrowing the String as a `&str`. Instead of creating a copy, this will give us a reference to the original String – this is what Borrowed Props are for!
+
+However, if we create a reference a String, Rust will require us to show that the String will not go away while we're using the reference. Otherwise, if we referenced something that doesn't exist, Bad Things could happen. To prevent this, Rust asks us to define a lifetime for the reference:
 
 ```rust
-fn Demo<'a>(cx: Scope<'a, MyProps<'a>>) -> Element {
-    todo!()
+#[derive(Props)]
+struct TitleCardProps<'a> {
+    title: &'a str,
+}
+
+fn TitleCard<'a>(cx: Scope<'a, TitleCardProps<'a>>) -> Element {
+    cx.render(rsx!{
+        h1 { "{cx.props.title}" }
+    })
 }
 ```
 
-By putting the `'a` lifetime on Scope and our Props, we can now borrow data from our parent and pass it on to our children.
-
+This lifetime `'a` tells the compiler that as long as `title` exists, the String it was created from must also exist. Dioxus will happily accept such a component.
 
 ## Memoization
 
-If you're coming from React, you might be wondering how memoization fits in. For our purpose, memoization is the process in which we check if a component actually needs to be re-rendered when its props change. If a component's properties change but they wouldn't necessarily affect the output, then we don't need to actually re-render the component.
+Dioxus uses Memoization for a more efficient user interface. Memoization is the process in which we check if a component actually needs to be re-rendered when its props change. If a component's properties change but they wouldn't affect the output, then we don't need to re-render the component, saving time!
 
 For example, let's say we have a component that has two children:
 
 ```rust
 fn Demo(cx: Scope) -> Element {
+    // don't worry about these 2, we'll cover them later
     let name = use_state(&cx, || String::from("bob"));
     let age = use_state(&cx, || 21);
 
@@ -88,35 +84,15 @@ fn Demo(cx: Scope) -> Element {
 
 If `name` changes but `age` does not, then there is no reason to re-render our `Age` component since the contents of its props did not meaningfully change.
 
+Dioxus memoizes owned components. It uses `PartialEq` to determine if a component needs rerendering, or if it has stayed the same. This is why you must derive PartialEq!
 
-Dioxus implements memoization by default, which means you can always rely on props with `PartialEq` or no props at all to act as barriers in your app. This can be extremely useful when building larger apps where properties frequently change. By moving our state into a global state management solution, we can achieve precise, surgical re-renders, improving the performance of our app.
+> This means you can always rely on props with `PartialEq` or no props at all to act as barriers in your app. This can be extremely useful when building larger apps where properties frequently change. By moving our state into a global state management solution, we can achieve precise, surgical re-renders, improving the performance of our app.
 
+Borrowed Props cannot be safely memoized. However, this is not a problem – Dioxus relies on the memoization of their parents to determine if they need to be rerendered.
 
-However, for components that borrow values from their parents, we cannot safely memoize them.
+## Optional Props
 
-For example, this component borrows `&str` - and if the parent re-renders, then the actual reference to `str` will probably be different. Since the data is borrowed, we need to pass a new version down the tree.
-
-```rust
-#[derive(Props)]
-struct MyProps<'a> {
-    name: &'a str
-}
-
-fn Demo<'a>(cx: Scope<'a, MyProps<'a>>) -> Element {
-    todo!()
-}
-```
-
-TLDR: 
-- if you see props with a lifetime or generics, it cannot be memoized
-- memoization is done automatically through the `PartialEq` trait
-- components with empty props can act as memoization barriers
-
-## Optional Fields
-
-Dioxus' `Props` macro is very similar to [@idanarye](https://github.com/idanarye)'s [TypedBuilder crate](https://github.com/idanarye/rust-typed-builder) and supports many of the same parameters.
-
-For example, you can easily create optional fields by attaching the `optional` modifier to a field.
+You can easily create optional fields by attaching the `optional` modifier to a field:
 
 ```rust
 #[derive(Props, PartialEq)]
@@ -128,7 +104,7 @@ struct MyProps {
 }
 
 fn Demo(cx: MyProps) -> Element {
-    ...
+    todo!()
 }
 ```
 
@@ -147,21 +123,16 @@ The `optional` modifier is a combination of two separate modifiers: `default` an
 
 - `default` - automatically add the field using its `Default` implementation
 - `strip_option` - automatically wrap values at the call site in `Some`
-- `optional` - combine both `default` and `strip_option`
+- `optional` - alias for `default` and `strip_option`
 - `into` - automatically call `into` on the value at the callsite
 
 For more information on how tags work, check out the [TypedBuilder](https://github.com/idanarye/rust-typed-builder) crate. However, all attributes for props in Dioxus are flattened (no need for `setter` syntax) and the `optional` field is new.
 
+## The `inline_props` macro
 
+So far, every Component function we've seen had a corresponding ComponentProps struct to pass in props. This was quite verbose... Wouldn't it be nice to have props as simple function arguments? Then we wouldn't need to define a Props struct, and instead of typing `cx.props.whatever`, we could just use `whatever` directly!
 
-
-## The inline_props macro
-
-Yes - *another* macro! However, this one is entirely optional.
-
-For internal components, we provide the `inline_props` macro, which will let you embed your `Props` definition right into the function arguments of your component.
-
-Our title card above would be transformed from:
+`inline_props` allows you to do just that. Instead of typing the "full" version:
 
 ```rust
 #[derive(Props, PartialEq)]
@@ -173,10 +144,10 @@ fn TitleCard(cx: Scope<TitleCardProps>) -> Element {
     cx.render(rsx!{
         h1 { "{cx.props.title}" }
     })
-}   
+}
 ```
 
-to:
+...you can define a function that accepts props as arguments. Then, just annotate it with `#[inline_props]`, and the macro will turn it into a regular Component for you:
 
 ```rust
 #[inline_props]
@@ -184,9 +155,7 @@ fn TitleCard(cx: Scope, title: String) -> Element {
     cx.render(rsx!{
         h1 { "{title}" }
     })
-}   
+}
 ```
 
-Again, this macro is optional and should not be used by library authors since you have less fine-grained control over documentation and optionality.
-
-However, it's great for quickly throwing together an app without dealing with *any* extra boilerplate.
+> While the new Component is shorter and easier to read, this macro should not be used by library authors since you have less control over Prop documentation.

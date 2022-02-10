@@ -1,4 +1,3 @@
-
 # Reusing, Importing, and Exporting Components
 
 As your application grows in size, you'll want to start breaking your UI into components and, eventually, different files. This is a great idea to encapsulate functionality of your UI and scale your team.
@@ -67,6 +66,8 @@ fn ActionCard(Scope<ActionCardProps>) -> Element {}
 We should also create a `mod.rs` file in the `post` folder so we can use it from our `main.rs`. Our `Post` component and its props will go into this file.
 
 ```rust
+// src/post/mod.rs
+
 use dioxus::prelude::*;
 
 #[derive(PartialEq, Props)]
@@ -289,14 +290,3 @@ use dioxus::prelude::*;
 pub struct ActionCardProps {}
 pub fn ActionCard(Scope<ActionCardProps>) -> Element {}
 ```
-
-## Moving forward
-
-Next chapter, we'll start to add use code to hide and show Elements with conditional rendering.
-
-For more reading on components:
-
-- [Components in depth]()
-- [Lifecycles]()
-- [The Context object]()
-- [Optional Prop fields]()
