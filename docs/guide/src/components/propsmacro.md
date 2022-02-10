@@ -7,7 +7,7 @@ Dioxus components are functions that accept Props as input and output an Element
 - The inline_props macro    
 
 ## Props
-All properties that your components take must implement the `Props` trait. We can derive this trait on our own structs to define a Component's props.
+The input of your Component must be passed in a single struct, which must implement the `Props` trait. We can derive this trait automatically with `#[derive(Props)]`.
 
 > Dioxus `Props` is very similar to [@idanarye](https://github.com/idanarye)'s [TypedBuilder crate](https://github.com/idanarye/rust-typed-builder) and supports many of the same parameters.
 
@@ -20,15 +20,40 @@ There are 2 flavors of Props: owned and borrowed.
 
 Owned Props are very simple – they don't borrow anything. Example:
 ```rust
-#[derive(Props, PartialEq)]
-struct MyProps {
-    name: String
+// Remember: owned props must implement PartialEq!
+#[derive(PartialEq, Props)]
+struct VoteButtonProps {
+    score: i32
 }
 
-fn Demo(cx: Scope<MyProps>) -> Element {
-    todo!()
+fn VoteButton(cx: Scope<VoteButtonProps>) -> Element {
+    cx.render(rsx!{
+        div {
+            div { "+" }
+            div { "{cx.props.score}"}
+            div { "-" }
+        }
+    })
 }
 ```
+
+Now, we can use the VoteButton Component like we would use a regular HTML element:
+
+```rust
+fn main() {
+    dioxus::desktop::launch(App);
+}
+
+fn App(cx: Scope) -> Element {
+    cx.render(rsx! (
+        VoteButton { score: 42 }
+    ))
+}
+```
+
+And we can see that the Component indeed gets rendered:
+
+![Screenshot of running app. Text: "+ \ 42 \ -"](component_example_votes.png)
 
 > The simplest Owned Props you can have is `()` - or no value at all. This is what the `App` Component takes as props. `Scope` accepts a generic for the Props which defaults to `()`.
 > 
@@ -42,7 +67,7 @@ fn Demo(cx: Scope<MyProps>) -> Element {
 
 ### Borrowed Props
 
-Owning a string works well as long as you only need it in one place. But what if we need to pass a String from a `Post` Component to a `TitleCard` subcomponent? A naive solution might be to [`.clone()`](https://doc.rust-lang.org/std/clone/trait.Clone.html) the String, creating a copy of it – but this would be inefficient, especially for larger Strings.
+Owning props works well if your props are easy to copy around - like a single number. But what if we need to pass a larger data type, like a String from an `App` Component to a `TitleCard` subcomponent? A naive solution might be to [`.clone()`](https://doc.rust-lang.org/std/clone/trait.Clone.html) the String, creating a copy of it for the subcomponent – but this would be inefficient, especially for larger Strings.
 
 Rust allows for something more efficient – borrowing the String as a `&str`. Instead of creating a copy, this will give us a reference to the original String – this is what Borrowed Props are for!
 
@@ -61,7 +86,21 @@ fn TitleCard<'a>(cx: Scope<'a, TitleCardProps<'a>>) -> Element {
 }
 ```
 
-This lifetime `'a` tells the compiler that as long as `title` exists, the String it was created from must also exist. Dioxus will happily accept such a component.
+This lifetime `'a` tells the compiler that as long as `title` exists, the String it was created from must also exist. Dioxus will happily accept such a component – we can now render it alongside our VoteButton!
+
+```rust
+fn App(cx: Scope) -> Element {
+    // For the sake of an example, we create the &str here.
+    // But you might as well borrow it from an owned String type.
+    let hello = "Hello Dioxus!";
+
+    cx.render(rsx! (
+        VoteButton { score: 42 },
+        TitleCard { title: hello }
+    ))
+}
+```
+![New screenshot of running app, now including a "Hello Dioxus!" heading.](component_example_title.png)
 
 ## Memoization
 
