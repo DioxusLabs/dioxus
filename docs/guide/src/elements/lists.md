@@ -130,7 +130,7 @@ Remember: keys let Dioxus uniquely identify an item among its siblings. A well-c
 
 You might be tempted to use an item's index in the array as its key. In fact, that’s what Dioxus will use if you don’t specify a key at all. This is only acceptable if you can guarantee that the list is constant – i.e., no re-ordering, additions or deletions. In all other cases, do not use the index for the key – it will lead to the performance problems described above.
 
-Note that if you pass the key to a [custom component](./components.md) you've made, it won't receive the key as a prop. It’s only used as a hint by Dioxus itself. If your component needs an ID, you have to pass it as a separate prop:
+Note that if you pass the key to a [custom component](../components/index.md) you've made, it won't receive the key as a prop. It’s only used as a hint by Dioxus itself. If your component needs an ID, you have to pass it as a separate prop:
 ```rust
 Post { key: "{key}", id: "{key}" }
 ```
