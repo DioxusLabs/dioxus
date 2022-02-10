@@ -58,11 +58,21 @@ impl DesktopContext {
         let _ = self.proxy.send_event(UserWindowEvent::FocusWindow);
     }
 
+    /// set resizable state
+    pub fn resizable(&self, resizable: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::Resizable(resizable));
+    }
+
     /// set window title
-    pub fn title(&self, title: &str) {
+    pub fn set_title(&self, title: &str) {
         let _ = self
             .proxy
-            .send_event(UserWindowEvent::Title(String::from(title)));
+            .send_event(UserWindowEvent::SetTitle(String::from(title)));
+    }
+
+    /// hide the menu
+    pub fn hide_menu(&self) {
+        let _ = self.proxy.send_event(UserWindowEvent::HideMenu);
     }
 }
 

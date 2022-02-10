@@ -321,10 +321,23 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_focus();
                         }
                     }
-                    UserWindowEvent::Title(content) => {
+
+                    UserWindowEvent::SetTitle(content) => {
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
                             window.set_title(&content);
+                        }
+                    }
+                    UserWindowEvent::Resizable(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_resizable(state);
+                        }
+                    }
+                    UserWindowEvent::HideMenu => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.hide_menu();
                         }
                     }
                 }
@@ -344,10 +357,12 @@ pub enum UserWindowEvent {
     DragWindow,
     CloseWindow,
     FocusWindow,
-
-    Title(String),
     Minimize(bool),
     Maximize(bool),
+    Resizable(bool),
+
+    SetTitle(String),
+    HideMenu,
 }
 
 pub struct DesktopController {
