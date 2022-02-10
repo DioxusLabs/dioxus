@@ -1,6 +1,6 @@
 # Thinking in React
 
-We've finally reached the point in our tutorial where we can talk about the "Theory of React." We've talked about defining a declarative view, but not about the aspects that make our code *reactive*.
+We've finally reached the point in our tutorial where we can talk about the theory of Reactive interfaces. We've talked about defining a declarative view, but not about the aspects that make our code *reactive*.
 
 Understanding the theory of reactive programming is essential to making sense of Dioxus and writing effective, performant UIs.
 

@@ -215,5 +215,3 @@ In this chapter, we learned:
 - How to convert `listeners` into `EventHandlers` for components
 - How to extend any node with custom attributes and children
 
-Next chapter, we'll talk about conditionally rendering parts of your user interface.
-
