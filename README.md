@@ -43,11 +43,11 @@
   <h3>
     <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
+    <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
+    <span> | </span>
     <a href="https://dioxuslabs.com/guide"> Guide (0.1.8) </a>
     <span> | </span>
     <a href="https://dioxuslabs.com/nightly/guide"> Guide (Master) </a>
-    <span> | </span>
-    <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
   </h3>
 </div>
 
