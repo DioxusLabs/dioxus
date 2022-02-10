@@ -1,6 +1,14 @@
-on: [push, pull_request]
-
 name: Rust CI
+
+on:
+  push:
+    paths:
+      - packages
+      - examples
+      - src
+      - lib.rs
+      - Cargo.toml
+  pull_request:
 
 jobs:
   check:
