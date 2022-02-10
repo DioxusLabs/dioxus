@@ -3,13 +3,15 @@ name: Rust CI
 on:
   push:
     paths:
-      - packages
-      - examples
-      - src
+      - packages/**
+      - examples/**
+      - src/**
       - lib.rs
       - Cargo.toml
       - .github
   pull_request:
+    branches:
+      - master
 
 jobs:
   check:
