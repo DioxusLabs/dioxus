@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use dioxus_core::ScopeState;
-use wry::application::event_loop::EventLoopProxy;
+use wry::application::{event_loop::EventLoopProxy, window::Fullscreen};
 
 use crate::UserWindowEvent;
 
@@ -34,44 +34,50 @@ impl DesktopContext {
     /// ```rust
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
-    pub fn drag(&self) {
+    pub fn drag_window(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::DragWindow);
     }
 
     /// set window minimize state
-    pub fn minimize(&self, minimized: bool) {
+    pub fn set_minimized(&self, minimized: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Minimize(minimized));
     }
 
     /// set window maximize state
-    pub fn maximize(&self, maximized: bool) {
+    pub fn set_maximized(&self, maximized: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Maximize(maximized));
     }
 
-    pub fn visible(&self, visible: bool) {
+    pub fn set_visible(&self, visible: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Visible(visible));
     }
 
     /// close window
-    pub fn close(&self) {
+    pub fn close_window(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::CloseWindow);
     }
 
     /// set window to focus
-    pub fn focus(&self) {
+    pub fn set_focus(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::FocusWindow);
     }
 
+    pub fn set_fullscreen(&self, fullscreen: Option<Fullscreen>) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::Fullscreen(Box::new(fullscreen)));
+    }
+
     /// set resizable state
-    pub fn resizable(&self, resizable: bool) {
+    pub fn set_resizable(&self, resizable: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Resizable(resizable));
     }
 
-    pub fn always_on_top(&self, top: bool) {
+    pub fn set_always_on_top(&self, top: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::AlwaysOnTop(top));
     }
 
-    pub fn cursor_visible(&self, visible: bool) {
+    pub fn set_cursor_visible(&self, visible: bool) {
         let _ = self
             .proxy
             .send_event(UserWindowEvent::CursorVisible(visible));
