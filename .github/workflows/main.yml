@@ -6,9 +6,9 @@ on:
       - packages/**
       - examples/**
       - src/**
+      - .github/**
       - lib.rs
       - Cargo.toml
-      - .github
   pull_request:
     branches:
       - master
