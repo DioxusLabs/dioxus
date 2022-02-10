@@ -72,7 +72,7 @@ use tao::{
 pub use wry;
 pub use wry::application as tao;
 use wry::{
-    application::event_loop::EventLoopProxy,
+    application::{event_loop::EventLoopProxy, window::Fullscreen},
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
@@ -315,10 +315,22 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_maximized(state);
                         }
                     }
+                    UserWindowEvent::Fullscreen(fullscreen) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_fullscreen(*fullscreen.clone());
+                        }
+                    }
                     UserWindowEvent::FocusWindow => {
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
                             window.set_focus();
+                        }
+                    }
+                    UserWindowEvent::Resizable(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_resizable(state);
                         }
                     }
 
@@ -328,16 +340,10 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_title(&content);
                         }
                     }
-                    UserWindowEvent::Resizable(state) => {
+                    UserWindowEvent::SetDecorations(state) => {
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
-                            window.set_resizable(state);
-                        }
-                    }
-                    UserWindowEvent::HideMenu => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.hide_menu();
+                            window.set_decorations(state);
                         }
                     }
                 }
@@ -360,9 +366,10 @@ pub enum UserWindowEvent {
     Minimize(bool),
     Maximize(bool),
     Resizable(bool),
+    Fullscreen(Box<Option<Fullscreen>>),
 
     SetTitle(String),
-    HideMenu,
+    SetDecorations(bool),
 }
 
 pub struct DesktopController {

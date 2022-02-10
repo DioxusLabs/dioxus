@@ -71,8 +71,10 @@ impl DesktopContext {
     }
 
     /// hide the menu
-    pub fn hide_menu(&self) {
-        let _ = self.proxy.send_event(UserWindowEvent::HideMenu);
+    pub fn set_decorations(&self, decoration: bool) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::SetDecorations(decoration));
     }
 }
 
