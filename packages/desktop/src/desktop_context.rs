@@ -57,6 +57,13 @@ impl DesktopContext {
     pub fn focus(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::FocusWindow);
     }
+
+    /// set window title
+    pub fn title(&self, title: &str) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::Title(String::from(title)));
+    }
 }
 
 /// use this function can get the `DesktopContext` context.
