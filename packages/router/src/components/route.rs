@@ -12,7 +12,7 @@ pub struct RouteProps<'a> {
     /// The path to match.
     to: &'a str,
 
-    /// The elements to render when the path matches.
+    /// The component to render when the path matches.
     children: Element<'a>,
 
     #[props(default)]
