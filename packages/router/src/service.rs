@@ -1,13 +1,14 @@
+// todo: how does router work in multi-window contexts?
+// does each window have its own router? probably, lol
+
+use crate::platform::RouterProvider;
+use dioxus_core::ScopeId;
 use gloo::history::{BrowserHistory, History, HistoryListener, Location};
 use std::{
     cell::{Cell, Ref, RefCell},
     collections::{HashMap, HashSet},
     rc::Rc,
 };
-
-use dioxus_core::ScopeId;
-
-use crate::platform::RouterProvider;
 
 /// An abstraction over the platform's history API.
 ///
@@ -43,8 +44,6 @@ pub struct RouterService {
     onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
     root_found: Rc<Cell<Option<ScopeId>>>,
     cur_path_params: Rc<RefCell<HashMap<String, String>>>,
-
-    // history: Rc<dyn RouterProvider>,
     history: Rc<RefCell<BrowserHistory>>,
     listener: HistoryListener,
 }
@@ -157,10 +156,12 @@ impl RouterService {
         }
     }
 
+    /// Get the current location of the Router
     pub fn current_location(&self) -> Location {
         self.history.borrow().location().clone()
     }
 
+    /// Get the current params of the router
     pub fn current_path_params(&self) -> Ref<HashMap<String, String>> {
         self.cur_path_params.borrow()
     }
@@ -218,14 +219,4 @@ fn route_matches_path(route: &str, path: &str) -> Option<HashMap<String, String>
     }
 
     Some(matches)
-}
-
-pub struct RouterCfg {
-    initial_route: String,
-}
-
-impl RouterCfg {
-    pub fn new(initial_route: String) -> Self {
-        Self { initial_route }
-    }
 }
