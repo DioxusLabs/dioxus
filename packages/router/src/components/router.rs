@@ -1,11 +1,10 @@
-use dioxus_core::Element;
-
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
+use dioxus_core::Element;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
-use crate::RouterService;
+use crate::{RouterProvider, RouterService};
 
 /// The props for the [`Router`](fn.Router.html) component.
 #[derive(Props)]
@@ -38,9 +37,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     svc.pending_events.borrow_mut().clear();
 
     if any_pending {
-        let location = svc.current_location();
-        let path = location.path();
-        cx.props.onchange.call(path.to_string());
+        cx.props.onchange.call(svc.current_location().to_string());
     }
 
     cx.render(rsx!(

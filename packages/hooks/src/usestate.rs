@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic)]
 
-use dioxus_core::prelude::*;
+use dioxus_core::{prelude::*, to_owned};
 use std::{
     cell::{RefCell, RefMut},
     fmt::{Debug, Display},
@@ -37,7 +37,7 @@ pub fn use_state<'a, T: 'static>(
         let update_callback = cx.schedule_update();
         let slot = Rc::new(RefCell::new(current_val.clone()));
         let setter = Rc::new({
-            crate::to_owned![update_callback, slot];
+            to_owned![update_callback, slot];
             move |new| {
                 {
                     let mut slot = slot.borrow_mut();

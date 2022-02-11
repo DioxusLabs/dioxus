@@ -1,5 +1,4 @@
 use dioxus_core::{ScopeId, ScopeState};
-use gloo::history::{HistoryResult, Location};
 use serde::de::DeserializeOwned;
 use std::{rc::Rc, str::FromStr};
 
@@ -15,11 +14,12 @@ pub struct UseRoute {
 
 impl UseRoute {
     /// This method simply calls the [`Location::query`] method.
-    pub fn query<T>(&self) -> HistoryResult<T>
+    pub fn query<T>(&self) -> crate::Result<T>
     where
         T: DeserializeOwned,
     {
-        self.current_location().query::<T>()
+        todo!()
+        // self.current_location().query::<T>()
     }
 
     /// Returns the nth segment in the path. Paths that end with a slash have
@@ -56,19 +56,23 @@ impl UseRoute {
             .and_then(|v| Some(v.parse::<T>()))
     }
 
-    /// Returns the [Location] for the current route.
-    pub fn current_location(&self) -> Location {
+    /// Returns the [Location] for the current route as a `&str`.
+    pub fn current_location(&self) -> Rc<str> {
         self.router.current_location()
     }
 
+    pub fn native_location<T: 'static>(&self) -> Option<Box<T>> {
+        self.router.native_location()
+    }
+
     fn path_segments(&self) -> Vec<String> {
-        let location = self.router.current_location();
-        let path = location.path();
-        if path == "/" {
-            return vec![String::new()];
+        match self.router.current_location().as_ref() {
+            "/" => vec![String::new()],
+            location => location[1..]
+                .split('/')
+                .map(str::to_string)
+                .collect::<Vec<_>>(),
         }
-        let stripped = &location.path()[1..];
-        stripped.split('/').map(str::to_string).collect::<Vec<_>>()
     }
 }
 

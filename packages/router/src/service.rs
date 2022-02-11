@@ -1,9 +1,7 @@
 // todo: how does router work in multi-window contexts?
 // does each window have its own router? probably, lol
 
-use crate::platform::RouterProvider;
 use dioxus_core::ScopeId;
-use gloo::history::{BrowserHistory, History, HistoryListener, Location};
 use std::{
     cell::{Cell, Ref, RefCell},
     collections::{HashMap, HashSet},
@@ -39,13 +37,18 @@ use std::{
 ///   desktop, there is no way to tap into forward/back for the app unless explicitly set.
 pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
+
     pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
+
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
+
     onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
+
     root_found: Rc<Cell<Option<ScopeId>>>,
+
     cur_path_params: Rc<RefCell<HashMap<String, String>>>,
-    history: Rc<RefCell<BrowserHistory>>,
-    listener: HistoryListener,
+
+    history: Box<dyn RouterProvider>,
 }
 
 pub(crate) enum RouteEvent {
@@ -62,43 +65,50 @@ impl RouterService {
     ///
     /// In most cases, `root_scope` should be `ScopeId(0)`.
     pub fn new(regen_route: Rc<dyn Fn(ScopeId)>, root_scope: ScopeId) -> Self {
-        let history = BrowserHistory::default();
-        let location = history.location();
-        let path = location.path();
-
         let onchange_listeners = Rc::new(RefCell::new(HashSet::new()));
         let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
         let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
         let root_found = Rc::new(Cell::new(None));
 
-        let listener = history.listen({
-            let pending_events = pending_events.clone();
-            let regen_route = regen_route.clone();
-            let root_found = root_found.clone();
-            let slots = slots.clone();
-            let onchange_listeners = onchange_listeners.clone();
-            move || {
-                root_found.set(None);
-                // checking if the route is valid is cheap, so we do it
-                for (slot, root) in slots.borrow_mut().iter().rev() {
-                    regen_route(*slot);
+        let mut history: Box<dyn RouterProvider> = if cfg!(feature = "web") {
+            use gloo::history::{BrowserHistory, History, HistoryListener, Location};
+            let history = BrowserHistory::default();
+            let location = history.location();
+            let path = location.path();
+            let listener = history.listen({
+                dioxus_core::to_owned![
+                    pending_events,
+                    regen_route,
+                    root_found,
+                    slots,
+                    onchange_listeners
+                ];
+                move || {
+                    root_found.set(None);
+                    // checking if the route is valid is cheap, so we do it
+                    for (slot, root) in slots.borrow_mut().iter().rev() {
+                        regen_route(*slot);
+                    }
+
+                    for listener in onchange_listeners.borrow_mut().iter() {
+                        regen_route(*listener);
+                    }
+
+                    // also regenerate the root
+                    regen_route(root_scope);
+
+                    pending_events.borrow_mut().push(RouteEvent::Change)
                 }
+            });
 
-                for listener in onchange_listeners.borrow_mut().iter() {
-                    regen_route(*listener);
-                }
-
-                // also regenerate the root
-                regen_route(root_scope);
-
-                pending_events.borrow_mut().push(RouteEvent::Change)
-            }
-        });
+            Box::new(web::create_router())
+        } else {
+            Box::new(hash::create_router())
+        };
 
         Self {
-            listener,
             root_found,
-            history: Rc::new(RefCell::new(history)),
+            history,
             regen_route,
             slots,
             pending_events,
@@ -113,7 +123,7 @@ impl RouterService {
     ///
     /// This does not modify the current route
     pub fn push_route(&self, route: &str) {
-        self.history.borrow_mut().push(route);
+        self.history.push(route);
     }
 
     pub(crate) fn register_total_route(&self, route: String, scope: ScopeId, fallback: bool) {
@@ -129,8 +139,7 @@ impl RouterService {
             return false;
         }
 
-        let location = self.history.borrow().location();
-        let path = location.path();
+        let path = self.history.path();
 
         let roots = self.slots.borrow();
 
@@ -139,17 +148,15 @@ impl RouterService {
         // fallback logic
         match root {
             Some((id, route)) => {
-                if let Some(params) = route_matches_path(route, path) {
+                if let Some(params) = route_matches_path(route, &path) {
                     self.root_found.set(Some(*id));
                     *self.cur_path_params.borrow_mut() = params;
                     true
+                } else if route.is_empty() {
+                    self.root_found.set(Some(*id));
+                    true
                 } else {
-                    if route == "" {
-                        self.root_found.set(Some(*id));
-                        true
-                    } else {
-                        false
-                    }
+                    false
                 }
             }
             None => false,
@@ -157,8 +164,18 @@ impl RouterService {
     }
 
     /// Get the current location of the Router
-    pub fn current_location(&self) -> Location {
-        self.history.borrow().location().clone()
+    pub fn current_location(&self) -> Rc<str> {
+        self.history.path()
+    }
+
+    pub fn query_current_location(&self) -> HashMap<String, String> {
+        todo!()
+        // self.history.borrow().query()
+    }
+
+    /// Get the current location of the Router
+    pub fn native_location<T: 'static>(&self) -> Option<Box<T>> {
+        self.history.native_location().downcast::<T>().ok()
     }
 
     /// Get the current params of the router
@@ -219,4 +236,117 @@ fn route_matches_path(route: &str, path: &str) -> Option<HashMap<String, String>
     }
 
     Some(matches)
+}
+
+use std::any::Any;
+
+use dioxus_core::ScopeState;
+
+pub(crate) trait RouterProvider {
+    fn push(&self, path: &str);
+    fn path(&self) -> Rc<str>;
+    fn listen(&self, callback: Box<dyn Fn()>);
+    fn native_location(&self) -> Box<dyn Any>;
+}
+
+mod hash {
+    use super::*;
+    use dioxus_core::ScopeState;
+
+    /// a simple cross-platform hash-based router
+    pub struct HashRouter {}
+
+    impl RouterProvider for HashRouter {
+        fn push(&self, path: &str) {
+            todo!()
+        }
+
+        fn path(&self) -> Rc<str> {
+            unimplemented!()
+        }
+
+        fn listen(&self, callback: Box<dyn Fn()>) {
+            unimplemented!()
+        }
+
+        fn native_location(&self) -> Box<dyn Any> {
+            todo!()
+        }
+    }
+
+    pub(crate) fn create_router() -> web::WebRouter {
+        todo!()
+    }
+}
+
+#[cfg(feature = "web")]
+mod web {
+    use super::RouterProvider;
+    use crate::RouteEvent;
+    use dioxus_core::{ScopeId, ScopeState};
+    use gloo::history::HistoryResult;
+    use gloo::history::{BrowserHistory, History, HistoryListener, Location};
+    use std::any::Any;
+    use std::{
+        cell::{Cell, Ref, RefCell},
+        collections::{HashMap, HashSet},
+        rc::Rc,
+    };
+
+    pub struct WebRouter {}
+
+    impl RouterProvider for WebRouter {
+        fn path(&self) -> Rc<str> {
+            unimplemented!()
+        }
+
+        fn listen(&self, callback: Box<dyn Fn()>) {
+            unimplemented!()
+        }
+
+        fn push(&self, path: &str) {
+            todo!()
+        }
+
+        fn native_location(&self) -> Box<dyn Any> {
+            todo!()
+        }
+    }
+
+    pub fn create_router() -> WebRouter {
+        // let history = BrowserHistory::default();
+        // let location = history.location();
+        // let path = location.path();
+
+        // let onchange_listeners = Rc::new(RefCell::new(HashSet::new()));
+        // let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
+        // let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
+        // let root_found = Rc::new(Cell::new(None));
+
+        // let listener = history.listen({
+        //     let pending_events = pending_events.clone();
+        //     let regen_route = regen_route.clone();
+        //     let root_found = root_found.clone();
+        //     let slots = slots.clone();
+        //     let onchange_listeners = onchange_listeners.clone();
+        //     move || {
+        //         root_found.set(None);
+        //         // checking if the route is valid is cheap, so we do it
+        //         for (slot, root) in slots.borrow_mut().iter().rev() {
+        //             regen_route(*slot);
+        //         }
+
+        //         for listener in onchange_listeners.borrow_mut().iter() {
+        //             regen_route(*listener);
+        //         }
+
+        //         // also regenerate the root
+        //         regen_route(root_scope);
+
+        //         pending_events.borrow_mut().push(RouteEvent::Change)
+        //     }
+        // });
+
+        todo!()
+    }
 }

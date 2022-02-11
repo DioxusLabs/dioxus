@@ -33,17 +33,15 @@ web-sys = { version = "0.3", features = [
 ], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
-gloo = { version = "0.5", optional = true }
+gloo = { version = "0.6", optional = true }
 log = "0.4.14"
+thiserror = "1.0.30"
 
 
 [features]
-default = ["derive", "web"]
+default = ["web"]
 web = ["web-sys", "gloo", "js-sys", "wasm-bindgen"]
-desktop = []
-mobile = []
-derive = []
-wasm_test = []
+hash = []
 
 [dev-dependencies]
 console_error_panic_hook = "0.1.7"
@@ -55,6 +53,4 @@ gloo-utils = "0.1.2"
 
 [dev-dependencies.web-sys]
 version = "0.3"
-features = [
-    "Document",
-]
+features = ["Document"]
