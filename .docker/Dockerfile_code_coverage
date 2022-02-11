@@ -1,0 +1,7 @@
+FROM dioxus-test-image
+
+WORKDIR /run_test
+RUN cargo install cargo-tarpaulin
+RUN cargo cache -a
+
+ENTRYPOINT [ "bash" ]

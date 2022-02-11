@@ -1,4 +1,4 @@
-#![allow(unused, non_upper_case_globals)]
+#![allow(unused, non_upper_case_globals, non_snake_case)]
 
 use dioxus::{prelude::*, DomEdit, Mutations, SchedulerMsg, ScopeId};
 use dioxus_core as dioxus;

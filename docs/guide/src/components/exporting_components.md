@@ -1,4 +1,3 @@
-
 # Reusing, Importing, and Exporting Components
 
 As your application grows in size, you'll want to start breaking your UI into components and, eventually, different files. This is a great idea to encapsulate functionality of your UI and scale your team.
@@ -66,6 +65,16 @@ fn ActionCard(Scope<ActionCardProps>) -> Element {}
 
 We should also create a `mod.rs` file in the `post` folder so we can use it from our `main.rs`. Our `Post` component and its props will go into this file.
 
+```rust
+// src/post/mod.rs
+
+use dioxus::prelude::*;
+
+#[derive(PartialEq, Props)]
+struct PostProps {}
+fn Post(Scope<PostProps>) -> Element {}
+```
+
 ```shell
 ├── Cargo.toml
 └── src
@@ -77,8 +86,6 @@ We should also create a `mod.rs` file in the `post` folder so we can use it from
         ├── action.rs
         └── mod.rs
 ```
-
-
 
 In our `main.rs`, we'll want to declare the `post` module so we can access our `Post` component.
 
@@ -163,7 +170,6 @@ pub fn Post(Scope<PostProps>) -> Element {
     })
 }
 ```
-
 
 Ultimately, including and exporting components is governed by Rust's module system. [The Rust book is a great resource to learn about these concepts in greater detail.](https://doc.rust-lang.org/book/ch07-00-managing-growing-projects-with-packages-crates-and-modules.html)
 
@@ -284,14 +290,3 @@ use dioxus::prelude::*;
 pub struct ActionCardProps {}
 pub fn ActionCard(Scope<ActionCardProps>) -> Element {}
 ```
-
-## Moving forward
-
-Next chapter, we'll start to add use code to hide and show Elements with conditional rendering.
-
-For more reading on components:
-
-- [Components in depth]()
-- [Lifecycles]()
-- [The Context object]()
-- [Optional Prop fields]()

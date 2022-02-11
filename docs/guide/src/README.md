@@ -5,13 +5,13 @@
 **Dioxus** is a framework and ecosystem for building fast, scalable, and robust user interfaces with the Rust programming language. This guide will help you get started with Dioxus running on the Web, Desktop, Mobile, and more.
 
 ```rust
-fn App(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+fn app(cx: Scope) -> Element {
+    let (count, set_count) = use_state(&cx, || 0);
 
     cx.render(rsx!(
         h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
-        button { onclick: move |_| count -= 1, "Down low!" }
+        button { onclick: move |_| set_count(count + 1), "Up high!" }
+        button { onclick: move |_| set_count(count - 1), "Down low!" }
     ))
 };
 ```
@@ -22,7 +22,7 @@ In general, Dioxus and React share many functional similarities. If this guide i
 
 ## Multiplatform
 
-Dioxus is a *portable* toolkit, meaning the Core implementation can run anywhere with no platform-dependent linking. Unlike many other Rust frontend toolkits, Dioxus is not intrinsically linked to Web-Sys. In fact, every element and event listener can be swapped out at compile time. By default, Dioxus ships with the `html` feature enabled, but this can be disabled depending on your target renderer.
+Dioxus is a *portable* toolkit, meaning the Core implementation can run anywhere with no platform-dependent linking. Unlike many other Rust frontend toolkits, Dioxus is not intrinsically linked to WebSys. In fact, every element and event listener can be swapped out at compile time. By default, Dioxus ships with the `html` feature enabled, but this can be disabled depending on your target renderer.
 
 Right now, we have several 1st-party renderers:
 - WebSys (for WASM)

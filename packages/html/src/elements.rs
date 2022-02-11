@@ -1047,7 +1047,7 @@ impl input {
     /// - `text`
     /// - `time`
     /// - `url`
-    /// - `week`    
+    /// - `week`
     pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("type", val, None, false)
     }
@@ -1098,11 +1098,6 @@ impl textarea {
 impl label {
     pub fn r#for<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
         cx.attr("for", val, None, false)
-    }
-}
-impl a {
-    pub fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("dioxus-prevent-default", val, None, false)
     }
 }
 

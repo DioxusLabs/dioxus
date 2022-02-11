@@ -1,4 +1,4 @@
-[tasks.test]
+[tasks.test-with-browser]
 extend = "core::wasm-pack-base"
 command = "wasm-pack"
 args = [
