@@ -34,7 +34,7 @@ impl DesktopContext {
     /// ```rust
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
-    pub fn drag_window(&self) {
+    pub fn drag(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::DragWindow);
     }
 
@@ -54,12 +54,12 @@ impl DesktopContext {
     }
 
     /// close window
-    pub fn close_window(&self) {
+    pub fn close(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::CloseWindow);
     }
 
     /// set window to focus
-    pub fn set_focus(&self) {
+    pub fn focus(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::FocusWindow);
     }
 
