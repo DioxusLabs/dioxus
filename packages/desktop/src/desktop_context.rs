@@ -39,13 +39,18 @@ impl DesktopContext {
     }
 
     /// set window minimize state
-    pub fn minimize(&self, minimized: bool) {
+    pub fn set_minimized(&self, minimized: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Minimize(minimized));
     }
 
     /// set window maximize state
-    pub fn maximize(&self, maximized: bool) {
+    pub fn set_maximized(&self, maximized: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Maximize(maximized));
+    }
+
+    /// set window visible or not
+    pub fn set_visible(&self, visible: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::Visible(visible));
     }
 
     /// close window
@@ -56,6 +61,49 @@ impl DesktopContext {
     /// set window to focus
     pub fn focus(&self) {
         let _ = self.proxy.send_event(UserWindowEvent::FocusWindow);
+    }
+
+    /// change window to fullscreen
+    pub fn set_fullscreen(&self, fullscreen: bool) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::Fullscreen(fullscreen));
+    }
+
+    /// set resizable state
+    pub fn set_resizable(&self, resizable: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::Resizable(resizable));
+    }
+
+    /// set the window always on top
+    pub fn set_always_on_top(&self, top: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::AlwaysOnTop(top));
+    }
+
+    // set cursor visible or not
+    pub fn set_cursor_visible(&self, visible: bool) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::CursorVisible(visible));
+    }
+
+    // set cursor grab
+    pub fn set_cursor_grab(&self, grab: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::CursorGrab(grab));
+    }
+
+    /// set window title
+    pub fn set_title(&self, title: &str) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::SetTitle(String::from(title)));
+    }
+
+    /// change window to borderless
+    pub fn set_decorations(&self, decoration: bool) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::SetDecorations(decoration));
     }
 }
 

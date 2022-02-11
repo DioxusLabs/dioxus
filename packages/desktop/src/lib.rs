@@ -72,7 +72,7 @@ use tao::{
 pub use wry;
 pub use wry::application as tao;
 use wry::{
-    application::event_loop::EventLoopProxy,
+    application::{event_loop::EventLoopProxy, window::Fullscreen},
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
@@ -292,12 +292,23 @@ pub fn launch_with_props<P: 'static + Send>(
                             let window = webview.window();
                             // start to drag the window.
                             // if the drag_window have any err. we don't do anything.
+
+                            if window.fullscreen().is_some() {
+                                return;
+                            }
+
                             let _ = window.drag_window();
                         }
                     }
                     UserWindowEvent::CloseWindow => {
                         // close window
                         *control_flow = ControlFlow::Exit;
+                    }
+                    UserWindowEvent::Visible(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_visible(state);
+                        }
                     }
                     UserWindowEvent::Minimize(state) => {
                         // this loop just run once, because dioxus-desktop is unsupport multi-window.
@@ -315,10 +326,67 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_maximized(state);
                         }
                     }
+                    UserWindowEvent::Fullscreen(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+
+                            let current_monitor = window.current_monitor();
+
+                            if current_monitor.is_none() {
+                                return;
+                            }
+
+                            let fullscreen = if state {
+                                Some(Fullscreen::Borderless(current_monitor))
+                            } else {
+                                None
+                            };
+
+                            window.set_fullscreen(fullscreen);
+                        }
+                    }
                     UserWindowEvent::FocusWindow => {
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
                             window.set_focus();
+                        }
+                    }
+                    UserWindowEvent::Resizable(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_resizable(state);
+                        }
+                    }
+                    UserWindowEvent::AlwaysOnTop(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_always_on_top(state);
+                        }
+                    }
+
+                    UserWindowEvent::CursorVisible(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_cursor_visible(state);
+                        }
+                    }
+                    UserWindowEvent::CursorGrab(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            let _ = window.set_cursor_grab(state);
+                        }
+                    }
+
+                    UserWindowEvent::SetTitle(content) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_title(&content);
+                        }
+                    }
+                    UserWindowEvent::SetDecorations(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_decorations(state);
                         }
                     }
                 }
@@ -338,8 +406,18 @@ pub enum UserWindowEvent {
     DragWindow,
     CloseWindow,
     FocusWindow,
+    Visible(bool),
     Minimize(bool),
     Maximize(bool),
+    Resizable(bool),
+    AlwaysOnTop(bool),
+    Fullscreen(bool),
+
+    CursorVisible(bool),
+    CursorGrab(bool),
+
+    SetTitle(String),
+    SetDecorations(bool),
 }
 
 pub struct DesktopController {
