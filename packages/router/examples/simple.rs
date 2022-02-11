@@ -1,8 +1,9 @@
+#![allow(non_snake_case)]
+
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_router::*;
-use serde::{Deserialize, Serialize};
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -25,26 +26,17 @@ static APP: Component = |cx| {
 
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
-        div {
-            h1 { "Home" }
-        }
+        h1 { "Home" }
     })
 }
 
 fn BlogList(cx: Scope) -> Element {
     cx.render(rsx! {
-        div {
-
-        }
+        div { "Blog List" }
     })
 }
 
 fn BlogPost(cx: Scope) -> Element {
     let id = use_route(&cx).segment::<usize>("id")?;
-
-    cx.render(rsx! {
-        div {
-
-        }
-    })
+    cx.render(rsx! { div { "{id:?}" } })
 }
