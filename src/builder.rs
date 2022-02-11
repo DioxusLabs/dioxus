@@ -5,6 +5,7 @@ use crate::{
 };
 use std::{
     fs::{copy, create_dir_all, remove_dir_all},
+    panic,
     path::PathBuf,
     process::Command,
 };
@@ -62,9 +63,6 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
-    // [3] Bindgen the final binary for use easy linking
-    let mut bindgen_builder = Bindgen::new();
-
     let release_type = match config.release {
         true => "release",
         false => "debug",
@@ -80,16 +78,25 @@ pub fn build(config: &CrateConfig) -> Result<()> {
             .join(format!("{}.wasm", name)),
     };
 
-    bindgen_builder
-        .input_path(input_path)
-        .web(true)?
-        .debug(true)
-        .demangle(true)
-        .keep_debug(true)
-        .remove_name_section(false)
-        .remove_producers_section(false)
-        .out_name(&dioxus_config.application.name)
-        .generate(&bindgen_outdir)?;
+    let bindgen_result = panic::catch_unwind(move || {
+        // [3] Bindgen the final binary for use easy linking
+        let mut bindgen_builder = Bindgen::new();
+
+        bindgen_builder
+            .input_path(input_path)
+            .web(true).unwrap()
+            .debug(true)
+            .demangle(true)
+            .keep_debug(true)
+            .remove_name_section(false)
+            .remove_producers_section(false)
+            .out_name(&dioxus_config.application.name)
+            .generate(&bindgen_outdir).unwrap();
+    });
+    if bindgen_result.is_err() {
+        panic!("Bindgen build failed");
+    }
+
 
     // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
