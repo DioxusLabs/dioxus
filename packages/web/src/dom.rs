@@ -87,7 +87,15 @@ impl WebsysDom {
             }
         });
 
-        let root = load_document().get_element_by_id(&cfg.rootname).unwrap();
+        let document = load_document();
+        let root = match document.get_element_by_id(&cfg.rootname) {
+            Some(root) => root,
+            // a match here in order to avoid some error during runtime browser test
+            None => {
+                let body = document.create_element("body").ok().unwrap();
+                body
+            }
+        };
 
         Self {
             interpreter: Interpreter::new(root.clone()),
