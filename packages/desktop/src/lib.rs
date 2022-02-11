@@ -177,6 +177,7 @@ pub fn launch_with_props<P: 'static + Send>(
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
+                    .with_transparent(cfg.window.window.transparent)
                     .with_url("dioxus://index.html/")
                     .unwrap()
                     .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
