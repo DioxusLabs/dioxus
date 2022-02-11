@@ -1,5 +1,3 @@
-use dioxus_core::Element;
-
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::Props;
@@ -8,18 +6,33 @@ use dioxus_html as dioxus_elements;
 
 use crate::{RouteContext, RouterService};
 
+/// Props for the [`Route`](struct.Route.html) component.
 #[derive(Props)]
 pub struct RouteProps<'a> {
+    /// The path to match.
     to: &'a str,
 
+    /// The elements to render when the path matches.
     children: Element<'a>,
 
     #[props(default)]
     fallback: bool,
 }
 
+/// A component that conditionally renders children based on the current location.
+///
+/// # Example
+///
+///```rust
+/// rsx!(
+///     Router {
+///         Route { to: "/home", Home {} }
+///         Route { to: "/about", About {} }
+///         Route { to: "/Blog", Blog {} }
+///     }
+/// )
+/// ```
 pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
-    // now we want to submit
     let router_root = cx
         .use_hook(|_| cx.consume_context::<RouterService>())
         .as_ref()?;
@@ -30,7 +43,6 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
             Some(ctx) => ctx.total_route.to_string(),
             None => cx.props.to.to_string(),
         };
-        // log::trace!("total route for {} is {}", cx.props.to, total_route);
 
         // provide our route context
         let route_context = cx.provide_context(RouteContext {
@@ -44,23 +56,11 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
             cx.scope_id(),
             cx.props.fallback,
         );
-
-        Some(RouteInner {})
     });
-
-    // log::trace!("Checking route {}", cx.props.to);
 
     if router_root.should_render(cx.scope_id()) {
         cx.render(rsx!(&cx.props.children))
     } else {
         None
-    }
-}
-
-struct RouteInner {}
-
-impl Drop for RouteInner {
-    fn drop(&mut self) {
-        // todo!()
     }
 }

@@ -11,11 +11,31 @@ use crate::platform::RouterProvider;
 
 /// An abstraction over the platform's history API.
 ///
+/// The history is denoted using web-like semantics, with forward slashes delmitiing
+/// routes and question marks denoting optional parameters.
+///
+/// This RouterService is exposed so you can modify the history directly. It
+/// does not provide a high-level ergonomic API for your components. Instead,
+/// you should consider using the components and hooks instead.
+/// - [`Route`](struct.Route.html)
+/// - [`Link`](struct.Link.html)
+/// - [`UseRoute`](struct.UseRoute.html)
+/// - [`Router`](struct.Router.html)
 ///
 ///
+/// # Example
 ///
+/// ```rust
+/// let router = Router::new();
+/// router.push_route("/home/custom");
+/// cx.provide_context(router);
+/// ```
 ///
+/// # Platform Specific
 ///
+/// - On the web, this is a [`BrowserHistory`](https://docs.rs/gloo/0.3.0/gloo/history/struct.BrowserHistory.html).
+/// - On desktop, mobile, and SSR, this is just a Vec of Strings. Currently on
+///   desktop, there is no way to tap into forward/back for the app unless explicitly set.
 pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
     pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
@@ -35,20 +55,13 @@ pub(crate) enum RouteEvent {
     Push,
 }
 
-enum RouteSlot {
-    Routes {
-        // the partial route
-        partial: String,
-
-        // the total route
-        total: String,
-
-        // Connections to other routs
-        rest: Vec<RouteSlot>,
-    },
-}
-
 impl RouterService {
+    /// Creates a new RouterService.
+    ///
+    /// Takes a callback that can regenerated *any* scope and the root scope
+    /// of the router itself.
+    ///
+    /// In most cases, `root_scope` should be `ScopeId(0)`.
     pub fn new(regen_route: Rc<dyn Fn(ScopeId)>, root_scope: ScopeId) -> Self {
         let history = BrowserHistory::default();
         let location = history.location();
@@ -95,16 +108,21 @@ impl RouterService {
         }
     }
 
+    /// Push a new route to the history.
+    ///
+    /// This will trigger a route change event.
+    ///
+    /// This does not modify the current route
     pub fn push_route(&self, route: &str) {
         self.history.borrow_mut().push(route);
     }
 
-    pub fn register_total_route(&self, route: String, scope: ScopeId, fallback: bool) {
+    pub(crate) fn register_total_route(&self, route: String, scope: ScopeId, fallback: bool) {
         let clean = clean_route(route);
         self.slots.borrow_mut().push((scope, clean));
     }
 
-    pub fn should_render(&self, scope: ScopeId) -> bool {
+    pub(crate) fn should_render(&self, scope: ScopeId) -> bool {
         if let Some(root_id) = self.root_found.get() {
             if root_id == scope {
                 return true;
@@ -147,10 +165,16 @@ impl RouterService {
         self.cur_path_params.borrow()
     }
 
+    /// Registers a scope to regenerate on route change.
+    ///
+    /// This is useful if you've built some abstraction on top of the router service.
     pub fn subscribe_onchange(&self, id: ScopeId) {
         self.onchange_listeners.borrow_mut().insert(id);
     }
 
+    /// Unregisters a scope to regenerate on route change.
+    ///
+    /// This is useful if you've built some abstraction on top of the router service.
     pub fn unsubscribe_onchange(&self, id: ScopeId) {
         self.onchange_listeners.borrow_mut().remove(&id);
     }

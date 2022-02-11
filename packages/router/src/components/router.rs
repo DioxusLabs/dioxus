@@ -7,20 +7,31 @@ use dioxus_html as dioxus_elements;
 
 use crate::RouterService;
 
+/// The props for the [`Router`](fn.Router.html) component.
 #[derive(Props)]
 pub struct RouterProps<'a> {
-    children: Element<'a>,
+    /// The routes and elements that should be rendered when the path matches.
+    ///
+    /// If elements are not contained within Routes, the will be rendered
+    /// regardless of the path.
+    pub children: Element<'a>,
 
+    ///
     #[props(default)]
-    onchange: EventHandler<'a, String>,
+    pub onchange: EventHandler<'a, String>,
 }
 
+///
+///
+///
+///
+///
+///
+///
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    log::debug!("running router {:?}", cx.scope_id());
     let svc = cx.use_hook(|_| {
-        let update = cx.schedule_update_any();
-        cx.provide_context(RouterService::new(update, cx.scope_id()))
+        cx.provide_context(RouterService::new(cx.schedule_update_any(), cx.scope_id()))
     });
 
     let any_pending = svc.pending_events.borrow().len() > 0;

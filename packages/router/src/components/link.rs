@@ -5,61 +5,78 @@ use dioxus_core::prelude::*;
 use dioxus_core_macro::{format_args_f, rsx, Props};
 use dioxus_html as dioxus_elements;
 
+/// Props for the [`Link`](struct.Link.html) component.
 #[derive(Props)]
 pub struct LinkProps<'a> {
-    to: &'a str,
-
-    /// The url that gets pushed to the history stack
+    /// The route to link to. This can be a relative path, or a full URL.
     ///
-    /// You can either put in your own inline method or just autoderive the route using `derive(Routable)`
+    /// ```rust
+    /// // Absolute path
+    /// Link { to: "/home", "Go Home" }
     ///
-    /// ```rust, ignore
-    ///
-    /// Link { to: Route::Home, href: |_| "home".to_string() }
-    ///
-    /// // or
-    ///
-    /// Link { to: Route::Home, href: Route::as_url }
-    ///
+    /// // Relative path
+    /// Link { to: "../", "Go Up" }
     /// ```
-    #[props(default, strip_option)]
-    href: Option<&'a str>,
+    pub to: &'a str,
 
+    /// Set the class of the inner link ['a'](https://www.w3schools.com/tags/tag_a.asp) element.
+    ///
+    /// This can be useful when styling the inner link element.
     #[props(default, strip_option)]
-    class: Option<&'a str>,
+    pub class: Option<&'a str>,
 
+    /// Set the ID of the inner link ['a'](https://www.w3schools.com/tags/tag_a.asp) element.
+    ///
+    /// This can be useful when styling the inner link element.
     #[props(default, strip_option)]
-    id: Option<&'a str>,
+    pub id: Option<&'a str>,
 
+    /// Set the title of the window after the link is clicked..
     #[props(default, strip_option)]
-    title: Option<&'a str>,
+    pub title: Option<&'a str>,
 
-    children: Element<'a>,
+    /// Set child elements of the link.
+    pub children: Element<'a>,
 
     #[props(default)]
     attributes: Option<&'a [Attribute<'a>]>,
 }
 
+/// A component that renders a link to a route.
+///
+/// `Link` components are just [`<a>`](https://www.w3schools.com/tags/tag_a.asp) elements
+/// that link to different pages *within* your single-page app.
+///
+/// If you need to link to a resource outside of your app, then just use a regular
+/// `<a>` element directly.
+///
+/// # Examples
+///
+/// ```rust
+/// fn Header(cx: Scope) -> Element {
+///     cx.render(rsx!{
+///         Link { to: "/home", "Go Home" }
+///     })
+/// }
+/// ```
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    // log::trace!("render Link to {}", cx.props.to);
     if let Some(service) = cx.consume_context::<RouterService>() {
-        return cx.render(rsx! {
+        cx.render(rsx! {
             a {
                 href: "{cx.props.to}",
                 class: format_args!("{}", cx.props.class.unwrap_or("")),
                 id: format_args!("{}", cx.props.id.unwrap_or("")),
                 title: format_args!("{}", cx.props.title.unwrap_or("")),
-
                 prevent_default: "onclick",
                 onclick: move |_| service.push_route(cx.props.to),
-
                 &cx.props.children
             }
-        });
+        })
+    } else {
+        log::error!(
+            "Attempted to create a Link to {} outside of a Router context",
+            cx.props.to,
+        );
+        None
     }
-    log::warn!(
-        "Attempted to create a Link to {} outside of a Router context",
-        cx.props.to,
-    );
-    None
 }
