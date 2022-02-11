@@ -72,9 +72,7 @@ use tao::{
 pub use wry;
 pub use wry::application as tao;
 use wry::{
-    application::{
-        event_loop::EventLoopProxy, platform::windows::WindowExtWindows, window::Fullscreen,
-    },
+    application::{event_loop::EventLoopProxy, window::Fullscreen},
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
@@ -373,12 +371,6 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_decorations(state);
                         }
                     }
-                    UserWindowEvent::SkipTaskBar(state) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.set_skip_taskbar(state);
-                        }
-                    }
                 }
             }
             Event::MainEventsCleared => {}
@@ -408,7 +400,6 @@ pub enum UserWindowEvent {
 
     SetTitle(String),
     SetDecorations(bool),
-    SkipTaskBar(bool),
 }
 
 pub struct DesktopController {

@@ -105,11 +105,6 @@ impl DesktopContext {
             .proxy
             .send_event(UserWindowEvent::SetDecorations(decoration));
     }
-
-    /// skip/hidden the taskbar icon
-    pub fn set_skip_taskbar(&self, skip: bool) {
-        let _ = self.proxy.send_event(UserWindowEvent::SkipTaskBar(skip));
-    }
 }
 
 /// use this function can get the `DesktopContext` context.
