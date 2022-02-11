@@ -72,7 +72,9 @@ use tao::{
 pub use wry;
 pub use wry::application as tao;
 use wry::{
-    application::{event_loop::EventLoopProxy, window::Fullscreen},
+    application::{
+        event_loop::EventLoopProxy, platform::windows::WindowExtWindows, window::Fullscreen,
+    },
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
@@ -352,6 +354,12 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_cursor_visible(state);
                         }
                     }
+                    UserWindowEvent::CursorGrab(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            let _ = window.set_cursor_grab(state);
+                        }
+                    }
 
                     UserWindowEvent::SetTitle(content) => {
                         for webview in desktop.webviews.values() {
@@ -363,6 +371,12 @@ pub fn launch_with_props<P: 'static + Send>(
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
                             window.set_decorations(state);
+                        }
+                    }
+                    UserWindowEvent::SkipTaskBar(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_skip_taskbar(state);
                         }
                     }
                 }
@@ -390,9 +404,11 @@ pub enum UserWindowEvent {
     Fullscreen(Box<Option<Fullscreen>>),
 
     CursorVisible(bool),
+    CursorGrab(bool),
 
     SetTitle(String),
     SetDecorations(bool),
+    SkipTaskBar(bool),
 }
 
 pub struct DesktopController {

@@ -48,6 +48,7 @@ impl DesktopContext {
         let _ = self.proxy.send_event(UserWindowEvent::Maximize(maximized));
     }
 
+    /// set window visible or not
     pub fn set_visible(&self, visible: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::Visible(visible));
     }
@@ -62,6 +63,7 @@ impl DesktopContext {
         let _ = self.proxy.send_event(UserWindowEvent::FocusWindow);
     }
 
+    /// change window to fullscreen
     pub fn set_fullscreen(&self, fullscreen: Option<Fullscreen>) {
         let _ = self
             .proxy
@@ -73,14 +75,21 @@ impl DesktopContext {
         let _ = self.proxy.send_event(UserWindowEvent::Resizable(resizable));
     }
 
+    /// set the window always on top
     pub fn set_always_on_top(&self, top: bool) {
         let _ = self.proxy.send_event(UserWindowEvent::AlwaysOnTop(top));
     }
 
+    // set cursor visible or not
     pub fn set_cursor_visible(&self, visible: bool) {
         let _ = self
             .proxy
             .send_event(UserWindowEvent::CursorVisible(visible));
+    }
+
+    // set cursor grab
+    pub fn set_cursor_grab(&self, grab: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::CursorGrab(grab));
     }
 
     /// set window title
@@ -90,11 +99,16 @@ impl DesktopContext {
             .send_event(UserWindowEvent::SetTitle(String::from(title)));
     }
 
-    /// hide the menu
+    /// change window to borderless
     pub fn set_decorations(&self, decoration: bool) {
         let _ = self
             .proxy
             .send_event(UserWindowEvent::SetDecorations(decoration));
+    }
+
+    /// skip/hidden the taskbar icon
+    pub fn set_skip_taskbar(&self, skip: bool) {
+        let _ = self.proxy.send_event(UserWindowEvent::SkipTaskBar(skip));
     }
 }
 
