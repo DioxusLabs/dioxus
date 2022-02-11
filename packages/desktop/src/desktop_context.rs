@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use dioxus_core::ScopeState;
-use wry::application::{event_loop::EventLoopProxy, window::Fullscreen};
+use wry::application::event_loop::EventLoopProxy;
 
 use crate::UserWindowEvent;
 
@@ -64,10 +64,10 @@ impl DesktopContext {
     }
 
     /// change window to fullscreen
-    pub fn set_fullscreen(&self, fullscreen: Option<Fullscreen>) {
+    pub fn set_fullscreen(&self, fullscreen: bool) {
         let _ = self
             .proxy
-            .send_event(UserWindowEvent::Fullscreen(Box::new(fullscreen)));
+            .send_event(UserWindowEvent::Fullscreen(fullscreen));
     }
 
     /// set resizable state

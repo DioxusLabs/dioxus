@@ -292,6 +292,11 @@ pub fn launch_with_props<P: 'static + Send>(
                             let window = webview.window();
                             // start to drag the window.
                             // if the drag_window have any err. we don't do anything.
+
+                            if window.fullscreen().is_some() {
+                                return;
+                            }
+
                             let _ = window.drag_window();
                         }
                     }
@@ -321,10 +326,23 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_maximized(state);
                         }
                     }
-                    UserWindowEvent::Fullscreen(fullscreen) => {
+                    UserWindowEvent::Fullscreen(state) => {
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
-                            window.set_fullscreen(*fullscreen.clone());
+
+                            let current_monitor = window.current_monitor();
+
+                            if current_monitor.is_none() {
+                                return;
+                            }
+
+                            let fullscreen = if state {
+                                Some(Fullscreen::Borderless(current_monitor))
+                            } else {
+                                None
+                            };
+
+                            window.set_fullscreen(fullscreen);
                         }
                     }
                     UserWindowEvent::FocusWindow => {
@@ -393,7 +411,7 @@ pub enum UserWindowEvent {
     Maximize(bool),
     Resizable(bool),
     AlwaysOnTop(bool),
-    Fullscreen(Box<Option<Fullscreen>>),
+    Fullscreen(bool),
 
     CursorVisible(bool),
     CursorGrab(bool),
