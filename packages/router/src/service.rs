@@ -9,6 +9,13 @@ use dioxus_core::ScopeId;
 
 use crate::platform::RouterProvider;
 
+/// An abstraction over the platform's history API.
+///
+///
+///
+///
+///
+///
 pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
     pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
@@ -22,7 +29,7 @@ pub struct RouterService {
     listener: HistoryListener,
 }
 
-pub enum RouteEvent {
+pub(crate) enum RouteEvent {
     Change,
     Pop,
     Push,
