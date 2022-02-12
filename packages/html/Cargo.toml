@@ -14,7 +14,28 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.1.9" }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
+wasm-bindgen = { version = "0.2.79", optional = true }
+
+[dependencies.web-sys]
+optional = true
+version = "0.3.56"
+features = [
+    "TouchEvent",
+    "MouseEvent",
+    "InputEvent",
+    "ClipboardEvent",
+    "KeyboardEvent",
+    "TouchEvent",
+    "WheelEvent",
+    "AnimationEvent",
+    "TransitionEvent",
+    "PointerEvent",
+    "FocusEvent",
+    "CompositionEvent",
+    "ClipboardEvent",
+]
 
 [features]
 default = []
 serialize = ["serde", "serde_repr"]
+wasm-bind = ["web-sys", "wasm-bindgen"]

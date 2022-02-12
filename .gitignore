@@ -9,3 +9,6 @@ Cargo.lock
 !.vscode/launch.json
 !.vscode/extensions.json
 tarpaulin-report.html
+
+# Jetbrain
+.idea/

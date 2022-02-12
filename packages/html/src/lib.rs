@@ -16,6 +16,8 @@
 mod elements;
 mod events;
 mod global_attributes;
+#[cfg(feature = "wasm-bind")]
+mod web_sys_bind;
 
 pub use elements::*;
 pub use events::*;
