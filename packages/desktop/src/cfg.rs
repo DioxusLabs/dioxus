@@ -1,3 +1,4 @@
+use wry::application::window::Icon;
 use wry::{
     application::{
         event_loop::EventLoop,
@@ -13,12 +14,12 @@ pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 pub struct DesktopConfig {
     pub window: WindowBuilder,
     pub file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
-    pub protocos: Vec<WryProtocl>,
+    pub protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
 }
 
-pub type WryProtocl = (
+pub type WryProtocol = (
     String,
     Box<dyn Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static>,
 );
@@ -31,7 +32,7 @@ impl DesktopConfig {
         Self {
             event_handler: None,
             window,
-            protocos: Vec::new(),
+            protocols: Vec::new(),
             file_drop_handler: None,
             pre_rendered: None,
         }
@@ -75,7 +76,12 @@ impl DesktopConfig {
     where
         F: Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static,
     {
-        self.protocos.push((name, Box::new(handler)));
+        self.protocols.push((name, Box::new(handler)));
+        self
+    }
+
+    pub fn with_icon(&mut self, icon: Icon) -> &mut Self {
+        self.window.window.window_icon = Some(icon);
         self
     }
 }

@@ -261,7 +261,7 @@ pub fn launch_with_props<P: 'static + Send>(
                             .unwrap_or_default()
                     });
 
-                for (name, handler) in cfg.protocos.drain(..) {
+                for (name, handler) in cfg.protocols.drain(..) {
                     webview = webview.with_custom_protocol(name, handler)
                 }
 
