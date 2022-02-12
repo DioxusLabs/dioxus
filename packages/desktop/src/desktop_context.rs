@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use dioxus_core::ScopeState;
+use dioxus_core::{Component, ScopeState};
 use wry::application::event_loop::EventLoopProxy;
 
-use crate::UserWindowEvent;
+use crate::{cfg::DesktopConfig, UserWindowEvent};
 
 type ProxyType = EventLoopProxy<UserWindowEvent>;
 
@@ -104,6 +104,15 @@ impl DesktopContext {
         let _ = self
             .proxy
             .send_event(UserWindowEvent::SetDecorations(decoration));
+    }
+
+    /// change window to borderless
+    pub fn create_window<P: 'static>(
+        &self,
+        root: Component<P>,
+        props: P,
+        builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
+    ) {
     }
 }
 

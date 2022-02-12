@@ -59,8 +59,11 @@ use cfg::DesktopConfig;
 pub use desktop_context::use_window;
 use desktop_context::DesktopContext;
 use dioxus_core::*;
+use futures::future::poll_fn;
 use std::{
     collections::{HashMap, VecDeque},
+    future::Future,
+    pin::Pin,
     sync::atomic::AtomicBool,
     sync::{Arc, RwLock},
 };
@@ -76,6 +79,11 @@ use wry::{
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
+
+/// Launch the app but without windows
+///
+/// Manually spawn in windows later
+pub fn launch_without_windows() {}
 
 /// Launch the WebView and run the event loop.
 ///
@@ -157,7 +165,55 @@ pub fn launch_with_props<P: 'static + Send>(
 
     let event_loop = EventLoop::with_user_event();
 
-    let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
+    let (s_tx, s_rx) = tokio::sync::mpsc::unbounded_channel();
+
+    /*
+    Note: all webviews are created on the same thread.
+
+    This should be okay (performance wise) because most users won't need mulithreading
+    across webviews.
+
+    We trade off performance for a gain in ergonomics between VDoms, since we can
+    update props from one webview to another.
+    */
+    std::thread::spawn(move || {
+        // We create the runtime as multithreaded, so you can still "spawn" onto multiple threads
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        // maintain all the webviews in a task that we poll
+        let futures = HashMap::<WindowId, Pin<Box<dyn Future<Output = ()>>>>::new();
+
+        runtime.block_on(async move {
+            use futures_util::future::{select, Either};
+
+            let mut to_remove = vec![];
+            loop {
+                let poll_webviews = poll_fn(|cx| {
+                    for (id, fut) in futures {
+                        let stat = fut.as_mut().poll(cx);
+
+                        // uh, I mean this shouldn't really happen, but yeah okay
+                        if stat.is_ready() {
+                            to_remove.push(id);
+                        }
+                    }
+                    //
+                    std::task::Poll::Pending
+                });
+
+                let poll_channel = s_rx.recv();
+
+                match select(poll_webviews, poll_channel).await {
+                    Either::Left((_, _)) => {}
+                    Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
+                }
+            }
+        })
+    });
+
     let proxy = event_loop.create_proxy();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
@@ -188,10 +244,12 @@ pub fn launch_with_props<P: 'static + Send>(
                             }
                             "initialize" => {
                                 is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                let _ = proxy.send_event(UserWindowEvent::Update);
+                                let _ = proxy.send_event(UserWindowEvent {
+                                    event: UserWindowEventType::Update,
+                                    window_id,
+                                });
                             }
                             "browser_open" => {
-                                println!("browser_open");
                                 let data = req.params.unwrap();
                                 log::trace!("Open browser: {:?}", data);
                                 if let Some(arr) = data.as_array() {
@@ -244,6 +302,8 @@ pub fn launch_with_props<P: 'static + Send>(
                                     .body(String::from("Not Found").into_bytes());
                             }
 
+                            // todo: try to canonicalize the path if we're instead a binary
+
                             let mime = mime_guess::from_path(&path_buf).first_or_octet_stream();
 
                             // do not let path searching to go two layers beyond the caller level
@@ -282,112 +342,53 @@ pub fn launch_with_props<P: 'static + Send>(
                 _ => {}
             },
 
-            Event::UserEvent(_evt) => {
-                //
-                match _evt {
-                    UserWindowEvent::Update => desktop.try_load_ready_webviews(),
-                    UserWindowEvent::DragWindow => {
-                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            // start to drag the window.
-                            // if the drag_window have any err. we don't do anything.
-
-                            if window.fullscreen().is_some() {
-                                return;
-                            }
-
-                            let _ = window.drag_window();
-                        }
-                    }
-                    UserWindowEvent::CloseWindow => {
-                        // close window
+            Event::UserEvent(UserWindowEvent { window_id, event }) => {
+                let webview = desktop.webviews.get(&window_id).unwrap();
+                let window = webview.window();
+                match event {
+                    UserWindowEventType::Update => desktop.try_load_ready_webviews(),
+                    UserWindowEventType::CloseWindow => {
+                        // todo: close the window, not the app
                         *control_flow = ControlFlow::Exit;
                     }
-                    UserWindowEvent::Visible(state) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.set_visible(state);
-                        }
-                    }
-                    UserWindowEvent::Minimize(state) => {
-                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            // change window minimized state.
-                            window.set_minimized(state);
-                        }
-                    }
-                    UserWindowEvent::Maximize(state) => {
-                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            // change window maximized state.
-                            window.set_maximized(state);
-                        }
-                    }
-                    UserWindowEvent::Fullscreen(state) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
+                    UserWindowEventType::NewWindow(id) => todo!(),
 
-                            let current_monitor = window.current_monitor();
+                    UserWindowEventType::Visible(state) => window.set_visible(state),
+                    UserWindowEventType::Minimize(state) => window.set_minimized(state),
+                    UserWindowEventType::Maximize(state) => window.set_maximized(state),
+                    UserWindowEventType::FocusWindow => window.set_focus(),
+                    UserWindowEventType::Resizable(state) => window.set_resizable(state),
+                    UserWindowEventType::AlwaysOnTop(state) => window.set_always_on_top(state),
+                    UserWindowEventType::CursorVisible(state) => window.set_cursor_visible(state),
+                    UserWindowEventType::SetTitle(content) => window.set_title(&content),
+                    UserWindowEventType::SetDecorations(state) => window.set_decorations(state),
 
-                            if current_monitor.is_none() {
-                                return;
-                            }
+                    UserWindowEventType::Fullscreen(state) => {
+                        let current_monitor = window.current_monitor();
 
-                            let fullscreen = if state {
-                                Some(Fullscreen::Borderless(current_monitor))
-                            } else {
-                                None
-                            };
+                        if current_monitor.is_none() {
+                            return;
+                        }
 
-                            window.set_fullscreen(fullscreen);
-                        }
-                    }
-                    UserWindowEvent::FocusWindow => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.set_focus();
-                        }
-                    }
-                    UserWindowEvent::Resizable(state) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.set_resizable(state);
-                        }
-                    }
-                    UserWindowEvent::AlwaysOnTop(state) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.set_always_on_top(state);
-                        }
+                        let fullscreen = if state {
+                            Some(Fullscreen::Borderless(current_monitor))
+                        } else {
+                            None
+                        };
+
+                        window.set_fullscreen(fullscreen);
                     }
 
-                    UserWindowEvent::CursorVisible(state) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.set_cursor_visible(state);
+                    UserWindowEventType::DragWindow => {
+                        // start to drag the window.
+                        // if the drag_window have any err. we don't do anything.
+                        if window.fullscreen().is_some() {
+                            return;
                         }
+                        let _ = window.drag_window();
                     }
-                    UserWindowEvent::CursorGrab(state) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            let _ = window.set_cursor_grab(state);
-                        }
-                    }
-
-                    UserWindowEvent::SetTitle(content) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.set_title(&content);
-                        }
-                    }
-                    UserWindowEvent::SetDecorations(state) => {
-                        for webview in desktop.webviews.values() {
-                            let window = webview.window();
-                            window.set_decorations(state);
-                        }
+                    UserWindowEventType::CursorGrab(state) => {
+                        let _ = window.set_cursor_grab(state);
                     }
                 }
             }
@@ -401,7 +402,18 @@ pub fn launch_with_props<P: 'static + Send>(
     })
 }
 
-pub enum UserWindowEvent {
+pub enum WebviewManagement {
+    Open {
+        make: Box<dyn FnOnce() -> VirtualDom>,
+    },
+}
+
+struct UserWindowEvent {
+    window_id: WindowId,
+    event: UserWindowEventType,
+}
+
+pub enum UserWindowEventType {
     Update,
     DragWindow,
     CloseWindow,
@@ -412,12 +424,12 @@ pub enum UserWindowEvent {
     Resizable(bool),
     AlwaysOnTop(bool),
     Fullscreen(bool),
-
     CursorVisible(bool),
     CursorGrab(bool),
-
     SetTitle(String),
     SetDecorations(bool),
+
+    NewWindow(WindowId),
 }
 
 pub struct DesktopController {
@@ -436,6 +448,7 @@ impl DesktopController {
         root: Component<P>,
         props: P,
         evt: EventLoopProxy<UserWindowEvent>,
+        window_id: WindowId,
     ) -> Self {
         let edit_queue = Arc::new(RwLock::new(VecDeque::new()));
         let pending_edits = edit_queue.clone();
@@ -452,34 +465,15 @@ impl DesktopController {
                 .build()
                 .unwrap();
 
+            let futures = HashMap::<WindowId, Box<dyn Future<Output = ()>>>::new();
+
             runtime.block_on(async move {
-                let mut dom =
-                    VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
+                //
+                // wait for signal to come in
 
-                let window_context = DesktopContext::new(desktop_context_proxy);
+                // poll virtualdoms
 
-                dom.base_scope().provide_context(window_context);
-
-                let edits = dom.rebuild();
-
-                edit_queue
-                    .write()
-                    .unwrap()
-                    .push_front(serde_json::to_string(&edits.edits).unwrap());
-
-                loop {
-                    dom.wait_for_work().await;
-                    let mut muts = dom.work_with_deadline(|| false);
-
-                    while let Some(edit) = muts.pop() {
-                        edit_queue
-                            .write()
-                            .unwrap()
-                            .push_front(serde_json::to_string(&edit.edits).unwrap());
-                    }
-
-                    let _ = evt.send_event(UserWindowEvent::Update);
-                }
+                task.await;
             })
         });
 
@@ -515,3 +509,37 @@ impl DesktopController {
         }
     }
 }
+
+// let task = async move {
+//     let mut dom =
+//         VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
+
+//     let window_context = DesktopContext::new(desktop_context_proxy);
+
+//     dom.base_scope().provide_context(window_context);
+
+//     let edits = dom.rebuild();
+
+//     edit_queue
+//         .write()
+//         .unwrap()
+//         .push_front(serde_json::to_string(&edits.edits).unwrap());
+
+//     loop {
+//         dom.wait_for_work().await;
+
+//         let mut muts = dom.work_with_deadline(|| false);
+
+//         while let Some(edit) = muts.pop() {
+//             edit_queue
+//                 .write()
+//                 .unwrap()
+//                 .push_front(serde_json::to_string(&edit.edits).unwrap());
+//         }
+
+//         let _ = evt.send_event(UserWindowEvent {
+//             event: UserWindowEventType::Update,
+//             window_id,
+//         });
+//     }
+// };
