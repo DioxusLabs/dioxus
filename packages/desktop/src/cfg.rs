@@ -1,6 +1,3 @@
-use image::io::Reader as ImageReader;
-use image::ImageFormat;
-use std::io::Cursor;
 use wry::application::window::Icon;
 use wry::{
     application::{
@@ -91,12 +88,8 @@ impl DesktopConfig {
 
 impl DesktopConfig {
     pub(crate) fn with_default_icon(mut self) -> Self {
-        let png: &[u8] = include_bytes!("default_icon.png");
-        let mut reader = ImageReader::new(Cursor::new(png));
-        reader.set_format(ImageFormat::Png);
-        let icon = reader.decode().expect("image parse failed");
-        let rgba = Icon::from_rgba(icon.as_bytes().to_owned(), icon.width(), icon.height())
-            .expect("image parse failed");
+        let bin: &[u8] = include_bytes!("default_icon.bin");
+        let rgba = Icon::from_rgba(bin.to_owned(), 460, 460).expect("image parse failed");
         self.window.window.window_icon = Some(rgba);
         self
     }
@@ -106,4 +99,29 @@ impl Default for DesktopConfig {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// dirty trick, avoid introducing `image` at runtime
+// TODO: use serde when `Icon` impl serde
+#[test]
+#[ignore]
+fn prepare_default_icon() {
+    use image::io::Reader as ImageReader;
+    use image::ImageFormat;
+    use std::fs::File;
+    use std::io::Cursor;
+    use std::io::Write;
+    use std::path::PathBuf;
+    let png: &[u8] = include_bytes!("default_icon.png");
+    let mut reader = ImageReader::new(Cursor::new(png));
+    reader.set_format(ImageFormat::Png);
+    let icon = reader.decode().unwrap();
+    let bin = PathBuf::from(file!())
+        .parent()
+        .unwrap()
+        .join("default_icon.bin");
+    println!("{:?}", bin);
+    let mut file = File::create(bin).unwrap();
+    file.write_all(icon.as_bytes()).unwrap();
+    println!("({}, {})", icon.width(), icon.height())
 }
