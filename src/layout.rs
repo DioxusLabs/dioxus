@@ -4,7 +4,7 @@ use tui::style::Style as TuiStyle;
 
 use crate::{
     attributes::{apply_attributes, StyleModifer},
-    TuiNode,
+    TuiModifier, TuiNode,
 };
 
 /*
@@ -42,6 +42,7 @@ pub fn collect_layout<'a>(
                 TuiNode {
                     node,
                     block_style: tui::style::Style::default(),
+                    tui_modifier: TuiModifier::default(),
                     layout: layout.new_node(style, &[]).unwrap(),
                 },
             );
@@ -51,6 +52,7 @@ pub fn collect_layout<'a>(
             let mut modifier = StyleModifer {
                 style: Style::default(),
                 tui_style: TuiStyle::default(),
+                tui_modifier: TuiModifier::default(),
             };
 
             for &Attribute { name, value, .. } in el.attributes {
@@ -86,6 +88,7 @@ pub fn collect_layout<'a>(
                 TuiNode {
                     node,
                     block_style: modifier.tui_style,
+                    tui_modifier: modifier.tui_modifier,
                     layout: layout.new_node(modifier.style, &child_layout).unwrap(),
                 },
             );

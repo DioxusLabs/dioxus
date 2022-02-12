@@ -43,6 +43,7 @@ pub fn launch(app: Component<()>) {
 pub struct TuiNode<'a> {
     pub layout: stretch2::node::Node,
     pub block_style: TuiStyle,
+    pub tui_modifier: TuiModifier,
     pub node: &'a VNode<'a>,
 }
 
@@ -132,7 +133,14 @@ pub fn render_vdom(
 
                     // resolve events before rendering
                     events = handler.get_events(vdom, &layout, &mut nodes, root_node);
-                    render::render_vnode(frame, &layout, &mut nodes, vdom, root_node);
+                    render::render_vnode(
+                        frame,
+                        &layout,
+                        &mut nodes,
+                        vdom,
+                        root_node,
+                        &TuiStyle::default(),
+                    );
                     assert!(nodes.is_empty());
                 })?;
 

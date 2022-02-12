@@ -53,13 +53,6 @@ fn app(cx: Scope) -> Element {
                 "zib"
                 "zib"
                 "zib"
-                "zib"
-                "zib"
-                "zib"
-                "zib"
-                "zib"
-                "zib"
-                "zib"
             }
             p {
                 background_color: "yellow",
@@ -76,6 +69,32 @@ fn app(cx: Scope) -> Element {
             p {
                 background_color: "cyan",
                 "asd"
+            }
+            div {
+                font_weight: "bold",
+                color: "#666666",
+                p{
+                    "bold"
+                }
+                p {
+                    font_weight: "normal",
+                    " normal"
+                }
+            }
+            p {
+                font_style: "italic",
+                color: "red",
+                "italic"
+            }
+            p {
+                text_decoration: "underline",
+                color: "rgb(50, 100, 255)",
+                "underline"
+            }
+            p {
+                text_decoration: "line-through",
+                color: "hsl(10, 100%, 70%)",
+                "line-through"
             }
         }
     })
