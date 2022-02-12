@@ -32,6 +32,7 @@ dioxus-html = { path = "../html", features = ["serialize"], version = "^0.1.6" }
 webbrowser = "0.5.5"
 mime_guess = "2.0.3"
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.0.0" }
+image = "0.24.0"
 
 
 [features]

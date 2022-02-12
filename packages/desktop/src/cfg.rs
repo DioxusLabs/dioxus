@@ -1,3 +1,6 @@
+use image::io::Reader as ImageReader;
+use image::ImageFormat;
+use std::io::Cursor;
 use wry::application::window::Icon;
 use wry::{
     application::{
@@ -82,6 +85,19 @@ impl DesktopConfig {
 
     pub fn with_icon(&mut self, icon: Icon) -> &mut Self {
         self.window.window.window_icon = Some(icon);
+        self
+    }
+}
+
+impl DesktopConfig {
+    pub(crate) fn with_default_icon(mut self) -> Self {
+        let png: &[u8] = include_bytes!("default_icon.png");
+        let mut reader = ImageReader::new(Cursor::new(png));
+        reader.set_format(ImageFormat::Png);
+        let icon = reader.decode().expect("image parse failed");
+        let rgba = Icon::from_rgba(icon.as_bytes().to_owned(), icon.width(), icon.height())
+            .expect("image parse failed");
+        self.window.window.window_icon = Some(rgba);
         self
     }
 }
