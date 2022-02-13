@@ -42,3 +42,4 @@ ayatana = ["wry/ayatana"]
 
 [dev-dependencies]
 dioxus-hooks = { path = "../hooks" }
+# image = "0.24.0" # enable this when generating a new desktop image

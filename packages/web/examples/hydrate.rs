@@ -1,8 +1,6 @@
-use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use wasm_bindgen_test::wasm_bindgen_test;
 use web_sys::window;
 
 fn app(cx: Scope) -> Element {

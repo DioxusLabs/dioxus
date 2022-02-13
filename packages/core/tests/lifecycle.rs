@@ -1,4 +1,5 @@
 #![allow(unused, non_upper_case_globals)]
+#![allow(non_snake_case)]
 
 //! Tests for the lifecycle of components.
 use dioxus::prelude::*;

@@ -1,54 +1,6 @@
-//! Dioxus Desktop Renderer
-//!
-//! Render the Dioxus [`VirtualDom`] using the platform's native [`WebView`] implementation.
-//!
-//! # Desktop
-//!
-//! One of Dioxus' killer features is the ability to quickly build a native desktop app that looks and feels the same across platforms. Apps built with Dioxus are typically <5mb in size and use existing system resources, so they won't hog extreme amounts of RAM or memory.
-//!
-//! Dioxus Desktop is built off Tauri. Right now there aren't any Dioxus abstractions over keyboard shortcuts, menubar, handling, etc, so you'll want to leverage Tauri - mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly. The next major release of Dioxus-Desktop will include components and hooks for notifications, global shortcuts, menubar, etc.
-//!
-//!
-//! ## Getting Set up
-//!
-//! Getting Set up with Dioxus-Desktop is quite easy. Make sure you have Rust and Cargo installed, and then create a new project:
-//!
-//! ```shell
-//! $ cargo new --bin demo
-//! $ cd app
-//! ```
-//!
-//! Add Dioxus with the `desktop` feature:
-//!
-//! ```shell
-//! $ cargo add dioxus --features desktop
-//! ```
-//!
-//! Edit your `main.rs`:
-//!
-//! ```rust
-//! // main.rs
-//! use dioxus::prelude::*;
-//!
-//! fn main() {
-//!     dioxus::desktop::launch(app);
-//! }
-//!
-//! fn app(cx: Scope) -> Element {
-//!     cx.render(rsx!{
-//!         div {
-//!             "hello world!"
-//!         }
-//!     })
-//! }
-//! ```
-//!
-//!
-//! To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
-//!
-//! ## Future Steps
-//!
-//! Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
+#![doc = include_str!("readme.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub mod cfg;
 pub mod desktop_context;
@@ -72,7 +24,7 @@ use tao::{
 pub use wry;
 pub use wry::application as tao;
 use wry::{
-    application::event_loop::EventLoopProxy,
+    application::{event_loop::EventLoopProxy, window::Fullscreen},
     webview::{WebView, WebViewBuilder},
 };
 
@@ -157,7 +109,7 @@ pub fn launch_with_props<P: 'static + Send>(
     props: P,
     builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
-    let mut cfg = DesktopConfig::default();
+    let mut cfg = DesktopConfig::default().with_default_icon();
     builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
@@ -182,6 +134,7 @@ pub fn launch_with_props<P: 'static + Send>(
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
+                    .with_transparent(cfg.window.window.transparent)
                     .with_url("dioxus://index.html/")
                     .unwrap()
                     .with_ipc_handler(move |_window: &Window, req| {
@@ -237,12 +190,12 @@ pub fn launch_with_props<P: 'static + Send>(
                             .unwrap_or_default()
                     });
 
-                for (name, handler) in cfg.protocos.drain(..) {
-                    webview = webview.with_custom_protocol(name, handler);
-                }
-
                 if cfg!(debug_assertions) {
                     webview = webview.with_dev_tool(true);
+                }
+
+                for (name, handler) in cfg.protocols.drain(..) {
+                    webview = webview.with_custom_protocol(name, handler)
                 }
 
                 desktop.webviews.insert(window_id, webview.build().unwrap());
@@ -272,12 +225,23 @@ pub fn launch_with_props<P: 'static + Send>(
                             let window = webview.window();
                             // start to drag the window.
                             // if the drag_window have any err. we don't do anything.
+
+                            if window.fullscreen().is_some() {
+                                return;
+                            }
+
                             let _ = window.drag_window();
                         }
                     }
                     UserWindowEvent::CloseWindow => {
                         // close window
                         *control_flow = ControlFlow::Exit;
+                    }
+                    UserWindowEvent::Visible(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_visible(state);
+                        }
                     }
                     UserWindowEvent::Minimize(state) => {
                         // this loop just run once, because dioxus-desktop is unsupport multi-window.
@@ -295,10 +259,67 @@ pub fn launch_with_props<P: 'static + Send>(
                             window.set_maximized(state);
                         }
                     }
+                    UserWindowEvent::Fullscreen(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+
+                            let current_monitor = window.current_monitor();
+
+                            if current_monitor.is_none() {
+                                return;
+                            }
+
+                            let fullscreen = if state {
+                                Some(Fullscreen::Borderless(current_monitor))
+                            } else {
+                                None
+                            };
+
+                            window.set_fullscreen(fullscreen);
+                        }
+                    }
                     UserWindowEvent::FocusWindow => {
                         for webview in desktop.webviews.values() {
                             let window = webview.window();
                             window.set_focus();
+                        }
+                    }
+                    UserWindowEvent::Resizable(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_resizable(state);
+                        }
+                    }
+                    UserWindowEvent::AlwaysOnTop(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_always_on_top(state);
+                        }
+                    }
+
+                    UserWindowEvent::CursorVisible(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_cursor_visible(state);
+                        }
+                    }
+                    UserWindowEvent::CursorGrab(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            let _ = window.set_cursor_grab(state);
+                        }
+                    }
+
+                    UserWindowEvent::SetTitle(content) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_title(&content);
+                        }
+                    }
+                    UserWindowEvent::SetDecorations(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_decorations(state);
                         }
                     }
                 }
@@ -313,8 +334,18 @@ pub enum UserWindowEvent {
     DragWindow,
     CloseWindow,
     FocusWindow,
+    Visible(bool),
     Minimize(bool),
     Maximize(bool),
+    Resizable(bool),
+    AlwaysOnTop(bool),
+    Fullscreen(bool),
+
+    CursorVisible(bool),
+    CursorGrab(bool),
+
+    SetTitle(String),
+    SetDecorations(bool),
 }
 
 pub struct DesktopController {

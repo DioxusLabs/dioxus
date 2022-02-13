@@ -2,22 +2,12 @@
 
 Most components you will write in Dioxus will need to store state somehow. For local state, we provide two very convenient hooks:
 
-- `use_state`
-- `use_ref`
+- [use_state](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_state.html)
+- [use_ref](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_ref.html)
 
 Both of these hooks are extremely powerful and flexible, so we've dedicated this section to understanding them properly.
 
 > These two hooks are not the only way to store state. You can always build your own hooks!
-
-## Note on Hooks
-
-If you're struggling with errors due to usage in hooks, make sure you're following the rules of hooks:
-
-- Functions with "use_" should not be called in callbacks
-- Functions with "use_" should not be called out of order
-- Functions with "use_" should not be called in loops or conditionals
-
-A large majority of issues that seem to be "wrong with Dioxus" are actually just a misuse of hooks.
 
 ## `use_state`
 
@@ -84,7 +74,7 @@ cx.spawn({
 
 You might've noticed a fundamental limitation to `use_state`: to modify the value in-place, it must be cheaply cloneable. But what if your type is not cheap to clone?
 
-In these cases, you should reach for `use_ref` which is essentially just a glorified `Rc<RefCell<T>>` (typical Rust UI shenanigans).
+In these cases, you should reach for `use_ref` which is essentially just a glorified `Rc<RefCell<T>>` (Rust [smart pointers](https://doc.rust-lang.org/book/ch15-04-rc.html)).
 
 This provides us some runtime locks around our data, trading reliability for performance. For most cases though, you will find it hard to make `use_ref` crash.
 
@@ -117,7 +107,7 @@ names.write().push("Tiger");
 If you don't want to re-render the component when names is updated, then we can use the `write_silent` method:
 
 ```rust
-names.write().push("Transmogrifier");
+names.write_silent().push("Transmogrifier");
 ```
 
 Again, like `UseState`, the `UseRef` handle is clonable into async contexts:
@@ -135,8 +125,3 @@ cx.spawn({
     }
 })
 ```
-
-
-## Wrapping up
-
-These two hooks are extremely powerful at storing state.

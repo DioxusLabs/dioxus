@@ -12,9 +12,16 @@ function run_script {
     rsync -a --progress ../ tmp --exclude target --exclude docker
 
     # build base image
-    docker build -f Dockerfile_pre_test -t dioxus-base-test-image .
+    docker build -f Dockerfile_base_test_image -t dioxus-base-test-image .
+    docker build -f Dockerfile_pre_test -t dioxus-pre-test .
     # run test
     docker build -f Dockerfile_test -t dioxus-test-image .
+    # code coverage
+    docker build -f Dockerfile_code_coverage -t dioxus-code-coverage .
+
+    # exec test coverage
+    cd .. && \
+    echo "rustup default nightly && cargo +nightly tarpaulin --verbose --all-features --tests --workspace --exclude core-macro --timeout 120 --out Html" | docker run -i --rm --security-opt seccomp=unconfined -v "/home/elios/project/prs/dioxus/:/run_test" dioxus-code-coverage
 
     # clean up
     rm -rf tmp

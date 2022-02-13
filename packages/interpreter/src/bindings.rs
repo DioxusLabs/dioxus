@@ -1,4 +1,4 @@
-#![allow(clippy::unused_unit)]
+#![allow(clippy::unused_unit, non_upper_case_globals)]
 
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
