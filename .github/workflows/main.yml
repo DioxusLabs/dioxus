@@ -10,10 +10,14 @@ on:
       - lib.rs
       - Cargo.toml
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
 
 jobs:
+  JOB:
+    if: github.event.pull_request.draft == false
+
   check:
     name: Check
     runs-on: ubuntu-latest
