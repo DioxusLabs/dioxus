@@ -1,21 +1,18 @@
-use std::{io::Write, path::PathBuf};
-
-use crate::{cfg::ConfigOptsBuild, gen_page};
-use structopt::StructOpt;
+use super::*;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, StructOpt)]
-#[structopt(name = "build")]
+#[derive(Clone, Debug, Parser)]
+#[clap(name = "build")]
 pub struct Build {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub build: ConfigOptsBuild,
 }
 
 impl Build {
-    pub fn build(self) -> anyhow::Result<()> {
+    pub fn build(self) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
 
-        // change the relase state.
+        // change the release state.
         crate_config.with_release(self.build.release);
 
         if self.build.example.is_some() {
@@ -30,7 +27,7 @@ impl Build {
                 crate::builder::build_desktop(&crate_config)?;
             }
             _ => {
-                return Err(anyhow::anyhow!("Unsoppurt platform target."));
+                return custom_error!("Unsoppurt platform target.");
             }
         }
 

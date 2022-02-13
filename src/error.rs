@@ -11,6 +11,15 @@ pub enum Error {
     #[error("I/O Error: {0}")]
     IO(#[from] std::io::Error),
 
+    #[error("Format Error: {0}")]
+    FormatError(#[from] std::fmt::Error),
+
+    #[error("Format failed: {0}")]
+    ParseError(String),
+
+    #[error("Runtime Error: {0}")]
+    RuntimeError(String),
+
     #[error("Failed to write error")]
     FailedToWrite,
 
@@ -19,6 +28,9 @@ pub enum Error {
 
     #[error("Failed to write error")]
     CargoError(String),
+
+    #[error("{0}")]
+    CustomError(String),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -34,4 +46,29 @@ impl From<String> for Error {
     fn from(s: String) -> Self {
         Error::Unique(s)
     }
+}
+
+impl From<html_parser::Error> for Error {
+    fn from(e: html_parser::Error) -> Self {
+        Self::ParseError(e.to_string())
+    }
+}
+
+impl From<hyper::Error> for Error {
+    fn from(e: hyper::Error) -> Self {
+        Self::RuntimeError(e.to_string())
+    }
+}
+
+#[macro_export]
+macro_rules! custom_error {
+    ($msg:literal $(,)?) => {
+        Err(Error::CustomError($msg.to_string()))
+    };
+    ($err:expr $(,)?) => {
+        Err(Error::from($err))
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        Err(Error::CustomError(format!($fmt, $($arg)*)))
+    };
 }

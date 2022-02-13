@@ -1,18 +1,12 @@
-use std::{
-    fs::remove_dir_all,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
-
-use structopt::StructOpt;
+use super::*;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, StructOpt)]
-#[structopt(name = "clean")]
+#[derive(Clone, Debug, Parser)]
+#[clap(name = "clean")]
 pub struct Clean {}
 
 impl Clean {
-    pub fn clean(self) -> anyhow::Result<()> {
+    pub fn clean(self) -> Result<()> {
         let crate_config = crate::CrateConfig::new()?;
 
         let output = Command::new("cargo")
