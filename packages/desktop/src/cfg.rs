@@ -19,7 +19,7 @@ pub struct DesktopConfig {
     pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
 }
 
-pub type WryProtocol = (
+pub(crate) type WryProtocol = (
     String,
     Box<dyn Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static>,
 );
