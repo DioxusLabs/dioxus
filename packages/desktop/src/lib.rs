@@ -1,54 +1,6 @@
-//! Dioxus Desktop Renderer
-//!
-//! Render the Dioxus VirtualDom using the platform's native WebView implementation.
-//!
-//! # Desktop
-//!
-//! One of Dioxus' killer features is the ability to quickly build a native desktop app that looks and feels the same across platforms. Apps built with Dioxus are typically <5mb in size and use existing system resources, so they won't hog extreme amounts of RAM or memory.
-//!
-//! Dioxus Desktop is built off Tauri. Right now there aren't any Dioxus abstractions over keyboard shortcuts, menubar, handling, etc, so you'll want to leverage Tauri - mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly. The next major release of Dioxus-Desktop will include components and hooks for notifications, global shortcuts, menubar, etc.
-//!
-//!
-//! ## Getting Set up
-//!
-//! Getting Set up with Dioxus-Desktop is quite easy. Make sure you have Rust and Cargo installed, and then create a new project:
-//!
-//! ```shell
-//! $ cargo new --bin demo
-//! $ cd app
-//! ```
-//!
-//! Add Dioxus with the `desktop` feature:
-//!
-//! ```shell
-//! $ cargo add dioxus --features desktop
-//! ```
-//!
-//! Edit your `main.rs`:
-//!
-//! ```rust
-//! // main.rs
-//! use dioxus::prelude::*;
-//!
-//! fn main() {
-//!     dioxus::desktop::launch(app);
-//! }
-//!
-//! fn app(cx: Scope) -> Element {
-//!     cx.render(rsx!{
-//!         div {
-//!             "hello world!"
-//!         }
-//!     })
-//! }
-//! ```
-//!
-//!
-//! To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
-//!
-//! ## Future Steps
-//!
-//! Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
+#![doc = include_str!("readme.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub mod cfg;
 pub mod desktop_context;
@@ -152,7 +104,7 @@ pub fn launch_with_props<P: 'static + Send>(
     props: P,
     builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
-    let mut cfg = DesktopConfig::default();
+    let mut cfg = DesktopConfig::default().with_default_icon();
     builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
@@ -261,7 +213,7 @@ pub fn launch_with_props<P: 'static + Send>(
                             .unwrap_or_default()
                     });
 
-                for (name, handler) in cfg.protocos.drain(..) {
+                for (name, handler) in cfg.protocols.drain(..) {
                     webview = webview.with_custom_protocol(name, handler)
                 }
 
