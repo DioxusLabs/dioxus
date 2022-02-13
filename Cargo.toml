@@ -36,6 +36,13 @@ web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
 router = ["dioxus-router"]
 
+devtool = ["dioxus-desktop/devtool"]
+fullscreen = ["dioxus-desktop/fullscreen"]
+transparent = ["dioxus-desktop/transparent"]
+
+tray = ["dioxus-desktop/tray"]
+ayatana = ["dioxus-desktop/ayatana"]
+
 # "dioxus-router/web"
 # "dioxus-router/desktop"
 # desktop = ["dioxus-desktop", "dioxus-router/desktop"]

@@ -38,6 +38,13 @@ dioxus-interpreter-js = { path = "../interpreter", version = "^0.0.0" }
 default = ["tokio_runtime"]
 tokio_runtime = ["tokio"]
 
+devtool = ["wry/devtool"]
+fullscreen = ["wry/fullscreen"]
+transparent = ["wry/transparent"]
+
+tray = ["wry/tray"]
+ayatana = ["wry/ayatana"]
+
 
 [dev-dependencies]
 dioxus-hooks = { path = "../hooks" }
