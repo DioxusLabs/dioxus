@@ -15,10 +15,8 @@ on:
       - master
 
 jobs:
-  JOB:
-    if: github.event.pull_request.draft == false
-
   test:
+    if: github.event.pull_request.draft == false
     runs-on: windows-latest
     name: (${{ matrix.target }}, ${{ matrix.cfg_release_channel }})
     env:

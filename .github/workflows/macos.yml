@@ -15,9 +15,8 @@ on:
       - master
 
 jobs:
-  JOB:
-    if: github.event.pull_request.draft == false
   test:
+    if: github.event.pull_request.draft == false
     name: Test Suite
     runs-on: macos-latest
     steps:

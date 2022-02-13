@@ -15,10 +15,8 @@ on:
       - master
 
 jobs:
-  JOB:
-    if: github.event.pull_request.draft == false
-
   check:
+    if: github.event.pull_request.draft == false
     name: Check
     runs-on: ubuntu-latest
     steps:
