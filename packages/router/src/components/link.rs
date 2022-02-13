@@ -11,7 +11,7 @@ pub struct LinkProps<'a> {
 
     /// The url that gets pushed to the history stack
     ///
-    /// You can either put it your own inline method or just autoderive the route using `derive(Routable)`
+    /// You can either put in your own inline method or just autoderive the route using `derive(Routable)`
     ///
     /// ```rust, ignore
     ///
@@ -31,6 +31,9 @@ pub struct LinkProps<'a> {
     #[props(default, strip_option)]
     id: Option<&'a str>,
 
+    #[props(default, strip_option)]
+    title: Option<&'a str>,
+
     children: Element<'a>,
 
     #[props(default)]
@@ -38,17 +41,25 @@ pub struct LinkProps<'a> {
 }
 
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    let service = cx.consume_context::<RouterService>()?;
-    cx.render(rsx! {
-        a {
-            href: "{cx.props.to}",
-            class: format_args!("{}", cx.props.class.unwrap_or("")),
-            id: format_args!("{}", cx.props.id.unwrap_or("")),
+    // log::trace!("render Link to {}", cx.props.to);
+    if let Some(service) = cx.consume_context::<RouterService>() {
+        return cx.render(rsx! {
+            a {
+                href: "{cx.props.to}",
+                class: format_args!("{}", cx.props.class.unwrap_or("")),
+                id: format_args!("{}", cx.props.id.unwrap_or("")),
+                title: format_args!("{}", cx.props.title.unwrap_or("")),
 
-            prevent_default: "onclick",
-            onclick: move |_| service.push_route(cx.props.to),
+                prevent_default: "onclick",
+                onclick: move |_| service.push_route(cx.props.to),
 
-            &cx.props.children
-        }
-    })
+                &cx.props.children
+            }
+        });
+    }
+    log::warn!(
+        "Attempted to create a Link to {} outside of a Router context",
+        cx.props.to,
+    );
+    None
 }

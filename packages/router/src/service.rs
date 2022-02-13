@@ -1,20 +1,31 @@
-use gloo::history::{BrowserHistory, History, HistoryListener};
+use gloo::history::{BrowserHistory, History, HistoryListener, Location};
 use std::{
-    cell::{Cell, RefCell},
-    collections::HashMap,
+    cell::{Cell, Ref, RefCell},
+    collections::{HashMap, HashSet},
     rc::Rc,
 };
 
 use dioxus_core::ScopeId;
 
+use crate::platform::RouterProvider;
+
 pub struct RouterService {
     pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
-    history: Rc<RefCell<BrowserHistory>>,
-    registerd_routes: RefCell<RouteSlot>,
+    pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
-    root_found: Rc<Cell<bool>>,
-    cur_root: RefCell<String>,
+    onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
+    root_found: Rc<Cell<Option<ScopeId>>>,
+    cur_path_params: Rc<RefCell<HashMap<String, String>>>,
+
+    // history: Rc<dyn RouterProvider>,
+    history: Rc<RefCell<BrowserHistory>>,
     listener: HistoryListener,
+}
+
+pub enum RouteEvent {
+    Change,
+    Pop,
+    Push,
 }
 
 enum RouteSlot {
@@ -36,34 +47,44 @@ impl RouterService {
         let location = history.location();
         let path = location.path();
 
+        let onchange_listeners = Rc::new(RefCell::new(HashSet::new()));
         let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
+        let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
+        let root_found = Rc::new(Cell::new(None));
 
-        let _slots = slots.clone();
+        let listener = history.listen({
+            let pending_events = pending_events.clone();
+            let regen_route = regen_route.clone();
+            let root_found = root_found.clone();
+            let slots = slots.clone();
+            let onchange_listeners = onchange_listeners.clone();
+            move || {
+                root_found.set(None);
+                // checking if the route is valid is cheap, so we do it
+                for (slot, root) in slots.borrow_mut().iter().rev() {
+                    regen_route(*slot);
+                }
 
-        let root_found = Rc::new(Cell::new(false));
-        let regen = regen_route.clone();
-        let _root_found = root_found.clone();
-        let listener = history.listen(move || {
-            _root_found.set(false);
-            // checking if the route is valid is cheap, so we do it
-            for (slot, _) in _slots.borrow_mut().iter().rev() {
-                log::trace!("regenerating slot {:?}", slot);
-                regen(*slot);
+                for listener in onchange_listeners.borrow_mut().iter() {
+                    regen_route(*listener);
+                }
+
+                // also regenerate the root
+                regen_route(root_scope);
+
+                pending_events.borrow_mut().push(RouteEvent::Change)
             }
         });
 
         Self {
-            registerd_routes: RefCell::new(RouteSlot::Routes {
-                partial: String::from("/"),
-                total: String::from("/"),
-                rest: Vec::new(),
-            }),
+            listener,
             root_found,
             history: Rc::new(RefCell::new(history)),
             regen_route,
             slots,
-            cur_root: RefCell::new(path.to_string()),
-            listener,
+            pending_events,
+            onchange_listeners,
+            cur_path_params: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
@@ -72,11 +93,15 @@ impl RouterService {
     }
 
     pub fn register_total_route(&self, route: String, scope: ScopeId, fallback: bool) {
-        self.slots.borrow_mut().push((scope, route));
+        let clean = clean_route(route);
+        self.slots.borrow_mut().push((scope, clean));
     }
 
     pub fn should_render(&self, scope: ScopeId) -> bool {
-        if self.root_found.get() {
+        if let Some(root_id) = self.root_found.get() {
+            if root_id == scope {
+                return true;
+            }
             return false;
         }
 
@@ -89,13 +114,14 @@ impl RouterService {
 
         // fallback logic
         match root {
-            Some((_id, route)) => {
-                if route == path {
-                    self.root_found.set(true);
+            Some((id, route)) => {
+                if let Some(params) = route_matches_path(route, path) {
+                    self.root_found.set(Some(*id));
+                    *self.cur_path_params.borrow_mut() = params;
                     true
                 } else {
                     if route == "" {
-                        self.root_found.set(true);
+                        self.root_found.set(Some(*id));
                         true
                     } else {
                         false
@@ -105,6 +131,62 @@ impl RouterService {
             None => false,
         }
     }
+
+    pub fn current_location(&self) -> Location {
+        self.history.borrow().location().clone()
+    }
+
+    pub fn current_path_params(&self) -> Ref<HashMap<String, String>> {
+        self.cur_path_params.borrow()
+    }
+
+    pub fn subscribe_onchange(&self, id: ScopeId) {
+        self.onchange_listeners.borrow_mut().insert(id);
+    }
+
+    pub fn unsubscribe_onchange(&self, id: ScopeId) {
+        self.onchange_listeners.borrow_mut().remove(&id);
+    }
+}
+
+fn clean_route(route: String) -> String {
+    if route.as_str() == "/" {
+        return route;
+    }
+    route.trim_end_matches('/').to_string()
+}
+
+fn clean_path(path: &str) -> &str {
+    if path == "/" {
+        return path;
+    }
+    path.trim_end_matches('/')
+}
+
+fn route_matches_path(route: &str, path: &str) -> Option<HashMap<String, String>> {
+    let route_pieces = route.split('/').collect::<Vec<_>>();
+    let path_pieces = clean_path(path).split('/').collect::<Vec<_>>();
+
+    if route_pieces.len() != path_pieces.len() {
+        return None;
+    }
+
+    let mut matches = HashMap::new();
+    for (i, r) in route_pieces.iter().enumerate() {
+        // If this is a parameter then it matches as long as there's
+        // _any_thing in that spot in the path.
+        if r.starts_with(':') {
+            let param = &r[1..];
+            matches.insert(param.to_string(), path_pieces[i].to_string());
+            continue;
+        }
+
+        if path_pieces[i] != *r {
+            return None;
+        }
+    }
+
+    Some(matches)
 }
 
 pub struct RouterCfg {

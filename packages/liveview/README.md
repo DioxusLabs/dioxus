@@ -20,7 +20,7 @@ async fn main() -> tide::Result<()> {
 }
 ```
 
-Dioxus LiveView runs your Dioxus apps on the server 
+Dioxus LiveView runs your Dioxus apps on the server
 
 
 
@@ -36,7 +36,7 @@ async fn main() {
 
 async fn order_shoes(mut req: WebsocketRequest) -> Response {
     let stream = req.upgrade();
-    dioxus::liveview::launch(App, stream).await;    
+    dioxus::liveview::launch(App, stream).await;
 }
 
 fn App(cx: Scope) -> Element {

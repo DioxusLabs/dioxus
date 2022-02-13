@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Documentation
+
+ - <csr-id-a239d2ba6ac7f1f3d09de16c022ce8ca52cf0f63/> fix web doc example and use &mut for builders everywhere
+
+### New Features
+
+ - <csr-id-430cde7068d308f2783e33d278fd0c0efa659c1b/> default asset server
+ - <csr-id-95e93ed0bcf6c69990f4cf3c6448b2bf5da96c36/> remove dioxus id on non-event elements
+ - <csr-id-eb138848ec7a8978f0ed7c717374684d2315dc03/> also hide placeholder node
+ - <csr-id-05331ddd8033f6997d4916179b62f4d62f832988/> wire up both desktop and web
+ - <csr-id-8f4aa84f1a4f2443b34d81ee42490564e168de53/> bool attr white list
+ - <csr-id-5bf6c96f9fed04de949403202bafcbeadb5d2030/> setup a typescript build
+
+### Bug Fixes
+
+ - <csr-id-22308eb26a9ea48b14f5f5abb833aa90a4e3fc40/> custom protocol receiver type
+ - <csr-id-6bc45b1c5064a4e2b04d452c52a8167ad179691e/> clippy
+ - <csr-id-bad36162af764291f5a031b6233d151f61d745a4/> wry pathing
+ - <csr-id-be614e6535e6e13e6ff93e9c6a171c1c002e6b01/> cursor jumping  and use set instead of lsit
+ - <csr-id-92561612c727e73356d7d36e16af39aacf02a56d/> format code
+ - <csr-id-2073b400df55f0c6d8bed7371b2313be6c064e6e/> check `href` null
+ - <csr-id-21232285d9d84168d9003969ddd254fc22951e4b/> add exclusion list
+ - <csr-id-327f9015481809d8e5b9e69f26202e8d66dd198e/> check `href` null
+ - <csr-id-8089023a6c3a54957af9c9c05c9dee6088b059ef/> prevent `submit` default
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 26 commits contributed to the release over the course of 11 calendar days.
+ - 17 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - custom protocol receiver type ([`22308eb`](https://github.comgit//DioxusLabs/dioxus/commit/22308eb26a9ea48b14f5f5abb833aa90a4e3fc40))
+    - default asset server ([`430cde7`](https://github.comgit//DioxusLabs/dioxus/commit/430cde7068d308f2783e33d278fd0c0efa659c1b))
+    - fix web doc example and use &mut for builders everywhere ([`a239d2b`](https://github.comgit//DioxusLabs/dioxus/commit/a239d2ba6ac7f1f3d09de16c022ce8ca52cf0f63))
+    - Merge pull request #111 from DioxusLabs/jk/props-attrs ([`0369fe7`](https://github.comgit//DioxusLabs/dioxus/commit/0369fe72fb247409da300a54ef11ba9155d0efb3))
+    - clippy ([`6bc45b1`](https://github.comgit//DioxusLabs/dioxus/commit/6bc45b1c5064a4e2b04d452c52a8167ad179691e))
+    - Merge pull request #113 from DioxusLabs/jk/desktop-cursor-jump ([`20a2940`](https://github.comgit//DioxusLabs/dioxus/commit/20a29409b22510b001fdbee349724adb7b44d401))
+    - wry pathing ([`bad3616`](https://github.comgit//DioxusLabs/dioxus/commit/bad36162af764291f5a031b6233d151f61d745a4))
+    - remove dioxus id on non-event elements ([`95e93ed`](https://github.comgit//DioxusLabs/dioxus/commit/95e93ed0bcf6c69990f4cf3c6448b2bf5da96c36))
+    - also hide placeholder node ([`eb13884`](https://github.comgit//DioxusLabs/dioxus/commit/eb138848ec7a8978f0ed7c717374684d2315dc03))
+    - drag and drop support ([`9ae981a`](https://github.comgit//DioxusLabs/dioxus/commit/9ae981a1af4b5474ce16e27e070794d59128c12a))
+    - feat(events:focus): add missing `onfocusin` event ([`007d06d`](https://github.comgit//DioxusLabs/dioxus/commit/007d06d602f1adfaa51c87ec89b2afe90d8cdef9))
+    - cursor jumping  and use set instead of lsit ([`be614e6`](https://github.comgit//DioxusLabs/dioxus/commit/be614e6535e6e13e6ff93e9c6a171c1c002e6b01))
+    - Merge pull request #108 from DioxusLabs/jk/fstring-component-fields ([`f4132d1`](https://github.comgit//DioxusLabs/dioxus/commit/f4132d1874f7495049fac23ba0a022ac137ad74f))
+    - feat(example:todomvc): add editing support ([`9849f68`](https://github.comgit//DioxusLabs/dioxus/commit/9849f68f257200fac511c048bfb1a076243b86d3))
+    - Merge pull request #101 from alexkirsz/ci ([`29bf424`](https://github.comgit//DioxusLabs/dioxus/commit/29bf424b0976b95ff645bb128d0e758cf0186614))
+    - Merge pull request #139 from DioxusLabs/jk/provide-context-any ([`70f2ef4`](https://github.comgit//DioxusLabs/dioxus/commit/70f2ef43db5b6737bd9bcbfc1aa21c834ce4b395))
+    - Merge branch 'master' into jk/unify ([`824defa`](https://github.comgit//DioxusLabs/dioxus/commit/824defa2dbcc16d66588b3976699d89b65a8a068))
+    - wire up both desktop and web ([`05331dd`](https://github.comgit//DioxusLabs/dioxus/commit/05331ddd8033f6997d4916179b62f4d62f832988))
+    - format code ([`9256161`](https://github.comgit//DioxusLabs/dioxus/commit/92561612c727e73356d7d36e16af39aacf02a56d))
+    - Enable clippy ([`b6903bf`](https://github.comgit//DioxusLabs/dioxus/commit/b6903bf558bc7a3d0fe6794a137c44fca0957d11))
+    - bool attr white list ([`8f4aa84`](https://github.comgit//DioxusLabs/dioxus/commit/8f4aa84f1a4f2443b34d81ee42490564e168de53))
+    - setup a typescript build ([`5bf6c96`](https://github.comgit//DioxusLabs/dioxus/commit/5bf6c96f9fed04de949403202bafcbeadb5d2030))
+    - check `href` null ([`2073b40`](https://github.comgit//DioxusLabs/dioxus/commit/2073b400df55f0c6d8bed7371b2313be6c064e6e))
+    - add exclusion list ([`2123228`](https://github.comgit//DioxusLabs/dioxus/commit/21232285d9d84168d9003969ddd254fc22951e4b))
+    - check `href` null ([`327f901`](https://github.comgit//DioxusLabs/dioxus/commit/327f9015481809d8e5b9e69f26202e8d66dd198e))
+    - prevent `submit` default ([`8089023`](https://github.comgit//DioxusLabs/dioxus/commit/8089023a6c3a54957af9c9c05c9dee6088b059ef))
+</details>
+
 ## v0.1.5 (2022-01-08)
 
 ### Documentation
@@ -37,6 +107,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-f782e142118fb7acf1b88a0f3fbb03e4a5e3e91e/> omg what a dumb mistake
  - <csr-id-4a0068f09918adbc299150edcf777f342ced0dd3/> bless up, no more segfaults
  - <csr-id-7dfe89c9581f45a445f17f9fe4bb94e61f67e971/> wire up event delegator for webview
+ - <csr-id-46fd6ac3450ca5ebf9aecb2d59a5a92b2a68bdd0/> link open in browser
+ - <csr-id-f006f50317f4b75fac353bc988db057a281ba7f8/> move `rpc` to handler
+ - <csr-id-9e04ce5342850d2e0a01dde169807d6f6eb16566/> `open_browser` bool attribute
+ - <csr-id-c737c424b05ad8453e8770a14a0d210fb0c7c2fe/> link open in browser
+ - <csr-id-a0f60152bc7e5866f114ed469809ce8be70d17d4/> link open in browser
 
 ### Bug Fixes
 
@@ -48,13 +123,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - <csr-id-a33f7701fcf5f917fea8719253650b5ad92554fd/> tags
  - <csr-id-601078f9cf78a58d7502a377676ac94f3cf037bf/> desktop and mobile
  - <csr-id-ba9e1dbb8fa24048a6c9ccef8a8722688226a845/> messed up how lifetimes worked, need to render once per component
+ - <csr-id-62b637f8b0eaf616c49461fa23b9251a79abc147/> error pattern
+ - <csr-id-5233ee97d9314f7f0e0bdf05c56d2a9e4201a596/> format code
 
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 91 commits contributed to the release over the course of 151 calendar days.
- - 78 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 98 commits contributed to the release over the course of 151 calendar days.
+ - 84 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
 ### Commit Details
@@ -64,11 +141,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`a36dab7`](https://github.comgit//DioxusLabs/dioxus/commit/a36dab7f45920acd8535a69b4aa3695f3bb92111))
-    - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
-    - add exclusion list ([`2123228`](https://github.comgit//DioxusLabs/dioxus/commit/21232285d9d84168d9003969ddd254fc22951e4b))
+    - Release dioxus-desktop v0.1.5 ([`cd0dcac`](https://github.comgit//DioxusLabs/dioxus/commit/cd0dcacaf2862f26d29acb21d98f75d41b940e3f))
     - handle bool attrs properly ([`8d685f4`](https://github.comgit//DioxusLabs/dioxus/commit/8d685f40b7e0ef6521c60310d8687291e9b9c48a))
+    - link open in browser ([`46fd6ac`](https://github.comgit//DioxusLabs/dioxus/commit/46fd6ac3450ca5ebf9aecb2d59a5a92b2a68bdd0))
+    - Release dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`a36dab7`](https://github.comgit//DioxusLabs/dioxus/commit/a36dab7f45920acd8535a69b4aa3695f3bb92111))
+    - error pattern ([`62b637f`](https://github.comgit//DioxusLabs/dioxus/commit/62b637f8b0eaf616c49461fa23b9251a79abc147))
+    - move `rpc` to handler ([`f006f50`](https://github.comgit//DioxusLabs/dioxus/commit/f006f50317f4b75fac353bc988db057a281ba7f8))
+    - `open_browser` bool attribute ([`9e04ce5`](https://github.comgit//DioxusLabs/dioxus/commit/9e04ce5342850d2e0a01dde169807d6f6eb16566))
+    - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
+    - format code ([`5233ee9`](https://github.comgit//DioxusLabs/dioxus/commit/5233ee97d9314f7f0e0bdf05c56d2a9e4201a596))
+    - link open in browser ([`c737c42`](https://github.comgit//DioxusLabs/dioxus/commit/c737c424b05ad8453e8770a14a0d210fb0c7c2fe))
     - Merge pull request #89 from DioxusLabs/jk/simplify-example-run ([`8b6aa8b`](https://github.comgit//DioxusLabs/dioxus/commit/8b6aa8b880b6cb5c95e0c0743aad4e4e74388e05))
+    - link open in browser ([`a0f6015`](https://github.comgit//DioxusLabs/dioxus/commit/a0f60152bc7e5866f114ed469809ce8be70d17d4))
     - Merge pull request #74 from mrxiaozhuox/master ([`47056fd`](https://github.comgit//DioxusLabs/dioxus/commit/47056fda4577bcbdaa2a6f63d82eec876e5a5aee))
     - Merge pull request #80 from DioxusLabs/jk/router2dotoh ([`cdc2d8e`](https://github.comgit//DioxusLabs/dioxus/commit/cdc2d8ec6d123245c2ea5f6d10af02b6a6833994))
     - clear warnigns ([`175a6a1`](https://github.comgit//DioxusLabs/dioxus/commit/175a6a199c6738d8d0c7646ba0ec3fc4406c6535))

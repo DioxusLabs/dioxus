@@ -1,60 +1,15 @@
-//! Dioxus Desktop Renderer
-//!
-//! Render the Dioxus VirtualDom using the platform's native WebView implementation.
-//!
-//! # Desktop
-//!
-//! One of Dioxus' killer features is the ability to quickly build a native desktop app that looks and feels the same across platforms. Apps built with Dioxus are typically <5mb in size and use existing system resources, so they won't hog extreme amounts of RAM or memory.
-//!
-//! Dioxus Desktop is built off Tauri. Right now there aren't any Dioxus abstractions over keyboard shortcuts, menubar, handling, etc, so you'll want to leverage Tauri - mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly. The next major release of Dioxus-Desktop will include components and hooks for notifications, global shortcuts, menubar, etc.
-//!
-//!
-//! ## Getting Set up
-//!
-//! Getting Set up with Dioxus-Desktop is quite easy. Make sure you have Rust and Cargo installed, and then create a new project:
-//!
-//! ```shell
-//! $ cargo new --bin demo
-//! $ cd app
-//! ```
-//!
-//! Add Dioxus with the `desktop` feature:
-//!
-//! ```shell
-//! $ cargo add dioxus --features desktop
-//! ```
-//!
-//! Edit your `main.rs`:
-//!
-//! ```rust
-//! // main.rs
-//! use dioxus::prelude::*;
-//!
-//! fn main() {
-//!     dioxus::desktop::launch(app);
-//! }
-//!
-//! fn app(cx: Scope) -> Element {
-//!     cx.render(rsx!{
-//!         div {
-//!             "hello world!"
-//!         }
-//!     })
-//! }
-//! ```
-//!
-//!
-//! To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
-//!
-//! ## Future Steps
-//!
-//! Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
+#![doc = include_str!("readme.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub mod cfg;
+pub mod desktop_context;
 pub mod escape;
 pub mod events;
 
 use cfg::DesktopConfig;
+pub use desktop_context::use_window;
+use desktop_context::DesktopContext;
 use dioxus_core::*;
 use std::{
     collections::{HashMap, VecDeque},
@@ -69,7 +24,7 @@ use tao::{
 pub use wry;
 pub use wry::application as tao;
 use wry::{
-    application::event_loop::EventLoopProxy,
+    application::{event_loop::EventLoopProxy, window::Fullscreen},
     webview::RpcRequest,
     webview::{WebView, WebViewBuilder},
 };
@@ -149,7 +104,7 @@ pub fn launch_with_props<P: 'static + Send>(
     props: P,
     builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
-    let mut cfg = DesktopConfig::new();
+    let mut cfg = DesktopConfig::default().with_default_icon();
     builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
@@ -174,6 +129,7 @@ pub fn launch_with_props<P: 'static + Send>(
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
+                    .with_transparent(cfg.window.window.transparent)
                     .with_url("dioxus://index.html/")
                     .unwrap()
                     .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
@@ -187,37 +143,77 @@ pub fn launch_with_props<P: 'static + Send>(
                                 is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                                 let _ = proxy.send_event(UserWindowEvent::Update);
                             }
+                            "browser_open" => {
+                                println!("browser_open");
+                                let data = req.params.unwrap();
+                                log::trace!("Open browser: {:?}", data);
+                                if let Some(arr) = data.as_array() {
+                                    if let Some(temp) = arr[0].as_object() {
+                                        if temp.contains_key("href") {
+                                            let url = temp.get("href").unwrap().as_str().unwrap();
+                                            if let Err(e) = webbrowser::open(url) {
+                                                log::error!("Open Browser error: {:?}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                         None
                     })
-                    .with_custom_protocol("dioxus".into(), move |request| {
+                    .with_custom_protocol(String::from("dioxus"), move |request| {
                         // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
                         // For now, we only serve two pieces of content which get included as bytes into the final binary.
                         let path = request.uri().replace("dioxus://", "");
 
-                        if path.trim_end_matches('/') == "index.html" {
+                        // all assets shouldbe called from index.html
+                        let trimmed = path.trim_start_matches("index.html/");
+
+                        if trimmed.is_empty() {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/html")
                                 .body(include_bytes!("./index.html").to_vec())
-                        } else if path.trim_end_matches('/') == "index.html/index.js" {
+                        } else if trimmed == "index.js" {
                             wry::http::ResponseBuilder::new()
                                 .mimetype("text/javascript")
-                                .body(include_bytes!("./index.js").to_vec())
+                                .body(dioxus_interpreter_js::INTERPRTER_JS.as_bytes().to_vec())
                         } else {
-                            wry::http::ResponseBuilder::new()
-                                .status(wry::http::status::StatusCode::NOT_FOUND)
-                                .body(format!("Not found: {}", path).as_bytes().to_vec())
+                            // Read the file content from file path
+                            use std::fs::read;
+
+                            let path_buf = std::path::Path::new(trimmed).canonicalize()?;
+                            let cur_path = std::path::Path::new(".").canonicalize()?;
+
+                            if !path_buf.starts_with(cur_path) {
+                                return wry::http::ResponseBuilder::new()
+                                    .status(wry::http::status::StatusCode::FORBIDDEN)
+                                    .body(String::from("Forbidden").into_bytes());
+                            }
+
+                            if !path_buf.exists() {
+                                return wry::http::ResponseBuilder::new()
+                                    .status(wry::http::status::StatusCode::NOT_FOUND)
+                                    .body(String::from("Not Found").into_bytes());
+                            }
+
+                            let mime = mime_guess::from_path(&path_buf).first_or_octet_stream();
+
+                            // do not let path searching to go two layers beyond the caller level
+                            let data = read(path_buf)?;
+                            let meta = format!("{}", mime);
+
+                            wry::http::ResponseBuilder::new().mimetype(&meta).body(data)
                         }
                     })
                     .with_file_drop_handler(move |window, evet| {
-                        if let Some(handler) = file_handler.as_ref() {
-                            return handler(window, evet);
-                        }
-                        false
+                        file_handler
+                            .as_ref()
+                            .map(|handler| handler(window, evet))
+                            .unwrap_or_default()
                     });
 
-                for (name, handler) in cfg.protocos.drain(..) {
+                for (name, handler) in cfg.protocols.drain(..) {
                     webview = webview.with_custom_protocol(name, handler)
                 }
 
@@ -243,6 +239,109 @@ pub fn launch_with_props<P: 'static + Send>(
                 //
                 match _evt {
                     UserWindowEvent::Update => desktop.try_load_ready_webviews(),
+                    UserWindowEvent::DragWindow => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            // start to drag the window.
+                            // if the drag_window have any err. we don't do anything.
+
+                            if window.fullscreen().is_some() {
+                                return;
+                            }
+
+                            let _ = window.drag_window();
+                        }
+                    }
+                    UserWindowEvent::CloseWindow => {
+                        // close window
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    UserWindowEvent::Visible(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_visible(state);
+                        }
+                    }
+                    UserWindowEvent::Minimize(state) => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            // change window minimized state.
+                            window.set_minimized(state);
+                        }
+                    }
+                    UserWindowEvent::Maximize(state) => {
+                        // this loop just run once, because dioxus-desktop is unsupport multi-window.
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            // change window maximized state.
+                            window.set_maximized(state);
+                        }
+                    }
+                    UserWindowEvent::Fullscreen(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+
+                            let current_monitor = window.current_monitor();
+
+                            if current_monitor.is_none() {
+                                return;
+                            }
+
+                            let fullscreen = if state {
+                                Some(Fullscreen::Borderless(current_monitor))
+                            } else {
+                                None
+                            };
+
+                            window.set_fullscreen(fullscreen);
+                        }
+                    }
+                    UserWindowEvent::FocusWindow => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_focus();
+                        }
+                    }
+                    UserWindowEvent::Resizable(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_resizable(state);
+                        }
+                    }
+                    UserWindowEvent::AlwaysOnTop(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_always_on_top(state);
+                        }
+                    }
+
+                    UserWindowEvent::CursorVisible(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_cursor_visible(state);
+                        }
+                    }
+                    UserWindowEvent::CursorGrab(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            let _ = window.set_cursor_grab(state);
+                        }
+                    }
+
+                    UserWindowEvent::SetTitle(content) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_title(&content);
+                        }
+                    }
+                    UserWindowEvent::SetDecorations(state) => {
+                        for webview in desktop.webviews.values() {
+                            let window = webview.window();
+                            window.set_decorations(state);
+                        }
+                    }
                 }
             }
             Event::MainEventsCleared => {}
@@ -257,6 +356,21 @@ pub fn launch_with_props<P: 'static + Send>(
 
 pub enum UserWindowEvent {
     Update,
+    DragWindow,
+    CloseWindow,
+    FocusWindow,
+    Visible(bool),
+    Minimize(bool),
+    Maximize(bool),
+    Resizable(bool),
+    AlwaysOnTop(bool),
+    Fullscreen(bool),
+
+    CursorVisible(bool),
+    CursorGrab(bool),
+
+    SetTitle(String),
+    SetDecorations(bool),
 }
 
 pub struct DesktopController {
@@ -283,6 +397,7 @@ impl DesktopController {
         let return_sender = sender.clone();
         let proxy = evt.clone();
 
+        let desktop_context_proxy = proxy.clone();
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "spawn" onto multiple threads
             let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -293,6 +408,10 @@ impl DesktopController {
             runtime.block_on(async move {
                 let mut dom =
                     VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
+
+                let window_context = DesktopContext::new(desktop_context_proxy);
+
+                dom.base_scope().provide_context(window_context);
 
                 let edits = dom.rebuild();
 

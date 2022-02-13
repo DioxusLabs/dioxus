@@ -42,7 +42,7 @@ The HTML namespace is defined mostly with macros. However, the expanded form wou
 struct base;
 impl DioxusElement for base {
     const TAG_NAME: &'static str = "base";
-    const NAME_SPACE: Option<&'static str> = None;    
+    const NAME_SPACE: Option<&'static str> = None;
 }
 impl base {
     #[inline]
@@ -60,7 +60,7 @@ Because attributes are defined as methods on the unit struct, they guard the att
 
 ## How to extend it:
 
-Whenever the rsx! macro is called, it relies on a module `dioxus_elements` to be in scope. When you enable the `html` feature in dioxus, this module gets imported in the prelude. However, you can extend this with your own set of custom elements by making your own `dioxus_elements` module and re-exporting the html namespace. 
+Whenever the rsx! macro is called, it relies on a module `dioxus_elements` to be in scope. When you enable the `html` feature in dioxus, this module gets imported in the prelude. However, you can extend this with your own set of custom elements by making your own `dioxus_elements` module and re-exporting the html namespace.
 
 ```rust
 mod dioxus_elements {
@@ -68,13 +68,13 @@ mod dioxus_elements {
     struct my_element;
     impl DioxusElement for my_element {
         const TAG_NAME: &'static str = "base";
-        const NAME_SPACE: Option<&'static str> = None;            
+        const NAME_SPACE: Option<&'static str> = None;
     }
 }
 ```
 
 ## Limitations:
-- 
+-
 
 ## How to work around it:
 If an attribute in Dioxus is invalid (defined incorrectly) - first, make an issue - but then, you can work around it. The raw builder API is actually somewhat ergonomic to work with, and the NodeFactory type exposes a bunch of methods to make any type of tree - even invalid ones! So obviously, be careful, but there's basically anything you can do.
@@ -87,19 +87,19 @@ cx.render(rsx!{
         {LazyNodes::new(move |f| {
             f.raw_element(
                 // tag name
-                "custom_element", 
+                "custom_element",
 
                 // attributes
-                &[f.attr("billy", format_args!("goat"))], 
+                &[f.attr("billy", format_args!("goat"))],
 
                 // listeners
-                &[f.listener(onclick(move |_| {}))], 
+                &[f.listener(onclick(move |_| {}))],
 
                 // children
-                &[cx.render(rsx!(div {} ))], 
+                &[cx.render(rsx!(div {} ))],
 
                 // key
-                None 
+                None
             )
         })}
     }

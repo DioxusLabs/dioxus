@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-core-macro"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Core macro for Dioxus Virtual DOM"

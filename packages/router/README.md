@@ -5,7 +5,7 @@ DioxusRouter adds React-Router style routing to your Dioxus apps. Works in brows
 ```rust
 fn app() {
     cx.render(rsx! {
-        Routes {
+        Router {
             Route { to: "/", Component {} },
             Route { to: "/blog", Blog {} },
             Route { to: "/blog/:id", BlogPost {} },
@@ -16,7 +16,7 @@ fn app() {
 
 Then, in your route, you can choose to parse the Route any way you want through `use_route`.
 ```rust
-let id: usize = use_route(&cx).path("id")?;
+let id: usize = use_route(&cx).segment("id")?;
 
 let state: CustomState = use_route(&cx).parse()?;
 ```

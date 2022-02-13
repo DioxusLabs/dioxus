@@ -56,7 +56,7 @@ With the default configuration, any Element defined within the `dioxus-html` cra
 
 ## Text Elements
 
-Dioxus also supports a special type of Element: Text. Text Elements do not accept children, but rather just string literals denoted with double quotes.
+Dioxus also supports a special type of Element: Text. Text Elements do not accept children, just a string literal denoted by double quotes.
 
 ```rust
 rsx! (
@@ -74,26 +74,26 @@ rsx! (
 )
 ```
 
-Text can also be formatted with any value that implements `Display`. We use [f-string formatting](https://docs.rs/fstrings/0.2.3/fstrings/) - a "coming soon" feature for stable Rust that is familiar for Python and JavaScript users:
+Text can also be formatted with any value that implements `Display`. We use the same syntax as Rust [format strings](https://www.rustnote.com/blog/format_strings.html) – which will already be familiar for Python and JavaScript users:
 
 ```rust
 let name = "Bob";
 rsx! ( "hello {name}" )
 ```
 
-Unfortunately, you cannot drop in arbitrary expressions directly into the string literal. In the cases where we need to compute a complex value, we'll want to use `format_args!` directly. Due to specifics of how the `rsx!` macro (we'll cover later), our call to `format_args` must be contained within curly braces *and* square braces.
+Unfortunately, you cannot drop in arbitrary expressions directly into the string literal. In the cases where we need to compute a complex value, we'll want to use `format_args!` directly. Due to specifics of the `rsx!` macro (which we'll cover later), our call to `format_args` must be contained within square braces.
 
 ```rust
-rsx!( {[format_args!("Hello {}", if enabled { "Jack" } else { "Bob" } )]} )
+rsx!( [format_args!("Hello {}", if enabled { "Jack" } else { "Bob" } )] )
 ```
 
-Alternatively, `&str` can be included directly, though it must be inside of an array:
+Alternatively, `&str` can be included directly, though it must also be inside square braces:
 
 ```rust
 rsx!( "Hello ",  [if enabled { "Jack" } else { "Bob" }] )
 ```
 
-This is different from React's way of generating arbitrary markup but fits within idiomatic Rust. 
+This is different from React's way of generating arbitrary markup but fits within idiomatic Rust.
 
 Typically, with Dioxus, you'll just want to compute your substrings outside of the `rsx!` call and leverage the f-string formatting:
 
@@ -104,7 +104,7 @@ rsx! ( "hello {name}" )
 
 ## Attributes
 
-Every Element in your User Interface will have some sort of properties that the renderer will use when drawing to the screen. These might inform the renderer if the component should be hidden, what its background color should be, or to give it a specific name or ID.
+Every Element in your user interface will have some sort of properties that the renderer will use when drawing to the screen. These might inform the renderer if the component should be hidden, what its background color should be, or to give it a specific name or ID.
 
 To do this, we use the familiar struct-style syntax that Rust provides:
 
@@ -123,7 +123,7 @@ Each field is defined as a method on the element in the `dioxus-html` crate. Thi
 1) file an issue if the attribute _should_ be enabled
 2) add a custom attribute on-the-fly
 
-To use custom attributes, simply put the attribute name in quotes followed by a colon:
+To use custom attributes, simply put the attribute name in quotes:
 
 ```rust
 rsx!(
@@ -138,11 +138,11 @@ rsx!(
 All element attributes must occur *before* child elements. The `rsx!` macro will throw an error if your child elements come before any of your attributes. If you don't see the error, try editing your Rust-Analyzer IDE setting to ignore macro-errors. This is a temporary workaround because Rust-Analyzer currently throws *two* errors instead of just the one we care about.
 
 ```rust
-// settings.json 
+// settings.json
 {
   "rust-analyzer.diagnostics.disabled": [
     "macro-error"
-  ],   
+  ],
 }
 ```
 
@@ -166,8 +166,8 @@ This chapter just scratches the surface on how Elements can be defined.
 
 We learned:
 - Elements are the basic building blocks of User Interfaces
-- Elements can contain other elements 
+- Elements can contain other elements
 - Elements can either be a named container or text
 - Some Elements have properties that the renderer can use to draw the UI to the screen
 
-Next, we'll compose Elements together to form components.
+Next, we'll compose Elements together using Rust-based logic.

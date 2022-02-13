@@ -13,7 +13,9 @@ use std::{
     rc::Rc,
 };
 
-pub(crate) type FcSlot = *const ();
+/// for traceability, we use the raw fn pointer to identify the function
+/// we also get the component name, but that's not necessarily unique in the app
+pub(crate) type ComponentPtr = *mut std::os::raw::c_void;
 
 pub(crate) struct Heuristic {
     hook_arena_size: usize,
@@ -28,7 +30,7 @@ pub(crate) struct ScopeArena {
     pub scope_gen: Cell<usize>,
     pub bump: Bump,
     pub scopes: RefCell<FxHashMap<ScopeId, *mut ScopeState>>,
-    pub heuristics: RefCell<FxHashMap<FcSlot, Heuristic>>,
+    pub heuristics: RefCell<FxHashMap<ComponentPtr, Heuristic>>,
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
@@ -70,7 +72,7 @@ impl ScopeArena {
     }
 
     /// Safety:
-    /// - Obtaining a mutable refernece to any Scope is unsafe
+    /// - Obtaining a mutable reference to any Scope is unsafe
     /// - Scopes use interior mutability when sharing data into components
     pub(crate) fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
         unsafe { self.scopes.borrow().get(&id).map(|f| &**f) }
@@ -82,7 +84,7 @@ impl ScopeArena {
 
     pub(crate) fn new_with_key(
         &self,
-        fc_ptr: *const (),
+        fc_ptr: ComponentPtr,
         vcomp: Box<dyn AnyProps>,
         parent_scope: Option<ScopeId>,
         container: ElementId,
@@ -94,14 +96,14 @@ impl ScopeArena {
 
         // Get the height of the scope
         let height = parent_scope
-            .map(|id| self.get_scope(id).map(|scope| scope.height))
+            .map(|id| self.get_scope(id).map(|scope| scope.height + 1))
             .flatten()
             .unwrap_or_default();
 
         let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
 
         /*
-        This scopearena aggressively reuse old scopes when possible.
+        This scopearena aggressively reuses old scopes when possible.
         We try to minimize the new allocations for props/arenas.
 
         However, this will probably lead to some sort of fragmentation.
@@ -110,31 +112,62 @@ impl ScopeArena {
         if let Some(old_scope) = self.free_scopes.borrow_mut().pop() {
             // reuse the old scope
             let scope = unsafe { &mut *old_scope };
-            scope.props.get_mut().replace(vcomp);
+
+            scope.container = container;
+            scope.our_arena_idx = new_scope_id;
             scope.parent_scope = parent_scope;
             scope.height = height;
+            scope.fnptr = fc_ptr;
+            scope.props.get_mut().replace(vcomp);
             scope.subtree.set(subtree);
-            scope.our_arena_idx = new_scope_id;
-            scope.container = container;
+            scope.frames[0].reset();
+            scope.frames[1].reset();
+            scope.shared_contexts.get_mut().clear();
+            scope.items.get_mut().listeners.clear();
+            scope.items.get_mut().borrowed_props.clear();
+            scope.hook_idx.set(0);
+            scope.hook_vals.get_mut().clear();
+
             let any_item = self.scopes.borrow_mut().insert(new_scope_id, scope);
             debug_assert!(any_item.is_none());
         } else {
             // else create a new scope
+            let (node_capacity, hook_capacity) = self
+                .heuristics
+                .borrow()
+                .get(&fc_ptr)
+                .map(|h| (h.node_arena_size, h.hook_arena_size))
+                .unwrap_or_default();
+
             self.scopes.borrow_mut().insert(
                 new_scope_id,
-                self.bump.alloc(ScopeState::new(
-                    height,
+                self.bump.alloc(ScopeState {
                     container,
-                    new_scope_id,
+                    our_arena_idx: new_scope_id,
                     parent_scope,
-                    vcomp,
-                    self.tasks.clone(),
-                    self.heuristics
-                        .borrow()
-                        .get(&fc_ptr)
-                        .map(|h| (h.node_arena_size, h.hook_arena_size))
-                        .unwrap_or_default(),
-                )),
+                    height,
+                    fnptr: fc_ptr,
+                    props: RefCell::new(Some(vcomp)),
+                    frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
+
+                    // todo: subtrees
+                    subtree: Cell::new(0),
+                    is_subtree_root: Cell::new(false),
+
+                    generation: 0.into(),
+
+                    tasks: self.tasks.clone(),
+                    shared_contexts: Default::default(),
+
+                    items: RefCell::new(SelfReferentialItems {
+                        listeners: Default::default(),
+                        borrowed_props: Default::default(),
+                    }),
+
+                    hook_arena: Bump::new(),
+                    hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
+                    hook_idx: Default::default(),
+                }),
             );
         }
 
@@ -189,8 +222,6 @@ impl ScopeArena {
     /// This also makes sure that drop order is consistent and predictable. All resources that rely on being dropped will
     /// be dropped.
     pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
-        log::trace!("Ensuring drop safety for scope {:?}", scope_id);
-
         if let Some(scope) = self.get_scope(scope_id) {
             let mut items = scope.items.borrow_mut();
 
@@ -198,13 +229,9 @@ impl ScopeArena {
             // run the hooks (which hold an &mut Reference)
             // recursively call ensure_drop_safety on all children
             items.borrowed_props.drain(..).for_each(|comp| {
-                let scope_id = comp
-                    .scope
-                    .get()
-                    .expect("VComponents should be associated with a valid Scope");
-
-                self.ensure_drop_safety(scope_id);
-
+                if let Some(scope_id) = comp.scope.get() {
+                    self.ensure_drop_safety(scope_id);
+                }
                 drop(comp.props.take());
             });
 
@@ -220,18 +247,18 @@ impl ScopeArena {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
-        log::trace!("Running scope {:?}", id);
         self.ensure_drop_safety(id);
 
         // todo: we *know* that this is aliased by the contents of the scope itself
         let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
+
+        log::trace!("running scope {:?} symbol: {:?}", id, scope.fnptr);
 
         // Safety:
         // - We dropped the listeners, so no more &mut T can be used while these are held
         // - All children nodes that rely on &mut T are replaced with a new reference
         scope.hook_idx.set(0);
 
-        // book keeping to ensure safety around the borrowed data
         {
             // Safety:
             // - We've dropped all references to the wip bump frame with "ensure_drop_safety"
@@ -243,8 +270,6 @@ impl ScopeArena {
             debug_assert!(items.listeners.is_empty());
             debug_assert!(items.borrowed_props.is_empty());
         }
-
-        // safety: this is definitely not dropped
 
         /*
         If the component returns None, then we fill in a placeholder node. This will wipe what was there.
@@ -287,14 +312,13 @@ impl ScopeArena {
 
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
-                log::trace!("Found valid receiver element");
-
                 let real_el = unsafe { &**el };
+                log::debug!("looking for listener on {:?}", real_el);
+
                 if let VNode::Element(real_el) = real_el {
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
-                            log::trace!("Found valid receiver event");
-
+                            log::debug!("calling listener {:?}", listener.event);
                             if state.canceled.get() {
                                 // stop bubbling if canceled
                                 break;
@@ -424,6 +448,7 @@ pub struct ScopeState {
     pub(crate) container: ElementId,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
+    pub(crate) fnptr: ComponentPtr,
 
     // todo: subtrees
     pub(crate) is_subtree_root: Cell<bool>,
@@ -452,43 +477,6 @@ pub struct SelfReferentialItems<'a> {
 
 // Public methods exposed to libraries and components
 impl ScopeState {
-    fn new(
-        height: u32,
-        container: ElementId,
-        our_arena_idx: ScopeId,
-        parent_scope: Option<*mut ScopeState>,
-        vcomp: Box<dyn AnyProps>,
-        tasks: Rc<TaskQueue>,
-        (node_capacity, hook_capacity): (usize, usize),
-    ) -> Self {
-        ScopeState {
-            container,
-            our_arena_idx,
-            parent_scope,
-            height,
-            props: RefCell::new(Some(vcomp)),
-            frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
-
-            // todo: subtrees
-            subtree: Cell::new(0),
-            is_subtree_root: Cell::new(false),
-
-            generation: 0.into(),
-
-            tasks,
-            shared_contexts: Default::default(),
-
-            items: RefCell::new(SelfReferentialItems {
-                listeners: Default::default(),
-                borrowed_props: Default::default(),
-            }),
-
-            hook_arena: Bump::new(),
-            hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
-            hook_idx: Default::default(),
-        }
-    }
-
     /// Get the subtree ID that this scope belongs to.
     ///
     /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
@@ -670,6 +658,60 @@ impl ScopeState {
         value
     }
 
+    /// Provide a context for the root component from anywhere in your app.
+    ///
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// struct SharedState(&'static str);
+    ///
+    /// static App: Component = |cx| {
+    ///     cx.use_hook(|_| cx.provide_root_context(SharedState("world")));
+    ///     rsx!(cx, Child {})
+    /// }
+    ///
+    /// static Child: Component = |cx| {
+    ///     let state = cx.consume_state::<SharedState>();
+    ///     rsx!(cx, div { "hello {state.0}" })
+    /// }
+    /// ```
+    pub fn provide_root_context<T: 'static>(&self, value: T) -> Rc<T> {
+        let value = Rc::new(value);
+
+        // if we *are* the root component, then we can just provide the context directly
+        if self.scope_id() == ScopeId(0) {
+            self.shared_contexts
+                .borrow_mut()
+                .insert(TypeId::of::<T>(), value.clone())
+                .map(|f| f.downcast::<T>().ok())
+                .flatten();
+            return value;
+        }
+
+        let mut search_parent = self.parent_scope;
+
+        while let Some(parent) = search_parent.take() {
+            let parent = unsafe { &*parent };
+
+            if parent.scope_id() == ScopeId(0) {
+                let exists = parent
+                    .shared_contexts
+                    .borrow_mut()
+                    .insert(TypeId::of::<T>(), value.clone());
+
+                if exists.is_some() {
+                    log::warn!("Context already provided to parent scope - replacing it");
+                }
+                return value;
+            }
+
+            search_parent = parent.parent_scope;
+        }
+
+        unreachable!("all apps have a root scope")
+    }
+
     /// Try to retrieve a SharedState with type T from the any parent Scope.
     pub fn consume_context<T: 'static>(&self) -> Option<Rc<T>> {
         if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
@@ -698,6 +740,11 @@ impl ScopeState {
             .unwrap();
 
         self.tasks.push_fut(fut)
+    }
+
+    /// Spawns the future but does not return the TaskId
+    pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) {
+        self.push_future(fut);
     }
 
     // todo: attach some state to the future to know if we should poll it
@@ -840,13 +887,15 @@ impl ScopeState {
         self.frames[0].reset();
         self.frames[1].reset();
 
-        // Finally, free up the hook values
-        self.hook_arena.reset();
+        // Free up the hook values
         self.hook_vals.get_mut().drain(..).for_each(|state| {
             let as_mut = unsafe { &mut *state };
             let boxed = unsafe { bumpalo::boxed::Box::from_raw(as_mut) };
             drop(boxed);
         });
+
+        // Finally, clear the hook arena
+        self.hook_arena.reset();
     }
 }
 

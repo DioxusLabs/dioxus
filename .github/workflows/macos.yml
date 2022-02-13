@@ -1,6 +1,17 @@
-on: [push, pull_request]
-
 name: macOS tests
+
+on:
+  push:
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
+  pull_request:
+    branches:
+      - master
 
 jobs:
   test:

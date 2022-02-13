@@ -1,7 +1,7 @@
 /*
 Tiny CRM: A port of the Yew CRM example to Dioxus.
 */
-use dioxus::{events::FormEvent, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus::desktop::launch(app);
@@ -20,11 +20,11 @@ pub struct Client {
 }
 
 fn app(cx: Scope) -> Element {
-    let scene = use_state(&cx, || Scene::ClientsList);
     let clients = use_ref(&cx, || vec![] as Vec<Client>);
-    let firstname = use_state(&cx, String::new);
-    let lastname = use_state(&cx, String::new);
-    let description = use_state(&cx, String::new);
+    let (scene, set_scene) = use_state(&cx, || Scene::ClientsList);
+    let (firstname, set_firstname) = use_state(&cx, String::new);
+    let (lastname, set_lastname) = use_state(&cx, String::new);
+    let (description, set_description) = use_state(&cx, String::new);
 
     cx.render(rsx!(
         body {
@@ -38,7 +38,7 @@ fn app(cx: Scope) -> Element {
 
             h1 {"Dioxus CRM Example"}
 
-            match *scene {
+            match scene {
                 Scene::ClientsList => rsx!(
                     div { class: "crm",
                         h2 { margin_bottom: "10px", "List of clients" }
@@ -51,8 +51,8 @@ fn app(cx: Scope) -> Element {
                                 })
                             )
                         }
-                        button { class: "pure-button pure-button-primary", onclick: move |_| scene.set(Scene::NewClientForm), "Add New" }
-                        button { class: "pure-button", onclick: move |_| scene.set(Scene::Settings), "Settings" }
+                        button { class: "pure-button pure-button-primary", onclick: move |_| set_scene(Scene::NewClientForm), "Add New" }
+                        button { class: "pure-button", onclick: move |_| set_scene(Scene::Settings), "Settings" }
                     }
                 ),
                 Scene::NewClientForm => rsx!(
@@ -63,19 +63,19 @@ fn app(cx: Scope) -> Element {
                                 class: "new-client firstname",
                                 placeholder: "First name",
                                 value: "{firstname}",
-                                oninput: move |e| firstname.set(e.value.clone())
+                                oninput: move |e| set_firstname(e.value.clone())
                             }
                             input {
                                 class: "new-client lastname",
                                 placeholder: "Last name",
                                 value: "{lastname}",
-                                oninput: move |e| lastname.set(e.value.clone())
+                                oninput: move |e| set_lastname(e.value.clone())
                             }
                             textarea {
                                 class: "new-client description",
                                 placeholder: "Description",
                                 value: "{description}",
-                                oninput: move |e| description.set(e.value.clone())
+                                oninput: move |e| set_description(e.value.clone())
                             }
                         }
                         button {
@@ -86,13 +86,13 @@ fn app(cx: Scope) -> Element {
                                     first_name: (*firstname).clone(),
                                     last_name: (*lastname).clone(),
                                 });
-                                description.set(String::new());
-                                firstname.set(String::new());
-                                lastname.set(String::new());
+                                set_description(String::new());
+                                set_firstname(String::new());
+                                set_lastname(String::new());
                             },
                             "Add New"
                         }
-                        button { class: "pure-button", onclick: move |_| scene.set(Scene::ClientsList),
+                        button { class: "pure-button", onclick: move |_| set_scene(Scene::ClientsList),
                             "Go Back"
                         }
                     }
@@ -108,7 +108,7 @@ fn app(cx: Scope) -> Element {
                         }
                         button {
                             class: "pure-button pure-button-primary",
-                            onclick: move |_| scene.set(Scene::ClientsList),
+                            onclick: move |_| set_scene(Scene::ClientsList),
                             "Go Back"
                         }
                     }

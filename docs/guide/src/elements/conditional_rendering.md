@@ -27,7 +27,7 @@ Now that we have a "logged_in" flag accessible in our props, we can render two d
 
 ```rust
 fn App(cx: Scope<AppProps>) -> Element {
-    if props.logged_in {
+    if cx.props.logged_in {
         cx.render(rsx!{
             DashboardScreen {}
         })
@@ -39,7 +39,7 @@ fn App(cx: Scope<AppProps>) -> Element {
 }
 ```
 
-When the user is logged in, then this component will return the DashboardScreen. Else, the component will render the LoginScreen.
+When the user is logged in, then this component will return the DashboardScreen. If they're not logged in, the component will render the LoginScreen.
 
 ## Using match statements
 
@@ -67,7 +67,7 @@ fn App(cx: Scope)-> Element {
 }
 ```
 
-Do note: the `rsx!` macro returns a `Closure`, an anonymous function that has a unique type. To turn our `rsx!` into Elements, we need to call `cx.render`.
+Do note: the `rsx!` macro does not return an Element, but rather a wrapper struct for a `Closure` (an anonymous function). To turn our `rsx!` into an Element, we need to call `cx.render`.
 
 To make patterns like these less verbose, the `rsx!` macro accepts an optional first argument on which it will call `render`. Our previous component can be shortened with this alternative syntax:
 
@@ -136,34 +136,6 @@ cx.render(rsx!{
 })
 ```
 
-
-## Boolean Mapping
-
-In the spirit of highly-functional apps, we suggest using the "boolean mapping" pattern when trying to conditionally hide/show an Element.
-
-By default, Rust lets you convert any `boolean` into any other type by calling `and_then()`. We can exploit this functionality in components by mapping to some Element.
-
-```rust
-let show_title = true;
-rsx!(
-    div {
-        show_title.and_then(|| rsx!{
-            "This is the title"
-        })
-    }
-)
-```
-
-We can use this pattern for many things, including options:
-```rust
-let user_name = Some("bob");
-rsx!(
-    div {
-        user_name.map(|name| rsx!("Hello {name}"))
-    }
-)
-```
-
 ## Rendering Nothing
 
 Sometimes, you don't want your component to return anything at all. Under the hood, the `Element` type is just an alias for `Option<VNode>`, so you can simply return `None`.
@@ -176,11 +148,37 @@ fn demo(cx: Scope) -> Element {
 }
 ```
 
+## Boolean Mapping
+
+In the spirit of highly-functional apps, we suggest using the "boolean mapping" pattern when trying to conditionally hide/show an Element.
+
+By default, Rust lets you convert any `boolean` into an Option of any other type with [`then()`](https://doc.rust-lang.org/std/primitive.bool.html#method.then). We can use this in Components by mapping to some Element.
+
+```rust
+let show_title = true;
+rsx!(
+    div {
+        // Renders nothing by returning None when show_title is false
+        show_title.then(|| rsx!{
+            "This is the title"
+        })
+    }
+)
+```
+
+We can use this pattern for many things, including options:
+```rust
+let user_name = Some("bob");
+rsx!(
+    div {
+        // Renders nothing if user_name is None
+        user_name.map(|name| rsx!("Hello {name}"))
+    }
+)
+```
+
 ## Moving Forward:
 
-In this chapter, we learned how to render different Elements from a Component depending on a condition. This is a very powerful building block to assemble complex User Interfaces!
+In this chapter, we learned how to render different Elements from a Component depending on a condition. This is a very powerful building block to assemble complex user interfaces!
 
 In the next chapter, we'll cover how to renderer lists inside your `rsx!`.
-
-Related Reading:
-- [RSX in Depth]()

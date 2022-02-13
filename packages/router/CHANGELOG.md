@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### New Features
+
+ - <csr-id-e24957fc191476184816fe5dee249f691170d4ae/> enable use_router
+ - <csr-id-29ed7ebece26e9d53925af55f2f34a8fd8241405/> connect an onchange listener
+ - <csr-id-d2372717bd01fcff50af0572360e3f763d4c869d/> flatten props attrs
+
+### Bug Fixes
+
+ - <csr-id-5ee9d6c4348a2f51adac827f715fb138918d1dc6/> attach router listener to subscriber list
+ - <csr-id-a21e7d4dd168129da06f535f9dc4b1de724617cb/> use_route should subscribe to changes to the route
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 18 commits contributed to the release over the course of 14 calendar days.
+ - 7 commits where understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' where seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Merge pull request #169 from DioxusLabs/jk/router-userouter ([`3509602`](https://github.comgit//DioxusLabs/dioxus/commit/3509602c0bcd327a33bc8c95896775e24751da1a))
+    - enable use_router ([`e24957f`](https://github.comgit//DioxusLabs/dioxus/commit/e24957fc191476184816fe5dee249f691170d4ae))
+    - add docs to router UseRouteListener ([`79e0993`](https://github.comgit//DioxusLabs/dioxus/commit/79e09934aa685d03d6e0b323723bc1cd537d74d9))
+    - Merge pull request #166 from DioxusLabs/jk/default-assets-desktop ([`ccbb955`](https://github.comgit//DioxusLabs/dioxus/commit/ccbb955b7b24bd4e1c5aa40e813a2872ae474a69))
+    - rustfmt ([`9da46eb`](https://github.comgit//DioxusLabs/dioxus/commit/9da46eb7bc207997ca7779c58fcb2a9645dfa9d0))
+    - Make log message in Link component trace level, not debug ([`72c6bb3`](https://github.comgit//DioxusLabs/dioxus/commit/72c6bb3d0b7253f084f7e3bcf55d458cb4adeedb))
+    - attach router listener to subscriber list ([`5ee9d6c`](https://github.comgit//DioxusLabs/dioxus/commit/5ee9d6c4348a2f51adac827f715fb138918d1dc6))
+    - connect an onchange listener ([`29ed7eb`](https://github.comgit//DioxusLabs/dioxus/commit/29ed7ebece26e9d53925af55f2f34a8fd8241405))
+    - use_route should subscribe to changes to the route ([`a21e7d4`](https://github.comgit//DioxusLabs/dioxus/commit/a21e7d4dd168129da06f535f9dc4b1de724617cb))
+    - Merge pull request #95 from DioxusLabs/jk/filedragindrop ([`ca0dd4a`](https://github.comgit//DioxusLabs/dioxus/commit/ca0dd4aa7192d483a195d420363f39d771f3e471))
+    - Fix various typos and grammar nits ([`9e4ec43`](https://github.comgit//DioxusLabs/dioxus/commit/9e4ec43b1e78d355c56a38e4c092170b2b01b20d))
+    - flatten props attrs ([`d237271`](https://github.comgit//DioxusLabs/dioxus/commit/d2372717bd01fcff50af0572360e3f763d4c869d))
+    - Merge pull request #108 from DioxusLabs/jk/fstring-component-fields ([`f4132d1`](https://github.comgit//DioxusLabs/dioxus/commit/f4132d1874f7495049fac23ba0a022ac137ad74f))
+    - Enable clippy ([`b6903bf`](https://github.comgit//DioxusLabs/dioxus/commit/b6903bf558bc7a3d0fe6794a137c44fca0957d11))
+    - Merge pull request #138 from mrxiaozhuox/master ([`8c7473d`](https://github.comgit//DioxusLabs/dioxus/commit/8c7473d1943dd133f388ec36116c9d8295861b97))
+    - Add a warning when Link it called outside of a Router context ([`6408058`](https://github.comgit//DioxusLabs/dioxus/commit/64080588d02c54a1d380116cbecdd17de16d2392))
+    - Merge pull request #133 from mrxiaozhuox/master ([`887f69d`](https://github.comgit//DioxusLabs/dioxus/commit/887f69d5b47bdcde4fe0eab094c0cd0de23e4f3f))
+    - Fix handling of re-renders in the Router ([`81c094e`](https://github.comgit//DioxusLabs/dioxus/commit/81c094ed29fcdc5c6099492dd6ab09a59b79252c))
+</details>
+
 ## v0.1.0 (2022-01-08)
 
 ### Documentation
@@ -33,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 42 commits contributed to the release over the course of 352 calendar days.
+ - 50 commits contributed to the release over the course of 352 calendar days.
  - 35 commits where understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' where seen in commit messages
 
@@ -44,8 +92,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`b804c69`](https://github.comgit//DioxusLabs/dioxus/commit/b804c691d5ade4776390bb3d334cc9cd8efa4a49))
+    - More WIP router implementation ([`e06eac1`](https://github.comgit//DioxusLabs/dioxus/commit/e06eac1ce5c6bb0a6680482574d82b16a141a626))
+    - Implement UseRoute segment method ([`c9408da`](https://github.comgit//DioxusLabs/dioxus/commit/c9408da7310423b1676fab6d41635f9a8000d89e))
     - Release dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`a36dab7`](https://github.comgit//DioxusLabs/dioxus/commit/a36dab7f45920acd8535a69b4aa3695f3bb92111))
+    - Implement router matching for path parameters ([`f8a7e1c`](https://github.comgit//DioxusLabs/dioxus/commit/f8a7e1cd8255fd7d0116384247e0e305bb73bf3d))
+    - Commit WIP on router ([`3c6142f`](https://github.comgit//DioxusLabs/dioxus/commit/3c6142fb9d8b5f715adf0fb30c2f3534b9ecd923))
+    - Add more trace messages to the RouterService code ([`3a5b417`](https://github.comgit//DioxusLabs/dioxus/commit/3a5b417ad1639a31e9aac9f41b05d8b3f074b128))
     - Release dioxus-core v0.1.7, dioxus-core-macro v0.1.6, dioxus-html v0.1.4, dioxus-desktop v0.1.5, dioxus-hooks v0.1.6, dioxus-mobile v0.0.3, dioxus-router v0.1.0, dioxus-ssr v0.1.2, dioxus-web v0.0.4, dioxus v0.1.7 ([`40d1f85`](https://github.comgit//DioxusLabs/dioxus/commit/40d1f85d0c3e2c9fd23c08840cca9f459d4e4307))
+    - Fix typo in RouterService struct's "registered_routes" field name ([`d367e0f`](https://github.comgit//DioxusLabs/dioxus/commit/d367e0f89f1b31484bde42efaf10c3531aed1d64))
+    - Add title prop to Link ([`e22ba5b`](https://github.comgit//DioxusLabs/dioxus/commit/e22ba5b1e52fe00e08e0b6ac0abae29b6068b8f0))
     - add prevent default attribute and upgrade router ([`427b126`](https://github.comgit//DioxusLabs/dioxus/commit/427b126bc17336d5d14d56eb7fddb8e07752495f))
     - memoize dom in the prescence of identical components ([`cb2782b`](https://github.comgit//DioxusLabs/dioxus/commit/cb2782b4bb34cdaadfff590bfee930ae3ac6536c))
     - bump all versions ([`4f92ba4`](https://github.comgit//DioxusLabs/dioxus/commit/4f92ba41602d706449c1bddabd49829873ee72eb))

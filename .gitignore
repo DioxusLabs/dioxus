@@ -1,4 +1,5 @@
 /target
+/dist
 Cargo.lock
 .DS_Store
 
@@ -7,3 +8,4 @@ Cargo.lock
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+tarpaulin-report.html

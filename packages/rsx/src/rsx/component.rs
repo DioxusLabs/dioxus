@@ -135,11 +135,14 @@ impl ToTokens for Component {
             None => quote! { None },
         };
 
+        let fn_name = self.name.segments.last().unwrap().ident.to_string();
+
         tokens.append_all(quote! {
             __cx.component(
                 #name,
                 #builder,
                 #key_token,
+                #fn_name
             )
         })
     }

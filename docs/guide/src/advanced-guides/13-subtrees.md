@@ -6,7 +6,7 @@ For a VirtualDom that has a root tree with two subtrees, the edits follow a patt
 
 Root
 -> Tree 1
--> Tree 2 
+-> Tree 2
 -> Original root tree
 
 - Root edits
@@ -39,7 +39,7 @@ fn Window() -> DomTree {
         onassign: move |e| {
             // create window
         }
-        children() 
+        children()
     }
 }
 

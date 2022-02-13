@@ -1,6 +1,6 @@
 # Core Topics
 
-In this chapter, we'll cover some core topics on how Dioxus works and how to best leverage the features to build a beautiful, reactive app.
+In this chapter, we'll cover some core topics about how Dioxus works and how to best leverage the features to build a beautiful, reactive app.
 
 At a very high level, Dioxus is simply a Rust framework for _declaring_ user interfaces and _reacting_ to changes.
 
@@ -68,6 +68,6 @@ Remember: this concept is not new! Many frameworks are declarative - with React 
 
 Here's some reading about declaring UI in React:
 
-- [https://stackoverflow.com/questions/33655534/difference-between-declarative-and-imperative-in-react-js](https://stackoverflow.com/questions/33655534/difference-between-declarative-and-imperative-in-react-js)
+- [Difference between declarative and imperative in React.js](https://stackoverflow.com/questions/33655534/difference-between-declarative-and-imperative-in-react-js), a StackOverflow thread
 
-- [https://medium.com/@myung.kim287/declarative-vs-imperative-251ce99c6c44](https://medium.com/@myung.kim287/declarative-vs-imperative-251ce99c6c44)
+- [Declarative vs Imperative](https://medium.com/@myung.kim287/declarative-vs-imperative-251ce99c6c44), a blog post by Myung Kim

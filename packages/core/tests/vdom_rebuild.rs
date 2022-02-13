@@ -68,15 +68,9 @@ fn conditional_rendering() {
         mutations.edits,
         [
             CreateElement { root: 1, tag: "h1" },
-            CreateTextNode {
-                root: 2,
-                text: "hello"
-            },
+            CreateTextNode { root: 2, text: "hello" },
             AppendChildren { many: 1 },
-            CreateElement {
-                root: 3,
-                tag: "span"
-            },
+            CreateElement { root: 3, tag: "span" },
             CreateTextNode { root: 4, text: "a" },
             AppendChildren { many: 1 },
             CreatePlaceholder { root: 5 },

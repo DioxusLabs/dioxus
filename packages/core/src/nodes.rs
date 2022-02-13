@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{Element, Properties, Scope, ScopeId, ScopeState},
+    innerlude::{ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
     AnyEvent, Component,
 };
@@ -21,7 +21,7 @@ use std::{
 /// - the `rsx!` macro
 /// - the [`NodeFactory`] API
 pub enum VNode<'src> {
-    /// Text VNodes simply bump-allocated (or static) string slices
+    /// Text VNodes are simply bump-allocated (or static) string slices
     ///
     /// # Example
     ///
@@ -147,13 +147,6 @@ impl<'src> VNode<'src> {
         }
     }
 
-    pub(crate) fn children(&self) -> &[VNode<'src>] {
-        match &self {
-            VNode::Fragment(f) => f.children,
-            _ => &[],
-        }
-    }
-
     // Create an "owned" version of the vnode.
     pub fn decouple(&self) -> VNode<'src> {
         match *self {
@@ -175,13 +168,21 @@ impl Debug for VNode<'_> {
                 .field("key", &el.key)
                 .field("attrs", &el.attributes)
                 .field("children", &el.children)
+                .field("id", &el.id)
                 .finish(),
             VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
-            VNode::Placeholder(_) => write!(s, "VNode::VPlaceholder"),
+            VNode::Placeholder(t) => write!(s, "VNode::VPlaceholder {{ id: {:?} }}", t.id),
             VNode::Fragment(frag) => {
                 write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
             }
-            VNode::Component(comp) => write!(s, "VNode::VComponent {{ fc: {:?}}}", comp.user_fc),
+            VNode::Component(comp) => s
+                .debug_struct("VNode::VComponent")
+                .field("name", &comp.fn_name)
+                .field("fnptr", &comp.user_fc)
+                .field("key", &comp.key)
+                .field("scope", &comp.scope)
+                .field("originator", &comp.originator)
+                .finish(),
         }
     }
 }
@@ -352,27 +353,28 @@ type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 ///
 /// ```
 pub struct EventHandler<'bump, T = ()> {
-    pub callback: &'bump RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+    pub callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+}
+
+impl<'a, T> Default for EventHandler<'a, T> {
+    fn default() -> Self {
+        Self {
+            callback: RefCell::new(None),
+        }
+    }
 }
 
 impl<T> EventHandler<'_, T> {
+    /// Call this event handler with the appropriate event type
     pub fn call(&self, event: T) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
         }
     }
 
+    /// Forcibly drop the internal handler callback, releasing memory
     pub fn release(&self) {
         self.callback.replace(None);
-    }
-}
-
-impl<T> Copy for EventHandler<'_, T> {}
-impl<T> Clone for EventHandler<'_, T> {
-    fn clone(&self) -> Self {
-        Self {
-            callback: self.callback,
-        }
     }
 }
 
@@ -383,7 +385,8 @@ pub struct VComponent<'src> {
     pub originator: ScopeId,
     pub scope: Cell<Option<ScopeId>>,
     pub can_memoize: bool,
-    pub user_fc: *const (),
+    pub user_fc: ComponentPtr,
+    pub fn_name: &'static str,
     pub props: RefCell<Option<Box<dyn AnyProps + 'src>>>,
 }
 
@@ -405,7 +408,7 @@ impl<P> AnyProps for VComponentProps<P> {
     }
 
     // Safety:
-    // this will downcat the other ptr as our swallowed type!
+    // this will downcast the other ptr as our swallowed type!
     // you *must* make this check *before* calling this method
     // if your functions are not the same, then you will downcast a pointer into a different type (UB)
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool {
@@ -548,6 +551,7 @@ impl<'a> NodeFactory<'a> {
         component: fn(Scope<'a, P>) -> Element,
         props: P,
         key: Option<Arguments>,
+        fn_name: &'static str,
     ) -> VNode<'a>
     where
         P: Properties + 'a,
@@ -556,8 +560,9 @@ impl<'a> NodeFactory<'a> {
             key: key.map(|f| self.raw_text(f).0),
             scope: Default::default(),
             can_memoize: P::IS_STATIC,
-            user_fc: component as *const (),
+            user_fc: component as ComponentPtr,
             originator: self.scope.scope_id(),
+            fn_name,
             props: RefCell::new(Some(Box::new(VComponentProps {
                 // local_props: RefCell::new(Some(props)),
                 // heap_props: RefCell::new(None),
@@ -677,7 +682,7 @@ impl<'a> NodeFactory<'a> {
     pub fn event_handler<T>(self, f: impl FnMut(T) + 'a) -> EventHandler<'a, T> {
         let handler: &mut dyn FnMut(T) = self.bump.alloc(f);
         let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
-        let callback = self.bump.alloc(RefCell::new(Some(caller)));
+        let callback = RefCell::new(Some(caller));
         EventHandler { callback }
     }
 }

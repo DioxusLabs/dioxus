@@ -1,4 +1,4 @@
-pub static BUILTIN_INTERNED_STRINGS: &[&'static str] = &[
+pub static BUILTIN_INTERNED_STRINGS: &[&str] = &[
     // Important tags to dioxus
     "dioxus-id",
     "dioxus",

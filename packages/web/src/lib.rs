@@ -64,7 +64,6 @@ use futures_util::FutureExt;
 mod cache;
 mod cfg;
 mod dom;
-mod nodeslab;
 mod rehydrate;
 mod ric_raf;
 
@@ -92,6 +91,29 @@ pub fn launch(root_component: Component) {
     launch_with_props(root_component, (), |c| c);
 }
 
+/// Launch your app and run the event loop, with configuration.
+///
+/// This function will start your web app on the main web thread.
+///
+/// You can configure the WebView window with a configuration closure
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn main() {
+///     dioxus_web::launch_with_props(App, |config| config.pre_render(true));
+/// }
+///
+/// fn app(cx: Scope) -> Element {
+///     cx.render(rsx!{
+///         h1 {"hello world!"}
+///     })
+/// }
+/// ```
+pub fn launch_cfg(root: Component, config_builder: impl FnOnce(&mut WebConfig) -> &mut WebConfig) {
+    launch_with_props(root, (), config_builder)
+}
+
 /// Launches the VirtualDOM from the specified component function and props.
 ///
 /// This method will block the thread with `spawn_local`
@@ -100,7 +122,11 @@ pub fn launch(root_component: Component) {
 ///
 /// ```rust, ignore
 /// fn main() {
-///     dioxus_web::launch_with_props(App, RootProps { name: String::from("joe") });
+///     dioxus_web::launch_with_props(
+///         App,
+///         RootProps { name: String::from("joe") },
+///         |config| config
+///     );
 /// }
 ///
 /// #[derive(ParitalEq, Props)]
@@ -112,15 +138,19 @@ pub fn launch(root_component: Component) {
 ///     rsx!(cx, div {"hello {cx.props.name}"})
 /// }
 /// ```
-pub fn launch_with_props<T, F>(
+pub fn launch_with_props<T>(
     root_component: Component<T>,
     root_properties: T,
-    configuration_builder: F,
+    configuration_builder: impl FnOnce(&mut WebConfig) -> &mut WebConfig,
 ) where
     T: Send + 'static,
-    F: FnOnce(WebConfig) -> WebConfig,
 {
-    let config = configuration_builder(WebConfig::default());
+    if cfg!(feature = "panic_hook") {
+        console_error_panic_hook::set_once();
+    }
+
+    let mut config = WebConfig::default();
+    configuration_builder(&mut config);
     wasm_bindgen_futures::spawn_local(run_with_props(root_component, root_properties, config));
 }
 
