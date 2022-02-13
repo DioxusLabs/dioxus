@@ -103,25 +103,28 @@ impl Default for DesktopConfig {
 
 // dirty trick, avoid introducing `image` at runtime
 // TODO: use serde when `Icon` impl serde
-#[test]
-#[ignore]
-fn prepare_default_icon() {
-    use image::io::Reader as ImageReader;
-    use image::ImageFormat;
-    use std::fs::File;
-    use std::io::Cursor;
-    use std::io::Write;
-    use std::path::PathBuf;
-    let png: &[u8] = include_bytes!("default_icon.png");
-    let mut reader = ImageReader::new(Cursor::new(png));
-    reader.set_format(ImageFormat::Png);
-    let icon = reader.decode().unwrap();
-    let bin = PathBuf::from(file!())
-        .parent()
-        .unwrap()
-        .join("default_icon.bin");
-    println!("{:?}", bin);
-    let mut file = File::create(bin).unwrap();
-    file.write_all(icon.as_bytes()).unwrap();
-    println!("({}, {})", icon.width(), icon.height())
-}
+//
+// This function should only be enabled when generating new icons.
+//
+// #[test]
+// #[ignore]
+// fn prepare_default_icon() {
+//     use image::io::Reader as ImageReader;
+//     use image::ImageFormat;
+//     use std::fs::File;
+//     use std::io::Cursor;
+//     use std::io::Write;
+//     use std::path::PathBuf;
+//     let png: &[u8] = include_bytes!("default_icon.png");
+//     let mut reader = ImageReader::new(Cursor::new(png));
+//     reader.set_format(ImageFormat::Png);
+//     let icon = reader.decode().unwrap();
+//     let bin = PathBuf::from(file!())
+//         .parent()
+//         .unwrap()
+//         .join("default_icon.bin");
+//     println!("{:?}", bin);
+//     let mut file = File::create(bin).unwrap();
+//     file.write_all(icon.as_bytes()).unwrap();
+//     println!("({}, {})", icon.width(), icon.height())
+// }

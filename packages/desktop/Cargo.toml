@@ -41,4 +41,4 @@ tokio_runtime = ["tokio"]
 
 [dev-dependencies]
 dioxus-hooks = { path = "../hooks" }
-image = "0.24.0"
+# image = "0.24.0" # enable this when generating a new desktop image
