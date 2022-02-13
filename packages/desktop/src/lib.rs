@@ -132,23 +132,24 @@ pub fn launch_with_props<P: 'static + Send>(
                     .with_transparent(cfg.window.window.transparent)
                     .with_url("dioxus://index.html/")
                     .unwrap()
-                    .with_rpc_handler(move |_window: &Window, req: RpcRequest| {
-                        match req.method.as_str() {
-                            "user_event" => {
-                                let event = events::trigger_from_serialized(req.params.unwrap());
-                                log::trace!("User event: {:?}", event);
-                                sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
-                            }
-                            "initialize" => {
-                                is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                let _ = proxy.send_event(UserWindowEvent::Update);
-                            }
-                            "browser_open" => {
-                                println!("browser_open");
-                                let data = req.params.unwrap();
-                                log::trace!("Open browser: {:?}", data);
-                                if let Some(arr) = data.as_array() {
-                                    if let Some(temp) = arr[0].as_object() {
+                    .with_ipc_handler(move |_window: &Window, payload: String| {
+                        parse_ipc_message(&payload)
+                            .map(|message| match message.method() {
+                                "user_event" => {
+                                    let event = trigger_from_serialized(message.params());
+                                    log::trace!("User event: {:?}", event);
+                                    sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
+                                }
+                                "initialize" => {
+                                    is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
+                                    let _ = proxy
+                                        .send_event(user_window_events::UserWindowEvent::Update);
+                                }
+                                "browser_open" => {
+                                    println!("browser_open");
+                                    let data = message.params();
+                                    log::trace!("Open browser: {:?}", data);
+                                    if let Some(temp) = data.as_object() {
                                         if temp.contains_key("href") {
                                             let url = temp.get("href").unwrap().as_str().unwrap();
                                             if let Err(e) = webbrowser::open(url) {
@@ -157,11 +158,8 @@ pub fn launch_with_props<P: 'static + Send>(
                                         }
                                     }
                                 }
-                            }
-                            _ => {}
-                        }
-                        None
-                    })
+                                _ => (),
+                            })
                     .with_custom_protocol(String::from("dioxus"), move |request| {
                         // Any content that that uses the `dioxus://` scheme will be shuttled through this handler as a "special case"
                         // For now, we only serve two pieces of content which get included as bytes into the final binary.

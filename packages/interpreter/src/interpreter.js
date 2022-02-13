@@ -2,7 +2,7 @@ export function main() {
   let root = window.document.getElementById("main");
   if (root != null) {
     window.interpreter = new Interpreter(root);
-    window.rpc.call("initialize");
+    window.ipc.postMessage(serializeIpcMessage("initialize"))
   }
 }
 export class Interpreter {
@@ -207,7 +207,7 @@ export class Interpreter {
                   event.preventDefault();
                   const href = target.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
-                    window.rpc.call("browser_open", { href });
+                    window.ipc.postMessage(serializeIpcMessage("browser_open", { href }))
                   }
                 }
               }
@@ -261,11 +261,12 @@ export class Interpreter {
             if (realId == null) {
               return;
             }
-            window.rpc.call("user_event", {
+            window.ipc.postMessage(serializeIpcMessage(
+              "user_event", {
               event: edit.event_name,
               mounted_dom_id: parseInt(realId),
               contents: contents,
-            });
+            }));
           }
         };
         this.NewEventListener(edit.event_name, edit.root, handler);
@@ -543,6 +544,9 @@ export function serialize_event(event) {
       return {};
     }
   }
+}
+function serializeIpcMessage(method, params = {}) {
+  return JSON.stringify({ method, params });
 }
 const bool_attrs = {
   allowfullscreen: true,
