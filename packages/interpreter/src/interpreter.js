@@ -102,7 +102,6 @@ export class Interpreter {
   SetAttribute(root, field, value, ns) {
     const name = field;
     const node = this.nodes[root];
-    console.log(ns);
     if (ns === "style") {
       // @ts-ignore
       node.style[name] = value;
