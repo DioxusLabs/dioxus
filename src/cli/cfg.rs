@@ -1,46 +1,43 @@
-use std::path::PathBuf;
-use structopt::StructOpt;
-
-use serde::Deserialize;
+use super::*;
 
 /// Config options for the build system.
-#[derive(Clone, Debug, Default, Deserialize, StructOpt)]
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBuild {
     /// The index HTML file to drive the bundling process [default: index.html]
-    #[structopt(parse(from_os_str))]
+    #[clap(parse(from_os_str))]
     pub target: Option<PathBuf>,
 
     /// Build in release mode [default: false]
-    #[structopt(long)]
+    #[clap(long)]
     #[serde(default)]
     pub release: bool,
 
     /// Build a example [default: ""]
-    #[structopt(long)]
+    #[clap(long)]
     pub example: Option<String>,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
-    #[structopt(long)]
+    #[clap(long)]
     pub platform: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, StructOpt)]
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsServe {
     /// The index HTML file to drive the bundling process [default: index.html]
-    #[structopt(parse(from_os_str))]
+    #[clap(parse(from_os_str))]
     pub target: Option<PathBuf>,
 
     /// Build a example [default: ""]
-    #[structopt(long)]
+    #[clap(long)]
     pub example: Option<String>,
 
     /// Build in release mode [default: false]
-    #[structopt(long)]
+    #[clap(long)]
     #[serde(default)]
     pub release: bool,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
-    #[structopt(long)]
+    #[clap(long)]
     pub platform: Option<String>,
 }
 

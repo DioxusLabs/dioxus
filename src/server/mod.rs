@@ -10,14 +10,14 @@ use notify::{RecommendedWatcher, Watcher};
 use std::{path::PathBuf, sync::Arc};
 use tower_http::services::ServeDir;
 
-use crate::{builder, serve::Serve, CrateConfig};
+use crate::{builder, serve::Serve, CrateConfig, Result};
 use tokio::sync::broadcast;
 
 struct WsRelodState {
     update: broadcast::Sender<String>,
 }
 
-pub async fn startup(config: CrateConfig) -> anyhow::Result<()> {
+pub async fn startup(config: CrateConfig) -> Result<()> {
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();

@@ -1,26 +1,16 @@
-use std::{
-    fs::File,
-    io::{Read, Write},
-    path::PathBuf,
-    process::{Command, Stdio},
-};
-
-use regex::Regex;
-use serde::Deserialize;
-use structopt::StructOpt;
-
-use crate::{error::Result, Error};
+use super::*;
+use crate::custom_error;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, Default, Deserialize, StructOpt)]
-#[structopt(name = "create")]
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
+#[clap(name = "create")]
 pub struct Create {
     /// Init project name
-    #[structopt(default_value = ".")]
+    #[clap(default_value = ".")]
     name: String,
 
     /// Template path
-    #[structopt(default_value = "gh:dioxuslabs/dioxus-template", long)]
+    #[clap(default_value = "gh:dioxuslabs/dioxus-template", long)]
     template: String,
 }
 
@@ -34,10 +24,7 @@ impl Create {
         let project_path = PathBuf::from(&self.name);
 
         if project_path.join("Dioxus.toml").is_file() || project_path.join("Cargo.toml").is_file() {
-            return Err(Error::Other(anyhow::anyhow!(
-                "🧨 Folder '{}' is initialized.",
-                &self.name
-            )));
+            return custom_error!("🧨 Folder '{}' is initialized.", &self.name);
         }
 
         log::info!("🔧 Start to create a new project '{}'.", self.name);
@@ -58,9 +45,7 @@ impl Create {
                 .stderr(Stdio::inherit())
                 .output()?;
             if !install_output.status.success() {
-                return Err(Error::Other(anyhow::anyhow!(
-                    "Try to install cargo-generate failed."
-                )));
+                return custom_error!("Try to install cargo-generate failed.");
             }
         }
 
@@ -74,7 +59,7 @@ impl Create {
             .output()?;
 
         if !generate_output.status.success() {
-            return Err(Error::Other(anyhow::anyhow!("Generate project failed.")));
+            return custom_error!("Generate project failed.");
         }
 
         let mut dioxus_file = File::open(project_path.join("Dioxus.toml"))?;

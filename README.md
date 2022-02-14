@@ -7,8 +7,13 @@ dioxus-cli (inspired by wasm-pack and webpack) is a tool to help get dioxus proj
 
 ## Installation
 
-```
+```shell
+# for stable
+$ cargo install dioxus-cli
+# for latest
 $ cargo install --git https://github.com/DioxusLabs/cli
+# for developing
+$ cargo install --path . --debug
 ```
 
 Now, `dioxus` is in your path, you can use `dioxus --help` to get the help document.

@@ -12,13 +12,11 @@ use std::{
 use wasm_bindgen_cli_support::Bindgen;
 
 pub fn build(config: &CrateConfig) -> Result<()> {
-    /*
-    [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
-    [2] Generate the appropriate build folders
-    [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
-    [4] Wasm-opt the .wasm file with whatever optimizations need to be done
-    [5] Link up the html page to the wasm module
-    */
+    // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
+    // [2] Generate the appropriate build folders
+    // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
+    // [4] Wasm-opt the .wasm file with whatever optimizations need to be done
+    // [5] Link up the html page to the wasm module
 
     let CrateConfig {
         out_dir,

@@ -1,11 +1,8 @@
-use std::{fs::File, io::Write};
-
-use serde::Deserialize;
-use structopt::StructOpt;
+use super::*;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, Deserialize, StructOpt)]
-#[structopt(name = "config")]
+#[derive(Clone, Debug, Deserialize, Subcommand)]
+#[clap(name = "config")]
 pub enum Config {
     /// Init `Dioxus.toml` for project/folder.
     Init {
@@ -13,14 +10,14 @@ pub enum Config {
         name: String,
 
         /// Cover old config
-        #[structopt(long)]
+        #[clap(long)]
         #[serde(default)]
         force: bool,
     },
 }
 
 impl Config {
-    pub fn config(self) -> anyhow::Result<()> {
+    pub fn config(self) -> Result<()> {
         let crate_root = crate::cargo::crate_root()?;
         match self {
             Config::Init { name, force } => {
