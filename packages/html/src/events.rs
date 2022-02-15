@@ -486,8 +486,6 @@ pub mod on {
     #[derive(Debug)]
     pub struct FormData {
         pub value: String,
-
-        #[serde(default)]
         pub values: HashMap<String, String>,
         /* DOMEvent:  Send + SyncTarget relatedTarget */
     }
