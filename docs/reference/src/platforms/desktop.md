@@ -1,4 +1,4 @@
-# Desktop
+# Getting Started: Desktop
 
 One of Dioxus' killer features is the ability to quickly build a native desktop app that looks and feels the same across platforms. Apps built with Dioxus are typically <5mb in size and use existing system resources, so they won't hog extreme amounts of RAM or memory.
 
