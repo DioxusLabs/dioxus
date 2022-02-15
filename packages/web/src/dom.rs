@@ -87,14 +87,11 @@ impl WebsysDom {
             }
         });
 
+        // a match here in order to avoid some error during runtime browser test
         let document = load_document();
         let root = match document.get_element_by_id(&cfg.rootname) {
             Some(root) => root,
-            // a match here in order to avoid some error during runtime browser test
-            None => {
-                let body = document.create_element("body").ok().unwrap();
-                body
-            }
+            None => document.create_element("body").ok().unwrap(),
         };
 
         Self {

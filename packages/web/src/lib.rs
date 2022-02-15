@@ -211,7 +211,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         websys_dom.apply_edits(edits.edits);
     }
 
-    let work_loop = ric_raf::RafLoop::new();
+    let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::trace!("waiting for work");
