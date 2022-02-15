@@ -99,8 +99,6 @@ impl DesktopController {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                     .unwrap();
             }
-        } else {
-            println!("waiting for ready");
         }
     }
 }

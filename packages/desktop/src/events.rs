@@ -23,8 +23,7 @@ impl IpcMessage {
 }
 
 pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
-    let mm = serde_json::from_str(payload);
-    match mm {
+    match serde_json::from_str(payload) {
         Ok(message) => Some(message),
         Err(e) => {
             log::error!("could not parse IPC message, error: {e}");
