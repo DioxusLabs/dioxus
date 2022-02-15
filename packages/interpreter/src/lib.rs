@@ -1,4 +1,4 @@
-pub static INTERPRTER_JS: &str = include_str!("./interpreter.js");
+pub static INTERPRETER_JS: &str = include_str!("./interpreter.js");
 
 #[cfg(feature = "web")]
 mod bindings;
