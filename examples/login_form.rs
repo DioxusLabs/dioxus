@@ -3,7 +3,6 @@
 
 use dioxus::events::*;
 use dioxus::prelude::*;
-use dioxus::router::{use_router, Link, Route, Router};
 
 fn main() {
     dioxus::desktop::launch(app);
@@ -23,12 +22,10 @@ fn app(cx: Scope) -> Element {
 
             match resp {
                 // Parse data from here, such as storing a response token
-                Ok(_data) => {
-                    println!("Login successful");
-                }
+                Ok(_data) => println!("Login successful"),
 
                 //Handle any errors from the fetch here
-                Err(_err) => {}
+                Err(_err) => println!("Login failed"),
             }
         });
     };
