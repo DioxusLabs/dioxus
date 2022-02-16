@@ -33,6 +33,6 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     }
 
     cx.render(rsx!(
-        div { &cx.props.children }
+        &cx.props.children
     ))
 }
