@@ -32,7 +32,5 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         cx.props.onchange.call(path.to_string());
     }
 
-    cx.render(rsx!(
-        &cx.props.children
-    ))
+    cx.render(rsx!(&cx.props.children))
 }
