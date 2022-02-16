@@ -69,7 +69,7 @@ fn page_not_found(cx: Scope) -> Element {
 }
 ```
 
-Now to tell Dioxus Router to render our new component whenever no route exists, create a new route with a path of nothing.
+Now to tell Dioxus Router to render our new component when no route exists. Create a new route with a path of nothing:
 ```rs
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -81,7 +81,7 @@ fn app(cx: Scope) -> Element {
     })
 }
 ```
-When going to a route that doesn't exist, you should see the page not found text and the text we told Dioxus Router to render all the time.
+Now when you go to a route that doesn't exist, you should see the page not found text and the text we told Dioxus Router to render all the time.
 ```
 // localhost:8080/abc
 
