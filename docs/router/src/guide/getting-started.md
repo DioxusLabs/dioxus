@@ -10,7 +10,7 @@ $ rustup target add wasm32-unkown-unknown
     ...
 ```
 
-### Creating The Project
+### Creating the Project
 First, create a new cargo binary project:
 ```
 cargo new --bin dioxus-blog
@@ -29,7 +29,6 @@ dioxus = { version = "0.1.8", features = ["web", "router"] }
 
 Now we can start coding! Create an ``index.html`` file in the root of your project:
 ```html
-<!-- index.html -->
 <html>
     <head>
         <title>Dioxus Blog</title>
@@ -43,7 +42,6 @@ You can add whatever you want to this file, just ensure that you have a ``div`` 
 
 Now move to ``src/main.rs`` and replace its contents with:
 ```rs
-// src/main.rs
 use dioxus::prelude::*;
 
 fn main() {
