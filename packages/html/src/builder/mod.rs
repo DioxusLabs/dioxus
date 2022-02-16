@@ -4,7 +4,7 @@ use crate::into_attr::*;
 use bumpalo::collections::Vec as BumpVec;
 use dioxus_core::{
     self, exports::bumpalo, Attribute, Element, IntoVNode, Listener, NodeFactory, Scope,
-    ScopeState, VNode,
+    ScopeState, VNode, VText,
 };
 mod elements;
 mod events;
@@ -18,6 +18,16 @@ pub struct ElementBuilder<'a, T> {
     attrs: BumpVec<'a, Attribute<'a>>,
     children: BumpVec<'a, VNode<'a>>,
     listeners: BumpVec<'a, Listener<'a>>,
+}
+
+fn text<'a>(cx: &'a ScopeState, val: impl IntoAttributeValue<'a>) -> VNode<'a> {
+    let fac = NodeFactory::new(cx);
+    let (text, is_static) = val.into_str(fac);
+    VNode::Text(fac.bump().alloc(VText {
+        text,
+        is_static,
+        id: Default::default(),
+    }))
 }
 
 macro_rules! no_namespace_trait_methods {
@@ -151,16 +161,20 @@ fn test_builder() {
             .data(false)
             .dir(false)
             .dangerous_inner_html(false)
-            .onclick(move |_| {
-                println!("clicked");
-            })
-            .onclick(move |_| {
-                println!("clicked");
-            })
-            .onclick(move |_| {
-                println!("clicked");
-            })
             .attr("name", "asd")
+            .onclick(move |_| println!("clicked"))
+            .onclick(move |_| println!("clicked"))
+            .onclick(move |_| println!("clicked"))
+            .children([
+                match true {
+                    true => div(&cx).build(),
+                    false => div(&cx).class("asd").build(),
+                },
+                match 10 {
+                    10 => div(&cx).build(),
+                    _ => div(&cx).class("asd").build(),
+                },
+            ])
             .children([
                 match true {
                     true => div(&cx).build(),
@@ -199,5 +213,20 @@ fn test_builder() {
                 },
             ])
             .build()
+    }
+
+    fn test2(cx: Scope) -> Element {
+        let count = &*cx.use_hook(|_| 0);
+
+        cx.fragment([
+            cx.div()
+                .onclick(move |_| println!("{count}"))
+                .inner_text("up high!")
+                .build(),
+            cx.div()
+                .onclick(move |_| println!("{count}"))
+                .inner_text("down low!")
+                .build(),
+        ])
     }
 }
