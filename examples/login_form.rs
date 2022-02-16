@@ -3,20 +3,20 @@
 
 use dioxus::events::*;
 use dioxus::prelude::*;
-use dioxus::router::{Link, Route, Router, RouterService};
+use dioxus::router::{use_router, Link, Route, Router};
 
 fn main() {
-    dioxus::desktop::launch(APP);
+    dioxus::desktop::launch(app);
 }
 
-static APP: Component = |cx| {
+fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             Route { to: "/", home() }
             Route { to: "/login", login() }
         }
     })
-};
+}
 
 fn home(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -26,7 +26,7 @@ fn home(cx: Scope) -> Element {
 }
 
 fn login(cx: Scope) -> Element {
-    let service = cx.consume_context::<RouterService>()?;
+    let service = use_router(&cx);
 
     let onsubmit = move |evt: FormEvent| {
         to_owned![service];
@@ -42,10 +42,10 @@ fn login(cx: Scope) -> Element {
 
             match resp {
                 // Parse data from here, such as storing a response token
-                Ok(data) => service.push_route("/"),
+                Ok(_data) => service.push_route("/"),
 
                 //Handle any errors from the fetch here
-                Err(err) => {}
+                Err(_err) => {}
             }
         });
     };
@@ -55,13 +55,12 @@ fn login(cx: Scope) -> Element {
         form {
             onsubmit: onsubmit,
             prevent_default: "onsubmit", // Prevent the default behavior of <form> to post
-            input { r#type: "text" }
+
+            input { "type": "text" }
             label { "Username" }
             br {}
-            input { r#type: "password" }
-            label {
-                "Password"
-            }
+            input { "type": "password" }
+            label { "Password" }
             br {}
             button { "Login" }
         }
