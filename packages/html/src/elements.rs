@@ -1101,12 +1101,6 @@ impl label {
     }
 }
 
-impl form {
-    pub fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("dioxus-prevent-default", val, None, false)
-    }
-}
-
 builder_constructors! {
     // SVG components
     /// Build a
