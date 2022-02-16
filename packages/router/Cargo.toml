@@ -16,8 +16,8 @@ dioxus-html = { path = "../html", version = "^0.1.6", default-features = false }
 dioxus-core-macro = { path = "../core-macro", version = "^0.1.7" }
 
 serde = "1"
-url = "2.2.2"
 serde_urlencoded = "0.7"
+# url = "2.2.2"
 
 # for wasm
 web-sys = { version = "0.3", features = [

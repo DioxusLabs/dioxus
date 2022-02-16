@@ -40,7 +40,5 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         cx.props.onchange.call(svc.current_location().to_string());
     }
 
-    cx.render(rsx!(
-        div { &cx.props.children }
-    ))
+    cx.render(rsx!(&cx.props.children))
 }

@@ -10,11 +10,13 @@ on:
       - lib.rs
       - Cargo.toml
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
 
 jobs:
   check:
+    if: github.event.pull_request.draft == false
     name: Check
     runs-on: ubuntu-latest
     steps:
@@ -104,3 +106,5 @@ jobs:
           cargo +nightly tarpaulin --verbose --tests --all-features --workspace --timeout 120 --out Xml
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
+        with:
+          fail_ci_if_error: false

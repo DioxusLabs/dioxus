@@ -1,5 +1,4 @@
 use crate::RouterService;
-use dioxus::Attribute;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::{format_args_f, rsx, Props};
@@ -35,11 +34,18 @@ pub struct LinkProps<'a> {
     #[props(default, strip_option)]
     pub title: Option<&'a str>,
 
-    /// Set child elements of the link.
-    pub children: Element<'a>,
+    #[props(default = true)]
+    autodetect: bool,
 
-    #[props(default)]
-    attributes: Option<&'a [Attribute<'a>]>,
+    /// Is this link an external link?
+    #[props(default = false)]
+    external: bool,
+
+    /// New tab?
+    #[props(default = false)]
+    new_tab: bool,
+
+    children: Element<'a>,
 }
 
 /// A component that renders a link to a route.
@@ -60,23 +66,46 @@ pub struct LinkProps<'a> {
 /// }
 /// ```
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    if let Some(service) = cx.consume_context::<RouterService>() {
-        cx.render(rsx! {
-            a {
-                href: "{cx.props.to}",
-                class: format_args!("{}", cx.props.class.unwrap_or("")),
-                id: format_args!("{}", cx.props.id.unwrap_or("")),
-                title: format_args!("{}", cx.props.title.unwrap_or("")),
-                prevent_default: "onclick",
-                onclick: move |_| service.push_route(cx.props.to),
-                &cx.props.children
-            }
-        })
-    } else {
-        log::error!(
-            "Attempted to create a Link to {} outside of a Router context",
-            cx.props.to,
-        );
-        None
-    }
+    let svc = cx.use_hook(|_| cx.consume_context::<RouterService>());
+
+    let LinkProps {
+        to,
+        class,
+        id,
+        title,
+        autodetect,
+        external,
+        new_tab,
+        children,
+        ..
+    } = cx.props;
+
+    let is_http = to.starts_with("http") || to.starts_with("https");
+    let outerlink = (*autodetect && is_http) || *external;
+    let prevent_default = if outerlink { "" } else { "onclick" };
+
+    cx.render(rsx! {
+        a {
+            href: "{to}",
+            class: format_args!("{}", class.unwrap_or("")),
+            id: format_args!("{}", id.unwrap_or("")),
+            title: format_args!("{}", title.unwrap_or("")),
+            prevent_default: "{prevent_default}",
+            target: format_args!("{}", if *new_tab { "_blank" } else { "" }),
+            onclick: move |_| {
+                if !outerlink {
+                    if let Some(service) = svc {
+                        service.push_route(to);
+                    } else {
+                        log::error!(
+                            "Attempted to create a Link to {} outside of a Router context",
+                            cx.props.to,
+                        );
+                    }
+                }
+            },
+
+            children
+        }
+    })
 }

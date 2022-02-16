@@ -1,4 +1,4 @@
-# TUI
+# Getting Started: TUI
 
 TUI support is currently quite experimental. Even the project name will change. But, if you're willing to venture into the realm of the unknown, this guide will get you started.
 
