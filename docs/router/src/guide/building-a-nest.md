@@ -17,7 +17,7 @@ fn navbar(cx: Scope) -> Element {
 ```
 Our navbar will be a list of links going between our pages. We could always use an HTML anchor element but that would cause our page to unnecessarily reload. Instead we want to use the ``Link`` component provided by Dioxus Router. 
 
->Note: The Link component only works for links within your application. Use anchor elements when linking across websites.
+>By default, the Link component only works for links within your application. To link to external sites, add the ``external: true`` property.
 
 The Link component is very similar to the Route component. It takes a path and an element. Add the Link component into your use statement and then add some links:
 ```rs
