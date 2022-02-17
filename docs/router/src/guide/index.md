@@ -1,11 +1,11 @@
 # Dioxus Router: Guide
-In this guide you'll learn how to effectively use Dioxus Router whether you're building a small todo app or the next FAANG company. We will create a small website with blog functionality, a homepage, template user page, and an admin page. 
+In this guide you'll learn how to effectively use Dioxus Router whether you're building a small todo app or the next FAANG company. We will create a small website with a blog, homepage, and an admin page. 
 
 #### You'll learn how to
 - Create routes and render "pages".
 - Utilize nested routes, create a navigation bar, and render content for a set of routes.
 - Gather URL parameters to dynamically display content.
-- Redirect Conditionally
+- Redirect to other pages in your site.
 
 > Disclaimer
 >
