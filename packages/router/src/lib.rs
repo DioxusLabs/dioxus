@@ -15,10 +15,12 @@ mod components {
     #![allow(non_snake_case)]
 
     mod link;
+    mod redirect;
     mod route;
     mod router;
 
     pub use link::*;
+    pub use redirect::*;
     pub use route::*;
     pub use router::*;
 }

@@ -10,13 +10,14 @@ use crate::{RouteContext, RouterService};
 #[derive(Props)]
 pub struct RouteProps<'a> {
     /// The path to match.
-    to: &'a str,
+    pub to: &'a str,
 
     /// The component to render when the path matches.
-    children: Element<'a>,
+    pub children: Element<'a>,
 
+    /// Should we fall back to to this route if no future routes match?
     #[props(default)]
-    fallback: bool,
+    pub fallback: bool,
 }
 
 /// A component that conditionally renders children based on the current location.

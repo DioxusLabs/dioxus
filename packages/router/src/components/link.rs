@@ -34,18 +34,22 @@ pub struct LinkProps<'a> {
     #[props(default, strip_option)]
     pub title: Option<&'a str>,
 
+    /// Autodetect if a link is external or not.
+    ///
+    /// This is automatically set to `true` and will use http/https detection
     #[props(default = true)]
-    autodetect: bool,
+    pub autodetect: bool,
 
     /// Is this link an external link?
     #[props(default = false)]
-    external: bool,
+    pub external: bool,
 
     /// New tab?
     #[props(default = false)]
-    new_tab: bool,
+    pub new_tab: bool,
 
-    children: Element<'a>,
+    /// Pass children into the `<a>` element
+    pub children: Element<'a>,
 }
 
 /// A component that renders a link to a route.
@@ -104,7 +108,6 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
                     }
                 }
             },
-
             children
         }
     })

@@ -1,10 +1,11 @@
+use std::rc::Rc;
+
+use crate::RouterService;
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core::Element;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-
-use crate::{RouterProvider, RouterService};
 
 /// The props for the [`Router`](fn.Router.html) component.
 #[derive(Props)]
@@ -15,18 +16,19 @@ pub struct RouterProps<'a> {
     /// regardless of the path.
     pub children: Element<'a>,
 
+    /// Hook into the router when the route is changed.
+    ///
+    /// This lets you easily implement redirects
     ///
     #[props(default)]
-    pub onchange: EventHandler<'a, String>,
+    pub onchange: EventHandler<'a, Rc<RouterService>>,
 }
 
+/// A component that conditionally renders children based on the current location of the app.
 ///
+/// Uses BrowserRouter in the browser and HashRouter everywhere else.
 ///
-///
-///
-///
-///
-///
+/// Will fallback to HashRouter is BrowserRouter is not available, or through configuration.
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let svc = cx.use_hook(|_| {
@@ -37,7 +39,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     svc.pending_events.borrow_mut().clear();
 
     if any_pending {
-        cx.props.onchange.call(svc.current_location().to_string());
+        cx.props.onchange.call(svc.clone());
     }
 
     cx.render(rsx!(&cx.props.children))

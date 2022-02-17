@@ -70,41 +70,43 @@ impl RouterService {
         let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
         let root_found = Rc::new(Cell::new(None));
 
-        let mut history: Box<dyn RouterProvider> = if cfg!(feature = "web") {
-            use gloo::history::{BrowserHistory, History, HistoryListener, Location};
-            let history = BrowserHistory::default();
-            let location = history.location();
-            let path = location.path();
-            let listener = history.listen({
-                dioxus_core::to_owned![
-                    pending_events,
-                    regen_route,
-                    root_found,
-                    slots,
-                    onchange_listeners
-                ];
-                move || {
-                    root_found.set(None);
-                    // checking if the route is valid is cheap, so we do it
-                    for (slot, root) in slots.borrow_mut().iter().rev() {
-                        regen_route(*slot);
-                    }
+        // let mut history: Box<dyn RouterProvider> = if cfg!(feature = "web") {
+        //     use gloo::history::{BrowserHistory, History, HistoryListener, Location};
+        //     let history = BrowserHistory::default();
+        //     let location = history.location();
+        //     let path = location.path();
+        //     let listener = history.listen({
+        //         dioxus_core::to_owned![
+        //             pending_events,
+        //             regen_route,
+        //             root_found,
+        //             slots,
+        //             onchange_listeners
+        //         ];
+        //         move || {
+        //             root_found.set(None);
+        //             // checking if the route is valid is cheap, so we do it
+        //             for (slot, root) in slots.borrow_mut().iter().rev() {
+        //                 regen_route(*slot);
+        //             }
 
-                    for listener in onchange_listeners.borrow_mut().iter() {
-                        regen_route(*listener);
-                    }
+        //             for listener in onchange_listeners.borrow_mut().iter() {
+        //                 regen_route(*listener);
+        //             }
 
-                    // also regenerate the root
-                    regen_route(root_scope);
+        //             // also regenerate the root
+        //             regen_route(root_scope);
 
-                    pending_events.borrow_mut().push(RouteEvent::Change)
-                }
-            });
+        //             pending_events.borrow_mut().push(RouteEvent::Change)
+        //         }
+        //     });
 
-            Box::new(web::create_router())
-        } else {
-            Box::new(hash::create_router())
-        };
+        //     Box::new(web::create_router())
+        // } else {
+        //     Box::new(hash::create_router())
+        // };
+
+        let mut history = Box::new(hash::create_router());
 
         Self {
             root_found,
@@ -257,25 +259,21 @@ mod hash {
     pub struct HashRouter {}
 
     impl RouterProvider for HashRouter {
-        fn push(&self, path: &str) {
-            todo!()
-        }
+        fn push(&self, path: &str) {}
 
         fn path(&self) -> Rc<str> {
-            unimplemented!()
+            "/home".into()
         }
 
-        fn listen(&self, callback: Box<dyn Fn()>) {
-            unimplemented!()
-        }
+        fn listen(&self, callback: Box<dyn Fn()>) {}
 
         fn native_location(&self) -> Box<dyn Any> {
-            todo!()
+            Box::new(())
         }
     }
 
-    pub(crate) fn create_router() -> web::WebRouter {
-        todo!()
+    pub(crate) fn create_router() -> HashRouter {
+        HashRouter {}
     }
 }
 
@@ -287,11 +285,7 @@ mod web {
     use gloo::history::HistoryResult;
     use gloo::history::{BrowserHistory, History, HistoryListener, Location};
     use std::any::Any;
-    use std::{
-        cell::{Cell, Ref, RefCell},
-        collections::{HashMap, HashSet},
-        rc::Rc,
-    };
+    use std::rc::Rc;
 
     pub struct WebRouter {}
 
