@@ -1,7 +1,10 @@
 name: Rust CI
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - master
     paths:
       - packages/**
       - examples/**
@@ -9,10 +12,6 @@ on:
       - .github/**
       - lib.rs
       - Cargo.toml
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - master
 
 jobs:
   check:
