@@ -90,7 +90,7 @@ pub fn render_vnode<'a>(
         VNode::Element(el) => {
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
 
-            let new_style = node.block_style.merge(*style);
+            let mut new_style = node.block_style.merge(*style);
             node.block_style = new_style;
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
@@ -98,6 +98,8 @@ pub fn render_vnode<'a>(
                 frame.render_widget(WidgetWithContext::new(node, cfg), area);
             }
 
+            // do not pass background color to children
+            new_style.bg = None;
             for el in el.children {
                 render_vnode(frame, layout, layouts, vdom, el, &new_style, cfg);
             }

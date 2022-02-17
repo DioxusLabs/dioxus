@@ -26,8 +26,6 @@ impl RinkColor {
         } else {
             if self.alpha == 0.0 {
                 other
-            } else if other == Color::Reset {
-                self.color
             } else {
                 let [sr, sg, sb] = to_rgb(self.color);
                 let [or, og, ob] = to_rgb(other);
@@ -228,7 +226,7 @@ impl FromStr for RinkColor {
                     })
                 } else if color.starts_with("rgb(") {
                     let color_values = color[4..].trim_end_matches(')');
-                    if color.matches(',').count() == 4 {
+                    if color.matches(',').count() == 3 {
                         let (alpha, rgb_values) =
                             color_values.rsplit_once(',').ok_or(ParseColorError)?;
                         if let Ok(a) = alpha.parse() {
@@ -324,7 +322,6 @@ fn to_rgb(c: Color) -> [u8; 3] {
                 let r = ((v as u16 / 36) * 255 + 3) / 6;
                 let g = (((v as u16 % 36) / 6) * 255 + 3) / 6;
                 let b = ((v as u16 % 6) * 255 + 3) / 6;
-                let vals = [v / 36, (v % 36) / 6, v % 6];
                 [r as u8, g as u8, b as u8]
             }
             232..=255 => {
@@ -334,6 +331,7 @@ fn to_rgb(c: Color) -> [u8; 3] {
             // rink will never generate these colors, but they might be on the screen from another program
             _ => [0, 0, 0],
         },
+        Color::Reset => [0, 0, 0],
         _ => todo!("{c:?}"),
     }
 }
