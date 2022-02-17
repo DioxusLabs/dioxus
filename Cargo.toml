@@ -15,6 +15,7 @@ dioxus-core = { path = "./packages/core", version = "^0.1.9" }
 dioxus-html = { path = "./packages/html", version = "^0.1.6", optional = true }
 dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.7", optional = true }
 dioxus-hooks = { path = "./packages/hooks", version = "^0.1.7", optional = true }
+fermi = { path = "./packages/fermi", version = "^0.1.0", optional = true }
 
 dioxus-web = { path = "./packages/web", version = "^0.0.5", optional = true }
 dioxus-desktop = { path = "./packages/desktop", version = "^0.1.6", optional = true }
@@ -36,20 +37,6 @@ web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
 router = ["dioxus-router"]
 
-devtool = ["dioxus-desktop/devtool"]
-fullscreen = ["dioxus-desktop/fullscreen"]
-transparent = ["dioxus-desktop/transparent"]
-
-tray = ["dioxus-desktop/tray"]
-ayatana = ["dioxus-desktop/ayatana"]
-
-# "dioxus-router/web"
-# "dioxus-router/desktop"
-# desktop = ["dioxus-desktop", "dioxus-router/desktop"]
-# mobile = ["dioxus-mobile"]
-# liveview = ["dioxus-liveview"]
-
-
 [workspace]
 members = [
     "packages/core",
@@ -61,6 +48,7 @@ members = [
     "packages/desktop",
     "packages/mobile",
     "packages/interpreter",
+    "packages/fermi",
 ]
 
 [dev-dependencies]
@@ -75,4 +63,4 @@ serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }
 tokio = { version = "1.16.1", features = ["full"] }
 reqwest = { version = "0.11.9", features = ["json"] }
-dioxus = { path = ".", features = ["desktop", "ssr", "router"] }
+dioxus = { path = ".", features = ["desktop", "ssr", "router", "fermi"] }
