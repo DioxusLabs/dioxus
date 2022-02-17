@@ -9,4 +9,6 @@ In this guide you'll learn how to effectively use Dioxus Router whether you're b
 
 > Disclaimer
 >
-> This site will only display the features of Dioxus Router. It will not include any actual blog, user, or admin functionality. To keep things simple we will only be using a single file, this is not the recommended way to do things with a real application.
+> This site will only display the features of Dioxus Router. It will not include any actual blog or admin functionality. To keep things simple we will only be using a single file, this is not the recommended way of doing things with a real application.
+
+You can find the complete application [here](https://github.com/DogeDark/dioxus-router-example).
