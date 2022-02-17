@@ -32,15 +32,17 @@
 use stretch2::{prelude::*, style::PositionType, style::Style};
 use tui::style::{Color, Style as TuiStyle};
 
+use crate::style::{RinkColor, RinkStyle};
+
 pub struct StyleModifer {
     pub style: Style,
-    pub tui_style: TuiStyle,
+    pub tui_style: RinkStyle,
     pub tui_modifier: TuiModifier,
 }
 
 pub struct TuiModifier {
     // border arrays start at the top and proceed clockwise
-    pub border_colors: [Option<Color>; 4],
+    pub border_colors: [Option<RinkColor>; 4],
     pub border_types: [BorderType; 4],
     pub border_widths: [UnitSystem; 4],
     pub border_radi: [UnitSystem; 4],
@@ -67,116 +69,6 @@ impl Default for TuiModifier {
             border_types: [BorderType::NONE; 4],
             border_widths: [UnitSystem::Point(0.0); 4],
             border_radi: [UnitSystem::Point(0.0); 4],
-        }
-    }
-}
-
-fn parse_color(color: &str) -> Option<tui::style::Color> {
-    match color {
-        "red" => Some(Color::Red),
-        "green" => Some(Color::Green),
-        "blue" => Some(Color::Blue),
-        "yellow" => Some(Color::Yellow),
-        "cyan" => Some(Color::Cyan),
-        "magenta" => Some(Color::Magenta),
-        "white" => Some(Color::White),
-        "black" => Some(Color::Black),
-        _ => {
-            if color.len() == 7 && color.starts_with('#') {
-                let mut values = [0, 0, 0];
-                let mut color_ok = true;
-                for i in 0..values.len() {
-                    if let Ok(v) = u8::from_str_radix(&color[(1 + 2 * i)..(1 + 2 * (i + 1))], 16) {
-                        values[i] = v;
-                    } else {
-                        color_ok = false;
-                    }
-                }
-                if color_ok {
-                    Some(Color::Rgb(values[0], values[1], values[2]))
-                } else {
-                    None
-                }
-            } else if color.starts_with("rgb(") {
-                let mut values = [0, 0, 0];
-                let mut color_ok = true;
-                for (v, i) in color[4..]
-                    .trim_end_matches(')')
-                    .split(',')
-                    .zip(0..values.len())
-                {
-                    if let Ok(v) = v.trim().parse() {
-                        values[i] = v;
-                    } else {
-                        color_ok = false;
-                    }
-                }
-                if color_ok {
-                    Some(Color::Rgb(values[0], values[1], values[2]))
-                } else {
-                    None
-                }
-            } else if color.starts_with("hsl(") {
-                let mut values = [0, 0, 0];
-                let mut color_ok = true;
-                for (v, i) in color[4..]
-                    .trim_end_matches(')')
-                    .split(',')
-                    .zip(0..values.len())
-                {
-                    if let Ok(v) = v.trim_end_matches('%').trim().parse() {
-                        values[i] = v;
-                    } else {
-                        color_ok = false;
-                    }
-                }
-                if color_ok {
-                    let [h, s, l] = [
-                        values[0] as f32 / 360.0,
-                        values[1] as f32 / 100.0,
-                        values[2] as f32 / 100.0,
-                    ];
-                    let rgb = if s == 0.0 {
-                        [l as u8; 3]
-                    } else {
-                        fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
-                            if t < 0.0 {
-                                t += 1.0;
-                            }
-                            if t > 1.0 {
-                                t -= 1.0;
-                            }
-                            if t < 1.0 / 6.0 {
-                                p + (q - p) * 6.0 * t
-                            } else if t < 1.0 / 2.0 {
-                                q
-                            } else if t < 2.0 / 3.0 {
-                                p + (q - p) * (2.0 / 3.0 - t) * 6.0
-                            } else {
-                                p
-                            }
-                        }
-
-                        let q = if l < 0.5 {
-                            l * (1.0 + s)
-                        } else {
-                            l + s - l * s
-                        };
-                        let p = 2.0 * l - q;
-                        [
-                            (hue_to_rgb(p, q, h + 1.0 / 3.0) * 255.0) as u8,
-                            (hue_to_rgb(p, q, h) * 255.0) as u8,
-                            (hue_to_rgb(p, q, h - 1.0 / 3.0) * 255.0) as u8,
-                        ]
-                    };
-
-                    Some(Color::Rgb(rgb[0], rgb[1], rgb[2]))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
         }
     }
 }
@@ -257,7 +149,7 @@ pub fn apply_attributes(
         "clip" => {}
 
         "color" => {
-            if let Some(c) = parse_color(value) {
+            if let Ok(c) = value.parse() {
                 style.tui_style.fg.replace(c);
             }
         }
@@ -512,7 +404,7 @@ fn apply_display(_name: &str, value: &str, style: &mut StyleModifer) {
 fn apply_background(name: &str, value: &str, style: &mut StyleModifer) {
     match name {
         "background-color" => {
-            if let Some(c) = parse_color(value) {
+            if let Ok(c) = value.parse() {
                 style.tui_style.bg.replace(c);
             }
         }
@@ -548,7 +440,7 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         "border" => {}
         "border-bottom" => {}
         "border-bottom-color" => {
-            if let Some(c) = parse_color(value) {
+            if let Ok(c) = value.parse() {
                 style.tui_modifier.border_colors[2] = Some(c);
             }
         }
@@ -572,14 +464,14 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         "border-color" => {
             let values: Vec<_> = value.split(' ').collect();
             if values.len() == 1 {
-                if let Some(c) = parse_color(values[0]) {
+                if let Ok(c) = values[0].parse() {
                     for i in 0..4 {
                         style.tui_modifier.border_colors[i] = Some(c);
                     }
                 }
             } else {
                 for (i, v) in values.into_iter().enumerate() {
-                    if let Some(c) = parse_color(v) {
+                    if let Ok(c) = v.parse() {
                         style.tui_modifier.border_colors[i] = Some(c);
                     }
                 }
@@ -593,7 +485,7 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         "border-image-width" => {}
         "border-left" => {}
         "border-left-color" => {
-            if let Some(c) = parse_color(value) {
+            if let Ok(c) = value.parse() {
                 style.tui_modifier.border_colors[3] = Some(c);
             }
         }
@@ -621,7 +513,7 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         }
         "border-right" => {}
         "border-right-color" => {
-            if let Some(c) = parse_color(value) {
+            if let Ok(c) = value.parse() {
                 style.tui_modifier.border_colors[1] = Some(c);
             }
         }
@@ -647,7 +539,7 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         }
         "border-top" => {}
         "border-top-color" => {
-            if let Some(c) = parse_color(value) {
+            if let Ok(c) = value.parse() {
                 style.tui_modifier.border_colors[0] = Some(c);
             }
         }

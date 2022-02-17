@@ -4,6 +4,7 @@ use tui::style::Style as TuiStyle;
 
 use crate::{
     attributes::{apply_attributes, StyleModifer},
+    style::RinkStyle,
     TuiModifier, TuiNode,
 };
 
@@ -41,7 +42,7 @@ pub fn collect_layout<'a>(
                 id,
                 TuiNode {
                     node,
-                    block_style: tui::style::Style::default(),
+                    block_style: RinkStyle::default(),
                     tui_modifier: TuiModifier::default(),
                     layout: layout.new_node(style, &[]).unwrap(),
                 },
@@ -51,7 +52,7 @@ pub fn collect_layout<'a>(
             // gather up all the styles from the attribute list
             let mut modifier = StyleModifer {
                 style: Style::default(),
-                tui_style: TuiStyle::default(),
+                tui_style: RinkStyle::default(),
                 tui_modifier: TuiModifier::default(),
             };
 
@@ -87,7 +88,7 @@ pub fn collect_layout<'a>(
                 node.mounted_id(),
                 TuiNode {
                     node,
-                    block_style: modifier.tui_style,
+                    block_style: modifier.tui_style.into(),
                     tui_modifier: modifier.tui_modifier,
                     layout: layout.new_node(modifier.style, &child_layout).unwrap(),
                 },

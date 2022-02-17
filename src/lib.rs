@@ -13,19 +13,28 @@ use std::{
     time::{Duration, Instant},
 };
 use stretch2::{prelude::Size, Stretch};
-use tui::{backend::CrosstermBackend, style::Style as TuiStyle, Terminal};
+use style::RinkStyle;
+use tui::{backend::CrosstermBackend, Terminal};
 
 mod attributes;
+mod config;
 mod hooks;
 mod layout;
 mod render;
+mod style;
+mod widget;
 
 pub use attributes::*;
+pub use config::*;
 pub use hooks::*;
 pub use layout::*;
 pub use render::*;
 
 pub fn launch(app: Component<()>) {
+    launch_cfg(app, Config::default())
+}
+
+pub fn launch_cfg(app: Component<()>, cfg: Config) {
     let mut dom = VirtualDom::new(app);
     let (tx, rx) = unbounded();
 
@@ -37,12 +46,12 @@ pub fn launch(app: Component<()>) {
 
     dom.rebuild();
 
-    render_vdom(&mut dom, tx, handler).unwrap();
+    render_vdom(&mut dom, tx, handler, cfg).unwrap();
 }
 
 pub struct TuiNode<'a> {
     pub layout: stretch2::node::Node,
-    pub block_style: TuiStyle,
+    pub block_style: RinkStyle,
     pub tui_modifier: TuiModifier,
     pub node: &'a VNode<'a>,
 }
@@ -51,6 +60,7 @@ pub fn render_vdom(
     vdom: &mut VirtualDom,
     ctx: UnboundedSender<TermEvent>,
     handler: RinkInputHandler,
+    cfg: Config,
 ) -> Result<()> {
     // Setup input handling
     let (tx, mut rx) = unbounded();
@@ -139,7 +149,8 @@ pub fn render_vdom(
                         &mut nodes,
                         vdom,
                         root_node,
-                        &TuiStyle::default(),
+                        &RinkStyle::default(),
+                        cfg,
                     );
                     assert!(nodes.is_empty());
                 })?;

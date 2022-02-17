@@ -16,9 +16,6 @@ fn app(cx: Scope) -> Element {
             background_color: "hsl(248, 53%, 58%)",
             onwheel: move |w| set_radius((radius + w.delta_y as i8).abs()),
 
-            // the border can either be solid, double, thick, OR rounded
-            // if multable are set only the last style is appiled
-            // to skip a side set the style to none
             border_style: "solid none solid double",
             border_width: "thick",
             border_radius: "{radius}px",

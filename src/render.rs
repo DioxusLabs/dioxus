@@ -5,20 +5,111 @@ use stretch2::{
     prelude::{Layout, Size},
     Stretch,
 };
-use tui::{
-    backend::CrosstermBackend,
-    buffer::Buffer,
-    layout::Rect,
-    style::{Color, Style as TuiStyle},
-    widgets::Widget,
-};
+use tui::{backend::CrosstermBackend, layout::Rect};
 
-use crate::{BorderType, TuiNode, UnitSystem};
+use crate::{
+    style::{RinkColor, RinkStyle},
+    widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
+    BorderType, Config, TuiNode, UnitSystem,
+};
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 
-impl<'a> Widget for TuiNode<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+pub fn render_vnode<'a>(
+    frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
+    layout: &Stretch,
+    layouts: &mut HashMap<ElementId, TuiNode<'a>>,
+    vdom: &'a VirtualDom,
+    node: &'a VNode<'a>,
+    // this holds the accumulated syle state for styled text rendering
+    style: &RinkStyle,
+    cfg: Config,
+) {
+    match node {
+        VNode::Fragment(f) => {
+            for child in f.children {
+                render_vnode(frame, layout, layouts, vdom, child, style, cfg);
+            }
+            return;
+        }
+
+        VNode::Component(vcomp) => {
+            let idx = vcomp.scope.get().unwrap();
+            let new_node = vdom.get_scope(idx).unwrap().root_node();
+            render_vnode(frame, layout, layouts, vdom, new_node, style, cfg);
+            return;
+        }
+
+        VNode::Placeholder(_) => return,
+
+        VNode::Element(_) | VNode::Text(_) => {}
+    }
+
+    let id = node.try_mounted_id().unwrap();
+    let mut node = layouts.remove(&id).unwrap();
+
+    let Layout { location, size, .. } = layout.layout(node.layout).unwrap();
+
+    let Point { x, y } = location;
+    let Size { width, height } = size;
+
+    match node.node {
+        VNode::Text(t) => {
+            #[derive(Default)]
+            struct Label<'a> {
+                text: &'a str,
+                style: RinkStyle,
+            }
+
+            impl<'a> RinkWidget for Label<'a> {
+                fn render(self, area: Rect, mut buf: RinkBuffer) {
+                    for (i, c) in self.text.char_indices() {
+                        let mut new_cell = RinkCell::default();
+                        new_cell.set_style(self.style);
+                        new_cell.symbol = c.to_string();
+                        buf.set(area.left() + i as u16, area.top(), &new_cell);
+                    }
+                }
+            }
+
+            // let s = Span::raw(t.text);
+
+            // Block::default().
+
+            let label = Label {
+                text: t.text,
+                style: *style,
+            };
+            let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
+
+            // the renderer will panic if a node is rendered out of range even if the size is zero
+            if area.width > 0 && area.height > 0 {
+                frame.render_widget(WidgetWithContext::new(label, cfg), area);
+            }
+        }
+        VNode::Element(el) => {
+            let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
+
+            let new_style = node.block_style.merge(*style);
+            node.block_style = new_style;
+
+            // the renderer will panic if a node is rendered out of range even if the size is zero
+            if area.width > 0 && area.height > 0 {
+                frame.render_widget(WidgetWithContext::new(node, cfg), area);
+            }
+
+            for el in el.children {
+                render_vnode(frame, layout, layouts, vdom, el, &new_style, cfg);
+            }
+        }
+        VNode::Fragment(_) => todo!(),
+        VNode::Component(_) => todo!(),
+        VNode::Placeholder(_) => todo!(),
+    }
+}
+
+impl<'a> RinkWidget for TuiNode<'a> {
+    fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
         use tui::symbols::line::*;
 
         enum Direction {
@@ -29,11 +120,11 @@ impl<'a> Widget for TuiNode<'a> {
         }
 
         fn draw(
-            buf: &mut Buffer,
+            buf: &mut RinkBuffer,
             points_history: [[i32; 2]; 3],
             symbols: &Set,
             pos: [u16; 2],
-            color: &Option<Color>,
+            color: &Option<RinkColor>,
         ) {
             let [before, current, after] = points_history;
             let start_dir = match [before[0] - current[0], before[1] - current[1]] {
@@ -61,14 +152,11 @@ impl<'a> Widget for TuiNode<'a> {
                 }
             };
 
-            let cell = buf.get_mut(
-                (current[0] + pos[0] as i32) as u16,
-                (current[1] + pos[1] as i32) as u16,
-            );
+            let mut new_cell = RinkCell::default();
             if let Some(c) = color {
-                cell.fg = *c;
+                new_cell.fg = *c;
             }
-            cell.symbol = match [start_dir, end_dir] {
+            new_cell.symbol = match [start_dir, end_dir] {
                 [Direction::Down, Direction::Up] => symbols.vertical,
                 [Direction::Down, Direction::Right] => symbols.top_left,
                 [Direction::Down, Direction::Left] => symbols.top_right,
@@ -87,6 +175,11 @@ impl<'a> Widget for TuiNode<'a> {
                 ),
             }
             .to_string();
+            buf.set(
+                (current[0] + pos[0] as i32) as u16,
+                (current[1] + pos[1] as i32) as u16,
+                &new_cell,
+            );
         }
 
         fn draw_arc(
@@ -95,8 +188,8 @@ impl<'a> Widget for TuiNode<'a> {
             arc_angle: f32,
             radius: f32,
             symbols: &Set,
-            buf: &mut Buffer,
-            color: &Option<Color>,
+            mut buf: &mut RinkBuffer,
+            color: &Option<RinkColor>,
         ) {
             if radius < 0.0 {
                 return;
@@ -143,7 +236,7 @@ impl<'a> Widget for TuiNode<'a> {
                             _ => todo!(),
                         };
                         draw(
-                            buf,
+                            &mut buf,
                             [points_history[0], points_history[1], connecting_point],
                             &symbols,
                             pos,
@@ -152,7 +245,7 @@ impl<'a> Widget for TuiNode<'a> {
                         points_history = [points_history[1], connecting_point, points_history[2]];
                     }
 
-                    draw(buf, points_history, &symbols, pos, color);
+                    draw(&mut buf, points_history, &symbols, pos, color);
                 }
             }
 
@@ -173,11 +266,22 @@ impl<'a> Widget for TuiNode<'a> {
                 }
             }];
 
-            draw(buf, points_history, &symbols, pos, color);
+            draw(&mut buf, points_history, &symbols, pos, color);
         }
 
         if area.area() == 0 {
             return;
+        }
+
+        // todo: only render inside borders
+        for x in area.left()..area.right() {
+            for y in area.top()..area.bottom() {
+                let mut new_cell = RinkCell::default();
+                if let Some(c) = self.block_style.bg {
+                    new_cell.bg = c;
+                }
+                buf.set(x, y, &new_cell);
+            }
         }
 
         for i in 0..4 {
@@ -231,41 +335,33 @@ impl<'a> Widget for TuiNode<'a> {
 
             let color = self.tui_modifier.border_colors[i].or(self.block_style.fg);
 
+            let mut new_cell = RinkCell::default();
+            if let Some(c) = color {
+                new_cell.fg = c;
+            }
             match i {
                 0 => {
                     for x in (area.left() + last_radius[0] + 1)..(area.right() - radius[0]) {
-                        let cell = buf.get_mut(x, area.top());
-                        if let Some(c) = color {
-                            cell.fg = c;
-                        }
-                        cell.symbol = symbols.horizontal.to_string();
+                        new_cell.symbol = symbols.horizontal.to_string();
+                        buf.set(x, area.top(), &new_cell);
                     }
                 }
                 1 => {
                     for y in (area.top() + last_radius[1] + 1)..(area.bottom() - radius[1]) {
-                        let cell = buf.get_mut(area.right() - 1, y);
-                        if let Some(c) = color {
-                            cell.fg = c;
-                        }
-                        cell.symbol = symbols.vertical.to_string();
+                        new_cell.symbol = symbols.vertical.to_string();
+                        buf.set(area.right() - 1, y, &new_cell);
                     }
                 }
                 2 => {
                     for x in (area.left() + radius[0])..(area.right() - last_radius[0] - 1) {
-                        let cell = buf.get_mut(x, area.bottom() - 1);
-                        if let Some(c) = color {
-                            cell.fg = c;
-                        }
-                        cell.symbol = symbols.horizontal.to_string();
+                        new_cell.symbol = symbols.horizontal.to_string();
+                        buf.set(x, area.bottom() - 1, &new_cell);
                     }
                 }
                 3 => {
                     for y in (area.top() + radius[1])..(area.bottom() - last_radius[1] - 1) {
-                        let cell = buf.get_mut(area.left(), y);
-                        if let Some(c) = color {
-                            cell.fg = c;
-                        }
-                        cell.symbol = symbols.vertical.to_string();
+                        new_cell.symbol = symbols.vertical.to_string();
+                        buf.set(area.left(), y, &new_cell);
                     }
                 }
                 _ => (),
@@ -278,7 +374,7 @@ impl<'a> Widget for TuiNode<'a> {
                     std::f32::consts::FRAC_PI_2,
                     r,
                     &symbols,
-                    buf,
+                    &mut buf,
                     &color,
                 ),
                 1 => draw_arc(
@@ -287,7 +383,7 @@ impl<'a> Widget for TuiNode<'a> {
                     std::f32::consts::FRAC_PI_2,
                     r,
                     &symbols,
-                    buf,
+                    &mut buf,
                     &color,
                 ),
                 2 => draw_arc(
@@ -296,7 +392,7 @@ impl<'a> Widget for TuiNode<'a> {
                     std::f32::consts::FRAC_PI_2,
                     r,
                     &symbols,
-                    buf,
+                    &mut buf,
                     &color,
                 ),
                 3 => draw_arc(
@@ -305,107 +401,11 @@ impl<'a> Widget for TuiNode<'a> {
                     std::f32::consts::FRAC_PI_2,
                     r,
                     &symbols,
-                    buf,
+                    &mut buf,
                     &color,
                 ),
                 _ => panic!("more than 4 sides?"),
             }
         }
-
-        // todo: only render inside borders
-        for x in area.left()..area.right() {
-            for y in area.top()..area.bottom() {
-                let cell = buf.get_mut(x, y);
-                if let Some(c) = self.block_style.bg {
-                    cell.bg = c;
-                }
-            }
-        }
-    }
-}
-
-pub fn render_vnode<'a>(
-    frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
-    layout: &Stretch,
-    layouts: &mut HashMap<ElementId, TuiNode<'a>>,
-    vdom: &'a VirtualDom,
-    node: &'a VNode<'a>,
-    // this holds the parents syle state for styled text rendering and potentially transparentcy
-    style: &TuiStyle,
-) {
-    match node {
-        VNode::Fragment(f) => {
-            for child in f.children {
-                render_vnode(frame, layout, layouts, vdom, child, style);
-            }
-            return;
-        }
-
-        VNode::Component(vcomp) => {
-            let idx = vcomp.scope.get().unwrap();
-            let new_node = vdom.get_scope(idx).unwrap().root_node();
-            render_vnode(frame, layout, layouts, vdom, new_node, style);
-            return;
-        }
-
-        VNode::Placeholder(_) => return,
-
-        VNode::Element(_) | VNode::Text(_) => {}
-    }
-
-    let id = node.try_mounted_id().unwrap();
-    let node = layouts.remove(&id).unwrap();
-
-    let Layout { location, size, .. } = layout.layout(node.layout).unwrap();
-
-    let Point { x, y } = location;
-    let Size { width, height } = size;
-
-    match node.node {
-        VNode::Text(t) => {
-            #[derive(Default)]
-            struct Label<'a> {
-                text: &'a str,
-                style: TuiStyle,
-            }
-
-            impl<'a> Widget for Label<'a> {
-                fn render(self, area: Rect, buf: &mut Buffer) {
-                    buf.set_string(area.left(), area.top(), self.text, self.style);
-                }
-            }
-
-            // let s = Span::raw(t.text);
-
-            // Block::default().
-
-            let label = Label {
-                text: t.text,
-                style: *style,
-            };
-            let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
-
-            // the renderer will panic if a node is rendered out of range even if the size is zero
-            if area.width > 0 && area.height > 0 {
-                frame.render_widget(label, area);
-            }
-        }
-        VNode::Element(el) => {
-            let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
-
-            let new_style = style.patch(node.block_style);
-
-            // the renderer will panic if a node is rendered out of range even if the size is zero
-            if area.width > 0 && area.height > 0 {
-                frame.render_widget(node, area);
-            }
-
-            for el in el.children {
-                render_vnode(frame, layout, layouts, vdom, el, &new_style);
-            }
-        }
-        VNode::Fragment(_) => todo!(),
-        VNode::Component(_) => todo!(),
-        VNode::Placeholder(_) => todo!(),
     }
 }
