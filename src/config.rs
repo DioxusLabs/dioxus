@@ -33,7 +33,7 @@ impl Default for DioxusConfig {
                 name: "dioxus".into(),
                 default_platform: "web".to_string(),
                 out_dir: Some(PathBuf::from("dist")),
-                public_dir: Some(PathBuf::from("public")),
+                asset_dir: Some(PathBuf::from("public")),
             },
             web: WebConfig {
                 app: WebAppConfing {
@@ -61,7 +61,7 @@ pub struct ApplicationConfig {
     pub name: String,
     pub default_platform: String,
     pub out_dir: Option<PathBuf>,
-    pub public_dir: Option<PathBuf>,
+    pub asset_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,7 +101,7 @@ pub struct CrateConfig {
     pub crate_dir: PathBuf,
     pub workspace_dir: PathBuf,
     pub target_dir: PathBuf,
-    pub public_dir: PathBuf,
+    pub asset_dir: PathBuf,
     pub manifest: cargo_toml::Manifest<cargo_toml::Value>,
     pub executable: ExecutableType,
     pub dioxus_config: DioxusConfig,
@@ -130,7 +130,7 @@ impl CrateConfig {
 
         let cargo_def = &crate_dir.join("Cargo.toml");
 
-        let public_dir = match dioxus_config.application.public_dir {
+        let asset_dir = match dioxus_config.application.asset_dir {
             Some(ref v) => crate_dir.join(v),
             None => crate_dir.join("public"),
         };
@@ -154,7 +154,7 @@ impl CrateConfig {
             crate_dir,
             workspace_dir,
             target_dir,
-            public_dir,
+            asset_dir,
             manifest,
             executable,
             release,

@@ -22,7 +22,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         out_dir,
         crate_dir,
         target_dir,
-        public_dir,
+        asset_dir,
         executable,
         dioxus_config,
         ..
@@ -105,8 +105,8 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         content_only: false,
         depth: 0,
     };
-    if public_dir.is_dir() {
-        for entry in std::fs::read_dir(&public_dir)? {
+    if asset_dir.is_dir() {
+        for entry in std::fs::read_dir(&asset_dir)? {
             let path = entry?.path();
             if path.is_file() {
                 std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;
@@ -195,7 +195,7 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
         copy(res_path, &config.out_dir.join(target_file))?;
 
         // this code will copy all public file to the output dir
-        if config.public_dir.is_dir() {
+        if config.asset_dir.is_dir() {
             let copy_options = fs_extra::dir::CopyOptions {
                 overwrite: true,
                 skip_exist: false,
@@ -205,7 +205,7 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
                 depth: 0,
             };
 
-            for entry in std::fs::read_dir(&config.public_dir)? {
+            for entry in std::fs::read_dir(&config.asset_dir)? {
                 let path = entry?.path();
                 if path.is_file() {
                     std::fs::copy(&path, &config.out_dir.join(path.file_name().unwrap()))?;
