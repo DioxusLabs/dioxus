@@ -1,8 +1,10 @@
-use std::{future::Future, rc::Rc};
+#![allow(clippy::all, unused)]
+
+use std::rc::Rc;
 
 use dioxus_core::prelude::*;
 
-use crate::{Atom, AtomRoot, Readable, Writable};
+use crate::{AtomRoot, Readable, Writable};
 
 #[derive(Clone)]
 pub struct CallbackApi {

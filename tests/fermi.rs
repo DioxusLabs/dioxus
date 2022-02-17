@@ -26,15 +26,8 @@ struct LeafProps {
 }
 
 fn Leaf(cx: Scope<LeafProps>) -> Element {
-    let user = use_read(&cx, TITLE);
-    let user = use_read(&cx, USERS);
-
-    use_coroutine(&cx, || {
-        //
-        async move {
-            //
-        }
-    });
+    let _user = use_read(&cx, TITLE);
+    let _user = use_read(&cx, USERS);
 
     rsx!(cx, div {
         button {
