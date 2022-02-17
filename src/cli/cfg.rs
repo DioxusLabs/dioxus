@@ -16,9 +16,9 @@ pub struct ConfigOptsBuild {
     #[clap(long)]
     pub example: Option<String>,
 
-    /// Build platform: support Web & Desktop [default: "web"]
-    #[clap(long, default_value = "web")]
-    pub platform: String,
+    /// Build platform: support Web & Desktop [default: "default_platform"]
+    #[clap(long)]
+    pub platform: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -36,9 +36,9 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub release: bool,
 
-    /// Build platform: support Web & Desktop [default: "web"]
-    #[clap(long, default_value = "web")]
-    pub platform: String,
+    /// Build platform: support Web & Desktop [default: "default_platform"]
+    #[clap(long)]
+    pub platform: Option<String>,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.

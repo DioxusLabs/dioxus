@@ -1,22 +1,23 @@
 [application]
 
-# App (Project) Name
+# dioxus project name
 name = "{{project-name}}"
 
-# Dioxus App Support Platform
-# desktop, web, mobile, ssr
-platforms = ["web"]
+# default platfrom
+# you can also use `dioxus serve/build --platform XXX` to use other platform
+# value: web | desktop
+default_platform = "web"
 
 # Web `build` & `serve` dist path
 out_dir = "dist"
+
+# resource (static) file folder
+asset_dir = "public"
 
 [web.app]
 
 # HTML title tag content
 title = "dioxus | ⛺"
-
-# resource (static) file folder
-public_dir = "public"
 
 [web.watcher]
 
