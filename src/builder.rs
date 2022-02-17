@@ -92,7 +92,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
             .generate(&bindgen_outdir).unwrap();
     });
     if bindgen_result.is_err() {
-        panic!("Bindgen build failed");
+        log::error!("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.");
     }
 
 
