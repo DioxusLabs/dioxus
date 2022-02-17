@@ -101,8 +101,9 @@ jobs:
       - name: Generate code coverage
         run: |
           apt-get update &&\
+          apt-get install build-essential &&\
           apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev -y &&\
-          cargo +nightly tarpaulin --verbose --tests --all-features --workspace --timeout 120 --out Xml
+          cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
         with:
