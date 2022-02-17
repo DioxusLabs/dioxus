@@ -20,7 +20,7 @@ fn homepage(cx: Scope) -> Element {
 }
 ```
 
-### To Route or Not To Route
+### To Route or Not to Route
 We want to use Dioxus Router to seperate our application into different "pages". Dioxus Router will then determine which page to render based on the URL path.
 
 To start using Dioxus Router, we need to use the ``Router`` component.
@@ -46,7 +46,7 @@ If you head to your application's browser tab, you should see the text ``Welcome
 
 This is because we told Dioxus Router to render the ``homepage`` component only when the URL path is ``/``. You can tell Dioxus Router to render any kind of component such as a ``div {}``.
 
-### What If A Route Doesn't Exist?
+### What if a Route Doesn't Exist?
 In our example Dioxus Router doesn't render anything. If we wanted to, we could tell Dioxus Router to render a component all the time! Try it out:
 ```rs
 fn app(cx: Scope) -> Element {

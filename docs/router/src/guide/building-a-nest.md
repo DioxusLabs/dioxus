@@ -1,7 +1,7 @@
 # Building a Nest
 Not a bird's nest! A nest of routes!
 
-In this chapter we will begin to build the blog portion of our site which will include links, nested URLs, and URL parameters. We will also go more in depth with when we want to display content without a route.
+In this chapter we will begin to build the blog portion of our site which will include links, nested URLs, and URL parameters. We will also explore the use case of rendering components outside of routes.
 
 ### Site Navigation
 Our site visitors won't know all the available pages and blogs on our site so we should provide a navigation bar for them.
@@ -60,7 +60,7 @@ Now you should see a list of links near the top of your page. Click on one and y
 Many websites such as GitHub put parameters in their URL. For example, ``github.com/DioxusLabs`` utilizes the text after the domain to dynamically search and display content about an organization.
 
 We want to store our blogs in a database and load them as needed. This'll help prevent our app from being bloated therefor providing faster load times. We also want our users to be able to send people a link to a specific blog post.
-We could utilize a search page that loads a blog when clicked but then our users won't be able to share our blogs easily. This is where URL parameters come in. And finally, we also want our site to tell users they are on a blog page whenever the URL includes ``/blog``.
+We could utilize a search page that loads a blog when clicked but then our users won't be able to share our blogs easily. This is where URL parameters come in. And finally, we also want our site to tell users they are on a blog page whenever the URL starts with``/blog``.
 
 The path to our blog will look like ``/blog/myBlogPage``. ``myBlogPage`` being the URL parameter.
 Dioxus Router uses the ``:name`` pattern so our route will look like ``/blog/:post``.  
