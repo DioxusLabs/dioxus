@@ -89,5 +89,7 @@ Now when you go to a route that doesn't exist, you should see the page not found
 Oops! The page you are looking for doesn't exist!
 ```
 
+> Make sure you put your empty route at the bottom or else it'll override any routes below it!
+
 ### Conclusion
 In this chapter we learned how to create a route and tell Dioxus Router what component to render when the URL path is equal to what we specified. We also created a 404 page to handle when a route doesn't exist. Next, we'll create the blog portion of our site. We will utilize nested routes and URL parameters.
