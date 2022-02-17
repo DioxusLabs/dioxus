@@ -17,8 +17,6 @@ fn navbar(cx: Scope) -> Element {
 ```
 Our navbar will be a list of links going between our pages. We could always use an HTML anchor element but that would cause our page to unnecessarily reload. Instead we want to use the ``Link`` component provided by Dioxus Router. 
 
->By default, the Link component only works for links within your application. To link to external sites, add the ``external: true`` property.
-
 The Link component is very similar to the Route component. It takes a path and an element. Add the Link component into your use statement and then add some links:
 ```rs
 use dioxus::{
@@ -39,6 +37,11 @@ fn navbar(cx: Scope) -> Element {
     })
 }
 ```
+>By default, the Link component only works for links within your application. To link to external sites, add the ``external: true`` property.
+>```rs 
+>Link { to: "https://github.com", external: true, "GitHub"}
+>```
+
 And finally, use the navbar component in your app component:
 ```rs
 fn app(cx: Scope) -> Element {
@@ -140,17 +143,17 @@ fn blog_post(cx: Scope) -> Element {
 }
 ```
 All that's left is to extract the blog id from the URL and to call our helper function to get the blog text. To do this we need to utilize Dioxus Router's ``use_route`` hook.
-First start by adding ``use_route`` to your use statement.
+First start by adding ``use_route`` to your imports and then utilize the hook in your ``blog_post`` component.
 ```rs
 use dioxus::{
     prelude::*,
     router::{use_route, Link, Route, Router}, // UPDATED
 };
-```
-Then utilize the hook in our new ``blog_post`` component.
-```rs
+
+...
+
 fn blog_post(cx: Scope) -> Element {
-    let route = use_route(&cx);
+    let route = use_route(&cx); // NEW
     let blog_text = "";
 
     cx.render(rsx! {
@@ -172,6 +175,23 @@ fn blog_post(cx: Scope) -> Element {
 
     cx.render(rsx! {
         p { "{blog_text}" }
+    })
+}
+```
+And finally add the ``blog_post`` component to your ``app`` component:
+```rs
+fn app(cx: Scope) -> Element {
+    cx.render(rsx! {
+        Router {
+            self::navbar {}
+            Route { to: "/", self::homepage {}}
+            Route {
+                to: "/blog",
+                p { "-- Dioxus Blog --" }
+                Route { to: "/:post", self::blog_post {} } // UPDATED
+            }
+            Route { to: "", self::page_not_found {}}
+        }
     })
 }
 ```
