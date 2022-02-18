@@ -340,6 +340,9 @@ pub use dioxus_web as web;
 #[cfg(feature = "desktop")]
 pub use dioxus_desktop as desktop;
 
+#[cfg(feature = "fermi")]
+pub use fermi;
+
 // #[cfg(feature = "mobile")]
 // pub use dioxus_mobile as mobile;
 
