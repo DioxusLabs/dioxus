@@ -23,7 +23,7 @@ dioxus 0.1.2
 Build, bundle, & ship your Dioxus app
 
 USAGE:
-    dioxus.exe [FLAGS] <SUBCOMMAND>
+    dioxus [FLAGS] <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information
@@ -42,7 +42,7 @@ SUBCOMMANDS:
 
 ## Get Started 
 
-You can use the `dioxus crate project_name` to init a dioxus project, its will be clone from the [dioxus-template](https://github.com/DioxusLabs/dioxus-template).
+You can use the `dioxus create project_name` to init a dioxus project, its will be clone from the [dioxus-template](https://github.com/DioxusLabs/dioxus-template).
 
 or you can assign the template path:
 
