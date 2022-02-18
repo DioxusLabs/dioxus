@@ -1,34 +1,25 @@
-use anyhow::Result;
-use html_parser::Dom;
-use html_parser::Element;
-use html_parser::Node;
-#[allow(unused_imports)]
-use std::fmt::{Display, Formatter};
-use std::io::Read;
-use std::path::PathBuf;
-use std::process::exit;
-use structopt::StructOpt;
+use super::*;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, StructOpt)]
-#[structopt(name = "translate")]
+#[derive(Clone, Debug, Parser)]
+#[clap(name = "translate")]
 pub struct Translate {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub component: bool,
 
     /// Input file
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub file: Option<String>,
 
     /// Output file, stdout if not present
-    #[structopt(short, long)]
+    #[clap(parse(from_os_str))]
     pub output: Option<PathBuf>,
 }
 
 impl Translate {
-    pub fn translate(self) -> anyhow::Result<()> {
+    pub fn translate(self) -> Result<()> {
         let Translate {
             component,
             output,

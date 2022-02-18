@@ -1,9 +1,9 @@
+use clap::Parser;
 use dioxus_cli::*;
-use structopt::StructOpt;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Cli::from_args();
+    let args = Cli::parse();
     set_up_logging();
 
     match args.action {

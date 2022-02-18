@@ -5,25 +5,24 @@ use crate::{
 };
 use std::{
     fs::{copy, create_dir_all, remove_dir_all},
+    panic,
     path::PathBuf,
     process::Command,
 };
 use wasm_bindgen_cli_support::Bindgen;
 
 pub fn build(config: &CrateConfig) -> Result<()> {
-    /*
-    [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
-    [2] Generate the appropriate build folders
-    [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
-    [4] Wasm-opt the .wasm file with whatever optimizations need to be done
-    [5] Link up the html page to the wasm module
-    */
+    // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
+    // [2] Generate the appropriate build folders
+    // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
+    // [4] Wasm-opt the .wasm file with whatever optimizations need to be done
+    // [5] Link up the html page to the wasm module
 
     let CrateConfig {
         out_dir,
         crate_dir,
         target_dir,
-        public_dir,
+        asset_dir,
         executable,
         dioxus_config,
         ..
@@ -62,9 +61,6 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
-    // [3] Bindgen the final binary for use easy linking
-    let mut bindgen_builder = Bindgen::new();
-
     let release_type = match config.release {
         true => "release",
         false => "debug",
@@ -80,17 +76,27 @@ pub fn build(config: &CrateConfig) -> Result<()> {
             .join(format!("{}.wasm", name)),
     };
 
-    bindgen_builder
-        .input_path(input_path)
-        .web(true)?
-        .debug(true)
-        .demangle(true)
-        .keep_debug(true)
-        .remove_name_section(false)
-        .remove_producers_section(false)
-        .out_name(&dioxus_config.application.name)
-        .generate(&bindgen_outdir)?;
+    let bindgen_result = panic::catch_unwind(move || {
+        // [3] Bindgen the final binary for use easy linking
+        let mut bindgen_builder = Bindgen::new();
 
+        bindgen_builder
+            .input_path(input_path)
+            .web(true).unwrap()
+            .debug(true)
+            .demangle(true)
+            .keep_debug(true)
+            .remove_name_section(false)
+            .remove_producers_section(false)
+            .out_name(&dioxus_config.application.name)
+            .generate(&bindgen_outdir).unwrap();
+    });
+    if bindgen_result.is_err() {
+        log::error!("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.");
+    }
+
+
+    // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
         overwrite: true,
         skip_exist: false,
@@ -99,8 +105,8 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         content_only: false,
         depth: 0,
     };
-    if public_dir.is_dir() {
-        for entry in std::fs::read_dir(&public_dir)? {
+    if asset_dir.is_dir() {
+        for entry in std::fs::read_dir(&asset_dir)? {
             let path = entry?.path();
             if path.is_file() {
                 std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;
@@ -120,7 +126,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     Ok(())
 }
 
-pub fn build_desktop(config: &CrateConfig) -> Result<()> {
+pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
     log::info!("🚅 Running build [Desktop] command...");
 
     let mut cmd = Command::new("cargo");
@@ -146,7 +152,9 @@ pub fn build_desktop(config: &CrateConfig) -> Result<()> {
     }
 
     if output.status.success() {
-        if config.out_dir.is_dir() {
+        // this code will clean the output dir.
+        // if using the serve, we will not clean the out_dir.
+        if config.out_dir.is_dir() && !is_serve {
             remove_dir_all(&config.out_dir)?;
         }
 
@@ -181,8 +189,36 @@ pub fn build_desktop(config: &CrateConfig) -> Result<()> {
             file_name
         };
 
-        create_dir_all(&config.out_dir)?;
+        if !config.out_dir.is_dir() {
+            create_dir_all(&config.out_dir)?;
+        }
         copy(res_path, &config.out_dir.join(target_file))?;
+
+        // this code will copy all public file to the output dir
+        if config.asset_dir.is_dir() {
+            let copy_options = fs_extra::dir::CopyOptions {
+                overwrite: true,
+                skip_exist: false,
+                buffer_size: 64000,
+                copy_inside: false,
+                content_only: false,
+                depth: 0,
+            };
+
+            for entry in std::fs::read_dir(&config.asset_dir)? {
+                let path = entry?.path();
+                if path.is_file() {
+                    std::fs::copy(&path, &config.out_dir.join(path.file_name().unwrap()))?;
+                } else {
+                    match fs_extra::dir::copy(&path, &config.out_dir, &copy_options) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::warn!("Error copying dir: {}", e);
+                        }
+                    }
+                }
+            }
+        }
 
         log::info!(
             "🚩 Build completed: [./{}]",

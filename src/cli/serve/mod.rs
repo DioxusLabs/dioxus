@@ -1,17 +1,20 @@
-use crate::{cfg::ConfigOptsServe, gen_page, server, CrateConfig};
-use std::{io::Write, path::PathBuf, process::{Command, Stdio}};
-use structopt::StructOpt;
+use std::{
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
+use super::*;
 
 /// Run the WASM project on dev-server
-#[derive(Clone, Debug, StructOpt)]
-#[structopt(name = "serve")]
+#[derive(Clone, Debug, Parser)]
+#[clap(name = "serve")]
 pub struct Serve {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub serve: ConfigOptsServe,
 }
 
 impl Serve {
-    pub async fn serve(self) -> anyhow::Result<()> {
+    pub async fn serve(self) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the relase state.
@@ -21,12 +24,20 @@ impl Serve {
             crate_config.as_example(self.serve.example.unwrap());
         }
 
-        match self.serve.platform.as_str() {
+        let platform = self.serve.platform.unwrap_or_else(|| {
+            crate_config
+                .dioxus_config
+                .application
+                .default_platform
+                .clone()
+        });
+
+        match platform.as_str() {
             "web" => {
                 crate::builder::build(&crate_config)?;
             }
             "desktop" => {
-                crate::builder::build_desktop(&crate_config)?;
+                crate::builder::build_desktop(&crate_config, true)?;
 
                 match &crate_config.executable {
                     crate::ExecutableType::Binary(name)
@@ -51,7 +62,7 @@ impl Serve {
                 return Ok(());
             }
             _ => {
-                return Err(anyhow::anyhow!("Unsoppurt platform target."));
+                return custom_error!("Unsoppurt platform target.");
             }
         }
 
@@ -64,7 +75,7 @@ impl Serve {
         Ok(())
     }
 
-    pub fn regen_dev_page(crate_config: &CrateConfig) -> anyhow::Result<()> {
+    pub fn regen_dev_page(crate_config: &CrateConfig) -> Result<()> {
         let serve_html = gen_page(&crate_config.dioxus_config, true);
 
         let mut file = std::fs::File::create(
