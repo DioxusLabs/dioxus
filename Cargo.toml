@@ -37,6 +37,12 @@ web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
 router = ["dioxus-router"]
 
+devtool = ["dioxus-desktop/devtool"]
+fullscreen = ["dioxus-desktop/fullscreen"]
+transparent = ["dioxus-desktop/transparent"]
+
+tray = ["dioxus-desktop/tray"]
+ayatana = ["dioxus-desktop/ayatana"]
 
 # "dioxus-router/web"
 # "dioxus-router/desktop"
@@ -60,15 +66,15 @@ members = [
 ]
 
 [dev-dependencies]
-futures-util = "0.3.17"
+futures-util = "0.3.21"
 log = "0.4.14"
 num-format = "0.4.0"
 separator = "0.4.1"
-serde = { version = "1.0.131", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
 im-rc = "15.0.0"
-anyhow = "1.0.51"
-serde_json = "1.0.73"
+anyhow = "1.0.53"
+serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }
-tokio = { version = "1.14.0", features = ["full"] }
-reqwest = { version = "0.11.8", features = ["json"] }
+tokio = { version = "1.16.1", features = ["full"] }
+reqwest = { version = "0.11.9", features = ["json"] }
 dioxus = { path = ".", features = ["desktop", "ssr", "router"] }

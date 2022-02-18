@@ -8,7 +8,7 @@ We'll learn about:
 - Suggested cargo extensions
 
 
-For platform-specific guides, check out the [Platform Specific Guides](../platforms/00-index.md).
+For platform-specific guides, check out the [Platform Specific Guides](/reference/platforms/index.md).
 
 # Setting up Dioxus
 

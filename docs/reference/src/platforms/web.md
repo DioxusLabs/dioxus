@@ -1,4 +1,4 @@
-# Getting Started: Dioxus for Web
+# Getting Started: Web
 
 [*"Pack your things, we're going on an adventure!"*](https://trunkrs.dev)
 

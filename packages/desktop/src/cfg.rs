@@ -12,14 +12,14 @@ use wry::{
 pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
 pub struct DesktopConfig {
-    pub window: WindowBuilder,
-    pub file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
-    pub protocols: Vec<WryProtocol>,
+    pub(crate) window: WindowBuilder,
+    pub(crate) file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
+    pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
 }
 
-pub type WryProtocol = (
+pub(crate) type WryProtocol = (
     String,
     Box<dyn Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static>,
 );
@@ -88,7 +88,7 @@ impl DesktopConfig {
 
 impl DesktopConfig {
     pub(crate) fn with_default_icon(mut self) -> Self {
-        let bin: &[u8] = include_bytes!("default_icon.bin");
+        let bin: &[u8] = include_bytes!("./assets/default_icon.bin");
         let rgba = Icon::from_rgba(bin.to_owned(), 460, 460).expect("image parse failed");
         self.window.window.window_icon = Some(rgba);
         self
