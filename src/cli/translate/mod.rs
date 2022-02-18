@@ -23,7 +23,7 @@ pub struct Translate {
     pub file: Option<String>,
 
     /// Output file, stdout if not present
-    #[structopt(parse(from_os_str))]
+    #[structopt(short, long)]
     pub output: Option<PathBuf>,
 }
 
@@ -176,6 +176,7 @@ fn component(cx: Scope) -> Element {{
         }
 
         writeln!(f, "\n\nmod icons {{")?;
+        writeln!(f, "\tuse super::*;")?;
 
         let mut id = 0;
         while let Some(svg) = svg_nodes.pop() {
@@ -188,7 +189,8 @@ fn component(cx: Scope) -> Element {{
             write_tabs(f, 3)?;
 
             render_element(f, svg, 3, &mut svg_nodes, false, &mut 0)?;
-            writeln!(f, "\t\t))\n\t}}\n")?;
+
+            writeln!(f, "\t\t))\n\t}}")?;
             id += 1;
         }
 
