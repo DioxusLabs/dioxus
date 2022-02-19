@@ -11,3 +11,4 @@ proc-macro-error = "1.0.4"
 proc-macro2 = { version = "1.0.6" }
 quote = "1.0"
 syn = { version = "1.0.11", features = ["full", "extra-traits"] }
+prettyplease = {git = "https://github.com/jkelleyrtp/prettyplease.git", branch = "jk/expr"}

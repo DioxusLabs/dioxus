@@ -19,7 +19,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
-    token, Expr, Ident, LitStr, Result, Token,
+    token, Attribute, Expr, Ident, LitStr, Result, Token,
 };
 
 pub struct Component {
@@ -150,14 +150,15 @@ impl ToTokens for Component {
 
 // the struct's fields info
 pub struct ComponentField {
-    name: Ident,
-    content: ContentField,
+    pub name: Ident,
+    pub content: ContentField,
 }
 
-enum ContentField {
+pub enum ContentField {
     ManExpr(Expr),
     Formatted(LitStr),
     OnHandlerRaw(Expr),
+    Meta(Attribute),
 }
 
 impl ToTokens for ContentField {
@@ -170,6 +171,7 @@ impl ToTokens for ContentField {
             ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
                 __cx.event_handler(#e)
             }),
+            ContentField::Meta(_) => {}
         }
     }
 }

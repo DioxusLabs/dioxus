@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
-    Expr, Ident, LitStr, Result, Token,
+    Attribute, Expr, Ident, LitStr, Result, Token,
 };
 
 // =======================================
@@ -235,6 +235,9 @@ pub enum ElementAttr {
     // EventClosure { name: Ident, closure: ExprClosure },
     /// onclick: {}
     EventTokens { name: Ident, tokens: Expr },
+
+    /// Comments/attributes
+    Meta(Attribute),
 }
 
 pub struct ElementAttrNamed {
@@ -276,6 +279,9 @@ impl ToTokens for ElementAttrNamed {
                 quote! {
                     dioxus_elements::on::#name(__cx, #tokens)
                 }
+            }
+            ElementAttr::Meta(_) => {
+                return;
             }
         });
     }
