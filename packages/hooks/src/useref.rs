@@ -42,6 +42,17 @@ impl<T> UseRef<T> {
         self.value.borrow_mut()
     }
 
+    /// Take a reference to the inner value termporarily and produce a new value
+    pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+        f(&*self.read())
+    }
+
+    /// Take a reference to the inner value termporarily and produce a new value,
+    /// modifying the original in place.
+    pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
+        f(&mut *self.write())
+    }
+
     pub fn needs_update(&self) {
         (self.update_callback)();
     }
