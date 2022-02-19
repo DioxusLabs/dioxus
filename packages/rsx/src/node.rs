@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    token, Expr, LitStr, Result, Token,
+    token, Attribute, Expr, LitStr, Result, Token,
 };
 
 /*
@@ -20,6 +20,7 @@ pub enum BodyNode {
     Component(Component),
     Text(LitStr),
     RawExpr(Expr),
+    Meta(Attribute),
 }
 
 impl Parse for BodyNode {
@@ -79,6 +80,7 @@ impl ToTokens for BodyNode {
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)
             }),
+            BodyNode::Meta(_) => {}
         }
     }
 }

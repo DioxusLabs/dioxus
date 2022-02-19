@@ -33,6 +33,7 @@ jobs:
           command: check
 
   test:
+    if: github.event.pull_request.draft == false
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
@@ -54,6 +55,7 @@ jobs:
           args: tests
 
   fmt:
+    if: github.event.pull_request.draft == false
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
@@ -71,6 +73,7 @@ jobs:
           args: --all -- --check
 
   clippy:
+    if: github.event.pull_request.draft == false
     name: Clippy
     runs-on: ubuntu-latest
     steps:
