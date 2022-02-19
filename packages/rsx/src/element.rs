@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
-    Expr, ExprClosure, Ident, LitStr, Result, Token,
+    Expr, Ident, LitStr, Result, Token,
 };
 
 // =======================================
@@ -81,24 +81,31 @@ impl Parse for Element {
                 content.parse::<Token![:]>()?;
 
                 if name_str.starts_with("on") {
-                    if content.fork().parse::<ExprClosure>().is_ok() {
-                        //
-                        attributes.push(ElementAttrNamed {
-                            el_name: el_name.clone(),
-                            attr: ElementAttr::EventClosure {
-                                name,
-                                closure: content.parse()?,
-                            },
-                        });
-                    } else {
-                        attributes.push(ElementAttrNamed {
-                            el_name: el_name.clone(),
-                            attr: ElementAttr::EventTokens {
-                                name,
-                                tokens: content.parse()?,
-                            },
-                        });
-                    }
+                    attributes.push(ElementAttrNamed {
+                        el_name: el_name.clone(),
+                        attr: ElementAttr::EventTokens {
+                            name,
+                            tokens: content.parse()?,
+                        },
+                    });
+                    // if content.fork().parse::<ExprClosure>().is_ok() {
+                    //     //
+                    //     attributes.push(ElementAttrNamed {
+                    //         el_name: el_name.clone(),
+                    //         attr: ElementAttr::EventClosure {
+                    //             name,
+                    //             closure: content.parse()?,
+                    //         },
+                    //     });
+                    // } else {
+                    //     attributes.push(ElementAttrNamed {
+                    //         el_name: el_name.clone(),
+                    //         attr: ElementAttr::EventTokens {
+                    //             name,
+                    //             tokens: content.parse()?,
+                    //         },
+                    //     });
+                    // }
                 } else {
                     match name_str.as_str() {
                         "key" => {
@@ -203,28 +210,20 @@ impl ToTokens for Element {
         let name = &self.name;
         let children = &self.children;
 
-        // let listeners = &self.listeners;
-
         let key = match &self.key {
             Some(ty) => quote! { Some(format_args_f!(#ty)) },
             None => quote! { None },
         };
 
-        let listeners = self.attributes.iter().filter(|f| {
-            if let ElementAttr::EventTokens { .. } = f.attr {
-                true
-            } else {
-                false
-            }
-        });
+        let listeners = self
+            .attributes
+            .iter()
+            .filter(|f| matches!(f.attr, ElementAttr::EventTokens { .. }));
 
-        let attr = self.attributes.iter().filter(|f| {
-            if let ElementAttr::EventTokens { .. } = f.attr {
-                false
-            } else {
-                true
-            }
-        });
+        let attr = self
+            .attributes
+            .iter()
+            .filter(|f| !matches!(f.attr, ElementAttr::EventTokens { .. }));
 
         tokens.append_all(quote! {
             __cx.element(
@@ -251,9 +250,8 @@ pub enum ElementAttr {
     /// "attribute": true,
     CustomAttrExpression { name: LitStr, value: Expr },
 
-    /// onclick: move |_| {}
-    EventClosure { name: Ident, closure: ExprClosure },
-
+    // /// onclick: move |_| {}
+    // EventClosure { name: Ident, closure: ExprClosure },
     /// onclick: {}
     EventTokens { name: Ident, tokens: Expr },
 }
@@ -288,11 +286,11 @@ impl ToTokens for ElementAttrNamed {
                     __cx.attr( #name, format_args_f!(#value), None, false )
                 }
             }
-            ElementAttr::EventClosure { name, closure } => {
-                quote! {
-                    dioxus_elements::on::#name(__cx, #closure)
-                }
-            }
+            // ElementAttr::EventClosure { name, closure } => {
+            //     quote! {
+            //         dioxus_elements::on::#name(__cx, #closure)
+            //     }
+            // }
             ElementAttr::EventTokens { name, tokens } => {
                 quote! {
                     dioxus_elements::on::#name(__cx, #tokens)
