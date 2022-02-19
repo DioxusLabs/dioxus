@@ -1,7 +1,10 @@
-use dioxus_macro_inner::*;
 use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::parse_macro_input;
+
+mod ifmt;
+mod inlineprops;
+mod props;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {
@@ -175,40 +178,10 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 #[proc_macro_error::proc_macro_error]
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsx::CallBody>(s) {
+    match syn::parse::<dioxus_rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
         Ok(stream) => stream.to_token_stream().into(),
     }
-}
-
-/// Derive macro used to mark an enum as Routable.
-///
-/// This macro can only be used on enums. Every varient of the macro needs to be marked
-/// with the `at` attribute to specify the URL of the route. It generates an implementation of
-///  `yew_router::Routable` trait and `const`s for the routes passed which are used with `Route`
-/// component.
-///
-/// # Example
-///
-/// ```
-/// # use yew_router::Routable;
-/// #[derive(Debug, Clone, Copy, PartialEq, Routable)]
-/// enum Routes {
-///     #[at("/")]
-///     Home,
-///     #[at("/secure")]
-///     Secure,
-///     #[at("/profile/{id}")]
-///     Profile(u32),
-///     #[at("/404")]
-///     NotFound,
-/// }
-/// ```
-#[proc_macro_derive(Routable, attributes(at, not_found))]
-pub fn routable_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use router::{routable_derive_impl, Routable};
-    let input = parse_macro_input!(input as Routable);
-    routable_derive_impl(input).into()
 }
 
 /// Derive props for a component within the component definition.
