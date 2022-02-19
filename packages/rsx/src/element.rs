@@ -88,24 +88,6 @@ impl Parse for Element {
                             tokens: content.parse()?,
                         },
                     });
-                    // if content.fork().parse::<ExprClosure>().is_ok() {
-                    //     //
-                    //     attributes.push(ElementAttrNamed {
-                    //         el_name: el_name.clone(),
-                    //         attr: ElementAttr::EventClosure {
-                    //             name,
-                    //             closure: content.parse()?,
-                    //         },
-                    //     });
-                    // } else {
-                    //     attributes.push(ElementAttrNamed {
-                    //         el_name: el_name.clone(),
-                    //         attr: ElementAttr::EventTokens {
-                    //             name,
-                    //             tokens: content.parse()?,
-                    //         },
-                    //     });
-                    // }
                 } else {
                     match name_str.as_str() {
                         "key" => {
@@ -199,7 +181,6 @@ impl Parse for Element {
             name: el_name,
             attributes,
             children,
-            // listeners,
             _is_static: false,
         })
     }
