@@ -173,6 +173,10 @@ pub fn launch_with_props<P: 'static + Send>(
                     webview = webview.with_custom_protocol(name, handler)
                 }
 
+                if cfg!(debug_assertions) {
+                    webview = webview.with_dev_tool(true);
+                }
+
                 desktop.webviews.insert(window_id, webview.build().unwrap());
             }
 

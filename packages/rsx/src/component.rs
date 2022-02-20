@@ -23,10 +23,10 @@ use syn::{
 };
 
 pub struct Component {
-    name: syn::Path,
-    body: Vec<ComponentField>,
-    children: Vec<BodyNode>,
-    manual_props: Option<Expr>,
+    pub name: syn::Path,
+    pub body: Vec<ComponentField>,
+    pub children: Vec<BodyNode>,
+    pub manual_props: Option<Expr>,
 }
 
 impl Parse for Component {
