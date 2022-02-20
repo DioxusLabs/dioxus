@@ -174,7 +174,25 @@ pub fn launch_with_props<P: 'static + Send>(
                 }
 
                 if cfg!(debug_assertions) {
+                    // in debug, we are okay with the reload menu showing and dev tool
                     webview = webview.with_dev_tool(true);
+                } else {
+                    // in release mode, we don't want to show the dev tool or reload menus
+                    webview = webview.with_initialization_script(
+                        r#"
+                        if (document.addEventListener) {
+                        document.addEventListener('contextmenu', function(e) {
+                            alert("You've tried to open context menu");
+                            e.preventDefault();
+                        }, false);
+                        } else {
+                        document.attachEvent('oncontextmenu', function() {
+                            alert("You've tried to open context menu");
+                            window.event.returnValue = false;
+                        });
+                        }
+                    "#,
+                    )
                 }
 
                 desktop.webviews.insert(window_id, webview.build().unwrap());
