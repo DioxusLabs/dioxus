@@ -143,7 +143,6 @@ pub fn launch_with_props<P: 'static + Send>(
                                         .send_event(user_window_events::UserWindowEvent::Update);
                                 }
                                 "browser_open" => {
-                                    println!("browser_open");
                                     let data = message.params();
                                     log::trace!("Open browser: {:?}", data);
                                     if let Some(temp) = data.as_object() {

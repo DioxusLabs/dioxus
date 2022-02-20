@@ -3,6 +3,7 @@ use wry::application::window::Fullscreen as WryFullscreen;
 
 use crate::controller::DesktopController;
 
+#[derive(Debug)]
 pub(crate) enum UserWindowEvent {
     Update,
 
