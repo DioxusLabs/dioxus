@@ -128,8 +128,14 @@ pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
 /// }
 /// ```
 pub trait Properties: Sized {
+    /// The type of the builder for this component.
+    /// Used to create "in-progress" versions of the props.
     type Builder;
+
+    /// An indication if these props are can be memoized automatically.
     const IS_STATIC: bool;
+
+    /// Create a builder for this component.
     fn builder() -> Self::Builder;
 
     /// Memoization can only happen if the props are valid for the 'static lifetime

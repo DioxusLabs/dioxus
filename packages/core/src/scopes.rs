@@ -396,7 +396,10 @@ impl ScopeArena {
 /// }
 /// ```
 pub struct Scope<'a, P = ()> {
+    /// The internal ScopeState for this component
     pub scope: &'a ScopeState,
+
+    /// The props for this component
     pub props: &'a P,
 }
 
@@ -747,7 +750,8 @@ impl ScopeState {
         self.push_future(fut);
     }
 
-    // todo: attach some state to the future to know if we should poll it
+    /// Informs the scheduler that this task is no longer needed and should be removed
+    /// on next poll.
     pub fn remove_future(&self, id: TaskId) {
         self.tasks.remove_fut(id);
     }

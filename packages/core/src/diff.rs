@@ -257,11 +257,10 @@ impl<'b> DiffState<'b> {
         vcomponent.scope.set(Some(new_idx));
 
         log::trace!(
-            "created component \"{}\", id: {:?} parent {:?} orig: {:?}",
+            "created component \"{}\", id: {:?} parent {:?}",
             vcomponent.fn_name,
             new_idx,
             parent_idx,
-            vcomponent.originator
         );
 
         // if vcomponent.can_memoize {
@@ -957,13 +956,6 @@ impl<'b> DiffState<'b> {
                     let props = scope.props.take().unwrap();
                     c.props.borrow_mut().replace(props);
                     self.scopes.try_remove(scope_id).unwrap();
-
-                    // // we can only remove components if they are actively being diffed
-                    // if self.scope_stack.contains(&c.originator) {
-                    //     log::trace!("Removing component {:?}", old);
-
-                    //     self.scopes.try_remove(scope_id).unwrap();
-                    // }
                 }
                 self.leave_scope();
             }

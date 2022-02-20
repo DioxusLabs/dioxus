@@ -35,14 +35,32 @@ enum StackNodeStorage<'a, 'b> {
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
-    pub fn new_some<F>(_val: F) -> Self
-    where
-        F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
-    {
-        Self::new(_val)
+    /// Create a new LazyNodes closure, optimistically placing it onto the stack.
+    ///
+    /// If the closure cannot fit into the stack allocation (16 bytes), then it
+    /// is placed on the heap. Most closures will fit into the stack, and is
+    /// the most optimal way to use the creation function.
+    pub fn new(val: impl FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b) -> Self {
+        // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
+        let mut slot = Some(val);
+
+        let val = move |fac: Option<NodeFactory<'a>>| {
+            let inner = slot.take().unwrap();
+            fac.map(inner)
+        };
+
+        // miri does not know how to work with mucking directly into bytes
+        // just use a heap allocated type when miri is running
+        if cfg!(miri) {
+            Self {
+                inner: StackNodeStorage::Heap(Box::new(val)),
+            }
+        } else {
+            unsafe { LazyNodes::new_inner(val) }
+        }
     }
 
-    /// force this call onto the stack
+    /// Create a new LazyNodes closure, but force it onto the heap.
     pub fn new_boxed<F>(_val: F) -> Self
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
@@ -57,25 +75,6 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
 
         Self {
             inner: StackNodeStorage::Heap(Box::new(val)),
-        }
-    }
-
-    pub fn new(_val: impl FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b) -> Self {
-        // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
-        let mut slot = Some(_val);
-
-        let val = move |fac: Option<NodeFactory<'a>>| {
-            let inner = slot.take().unwrap();
-            fac.map(inner)
-        };
-
-        // miri does not know how to work with mucking directly into bytes
-        if cfg!(miri) {
-            Self {
-                inner: StackNodeStorage::Heap(Box::new(val)),
-            }
-        } else {
-            unsafe { LazyNodes::new_inner(val) }
         }
     }
 
@@ -153,6 +152,15 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         }
     }
 
+    /// Call the closure with the given factory to produce real VNodes.
+    ///
+    /// ```rust, ignore
+    /// let f = LazyNodes::new(move |f| f.element("div", [], [], [] None));
+    ///
+    /// let fac = NodeFactory::new(&cx);
+    ///
+    /// let node = f.call(cac);
+    /// ```
     pub fn call(self, f: NodeFactory<'a>) -> VNode<'a> {
         match self.inner {
             StackNodeStorage::Heap(mut lazy) => lazy(Some(f)).unwrap(),
@@ -245,9 +253,7 @@ mod tests {
     #[test]
     fn it_works() {
         fn app(cx: Scope<()>) -> Element {
-            cx.render(LazyNodes::new_some(|f| {
-                f.text(format_args!("hello world!"))
-            }))
+            cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
         }
 
         let mut dom = VirtualDom::new(app);
@@ -280,7 +286,7 @@ mod tests {
                     .map(|i| {
                         let val = cx.props.inner.clone();
 
-                        LazyNodes::new_some(move |f| {
+                        LazyNodes::new(move |f| {
                             log::debug!("hell closure");
                             let inner = DropInner { id: i };
                             f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
@@ -288,7 +294,7 @@ mod tests {
                     })
                     .collect::<Vec<_>>();
 
-                LazyNodes::new_some(|f| {
+                LazyNodes::new(|f| {
                     log::debug!("main closure");
                     f.fragment_from_iter(it)
                 })
