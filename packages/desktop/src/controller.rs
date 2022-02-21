@@ -1,5 +1,4 @@
-use crate::desktop_context::DesktopContext;
-use crate::user_window_events::UserWindowEvent;
+use crate::desktop_context::{DesktopContext, UserWindowEvent};
 use dioxus_core::*;
 use std::{
     collections::{HashMap, VecDeque},

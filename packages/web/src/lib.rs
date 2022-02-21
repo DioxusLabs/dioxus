@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 //! Dioxus WebSys
 //!
 //! ## Overview

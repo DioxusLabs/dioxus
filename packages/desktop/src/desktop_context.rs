@@ -3,14 +3,23 @@ use std::rc::Rc;
 use dioxus_core::ScopeState;
 use wry::application::event_loop::EventLoopProxy;
 
-use crate::user_window_events::UserWindowEvent;
 use UserWindowEvent::*;
 
-type ProxyType = EventLoopProxy<UserWindowEvent>;
+pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
-/// Desktop-Window handle api context
+/// Get an imperative handle to the current window
+pub fn use_window(cx: &ScopeState) -> &Rc<DesktopContext> {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
+        .as_ref()
+        .unwrap()
+}
+
+/// An imperative interface to the current window.
 ///
-/// you can use this context control some window event
+/// To get a handle to the current window, use the [`use_window`] hook.
+///
+///
+/// # Example
 ///
 /// you can use `cx.consume_context::<DesktopContext>` to get this context
 ///
@@ -19,7 +28,8 @@ type ProxyType = EventLoopProxy<UserWindowEvent>;
 /// ```
 #[derive(Clone)]
 pub struct DesktopContext {
-    proxy: ProxyType,
+    /// The wry/tao proxy to the current window
+    pub proxy: ProxyType,
 }
 
 impl DesktopContext {
@@ -84,12 +94,12 @@ impl DesktopContext {
         let _ = self.proxy.send_event(AlwaysOnTop(top));
     }
 
-    // set cursor visible or not
+    /// set cursor visible or not
     pub fn set_cursor_visible(&self, visible: bool) {
         let _ = self.proxy.send_event(CursorVisible(visible));
     }
 
-    // set cursor grab
+    /// set cursor grab
     pub fn set_cursor_grab(&self, grab: bool) {
         let _ = self.proxy.send_event(CursorGrab(grab));
     }
@@ -110,9 +120,73 @@ impl DesktopContext {
     }
 }
 
-/// use this function can get the `DesktopContext` context.
-pub fn use_window(cx: &ScopeState) -> &Rc<DesktopContext> {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
-        .as_ref()
-        .unwrap()
+use wry::application::event_loop::ControlFlow;
+use wry::application::window::Fullscreen as WryFullscreen;
+
+use crate::controller::DesktopController;
+
+pub enum UserWindowEvent {
+    Update,
+
+    CloseWindow,
+    DragWindow,
+    FocusWindow,
+
+    Visible(bool),
+    Minimize(bool),
+    Maximize(bool),
+    MaximizeToggle,
+    Resizable(bool),
+    AlwaysOnTop(bool),
+    Fullscreen(bool),
+
+    CursorVisible(bool),
+    CursorGrab(bool),
+
+    SetTitle(String),
+    SetDecorations(bool),
+
+    DevTool,
+}
+
+pub(super) fn handler(
+    user_event: UserWindowEvent,
+    desktop: &mut DesktopController,
+    control_flow: &mut ControlFlow,
+) {
+    // currently dioxus-desktop supports a single window only,
+    // so we can grab the only webview from the map;
+    let webview = desktop.webviews.values().next().unwrap();
+    let window = webview.window();
+
+    match user_event {
+        Update => desktop.try_load_ready_webviews(),
+        CloseWindow => *control_flow = ControlFlow::Exit,
+        DragWindow => {
+            // if the drag_window has any errors, we don't do anything
+            window.fullscreen().is_none().then(|| window.drag_window());
+        }
+        Visible(state) => window.set_visible(state),
+        Minimize(state) => window.set_minimized(state),
+        Maximize(state) => window.set_maximized(state),
+        MaximizeToggle => window.set_maximized(!window.is_maximized()),
+        Fullscreen(state) => {
+            if let Some(handle) = window.current_monitor() {
+                window.set_fullscreen(state.then(|| WryFullscreen::Borderless(Some(handle))));
+            }
+        }
+        FocusWindow => window.set_focus(),
+        Resizable(state) => window.set_resizable(state),
+        AlwaysOnTop(state) => window.set_always_on_top(state),
+
+        CursorVisible(state) => window.set_cursor_visible(state),
+        CursorGrab(state) => {
+            let _ = window.set_cursor_grab(state);
+        }
+
+        SetTitle(content) => window.set_title(&content),
+        SetDecorations(state) => window.set_decorations(state),
+
+        DevTool => webview.devtool(),
+    }
 }

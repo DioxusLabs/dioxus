@@ -1,18 +1,23 @@
 #![doc = include_str!("readme.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![deny(missing_docs)]
 
-pub mod cfg;
+mod cfg;
 mod controller;
-pub mod desktop_context;
-pub mod escape;
-pub mod events;
+mod desktop_context;
+mod escape;
+mod events;
 mod protocol;
-mod user_window_events;
 
+use desktop_context::UserWindowEvent;
+pub use desktop_context::{use_window, DesktopContext};
+pub use wry;
+pub use wry::application as tao;
+
+use crate::events::trigger_from_serialized;
 use cfg::DesktopConfig;
 use controller::DesktopController;
-pub use desktop_context::use_window;
 use dioxus_core::*;
 use events::parse_ipc_message;
 use tao::{
@@ -20,11 +25,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-pub use wry;
-pub use wry::application as tao;
 use wry::webview::WebViewBuilder;
-
-use crate::events::trigger_from_serialized;
 
 /// Launch the WebView and run the event loop.
 ///
@@ -139,8 +140,7 @@ pub fn launch_with_props<P: 'static + Send>(
                                 }
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                    let _ = proxy
-                                        .send_event(user_window_events::UserWindowEvent::Update);
+                                    let _ = proxy.send_event(UserWindowEvent::Update);
                                 }
                                 "browser_open" => {
                                     println!("browser_open");
@@ -214,7 +214,7 @@ pub fn launch_with_props<P: 'static + Send>(
             },
 
             Event::UserEvent(user_event) => {
-                user_window_events::handler(user_event, &mut desktop, control_flow)
+                desktop_context::handler(user_event, &mut desktop, control_flow)
             }
             Event::MainEventsCleared => {}
             Event::Resumed => {}
