@@ -748,7 +748,7 @@ impl ScopeState {
     }
 
     // todo: attach some state to the future to know if we should poll it
-    pub fn remove_future(&self, id: TaskId) {
+    pub fn cancel_future(&self, id: TaskId) {
         self.tasks.remove_fut(id);
     }
 
