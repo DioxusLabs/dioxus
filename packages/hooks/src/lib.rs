@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 //! Useful foundational hooks for Dioxus
 
 mod usestate;
