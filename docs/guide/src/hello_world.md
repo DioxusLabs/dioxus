@@ -63,7 +63,7 @@ $ cat Cargo.toml
 [package]
 name = "hello-dioxus"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -92,10 +92,10 @@ use dioxus::prelude::*;
 
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
-fn App(cx: Scope) -> Element {
+fn app(cx: Scope) -> Element {
     cx.render(rsx! (
         div { "Hello, world!" }
     ))
@@ -118,14 +118,14 @@ This initialization code launches a Tokio runtime on a helper thread where your 
 
 ```rust
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 ```
 
 Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Element`.
 
 ```rust
-fn App(cx: Scope) -> Element {
+fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div { "Hello, world!" }
     })
