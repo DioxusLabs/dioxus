@@ -94,3 +94,54 @@ Only include resources at `Dev` mode.
         "https://cdn.jsdelivr.net/npm/bootstrap/dist/js/bootstrap.js"
     ]
    ```
+
+## Config example
+
+```toml
+[application]
+
+# App (Project) Name
+name = "{{project-name}}"
+
+# Dioxus App Default Platform
+# desktop, web, mobile, ssr
+default_platform = "web"
+
+# `build` & `serve` dist path
+out_dir = "dist"
+
+# resource (public) file folder
+asset_dir = "public"
+
+[web.app]
+
+# HTML title tag content
+title = "dioxus | ⛺"
+
+[web.watcher]
+
+# when watcher trigger, regenerate the `index.html`
+reload_html = true
+
+# which files or dirs will be watcher monitoring
+watch_path = ["src", "public"]
+
+# include `assets` in web platform
+[web.resource]
+
+# CSS style file
+style = []
+
+# Javascript code file
+script = []
+
+[web.resource.dev]
+
+# serve: [dev-server] only
+
+# CSS style file
+style = []
+
+# Javascript code file
+script = []
+```
