@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🌗🚀 Dioxus</h1>
+  <h1>Dioxus</h1>
   <p>
     <strong>Frontend that scales.</strong>
   </p>
@@ -26,9 +26,7 @@
     <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
       alt="CI status" />
   </a>
-</div>
 
-<div align="center">
   <!--Awesome -->
   <a href="https://github.com/dioxuslabs/awesome-dioxus">
     <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
@@ -45,9 +43,11 @@
   <h3>
     <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> Guide </a>
-    <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
+    <span> | </span>
+    <a href="https://dioxuslabs.com/guide"> Guide (0.1.8) </a>
+    <span> | </span>
+    <a href="https://dioxuslabs.com/nightly/guide"> Guide (Master) </a>
   </h3>
 </div>
 
@@ -65,12 +65,12 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let (count, set_count) = use_state(&cx, || 0);
 
     cx.render(rsx!(
         h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
-        button { onclick: move |_| count -= 1, "Down low!" }
+        button { onclick: move |_| set_count(count + 1), "Up high!" }
+        button { onclick: move |_| set_count(count - 1), "Down low!" }
     ))
 }
 ```
@@ -101,10 +101,10 @@ cargo run --example EXAMPLE
 <table style="width:100%" align="center">
     <tr >
         <th><a href="https://dioxuslabs.com/guide/">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/reference/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/reference/desktop/">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/reference/ssr/">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/reference/mobile/">Mobile</a></th>
+        <th><a href="https://dioxuslabs.com/reference/platforms/web">Web</a></th>
+        <th><a href="https://dioxuslabs.com/reference/platforms/desktop/">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/reference/platforms/ssr/">SSR</a></th>
+        <th><a href="https://dioxuslabs.com/reference/platforms/mobile/">Mobile</a></th>
         <th><a href="https://dioxuslabs.com/guide/concepts/managing_state.html">State</a></th>
     <tr>
 </table>

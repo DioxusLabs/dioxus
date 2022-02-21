@@ -5,12 +5,12 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let disabled = use_state(&cx, || false);
+    let (disabled, set_disabled) = use_state(&cx, || false);
 
     cx.render(rsx! {
         div {
             button {
-                onclick: move |_| disabled.set(!disabled.get()),
+                onclick: move |_| set_disabled(!disabled),
                 "click to " [if *disabled {"enable"} else {"disable"} ] " the lower button"
             }
 
@@ -18,11 +18,6 @@ fn app(cx: Scope) -> Element {
                 disabled: "{disabled}",
                 "lower button"
             }
-
-            input {
-                value: "false",
-            }
-
         }
     })
 }

@@ -1,9 +1,21 @@
-on: [push, pull_request]
-
 name: Rust CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - master
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
 
 jobs:
   check:
+    if: github.event.pull_request.draft == false
     name: Check
     runs-on: ubuntu-latest
     steps:
@@ -21,6 +33,7 @@ jobs:
           command: check
 
   test:
+    if: github.event.pull_request.draft == false
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
@@ -33,12 +46,16 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev
+      - uses: davidB/rust-cargo-make@v1
+      - uses: browser-actions/setup-firefox@latest
+      - uses: jetli/wasm-pack-action@v0.3.0
       - uses: actions-rs/cargo@v1
         with:
-          command: test
-          args: --features "desktop, ssr, router"
+          command: make
+          args: tests
 
   fmt:
+    if: github.event.pull_request.draft == false
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
@@ -56,6 +73,7 @@ jobs:
           args: --all -- --check
 
   clippy:
+    if: github.event.pull_request.draft == false
     name: Clippy
     runs-on: ubuntu-latest
     steps:
@@ -73,3 +91,24 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
+
+  # Coverage is disabled until we can fix it
+  # coverage:
+  #   name: Coverage
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: xd009642/tarpaulin:develop-nightly
+  #     options: --security-opt seccomp=unconfined
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v2
+  #     - name: Generate code coverage
+  #       run: |
+  #         apt-get update &&\
+  #         apt-get install build-essential &&\
+  #         apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev -y &&\
+  #         cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
+  #     - name: Upload to codecov.io
+  #       uses: codecov/codecov-action@v2
+  #       with:
+  #         fail_ci_if_error: false

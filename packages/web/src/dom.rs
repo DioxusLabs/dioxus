@@ -7,8 +7,8 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use crate::bindings::Interpreter;
 use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
+use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
 use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -28,17 +28,57 @@ impl WebsysDom {
     pub fn new(cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         // eventually, we just want to let the interpreter do all the work of decoding events into our event type
         let callback: Box<dyn FnMut(&Event)> = Box::new(move |event: &web_sys::Event| {
-            if let Ok(synthetic_event) = decode_trigger(event) {
+            let mut target = event
+                .target()
+                .expect("missing target")
+                .dyn_into::<Element>()
+                .expect("not a valid element");
+
+            let typ = event.type_();
+
+            let decoded: anyhow::Result<UserEvent> = loop {
+                match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
+                    Some(Ok(id)) => {
+                        break Ok(UserEvent {
+                            name: event_name_from_typ(&typ),
+                            data: virtual_event_from_websys_event(event.clone(), target.clone()),
+                            element: Some(ElementId(id)),
+                            scope_id: None,
+                            priority: dioxus_core::EventPriority::Medium,
+                        });
+                    }
+                    Some(Err(e)) => {
+                        break Err(e.into());
+                    }
+                    None => {
+                        // walk the tree upwards until we actually find an event target
+                        if let Some(parent) = target.parent_element() {
+                            target = parent;
+                        } else {
+                            break Ok(UserEvent {
+                                name: event_name_from_typ(&typ),
+                                data: virtual_event_from_websys_event(
+                                    event.clone(),
+                                    target.clone(),
+                                ),
+                                element: None,
+                                scope_id: None,
+                                priority: dioxus_core::EventPriority::Low,
+                            });
+                        }
+                    }
+                }
+            };
+
+            if let Ok(synthetic_event) = decoded {
                 // Try to prevent default if the attribute is set
-                if let Some(target) = event.target() {
-                    if let Some(node) = target.dyn_ref::<HtmlElement>() {
-                        if let Some(name) = node.get_attribute("dioxus-prevent-default") {
-                            if name == synthetic_event.name
-                                || name.trim_start_matches("on") == synthetic_event.name
-                            {
-                                log::trace!("Preventing default");
-                                event.prevent_default();
-                            }
+                if let Some(node) = target.dyn_ref::<HtmlElement>() {
+                    if let Some(name) = node.get_attribute("dioxus-prevent-default") {
+                        if name == synthetic_event.name
+                            || name.trim_start_matches("on") == synthetic_event.name
+                        {
+                            log::trace!("Preventing default");
+                            event.prevent_default();
                         }
                     }
                 }
@@ -47,7 +87,12 @@ impl WebsysDom {
             }
         });
 
-        let root = load_document().get_element_by_id(&cfg.rootname).unwrap();
+        // a match here in order to avoid some error during runtime browser test
+        let document = load_document();
+        let root = match document.get_element_by_id(&cfg.rootname) {
+            Some(root) => root,
+            None => document.create_element("body").ok().unwrap(),
+        };
 
         Self {
             interpreter: Interpreter::new(root.clone()),
@@ -65,9 +110,7 @@ impl WebsysDom {
                 DomEdit::InsertAfter { root, n } => self.interpreter.InsertAfter(root, n),
                 DomEdit::InsertBefore { root, n } => self.interpreter.InsertBefore(root, n),
                 DomEdit::Remove { root } => self.interpreter.Remove(root),
-                DomEdit::CreateTextNode { text, root } => {
-                    self.interpreter.CreateTextNode(text, root)
-                }
+
                 DomEdit::CreateElement { tag, root } => self.interpreter.CreateElement(tag, root),
                 DomEdit::CreateElementNs { tag, root, ns } => {
                     self.interpreter.CreateElementNs(tag, root, ns)
@@ -83,15 +126,27 @@ impl WebsysDom {
                 DomEdit::RemoveEventListener { root, event } => {
                     self.interpreter.RemoveEventListener(root, event)
                 }
-                DomEdit::SetText { root, text } => self.interpreter.SetText(root, text),
+
+                DomEdit::RemoveAttribute { root, name } => {
+                    self.interpreter.RemoveAttribute(root, name)
+                }
+
+                DomEdit::CreateTextNode { text, root } => {
+                    let text = serde_wasm_bindgen::to_value(text).unwrap();
+                    self.interpreter.CreateTextNode(text, root)
+                }
+                DomEdit::SetText { root, text } => {
+                    let text = serde_wasm_bindgen::to_value(text).unwrap();
+                    self.interpreter.SetText(root, text)
+                }
                 DomEdit::SetAttribute {
                     root,
                     field,
                     value,
                     ns,
-                } => self.interpreter.SetAttribute(root, field, value, ns),
-                DomEdit::RemoveAttribute { root, name } => {
-                    self.interpreter.RemoveAttribute(root, name)
+                } => {
+                    let value = serde_wasm_bindgen::to_value(value).unwrap();
+                    self.interpreter.SetAttribute(root, field, value, ns)
                 }
             }
         }
@@ -107,7 +162,10 @@ unsafe impl Sync for DioxusWebsysEvent {}
 
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
-fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send + Sync> {
+fn virtual_event_from_websys_event(
+    event: web_sys::Event,
+    target: Element,
+) -> Arc<dyn Any + Send + Sync> {
     use dioxus_html::on::*;
     use dioxus_html::KeyCode;
 
@@ -140,9 +198,6 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
         "change" | "input" | "invalid" | "reset" | "submit" => {
-            let evt: &web_sys::Event = event.dyn_ref().unwrap();
-
-            let target: web_sys::EventTarget = evt.target().unwrap();
             let value: String = (&target)
                 .dyn_ref()
                 .map(|input: &web_sys::HtmlInputElement| {
@@ -178,7 +233,38 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
                 })
                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-            Arc::new(FormData { value })
+            let mut values = std::collections::HashMap::new();
+
+            // try to fill in form values
+            if let Some(form) = target.dyn_ref::<web_sys::HtmlFormElement>() {
+                let elements = form.elements();
+                for x in 0..elements.length() {
+                    let element = elements.item(x).unwrap();
+                    if let Some(name) = element.get_attribute("name") {
+                        let value: String = (&element)
+                                .dyn_ref()
+                                .map(|input: &web_sys::HtmlInputElement| {
+                                    match input.type_().as_str() {
+                                        "checkbox" => {
+                                            match input.checked() {
+                                                true => "true".to_string(),
+                                                false => "false".to_string(),
+                                            }
+                                        },
+                                        _ => input.value()
+                                    }
+                                })
+                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| input.value()))
+                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlSelectElement| input.value()))
+                                .or_else(|| target.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content())
+                                .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
+
+                        values.insert(name, value);
+                    }
+                }
+            }
+
+            Arc::new(FormData { value, values })
         }
         "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
         | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
@@ -270,50 +356,8 @@ fn virtual_event_from_websys_event(event: web_sys::Event) -> Arc<dyn Any + Send 
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => Arc::new(MediaData {}),
         "toggle" => Arc::new(ToggleData {}),
+
         _ => Arc::new(()),
-    }
-}
-
-/// This function decodes a websys event and produces an EventTrigger
-/// With the websys implementation, we attach a unique key to the nodes
-fn decode_trigger(event: &web_sys::Event) -> anyhow::Result<UserEvent> {
-    let mut target = event
-        .target()
-        .expect("missing target")
-        .dyn_into::<Element>()
-        .expect("not a valid element");
-
-    let typ = event.type_();
-
-    loop {
-        match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
-            Some(Ok(id)) => {
-                return Ok(UserEvent {
-                    name: event_name_from_typ(&typ),
-                    data: virtual_event_from_websys_event(event.clone()),
-                    element: Some(ElementId(id)),
-                    scope_id: None,
-                    priority: dioxus_core::EventPriority::Medium,
-                });
-            }
-            Some(Err(e)) => {
-                return Err(e.into());
-            }
-            None => {
-                // walk the tree upwards until we actually find an event target
-                if let Some(parent) = target.parent_element() {
-                    target = parent;
-                } else {
-                    return Ok(UserEvent {
-                        name: event_name_from_typ(&typ),
-                        data: virtual_event_from_websys_event(event.clone()),
-                        element: None,
-                        scope_id: None,
-                        priority: dioxus_core::EventPriority::Low,
-                    });
-                }
-            }
-        }
     }
 }
 

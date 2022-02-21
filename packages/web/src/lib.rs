@@ -61,7 +61,6 @@ pub use dioxus_core as dioxus;
 use dioxus_core::prelude::Component;
 use futures_util::FutureExt;
 
-pub(crate) mod bindings;
 mod cache;
 mod cfg;
 mod dom;
@@ -212,7 +211,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         websys_dom.apply_edits(edits.edits);
     }
 
-    let work_loop = ric_raf::RafLoop::new();
+    let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::trace!("waiting for work");

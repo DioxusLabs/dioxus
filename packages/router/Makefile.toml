@@ -1,0 +1,10 @@
+[tasks.test-with-browser]
+extend = "core::wasm-pack-base"
+command = "wasm-pack"
+args = [
+  "test",
+  "@@split(DIOXUS_TEST_FLAGS, )",
+  "--",
+  "--features",
+  "${DIOXUS_TEST_FEATURES}",
+]

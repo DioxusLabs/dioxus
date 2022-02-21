@@ -11,18 +11,26 @@ use crate::RouterService;
 pub struct RouterProps<'a> {
     children: Element<'a>,
 
-    #[props(default, strip_option)]
-    onchange: Option<&'a dyn Fn(&'a str)>,
+    #[props(default)]
+    onchange: EventHandler<'a, String>,
 }
 
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    cx.use_hook(|_| {
+    log::debug!("running router {:?}", cx.scope_id());
+    let svc = cx.use_hook(|_| {
         let update = cx.schedule_update_any();
         cx.provide_context(RouterService::new(update, cx.scope_id()))
     });
 
-    cx.render(rsx!(
-        div { &cx.props.children }
-    ))
+    let any_pending = svc.pending_events.borrow().len() > 0;
+    svc.pending_events.borrow_mut().clear();
+
+    if any_pending {
+        let location = svc.current_location();
+        let path = location.path();
+        cx.props.onchange.call(path.to_string());
+    }
+
+    cx.render(rsx!(&cx.props.children))
 }

@@ -1,100 +1,118 @@
-use std::cell::RefCell;
+use std::rc::Rc;
 
-use dioxus::prelude::Scope;
-use dioxus_core as dioxus;
-use dioxus_core::{Context, Element, LazyNodes, NodeFactory, Properties};
-use dioxus_core_macro::Props;
+use dioxus_core::ScopeState;
+use wry::application::event_loop::EventLoopProxy;
 
-/*
-This module provides a set of Dioxus components to easily manage windows, tabs, etc.
+use crate::user_window_events::UserWindowEvent;
+use UserWindowEvent::*;
 
-Windows can be created anywhere in the tree, making them very flexible for things like modals, etc.
+type ProxyType = EventLoopProxy<UserWindowEvent>;
 
-*/
-pub struct DesktopContext {}
+/// Desktop-Window handle api context
+///
+/// you can use this context control some window event
+///
+/// you can use `cx.consume_context::<DesktopContext>` to get this context
+///
+/// ```rust
+///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
+/// ```
+#[derive(Clone)]
+pub struct DesktopContext {
+    proxy: ProxyType,
+}
 
 impl DesktopContext {
-    fn add_window(&mut self) {
-        //
+    pub(crate) fn new(proxy: ProxyType) -> Self {
+        Self { proxy }
     }
-    fn close_window(&mut self) {
-        //
+
+    /// trigger the drag-window event
+    ///
+    /// Moves the window with the left mouse button until the button is released.
+    ///
+    /// you need use it in `onmousedown` event:
+    /// ```rust
+    /// onmousedown: move |_| { desktop.drag_window(); }
+    /// ```
+    pub fn drag(&self) {
+        let _ = self.proxy.send_event(DragWindow);
+    }
+
+    /// set window minimize state
+    pub fn set_minimized(&self, minimized: bool) {
+        let _ = self.proxy.send_event(Minimize(minimized));
+    }
+
+    /// set window maximize state
+    pub fn set_maximized(&self, maximized: bool) {
+        let _ = self.proxy.send_event(Maximize(maximized));
+    }
+
+    /// toggle window maximize state
+    pub fn toggle_maximized(&self) {
+        let _ = self.proxy.send_event(MaximizeToggle);
+    }
+
+    /// set window visible or not
+    pub fn set_visible(&self, visible: bool) {
+        let _ = self.proxy.send_event(Visible(visible));
+    }
+
+    /// close window
+    pub fn close(&self) {
+        let _ = self.proxy.send_event(CloseWindow);
+    }
+
+    /// set window to focus
+    pub fn focus(&self) {
+        let _ = self.proxy.send_event(FocusWindow);
+    }
+
+    /// change window to fullscreen
+    pub fn set_fullscreen(&self, fullscreen: bool) {
+        let _ = self.proxy.send_event(Fullscreen(fullscreen));
+    }
+
+    /// set resizable state
+    pub fn set_resizable(&self, resizable: bool) {
+        let _ = self.proxy.send_event(Resizable(resizable));
+    }
+
+    /// set the window always on top
+    pub fn set_always_on_top(&self, top: bool) {
+        let _ = self.proxy.send_event(AlwaysOnTop(top));
+    }
+
+    // set cursor visible or not
+    pub fn set_cursor_visible(&self, visible: bool) {
+        let _ = self.proxy.send_event(CursorVisible(visible));
+    }
+
+    // set cursor grab
+    pub fn set_cursor_grab(&self, grab: bool) {
+        let _ = self.proxy.send_event(CursorGrab(grab));
+    }
+
+    /// set window title
+    pub fn set_title(&self, title: &str) {
+        let _ = self.proxy.send_event(SetTitle(String::from(title)));
+    }
+
+    /// change window to borderless
+    pub fn set_decorations(&self, decoration: bool) {
+        let _ = self.proxy.send_event(SetDecorations(decoration));
+    }
+
+    /// opens DevTool window
+    pub fn devtool(&self) {
+        let _ = self.proxy.send_event(DevTool);
     }
 }
 
-enum WindowHandlers {
-    Resized(Box<dyn Fn()>),
-    Moved(Box<dyn Fn()>),
-    CloseRequested(Box<dyn Fn()>),
-    Destroyed(Box<dyn Fn()>),
-    DroppedFile(Box<dyn Fn()>),
-    HoveredFile(Box<dyn Fn()>),
-    HoverFileCancelled(Box<dyn Fn()>),
-    ReceivedTimeText(Box<dyn Fn()>),
-    Focused(Box<dyn Fn()>),
-}
-
-#[derive(Props)]
-pub struct WebviewWindowProps<'a> {
-    onclose: &'a dyn FnMut(()),
-
-    onopen: &'a dyn FnMut(()),
-
-    /// focuse me
-    onfocused: &'a dyn FnMut(()),
-
-    children: Element,
-}
-
-/// A handle to a
-///
-///
-///
-///
-///
-///
-///
-///
-///
-pub fn WebviewWindow(cx: Scope<WebviewWindowProps>) -> Element {
-    let dtcx = cx.consume_state::<RefCell<DesktopContext>>()?;
-
-    cx.use_hook(|_| {});
-
-    // render the children directly
-    todo!()
-    // cx.render(LazyNodes::new(move |f: NodeFactory| {
-    //     f.fragment_from_iter(cx.children())
-    // }))
-}
-
-pub struct WindowHandle {}
-
-/// Get a handle to the current window from inside a component
-pub fn use_current_window(cx: Scope) -> Option<WindowHandle> {
-    todo!()
-}
-
-#[test]
-fn syntax_works() {
-    use dioxus_core as dioxus;
-    use dioxus_core::prelude::*;
-    use dioxus_core_macro::*;
-    use dioxus_hooks::*;
-    use dioxus_html as dioxus_elements;
-
-    static App: Component = |cx| {
-        cx.render(rsx! {
-            // left window
-            WebviewWindow {
-                onclose: move |evt| {}
-                onopen: move |evt| {}
-                onfocused: move |evt| {}
-
-                div {
-
-                }
-            }
-        })
-    };
+/// use this function can get the `DesktopContext` context.
+pub fn use_window(cx: &ScopeState) -> &Rc<DesktopContext> {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
+        .as_ref()
+        .unwrap()
 }

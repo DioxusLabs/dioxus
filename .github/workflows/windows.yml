@@ -1,12 +1,21 @@
 name: windows
+
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
-  pull_request:
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
 
 jobs:
   test:
+    if: github.event.pull_request.draft == false
     runs-on: windows-latest
     name: (${{ matrix.target }}, ${{ matrix.cfg_release_channel }})
     env:
@@ -19,13 +28,7 @@ jobs:
       max-parallel: 2
       fail-fast: false
       matrix:
-        target:
-          [
-            i686-pc-windows-gnu,
-            i686-pc-windows-msvc,
-            x86_64-pc-windows-gnu,
-            x86_64-pc-windows-msvc,
-          ]
+        target: [x86_64-pc-windows-gnu, x86_64-pc-windows-msvc]
         cfg_release_channel: [stable]
 
     steps:
@@ -47,12 +50,6 @@ jobs:
           rustup target add ${{ matrix.target }}
         shell: powershell
 
-      - name: Add mingw32 to path for i686-gnu
-        run: |
-          echo "C:\msys64\mingw32\bin" >> $GITHUB_PATH
-        if: matrix.target == 'i686-pc-windows-gnu' && matrix.channel == 'nightly'
-        shell: bash
-
       - name: Add mingw64 to path for x86_64-gnu
         run: echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
         if: matrix.target == 'x86_64-pc-windows-gnu' && matrix.channel == 'nightly'
@@ -62,7 +59,7 @@ jobs:
         run: |
           rustc -Vv
           cargo -V
-          set RUST_BACKTRACE=1 
+          set RUST_BACKTRACE=1
           cargo build --features "desktop, ssr, router"
           cargo test --features "desktop, ssr, router"
         shell: cmd

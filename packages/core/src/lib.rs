@@ -12,7 +12,6 @@ pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
-    pub(crate) use crate::diff::*;
     pub use crate::events::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-core"
-version = "0.1.7"
+version = "0.1.9"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -32,7 +32,7 @@ smallvec = "1.6"
 
 slab = "0.4"
 
-futures-channel = "0.3"
+futures-channel = "0.3.21"
 
 # used for noderefs
 once_cell = "1.8"

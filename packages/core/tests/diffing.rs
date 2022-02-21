@@ -1,4 +1,5 @@
 #![allow(unused, non_upper_case_globals)]
+
 //! Diffing Tests
 //!
 //! These tests only verify that the diffing algorithm works properly for single components.
@@ -31,26 +32,14 @@ fn html_and_rsx_generate_the_same_output() {
     assert_eq!(
         create.edits,
         [
-            CreateElement {
-                root: 1,
-                tag: "div"
-            },
-            CreateTextNode {
-                root: 2,
-                text: "Hello world"
-            },
+            CreateElement { root: 1, tag: "div" },
+            CreateTextNode { root: 2, text: "Hello world" },
             AppendChildren { many: 1 },
             AppendChildren { many: 1 },
         ]
     );
 
-    assert_eq!(
-        change.edits,
-        [SetText {
-            text: "Goodbye world",
-            root: 2
-        },]
-    );
+    assert_eq!(change.edits, [SetText { text: "Goodbye world", root: 2 },]);
 }
 
 /// Should result in 3 elements on the stack
@@ -67,32 +56,14 @@ fn fragments_create_properly() {
     assert_eq!(
         create.edits,
         [
-            CreateElement {
-                root: 1,
-                tag: "div"
-            },
-            CreateTextNode {
-                root: 2,
-                text: "Hello a"
-            },
+            CreateElement { root: 1, tag: "div" },
+            CreateTextNode { root: 2, text: "Hello a" },
             AppendChildren { many: 1 },
-            CreateElement {
-                root: 3,
-                tag: "div"
-            },
-            CreateTextNode {
-                root: 4,
-                text: "Hello b"
-            },
+            CreateElement { root: 3, tag: "div" },
+            CreateTextNode { root: 4, text: "Hello b" },
             AppendChildren { many: 1 },
-            CreateElement {
-                root: 5,
-                tag: "div"
-            },
-            CreateTextNode {
-                root: 6,
-                text: "Hello c"
-            },
+            CreateElement { root: 5, tag: "div" },
+            CreateTextNode { root: 6, text: "Hello c" },
             AppendChildren { many: 1 },
             AppendChildren { many: 3 },
         ]
@@ -116,10 +87,7 @@ fn empty_fragments_create_anchors() {
     assert_eq!(
         change.edits,
         [
-            CreateElement {
-                root: 2,
-                tag: "div"
-            },
+            CreateElement { root: 2, tag: "div" },
             ReplaceWith { m: 1, root: 1 }
         ]
     );
@@ -138,29 +106,15 @@ fn empty_fragments_create_many_anchors() {
         create.edits,
         [CreatePlaceholder { root: 1 }, AppendChildren { many: 1 }]
     );
+
     assert_eq!(
         change.edits,
         [
-            CreateElement {
-                root: 2,
-                tag: "div"
-            },
-            CreateElement {
-                root: 3,
-                tag: "div"
-            },
-            CreateElement {
-                root: 4,
-                tag: "div"
-            },
-            CreateElement {
-                root: 5,
-                tag: "div"
-            },
-            CreateElement {
-                root: 6,
-                tag: "div"
-            },
+            CreateElement { root: 2, tag: "div" },
+            CreateElement { root: 3, tag: "div" },
+            CreateElement { root: 4, tag: "div" },
+            CreateElement { root: 5, tag: "div" },
+            CreateElement { root: 6, tag: "div" },
             ReplaceWith { m: 5, root: 1 }
         ]
     );
@@ -188,32 +142,14 @@ fn empty_fragments_create_anchors_with_many_children() {
     assert_eq!(
         change.edits,
         [
-            CreateElement {
-                tag: "div",
-                root: 2,
-            },
-            CreateTextNode {
-                text: "hello: 0",
-                root: 3
-            },
+            CreateElement { tag: "div", root: 2 },
+            CreateTextNode { text: "hello: 0", root: 3 },
             AppendChildren { many: 1 },
-            CreateElement {
-                tag: "div",
-                root: 4,
-            },
-            CreateTextNode {
-                text: "hello: 1",
-                root: 5
-            },
+            CreateElement { tag: "div", root: 4 },
+            CreateTextNode { text: "hello: 1", root: 5 },
             AppendChildren { many: 1 },
-            CreateElement {
-                tag: "div",
-                root: 6,
-            },
-            CreateTextNode {
-                text: "hello: 2",
-                root: 7
-            },
+            CreateElement { tag: "div", root: 6 },
+            CreateTextNode { text: "hello: 2", root: 7 },
             AppendChildren { many: 1 },
             ReplaceWith { root: 1, m: 3 }
         ]
@@ -236,23 +172,11 @@ fn many_items_become_fragment() {
     assert_eq!(
         create.edits,
         [
-            CreateElement {
-                root: 1,
-                tag: "div"
-            },
-            CreateTextNode {
-                text: "hello",
-                root: 2
-            },
+            CreateElement { root: 1, tag: "div" },
+            CreateTextNode { text: "hello", root: 2 },
             AppendChildren { many: 1 },
-            CreateElement {
-                root: 3,
-                tag: "div"
-            },
-            CreateTextNode {
-                text: "hello",
-                root: 4
-            },
+            CreateElement { root: 3, tag: "div" },
+            CreateTextNode { text: "hello", root: 4 },
             AppendChildren { many: 1 },
             AppendChildren { many: 2 },
         ]
@@ -315,7 +239,7 @@ fn two_fragments_with_differrent_elements_are_differet() {
             // replace the divs with new h1s
             CreateElement { tag: "h1", root: 7 },
             ReplaceWith { root: 1, m: 1 },
-            CreateElement { tag: "h1", root: 8 },
+            CreateElement { tag: "h1", root: 1 }, // notice how 1 gets re-used
             ReplaceWith { root: 2, m: 1 },
         ]
     );
@@ -339,39 +263,27 @@ fn two_fragments_with_differrent_elements_are_differet_shorter() {
     assert_eq!(
         create.edits,
         [
-            CreateElement {
-                root: 1,
-                tag: "div"
-            },
-            CreateElement {
-                root: 2,
-                tag: "div"
-            },
-            CreateElement {
-                root: 3,
-                tag: "div"
-            },
-            CreateElement {
-                root: 4,
-                tag: "div"
-            },
-            CreateElement {
-                root: 5,
-                tag: "div"
-            },
+            CreateElement { root: 1, tag: "div" },
+            CreateElement { root: 2, tag: "div" },
+            CreateElement { root: 3, tag: "div" },
+            CreateElement { root: 4, tag: "div" },
+            CreateElement { root: 5, tag: "div" },
             CreateElement { root: 6, tag: "p" },
             AppendChildren { many: 6 },
         ]
     );
+
+    // note: key reuse is always the last node that got used
+    // slab maintains a linked list, essentially
     assert_eq!(
         change.edits,
         [
             Remove { root: 3 },
             Remove { root: 4 },
             Remove { root: 5 },
-            CreateElement { root: 7, tag: "h1" },
-            ReplaceWith { root: 1, m: 1 },
-            CreateElement { root: 8, tag: "h1" },
+            CreateElement { root: 5, tag: "h1" }, // 3 gets reused
+            ReplaceWith { root: 1, m: 1 },        // 1 gets deleted
+            CreateElement { root: 1, tag: "h1" }, // 1 gets reused
             ReplaceWith { root: 2, m: 1 },
         ]
     );
@@ -395,14 +307,8 @@ fn two_fragments_with_same_elements_are_differet() {
     assert_eq!(
         create.edits,
         [
-            CreateElement {
-                root: 1,
-                tag: "div"
-            },
-            CreateElement {
-                root: 2,
-                tag: "div"
-            },
+            CreateElement { root: 1, tag: "div" },
+            CreateElement { root: 2, tag: "div" },
             CreateElement { root: 3, tag: "p" },
             AppendChildren { many: 3 },
         ]
@@ -410,18 +316,9 @@ fn two_fragments_with_same_elements_are_differet() {
     assert_eq!(
         change.edits,
         [
-            CreateElement {
-                root: 4,
-                tag: "div"
-            },
-            CreateElement {
-                root: 5,
-                tag: "div"
-            },
-            CreateElement {
-                root: 6,
-                tag: "div"
-            },
+            CreateElement { root: 4, tag: "div" },
+            CreateElement { root: 5, tag: "div" },
+            CreateElement { root: 6, tag: "div" },
             InsertAfter { root: 2, n: 3 },
         ]
     );
@@ -628,14 +525,8 @@ fn keyed_diffing_additions() {
     assert_eq!(
         change.edits,
         [
-            CreateElement {
-                root: 6,
-                tag: "div"
-            },
-            CreateElement {
-                root: 7,
-                tag: "div"
-            },
+            CreateElement { root: 6, tag: "div" },
+            CreateElement { root: 7, tag: "div" },
             InsertAfter { n: 2, root: 5 }
         ]
     );
@@ -663,14 +554,8 @@ fn keyed_diffing_additions_and_moves_on_ends() {
         change.edits,
         [
             // create 11, 12
-            CreateElement {
-                tag: "div",
-                root: 5
-            },
-            CreateElement {
-                tag: "div",
-                root: 6
-            },
+            CreateElement { tag: "div", root: 5 },
+            CreateElement { tag: "div", root: 6 },
             InsertAfter { root: 3, n: 2 },
             // move 7 to the front
             PushRoot { root: 4 },
@@ -684,13 +569,13 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     let dom = new_dom();
 
     let left = rsx!({
-        [/**/ 4, 5, 6, 7 /**/].iter().map(|f| {
+        [/**/ 1, 2, 3, 4 /**/].iter().map(|f| {
             rsx! { div { key: "{f}"  }}
         })
     });
 
     let right = rsx!({
-        [/**/ 7, 4, 13, 17, 5, 11, 12, 6 /**/].iter().map(|f| {
+        [/**/ 4, 1, 7, 8, 2, 5, 6, 3 /**/].iter().map(|f| {
             rsx! { div { key: "{f}"  }}
         })
     });
@@ -701,26 +586,14 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     assert_eq!(
         change.edits,
         [
-            // create 13, 17
-            CreateElement {
-                tag: "div",
-                root: 5
-            },
-            CreateElement {
-                tag: "div",
-                root: 6
-            },
-            InsertBefore { root: 2, n: 2 },
-            // create 11, 12
-            CreateElement {
-                tag: "div",
-                root: 7
-            },
-            CreateElement {
-                tag: "div",
-                root: 8
-            },
+            // create 5, 6
+            CreateElement { tag: "div", root: 5 },
+            CreateElement { tag: "div", root: 6 },
             InsertBefore { root: 3, n: 2 },
+            // create 7, 8
+            CreateElement { tag: "div", root: 7 },
+            CreateElement { tag: "div", root: 8 },
+            InsertBefore { root: 2, n: 2 },
             // move 7
             PushRoot { root: 4 },
             InsertBefore { root: 1, n: 1 }
@@ -756,16 +629,10 @@ fn controlled_keyed_diffing_out_of_order() {
             // remove 7
 
             // create 9 and insert before 6
-            CreateElement {
-                root: 5,
-                tag: "div"
-            },
+            CreateElement { root: 5, tag: "div" },
             InsertBefore { n: 1, root: 3 },
             // create 0 and insert before 5
-            CreateElement {
-                root: 6,
-                tag: "div"
-            },
+            CreateElement { root: 6, tag: "div" },
             InsertBefore { n: 1, root: 2 },
         ]
     );
@@ -792,10 +659,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
     assert_eq!(
         changes.edits,
         [
-            CreateElement {
-                root: 6,
-                tag: "div"
-            },
+            CreateElement { root: 6, tag: "div" },
             InsertBefore { n: 1, root: 3 },
             PushRoot { root: 4 },
             InsertBefore { n: 1, root: 1 },

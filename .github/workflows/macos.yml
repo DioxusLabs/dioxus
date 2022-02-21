@@ -1,9 +1,21 @@
-on: [push, pull_request]
-
 name: macOS tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - master
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
 
 jobs:
   test:
+    if: github.event.pull_request.draft == false
     name: Test Suite
     runs-on: macos-latest
     steps:
