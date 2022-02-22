@@ -107,6 +107,7 @@ pub enum DomEdit<'bump> {
     RemoveAttribute {
         root: u64,
         name: &'static str,
+        ns: Option<&'bump str>,
     },
 }
 
@@ -218,8 +219,17 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {
-        let name = attribute.name;
-        self.edits.push(RemoveAttribute { name, root });
+        let Attribute {
+            name,
+            namespace,
+            ..
+        } = attribute;
+
+        self.edits.push(RemoveAttribute { 
+            name,
+            ns: *namespace,
+            root
+        });
     }
 
     pub(crate) fn mark_dirty_scope(&mut self, scope: ScopeId) {
