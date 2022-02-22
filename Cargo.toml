@@ -16,8 +16,8 @@ dioxus-core = { path = "./packages/core", version = "^0.1.9" }
 dioxus-html = { path = "./packages/html", version = "^0.1.6", optional = true }
 dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.7", optional = true }
 dioxus-hooks = { path = "./packages/hooks", version = "^0.1.7", optional = true }
-dioxus-rsx = { path = "./packages/rsx", optional = true }
 fermi = { path = "./packages/fermi", version = "^0.1.0", optional = true }
+# dioxus-rsx = { path = "./packages/rsx", optional = true }
 
 dioxus-web = { path = "./packages/web", version = "^0.0.5", optional = true }
 dioxus-desktop = { path = "./packages/desktop", version = "^0.1.6", optional = true }
@@ -31,7 +31,8 @@ dioxus-interpreter-js = { path = "./packages/interpreter", version = "^0.0.0", o
 [features]
 default = ["macro", "hooks", "html"]
 
-macro = ["dioxus-core-macro", "dioxus-rsx"]
+macro = ["dioxus-core-macro"]
+# macro = ["dioxus-core-macro", "dioxus-rsx"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
 ssr = ["dioxus-ssr"]
