@@ -7,3 +7,5 @@
 - [Commands](./cmd/README.md)
   - [Build](./cmd/build.md)
   - [Serve](./cmd/serve.md)
+  - [Clean](./cmd/clean.md)
+  - [Translate](./cmd/translate.md)
