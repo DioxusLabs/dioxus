@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response, ResponseBuilder},
     Result,
@@ -21,8 +21,13 @@ pub(super) fn desktop_handler(request: &Request) -> Result<Response> {
             .mimetype("text/javascript")
             .body(dioxus_interpreter_js::INTERPRETER_JS.as_bytes().to_vec())
     } else {
+        // the path of the asset specified without any relative paths
         let path_buf = Path::new(trimmed).canonicalize()?;
-        let cur_path = Path::new(".").canonicalize()?;
+
+        // the current path of the bundle
+        let cur_path = get_asset_root()
+            .unwrap_or_else(|| Path::new(".").to_path_buf())
+            .canonicalize()?;
 
         if !path_buf.starts_with(cur_path) {
             return ResponseBuilder::new()
@@ -44,4 +49,36 @@ pub(super) fn desktop_handler(request: &Request) -> Result<Response> {
 
         ResponseBuilder::new().mimetype(&meta).body(data)
     }
+}
+
+#[allow(unreachable_code)]
+fn get_asset_root() -> Option<PathBuf> {
+    /*
+    We're matching exactly how cargo-bundle works.
+
+    - [x] macOS
+    - [ ] Windows
+    - [ ] Linux (rpm)
+    - [ ] Linux (deb)
+    - [ ] iOS
+    - [ ] Android
+
+    */
+
+    if std::env::var_os("CARGO").is_some() {
+        return None;
+    }
+
+    // TODO: support for other platforms
+    #[cfg(target_os = "macos")]
+    {
+        let bundle = core_foundation::bundle::CFBundle::main_bundle();
+        let bundle_path = bundle.path()?;
+        let resources_path = bundle.resources_path()?;
+        let absolute_resources_root = bundle_path.join(resources_path);
+        let canonical_resources_root = dunce::canonicalize(absolute_resources_root).ok()?;
+        return Some(canonical_resources_root);
+    }
+
+    None
 }
