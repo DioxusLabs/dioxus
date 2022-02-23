@@ -146,6 +146,28 @@ impl UseFutureDep for () {
 pub trait Dep: 'static + PartialEq + Clone {}
 impl<T> Dep for T where T: 'static + PartialEq + Clone {}
 
+impl<A: Dep> UseFutureDep for &A {
+    type Out = A;
+    fn out(&self) -> Self::Out {
+        (*self).clone()
+    }
+    fn apply(self, state: &mut Vec<Box<dyn Any>>) -> bool {
+        match state.get_mut(0).map(|f| f.downcast_mut::<A>()).flatten() {
+            Some(val) => {
+                if *val != *self {
+                    *val = self.clone();
+                    return true;
+                }
+            }
+            None => {
+                state.push(Box::new(self.clone()));
+                return true;
+            }
+        }
+        false
+    }
+}
+
 macro_rules! impl_dep {
     (
         $($el:ident=$name:ident,)*
