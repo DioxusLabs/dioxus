@@ -10,7 +10,8 @@ use std::{
     collections::HashMap,
     future::Future,
     pin::Pin,
-    rc::Rc, sync::Arc,
+    rc::Rc,
+    sync::Arc,
 };
 
 /// for traceability, we use the raw fn pointer to identify the function
