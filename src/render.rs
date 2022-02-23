@@ -10,7 +10,7 @@ use tui::{backend::CrosstermBackend, layout::Rect};
 use crate::{
     style::{RinkColor, RinkStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    BorderType, Config, TuiNode, UnitSystem,
+    BorderEdge, BorderStyle, Config, TuiNode, UnitSystem,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
@@ -71,10 +71,6 @@ pub fn render_vnode<'a>(
                     }
                 }
             }
-
-            // let s = Span::raw(t.text);
-
-            // Block::default().
 
             let label = Label {
                 text: t.text,
@@ -190,7 +186,7 @@ impl<'a> RinkWidget for TuiNode<'a> {
             arc_angle: f32,
             radius: f32,
             symbols: &Set,
-            mut buf: &mut RinkBuffer,
+            buf: &mut RinkBuffer,
             color: &Option<RinkColor>,
         ) {
             if radius < 0.0 {
@@ -202,6 +198,7 @@ impl<'a> RinkWidget for TuiNode<'a> {
                 (starting_angle.cos() * (radius * RADIUS_MULTIPLIER[0])) as i32,
                 (starting_angle.sin() * (radius * RADIUS_MULTIPLIER[1])) as i32,
             ];
+            // keep track of the last 3 point to allow filling diagonals
             let mut points_history = [
                 [0, 0],
                 {
@@ -238,16 +235,16 @@ impl<'a> RinkWidget for TuiNode<'a> {
                             _ => todo!(),
                         };
                         draw(
-                            &mut buf,
+                            buf,
                             [points_history[0], points_history[1], connecting_point],
-                            &symbols,
+                            symbols,
                             pos,
                             color,
                         );
                         points_history = [points_history[1], connecting_point, points_history[2]];
                     }
 
-                    draw(&mut buf, points_history, &symbols, pos, color);
+                    draw(buf, points_history, symbols, pos, color);
                 }
             }
 
@@ -268,7 +265,21 @@ impl<'a> RinkWidget for TuiNode<'a> {
                 }
             }];
 
-            draw(&mut buf, points_history, &symbols, pos, color);
+            draw(buf, points_history, symbols, pos, color);
+        }
+
+        fn get_radius(border: &BorderEdge, area: Rect) -> f32 {
+            match border.style {
+                BorderStyle::HIDDEN => 0.0,
+                BorderStyle::NONE => 0.0,
+                _ => match border.radius {
+                    UnitSystem::Percent(p) => p * area.width as f32 / 100.0,
+                    UnitSystem::Point(p) => p,
+                }
+                .abs()
+                .min((area.width as f32 / RADIUS_MULTIPLIER[0]) / 2.0)
+                .min((area.height as f32 / RADIUS_MULTIPLIER[1]) / 2.0),
+            }
         }
 
         if area.area() == 0 {
@@ -286,128 +297,146 @@ impl<'a> RinkWidget for TuiNode<'a> {
             }
         }
 
-        for i in 0..4 {
+        let borders = self.tui_modifier.borders;
+
+        let last_edge = &borders.left;
+        let current_edge = &borders.top;
+        if let Some(symbols) = current_edge.style.symbol_set() {
             // the radius for the curve between this line and the next
-            let r = match self.tui_modifier.border_types[(i + 1) % 4] {
-                BorderType::HIDDEN => 0.0,
-                BorderType::NONE => 0.0,
-                _ => match self.tui_modifier.border_radi[i] {
-                    UnitSystem::Percent(p) => p * area.width as f32 / 100.0,
-                    UnitSystem::Point(p) => p,
-                }
-                .abs()
-                .min((area.width as f32 / RADIUS_MULTIPLIER[0]) / 2.0)
-                .min((area.height as f32 / RADIUS_MULTIPLIER[1]) / 2.0),
-            };
+            let r = get_radius(current_edge, area);
             let radius = [
                 (r * RADIUS_MULTIPLIER[0]) as u16,
                 (r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-
             // the radius for the curve between this line and the last
-            let last_idx = if i == 0 { 3 } else { i - 1 };
-            let last_r = match self.tui_modifier.border_types[last_idx] {
-                BorderType::HIDDEN => 0.0,
-                BorderType::NONE => 0.0,
-                _ => match self.tui_modifier.border_radi[last_idx] {
-                    UnitSystem::Percent(p) => p * area.width as f32 / 100.0,
-                    UnitSystem::Point(p) => p,
-                }
-                .abs()
-                .min((area.width as f32 / RADIUS_MULTIPLIER[0]) / 2.0)
-                .min((area.height as f32 / RADIUS_MULTIPLIER[1]) / 2.0),
-            };
+            let last_r = get_radius(last_edge, area);
             let last_radius = [
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-
-            let symbols = match self.tui_modifier.border_types[i] {
-                BorderType::DOTTED => NORMAL,
-                BorderType::DASHED => NORMAL,
-                BorderType::SOLID => NORMAL,
-                BorderType::DOUBLE => DOUBLE,
-                BorderType::GROOVE => NORMAL,
-                BorderType::RIDGE => NORMAL,
-                BorderType::INSET => NORMAL,
-                BorderType::OUTSET => NORMAL,
-                BorderType::HIDDEN => continue,
-                BorderType::NONE => continue,
-            };
-
-            let color = self.tui_modifier.border_colors[i].or(self.block_style.fg);
-
+            let color = current_edge.color.or(self.block_style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
             }
-            match i {
-                0 => {
-                    for x in (area.left() + last_radius[0] + 1)..(area.right() - radius[0]) {
-                        new_cell.symbol = symbols.horizontal.to_string();
-                        buf.set(x, area.top(), &new_cell);
-                    }
-                }
-                1 => {
-                    for y in (area.top() + last_radius[1] + 1)..(area.bottom() - radius[1]) {
-                        new_cell.symbol = symbols.vertical.to_string();
-                        buf.set(area.right() - 1, y, &new_cell);
-                    }
-                }
-                2 => {
-                    for x in (area.left() + radius[0])..(area.right() - last_radius[0] - 1) {
-                        new_cell.symbol = symbols.horizontal.to_string();
-                        buf.set(x, area.bottom() - 1, &new_cell);
-                    }
-                }
-                3 => {
-                    for y in (area.top() + radius[1])..(area.bottom() - last_radius[1] - 1) {
-                        new_cell.symbol = symbols.vertical.to_string();
-                        buf.set(area.left(), y, &new_cell);
-                    }
-                }
-                _ => (),
+            for x in (area.left() + last_radius[0] + 1)..(area.right() - radius[0]) {
+                new_cell.symbol = symbols.horizontal.to_string();
+                buf.set(x, area.top(), &new_cell);
             }
+            draw_arc(
+                [area.right() - radius[0] - 1, area.top() + radius[1]],
+                std::f32::consts::FRAC_PI_2 * 3.0,
+                std::f32::consts::FRAC_PI_2,
+                r,
+                &symbols,
+                &mut buf,
+                &color,
+            );
+        }
 
-            match i {
-                0 => draw_arc(
-                    [area.right() - radius[0] - 1, area.top() + radius[1]],
-                    std::f32::consts::FRAC_PI_2 * 3.0,
-                    std::f32::consts::FRAC_PI_2,
-                    r,
-                    &symbols,
-                    &mut buf,
-                    &color,
-                ),
-                1 => draw_arc(
-                    [area.right() - radius[0] - 1, area.bottom() - radius[1] - 1],
-                    0.0,
-                    std::f32::consts::FRAC_PI_2,
-                    r,
-                    &symbols,
-                    &mut buf,
-                    &color,
-                ),
-                2 => draw_arc(
-                    [area.left() + radius[0], area.bottom() - radius[1] - 1],
-                    std::f32::consts::FRAC_PI_2,
-                    std::f32::consts::FRAC_PI_2,
-                    r,
-                    &symbols,
-                    &mut buf,
-                    &color,
-                ),
-                3 => draw_arc(
-                    [area.left() + radius[0], area.top() + radius[1]],
-                    std::f32::consts::PI,
-                    std::f32::consts::FRAC_PI_2,
-                    r,
-                    &symbols,
-                    &mut buf,
-                    &color,
-                ),
-                _ => panic!("more than 4 sides?"),
+        let last_edge = &borders.top;
+        let current_edge = &borders.right;
+        if let Some(symbols) = current_edge.style.symbol_set() {
+            // the radius for the curve between this line and the next
+            let r = get_radius(current_edge, area);
+            let radius = [
+                (r * RADIUS_MULTIPLIER[0]) as u16,
+                (r * RADIUS_MULTIPLIER[1]) as u16,
+            ];
+            // the radius for the curve between this line and the last
+            let last_r = get_radius(last_edge, area);
+            let last_radius = [
+                (last_r * RADIUS_MULTIPLIER[0]) as u16,
+                (last_r * RADIUS_MULTIPLIER[1]) as u16,
+            ];
+            let color = current_edge.color.or(self.block_style.fg);
+            let mut new_cell = RinkCell::default();
+            if let Some(c) = color {
+                new_cell.fg = c;
             }
+            for y in (area.top() + last_radius[1] + 1)..(area.bottom() - radius[1]) {
+                new_cell.symbol = symbols.vertical.to_string();
+                buf.set(area.right() - 1, y, &new_cell);
+            }
+            draw_arc(
+                [area.right() - radius[0] - 1, area.bottom() - radius[1] - 1],
+                0.0,
+                std::f32::consts::FRAC_PI_2,
+                r,
+                &symbols,
+                &mut buf,
+                &color,
+            );
+        }
+
+        let last_edge = &borders.right;
+        let current_edge = &borders.bottom;
+        if let Some(symbols) = current_edge.style.symbol_set() {
+            // the radius for the curve between this line and the next
+            let r = get_radius(current_edge, area);
+            let radius = [
+                (r * RADIUS_MULTIPLIER[0]) as u16,
+                (r * RADIUS_MULTIPLIER[1]) as u16,
+            ];
+            // the radius for the curve between this line and the last
+            let last_r = get_radius(last_edge, area);
+            let last_radius = [
+                (last_r * RADIUS_MULTIPLIER[0]) as u16,
+                (last_r * RADIUS_MULTIPLIER[1]) as u16,
+            ];
+            let color = current_edge.color.or(self.block_style.fg);
+            let mut new_cell = RinkCell::default();
+            if let Some(c) = color {
+                new_cell.fg = c;
+            }
+            for x in (area.left() + radius[0])..(area.right() - last_radius[0] - 1) {
+                new_cell.symbol = symbols.horizontal.to_string();
+                buf.set(x, area.bottom() - 1, &new_cell);
+            }
+            draw_arc(
+                [area.left() + radius[0], area.bottom() - radius[1] - 1],
+                std::f32::consts::FRAC_PI_2,
+                std::f32::consts::FRAC_PI_2,
+                r,
+                &symbols,
+                &mut buf,
+                &color,
+            );
+        }
+
+        let last_edge = &borders.bottom;
+        let current_edge = &borders.left;
+        if let Some(symbols) = current_edge.style.symbol_set() {
+            // the radius for the curve between this line and the next
+            let r = get_radius(current_edge, area);
+            let radius = [
+                (r * RADIUS_MULTIPLIER[0]) as u16,
+                (r * RADIUS_MULTIPLIER[1]) as u16,
+            ];
+            // the radius for the curve between this line and the last
+            let last_r = get_radius(last_edge, area);
+            let last_radius = [
+                (last_r * RADIUS_MULTIPLIER[0]) as u16,
+                (last_r * RADIUS_MULTIPLIER[1]) as u16,
+            ];
+            let color = current_edge.color.or(self.block_style.fg);
+            let mut new_cell = RinkCell::default();
+            if let Some(c) = color {
+                new_cell.fg = c;
+            }
+            for y in (area.top() + radius[1])..(area.bottom() - last_radius[1] - 1) {
+                new_cell.symbol = symbols.vertical.to_string();
+                buf.set(area.left(), y, &new_cell);
+            }
+            draw_arc(
+                [area.left() + radius[0], area.top() + radius[1]],
+                std::f32::consts::PI,
+                std::f32::consts::FRAC_PI_2,
+                r,
+                &symbols,
+                &mut buf,
+                &color,
+            );
         }
     }
 }

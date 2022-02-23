@@ -23,26 +23,23 @@ impl RinkColor {
     pub fn blend(self, other: Color) -> Color {
         if self.color == Color::Reset {
             Color::Reset
+        } else if self.alpha == 0.0 {
+            other
         } else {
-            if self.alpha == 0.0 {
-                other
-            } else {
-                let [sr, sg, sb] = to_rgb(self.color);
-                let [or, og, ob] = to_rgb(other);
-                let (sr, sg, sb, sa) = (
-                    sr as f32 / 255.0,
-                    sg as f32 / 255.0,
-                    sb as f32 / 255.0,
-                    self.alpha,
-                );
-                let (or, og, ob) = (or as f32 / 255.0, og as f32 / 255.0, ob as f32 / 255.0);
-                let c = Color::Rgb(
-                    (255.0 * (sr * sa + or * (1.0 - sa))) as u8,
-                    (255.0 * (sg * sa + og * (1.0 - sa))) as u8,
-                    (255.0 * (sb * sa + ob * (1.0 - sa))) as u8,
-                );
-                c
-            }
+            let [sr, sg, sb] = to_rgb(self.color);
+            let [or, og, ob] = to_rgb(other);
+            let (sr, sg, sb, sa) = (
+                sr as f32 / 255.0,
+                sg as f32 / 255.0,
+                sb as f32 / 255.0,
+                self.alpha,
+            );
+            let (or, og, ob) = (or as f32 / 255.0, og as f32 / 255.0, ob as f32 / 255.0);
+            Color::Rgb(
+                (255.0 * (sr * sa + or * (1.0 - sa))) as u8,
+                (255.0 * (sg * sa + og * (1.0 - sa))) as u8,
+                (255.0 * (sb * sa + ob * (1.0 - sa))) as u8,
+            )
         }
     }
 }
@@ -52,8 +49,8 @@ fn parse_value(
     current_max_output: f32,
     required_max_output: f32,
 ) -> Result<f32, ParseFloatError> {
-    if v.ends_with('%') {
-        Ok((v[..v.len() - 1].trim().parse::<f32>()? / 100.0) * required_max_output)
+    if let Some(stripped) = v.strip_suffix('%') {
+        Ok((stripped.trim().parse::<f32>()? / 100.0) * required_max_output)
     } else {
         Ok((v.trim().parse::<f32>()? / current_max_output) * required_max_output)
     }
@@ -224,8 +221,8 @@ impl FromStr for RinkColor {
                         color: c,
                         alpha: 1.0,
                     })
-                } else if color.starts_with("rgb(") {
-                    let color_values = color[4..].trim_end_matches(')');
+                } else if let Some(stripped) = color.strip_prefix("rgb(") {
+                    let color_values = stripped.trim_end_matches(')');
                     if color.matches(',').count() == 3 {
                         let (alpha, rgb_values) =
                             color_values.rsplit_once(',').ok_or(ParseColorError)?;
@@ -240,8 +237,8 @@ impl FromStr for RinkColor {
                             alpha: 1.0,
                         })
                     }
-                } else if color.starts_with("rgba(") {
-                    let color_values = color[5..].trim_end_matches(')');
+                } else if let Some(stripped) = color.strip_prefix("rgba(") {
+                    let color_values = stripped.trim_end_matches(')');
                     if color.matches(',').count() == 3 {
                         let (rgb_values, alpha) =
                             color_values.rsplit_once(',').ok_or(ParseColorError)?;
@@ -256,8 +253,8 @@ impl FromStr for RinkColor {
                             alpha: 1.0,
                         })
                     }
-                } else if color.starts_with("hsl(") {
-                    let color_values = color[4..].trim_end_matches(')');
+                } else if let Some(stripped) = color.strip_prefix("hsl(") {
+                    let color_values = stripped.trim_end_matches(')');
                     if color.matches(',').count() == 3 {
                         let (rgb_values, alpha) =
                             color_values.rsplit_once(',').ok_or(ParseColorError)?;
@@ -272,8 +269,8 @@ impl FromStr for RinkColor {
                             alpha: 1.0,
                         })
                     }
-                } else if color.starts_with("hsla(") {
-                    let color_values = color[5..].trim_end_matches(')');
+                } else if let Some(stripped) = color.strip_prefix("hsla(") {
+                    let color_values = stripped.trim_end_matches(')');
                     if color.matches(',').count() == 3 {
                         let (rgb_values, alpha) =
                             color_values.rsplit_once(',').ok_or(ParseColorError)?;
@@ -332,7 +329,6 @@ fn to_rgb(c: Color) -> [u8; 3] {
             _ => [0, 0, 0],
         },
         Color::Reset => [0, 0, 0],
-        _ => todo!("{c:?}"),
     }
 }
 
@@ -384,7 +380,7 @@ fn rgb_to_ansi() {
             if rgb[0] != rgb[1] || rgb[1] != rgb[2] {
                 assert_eq!(idxed, converted);
             } else {
-                assert!(i >= 232 && i <= 255);
+                assert!(i >= 232);
             }
         } else {
             panic!("color is not indexed")

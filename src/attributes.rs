@@ -30,7 +30,6 @@
 */
 
 use stretch2::{prelude::*, style::PositionType, style::Style};
-use tui::style::{Color, Style as TuiStyle};
 
 use crate::style::{RinkColor, RinkStyle};
 
@@ -40,16 +39,50 @@ pub struct StyleModifer {
     pub tui_modifier: TuiModifier,
 }
 
+#[derive(Default)]
 pub struct TuiModifier {
-    // border arrays start at the top and proceed clockwise
-    pub border_colors: [Option<RinkColor>; 4],
-    pub border_types: [BorderType; 4],
-    pub border_widths: [UnitSystem; 4],
-    pub border_radi: [UnitSystem; 4],
+    pub borders: Borders,
+}
+
+#[derive(Default)]
+pub struct Borders {
+    pub top: BorderEdge,
+    pub right: BorderEdge,
+    pub bottom: BorderEdge,
+    pub left: BorderEdge,
+}
+
+impl Borders {
+    fn slice(&mut self) -> [&mut BorderEdge; 4] {
+        [
+            &mut self.top,
+            &mut self.right,
+            &mut self.bottom,
+            &mut self.left,
+        ]
+    }
+}
+
+pub struct BorderEdge {
+    pub color: Option<RinkColor>,
+    pub style: BorderStyle,
+    pub width: UnitSystem,
+    pub radius: UnitSystem,
+}
+
+impl Default for BorderEdge {
+    fn default() -> Self {
+        Self {
+            color: None,
+            style: BorderStyle::NONE,
+            width: UnitSystem::Point(0.0),
+            radius: UnitSystem::Point(0.0),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
-pub enum BorderType {
+pub enum BorderStyle {
     DOTTED,
     DASHED,
     SOLID,
@@ -62,13 +95,30 @@ pub enum BorderType {
     NONE,
 }
 
-impl Default for TuiModifier {
-    fn default() -> Self {
-        Self {
-            border_colors: [None; 4],
-            border_types: [BorderType::NONE; 4],
-            border_widths: [UnitSystem::Point(0.0); 4],
-            border_radi: [UnitSystem::Point(0.0); 4],
+impl BorderStyle {
+    pub fn symbol_set(&self) -> Option<tui::symbols::line::Set> {
+        use tui::symbols::line::*;
+        const DASHED: Set = Set {
+            horizontal: "╌",
+            vertical: "╎",
+            ..NORMAL
+        };
+        const DOTTED: Set = Set {
+            horizontal: "┈",
+            vertical: "┊",
+            ..NORMAL
+        };
+        match self {
+            BorderStyle::DOTTED => Some(DOTTED),
+            BorderStyle::DASHED => Some(DASHED),
+            BorderStyle::SOLID => Some(NORMAL),
+            BorderStyle::DOUBLE => Some(DOUBLE),
+            BorderStyle::GROOVE => Some(NORMAL),
+            BorderStyle::RIDGE => Some(NORMAL),
+            BorderStyle::INSET => Some(NORMAL),
+            BorderStyle::OUTSET => Some(NORMAL),
+            BorderStyle::HIDDEN => None,
+            BorderStyle::NONE => None,
         }
     }
 }
@@ -345,8 +395,8 @@ fn parse_value(value: &str) -> Option<UnitSystem> {
         } else {
             None
         }
-    } else if value.ends_with("%") {
-        if let Ok(pct) = value.trim_end_matches("%").parse::<f32>() {
+    } else if value.ends_with('%') {
+        if let Ok(pct) = value.trim_end_matches('%').parse::<f32>() {
             Some(UnitSystem::Percent(pct))
         } else {
             None
@@ -421,18 +471,18 @@ fn apply_background(name: &str, value: &str, style: &mut StyleModifer) {
 }
 
 fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
-    fn parse_border_type(v: &str) -> BorderType {
+    fn parse_border_style(v: &str) -> BorderStyle {
         match v {
-            "dotted" => BorderType::DOTTED,
-            "dashed" => BorderType::DASHED,
-            "solid" => BorderType::SOLID,
-            "double" => BorderType::DOUBLE,
-            "groove" => BorderType::GROOVE,
-            "ridge" => BorderType::RIDGE,
-            "inset" => BorderType::INSET,
-            "outset" => BorderType::OUTSET,
-            "none" => BorderType::NONE,
-            "hidden" => BorderType::HIDDEN,
+            "dotted" => BorderStyle::DOTTED,
+            "dashed" => BorderStyle::DASHED,
+            "solid" => BorderStyle::SOLID,
+            "double" => BorderStyle::DOUBLE,
+            "groove" => BorderStyle::GROOVE,
+            "ridge" => BorderStyle::RIDGE,
+            "inset" => BorderStyle::INSET,
+            "outset" => BorderStyle::OUTSET,
+            "none" => BorderStyle::NONE,
+            "hidden" => BorderStyle::HIDDEN,
             _ => todo!(),
         }
     }
@@ -441,23 +491,25 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         "border-bottom" => {}
         "border-bottom-color" => {
             if let Ok(c) = value.parse() {
-                style.tui_modifier.border_colors[2] = Some(c);
+                style.tui_modifier.borders.bottom.color = Some(c);
             }
         }
         "border-bottom-left-radius" => {
             if let Some(v) = parse_value(value) {
-                style.tui_modifier.border_radi[2] = v;
+                style.tui_modifier.borders.left.radius = v;
             }
         }
         "border-bottom-right-radius" => {
             if let Some(v) = parse_value(value) {
-                style.tui_modifier.border_radi[1] = v;
+                style.tui_modifier.borders.right.radius = v;
             }
         }
-        "border-bottom-style" => style.tui_modifier.border_types[2] = parse_border_type(value),
+        "border-bottom-style" => {
+            style.tui_modifier.borders.bottom.style = parse_border_style(value)
+        }
         "border-bottom-width" => {
             if let Some(v) = parse_value(value) {
-                style.tui_modifier.border_widths[2] = v;
+                style.tui_modifier.borders.bottom.width = v;
             }
         }
         "border-collapse" => {}
@@ -465,14 +517,20 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
             let values: Vec<_> = value.split(' ').collect();
             if values.len() == 1 {
                 if let Ok(c) = values[0].parse() {
-                    for i in 0..4 {
-                        style.tui_modifier.border_colors[i] = Some(c);
-                    }
+                    style
+                        .tui_modifier
+                        .borders
+                        .slice()
+                        .iter_mut()
+                        .for_each(|b| b.color = Some(c));
                 }
             } else {
-                for (i, v) in values.into_iter().enumerate() {
+                for (v, b) in values
+                    .into_iter()
+                    .zip(style.tui_modifier.borders.slice().iter_mut())
+                {
                     if let Ok(c) = v.parse() {
-                        style.tui_modifier.border_colors[i] = Some(c);
+                        b.color = Some(c);
                     }
                 }
             }
@@ -486,27 +544,33 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         "border-left" => {}
         "border-left-color" => {
             if let Ok(c) = value.parse() {
-                style.tui_modifier.border_colors[3] = Some(c);
+                style.tui_modifier.borders.left.color = Some(c);
             }
         }
-        "border-left-style" => style.tui_modifier.border_types[3] = parse_border_type(value),
+        "border-left-style" => style.tui_modifier.borders.left.style = parse_border_style(value),
         "border-left-width" => {
             if let Some(v) = parse_value(value) {
-                style.tui_modifier.border_widths[3] = v;
+                style.tui_modifier.borders.left.width = v;
             }
         }
         "border-radius" => {
             let values: Vec<_> = value.split(' ').collect();
             if values.len() == 1 {
                 if let Some(r) = parse_value(values[0]) {
-                    for i in 0..4 {
-                        style.tui_modifier.border_radi[i] = r;
-                    }
+                    style
+                        .tui_modifier
+                        .borders
+                        .slice()
+                        .iter_mut()
+                        .for_each(|b| b.radius = r);
                 }
             } else {
-                for (i, v) in values.into_iter().enumerate() {
+                for (v, b) in values
+                    .into_iter()
+                    .zip(style.tui_modifier.borders.slice().iter_mut())
+                {
                     if let Some(r) = parse_value(v) {
-                        style.tui_modifier.border_radi[i] = r;
+                        b.radius = r;
                     }
                 }
             }
@@ -514,55 +578,76 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         "border-right" => {}
         "border-right-color" => {
             if let Ok(c) = value.parse() {
-                style.tui_modifier.border_colors[1] = Some(c);
+                style.tui_modifier.borders.right.color = Some(c);
             }
         }
-        "border-right-style" => style.tui_modifier.border_types[1] = parse_border_type(value),
+        "border-right-style" => style.tui_modifier.borders.right.style = parse_border_style(value),
         "border-right-width" => {
             if let Some(v) = parse_value(value) {
-                style.tui_modifier.border_widths[1] = v;
+                style.tui_modifier.borders.right.width = v;
             }
         }
         "border-spacing" => {}
         "border-style" => {
             let values: Vec<_> = value.split(' ').collect();
             if values.len() == 1 {
-                let border = parse_border_type(values[0]);
-                for i in 0..4 {
-                    style.tui_modifier.border_types[i] = border;
-                }
+                let border_style = parse_border_style(values[0]);
+                style
+                    .tui_modifier
+                    .borders
+                    .slice()
+                    .iter_mut()
+                    .for_each(|b| b.style = border_style);
             } else {
-                for (i, v) in values.into_iter().enumerate() {
-                    style.tui_modifier.border_types[i] = parse_border_type(v);
+                for (v, b) in values
+                    .into_iter()
+                    .zip(style.tui_modifier.borders.slice().iter_mut())
+                {
+                    b.style = parse_border_style(v);
                 }
             }
         }
         "border-top" => {}
         "border-top-color" => {
             if let Ok(c) = value.parse() {
-                style.tui_modifier.border_colors[0] = Some(c);
+                style.tui_modifier.borders.top.color = Some(c);
             }
         }
         "border-top-left-radius" => {
             if let Some(v) = parse_value(value) {
-                style.tui_modifier.border_radi[3] = v;
+                style.tui_modifier.borders.left.radius = v;
             }
         }
         "border-top-right-radius" => {
             if let Some(v) = parse_value(value) {
-                style.tui_modifier.border_radi[0] = v;
+                style.tui_modifier.borders.right.radius = v;
             }
         }
-        "border-top-style" => style.tui_modifier.border_types[0] = parse_border_type(value),
+        "border-top-style" => style.tui_modifier.borders.top.style = parse_border_style(value),
         "border-top-width" => {
             if let Some(v) = parse_value(value) {
-                style.tui_modifier.border_widths[0] = v;
+                style.tui_modifier.borders.top.width = v;
             }
         }
         "border-width" => {
-            if let Some(v) = parse_value(value) {
-                for i in 0..4 {
-                    style.tui_modifier.border_widths[i] = v;
+            let values: Vec<_> = value.split(' ').collect();
+            if values.len() == 1 {
+                if let Some(w) = parse_value(values[0]) {
+                    style
+                        .tui_modifier
+                        .borders
+                        .slice()
+                        .iter_mut()
+                        .for_each(|b| b.width = w);
+                }
+            } else {
+                for (v, b) in values
+                    .into_iter()
+                    .zip(style.tui_modifier.borders.slice().iter_mut())
+                {
+                    if let Some(w) = parse_value(v) {
+                        b.width = w;
+                    }
                 }
             }
         }
@@ -654,11 +739,11 @@ fn apply_flex(name: &str, value: &str, style: &mut StyleModifer) {
 fn apply_font(name: &str, value: &str, style: &mut StyleModifer) {
     use tui::style::Modifier;
     match name {
-        "font" => todo!(),
-        "font-family" => todo!(),
-        "font-size" => todo!(),
-        "font-size-adjust" => todo!(),
-        "font-stretch" => todo!(),
+        "font" => (),
+        "font-family" => (),
+        "font-size" => (),
+        "font-size-adjust" => (),
+        "font-stretch" => (),
         "font-style" => match value {
             "italic" => style.tui_style = style.tui_style.add_modifier(Modifier::ITALIC),
             "oblique" => style.tui_style = style.tui_style.add_modifier(Modifier::ITALIC),

@@ -1,6 +1,5 @@
 use dioxus::core::*;
 use std::collections::HashMap;
-use tui::style::Style as TuiStyle;
 
 use crate::{
     attributes::{apply_attributes, StyleModifer},
@@ -88,7 +87,7 @@ pub fn collect_layout<'a>(
                 node.mounted_id(),
                 TuiNode {
                     node,
-                    block_style: modifier.tui_style.into(),
+                    block_style: modifier.tui_style,
                     tui_modifier: modifier.tui_modifier,
                     layout: layout.new_node(modifier.style, &child_layout).unwrap(),
                 },

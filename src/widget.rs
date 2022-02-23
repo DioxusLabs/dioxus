@@ -23,8 +23,8 @@ impl<'a> RinkBuffer<'a> {
     pub fn set(&mut self, x: u16, y: u16, new: &RinkCell) {
         let mut cell = self.buf.get_mut(x, y);
         cell.bg = convert(self.cfg.rendering_mode, new.bg.blend(cell.bg));
-        if &new.symbol == "" {
-            if &cell.symbol != "" {
+        if new.symbol.is_empty() {
+            if !cell.symbol.is_empty() {
                 // allows text to "shine through" transparent backgrounds
                 cell.fg = convert(self.cfg.rendering_mode, new.bg.blend(cell.fg));
             }
