@@ -853,7 +853,7 @@ impl<'b> DiffState<'b> {
                     nodes_created += self.create_node(new_node);
                 } else {
                     self.diff_node(&old[old_index], new_node);
-                    nodes_created += self.push_all_nodes(new_node);
+                    nodes_created += self.push_all_real_nodes(new_node);
                 }
             }
 
@@ -876,7 +876,7 @@ impl<'b> DiffState<'b> {
                         nodes_created += self.create_node(new_node);
                     } else {
                         self.diff_node(&old[old_index], new_node);
-                        nodes_created += self.push_all_nodes(new_node);
+                        nodes_created += self.push_all_real_nodes(new_node);
                     }
                 }
 
@@ -899,7 +899,7 @@ impl<'b> DiffState<'b> {
                     nodes_created += self.create_node(new_node);
                 } else {
                     self.diff_node(&old[old_index], new_node);
-                    nodes_created += self.push_all_nodes(new_node);
+                    nodes_created += self.push_all_real_nodes(new_node);
                 }
             }
 
@@ -1100,9 +1100,9 @@ impl<'b> DiffState<'b> {
     }
 
     // recursively push all the nodes of a tree onto the stack and return how many are there
-    fn push_all_nodes(&mut self, node: &'b VNode<'b>) -> usize {
+    fn push_all_real_nodes(&mut self, node: &'b VNode<'b>) -> usize {
         match node {
-            VNode::Text(_) | VNode::Placeholder(_) => {
+            VNode::Text(_) | VNode::Placeholder(_) | VNode::Element(_) => {
                 self.mutations.push_root(node.mounted_id());
                 1
             }
@@ -1110,7 +1110,7 @@ impl<'b> DiffState<'b> {
             VNode::Fragment(frag) => {
                 let mut added = 0;
                 for child in frag.children {
-                    added += self.push_all_nodes(child);
+                    added += self.push_all_real_nodes(child);
                 }
                 added
             }
@@ -1118,16 +1118,7 @@ impl<'b> DiffState<'b> {
             VNode::Component(c) => {
                 let scope_id = c.scope.get().unwrap();
                 let root = self.scopes.root_node(scope_id);
-                self.push_all_nodes(root)
-            }
-
-            VNode::Element(el) => {
-                let mut num_on_stack = 0;
-                for child in el.children.iter() {
-                    num_on_stack += self.push_all_nodes(child);
-                }
-                self.mutations.push_root(el.id.get().unwrap());
-                num_on_stack + 1
+                self.push_all_real_nodes(root)
             }
         }
     }
