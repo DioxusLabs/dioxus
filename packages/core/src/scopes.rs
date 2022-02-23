@@ -579,6 +579,11 @@ impl ScopeState {
         self.our_arena_idx
     }
 
+    /// Get a handle to the raw update scheduler channel
+    pub fn scheduler_channel(&self) -> UnboundedSender<SchedulerMsg> {
+        self.tasks.sender.clone()
+    }
+
     /// Create a subscription that schedules a future render for the reference component
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
