@@ -21,30 +21,25 @@ pub(super) fn desktop_handler(request: &Request) -> Result<Response> {
             .mimetype("text/javascript")
             .body(dioxus_interpreter_js::INTERPRETER_JS.as_bytes().to_vec())
     } else {
-        // the path of the asset specified without any relative paths
-        let path_buf = Path::new(trimmed).canonicalize()?;
+        let asset_root = get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf());
+        let asset = asset_root.join(trimmed).canonicalize()?;
 
-        // the current path of the bundle
-        let cur_path = get_asset_root()
-            .unwrap_or_else(|| Path::new(".").to_path_buf())
-            .canonicalize()?;
-
-        if !path_buf.starts_with(cur_path) {
+        if !asset.starts_with(asset_root) {
             return ResponseBuilder::new()
                 .status(StatusCode::FORBIDDEN)
                 .body(String::from("Forbidden").into_bytes());
         }
 
-        if !path_buf.exists() {
+        if !asset.exists() {
             return ResponseBuilder::new()
                 .status(StatusCode::NOT_FOUND)
                 .body(String::from("Not Found").into_bytes());
         }
 
-        let mime = mime_guess::from_path(&path_buf).first_or_octet_stream();
+        let mime = mime_guess::from_path(&asset).first_or_octet_stream();
 
         // do not let path searching to go two layers beyond the caller level
-        let data = std::fs::read(path_buf)?;
+        let data = std::fs::read(asset)?;
         let meta = format!("{}", mime);
 
         ResponseBuilder::new().mimetype(&meta).body(data)
@@ -73,10 +68,11 @@ fn get_asset_root() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let bundle = core_foundation::bundle::CFBundle::main_bundle();
-        let bundle_path = bundle.path()?;
-        let resources_path = bundle.resources_path()?;
-        let absolute_resources_root = bundle_path.join(resources_path);
-        let canonical_resources_root = dunce::canonicalize(absolute_resources_root).ok()?;
+        let bundle_path = dbg!(bundle.path()?);
+        let resources_path = dbg!(bundle.resources_path()?);
+        let absolute_resources_root = dbg!(bundle_path.join(resources_path));
+        let canonical_resources_root = dbg!(dunce::canonicalize(absolute_resources_root).ok()?);
+
         return Some(canonical_resources_root);
     }
 
