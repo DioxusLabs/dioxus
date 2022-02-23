@@ -4,7 +4,7 @@ use wry::{
     Result,
 };
 
-pub(super) fn desktop_handler(request: &Request) -> Result<Response> {
+pub(super) fn desktop_handler(request: &Request, asset_root: Option<PathBuf>) -> Result<Response> {
     // Any content that uses the `dioxus://` scheme will be shuttled through this handler as a "special case".
     // For now, we only serve two pieces of content which get included as bytes into the final binary.
     let path = request.uri().replace("dioxus://", "");
@@ -21,7 +21,9 @@ pub(super) fn desktop_handler(request: &Request) -> Result<Response> {
             .mimetype("text/javascript")
             .body(dioxus_interpreter_js::INTERPRETER_JS.as_bytes().to_vec())
     } else {
-        let asset_root = get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf());
+        let asset_root = asset_root
+            .unwrap_or_else(|| get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf()));
+
         let asset = asset_root.join(trimmed).canonicalize()?;
 
         if !asset.starts_with(asset_root) {

@@ -122,7 +122,10 @@ pub fn launch_with_props<P: 'static + Send>(
                 let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
 
                 let proxy = proxy.clone();
+
                 let file_handler = cfg.file_drop_handler.take();
+
+                let resource_dir = cfg.resource_dir.clone();
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
@@ -160,7 +163,9 @@ pub fn launch_with_props<P: 'static + Send>(
                                 log::warn!("invalid IPC message received");
                             });
                     })
-                    .with_custom_protocol(String::from("dioxus"), protocol::desktop_handler)
+                    .with_custom_protocol(String::from("dioxus"), move |r| {
+                        protocol::desktop_handler(r, resource_dir.clone())
+                    })
                     .with_file_drop_handler(move |window, evet| {
                         file_handler
                             .as_ref()
