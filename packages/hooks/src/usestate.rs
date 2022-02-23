@@ -4,7 +4,8 @@ use dioxus_core::prelude::*;
 use std::{
     cell::{RefCell, RefMut},
     fmt::{Debug, Display},
-    rc::Rc, sync::Arc,
+    rc::Rc,
+    sync::Arc,
 };
 
 /// Store state between component renders.

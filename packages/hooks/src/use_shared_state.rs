@@ -2,7 +2,8 @@ use dioxus_core::{ScopeId, ScopeState};
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     collections::HashSet,
-    rc::Rc, sync::Arc,
+    rc::Rc,
+    sync::Arc,
 };
 
 type ProvidedState<T> = RefCell<ProvidedStateInner<T>>;

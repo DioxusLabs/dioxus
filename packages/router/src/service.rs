@@ -2,7 +2,8 @@ use gloo::history::{BrowserHistory, History, HistoryListener, Location};
 use std::{
     cell::{Cell, Ref, RefCell},
     collections::{HashMap, HashSet},
-    rc::Rc, sync::Arc,
+    rc::Rc,
+    sync::Arc,
 };
 
 use dioxus_core::ScopeId;

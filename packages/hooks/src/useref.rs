@@ -1,7 +1,8 @@
 use dioxus_core::ScopeState;
 use std::{
     cell::{Ref, RefCell, RefMut},
-    rc::Rc, sync::Arc,
+    rc::Rc,
+    sync::Arc,
 };
 
 /// `use_ref` is a key foundational hook for storing state in Dioxus.
