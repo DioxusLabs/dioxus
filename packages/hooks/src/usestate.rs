@@ -4,7 +4,7 @@ use dioxus_core::prelude::*;
 use std::{
     cell::{RefCell, RefMut},
     fmt::{Debug, Display},
-    rc::Rc,
+    rc::Rc, sync::Arc,
 };
 
 /// Store state between component renders.
@@ -69,7 +69,7 @@ pub fn use_state<'a, T: 'static>(
 
 pub struct UseState<T: 'static> {
     pub(crate) current_val: Rc<T>,
-    pub(crate) update_callback: Rc<dyn Fn()>,
+    pub(crate) update_callback: Arc<dyn Fn()>,
     pub(crate) setter: Rc<dyn Fn(T)>,
     pub(crate) slot: Rc<RefCell<Rc<T>>>,
 }

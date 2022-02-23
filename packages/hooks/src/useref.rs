@@ -1,7 +1,7 @@
 use dioxus_core::ScopeState;
 use std::{
     cell::{Ref, RefCell, RefMut},
-    rc::Rc,
+    rc::Rc, sync::Arc,
 };
 
 /// `use_ref` is a key foundational hook for storing state in Dioxus.
@@ -121,7 +121,7 @@ pub fn use_ref<'a, T: 'static>(
 
 /// A type created by the [`use_ref`] hook. See its documentation for more details.
 pub struct UseRef<T> {
-    update: Rc<dyn Fn()>,
+    update: Arc<dyn Fn()>,
     value: Rc<RefCell<T>>,
 }
 

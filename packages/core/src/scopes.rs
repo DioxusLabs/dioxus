@@ -10,7 +10,7 @@ use std::{
     collections::HashMap,
     future::Future,
     pin::Pin,
-    rc::Rc,
+    rc::Rc, sync::Arc,
 };
 
 /// for traceability, we use the raw fn pointer to identify the function
@@ -582,9 +582,9 @@ impl ScopeState {
     /// Create a subscription that schedules a future render for the reference component
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
-    pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
+    pub fn schedule_update(&self) -> Arc<dyn Fn() + 'static> {
         let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
-        Rc::new(move || {
+        Arc::new(move || {
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
@@ -594,9 +594,9 @@ impl ScopeState {
     /// A component's ScopeId can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
     ///
     /// This method should be used when you want to schedule an update for a component
-    pub fn schedule_update_any(&self) -> Rc<dyn Fn(ScopeId)> {
+    pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId)> {
         let chan = self.tasks.sender.clone();
-        Rc::new(move |id| {
+        Arc::new(move |id| {
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
