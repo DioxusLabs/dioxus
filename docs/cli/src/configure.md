@@ -62,7 +62,7 @@ Include some `CSS Javascript` resources into html file.
       "https://cdn.jsdelivr.net/npm/bootstrap/dist/css/bootstrap.css"
    ]
    ```
-2. ***script*** - include soe script(JS) file into html.
+2. ***script*** - include some script(JS) file into html.
     ```
     style = [
         # include from public_dir.
@@ -85,7 +85,7 @@ Only include resources at `Dev` mode.
       "https://cdn.jsdelivr.net/npm/bootstrap/dist/css/bootstrap.css"
    ]
    ```
-2. ***script*** - include soe script(JS) file into html.
+2. ***script*** - include some script(JS) file into html.
     ```
     style = [
         # include from public_dir.
