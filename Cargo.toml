@@ -38,6 +38,7 @@ html = ["dioxus-html"]
 ssr = ["dioxus-ssr"]
 web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
+ayatana = ["dioxus-desktop/ayatana"]
 router = ["dioxus-router"]
 
 [workspace]
