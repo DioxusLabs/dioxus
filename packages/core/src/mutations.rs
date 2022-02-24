@@ -220,15 +220,13 @@ impl<'a> Mutations<'a> {
 
     pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {
         let Attribute {
-            name,
-            namespace,
-            ..
+            name, namespace, ..
         } = attribute;
 
-        self.edits.push(RemoveAttribute { 
+        self.edits.push(RemoveAttribute {
             name,
             ns: *namespace,
-            root
+            root,
         });
     }
 
