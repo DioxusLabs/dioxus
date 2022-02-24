@@ -28,6 +28,8 @@ dioxus-mobile = { path = "./packages/mobile", version = "^0.0.3", optional = tru
 dioxus-interpreter-js = { path = "./packages/interpreter", version = "^0.0.0", optional = true }
 # dioxus-liveview = { path = "./packages/liveview", optional = true }
 
+bevy = "0.6"
+
 [features]
 default = ["macro", "hooks", "html"]
 

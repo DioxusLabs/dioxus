@@ -2,7 +2,7 @@
 name = "dioxus-desktop"
 version = "0.1.6"
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "Dioxus VirtualDOM renderer for a remote webview instance"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -30,6 +30,7 @@ webbrowser = "0.5.5"
 mime_guess = "2.0.3"
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.0.0" }
 
+bevy = "0.6"
 
 [features]
 default = ["tokio_runtime"]
