@@ -5,6 +5,7 @@ use syn::parse_macro_input;
 mod ifmt;
 mod inlineprops;
 mod props;
+mod rsx;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {
@@ -178,7 +179,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 #[proc_macro_error::proc_macro_error]
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
-    match syn::parse::<dioxus_rsx::CallBody>(s) {
+    match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
         Ok(stream) => stream.to_token_stream().into(),
     }

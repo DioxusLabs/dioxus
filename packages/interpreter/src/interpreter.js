@@ -53,14 +53,12 @@ export class Interpreter {
     }
   }
   CreateTextNode(text, root) {
-    // todo: make it so the types are okay
     const node = document.createTextNode(text);
     this.nodes[root] = node;
     this.stack.push(node);
   }
   CreateElement(tag, root) {
     const el = document.createElement(tag);
-    // el.setAttribute("data-dioxus-id", `${root}`);
     this.nodes[root] = el;
     this.stack.push(el);
   }
