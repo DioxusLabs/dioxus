@@ -14,6 +14,7 @@
 //! Currently, we don't validate for structures, but do validate attributes.
 
 pub mod builder;
+
 mod elements;
 mod events;
 mod global_attributes;

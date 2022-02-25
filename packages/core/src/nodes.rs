@@ -434,6 +434,7 @@ pub struct NodeFactory<'a> {
 }
 
 impl<'a> NodeFactory<'a> {
+    #[inline]
     pub fn new(scope: &'a ScopeState) -> NodeFactory<'a> {
         NodeFactory {
             scope,

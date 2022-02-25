@@ -1,23 +1,26 @@
-use std::fmt::Arguments;
-
 use crate::into_attr::*;
 use bumpalo::collections::Vec as BumpVec;
 use dioxus_core::{
-    self, exports::bumpalo, Attribute, Element, IntoVNode, Listener, NodeFactory, Scope,
-    ScopeState, VNode, VText,
+    self, exports::bumpalo, Attribute, Element, IntoVNode, Listener, NodeFactory, ScopeState,
+    VNode, VText,
 };
-mod elements;
-mod events;
-mod fragments;
-use fragments::fragment;
+pub mod elements;
+pub mod events;
+pub mod fragments;
 
 pub struct ElementBuilder<'a, T> {
-    _inner: T, // a marker type
+    _inner: T, // a zst marker type
     tag_name: &'static str,
     fac: NodeFactory<'a>,
     attrs: BumpVec<'a, Attribute<'a>>,
     children: BumpVec<'a, VNode<'a>>,
     listeners: BumpVec<'a, Listener<'a>>,
+}
+
+impl<'a, T> IntoVNode<'a> for ElementBuilder<'a, T> {
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        todo!()
+    }
 }
 
 fn text<'a>(cx: &'a ScopeState, val: impl IntoAttributeValue<'a>) -> VNode<'a> {
@@ -55,17 +58,8 @@ macro_rules! no_namespace_trait_methods {
 }
 
 impl<'a, T> ElementBuilder<'a, T> {
-    pub fn build(self) -> VNode<'a> {
-        self.fac.raw_element(
-            self.tag_name,
-            None,
-            self.listeners.into_bump_slice(),
-            self.attrs.into_bump_slice(),
-            self.children.into_bump_slice(),
-            None,
-        )
-    }
-    pub fn build_some(self) -> Element<'a> {
+    /// Build this node builder into a VNode.
+    pub fn render(self) -> Option<VNode<'a>> {
         Some(self.fac.raw_element(
             self.tag_name,
             None,
@@ -95,6 +89,15 @@ impl<'a, T> ElementBuilder<'a, T> {
         self
     }
 
+    /// Add a bunch of pre-formatted attributes
+    pub fn attributes(mut self, iter: impl IntoIterator<Item = Attribute<'a>>) -> Self {
+        for attr in iter {
+            self.attrs.push(attr);
+        }
+
+        self
+    }
+
     pub fn attr_ns(
         mut self,
         name: &'static str,
@@ -112,45 +115,86 @@ impl<'a, T> ElementBuilder<'a, T> {
         self
     }
 
-    pub fn children<'b, 'c>(mut self, node_iter: impl AsRef<[VNode<'a>]>) -> Self {
-        // let frag = self.fac.fragment_from_iter(node_iter);
+    pub fn children<'b, 'c, F, A>(mut self, node_iter: A) -> Self
+    where
+        F: IntoVNode<'a>,
 
+        // two trait requirements but we use one
+        // this forces all pure iterators to come in as fragments
+        A: AsRef<[F]> + IntoIterator<Item = F>,
+    {
+        for node in node_iter {
+            self.children.push(node.into_vnode(self.fac));
+        }
         self
     }
 
+    /// Add a child fragment from an iterator
     pub fn fragment<'b, 'c>(
         mut self,
-        frag: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
+        node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
     ) -> Self {
+        self.children.push(self.fac.fragment_from_iter(node_iter));
         self
     }
 
     no_namespace_trait_methods! {
+        /// accesskey
         accesskey;
+
+        /// class
         class;
+
+        /// contenteditable
         contenteditable;
+
+        /// data
         data;
+
+        /// dir
         dir;
+
+        /// draggable
         draggable;
+
+        /// hidden
         hidden;
+
         /// Set the value of the `id` attribute.
         id;
+
+        /// lang
         lang;
+
+        /// spellcheck
         spellcheck;
+
+        /// style
         style;
+
+        /// tabindex
         tabindex;
+
+        /// title
         title;
+
+        /// translate
         translate;
+
+        /// role
         role;
+
+        /// dangerous_inner_html
         dangerous_inner_html;
     }
 }
 
 #[test]
 fn test_builder() {
+    use dioxus_core::prelude::*;
     use elements::*;
 
-    fn please(cx: Scope) -> VNode {
+    fn please(cx: Scope) -> Element {
         div(&cx)
             .class("a")
             .draggable(false)
@@ -167,27 +211,28 @@ fn test_builder() {
             .onclick(move |_| println!("clicked"))
             .children([
                 match true {
-                    true => div(&cx).build(),
-                    false => div(&cx).class("asd").build(),
+                    true => div(&cx),
+                    false => div(&cx).class("asd"),
                 },
                 match 10 {
-                    10 => div(&cx).build(),
-                    _ => div(&cx).class("asd").build(),
+                    10 => div(&cx),
+                    _ => div(&cx).class("asd"),
                 },
             ])
             .children([
                 match true {
-                    true => div(&cx).build(),
-                    false => div(&cx).class("asd").build(),
+                    true => div(&cx),
+                    false => div(&cx).class("asd"),
                 },
                 match 10 {
-                    10 => div(&cx).build(),
-                    _ => div(&cx).class("asd").build(),
+                    10 => div(&cx),
+                    _ => div(&cx).class("asd"),
                 },
             ])
             .fragment((0..10).map(|i| {
                 div(&cx)
                     .class("val")
+                    .class(format_args!("{}", i))
                     .class("val")
                     .class("val")
                     .class("val")
@@ -195,38 +240,45 @@ fn test_builder() {
                     .class("val")
                     .class("val")
                     .class("val")
-                    .class("val")
-                    .build()
             }))
-            .fragment((0..10).map(|i| div(&cx).class("val").class("val").class("val").build()))
-            .fragment((0..20).map(|i| div(&cx).class("val").class("val").class("val").build()))
-            .fragment((0..30).map(|i| div(&cx).class("val").class("val").class("val").build()))
-            .fragment((0..40).map(|i| div(&cx).class("val").class("val").class("val").build()))
+            .fragment((0..10).map(|i| div(&cx).class("val")))
+            .fragment((0..20).map(|i| div(&cx).class("val")))
+            .fragment((0..30).map(|i| div(&cx).class("val")))
+            .fragment((0..40).map(|i| div(&cx).class("val")))
             .children([
                 match true {
-                    true => div(&cx).build(),
-                    false => div(&cx).class("asd").build(),
+                    true => div(&cx),
+                    false => div(&cx).class("asd"),
                 },
                 match 10 {
-                    10 => div(&cx).build(),
-                    _ => div(&cx).class("asd").build(),
+                    10 => div(&cx),
+                    _ => div(&cx).class("asd"),
+                },
+                if 20 == 10 {
+                    div(&cx)
+                } else {
+                    div(&cx).class("asd")
                 },
             ])
-            .build()
+            .render()
     }
 
     fn test2(cx: Scope) -> Element {
         let count = &*cx.use_hook(|_| 0);
 
-        cx.fragment([
-            cx.div()
-                .onclick(move |_| println!("{count}"))
-                .inner_text("up high!")
-                .build(),
-            cx.div()
-                .onclick(move |_| println!("{count}"))
-                .inner_text("down low!")
-                .build(),
-        ])
+        todo!()
+        // fragment(
+        //     &cx,
+        //     [
+        //         div(&cx)
+        //             .onclick(move |_| println!("{count}"))
+        //             .inner_text("up high!")
+        //             .build(),
+        //         div(&cx)
+        //             .onclick(move |_| println!("{count}"))
+        //             .inner_text("down low!")
+        //             .build(),
+        //     ],
+        // )
     }
 }

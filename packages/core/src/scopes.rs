@@ -828,6 +828,7 @@ impl ScopeState {
     }
 
     /// The "work in progress frame" represents the frame that is currently being worked on.
+    #[inline]
     pub(crate) fn wip_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 0 {
             true => &self.frames[0],

@@ -22,6 +22,7 @@ macro_rules! builder_constructors {
             $(#[$attr])*
             pub struct $st;
 
+            $(#[$attr])*
             pub fn $name<'a>(cx: &'a ScopeState) -> ElementBuilder<'a, $st> {
                 let fac = NodeFactory::new(cx);
                 ElementBuilder {
@@ -163,7 +164,6 @@ builder_constructors! {
     /// LazyNodes::new(|f| f.el(h1).children([f.text("A header element")]).finish())
     /// ```
     h1(H1) {};
-
 
     /// Build a
     /// [`<h2>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h2)
