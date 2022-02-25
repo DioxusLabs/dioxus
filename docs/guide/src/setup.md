@@ -52,6 +52,12 @@ Webview Linux apps require WebkitGtk. When distributing, this can be part of you
 sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libappindicator3-dev
 ```
 
+When using Debian/bullseye `libappindicator3-dev` is no longer available but replaced by `libayatana-appindicator3-dev`.
+
+```
+# on Debian/bullseye use:
+sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatanta-appindicator3-dev
+```
 
 If you run into issues, make sure you have all the basics installed, as outlined in the [Tauri docs](https://tauri.studio/en/docs/get-started/setup-linux).
 
