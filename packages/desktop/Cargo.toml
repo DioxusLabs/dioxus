@@ -13,12 +13,10 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.1.9", features = ["serialize"] }
-argh = "0.1.7"
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = "1.0.30"
 log = "0.4.14"
-html-escape = "0.2.9"
 wry = { version = "0.13.1" }
 futures-channel = "0.3.21"
 tokio = { version = "1.16.1", features = [
@@ -27,7 +25,6 @@ tokio = { version = "1.16.1", features = [
     "rt",
     "time",
 ], optional = true, default-features = false }
-dioxus-core-macro = { path = "../core-macro", version = "^0.1.7" }
 dioxus-html = { path = "../html", features = ["serialize"], version = "^0.1.6" }
 webbrowser = "0.5.5"
 mime_guess = "2.0.3"
@@ -47,5 +44,6 @@ ayatana = ["wry/ayatana"]
 
 
 [dev-dependencies]
+dioxus-core-macro = { path = "../core-macro", version = "^0.1.7" }
 dioxus-hooks = { path = "../hooks" }
 # image = "0.24.0" # enable this when generating a new desktop image

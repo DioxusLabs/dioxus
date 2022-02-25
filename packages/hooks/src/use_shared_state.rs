@@ -3,6 +3,7 @@ use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     collections::HashSet,
     rc::Rc,
+    sync::Arc,
 };
 
 type ProvidedState<T> = RefCell<ProvidedStateInner<T>>;
@@ -10,7 +11,7 @@ type ProvidedState<T> = RefCell<ProvidedStateInner<T>>;
 // Tracks all the subscribers to a shared State
 pub struct ProvidedStateInner<T> {
     value: Rc<RefCell<T>>,
-    notify_any: Rc<dyn Fn(ScopeId)>,
+    notify_any: Arc<dyn Fn(ScopeId)>,
     consumers: HashSet<ScopeId>,
 }
 
