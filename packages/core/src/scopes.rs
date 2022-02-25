@@ -97,11 +97,10 @@ impl ScopeArena {
 
         // Get the height of the scope
         let height = parent_scope
-            .map(|id| self.get_scope(id).map(|scope| scope.height + 1))
-            .flatten()
+            .and_then(|id| self.get_scope(id).map(|scope| scope.height + 1))
             .unwrap_or_default();
 
-        let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
+        let parent_scope = parent_scope.and_then(|f| self.get_scope_raw(f));
 
         /*
         This scopearena aggressively reuses old scopes when possible.
@@ -659,8 +658,7 @@ impl ScopeState {
         self.shared_contexts
             .borrow_mut()
             .insert(TypeId::of::<T>(), value.clone())
-            .map(|f| f.downcast::<T>().ok())
-            .flatten();
+            .and_then(|f| f.downcast::<T>().ok());
         value
     }
 
@@ -690,8 +688,7 @@ impl ScopeState {
             self.shared_contexts
                 .borrow_mut()
                 .insert(TypeId::of::<T>(), value.clone())
-                .map(|f| f.downcast::<T>().ok())
-                .flatten();
+                .and_then(|f| f.downcast::<T>().ok());
             return value;
         }
 
