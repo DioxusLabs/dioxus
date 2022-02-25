@@ -1,5 +1,5 @@
 use dioxus_core::{ScopeState, TaskId};
-use std::{cell::Cell, future::Future, rc::Rc};
+use std::{cell::Cell, future::Future, rc::Rc, sync::Arc};
 
 pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static>(
     cx: &'a ScopeState,
@@ -43,7 +43,7 @@ pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static>(
 }
 
 pub struct UseFuture<T> {
-    update: Rc<dyn Fn()>,
+    update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
     value: Option<T>,
     slot: Rc<Cell<Option<T>>>,
