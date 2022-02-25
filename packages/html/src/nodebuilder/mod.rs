@@ -1,21 +1,31 @@
 pub use crate::builder::IntoAttributeValue;
+use bumpalo::boxed::Box as BumpBox;
 use bumpalo::collections::Vec as BumpVec;
 use dioxus_core::{
-    self, exports::bumpalo, Attribute, Element, IntoVNode, Listener, NodeFactory, ScopeState,
+    self, exports::bumpalo, Attribute, IntoVNode, Listener, NodeFactory, ScopeState, UiEvent,
     VNode, VText,
 };
 
-pub mod events;
 pub mod fragments;
+pub mod global_attributes;
 
 pub struct ElementBuilder<'a, T> {
-    _inner: T, // a zst marker type
+    // a zst marker type
+    _inner: T,
+
     name: &'static str,
     fac: NodeFactory<'a>,
     attrs: BumpVec<'a, Attribute<'a>>,
     children: BumpVec<'a, VNode<'a>>,
     listeners: BumpVec<'a, Listener<'a>>,
     namespace: Option<&'static str>,
+    key: Option<&'a str>,
+}
+
+impl<'a, T> IntoVNode<'a> for ElementBuilder<'a, T> {
+    fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
+        self.render().unwrap()
+    }
 }
 
 impl<'a, T> ElementBuilder<'a, T> {
@@ -29,6 +39,7 @@ impl<'a, T> ElementBuilder<'a, T> {
             name,
             fac,
             namespace: None,
+            key: None,
         }
     }
 
@@ -42,6 +53,7 @@ impl<'a, T> ElementBuilder<'a, T> {
             name,
             fac,
             namespace: Some("http://www.w3.org/2000/svg"),
+            key: None,
         }
     }
 
@@ -55,58 +67,59 @@ impl<'a, T> ElementBuilder<'a, T> {
             is_volatile: false,
         });
     }
-}
 
-impl<'a, T> IntoVNode<'a> for ElementBuilder<'a, T> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        todo!()
+    pub fn push_attr_volatile(&mut self, name: &'static str, val: impl IntoAttributeValue<'a>) {
+        let (value, is_static) = val.into_str(self.fac);
+        self.attrs.push(Attribute {
+            name,
+            value,
+            is_static,
+            namespace: None,
+            is_volatile: true,
+        });
     }
-}
 
-fn text<'a>(cx: &'a ScopeState, val: impl IntoAttributeValue<'a>) -> VNode<'a> {
-    let fac = NodeFactory::new(cx);
-    let (text, is_static) = val.into_str(fac);
-    VNode::Text(fac.bump().alloc(VText {
-        text,
-        is_static,
-        id: Default::default(),
-    }))
-}
+    pub fn push_listener<D: Send + Sync + 'static>(
+        &mut self,
+        event_name: &'static str,
+        mut callback: impl FnMut(UiEvent<D>) + 'a,
+    ) -> Listener<'a> {
+        use dioxus_core::AnyEvent;
+        let fac = self.fac;
+        let bump = fac.bump();
 
-macro_rules! no_namespace_trait_methods {
-    (
-        $(
-            $(#[$attr:meta])*
-            $name:ident;
-        )*
-    ) => {
-        $(
-            $(#[$attr])*
-            pub fn $name(mut self, val: impl IntoAttributeValue<'a>) -> Self {
-                let (value, is_static) = val.into_str(self.fac);
-                self.attrs.push(Attribute {
-                    name: stringify!($name),
-                    value,
-                    is_static,
-                    namespace: None,
-                    is_volatile: false,
-                });
-                self
-            }
-        )*
-    };
-}
+        // we can't allocate unsized in bumpalo's box, so we need to craft the box manually
+        // safety: this is essentially the same as calling Box::new() but manually
+        // The box is attached to the lifetime of the bumpalo allocator
+        let cb: &mut dyn FnMut(AnyEvent) = bump.alloc(move |evt: AnyEvent| {
+            let event = evt.downcast::<D>().unwrap();
+            callback(event)
+        });
 
-impl<'a, T> ElementBuilder<'a, T> {
+        let callback: BumpBox<dyn FnMut(AnyEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
+
+        // ie copy
+        let shortname: &'static str = &event_name[2..];
+
+        let handler = bump.alloc(std::cell::RefCell::new(Some(callback)));
+        fac.listener(shortname, handler)
+    }
+
+    pub fn key(mut self, key: impl IntoAttributeValue<'a>) -> Self {
+        let (value, _) = key.into_str(self.fac);
+        self.key = Some(value);
+        self
+    }
+
     /// Build this node builder into a VNode.
     pub fn render(self) -> Option<VNode<'a>> {
         Some(self.fac.raw_element(
             self.name,
-            None,
+            self.namespace,
             self.listeners.into_bump_slice(),
             self.attrs.into_bump_slice(),
             self.children.into_bump_slice(),
-            None,
+            self.key,
         ))
     }
 
@@ -188,129 +201,14 @@ impl<'a, T> ElementBuilder<'a, T> {
         self.children.push(self.fac.fragment_from_iter(node_iter));
         self
     }
-
-    no_namespace_trait_methods! {
-        /// accesskey
-        accesskey;
-
-        /// class
-        class;
-
-        /// contenteditable
-        contenteditable;
-
-        /// data
-        data;
-
-        /// dir
-        dir;
-
-        /// draggable
-        draggable;
-
-        /// hidden
-        hidden;
-
-        /// Set the value of the `id` attribute.
-        id;
-
-        /// lang
-        lang;
-
-        /// spellcheck
-        spellcheck;
-
-        /// style
-        style;
-
-        /// tabindex
-        tabindex;
-
-        /// title
-        title;
-
-        /// translate
-        translate;
-
-        /// role
-        role;
-
-        /// dangerous_inner_html
-        dangerous_inner_html;
-    }
 }
 
-#[test]
-fn test_builder() {
-    use crate::codegen::elements::*;
-    use dioxus_core::prelude::*;
-
-    fn please(cx: Scope) -> Element {
-        div(&cx)
-            .class("a")
-            .draggable(false)
-            .id("asd")
-            .accesskey(false)
-            .class(false)
-            .contenteditable(false)
-            .data(false)
-            .dir(false)
-            .dangerous_inner_html(false)
-            .attr("name", "asd")
-            .onclick(move |_| println!("clicked"))
-            .onclick(move |_| println!("clicked"))
-            .onclick(move |_| println!("clicked"))
-            .children([
-                match true {
-                    true => div(&cx),
-                    false => div(&cx).class("asd"),
-                },
-                match 10 {
-                    10 => div(&cx),
-                    _ => div(&cx).class("asd"),
-                },
-            ])
-            .children([
-                match true {
-                    true => div(&cx),
-                    false => div(&cx).class("asd"),
-                },
-                match 10 {
-                    10 => div(&cx),
-                    _ => div(&cx).class("asd"),
-                },
-            ])
-            .fragment((0..10).map(|i| {
-                div(&cx)
-                    .class("val")
-                    .class(format_args!("{}", i))
-                    .class("val")
-                    .class("val")
-                    .class("val")
-                    .class("val")
-                    .class("val")
-                    .class("val")
-                    .class("val")
-            }))
-            .fragment((0..10).map(|i| div(&cx).class("val")))
-            .fragment((0..20).map(|i| div(&cx).class("val")))
-            .fragment((0..30).map(|i| div(&cx).class("val")))
-            .fragment((0..40).map(|i| div(&cx).class("val")))
-            .children([
-                match true {
-                    true => div(&cx),
-                    false => div(&cx).class("asd"),
-                },
-                match 10 {
-                    10 => div(&cx),
-                    _ => div(&cx).class("asd"),
-                },
-                if 20 == 10 {
-                    div(&cx)
-                } else {
-                    div(&cx).class("asd")
-                },
-            ])
-            .render()
-    }
+pub fn text<'a>(cx: &'a ScopeState, val: impl IntoAttributeValue<'a>) -> VNode<'a> {
+    let fac = NodeFactory::new(cx);
+    let (text, is_static) = val.into_str(fac);
+    VNode::Text(fac.bump().alloc(VText {
+        text,
+        is_static,
+        id: Default::default(),
+    }))
 }

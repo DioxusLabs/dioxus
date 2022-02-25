@@ -1,7 +1,5 @@
+use dioxus_core::NodeFactory;
 use std::fmt::Arguments;
-
-use bumpalo::collections::Vec as BumpVec;
-use dioxus_core::{self, exports::bumpalo, Attribute, Listener, NodeFactory, ScopeState};
 
 pub trait IntoAttributeValue<'a> {
     fn into_str(self, fac: NodeFactory<'a>) -> (&'a str, bool);

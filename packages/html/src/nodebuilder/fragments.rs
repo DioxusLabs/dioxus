@@ -1,11 +1,4 @@
-use std::fmt::Arguments;
-
-use super::ElementBuilder;
-use crate::into_attr::*;
-use bumpalo::collections::Vec as BumpVec;
-use dioxus_core::{
-    self, exports::bumpalo, Attribute, IntoVNode, Listener, NodeFactory, ScopeState, VNode,
-};
+use dioxus_core::{IntoVNode, NodeFactory, ScopeState, VNode};
 
 pub fn fragment<'a, 'b, 'c>(
     cx: &'a ScopeState,

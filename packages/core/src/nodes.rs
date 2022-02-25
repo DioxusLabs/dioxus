@@ -258,35 +258,6 @@ impl Debug for VElement<'_> {
     }
 }
 
-/// A trait for any generic Dioxus Element.
-///
-/// This trait provides the ability to use custom elements in the `rsx!` macro.
-///
-/// ```rust, ignore
-/// struct my_element;
-///
-/// impl DioxusElement for my_element {
-///     const TAG_NAME: "my_element";
-///     const NAME_SPACE: None;
-/// }
-///
-/// let _ = rsx!{
-///     my_element {}
-/// };
-/// ```
-pub trait DioxusElement {
-    const TAG_NAME: &'static str;
-    const NAME_SPACE: Option<&'static str>;
-    #[inline]
-    fn tag_name(&self) -> &'static str {
-        Self::TAG_NAME
-    }
-    #[inline]
-    fn namespace(&self) -> Option<&'static str> {
-        Self::NAME_SPACE
-    }
-}
-
 /// An attribute on a DOM node, such as `id="my-thing"` or
 /// `href="https://example.com"`.
 #[derive(Clone, Debug)]
@@ -483,24 +454,6 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    pub fn element(
-        &self,
-        el: impl DioxusElement,
-        listeners: &'a [Listener<'a>],
-        attributes: &'a [Attribute<'a>],
-        children: &'a [VNode<'a>],
-        key: Option<Arguments>,
-    ) -> VNode<'a> {
-        self.raw_element(
-            el.tag_name(),
-            el.namespace(),
-            listeners,
-            attributes,
-            children,
-            key,
-        )
-    }
-
     pub fn raw_element(
         &self,
         tag_name: &'static str,
@@ -508,10 +461,8 @@ impl<'a> NodeFactory<'a> {
         listeners: &'a [Listener<'a>],
         attributes: &'a [Attribute<'a>],
         children: &'a [VNode<'a>],
-        key: Option<Arguments>,
+        key: Option<&'a str>,
     ) -> VNode<'a> {
-        let key = key.map(|f| self.raw_text(f).0);
-
         let mut items = self.scope.items.borrow_mut();
         for listener in listeners {
             let long_listener = unsafe { std::mem::transmute(listener) };
