@@ -114,15 +114,18 @@ pub struct VirtualDom {
     ),
 }
 
+/// The type of message that can be sent to the scheduler.
+///
+/// These messages control how the scheduler will process updates to the UI.
 #[derive(Debug)]
 pub enum SchedulerMsg {
-    // events from the host
+    /// Events from the Renderer
     Event(UserEvent),
 
-    // setstate
+    /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 
-    // an async task pushed from an event handler (or just spawned)
+    /// New tasks from components that should be polled when the next poll is ready
     NewTask(ScopeId),
 }
 
@@ -388,6 +391,9 @@ impl VirtualDom {
         }
     }
 
+    /// Handle an individual message for the scheduler.
+    ///
+    /// This will either call an event listener or mark a component as dirty.
     pub fn process_message(&mut self, msg: SchedulerMsg) {
         match msg {
             SchedulerMsg::NewTask(_id) => {

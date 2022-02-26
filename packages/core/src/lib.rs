@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
+#![deny(missing_docs)]
 
 pub(crate) mod diff;
 pub(crate) mod events;
@@ -76,6 +77,9 @@ pub use crate::innerlude::{
     VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
 };
 
+/// The purpose of this module is to alleviate imports of many common types
+///
+/// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
         fc_to_builder, Attributes, Component, DioxusElement, Element, EventHandler, Fragment,

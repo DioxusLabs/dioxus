@@ -87,7 +87,12 @@ impl WebsysDom {
             }
         });
 
-        let root = load_document().get_element_by_id(&cfg.rootname).unwrap();
+        // a match here in order to avoid some error during runtime browser test
+        let document = load_document();
+        let root = match document.get_element_by_id(&cfg.rootname) {
+            Some(root) => root,
+            None => document.create_element("body").ok().unwrap(),
+        };
 
         Self {
             interpreter: Interpreter::new(root.clone()),
@@ -122,8 +127,8 @@ impl WebsysDom {
                     self.interpreter.RemoveEventListener(root, event)
                 }
 
-                DomEdit::RemoveAttribute { root, name } => {
-                    self.interpreter.RemoveAttribute(root, name)
+                DomEdit::RemoveAttribute { root, name, ns } => {
+                    self.interpreter.RemoveAttribute(root, name, ns)
                 }
 
                 DomEdit::CreateTextNode { text, root } => {

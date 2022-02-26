@@ -11,6 +11,7 @@ use std::{
     future::Future,
     pin::Pin,
     rc::Rc,
+    sync::Arc,
 };
 
 /// for traceability, we use the raw fn pointer to identify the function
@@ -96,11 +97,10 @@ impl ScopeArena {
 
         // Get the height of the scope
         let height = parent_scope
-            .map(|id| self.get_scope(id).map(|scope| scope.height + 1))
-            .flatten()
+            .and_then(|id| self.get_scope(id).map(|scope| scope.height + 1))
             .unwrap_or_default();
 
-        let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
+        let parent_scope = parent_scope.and_then(|f| self.get_scope_raw(f));
 
         /*
         This scopearena aggressively reuses old scopes when possible.
@@ -396,7 +396,10 @@ impl ScopeArena {
 /// }
 /// ```
 pub struct Scope<'a, P = ()> {
+    /// The internal ScopeState for this component
     pub scope: &'a ScopeState,
+
+    /// The props for this component
     pub props: &'a P,
 }
 
@@ -579,12 +582,17 @@ impl ScopeState {
         self.our_arena_idx
     }
 
+    /// Get a handle to the raw update scheduler channel
+    pub fn scheduler_channel(&self) -> UnboundedSender<SchedulerMsg> {
+        self.tasks.sender.clone()
+    }
+
     /// Create a subscription that schedules a future render for the reference component
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
-    pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
+    pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
-        Rc::new(move || {
+        Arc::new(move || {
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
@@ -594,9 +602,9 @@ impl ScopeState {
     /// A component's ScopeId can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
     ///
     /// This method should be used when you want to schedule an update for a component
-    pub fn schedule_update_any(&self) -> Rc<dyn Fn(ScopeId)> {
+    pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.tasks.sender.clone();
-        Rc::new(move |id| {
+        Arc::new(move |id| {
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
@@ -653,8 +661,7 @@ impl ScopeState {
         self.shared_contexts
             .borrow_mut()
             .insert(TypeId::of::<T>(), value.clone())
-            .map(|f| f.downcast::<T>().ok())
-            .flatten();
+            .and_then(|f| f.downcast::<T>().ok());
         value
     }
 
@@ -684,8 +691,7 @@ impl ScopeState {
             self.shared_contexts
                 .borrow_mut()
                 .insert(TypeId::of::<T>(), value.clone())
-                .map(|f| f.downcast::<T>().ok())
-                .flatten();
+                .and_then(|f| f.downcast::<T>().ok());
             return value;
         }
 
@@ -747,7 +753,8 @@ impl ScopeState {
         self.push_future(fut);
     }
 
-    // todo: attach some state to the future to know if we should poll it
+    /// Informs the scheduler that this task is no longer needed and should be removed
+    /// on next poll.
     pub fn remove_future(&self, id: TaskId) {
         self.tasks.remove_fut(id);
     }
