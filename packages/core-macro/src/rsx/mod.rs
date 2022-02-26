@@ -80,7 +80,6 @@ impl ToTokens for CallBody {
             // The `in cx` pattern allows directly rendering
             Some(ident) => out_tokens.append_all(quote! {
                 #ident.render(LazyNodes::new_some(move |__cx: NodeFactory| -> VNode {
-                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
                     #inner
                 }))
             }),
@@ -88,7 +87,6 @@ impl ToTokens for CallBody {
             // Otherwise we just build the LazyNode wrapper
             None => out_tokens.append_all(quote! {
                 LazyNodes::new_some(move |__cx: NodeFactory| -> VNode {
-                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
                     #inner
                 })
             }),
