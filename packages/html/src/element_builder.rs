@@ -6,9 +6,7 @@ use dioxus_core::{
     VNode, VText,
 };
 
-pub struct ElementBuilder<'a, T> {
-    // a zst marker type
-    _inner: T,
+pub struct ElementBuilder<'a> {
     name: &'static str,
     fac: NodeFactory<'a>,
     attrs: BumpVec<'a, Attribute<'a>>,
@@ -18,20 +16,19 @@ pub struct ElementBuilder<'a, T> {
     key: Option<&'a str>,
 }
 
-impl<'a, T> IntoVNode<'a> for ElementBuilder<'a, T> {
+impl<'a> IntoVNode<'a> for ElementBuilder<'a> {
     fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
-        self.render().unwrap()
+        self.build().unwrap()
     }
 }
 
-impl<'a, T> ElementBuilder<'a, T> {
-    pub fn new(cx: &'a ScopeState, t: T, name: &'static str) -> Self {
+impl<'a> ElementBuilder<'a> {
+    pub fn new(cx: &'a ScopeState, name: &'static str) -> Self {
         let fac = NodeFactory::new(cx);
         ElementBuilder {
             attrs: BumpVec::new_in(fac.bump()),
             children: BumpVec::new_in(fac.bump()),
             listeners: BumpVec::new_in(fac.bump()),
-            _inner: t,
             name,
             fac,
             namespace: None,
@@ -39,13 +36,12 @@ impl<'a, T> ElementBuilder<'a, T> {
         }
     }
 
-    pub fn new_svg(cx: &'a ScopeState, t: T, name: &'static str) -> Self {
+    pub fn new_svg(cx: &'a ScopeState, name: &'static str) -> Self {
         let fac = NodeFactory::new(cx);
         ElementBuilder {
             attrs: BumpVec::new_in(fac.bump()),
             children: BumpVec::new_in(fac.bump()),
             listeners: BumpVec::new_in(fac.bump()),
-            _inner: t,
             name,
             fac,
             namespace: Some("http://www.w3.org/2000/svg"),
@@ -107,8 +103,8 @@ impl<'a, T> ElementBuilder<'a, T> {
         self
     }
 
-    /// Build this node builder into a VNode.
-    pub fn render(self) -> Option<VNode<'a>> {
+    /// Build this Element builder into a VNode.
+    pub fn build(self) -> Option<VNode<'a>> {
         Some(self.fac.raw_element(
             self.name,
             self.namespace,
@@ -172,6 +168,11 @@ impl<'a, T> ElementBuilder<'a, T> {
             namespace: Some(name_space),
             is_volatile: false,
         });
+        self
+    }
+
+    pub fn child(mut self, node: impl IntoVNode<'a>) -> Self {
+        self.children.push(node.into_vnode(self.fac));
         self
     }
 

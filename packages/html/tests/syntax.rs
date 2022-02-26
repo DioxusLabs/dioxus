@@ -70,6 +70,6 @@ fn test_builder() {
                     div(&cx).class("asd")
                 },
             ])
-            .render()
+            .build()
     }
 }

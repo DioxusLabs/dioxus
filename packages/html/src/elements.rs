@@ -1,3 +1,6 @@
+use crate::builder::ElementBuilder;
+use dioxus_core::ScopeState;
+
 macro_rules! builder_constructors {
     (
         $(
@@ -11,33 +14,12 @@ macro_rules! builder_constructors {
          )*
     ) => {
         $(
-            // only export the functions
-            // the concrete types are manually accessible
-            pub use $concrete::$name;
 
-            pub mod $concrete {
-                #[allow(unused_imports)]
-                use crate::builder::IntoAttributeValue;
-                use crate::builder::ElementBuilder;
-                use dioxus_core::ScopeState;
-
-                pub struct $concrete;
-
-                $(#[$attr])*
-                pub fn $name(cx: &ScopeState) -> ElementBuilder<$concrete> {
-                    ElementBuilder::new(cx, $concrete, stringify!($name))
-                }
-
-
-                impl<'a> ElementBuilder<'a, $concrete> {
-                    $(
-                        $(#[$attr_method])*
-                        pub fn $fil(self, val: impl IntoAttributeValue<'a>) -> Self {
-                            self.attr(stringify!($fil), val)
-                        }
-                    )*
-                }
+            $(#[$attr])*
+            pub fn $name(cx: &ScopeState) -> ElementBuilder {
+                ElementBuilder::new(cx, stringify!($name))
             }
+
         )*
     };
 
@@ -48,33 +30,9 @@ macro_rules! builder_constructors {
         };
     )* ) => {
         $(
-
-            // only export the functions
-            // the concrete types are manually accessible
-            pub use $concrete::$name;
-
-            pub mod $concrete {
-                #[allow(unused_imports)]
-                use crate::builder::IntoAttributeValue;
-                use crate::builder::ElementBuilder;
-                use dioxus_core::ScopeState;
-
-                pub struct $concrete;
-
-                $(#[$attr])*
-                pub fn $name(cx: &ScopeState) -> ElementBuilder<$concrete> {
-                    ElementBuilder::new(cx, $concrete, stringify!($name))
-                }
-
-
-                impl<'a> ElementBuilder<'a, $concrete> {
-                    $(
-                        $(#[$attr_method])*
-                        pub fn $fil(self, val: impl IntoAttributeValue<'a>) -> Self {
-                            self.style_attr(stringify!($fil), val)
-                        }
-                    )*
-                }
+            $(#[$attr])*
+            pub fn $name(cx: &ScopeState) -> ElementBuilder {
+                ElementBuilder::new(cx, stringify!($name))
             }
         )*
     };
@@ -109,7 +67,7 @@ builder_constructors! {
     link(Link) {
         // as: Mime,
         crossorigin: CrossOrigin,
-        href: Uri,
+        // href: Uri,
         hreflang: LanguageTag,
         media: String, // FIXME media query
         rel: LinkType,
@@ -118,7 +76,6 @@ builder_constructors! {
         r#type: Mime,
         integrity: String,
     };
-
 
     /// Build a
     /// [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta)
@@ -134,8 +91,8 @@ builder_constructors! {
     /// [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style)
     /// element
     style(Style) {
-        r#type: Mime,
-        media: String, // FIXME media query
+        // r#type: Mime,
+        // media: String, // FIXME media query
         nonce: Nonce,
         // title: String, // FIXME
     };
@@ -145,36 +102,30 @@ builder_constructors! {
     /// element
     title(Title) { };
 
-
     /// Build a
     /// [`<body>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/body)
     /// element
     body(Body) {};
-
 
     /// Build a
     /// [`<address>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/address)
     /// element
     address(Address) {};
 
-
     /// Build a
     /// [`<article>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/article)
     /// element
     article(Article) {};
-
 
     /// Build a
     /// [`<aside>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/aside)
     /// element
     aside(Aside) {};
 
-
     /// Build a
     /// [`<footer>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/footer)
     /// element
     footer(Footer) {};
-
 
     /// Build a
     /// [`<header>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/header)
@@ -196,7 +147,6 @@ builder_constructors! {
     /// LazyNodes::new(|f| f.el(h1).children([f.text("A header element")]).finish())
     /// ```
 
-
     /// Build a
     /// [`<h1>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h1)
     /// element
@@ -216,7 +166,6 @@ builder_constructors! {
     /// LazyNodes::new(|f| f.el(h2).children([f.text("A header element")]).finish())
     /// ```
 
-
     /// Build a
     /// [`<h2>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h2)
     /// element
@@ -230,43 +179,35 @@ builder_constructors! {
     /// - The <h1> heading is the first heading in the document.
     /// - The <h1> heading is usually a large bolded font.
 
-
     /// Build a
     /// [`<h3>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h3)
     /// element
     h3(H3) {};
-
 
     /// Build a
     /// [`<h4>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h4)
     /// element
     h4(H4) {};
 
-
     /// Build a
     /// [`<h5>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h5)
     /// element
     h5(H5) {};
-
 
     /// Build a
     /// [`<h6>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h6)
     /// element
     h6(H6) {};
 
-
-
     /// Build a
     /// [`<main>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/main)
     /// element
     main(Main) {};
 
-
     /// Build a
     /// [`<nav>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/nav)
     /// element
     nav(Nav) {};
-
 
     /// Build a
     /// [`<section>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/section)
@@ -275,15 +216,12 @@ builder_constructors! {
 
     // Text content
 
-
     /// Build a
     /// [`<blockquote>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/blockquote)
     /// element
     blockquote(Blockquote) {
         cite: Uri,
     };
-
-
 
     /// Build a
     /// [`<dd>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dd)
@@ -311,42 +249,35 @@ builder_constructors! {
     /// - <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div>
     /// - <https://www.w3schools.com/tags/tag_div.asp>
 
-
     /// Build a
     /// [`<div>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div)
     /// element
     div(Div) {};
-
 
     /// Build a
     /// [`<dl>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dl)
     /// element
     dl(Dl) {};
 
-
     /// Build a
     /// [`<dt>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dt)
     /// element
     dt(Dt) {};
-
 
     /// Build a
     /// [`<figcaption>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/figcaption)
     /// element
     figcaption(Figcaption) {};
 
-
     /// Build a
     /// [`<figure>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/figure)
     /// element
     figure(Figure) {};
 
-
     /// Build a
     /// [`<hr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hr)
     /// element
     hr(Hr) {};
-
 
     /// Build a
     /// [`<li>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/li)
@@ -354,7 +285,6 @@ builder_constructors! {
     li(Li) {
         value: isize,
     };
-
 
     /// Build a
     /// [`<ol>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ol)
@@ -365,79 +295,67 @@ builder_constructors! {
         r#type: OrderedListType,
     };
 
-
     /// Build a
     /// [`<p>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/p)
     /// element
     p(P) {};
-
 
     /// Build a
     /// [`<pre>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/pre)
     /// element
     pre(Pre) {};
 
-
     /// Build a
     /// [`<ul>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ul)
     /// element
     ul(Ul) {};
 
-
     // Inline text semantics
-
 
     /// Build a
     /// [`<a>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a)
     /// element
     a(A) {
         download: String,
-        href: Uri,
-        hreflang: LanguageTag,
-        target: Target,
-        r#type: Mime,
-        // ping: SpacedList<Uri>,
-        // rel: SpacedList<LinkType>,
+        // href: Uri,
+        // hreflang: LanguageTag,
+        // target: Target,
+        // r#type: Mime,
         ping: SpacedList,
         rel: SpacedList,
+        // ping: SpacedList<Uri>,
+        // rel: SpacedList<LinkType>,
     };
-
 
     /// Build a
     /// [`<abbr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/abbr)
     /// element
     abbr(Abbr) {};
 
-
     /// Build a
     /// [`<b>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/b)
     /// element
     b(B) {};
-
 
     /// Build a
     /// [`<bdi>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdi)
     /// element
     bdi(Bdi) {};
 
-
     /// Build a
     /// [`<bdo>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdo)
     /// element
     bdo(Bdo) {};
-
 
     /// Build a
     /// [`<br>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/br)
     /// element
     br(Br) {};
 
-
     /// Build a
     /// [`<cite>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/cite)
     /// element
     cite(Cite) {};
-
 
     /// Build a
     /// [`<code>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/code)
@@ -446,7 +364,6 @@ builder_constructors! {
         language: String,
     };
 
-
     /// Build a
     /// [`<data>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data)
     /// element
@@ -454,36 +371,30 @@ builder_constructors! {
         value: String,
     };
 
-
     /// Build a
     /// [`<dfn>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dfn)
     /// element
     dfn(Dfn) {};
-
 
     /// Build a
     /// [`<em>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/em)
     /// element
     em(Em) {};
 
-
     /// Build a
     /// [`<i>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/i)
     /// element
     i(I) {};
-
 
     /// Build a
     /// [`<kbd>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/kbd)
     /// element
     kbd(Kbd) {};
 
-
     /// Build a
     /// [`<mark>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/mark)
     /// element
     mark(Mark) {};
-
 
     /// Build a
     /// [`<q>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/q)
@@ -492,96 +403,77 @@ builder_constructors! {
         cite: Uri,
     };
 
-
-
     /// Build a
     /// [`<rp>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rp)
     /// element
     rp(Rp) {};
-
-
 
     /// Build a
     /// [`<rt>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rt)
     /// element
     rt(Rt) {};
 
-
-
     /// Build a
     /// [`<ruby>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ruby)
     /// element
     ruby(Ruby) {};
-
 
     /// Build a
     /// [`<s>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/s)
     /// element
     s(S) {};
 
-
     /// Build a
     /// [`<samp>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/samp)
     /// element
     samp(Samp) {};
-
 
     /// Build a
     /// [`<small>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/small)
     /// element
     small(Small) {};
 
-
     /// Build a
     /// [`<span>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/span)
     /// element
     span(Span) {};
-
 
     /// Build a
     /// [`<strong>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/strong)
     /// element
     strong(Strong) {};
 
-
     /// Build a
     /// [`<sub>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/sub)
     /// element
     sub(Sub) {};
-
 
     /// Build a
     /// [`<sup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/sup)
     /// element
     sup(Sup) {};
 
-
     /// Build a
     /// [`<time>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time)
     /// element
     time(Time) {};
-
 
     /// Build a
     /// [`<u>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/u)
     /// element
     u(U) {};
 
-
     /// Build a
     /// [`<var>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/var)
     /// element
     var(Var) {};
-
 
     /// Build a
     /// [`<wbr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/wbr)
     /// element
     wbr(Wbr) {};
 
-
     // Image and multimedia
-
 
     /// Build a
     /// [`<area>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/area)
@@ -590,14 +482,13 @@ builder_constructors! {
         alt: String,
         coords: String, // TODO could perhaps be validated
         download: Bool,
-        href: Uri,
-        hreflang: LanguageTag,
+        // href: Uri,
+        // hreflang: LanguageTag,
         shape: AreaShape,
-        target: Target,
+        // target: Target,
         // ping: SpacedList<Uri>,
         // rel: SpacedSet<LinkType>,
     };
-
 
     /// Build a
     /// [`<audio>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/audio)
@@ -605,20 +496,19 @@ builder_constructors! {
     audio(Audio) {
         autoplay: Bool,
         controls: Bool,
-        crossorigin: CrossOrigin,
+        // crossorigin: CrossOrigin,
         muted: Bool,
         preload: Preload,
         src: Uri,
         r#loop: Bool,
     };
 
-
     /// Build a
     /// [`<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img)
     /// element
     img(Img) {
         alt: String,
-        crossorigin: CrossOrigin,
+        // crossorigin: CrossOrigin,
         decoding: ImageDecoding,
         height_: usize,
         ismap: Bool,
@@ -630,14 +520,12 @@ builder_constructors! {
         // sizes: SpacedList<String>, // FIXME it's not really just a string
     };
 
-
     /// Build a
     /// [`<map>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/map)
     /// element
     map(Map) {
         name: Id,
     };
-
 
     /// Build a
     /// [`<track>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/track)
@@ -650,14 +538,13 @@ builder_constructors! {
         srclang: LanguageTag,
     };
 
-
     /// Build a
     /// [`<video>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video)
     /// element
     video(Video) {
         autoplay: Bool,
         controls: Bool,
-        crossorigin: CrossOrigin,
+        // crossorigin: CrossOrigin,
         height_: usize,
         r#loop: Bool,
         muted: Bool,
@@ -668,9 +555,7 @@ builder_constructors! {
         width_: usize,
     };
 
-
     // Embedded content
-
 
     /// Build a
     /// [`<embed>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/embed)
@@ -678,10 +563,9 @@ builder_constructors! {
     embed(Embed) {
         height_: usize,
         src: Uri,
-        r#type: Mime,
+        // r#type: Mime,
         width_: usize,
     };
-
 
     /// Build a
     /// [`<iframe>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe)
@@ -707,7 +591,6 @@ builder_constructors! {
         // sandbox: SpacedSet<Sandbox>,
     };
 
-
     /// Build a
     /// [`<object>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/object)
     /// element
@@ -716,12 +599,11 @@ builder_constructors! {
         form: Id,
         height_: usize,
         name: Id,
-        r#type: Mime,
+        // r#type: Mime,
         typemustmatch: Bool,
         usemap: String, // TODO should be a fragment starting with '#'
         width_: usize,
     };
-
 
     /// Build a
     /// [`<param>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/param)
@@ -731,24 +613,20 @@ builder_constructors! {
         value: String,
     };
 
-
     /// Build a
     /// [`<picture>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/picture)
     /// element
     picture(Picture) {};
-
 
     /// Build a
     /// [`<source>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/source)
     /// element
     source(Source) {
         src: Uri,
-        r#type: Mime,
+        // r#type: Mime,
     };
 
-
     // Scripting
-
 
     /// Build a
     /// [`<canvas>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/canvas)
@@ -757,7 +635,6 @@ builder_constructors! {
         height_: usize,
         width_: usize,
     };
-
 
     /// Build a
     /// [`<noscript>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noscript)
@@ -768,7 +645,6 @@ builder_constructors! {
     /// JavaScript code. The [`script`] element can also be used with other languages, such as WebGL's GLSL shader
     /// programming language and JSON.
 
-
     /// Build a
     /// [`<script>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script)
     /// element
@@ -776,7 +652,7 @@ builder_constructors! {
         /// Normal script elements pass minimal information to the window.onerror for scripts which do not pass the
         /// standard CORS checks. To allow error logging for sites which use a separate domain for static media, use
         /// this attribute. See CORS settings attributes for a more descriptive explanation of its valid arguments.
-        crossorigin: CrossOrigin,
+        // crossorigin: CrossOrigin,
 
         /// This Boolean attribute is set to indicate to a browser that the script is meant to be executed after the
         /// document has been parsed, but before firing DOMContentLoaded.
@@ -805,9 +681,7 @@ builder_constructors! {
         text: String,
     };
 
-
     // Demarcating edits
-
 
     /// Build a
     /// [`<del>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/del)
@@ -817,7 +691,6 @@ builder_constructors! {
         datetime: Datetime,
     };
 
-
     /// Build a
     /// [`<ins>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ins)
     /// element
@@ -826,15 +699,12 @@ builder_constructors! {
         datetime: Datetime,
     };
 
-
     // Table content
-
 
     /// Build a
     /// [`<caption>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/caption)
     /// element
     caption(Caption) {};
-
 
     /// Build a
     /// [`<col>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/col)
@@ -843,7 +713,6 @@ builder_constructors! {
         span: usize,
     };
 
-
     /// Build a
     /// [`<colgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/colgroup)
     /// element
@@ -851,18 +720,15 @@ builder_constructors! {
         span: usize,
     };
 
-
     /// Build a
     /// [`<table>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/table)
     /// element
     table(Table) {};
 
-
     /// Build a
     /// [`<tbody>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tbody)
     /// element
     tbody(Tbody) {};
-
 
     /// Build a
     /// [`<td>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/td)
@@ -873,12 +739,10 @@ builder_constructors! {
         // headers: SpacedSet<Id>,
     };
 
-
     /// Build a
     /// [`<tfoot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tfoot)
     /// element
     tfoot(Tfoot) {};
-
 
     /// Build a
     /// [`<th>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/th)
@@ -891,12 +755,10 @@ builder_constructors! {
         // headers: SpacedSet<Id>,
     };
 
-
     /// Build a
     /// [`<thead>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/thead)
     /// element
     thead(Thead) {};
-
 
     /// Build a
     /// [`<tr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tr)
@@ -904,7 +766,6 @@ builder_constructors! {
     tr(Tr) {};
 
     // Forms
-
 
     /// Build a
     /// [`<button>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/button)
@@ -917,23 +778,20 @@ builder_constructors! {
         formenctype: FormEncodingType,
         formmethod: FormMethod,
         formnovalidate: Bool,
-        formtarget: Target,
+        // formtarget: Target,
         name: Id,
         value: String,
     };
-
 
     /// Build a
     /// [`<datalist>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/datalist)
     /// element
     datalist(Datalist) {};
 
-
     /// Build a
     /// [`<fieldset>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset)
     /// element
     fieldset(Fieldset) {};
-
 
     /// Build a
     /// [`<form>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form)
@@ -946,9 +804,8 @@ builder_constructors! {
         method: FormMethod,
         name: Id,
         novalidate: Bool,
-        target: Target,
+        // target: Target,
     };
-
 
     /// Build a
     /// [`<input>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input)
@@ -960,13 +817,13 @@ builder_constructors! {
         autofocus: Bool,
         capture: String,
         checked: Bool,
-        disabled: Bool,
+        // disabled: Bool,
         form: Id,
         formaction: Uri,
         formenctype: FormEncodingType,
         formmethod: FormDialogMethod,
         formnovalidate: Bool,
-        formtarget: Target,
+        // formtarget: Target,
         height_: isize,
         list: Id,
         max: String,
@@ -991,8 +848,6 @@ builder_constructors! {
         // value: String,
     };
 
-
-
     /// Build a
     /// [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/label)
     /// element
@@ -1001,12 +856,10 @@ builder_constructors! {
         // r#for: Id,
     };
 
-
     /// Build a
     /// [`<legend>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/legend)
     /// element
     legend(Legend) {};
-
 
     /// Build a
     /// [`<meter>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meter)
@@ -1021,30 +874,26 @@ builder_constructors! {
         form: Id,
     };
 
-
     /// Build a
     /// [`<optgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/optgroup)
     /// element
     optgroup(Optgroup) {
-        disabled: Bool,
+        // disabled: Bool,
         label: String,
     };
-
 
     /// Build a
     /// [`<option>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/option)
     /// element
     option(Option_) {
-        disabled: Bool,
+        // disabled: Bool,
         label: String,
-
 
         value: String,
 
         // defined below
         // selected: Bool,
     };
-
 
     /// Build a
     /// [`<output>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/output)
@@ -1055,7 +904,6 @@ builder_constructors! {
         // r#for: SpacedSet<Id>,
     };
 
-
     /// Build a
     /// [`<progress>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress)
     /// element
@@ -1063,7 +911,6 @@ builder_constructors! {
         max: f64,
         value: f64,
     };
-
 
     /// Build a
     /// [`<select>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select)
@@ -1073,14 +920,13 @@ builder_constructors! {
         // value: String,
         autocomplete: String,
         autofocus: Bool,
-        disabled: Bool,
+        // disabled: Bool,
         form: Id,
         multiple: Bool,
         name: Id,
         required: Bool,
         size: usize,
     };
-
 
     /// Build a
     /// [`<textarea>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/textarea)
@@ -1089,7 +935,7 @@ builder_constructors! {
         autocomplete: OnOff,
         autofocus: Bool,
         cols: usize,
-        disabled: Bool,
+        // disabled: Bool,
         form: Id,
         maxlength: usize,
         minlength: usize,
@@ -1102,9 +948,7 @@ builder_constructors! {
         wrap: Wrap,
     };
 
-
     // Interactive elements
-
 
     /// Build a
     /// [`<details>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/details)
@@ -1113,8 +957,6 @@ builder_constructors! {
         open: Bool,
     };
 
-
-
     /// Build a
     /// [`<summary>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/summary)
     /// element
@@ -1122,12 +964,10 @@ builder_constructors! {
 
     // Web components
 
-
     /// Build a
     /// [`<slot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/slot)
     /// element
     slot(Slot) {};
-
 
     /// Build a
     /// [`<template>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)
@@ -1136,6 +976,9 @@ builder_constructors! {
 }
 
 pub mod svg_elements {
+    use crate::builder::ElementBuilder;
+    use dioxus_core::ScopeState;
+
     builder_constructors! {
         svg(Svg) <> "http://www.w3.org/2000/svg" { };
         animate(Animate) <> "http://www.w3.org/2000/svg" {};

@@ -23,7 +23,7 @@ macro_rules! event_directory {
     };
 }
 
-impl<'a, T> crate::builder::ElementBuilder<'a, T> {
+impl<'a> crate::builder::ElementBuilder<'a> {
     // The Dioxus Synthetic event system
     // todo: move these into the html event system. dioxus accepts *any* event, so having these here doesn't make sense.
     event_directory! {

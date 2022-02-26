@@ -6,8 +6,8 @@ fn test_builder() {
     #[allow(unused)]
     fn please(cx: Scope, val: i32) -> Element {
         div(&cx)
-            .background("red")
-            .background("red")
+            .background_color("red")
+            .background_attachment("red")
             .background("red")
             .background("red")
             .aria_errormessage("asd")
@@ -24,6 +24,6 @@ fn test_builder() {
                     div(&cx).background("black")
                 },
             ])
-            .render()
+            .build()
     }
 }

@@ -49,7 +49,13 @@ macro_rules! aria_trait_methods {
     };
 }
 
-impl<'a, T> ElementBuilder<'a, T> {
+// We've chosen not to provide any type safety of attributes in the builder API.
+// This makes it possible to pass two different elements into a single builder.
+// It also reduces the compile time and complexity of this crate.
+//
+// However, it also means that elements are not type safe, and some attributes
+// will clobber other attributes.
+impl<'a> ElementBuilder<'a> {
     no_namespace_trait_methods! {
         /// accesskey
         accesskey;
@@ -98,6 +104,289 @@ impl<'a, T> ElementBuilder<'a, T> {
 
         /// dangerous_inner_html
         dangerous_inner_html;
+
+        /// align
+        align;
+
+        /// method
+        method;
+
+        /// start
+        start;
+
+        /// width_
+        width_;
+
+        /// span
+        span;
+
+        /// longdesc
+        longdesc;
+
+        /// nomodule
+        nomodule;
+
+        /// rows
+        rows;
+
+        /// list
+        list;
+
+        /// language
+        language;
+
+        /// href
+        href;
+
+        /// muted
+        muted;
+
+        /// capture
+        capture;
+
+        /// placeholder
+        placeholder;
+
+        /// formenctype
+        formenctype;
+
+        /// minlength
+        minlength;
+
+        /// coords
+        coords;
+
+        /// src
+        src;
+
+        /// decoding
+        decoding;
+
+        /// crossorigin
+        crossorigin;
+
+        /// high
+        high;
+
+        /// ismap
+        ismap;
+
+        /// allowpaymentrequest
+        allowpaymentrequest;
+
+        /// datetime
+        datetime;
+
+        /// srcdoc
+        srcdoc;
+
+        /// maxlength
+        maxlength;
+
+        /// autocomplete
+        autocomplete;
+
+        /// text
+        text;
+
+        /// cols
+        cols;
+
+        /// autoplay
+        autoplay;
+
+        /// height_
+        height_;
+
+        /// disabled
+        disabled;
+
+        /// cite
+        cite;
+
+        /// accept
+        accept;
+
+        /// readonly
+        readonly;
+
+        /// download
+        download;
+
+        /// open
+        open;
+
+        /// srclang
+        srclang;
+
+        /// nonce
+        nonce;
+
+        /// target
+        target;
+
+        /// action
+        action;
+
+        /// defer
+        defer;
+
+        /// poster
+        poster;
+
+        /// min
+        min;
+
+        /// kind
+        kind;
+
+        /// shape
+        shape;
+
+        /// srcset
+        srcset;
+
+        /// label
+        label;
+
+        /// marginwidth_
+        marginwidth_;
+
+        /// integrity
+        integrity;
+
+        /// formtarget
+        formtarget;
+
+        /// usemap
+        usemap;
+
+        /// preload
+        preload;
+
+        /// name
+        name;
+
+        /// ping
+        ping;
+
+        /// referrerpolicy
+        referrerpolicy;
+
+        /// default
+        default;
+
+        /// colspan
+        colspan;
+
+        /// abbr
+        abbr;
+
+        /// hreflang
+        hreflang;
+
+        /// reversed
+        reversed;
+
+        /// novalidate
+        novalidate;
+
+        /// checked
+        checked;
+
+        /// rowspan
+        rowspan;
+
+        /// http_equiv
+        http_equiv;
+
+        /// alt
+        alt;
+
+        /// charset
+        charset;
+
+        /// form
+        form;
+
+        /// scrolling
+        scrolling;
+
+        /// multiple
+        multiple;
+
+        /// size
+        size;
+
+        /// sizes
+        sizes;
+
+        /// allow
+        allow;
+
+        /// rel
+        rel;
+
+        /// controls
+        controls;
+
+        /// playsinline
+        playsinline;
+
+        /// typemustmatch
+        typemustmatch;
+
+        /// scope
+        scope;
+
+        /// formnovalidate
+        formnovalidate;
+
+        /// formaction
+        formaction;
+
+        /// required
+        required;
+
+        /// media
+        media;
+
+        /// optimum
+        optimum;
+
+        /// allowfullscreen
+        allowfullscreen;
+
+        /// enctype
+        enctype;
+
+        /// frame_border
+        frame_border;
+
+        /// formmethod
+        formmethod;
+
+        /// low
+        low;
+
+        /// autofocus
+        autofocus;
+
+        /// marginheight_
+        marginheight_;
+
+        /// max
+        max;
+
+        /// pattern
+        pattern;
+
+        /// step
+        step;
+
+        /// wrap
+        wrap;
+
     }
 
     style_trait_methods! {
