@@ -13,9 +13,6 @@ pub use usecoroutine::*;
 mod usefuture;
 pub use usefuture::*;
 
-mod usecallback;
-pub use usecallback::*;
-
 mod useeffect;
 pub use useeffect::*;
 
