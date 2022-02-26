@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use wry::application::window::Icon;
 use wry::{
     application::{
@@ -18,6 +20,7 @@ pub struct DesktopConfig {
     pub(crate) pre_rendered: Option<String>,
     pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
     pub(crate) disable_context_menu: bool,
+    pub(crate) resource_dir: Option<PathBuf>,
 }
 
 pub(crate) type WryProtocol = (
@@ -38,14 +41,23 @@ impl DesktopConfig {
             file_drop_handler: None,
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
+            resource_dir: None,
         }
     }
 
+    /// set the directory from which assets will be searched in release mode
+    pub fn with_resource_directory(mut self, path: impl Into<PathBuf>) -> Self {
+        self.resource_dir = Some(path.into());
+        self
+    }
+
+    /// Set whether or not the right-click context menu should be disabled.
     pub fn with_disable_context_menu(&mut self, disable: bool) -> &mut Self {
         self.disable_context_menu = disable;
         self
     }
 
+    /// With pre-rendered HTML content
     pub fn with_prerendered(&mut self, content: String) -> &mut Self {
         self.pre_rendered = Some(content);
         self

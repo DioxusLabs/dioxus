@@ -1,3 +1,6 @@
+// #![deny(missing_docs)]
+//! Useful foundational hooks for Dioxus
+
 mod usestate;
 pub use usestate::{use_state, UseState};
 

@@ -1,19 +1,30 @@
+#![allow(missing_docs)]
 use dioxus_core::{ScopeState, TaskId};
 use std::{any::Any, cell::Cell, future::Future, rc::Rc, sync::Arc};
 
-/// A hook that provides a future that will resolve to a value.
+/// A future that resolves to a value.
+///
+/// This runs the future only once - though the future may be regenerated
+/// through the [`UseFuture::restart`] method.
+///
+/// This is commonly used for components that cannot be rendered until some
+/// asynchronous operation has completed.
 ///
 /// Whenever the hooks dependencies change, the future will be re-evaluated.
 /// If a future is pending when the dependencies change, the previous future
 /// will be allowed to continue
 ///
-///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
-pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static, D: UseFutureDep>(
-    cx: &'a ScopeState,
+pub fn use_future<T, F, D>(
+    cx: &ScopeState,
     dependencies: D,
     future: impl FnOnce(D::Out) -> F,
-) -> &'a UseFuture<T> {
+) -> &UseFuture<T>
+where
+    T: 'static,
+    F: Future<Output = T> + 'static,
+    D: UseFutureDep,
+{
     let state = cx.use_hook(move |_| UseFuture {
         update: cx.schedule_update(),
         needs_regen: Cell::new(true),
@@ -41,7 +52,7 @@ pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static, D: UseFutureD
 
         // Cancel the current future
         if let Some(current) = state.task.take() {
-            cx.cancel_future(current);
+            cx.remove_future(current);
         }
 
         state.task.set(Some(cx.push_future(async move {
@@ -52,6 +63,12 @@ pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static, D: UseFutureD
     }
 
     state
+}
+
+pub enum FutureState<'a, T> {
+    Pending,
+    Complete(&'a T),
+    Regenerating(&'a T), // the old value
 }
 
 pub struct UseFuture<T> {
@@ -82,7 +99,7 @@ impl<T> UseFuture<T> {
     /// Forcefully cancel a future
     pub fn cancel(&self, cx: &ScopeState) {
         if let Some(task) = self.task.take() {
-            cx.cancel_future(task);
+            cx.remove_future(task);
         }
     }
 
@@ -219,6 +236,8 @@ impl_dep!(A = a, B = b, C = c,);
 impl_dep!(A = a, B = b, C = c, D = d,);
 impl_dep!(A = a, B = b, C = c, D = d, E = e,);
 impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f,);
+impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f, G = g,);
+impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f, G = g, H = h,);
 
 #[cfg(test)]
 mod tests {

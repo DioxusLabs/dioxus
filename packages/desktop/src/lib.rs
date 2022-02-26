@@ -1,18 +1,23 @@
 #![doc = include_str!("readme.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![deny(missing_docs)]
 
-pub mod cfg;
+mod cfg;
 mod controller;
-pub mod desktop_context;
-pub mod escape;
-pub mod events;
+mod desktop_context;
+mod escape;
+mod events;
 mod protocol;
-mod user_window_events;
 
+use desktop_context::UserWindowEvent;
+pub use desktop_context::{use_window, DesktopContext};
+pub use wry;
+pub use wry::application as tao;
+
+use crate::events::trigger_from_serialized;
 use cfg::DesktopConfig;
 use controller::DesktopController;
-pub use desktop_context::use_window;
 use dioxus_core::*;
 use events::parse_ipc_message;
 use tao::{
@@ -20,11 +25,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-pub use wry;
-pub use wry::application as tao;
 use wry::webview::WebViewBuilder;
-
-use crate::events::trigger_from_serialized;
 
 /// Launch the WebView and run the event loop.
 ///
@@ -122,7 +123,10 @@ pub fn launch_with_props<P: 'static + Send>(
                 let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
 
                 let proxy = proxy.clone();
+
                 let file_handler = cfg.file_drop_handler.take();
+
+                let resource_dir = cfg.resource_dir.clone();
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
@@ -139,8 +143,7 @@ pub fn launch_with_props<P: 'static + Send>(
                                 }
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                    let _ = proxy
-                                        .send_event(user_window_events::UserWindowEvent::Update);
+                                    let _ = proxy.send_event(UserWindowEvent::Update);
                                 }
                                 "browser_open" => {
                                     let data = message.params();
@@ -160,7 +163,9 @@ pub fn launch_with_props<P: 'static + Send>(
                                 log::warn!("invalid IPC message received");
                             });
                     })
-                    .with_custom_protocol(String::from("dioxus"), protocol::desktop_handler)
+                    .with_custom_protocol(String::from("dioxus"), move |r| {
+                        protocol::desktop_handler(r, resource_dir.clone())
+                    })
                     .with_file_drop_handler(move |window, evet| {
                         file_handler
                             .as_ref()
@@ -213,7 +218,7 @@ pub fn launch_with_props<P: 'static + Send>(
             },
 
             Event::UserEvent(user_event) => {
-                user_window_events::handler(user_event, &mut desktop, control_flow)
+                desktop_context::handler(user_event, &mut desktop, control_flow)
             }
             Event::MainEventsCleared => {}
             Event::Resumed => {}
