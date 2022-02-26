@@ -516,7 +516,13 @@ pub trait GlobalAttributes {
         wrap_flow: "wrap-flow",
         wrap_through: "wrap-through",
         writing_mode: "writing-mode",
-        z_index: "z-index",
+        gap: "gap",
+        list_styler_type: "list-style-type",
+        row_gap: "row-gap",
+        transition_timing_function: "transition-timing-function",
+        user_select: "user-select",
+        webkit_user_select: "-webkit-user-select",
+        z_index : "z-index",
     }
     aria_trait_methods! {
         aria_current: "aria-current",
