@@ -181,6 +181,8 @@ pub enum DomEdit<'bump> {
 
         /// The name of the attribute to remove.
         name: &'static str,
+
+        /// The namespace of the attribute.
         ns: Option<&'bump str>,
     },
 }
