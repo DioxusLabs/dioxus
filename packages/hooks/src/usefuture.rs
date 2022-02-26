@@ -152,7 +152,7 @@ impl<A: Dep> UseFutureDep for &A {
         (*self).clone()
     }
     fn apply(self, state: &mut Vec<Box<dyn Any>>) -> bool {
-        match state.get_mut(0).map(|f| f.downcast_mut::<A>()).flatten() {
+        match state.get_mut(0).and_then(|f| f.downcast_mut::<A>()) {
             Some(val) => {
                 if *val != *self {
                     *val = self.clone();
