@@ -427,6 +427,15 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
+    /// Directly pass in text blocks without the need to use the format_args macro.
+    pub fn bump_text(&self, text: &'a str, is_static: bool) -> VNode<'a> {
+        VNode::Text(self.bump.alloc(VText {
+            id: empty_cell(),
+            text,
+            is_static,
+        }))
+    }
+
     /// Parses a lazy text Arguments and returns a string and a flag indicating if the text is 'static
     ///
     /// Text that's static may be pointer compared, making it cheaper to diff

@@ -24,8 +24,8 @@ macro_rules! event_directory {
             impl<'a> crate::builder::ElementBuilder<'a> {
                 $(
                     $(#[$method_attr])*
-                    pub fn $name( mut self, callback: impl FnMut(&$data) + 'a) -> Self {
-                        self.push_listener(stringify!($name), callback);
+                    pub fn $name( mut self, cb: impl FnMut(&$data) + 'a) -> Self {
+                        self.push_listener(stringify!($name), cb);
                         self
                     }
                 )*

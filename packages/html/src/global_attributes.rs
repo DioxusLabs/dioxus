@@ -186,9 +186,6 @@ impl<'a> ElementBuilder<'a> {
         /// autocomplete
         autocomplete;
 
-        /// text
-        text;
-
         /// cols
         cols;
 

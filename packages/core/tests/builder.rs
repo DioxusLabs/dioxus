@@ -24,25 +24,32 @@ fn Parent(cx: Scope) -> Element {
         .children([
             h2(&cx)
                 .class("val")
-                .onclick(move |evt| {
-                    //
-                    let p = evt.client_x;
-                })
-                .onblick(move |e| {
+                .id("asd")
+                .name("asd")
+                .onclick(move |_| {
                     //
                 }),
-            h3(&cx).class("val").onclick(move |_| {
-                //
-            }),
-            h4(&cx).class("val").onclick(move |_| {
-                //
-            }),
-            h5(&cx).class("val").onclick(move |_| {
-                //
-            }),
-            h6(&cx).class("val").onclick(move |_| {
-                //
-            }),
+            h3(&cx)
+                .class("val")
+                .id("asd")
+                .name("asd")
+                .onclick(move |_| {
+                    //
+                }),
+            h3(&cx)
+                .class("val")
+                .id("asd")
+                .name("asd")
+                .onclick(move |_| {
+                    //
+                }),
+            h3(&cx)
+                .class("val")
+                .id("asd")
+                .name("asd")
+                .onclick(move |_| {
+                    //
+                }),
         ])
         .build()
 }

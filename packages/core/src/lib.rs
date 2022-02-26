@@ -79,7 +79,7 @@ pub use crate::innerlude::{
 pub mod prelude {
     pub use crate::innerlude::{
         fc_to_builder, Attributes, Component, Element, EventHandler, Fragment, LazyNodes,
-        NodeFactory, Properties, Scope, ScopeState, VNode, VirtualDom,
+        NodeFactory, Properties, Scope, ScopeState, UiEvent, VNode, VirtualDom,
     };
 }
 

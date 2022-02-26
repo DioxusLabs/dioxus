@@ -2,8 +2,8 @@ pub use crate::builder::IntoAttributeValue;
 use bumpalo::boxed::Box as BumpBox;
 use bumpalo::collections::Vec as BumpVec;
 use dioxus_core::{
-    self, exports::bumpalo, Attribute, IntoVNode, Listener, NodeFactory, ScopeState, UiEvent,
-    VNode, VText,
+    exports::bumpalo, Attribute, IntoVNode, Listener, NodeFactory, ScopeState, UiEvent, VNode,
+    VText,
 };
 
 pub struct ElementBuilder<'a> {
@@ -176,7 +176,7 @@ impl<'a> ElementBuilder<'a> {
         self
     }
 
-    pub fn children<'b, 'c, F, A>(mut self, nodes: A) -> Self
+    pub fn children<'c, F, A>(mut self, nodes: A) -> Self
     where
         F: IntoVNode<'a>,
 
@@ -196,6 +196,13 @@ impl<'a> ElementBuilder<'a> {
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
     ) -> Self {
         self.children.push(self.fac.fragment_from_iter(node_iter));
+        self
+    }
+
+    /// Add a text node
+    pub fn text(mut self, f: impl IntoAttributeValue<'a>) -> Self {
+        let (value, is_static) = f.into_str(self.fac);
+        self.children.push(self.fac.bump_text(value, is_static));
         self
     }
 }
