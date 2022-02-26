@@ -71,10 +71,10 @@ impl<'a> ElementBuilder<'a> {
         });
     }
 
-    pub fn push_listener<D: Send + Sync + 'static>(
+    pub fn push_listener<D: UiEvent>(
         &mut self,
         event_name: &'static str,
-        mut callback: impl FnMut(UiEvent<D>) + 'a,
+        mut callback: impl FnMut(&D) + 'a,
     ) -> Listener<'a> {
         use dioxus_core::AnyEvent;
         let fac = self.fac;
@@ -176,7 +176,7 @@ impl<'a> ElementBuilder<'a> {
         self
     }
 
-    pub fn children<'b, 'c, F, A>(mut self, node_iter: A) -> Self
+    pub fn children<'b, 'c, F, A>(mut self, nodes: A) -> Self
     where
         F: IntoVNode<'a>,
 
@@ -184,7 +184,7 @@ impl<'a> ElementBuilder<'a> {
         // this forces all pure iterators to come in as fragments
         A: AsRef<[F]> + IntoIterator<Item = F>,
     {
-        for node in node_iter {
+        for node in nodes {
             self.children.push(node.into_vnode(self.fac));
         }
         self

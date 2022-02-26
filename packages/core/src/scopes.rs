@@ -331,7 +331,6 @@ impl ScopeArena {
                                 // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
                                 // we could convert arc to rc internally or something
                                 (cb)(AnyEvent {
-                                    bubble_state: state.clone(),
                                     data: event.data.clone(),
                                 });
                             }

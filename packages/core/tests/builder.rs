@@ -22,11 +22,27 @@ fn Parent(cx: Scope) -> Element {
         .child(div(&cx).class("val").class("val").class("val"))
         .child(if true { div(&cx) } else { h2(&cx) })
         .children([
-            h2(&cx).class("val").class("val").class("val"),
-            h3(&cx).class("val").class("val").class("val"),
-            h4(&cx).class("val").class("val").class("val"),
-            h5(&cx).class("val").class("val").class("val"),
-            h6(&cx).class("val").class("val").class("val"),
+            h2(&cx)
+                .class("val")
+                .onclick(move |evt| {
+                    //
+                    let p = evt.client_x;
+                })
+                .onblick(move |e| {
+                    //
+                }),
+            h3(&cx).class("val").onclick(move |_| {
+                //
+            }),
+            h4(&cx).class("val").onclick(move |_| {
+                //
+            }),
+            h5(&cx).class("val").onclick(move |_| {
+                //
+            }),
+            h6(&cx).class("val").onclick(move |_| {
+                //
+            }),
         ])
         .build()
 }

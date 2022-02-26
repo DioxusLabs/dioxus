@@ -4,7 +4,7 @@
 //! This is all kinda WIP, but the bones are there.
 
 use crate::{ElementId, ScopeId};
-use std::{any::Any, cell::Cell, fmt::Debug, rc::Rc, sync::Arc};
+use std::{any::Any, cell::Cell, fmt::Debug, sync::Arc};
 
 pub(crate) struct BubbleState {
     pub canceled: Cell<bool>,
@@ -64,7 +64,7 @@ pub struct UserEvent {
     pub name: &'static str,
 
     /// The event data to be passed onto the event handler
-    pub data: Arc<dyn Any + Send + Sync>,
+    pub data: Arc<dyn UiEvent>,
 }
 
 /// Priority of Event Triggers.
@@ -120,46 +120,16 @@ pub enum EventPriority {
 }
 
 pub struct AnyEvent {
-    pub(crate) bubble_state: Rc<BubbleState>,
-    pub(crate) data: Arc<dyn Any + Send + Sync>,
+    pub(crate) data: Arc<dyn UiEvent>,
 }
 
 impl AnyEvent {
-    pub fn downcast<T: Send + Sync + 'static>(self) -> Option<UiEvent<T>> {
-        let AnyEvent { data, bubble_state } = self;
-
-        if let Ok(data) = data.downcast::<T>() {
-            Some(UiEvent { bubble_state, data })
-        } else {
-            None
-        }
+    pub fn downcast<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        (&self.data as &dyn Any).downcast_ref::<T>()
     }
 }
 
-pub struct UiEvent<T> {
-    pub data: Arc<T>,
-
-    #[allow(unused)]
-    bubble_state: Rc<BubbleState>,
-}
-
-impl<T: Debug> std::fmt::Debug for UiEvent<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UiEvent").field("data", &self.data).finish()
-    }
-}
-
-impl<T> std::ops::Deref for UiEvent<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.data.as_ref()
-    }
-}
-
-impl<T> UiEvent<T> {
-    /// Prevent this event from bubbling up the tree.
-    pub fn cancel_bubble(&self) {
-        self.bubble_state.canceled.set(true);
-    }
+pub trait UiEvent: Send + Sync + 'static + Any + Debug {
+    fn bubble_state(&self) -> bool;
+    fn cancel_bubble(&self);
 }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 macro_rules! event_directory {
     ( $(
         $( #[$attr:meta] )*
-        $wrapper:ident($data:ident): [
+        $data:ident: [
             $(
                 $( #[$method_attr:meta] )*
                 $name:ident
@@ -12,377 +12,383 @@ macro_rules! event_directory {
         ];
     )* ) => {
         $(
-            $(
-                $(#[$method_attr])*
-                pub fn $name( mut self, callback: impl FnMut($wrapper) + 'a) -> Self {
-                    self.push_listener(stringify!($name), callback);
-                    self
+            impl UiEvent for $data {
+                fn bubble_state(&self) -> bool {
+                    false
                 }
-            )*
+                fn cancel_bubble(&self) {
+                    //
+                }
+            }
+
+            impl<'a> crate::builder::ElementBuilder<'a> {
+                $(
+                    $(#[$method_attr])*
+                    pub fn $name( mut self, callback: impl FnMut(&$data) + 'a) -> Self {
+                        self.push_listener(stringify!($name), callback);
+                        self
+                    }
+                )*
+            }
         )*
     };
 }
 
-impl<'a> crate::builder::ElementBuilder<'a> {
-    // The Dioxus Synthetic event system
-    // todo: move these into the html event system. dioxus accepts *any* event, so having these here doesn't make sense.
-    event_directory! {
-        ClipboardEvent(ClipboardData): [
-            /// Called when "copy"
-            oncopy
+// The Dioxus Synthetic event system
+// todo: move these into the html event system. dioxus accepts *any* event, so having these here doesn't make sense.
+event_directory! {
+    ClipboardEvent: [
+        /// Called when "copy"
+        oncopy
 
-            /// oncut
-            oncut
+        /// oncut
+        oncut
 
-            /// onpaste
-            onpaste
-        ];
+        /// onpaste
+        onpaste
+    ];
 
-        CompositionEvent(CompositionData): [
-            /// oncompositionend
-            oncompositionend
+    CompositionEvent: [
+        /// oncompositionend
+        oncompositionend
 
-            /// oncompositionstart
-            oncompositionstart
+        /// oncompositionstart
+        oncompositionstart
 
-            /// oncompositionupdate
-            oncompositionupdate
-        ];
+        /// oncompositionupdate
+        oncompositionupdate
+    ];
 
-        KeyboardEvent(KeyboardData): [
-            /// onkeydown
-            onkeydown
+    KeyboardEvent: [
+        /// onkeydown
+        onkeydown
 
-            /// onkeypress
-            onkeypress
+        /// onkeypress
+        onkeypress
 
-            /// onkeyup
-            onkeyup
-        ];
+        /// onkeyup
+        onkeyup
+    ];
 
-        FocusEvent(FocusData): [
-            /// onfocus
-            onfocus
+    FocusEvent: [
+        /// onfocus
+        onfocus
 
-            // onfocusout
-            onfocusout
+        // onfocusout
+        onfocusout
 
-            // onfocusin
-            onfocusin
+        // onfocusin
+        onfocusin
 
-            /// onblur
-            onblur
-        ];
+        /// onblur
+        onblur
+    ];
 
-        FormEvent(FormData): [
-            /// onchange
-            onchange
+    FormEvent: [
+        /// onchange
+        onchange
 
-            /// oninput handler
-            oninput
+        /// oninput handler
+        oninput
 
-            /// oninvalid
-            oninvalid
+        /// oninvalid
+        oninvalid
 
-            /// onreset
-            onreset
+        /// onreset
+        onreset
 
-            /// onsubmit
-            onsubmit
-        ];
+        /// onsubmit
+        onsubmit
+    ];
 
-        /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
+    /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
+    ///
+    ///
+    /// The MouseEvent interface represents events that occur due to the user interacting with a pointing device (such as a mouse).
+    ///
+    /// ## Trait implementation:
+    /// ```rust, ignore
+    ///     fn alt_key(&self) -> bool;
+    ///     fn button(&self) -> i16;
+    ///     fn buttons(&self) -> u16;
+    ///     fn client_x(&self) -> i32;
+    ///     fn client_y(&self) -> i32;
+    ///     fn ctrl_key(&self) -> bool;
+    ///     fn meta_key(&self) -> bool;
+    ///     fn page_x(&self) -> i32;
+    ///     fn page_y(&self) -> i32;
+    ///     fn screen_x(&self) -> i32;
+    ///     fn screen_y(&self) -> i32;
+    ///     fn shift_key(&self) -> bool;
+    ///     fn get_modifier_state(&self, key_code: &str) -> bool;
+    /// ```
+    ///
+    /// ## Event Handlers
+    /// - [`onclick`]
+    /// - [`oncontextmenu`]
+    /// - [`ondoubleclick`]
+    /// - [`ondrag`]
+    /// - [`ondragend`]
+    /// - [`ondragenter`]
+    /// - [`ondragexit`]
+    /// - [`ondragleave`]
+    /// - [`ondragover`]
+    /// - [`ondragstart`]
+    /// - [`ondrop`]
+    /// - [`onmousedown`]
+    /// - [`onmouseenter`]
+    /// - [`onmouseleave`]
+    /// - [`onmousemove`]
+    /// - [`onmouseout`]
+    /// - [`onmouseover`]
+    /// - [`onmouseup`]
+    MouseEvent: [
+        /// Execute a callback when a button is clicked.
         ///
+        /// ## Description
         ///
-        /// The MouseEvent interface represents events that occur due to the user interacting with a pointing device (such as a mouse).
+        /// An element receives a click event when a pointing device button (such as a mouse's primary mouse button)
+        /// is both pressed and released while the pointer is located inside the element.
         ///
-        /// ## Trait implementation:
-        /// ```rust, ignore
-        ///     fn alt_key(&self) -> bool;
-        ///     fn button(&self) -> i16;
-        ///     fn buttons(&self) -> u16;
-        ///     fn client_x(&self) -> i32;
-        ///     fn client_y(&self) -> i32;
-        ///     fn ctrl_key(&self) -> bool;
-        ///     fn meta_key(&self) -> bool;
-        ///     fn page_x(&self) -> i32;
-        ///     fn page_y(&self) -> i32;
-        ///     fn screen_x(&self) -> i32;
-        ///     fn screen_y(&self) -> i32;
-        ///     fn shift_key(&self) -> bool;
-        ///     fn get_modifier_state(&self, key_code: &str) -> bool;
+        /// - Bubbles: Yes
+        /// - Cancelable: Yes
+        /// - Interface: [`MouseEvent`]
+        ///
+        /// If the button is pressed on one element and the pointer is moved outside the element before the button
+        /// is released, the event is fired on the most specific ancestor element that contained both elements.
+        /// `click` fires after both the `mousedown` and `mouseup` events have fired, in that order.
+        ///
+        /// ## Example
+        /// ```
+        /// rsx!( button { "click me", onclick: move |_| log::info!("Clicked!`") } )
         /// ```
         ///
-        /// ## Event Handlers
-        /// - [`onclick`]
-        /// - [`oncontextmenu`]
-        /// - [`ondoubleclick`]
-        /// - [`ondrag`]
-        /// - [`ondragend`]
-        /// - [`ondragenter`]
-        /// - [`ondragexit`]
-        /// - [`ondragleave`]
-        /// - [`ondragover`]
-        /// - [`ondragstart`]
-        /// - [`ondrop`]
-        /// - [`onmousedown`]
-        /// - [`onmouseenter`]
-        /// - [`onmouseleave`]
-        /// - [`onmousemove`]
-        /// - [`onmouseout`]
-        /// - [`onmouseover`]
-        /// - [`onmouseup`]
-        MouseEvent(MouseData): [
-            /// Execute a callback when a button is clicked.
-            ///
-            /// ## Description
-            ///
-            /// An element receives a click event when a pointing device button (such as a mouse's primary mouse button)
-            /// is both pressed and released while the pointer is located inside the element.
-            ///
-            /// - Bubbles: Yes
-            /// - Cancelable: Yes
-            /// - Interface(InteData): [`MouseEvent`]
-            ///
-            /// If the button is pressed on one element and the pointer is moved outside the element before the button
-            /// is released, the event is fired on the most specific ancestor element that contained both elements.
-            /// `click` fires after both the `mousedown` and `mouseup` events have fired, in that order.
-            ///
-            /// ## Example
-            /// ```
-            /// rsx!( button { "click me", onclick: move |_| log::info!("Clicked!`") } )
-            /// ```
-            ///
-            /// ## Reference
-            /// - <https://www.w3schools.com/tags/ev_onclick.asp>
-            /// - <https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event>
-            onclick
+        /// ## Reference
+        /// - <https://www.w3schools.com/tags/ev_onclick.asp>
+        /// - <https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event>
+        onclick
 
-            /// oncontextmenu
-            oncontextmenu
+        /// oncontextmenu
+        oncontextmenu
 
-            /// ondoubleclick
-            ondoubleclick
+        /// ondoubleclick
+        ondoubleclick
 
-            /// ondrag
-            ondrag
+        /// ondrag
+        ondrag
 
-            /// ondragend
-            ondragend
+        /// ondragend
+        ondragend
 
-            /// ondragenter
-            ondragenter
+        /// ondragenter
+        ondragenter
 
-            /// ondragexit
-            ondragexit
+        /// ondragexit
+        ondragexit
 
-            /// ondragleave
-            ondragleave
+        /// ondragleave
+        ondragleave
 
-            /// ondragover
-            ondragover
+        /// ondragover
+        ondragover
 
-            /// ondragstart
-            ondragstart
+        /// ondragstart
+        ondragstart
 
-            /// ondrop
-            ondrop
+        /// ondrop
+        ondrop
 
-            /// onmousedown
-            onmousedown
+        /// onmousedown
+        onmousedown
 
-            /// onmouseenter
-            onmouseenter
+        /// onmouseenter
+        onmouseenter
 
-            /// onmouseleave
-            onmouseleave
+        /// onmouseleave
+        onmouseleave
 
-            /// onmousemove
-            onmousemove
+        /// onmousemove
+        onmousemove
 
-            /// onmouseout
-            onmouseout
+        /// onmouseout
+        onmouseout
 
-            ///
-            onscroll
+        ///
+        onscroll
 
-            /// onmouseover
-            ///
-            /// Triggered when the users's mouse hovers over an element.
-            onmouseover
+        /// onmouseover
+        ///
+        /// Triggered when the users's mouse hovers over an element.
+        onmouseover
 
-            /// onmouseup
-            onmouseup
-        ];
+        /// onmouseup
+        onmouseup
+    ];
 
-        PointerEvent(PointerData): [
-            /// pointerdown
-            onpointerdown
+    PointerEvent: [
+        /// pointerdown
+        onpointerdown
 
-            /// pointermove
-            onpointermove
+        /// pointermove
+        onpointermove
 
-            /// pointerup
-            onpointerup
+        /// pointerup
+        onpointerup
 
-            /// pointercancel
-            onpointercancel
+        /// pointercancel
+        onpointercancel
 
-            /// gotpointercapture
-            ongotpointercapture
+        /// gotpointercapture
+        ongotpointercapture
 
-            /// lostpointercapture
-            onlostpointercapture
+        /// lostpointercapture
+        onlostpointercapture
 
-            /// pointerenter
-            onpointerenter
+        /// pointerenter
+        onpointerenter
 
-            /// pointerleave
-            onpointerleave
+        /// pointerleave
+        onpointerleave
 
-            /// pointerover
-            onpointerover
+        /// pointerover
+        onpointerover
 
-            /// pointerout
-            onpointerout
-        ];
+        /// pointerout
+        onpointerout
+    ];
 
-        SelectionEvent(SelectionData): [
-            /// onselect
-            onselect
-        ];
+    SelectionEvent: [
+        /// onselect
+        onselect
+    ];
 
-        TouchEvent(TouchData): [
-            /// ontouchcancel
-            ontouchcancel
+    TouchEvent: [
+        /// ontouchcancel
+        ontouchcancel
 
-            /// ontouchend
-            ontouchend
+        /// ontouchend
+        ontouchend
 
-            /// ontouchmove
-            ontouchmove
+        /// ontouchmove
+        ontouchmove
 
-            /// ontouchstart
-            ontouchstart
-        ];
+        /// ontouchstart
+        ontouchstart
+    ];
 
-        WheelEvent(WheelData): [
-            ///
-            onwheel
-        ];
+    WheelEvent: [
+        ///
+        onwheel
+    ];
 
-        MediaEvent(MediaData): [
-            ///abort
-            onabort
+    MediaEvent: [
+        ///abort
+        onabort
 
-            ///canplay
-            oncanplay
+        ///canplay
+        oncanplay
 
-            ///canplaythrough
-            oncanplaythrough
+        ///canplaythrough
+        oncanplaythrough
 
-            ///durationchange
-            ondurationchange
+        ///durationchange
+        ondurationchange
 
-            ///emptied
-            onemptied
+        ///emptied
+        onemptied
 
-            ///encrypted
-            onencrypted
+        ///encrypted
+        onencrypted
 
-            ///ended
-            onended
+        ///ended
+        onended
 
-            ///error
-            onerror
+        ///error
+        onerror
 
-            ///loadeddata
-            onloadeddata
+        ///loadeddata
+        onloadeddata
 
-            ///loadedmetadata
-            onloadedmetadata
+        ///loadedmetadata
+        onloadedmetadata
 
-            ///loadstart
-            onloadstart
+        ///loadstart
+        onloadstart
 
-            ///pause
-            onpause
+        ///pause
+        onpause
 
-            ///play
-            onplay
+        ///play
+        onplay
 
-            ///playing
-            onplaying
+        ///playing
+        onplaying
 
-            ///progress
-            onprogress
+        ///progress
+        onprogress
 
-            ///ratechange
-            onratechange
+        ///ratechange
+        onratechange
 
-            ///seeked
-            onseeked
+        ///seeked
+        onseeked
 
-            ///seeking
-            onseeking
+        ///seeking
+        onseeking
 
-            ///stalled
-            onstalled
+        ///stalled
+        onstalled
 
-            ///suspend
-            onsuspend
+        ///suspend
+        onsuspend
 
-            ///timeupdate
-            ontimeupdate
+        ///timeupdate
+        ontimeupdate
 
-            ///volumechange
-            onvolumechange
+        ///volumechange
+        onvolumechange
 
-            ///waiting
-            onwaiting
-        ];
+        ///waiting
+        onwaiting
+    ];
 
-        AnimationEvent(AnimationData): [
-            /// onanimationstart
-            onanimationstart
+    AnimationEvent: [
+        /// onanimationstart
+        onanimationstart
 
-            /// onanimationend
-            onanimationend
+        /// onanimationend
+        onanimationend
 
-            /// onanimationiteration
-            onanimationiteration
-        ];
+        /// onanimationiteration
+        onanimationiteration
+    ];
 
-        TransitionEvent(TransitionData): [
-            ///
-            ontransitionend
-        ];
+    TransitionEvent: [
+        ///
+        ontransitionend
+    ];
 
-        ToggleEvent(ToggleData): [
-            ///
-            ontoggle
-        ];
-    }
+    ToggleEvent: [
+        ///
+        ontoggle
+    ];
 }
 
-pub type ClipboardEvent = UiEvent<ClipboardData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct ClipboardData {
+pub struct ClipboardEvent {
     // DOMDataTransfer clipboardData
 }
 
-pub type CompositionEvent = UiEvent<CompositionData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct CompositionData {
+pub struct CompositionEvent {
     pub data: String,
 }
 
-pub type KeyboardEvent = UiEvent<KeyboardData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct KeyboardData {
+pub struct KeyboardEvent {
     pub char_code: u32,
 
     /// Identify which "key" was entered.
@@ -448,24 +454,21 @@ pub struct KeyboardData {
     // get_modifier_state: bool,
 }
 
-pub type FocusEvent = UiEvent<FocusData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct FocusData {/* DOMEventInner:  Send + SyncTarget relatedTarget */}
+pub struct FocusEvent {/* DOMEventInner:  Send + SyncTarget relatedTarget */}
 
-pub type FormEvent = UiEvent<FormData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct FormData {
+pub struct FormEvent {
     pub value: String,
     pub values: HashMap<String, String>,
     /* DOMEvent:  Send + SyncTarget relatedTarget */
 }
 
-pub type MouseEvent = UiEvent<MouseData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct MouseData {
+pub struct MouseEvent {
     pub alt_key: bool,
     pub button: i16,
     pub buttons: u16,
@@ -481,10 +484,9 @@ pub struct MouseData {
     // fn get_modifier_state(&self, key_code: &str) -> bool;
 }
 
-pub type PointerEvent = UiEvent<PointerData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct PointerData {
+pub struct PointerEvent {
     // Mouse only
     pub alt_key: bool,
     pub button: i16,
@@ -511,15 +513,13 @@ pub struct PointerData {
     // pub get_modifier_state: bool,
 }
 
-pub type SelectionEvent = UiEvent<SelectionData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct SelectionData {}
+pub struct SelectionEvent {}
 
-pub type TouchEvent = UiEvent<TouchData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct TouchData {
+pub struct TouchEvent {
     pub alt_key: bool,
     pub ctrl_key: bool,
     pub meta_key: bool,
@@ -530,50 +530,44 @@ pub struct TouchData {
     // touches: DOMTouchList,
 }
 
-pub type WheelEvent = UiEvent<WheelData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct WheelData {
+pub struct WheelEvent {
     pub delta_mode: u32,
     pub delta_x: f64,
     pub delta_y: f64,
     pub delta_z: f64,
 }
 
-pub type MediaEvent = UiEvent<MediaData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct MediaData {}
+pub struct MediaEvent {}
 
-pub type ImageEvent = UiEvent<ImageData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct ImageData {
+pub struct ImageEvent {
     pub load_error: bool,
 }
 
-pub type AnimationEvent = UiEvent<AnimationData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct AnimationData {
+pub struct AnimationEvent {
     pub animation_name: String,
     pub pseudo_element: String,
     pub elapsed_time: f32,
 }
 
-pub type TransitionEvent = UiEvent<TransitionData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct TransitionData {
+pub struct TransitionEvent {
     pub property_name: String,
     pub pseudo_element: String,
     pub elapsed_time: f32,
 }
 
-pub type ToggleEvent = UiEvent<ToggleData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct ToggleData {}
+pub struct ToggleEvent {}
 
 #[cfg_attr(
     feature = "serialize",
