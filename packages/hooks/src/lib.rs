@@ -16,6 +16,9 @@ pub use usefuture::*;
 mod usecallback;
 pub use usecallback::*;
 
+mod useeffect;
+pub use useeffect::*;
+
 #[macro_export]
 /// A helper macro for using hooks in async environements.
 ///

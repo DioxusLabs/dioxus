@@ -7,7 +7,6 @@ use std::future::Future;
 
 pub fn use_callback<I, G: UseFutureDep, F: Future<Output = ()> + 'static>(
     cx: &ScopeState,
-    //
     g: G,
     f: impl FnMut(I, G::Out) -> F,
 ) -> &UseCallback<I, G::Out>
@@ -26,7 +25,7 @@ where
 
 pub struct UseCallback<I, T> {
     f: Rc<RefCell<Option<Box<dyn FnMut(I, T)>>>>,
-    f2: Box<dyn Fn(I)>, // f: Rc<RefCell<Option<Box<dyn FnMut(I, T)>>>>,
+    f2: Box<dyn Fn(I)>,
 }
 
 impl<I: 'static, T> std::ops::Deref for UseCallback<I, T> {
@@ -36,10 +35,6 @@ impl<I: 'static, T> std::ops::Deref for UseCallback<I, T> {
         &self.f2
     }
 }
-
-trait MyThing {}
-impl<A> MyThing for Box<dyn Fn(A)> {}
-impl<A, B> MyThing for Box<dyn Fn(A, B)> {}
 
 #[test]
 fn demo() {
@@ -53,6 +48,7 @@ fn demo() {
         });
 
         let onsubmit = use_callback(&cx, (name,), my_callback);
+
         async fn my_callback(event: UiEvent<()>, name: (i32,)) {
             //
         }
