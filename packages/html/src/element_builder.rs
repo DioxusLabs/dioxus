@@ -6,9 +6,6 @@ use dioxus_core::{
     VNode, VText,
 };
 
-pub mod fragments;
-pub mod global_attributes;
-
 pub struct ElementBuilder<'a, T> {
     // a zst marker type
     _inner: T,
@@ -211,4 +208,12 @@ pub fn text<'a>(cx: &'a ScopeState, val: impl IntoAttributeValue<'a>) -> VNode<'
         is_static,
         id: Default::default(),
     }))
+}
+
+pub fn fragment<'a, 'b, 'c>(
+    cx: &'a ScopeState,
+    node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
+) -> VNode<'a> {
+    let fac = NodeFactory::new(cx);
+    fac.fragment_from_iter(node_iter)
 }

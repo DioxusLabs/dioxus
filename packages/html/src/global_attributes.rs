@@ -1,5 +1,5 @@
-use dioxus_core::*;
-use std::fmt::Arguments;
+use crate::builder::ElementBuilder;
+pub use crate::builder::IntoAttributeValue;
 
 macro_rules! no_namespace_trait_methods {
     (
@@ -10,12 +10,13 @@ macro_rules! no_namespace_trait_methods {
     ) => {
         $(
             $(#[$attr])*
-            fn $name<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                cx.attr(stringify!($name), val, None, false)
+            pub fn $name(self, val: impl IntoAttributeValue<'a>) -> Self {
+                self.attr(stringify!($name), val)
             }
         )*
     };
 }
+
 macro_rules! style_trait_methods {
     (
         $(
@@ -26,8 +27,8 @@ macro_rules! style_trait_methods {
         $(
             #[inline]
             $(#[$attr])*
-            fn $name<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                cx.attr($lit, val, Some("style"), false)
+            pub fn $name(self, val: impl IntoAttributeValue<'a>) -> Self {
+                self.style_attr(stringify!($name), val)
             }
         )*
     };
@@ -41,82 +42,64 @@ macro_rules! aria_trait_methods {
     ) => {
         $(
             $(#[$attr])*
-            fn $name<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                cx.attr($lit, val, None, false)
+            pub fn $name(self, val: impl IntoAttributeValue<'a>) -> Self {
+                self.style_attr(stringify!($name), val)
             }
         )*
     };
 }
 
-pub trait GlobalAttributes {
-    /// Prevent the default action for this element.
-    ///
-    /// For more information, see the MDN docs:
-    /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
-    fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("dioxus-prevent-default", val, None, false)
-    }
-
+impl<'a, T> ElementBuilder<'a, T> {
     no_namespace_trait_methods! {
+        /// accesskey
         accesskey;
 
-        /// The HTML class attribute is used to specify a class for an HTML element.
-        ///
-        /// ## Details
-        /// Multiple HTML elements can share the same class.
-        ///
-        /// The class global attribute is a space-separated list of the case-sensitive classes of the element.
-        /// Classes allow CSS and Javascript to select and access specific elements via the class selectors or
-        /// functions like the DOM method document.getElementsByClassName.
-        ///
-        /// ## Example
-        ///
-        /// ### HTML:
-        /// ```html
-        /// <p class="note editorial">Above point sounds a bit obvious. Remove/rewrite?</p>
-        /// ```
-        ///
-        /// ### CSS:
-        /// ```css
-        /// .note {
-        ///     font-style: italic;
-        ///     font-weight: bold;
-        /// }
-        ///
-        /// .editorial {
-        ///     background: rgb(255, 0, 0, .25);
-        ///     padding: 10px;
-        /// }
-        /// ```
+        /// class
         class;
+
+        /// contenteditable
         contenteditable;
+
+        /// data
         data;
+
+        /// dir
         dir;
+
+        /// draggable
         draggable;
+
+        /// hidden
         hidden;
+
+        /// Set the value of the `id` attribute.
         id;
+
+        /// lang
         lang;
+
+        /// spellcheck
         spellcheck;
+
+        /// style
         style;
+
+        /// tabindex
         tabindex;
+
+        /// title
         title;
+
+        /// translate
         translate;
 
+        /// role
         role;
 
-        /// dangerous_inner_html is Dioxus's replacement for using innerHTML in the browser DOM. In general, setting
-        /// HTML from code is risky because it’s easy to inadvertently expose your users to a cross-site scripting (XSS)
-        /// attack. So, you can set HTML directly from Dioxus, but you have to type out dangerous_inner_html to remind
-        /// yourself that it’s dangerous
+        /// dangerous_inner_html
         dangerous_inner_html;
     }
 
-    // This macro creates an explicit method call for each of the style attributes.
-    //
-    // The left token specifies the name of the attribute in the rsx! macro, and the right string literal specifies the
-    // actual name of the attribute generated.
-    //
-    // This roughly follows the html spec
     style_trait_methods! {
         /// Specifies the alignment of flexible container's items within the flex container.
         align_content: "align-content",
@@ -635,8 +618,8 @@ pub trait GlobalAttributes {
 
         /// Specifies a layering or stacking order for positioned elements.
         z_index	: "z-index",
-
     }
+
     aria_trait_methods! {
         aria_current: "aria-current",
         aria_details: "aria-details",
@@ -646,6 +629,7 @@ pub trait GlobalAttributes {
         aria_keyshortcuts: "aria-keyshortcuts",
         aria_label: "aria-label",
         aria_roledescription: "aria-roledescription",
+
         // Widget Attributes
         aria_autocomplete: "aria-autocomplete",
         aria_checked: "aria-checked",
@@ -666,14 +650,15 @@ pub trait GlobalAttributes {
         aria_valuemin: "aria-valuemin",
         aria_valuenow: "aria-valuenow",
         aria_valuetext: "aria-valuetext",
+
         // Live Region Attributes
         aria_atomic: "aria-atomic",
         aria_busy: "aria-busy",
         aria_live: "aria-live",
         aria_relevant: "aria-relevant",
-
         aria_dropeffect: "aria-dropeffect",
         aria_grabbed: "aria-grabbed",
+
         // Relationship Attributes
         aria_activedescendant: "aria-activedescendant",
         aria_colcount: "aria-colcount",
@@ -690,266 +675,5 @@ pub trait GlobalAttributes {
         aria_rowindex: "aria-rowindex",
         aria_rowspan: "aria-rowspan",
         aria_setsize: "aria-setsize",
-    }
-}
-
-pub trait SvgAttributes {
-    /// Prevent the default action for this element.
-    ///
-    /// For more information, see the MDN docs:
-    /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
-    fn prevent_default<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("dioxus-prevent-default", val, None, false)
-    }
-    aria_trait_methods! {
-        accent_height: "accent-height",
-        accumulate: "accumulate",
-        additive: "additive",
-        alignment_baseline: "alignment-baseline",
-        alphabetic: "alphabetic",
-        amplitude: "amplitude",
-        arabic_form: "arabic-form",
-        ascent: "ascent",
-        attributeName: "attributeName",
-        attributeType: "attributeType",
-        azimuth: "azimuth",
-        baseFrequency: "baseFrequency",
-        baseline_shift: "baseline-shift",
-        baseProfile: "baseProfile",
-        bbox: "bbox",
-        begin: "begin",
-        bias: "bias",
-        by: "by",
-        calcMode: "calcMode",
-        cap_height: "cap-height",
-        class: "class",
-        clip: "clip",
-        clipPathUnits: "clipPathUnits",
-        clip_path: "clip-path",
-        clip_rule: "clip-rule",
-        color: "color",
-        color_interpolation: "color-interpolation",
-        color_interpolation_filters: "color-interpolation-filters",
-        color_profile: "color-profile",
-        color_rendering: "color-rendering",
-        contentScriptType: "contentScriptType",
-        contentStyleType: "contentStyleType",
-        crossorigin: "crossorigin",
-        cursor: "cursor",
-        cx: "cx",
-        cy: "cy",
-        d: "d",
-        decelerate: "decelerate",
-        descent: "descent",
-        diffuseConstant: "diffuseConstant",
-        direction: "direction",
-        display: "display",
-        divisor: "divisor",
-        dominant_baseline: "dominant-baseline",
-        dur: "dur",
-        dx: "dx",
-        dy: "dy",
-        edgeMode: "edgeMode",
-        elevation: "elevation",
-        enable_background: "enable-background",
-        end: "end",
-        exponent: "exponent",
-        fill: "fill",
-        fill_opacity: "fill-opacity",
-        fill_rule: "fill-rule",
-        filter: "filter",
-        filterRes: "filterRes",
-        filterUnits: "filterUnits",
-        flood_color: "flood-color",
-        flood_opacity: "flood-opacity",
-        font_family: "font-family",
-        font_size: "font-size",
-        font_size_adjust: "font-size-adjust",
-        font_stretch: "font-stretch",
-        font_style: "font-style",
-        font_variant: "font-variant",
-        font_weight: "font-weight",
-        format: "format",
-        from: "from",
-        fr: "fr",
-        fx: "fx",
-        fy: "fy",
-        g1: "g1",
-        g2: "g2",
-        glyph_name: "glyph-name",
-        glyph_orientation_horizontal: "glyph-orientation-horizontal",
-        glyph_orientation_vertical: "glyph-orientation-vertical",
-        glyphRef: "glyphRef",
-        gradientTransform: "gradientTransform",
-        gradientUnits: "gradientUnits",
-        hanging: "hanging",
-        height: "height",
-        href: "href",
-        hreflang: "hreflang",
-        horiz_adv_x: "horiz-adv-x",
-        horiz_origin_x: "horiz-origin-x",
-        id: "id",
-        ideographic: "ideographic",
-        image_rendering: "image-rendering",
-        _in: "_in",
-        in2: "in2",
-        intercept: "intercept",
-        k: "k",
-        k1: "k1",
-        k2: "k2",
-        k3: "k3",
-        k4: "k4",
-        kernelMatrix: "kernelMatrix",
-        kernelUnitLength: "kernelUnitLength",
-        kerning: "kerning",
-        keyPoints: "keyPoints",
-        keySplines: "keySplines",
-        keyTimes: "keyTimes",
-        lang: "lang",
-        lengthAdjust: "lengthAdjust",
-        letter_spacing: "letter-spacing",
-        lighting_color: "lighting-color",
-        limitingConeAngle: "limitingConeAngle",
-        local: "local",
-        marker_end: "marker-end",
-        marker_mid: "marker-mid",
-        marker_start: "marker_start",
-        markerHeight: "markerHeight",
-        markerUnits: "markerUnits",
-        markerWidth: "markerWidth",
-        mask: "mask",
-        maskContentUnits: "maskContentUnits",
-        maskUnits: "maskUnits",
-        mathematical: "mathematical",
-        max: "max",
-        media: "media",
-        method: "method",
-        min: "min",
-        mode: "mode",
-        name: "name",
-        numOctaves: "numOctaves",
-        offset: "offset",
-        opacity: "opacity",
-        operator: "operator",
-        order: "order",
-        orient: "orient",
-        orientation: "orientation",
-        origin: "origin",
-        overflow: "overflow",
-        overline_position: "overline-position",
-        overline_thickness: "overline-thickness",
-        panose_1: "panose-1",
-        paint_order: "paint-order",
-        path: "path",
-        pathLength: "pathLength",
-        patternContentUnits: "patternContentUnits",
-        patternTransform: "patternTransform",
-        patternUnits: "patternUnits",
-        ping: "ping",
-        pointer_events: "pointer-events",
-        points: "points",
-        pointsAtX: "pointsAtX",
-        pointsAtY: "pointsAtY",
-        pointsAtZ: "pointsAtZ",
-        preserveAlpha: "preserveAlpha",
-        preserveAspectRatio: "preserveAspectRatio",
-        primitiveUnits: "primitiveUnits",
-        r: "r",
-        radius: "radius",
-        referrerPolicy: "referrerPolicy",
-        refX: "refX",
-        refY: "refY",
-        rel: "rel",
-        rendering_intent: "rendering-intent",
-        repeatCount: "repeatCount",
-        repeatDur: "repeatDur",
-        requiredExtensions: "requiredExtensions",
-        requiredFeatures: "requiredFeatures",
-        restart: "restart",
-        result: "result",
-        role: "role",
-        rotate: "rotate",
-        rx: "rx",
-        ry: "ry",
-        scale: "scale",
-        seed: "seed",
-        shape_rendering: "shape-rendering",
-        slope: "slope",
-        spacing: "spacing",
-        specularConstant: "specularConstant",
-        specularExponent: "specularExponent",
-        speed: "speed",
-        spreadMethod: "spreadMethod",
-        startOffset: "startOffset",
-        stdDeviation: "stdDeviation",
-        stemh: "stemh",
-        stemv: "stemv",
-        stitchTiles: "stitchTiles",
-        stop_color: "stop_color",
-        stop_opacity: "stop_opacity",
-        strikethrough_position: "strikethrough-position",
-        strikethrough_thickness: "strikethrough-thickness",
-        string: "string",
-        stroke: "stroke",
-        stroke_dasharray: "stroke-dasharray",
-        stroke_dashoffset: "stroke-dashoffset",
-        stroke_linecap: "stroke-linecap",
-        stroke_linejoin: "stroke-linejoin",
-        stroke_miterlimit: "stroke-miterlimit",
-        stroke_opacity: "stroke-opacity",
-        stroke_width: "stroke-width",
-        style: "style",
-        surfaceScale: "surfaceScale",
-        systemLanguage: "systemLanguage",
-        tabindex: "tabindex",
-        tableValues: "tableValues",
-        target: "target",
-        targetX: "targetX",
-        targetY: "targetY",
-        text_anchor: "text-anchor",
-        text_decoration: "text-decoration",
-        text_rendering: "text-rendering",
-        textLength: "textLength",
-        to: "to",
-        transform: "transform",
-        transform_origin: "transform-origin",
-        r#type: "_type",
-        u1: "u1",
-        u2: "u2",
-        underline_position: "underline-position",
-        underline_thickness: "underline-thickness",
-        unicode: "unicode",
-        unicode_bidi: "unicode-bidi",
-        unicode_range: "unicode-range",
-        units_per_em: "units-per-em",
-        v_alphabetic: "v-alphabetic",
-        v_hanging: "v-hanging",
-        v_ideographic: "v-ideographic",
-        v_mathematical: "v-mathematical",
-        values: "values",
-        vector_effect: "vector-effect",
-        version: "version",
-        vert_adv_y: "vert-adv-y",
-        vert_origin_x: "vert-origin-x",
-        vert_origin_y: "vert-origin-y",
-        view_box: "viewBox",
-        view_target: "viewTarget",
-        visibility: "visibility",
-        width: "width",
-        widths: "widths",
-        word_spacing: "word-spacing",
-        writing_mode: "writing-mode",
-        x: "x",
-        x_height: "x-height",
-        x1: "x1",
-        x2: "x2",
-        xmlns: "xmlns",
-        x_channel_selector: "xChannelSelector",
-        y: "y",
-        y1: "y1",
-        y2: "y2",
-        y_channel_selector: "yChannelSelector",
-        z: "z",
-        zoomAndPan: "zoomAndPan",
     }
 }

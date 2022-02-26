@@ -13,23 +13,20 @@
 //!
 //! Currently, we don't validate for structures, but do validate attributes.
 
+pub mod element_builder;
+pub mod elements;
+pub mod events;
 mod extensions;
 mod global_attributes;
 mod into_attr;
-pub mod nodebuilder;
-pub use global_attributes::*;
 
-// #[allow(unused_imports)]
-// mod codegen;
-
-pub mod elements;
-pub mod events;
 pub use events::*;
+pub use global_attributes::*;
 
 // This is what you blob import into your crate root.
 pub mod builder {
+    pub use crate::element_builder::ElementBuilder;
     pub use crate::elements;
     pub use crate::elements::*;
     pub use crate::into_attr::IntoAttributeValue;
-    pub use crate::nodebuilder::ElementBuilder;
 }

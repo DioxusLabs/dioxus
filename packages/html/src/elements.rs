@@ -18,7 +18,7 @@ macro_rules! builder_constructors {
             pub mod $concrete {
                 #[allow(unused_imports)]
                 use crate::builder::IntoAttributeValue;
-                use crate::nodebuilder::ElementBuilder;
+                use crate::builder::ElementBuilder;
                 use dioxus_core::ScopeState;
 
                 pub struct $concrete;
@@ -56,7 +56,7 @@ macro_rules! builder_constructors {
             pub mod $concrete {
                 #[allow(unused_imports)]
                 use crate::builder::IntoAttributeValue;
-                use crate::nodebuilder::ElementBuilder;
+                use crate::builder::ElementBuilder;
                 use dioxus_core::ScopeState;
 
                 pub struct $concrete;
