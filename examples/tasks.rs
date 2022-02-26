@@ -12,8 +12,8 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let (count, set_count) = use_state(&cx, || 0);
 
-    use_future(&cx, move || {
-        let set_count = set_count.to_owned();
+    use_future(&cx, (), move |_| {
+        let set_count = set_count.clone();
         async move {
             loop {
                 tokio::time::sleep(Duration::from_millis(1000)).await;

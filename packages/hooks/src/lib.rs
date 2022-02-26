@@ -16,8 +16,8 @@ pub use usecoroutine::*;
 mod usefuture;
 pub use usefuture::*;
 
-mod usesuspense;
-pub use usesuspense::*;
+mod useeffect;
+pub use useeffect::*;
 
 #[macro_export]
 /// A helper macro for using hooks in async environements.
