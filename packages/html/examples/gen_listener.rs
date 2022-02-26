@@ -1,12 +1,10 @@
-use std::{
-    collections::HashMap, fmt::Write as FmtWrite, fs::File, io::Write as IoWrite, path::Path,
-};
+use std::{collections::HashMap, fs::File};
 
 use serde::{Deserialize, Serialize};
 
 fn main() {
     let input = include_str!("./listeners.toml");
-    let root: TomlRoot = toml::from_str(input).unwrap();
+    let _root: TomlRoot = toml::from_str(input).unwrap();
 
     let schema: TomlRoot = toml::from_str(input).unwrap();
     let root_dir = std::env::current_dir().unwrap().join("src");
@@ -18,11 +16,11 @@ fn main() {
 
     // writeln!(mod_dir, "pub mod elements {{").unwrap();
 
-    for (element, props) in schema.listeners {
+    for (element, _props) in schema.listeners {
         // writeln!(mod_dir, "    pub mod {element};").unwrap();
         // writeln!(mod_dir, "    pub use {element}::{element};\n").unwrap();
 
-        let mut element_file = File::create(element_dir.join(format!("{element}.rs"))).unwrap();
+        let mut _element_file = File::create(element_dir.join(format!("{element}.rs"))).unwrap();
     }
 }
 

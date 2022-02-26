@@ -29,8 +29,8 @@ impl<'a> ElementBuilder<'a, Meta> {
         self
     }
     #[inline]
-    pub fn content(mut self, val: impl IntoAttributeValue<'a>) -> Self {
+    pub fn content_(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr("content", val);
         self
     }
-} 
+}

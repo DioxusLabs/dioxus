@@ -14,13 +14,13 @@ pub fn canvas(cx: &ScopeState) -> ElementBuilder<Canvas> {
 
 impl<'a> ElementBuilder<'a, Canvas> {
     #[inline]
-    pub fn width(mut self, val: impl IntoAttributeValue<'a>) -> Self {
+    pub fn width_(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr("width", val);
         self
     }
     #[inline]
-    pub fn height(mut self, val: impl IntoAttributeValue<'a>) -> Self {
+    pub fn height_(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr("height", val);
         self
     }
-} 
+}

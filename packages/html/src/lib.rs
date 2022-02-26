@@ -19,15 +19,17 @@ mod into_attr;
 pub mod nodebuilder;
 pub use global_attributes::*;
 
-#[allow(unused_imports)]
-mod codegen;
+// #[allow(unused_imports)]
+// mod codegen;
 
+pub mod elements;
 pub mod events;
 pub use events::*;
 
 // This is what you blob import into your crate root.
 pub mod builder {
-    pub use crate::codegen::elements::*;
+    pub use crate::elements;
+    pub use crate::elements::*;
     pub use crate::into_attr::IntoAttributeValue;
     pub use crate::nodebuilder::ElementBuilder;
 }

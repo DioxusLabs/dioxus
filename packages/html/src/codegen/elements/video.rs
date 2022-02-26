@@ -14,7 +14,7 @@ pub fn video(cx: &ScopeState) -> ElementBuilder<Video> {
 
 impl<'a> ElementBuilder<'a, Video> {
     #[inline]
-    pub fn height(mut self, val: impl IntoAttributeValue<'a>) -> Self {
+    pub fn height_(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr("height", val);
         self
     }
@@ -54,7 +54,7 @@ impl<'a> ElementBuilder<'a, Video> {
         self
     }
     #[inline]
-    pub fn width(mut self, val: impl IntoAttributeValue<'a>) -> Self {
+    pub fn width_(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr("width", val);
         self
     }
@@ -68,4 +68,4 @@ impl<'a> ElementBuilder<'a, Video> {
         self.push_attr("loop", val);
         self
     }
-} 
+}

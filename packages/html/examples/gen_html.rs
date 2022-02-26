@@ -1,6 +1,4 @@
-use std::{
-    collections::HashMap, fmt::Write as FmtWrite, fs::File, io::Write as IoWrite, path::Path,
-};
+use std::{collections::HashMap, fs::File, io::Write as IoWrite};
 
 use serde::{Deserialize, Serialize};
 

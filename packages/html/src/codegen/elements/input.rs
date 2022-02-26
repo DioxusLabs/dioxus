@@ -34,7 +34,7 @@ impl<'a> ElementBuilder<'a, Input> {
         self
     }
     #[inline]
-    pub fn height(mut self, val: impl IntoAttributeValue<'a>) -> Self {
+    pub fn height_(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr("height", val);
         self
     }
@@ -129,7 +129,7 @@ impl<'a> ElementBuilder<'a, Input> {
         self
     }
     #[inline]
-    pub fn width(mut self, val: impl IntoAttributeValue<'a>) -> Self {
+    pub fn width_(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr("width", val);
         self
     }
@@ -163,4 +163,4 @@ impl<'a> ElementBuilder<'a, Input> {
         self.push_attr("required", val);
         self
     }
-} 
+}

@@ -3,6 +3,7 @@ use dioxus_html::builder::*;
 
 #[test]
 fn test_builder() {
+    #[allow(unused)]
     fn please(cx: Scope) -> Element {
         div(&cx)
             .class("a")

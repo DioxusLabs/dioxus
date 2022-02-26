@@ -18,4 +18,4 @@ impl<'a> ElementBuilder<'a, Q> {
         self.push_attr("cite", val);
         self
     }
-} 
+}

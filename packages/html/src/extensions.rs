@@ -2,28 +2,28 @@
 //!
 use crate::builder::{ElementBuilder, IntoAttributeValue};
 
-impl<'a> ElementBuilder<'a, crate::codegen::elements::input::Input> {
+impl<'a> ElementBuilder<'a, crate::builder::elements::Input::Input> {
     pub fn value(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr_volatile("value", val);
         self
     }
 }
 
-impl<'a> ElementBuilder<'a, crate::codegen::elements::select::Select> {
+impl<'a> ElementBuilder<'a, crate::builder::elements::Select::Select> {
     pub fn value(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr_volatile("value", val);
         self
     }
 }
 
-impl<'a> ElementBuilder<'a, crate::codegen::elements::option::Option> {
+impl<'a> ElementBuilder<'a, crate::builder::elements::Option_::Option_> {
     pub fn selected(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr_volatile("selected", val);
         self
     }
 }
 
-impl<'a> ElementBuilder<'a, crate::codegen::elements::textarea::Textarea> {
+impl<'a> ElementBuilder<'a, crate::builder::elements::Textarea::Textarea> {
     pub fn value(mut self, val: impl IntoAttributeValue<'a>) -> Self {
         self.push_attr_volatile("value", val);
         self
