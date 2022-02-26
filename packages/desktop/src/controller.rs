@@ -56,6 +56,9 @@ impl DesktopController {
                     .unwrap()
                     .push_front(serde_json::to_string(&edits.edits).unwrap());
 
+                // Make sure the window is ready for any new updates
+                proxy.send_event(UserWindowEvent::Update).unwrap();
+
                 loop {
                     dom.wait_for_work().await;
                     let mut muts = dom.work_with_deadline(|| false);

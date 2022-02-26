@@ -1,4 +1,4 @@
-use std::{any::Any, cell::RefCell, collections::HashMap, rc::Rc};
+use std::{any::Any, cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use dioxus_core::ScopeId;
 use im_rc::HashSet;
@@ -9,7 +9,7 @@ pub type AtomId = *const ();
 
 pub struct AtomRoot {
     pub atoms: RefCell<HashMap<AtomId, Slot>>,
-    pub update_any: Rc<dyn Fn(ScopeId)>,
+    pub update_any: Arc<dyn Fn(ScopeId)>,
 }
 
 pub struct Slot {
@@ -18,7 +18,7 @@ pub struct Slot {
 }
 
 impl AtomRoot {
-    pub fn new(update_any: Rc<dyn Fn(ScopeId)>) -> Self {
+    pub fn new(update_any: Arc<dyn Fn(ScopeId)>) -> Self {
         Self {
             update_any,
             atoms: RefCell::new(HashMap::new()),

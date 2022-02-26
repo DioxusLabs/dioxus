@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 use dioxus_core::{ScopeState, TaskId};
-use std::{cell::Cell, future::Future, rc::Rc};
+use std::{cell::Cell, future::Future, rc::Rc, sync::Arc};
 
 /// A future that resolves to a value.
 ///
@@ -61,7 +61,7 @@ pub enum FutureState<'a, T> {
 }
 
 pub struct UseFuture<T> {
-    update: Rc<dyn Fn()>,
+    update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
     value: Option<T>,
     pending: bool,

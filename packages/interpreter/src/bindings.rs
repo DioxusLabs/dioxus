@@ -63,5 +63,5 @@ extern "C" {
     );
 
     #[wasm_bindgen(method)]
-    pub fn RemoveAttribute(this: &Interpreter, root: u64, field: &str);
+    pub fn RemoveAttribute(this: &Interpreter, root: u64, field: &str, ns: Option<&str>);
 }

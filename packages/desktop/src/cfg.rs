@@ -17,6 +17,7 @@ pub struct DesktopConfig {
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
+    pub(crate) disable_context_menu: bool,
 }
 
 pub(crate) type WryProtocol = (
@@ -29,13 +30,20 @@ impl DesktopConfig {
     #[inline]
     pub fn new() -> Self {
         let window = WindowBuilder::new().with_title("Dioxus app");
+
         Self {
             event_handler: None,
             window,
             protocols: Vec::new(),
             file_drop_handler: None,
             pre_rendered: None,
+            disable_context_menu: !cfg!(debug_assertions),
         }
+    }
+
+    pub fn with_disable_context_menu(&mut self, disable: bool) -> &mut Self {
+        self.disable_context_menu = disable;
+        self
     }
 
     pub fn with_prerendered(&mut self, content: String) -> &mut Self {

@@ -143,7 +143,6 @@ pub fn launch_with_props<P: 'static + Send>(
                                     let _ = proxy.send_event(UserWindowEvent::Update);
                                 }
                                 "browser_open" => {
-                                    println!("browser_open");
                                     let data = message.params();
                                     log::trace!("Open browser: {:?}", data);
                                     if let Some(temp) = data.as_object() {
@@ -173,10 +172,7 @@ pub fn launch_with_props<P: 'static + Send>(
                     webview = webview.with_custom_protocol(name, handler)
                 }
 
-                if cfg!(debug_assertions) {
-                    // in debug, we are okay with the reload menu showing and dev tool
-                    webview = webview.with_dev_tool(true);
-                } else {
+                if cfg.disable_context_menu {
                     // in release mode, we don't want to show the dev tool or reload menus
                     webview = webview.with_initialization_script(
                         r#"
@@ -193,6 +189,9 @@ pub fn launch_with_props<P: 'static + Send>(
                         }
                     "#,
                     )
+                } else {
+                    // in debug, we are okay with the reload menu showing and dev tool
+                    webview = webview.with_dev_tool(true);
                 }
 
                 desktop.webviews.insert(window_id, webview.build().unwrap());
