@@ -1,19 +1,30 @@
+#![allow(missing_docs)]
 use dioxus_core::{ScopeState, TaskId};
 use std::{cell::Cell, future::Future, rc::Rc, sync::Arc};
 
+/// A future that resolves to a value.
+///
+/// This runs the future only once - though the future may be regenerated
+/// through the [`UseFuture::restart`] method.
+///
+/// This is commonly used for components that cannot be rendered until some
+/// asynchronous operation has completed.
+///
+///
+///
+///
+///
 pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static>(
     cx: &'a ScopeState,
     new_fut: impl FnOnce() -> F,
 ) -> &'a UseFuture<T> {
-    let state = cx.use_hook(move |_| {
-        //
-        UseFuture {
-            update: cx.schedule_update(),
-            needs_regen: Cell::new(true),
-            slot: Rc::new(Cell::new(None)),
-            value: None,
-            task: None,
-        }
+    let state = cx.use_hook(move |_| UseFuture {
+        update: cx.schedule_update(),
+        needs_regen: Cell::new(true),
+        slot: Rc::new(Cell::new(None)),
+        value: None,
+        task: None,
+        pending: true,
     });
 
     if let Some(value) = state.slot.take() {
@@ -24,6 +35,7 @@ pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static>(
     if state.needs_regen.get() {
         // We don't need regen anymore
         state.needs_regen.set(false);
+        state.pending = false;
 
         // Create the new future
         let fut = new_fut();
@@ -42,10 +54,17 @@ pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static>(
     state
 }
 
+pub enum FutureState<'a, T> {
+    Pending,
+    Complete(&'a T),
+    Regenerating(&'a T), // the old value
+}
+
 pub struct UseFuture<T> {
     update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
     value: Option<T>,
+    pending: bool,
     slot: Rc<Cell<Option<T>>>,
     task: Option<TaskId>,
 }
@@ -71,5 +90,10 @@ impl<T> UseFuture<T> {
 
     pub fn value(&self) -> Option<&T> {
         self.value.as_ref()
+    }
+
+    pub fn state(&self) -> FutureState<T> {
+        // self.value.as_ref()
+        FutureState::Pending
     }
 }
