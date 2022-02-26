@@ -3,6 +3,7 @@ use std::{
     cell::{Cell, Ref, RefCell},
     collections::{HashMap, HashSet},
     rc::Rc,
+    sync::Arc,
 };
 
 use dioxus_core::ScopeId;
@@ -10,7 +11,7 @@ use dioxus_core::ScopeId;
 use crate::platform::RouterProvider;
 
 pub struct RouterService {
-    pub(crate) regen_route: Rc<dyn Fn(ScopeId)>,
+    pub(crate) regen_route: Arc<dyn Fn(ScopeId)>,
     pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
     slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
     onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
@@ -42,7 +43,7 @@ enum RouteSlot {
 }
 
 impl RouterService {
-    pub fn new(regen_route: Rc<dyn Fn(ScopeId)>, root_scope: ScopeId) -> Self {
+    pub fn new(regen_route: Arc<dyn Fn(ScopeId)>, root_scope: ScopeId) -> Self {
         let history = BrowserHistory::default();
         let location = history.location();
         let path = location.path();

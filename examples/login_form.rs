@@ -12,7 +12,7 @@ fn app(cx: Scope) -> Element {
     let onsubmit = move |evt: FormEvent| {
         cx.spawn(async move {
             let resp = reqwest::Client::new()
-                .post("http://localhost/login")
+                .post("http://localhost:8080/login")
                 .form(&[
                     ("username", &evt.values["username"]),
                     ("password", &evt.values["password"]),
@@ -22,10 +22,12 @@ fn app(cx: Scope) -> Element {
 
             match resp {
                 // Parse data from here, such as storing a response token
-                Ok(_data) => println!("Login successful"),
+                Ok(_data) => println!("Login successful!"),
 
                 //Handle any errors from the fetch here
-                Err(_err) => println!("Login failed"),
+                Err(_err) => {
+                    println!("Login failed - you need a login server running on localhost:8080.")
+                }
             }
         });
     };
@@ -36,10 +38,10 @@ fn app(cx: Scope) -> Element {
             onsubmit: onsubmit,
             prevent_default: "onsubmit", // Prevent the default behavior of <form> to post
 
-            input { "type": "text" }
+            input { "type": "text", id: "username", name: "username" }
             label { "Username" }
             br {}
-            input { "type": "password" }
+            input { "type": "password", id: "password", name: "password" }
             label { "Password" }
             br {}
             button { "Login" }

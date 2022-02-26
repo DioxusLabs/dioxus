@@ -53,14 +53,12 @@ export class Interpreter {
     }
   }
   CreateTextNode(text, root) {
-    // todo: make it so the types are okay
     const node = document.createTextNode(text);
     this.nodes[root] = node;
     this.stack.push(node);
   }
   CreateElement(tag, root) {
     const el = document.createElement(tag);
-    // el.setAttribute("data-dioxus-id", `${root}`);
     this.nodes[root] = el;
     this.stack.push(el);
   }
@@ -105,7 +103,7 @@ export class Interpreter {
     if (ns === "style") {
       // @ts-ignore
       node.style[name] = value;
-    } else if (ns != null || ns != undefined) {
+    } else if (ns !== null || ns !== undefined) {
       node.setAttributeNS(ns, name, value);
     } else {
       switch (name) {
@@ -133,10 +131,12 @@ export class Interpreter {
       }
     }
   }
-  RemoveAttribute(root, name) {
+  RemoveAttribute(root, field, ns) {
+    const name = field;
     const node = this.nodes[root];
-
-    if (name === "value") {
+    if (ns !== null || ns !== undefined) {
+      node.removeAttributeNS(ns, name);
+    } else if (name === "value") {
       node.value = "";
     } else if (name === "checked") {
       node.checked = false;
@@ -260,7 +260,7 @@ export class Interpreter {
               }
             }
 
-            if (realId == null) {
+            if (realId === null) {
               return;
             }
             window.ipc.postMessage(
@@ -281,7 +281,7 @@ export class Interpreter {
         this.SetAttribute(edit.root, edit.field, edit.value, edit.ns);
         break;
       case "RemoveAttribute":
-        this.RemoveAttribute(edit.root, edit.name);
+        this.RemoveAttribute(edit.root, edit.name, edit.ns);
         break;
     }
   }

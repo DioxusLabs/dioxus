@@ -129,7 +129,6 @@ pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
             label {
                 r#for: "cbg-{todo.id}",
                 onclick: move |_| set_is_editing(true),
-                onfocusout: move |_| set_is_editing(false),
                 "{todo.contents}"
             }
         }
@@ -139,6 +138,7 @@ pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                 value: "{todo.contents}",
                 oninput: move |evt| cx.props.set_todos.make_mut()[&cx.props.id].contents = evt.value.clone(),
                 autofocus: "true",
+                onfocusout: move |_| set_is_editing(false),
                 onkeydown: move |evt| {
                     match evt.key.as_str() {
                         "Enter" | "Escape" | "Tab" => set_is_editing(false),

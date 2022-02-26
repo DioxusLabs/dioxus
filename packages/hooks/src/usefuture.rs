@@ -1,5 +1,5 @@
 use dioxus_core::{ScopeState, TaskId};
-use std::{any::Any, cell::Cell, future::Future, rc::Rc};
+use std::{any::Any, cell::Cell, future::Future, rc::Rc, sync::Arc};
 
 /// A hook that provides a future that will resolve to a value.
 ///
@@ -55,7 +55,7 @@ pub fn use_future<'a, T: 'static, F: Future<Output = T> + 'static, D: UseFutureD
 }
 
 pub struct UseFuture<T> {
-    update: Rc<dyn Fn()>,
+    update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
     value: Option<T>,
     slot: Rc<Cell<Option<T>>>,
