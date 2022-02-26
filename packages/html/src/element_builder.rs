@@ -9,7 +9,6 @@ use dioxus_core::{
 pub struct ElementBuilder<'a, T> {
     // a zst marker type
     _inner: T,
-
     name: &'static str,
     fac: NodeFactory<'a>,
     attrs: BumpVec<'a, Attribute<'a>>,
