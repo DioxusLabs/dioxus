@@ -139,7 +139,9 @@ impl AnyEvent {
     pub fn downcast<T: Send + Sync + 'static>(self) -> Option<UiEvent<T>> {
         let AnyEvent { data, bubble_state } = self;
 
-        data.downcast::<T>().ok().map(|data| UiEvent { bubble_state, data })
+        data.downcast::<T>()
+            .ok()
+            .map(|data| UiEvent { bubble_state, data })
     }
 }
 
