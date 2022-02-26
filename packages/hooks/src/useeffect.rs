@@ -10,20 +10,39 @@ use crate::UseFutureDep;
 /// will be allowed to continue
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
-pub fn use_effect<'a, T: 'static, F: Future<Output = T> + 'static, D: UseFutureDep>(
-    cx: &'a ScopeState,
-    dependencies: D,
-    future: impl FnOnce(D::Out) -> F,
-) -> &'a UseEffect {
+///
+/// ## Examples
+///
+/// ```rust, ignore
+///
+/// #[inline_props]
+/// fn app(cx: Scope, name: &str) -> Element {
+///     use_effect(&cx, (name,), |(name,)| async move {
+///         set_title(name);
+///     }))
+/// }
+/// ```
+pub fn use_effect<T, F, D>(cx: &ScopeState, dependencies: D, future: impl FnOnce(D::Out) -> F)
+where
+    T: 'static,
+    F: Future<Output = T> + 'static,
+    D: UseFutureDep,
+{
+    struct UseEffect {
+        needs_regen: bool,
+        task: Cell<Option<TaskId>>,
+        dependencies: Vec<Box<dyn Any>>,
+    }
+
     let state = cx.use_hook(move |_| UseEffect {
-        needs_regen: Cell::new(true),
+        needs_regen: true,
         task: Cell::new(None),
         dependencies: Vec::new(),
     });
 
-    if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
+    if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen {
         // We don't need regen anymore
-        state.needs_regen.set(false);
+        state.needs_regen = false;
 
         // Create the new future
         let fut = future(dependencies.out());
@@ -32,14 +51,6 @@ pub fn use_effect<'a, T: 'static, F: Future<Output = T> + 'static, D: UseFutureD
             fut.await;
         })));
     }
-
-    state
-}
-
-pub struct UseEffect {
-    needs_regen: Cell<bool>,
-    task: Cell<Option<TaskId>>,
-    dependencies: Vec<Box<dyn Any>>,
 }
 
 #[cfg(test)]
