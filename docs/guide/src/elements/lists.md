@@ -10,14 +10,24 @@ In this chapter, you will learn:
 
 ## Rendering data from lists
 
-Thinking back to our analysis of the `r/reddit` page, we notice a list of data that needs to be rendered: the list of posts. This list of posts is always changing, so we cannot just hardcode the lists into our app like:
+If we wanted to build the Reddit app, then we need to implement a list of data that needs to be rendered: the list of posts. This list of posts is always changing, so we cannot just hardcode the lists into our app directly, like so:
 
 ```rust
+// we shouldn't ship our app with posts that don't update!
 rsx!(
     div {
-        Post {/* some properties */}
-        Post {/* some properties */}
-        Post {/* some properties */}
+        Post {
+            title: "Post A",
+            votes: 120,
+        }
+        Post {
+            title: "Post B",
+            votes: 14,
+        }
+        Post {
+            title: "Post C",
+            votes: 999,
+        }
     }
 )
 ```
@@ -32,7 +42,7 @@ As a simple example, let's render a list of names. First, start with our input d
 let names = ["jim", "bob", "jane", "doe"];
 ```
 
-Then, we create a new iterator by calling `iter` and then `map`. In our `map` function, we'll place render our template.
+Then, we create a new iterator by calling `iter` and then [`map`](https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.map). In our `map` function, we'll render our template.
 
 ```rust
 let name_list = names.iter().map(|name| rsx!(
@@ -40,16 +50,28 @@ let name_list = names.iter().map(|name| rsx!(
 ));
 ```
 
-Finally, we can include this list in the final structure:
+We can include this list in the final Element:
 
 ```rust
 rsx!(
     ul {
-        {name_list}
+        name_list
     }
 )
 ```
-The HTML-rendered version of this list would follow what you would expect:
+
+Rather than storing `name_list` in a temporary variable, we could also include the iterator inline:
+```rust
+rsx!(
+    ul {
+        names.iter().map(|name| rsx!(
+            li { "{name}" } 
+        ))
+    }
+)
+```
+
+The rendered HTML list is what you would expect:
 ```html
 <ul>
     <li> jim </li>
@@ -59,54 +81,13 @@ The HTML-rendered version of this list would follow what you would expect:
 </ul>
 ```
 
-### Rendering our posts with a PostList component
-
-Let's start by modeling this problem with a component and some properties.
-
-For this example, we're going to use the borrowed component syntax since we probably have a large list of posts that we don't want to clone every time we render the Post List.
-
-```rust
-#[derive(Props, PartialEq)]
-struct PostListProps<'a> {
-    posts: &'a [PostData]
-}
-```
-Next, we're going to define our component:
-
-```rust
-fn App(cx: Scope<PostList>) -> Element {
-    // First, we create a new iterator by mapping the post array
-    let posts = cx.props.posts.iter().map(|post| rsx!{
-        Post {
-            title: post.title,
-            age: post.age,
-            original_poster: post.original_poster
-        }
-    });
-
-    // Finally, we render the post list inside of a container
-    cx.render(rsx!{
-        ul { class: "post-list"
-            {posts}
-        }
-    })
-}
-```
-
-
 ## Filtering Iterators
 
 Rust's iterators are extremely powerful, especially when used for filtering tasks. When building user interfaces, you might want to display a list of items filtered by some arbitrary check.
 
-As a very simple example, let's set up a filter where we only list names that begin with the letter "J".
+As a very simple example, let's set up a filter where we only list names that begin with the letter "j".
 
-Let's make our list of names:
-
-```rust
-let names = ["jim", "bob", "jane", "doe"];
-```
-
-Then, we create a new iterator by calling `iter`, then `filter`, then `map`. In our `filter` function, we'll only allow "j" names, and in our `map` function, we'll  render our template.
+Using the list from above, let's create a new iterator. Before we render the list with `map` as in the previous example, we'll [`filter`](https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.filter) the names to only allow those that start with "j".
 
 ```rust
 let name_list = names
@@ -115,53 +96,43 @@ let name_list = names
     .map(|name| rsx!( li { "{name}" }));
 ```
 
-Rust's iterators provide us tons of functionality and are significantly easier to work with than JavaScript's map/filter/reduce.
+Rust's Iterators are very versatile – check out [their documentation](https://doc.rust-lang.org/std/iter/trait.Iterator.html) for more things you can do with them!
 
-For keen Rustaceans: notice how we don't actually call `collect` on the name list. If we `collected` our filtered list into new Vec, then we would need to make an allocation to store these new elements. Instead, we create an entirely new _lazy_ iterator which will then be consumed by Dioxus in the `render` call.
+For keen Rustaceans: notice how we don't actually call `collect` on the name list. If we `collect`ed our filtered list into new Vec, we would need to make an allocation to store these new elements, which slows down rendering. Instead, we create an entirely new _lazy_ iterator which Dioxus will consume in the `render` call. The `render` method is extraordinarily efficient, so it's best practice to let it do most of the allocations for us.
 
-The `render` method is extraordinarily efficient, so it's best practice to let it do most of the allocations for us.
+## Keeping list items in order with `key`
 
-## Keeping list items in order with key
+The examples above demonstrate the power of iterators in `rsx!` but all share the same issue: if your array items move (e.g. due to sorting), get inserted, or get deleted, Dioxus has no way of knowing what happened. This can cause Elements to be unnecessarily removed, changed and rebuilt when all that was needed was to change their position – this is inneficient.
 
-
-The examples above demonstrate the power of iterators in `rsx!` but all share the same issue: a lack of "keys". Whenever you render a list of elements, each item in the list must be **uniquely identifiable**. To make each item unique, you need to give it a "key".
-
-In Dioxus, keys are strings that uniquely identifies it among other items in that array:
+To solve this problem, each item in the list must be **uniquely identifiable**. You can achieve this by giving it a unique, fixed "key". In Dioxus, a key is a string that identifies an item among others in the list.
 
 ```rust
 rsx!( li { key: "a" } )
 ```
 
-Keys tell Dioxus which array item each component corresponds to, so that it can match them up later. This becomes important if your array items can move (e.g. due to sorting), get inserted, or get deleted. A well-chosen key helps Dioxus infer what exactly has happened, and make the correct updates to the screen
-
+Now, if an item has already been rendered once, Dioxus can use the key to match it up later to make the correct updates – and avoid unnecessary work.
 
 NB: the language from this section is strongly borrowed from [React's guide on keys](https://reactjs.org/docs/lists-and-keys.html).
+
 ### Where to get your key
 
 Different sources of data provide different sources of keys:
 
 - _Data from a database_: If your data is coming from a database, you can use the database keys/IDs, which are unique by nature.
-- _Locally generated data_: If your data is generated and persisted locally (e.g. notes in a note-taking app), use an incrementing counter or a package like `uuid` when creating items.
+- _Locally generated data_: If your data is generated and persisted locally (e.g. notes in a note-taking app), keep track of keys along with your data. You can use an incrementing counter or a package like `uuid` to generate keys for new items – but make sure they stay the same for the item's lifetime.
+
+Remember: keys let Dioxus uniquely identify an item among its siblings. A well-chosen key provides more information than the position within the array. Even if the position changes due to reordering, the key lets Dioxus identify the item throughout its lifetime.
 
 ### Rules of keys
 
 - Keys must be unique among siblings. However, it’s okay to use the same keys for Elements in different arrays.
-- Keys must not change or that defeats their purpose! Don’t generate them while rendering.
+- An item's key must not change – **don’t generate them on the fly** while rendering. Otherwise, Dioxus will be unable to keep track of which item is which, and we're back to square one.
 
-### Why does Dioxus need keys?
+You might be tempted to use an item's index in the array as its key. In fact, that’s what Dioxus will use if you don’t specify a key at all. This is only acceptable if you can guarantee that the list is constant – i.e., no re-ordering, additions or deletions. In all other cases, do not use the index for the key – it will lead to the performance problems described above.
 
-Imagine that files on your desktop didn’t have names. Instead, you’d refer to them by their order — the first file, the second file, and so on. You could get used to it, but once you delete a file, it would get confusing. The second file would become the first file, the third file would be the second file, and so on.
-
-File names in a folder and Element keys in an array serve a similar purpose. They let us uniquely identify an item between its siblings. A well-chosen key provides more information than the position within the array. Even if the position changes due to reordering, the key lets Dioxus identify the item throughout its lifetime.
-
-### Gotcha
-You might be tempted to use an item’s index in the array as its key. In fact, that’s what Dioxus will use if you don’t specify a key at all. But the order in which you render items will change over time if an item is inserted, deleted, or if the array gets reordered. Index as a key often leads to subtle and confusing bugs.
-
-Similarly, do not generate keys on the fly, `gen_random`. This will cause keys to never match up between renders, leading to all your components and DOM being recreated every time. Not only is this slow, but it will also lose any user input inside the list items. Instead, use a stable ID based on the data.
-
-Note that your components won’t receive key as a prop. It’s only used as a hint by Dioxus itself. If your component needs an ID, you have to pass it as a separate prop:
+Note that if you pass the key to a [custom component](../components/index.md) you've made, it won't receive the key as a prop. It’s only used as a hint by Dioxus itself. If your component needs an ID, you have to pass it as a separate prop:
 ```rust
-Post { key: "{key}", id: "{id}" }
+Post { key: "{key}", id: "{key}" }
 ```
 
 ## Moving on
@@ -171,4 +142,4 @@ In this section, we learned:
 - How to use iterator tools to filter and transform data
 - How to use keys to render lists efficiently
 
-Moving forward, we'll finally cover user input and interactivity.
+Moving forward, we'll learn more about attributes.

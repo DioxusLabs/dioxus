@@ -63,7 +63,7 @@ $ cat Cargo.toml
 [package]
 name = "hello-dioxus"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -81,6 +81,13 @@ $ cargo add dioxus --features desktop
 
 It's very important to add `dioxus` with the `desktop` feature for this example. The `dioxus` crate is a batteries-include crate that combines a bunch of utility crates together, ensuring compatibility of the most important parts of the ecosystem. Under the hood, the `dioxus` crate configures various renderers, hooks, debug tooling, and more. The `desktop` feature ensures the we only depend on the smallest set of required crates to compile and render.
 
+If you system does not provide the `libappindicator3` library, like Debian/bullseye, you can enable the replacement `ayatana` with an additional flag:
+
+```shell
+$ # On Debian/bullseye use:
+$ cargo add dioxus --features desktop --features ayatana
+```
+
 If you plan to develop extensions for the `Dioxus` ecosystem, please use the `dioxus` crate with the `core` feature to limit the amount of dependencies your project brings in.
 
 ### Our first app
@@ -92,10 +99,10 @@ use dioxus::prelude::*;
 
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 
-fn App(cx: Scope) -> Element {
+fn app(cx: Scope) -> Element {
     cx.render(rsx! (
         div { "Hello, world!" }
     ))
@@ -118,14 +125,14 @@ This initialization code launches a Tokio runtime on a helper thread where your 
 
 ```rust
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus::desktop::launch(app);
 }
 ```
 
 Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Element`.
 
 ```rust
-fn App(cx: Scope) -> Element {
+fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div { "Hello, world!" }
     })
@@ -143,5 +150,3 @@ For now, just know that `Scope` lets you store state with hooks and render eleme
 ## Moving on
 
 Congrats! You've built your first desktop application with Dioxus. Next, we're going to learn about the basics of building interactive user interfaces.
-
-

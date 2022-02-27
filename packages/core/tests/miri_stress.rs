@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 /*
 Stress Miri as much as possible.
 
@@ -312,21 +313,10 @@ fn leak_thru_children() {
 #[test]
 fn test_pass_thru() {
     #[inline_props]
-    fn Router<'a>(cx: Scope, children: Element<'a>) -> Element {
-        cx.render(rsx! {
-            div {
-                &cx.props.children
-            }
-        })
-    }
-
-    #[inline_props]
     fn NavContainer<'a>(cx: Scope, children: Element<'a>) -> Element {
         cx.render(rsx! {
             header {
-                nav {
-                    &cx.props.children
-                }
+                nav { children }
             }
         })
     }
@@ -365,9 +355,9 @@ fn test_pass_thru() {
                 class: "columns is-mobile",
                 div {
                     class: "column is-full",
-                    &cx.props.nav,
-                    &cx.props.body,
-                    &cx.props.footer,
+                    nav,
+                    body,
+                    footer,
                 }
             }
         })
@@ -398,7 +388,7 @@ fn test_pass_thru() {
     let mut dom = new_dom(app, ());
     let _ = dom.rebuild();
 
-    for x in 0..40 {
+    for _ in 0..40 {
         dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
         dom.work_with_deadline(|| false);
         dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));

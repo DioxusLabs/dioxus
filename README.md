@@ -1,8 +1,5 @@
 <div align="center">
-  <h1>🌗🚀 Dioxus</h1>
-  <p>
-    <strong>Frontend that scales.</strong>
-  </p>
+  <h1>Dioxus</h1>
 </div>
 
 <div align="center">
@@ -26,9 +23,7 @@
     <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
       alt="CI status" />
   </a>
-</div>
 
-<div align="center">
   <!--Awesome -->
   <a href="https://github.com/dioxuslabs/awesome-dioxus">
     <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
@@ -45,9 +40,11 @@
   <h3>
     <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> Guide </a>
-    <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
+    <span> | </span>
+    <a href="https://dioxuslabs.com/guide"> Guide (0.1.8) </a>
+    <span> | </span>
+    <a href="https://dioxuslabs.com/nightly/guide"> Guide (Nightly) </a>
   </h3>
 </div>
 
@@ -101,10 +98,10 @@ cargo run --example EXAMPLE
 <table style="width:100%" align="center">
     <tr >
         <th><a href="https://dioxuslabs.com/guide/">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/reference/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/reference/desktop/">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/reference/ssr/">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/reference/mobile/">Mobile</a></th>
+        <th><a href="https://dioxuslabs.com/reference/platforms/web">Web</a></th>
+        <th><a href="https://dioxuslabs.com/reference/platforms/desktop/">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/reference/platforms/ssr/">SSR</a></th>
+        <th><a href="https://dioxuslabs.com/reference/platforms/mobile/">Mobile</a></th>
         <th><a href="https://dioxuslabs.com/guide/concepts/managing_state.html">State</a></th>
     <tr>
 </table>
@@ -160,9 +157,9 @@ You shouldn't use Dioxus if:
 ## Comparison with other Rust UI frameworks
 Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**.
 
-- [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead of React-hooks, no borrowed props, supports SSR (no hydration).
+- [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead, no borrowed props, supports SSR (no hydration), no direct desktop/mobile support.
 - [Percy](https://github.com/chinedufn/percy): Supports SSR but with less emphasis on state management and event handling.
-- [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but lacking in ergonomics.
+- [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but no direct support for desktop/mobile.
 - [Dominator](https://github.com/Pauan/rust-dominator): Signal-based zero-cost alternative, less emphasis on community and docs.
 - [Azul](https://azul.rs): Fully native HTML/CSS renderer for desktop applications, no support for web/ssr
 

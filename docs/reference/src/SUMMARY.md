@@ -2,11 +2,12 @@
 
 - [Introduction](README.md)
 
-- [Web](web/index.md)
-- [Desktop](desktop/index.md)
-- [Mobile](mobile/index.md)
-- [SSR](ssr/index.md)
-- [TUI](tui/index.md)
+- [Platforms](platforms/index.md)
+  - [Web](platforms/web.md)
+  - [Server Side Rendering](platforms/ssr.md)
+  - [Desktop](platforms/desktop.md)
+  - [Mobile](platforms/mobile.md)
+  - [TUI](platforms/tui.md)
   
 - [Advanced Guides](guide/index.md)
   - [RSX in Depth](guide/rsx_in_depth.md)

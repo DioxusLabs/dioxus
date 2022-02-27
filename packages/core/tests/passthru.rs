@@ -1,4 +1,5 @@
 #![allow(unused, non_upper_case_globals)]
+#![allow(non_snake_case)]
 
 //! Diffing Tests
 //!
@@ -40,9 +41,7 @@ fn nested_passthru_creates() {
 
     #[inline_props]
     fn Child<'a>(cx: Scope, children: Element<'a>) -> Element {
-        cx.render(rsx! {
-                children
-        })
+        cx.render(rsx! { children })
     };
 
     let mut dom = VirtualDom::new(app);

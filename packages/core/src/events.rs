@@ -119,24 +119,41 @@ pub enum EventPriority {
     Low = 0,
 }
 
+/// The internal Dioxus type that carries any event data to the relevant handler.
+///
+///
+///
+///
+///
 pub struct AnyEvent {
     pub(crate) bubble_state: Rc<BubbleState>,
     pub(crate) data: Arc<dyn Any + Send + Sync>,
 }
 
 impl AnyEvent {
+    /// Convert this AnyEvent into a specific UiEvent with EventData.
+    ///
+    /// ```rust, ignore
+    /// let evt: FormEvent = evvt.downcast().unwrap();
+    /// ```
     pub fn downcast<T: Send + Sync + 'static>(self) -> Option<UiEvent<T>> {
         let AnyEvent { data, bubble_state } = self;
 
-        if let Ok(data) = data.downcast::<T>() {
-            Some(UiEvent { bubble_state, data })
-        } else {
-            None
-        }
+        data.downcast::<T>()
+            .ok()
+            .map(|data| UiEvent { bubble_state, data })
     }
 }
 
+/// A UiEvent is a type that wraps various EventData.
+///
+/// You should prefer to use the name of the event directly, rather than
+/// the UiEvent<T> generic type.
+///
+/// For the HTML crate, this would include [`MouseEvent`], [`FormEvent`] etc.
 pub struct UiEvent<T> {
+    /// The internal data of the event
+    /// This is wrapped in an Arc so that it can be sent across threads
     pub data: Arc<T>,
 
     #[allow(unused)]

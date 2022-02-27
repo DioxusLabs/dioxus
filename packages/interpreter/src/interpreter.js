@@ -2,16 +2,10 @@ export function main() {
   let root = window.document.getElementById("main");
   if (root != null) {
     window.interpreter = new Interpreter(root);
-    window.rpc.call("initialize");
+    window.ipc.postMessage(serializeIpcMessage("initialize"));
   }
 }
 export class Interpreter {
-  root;
-  stack;
-  listeners;
-  handlers;
-  lastNodeWasText;
-  nodes;
   constructor(root) {
     this.root = root;
     this.stack = [root];
@@ -59,14 +53,12 @@ export class Interpreter {
     }
   }
   CreateTextNode(text, root) {
-    // todo: make it so the types are okay
     const node = document.createTextNode(text);
     this.nodes[root] = node;
     this.stack.push(node);
   }
   CreateElement(tag, root) {
     const el = document.createElement(tag);
-    // el.setAttribute("data-dioxus-id", `${root}`);
     this.nodes[root] = el;
     this.stack.push(el);
   }
@@ -108,15 +100,15 @@ export class Interpreter {
   SetAttribute(root, field, value, ns) {
     const name = field;
     const node = this.nodes[root];
-    if (ns == "style") {
+    if (ns === "style") {
       // @ts-ignore
       node.style[name] = value;
-    } else if (ns != null || ns != undefined) {
+    } else if (ns !== null || ns !== undefined) {
       node.setAttributeNS(ns, name, value);
     } else {
       switch (name) {
         case "value":
-          if (value != node.value) {
+          if (value !== node.value) {
             node.value = value;
           }
           break;
@@ -131,7 +123,7 @@ export class Interpreter {
           break;
         default:
           // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-          if (value == "false" && bool_attrs.hasOwnProperty(name)) {
+          if (value === "false" && bool_attrs.hasOwnProperty(name)) {
             node.removeAttribute(name);
           } else {
             node.setAttribute(name, value);
@@ -139,17 +131,21 @@ export class Interpreter {
       }
     }
   }
-  RemoveAttribute(root, name) {
+  RemoveAttribute(root, field, ns) {
+    const name = field;
     const node = this.nodes[root];
-    node.removeAttribute(name);
-    if (name === "value") {
+    if (ns !== null || ns !== undefined) {
+      node.removeAttributeNS(ns, name);
+    } else if (name === "value") {
       node.value = "";
-    }
-    if (name === "checked") {
+    } else if (name === "checked") {
       node.checked = false;
-    }
-    if (name === "selected") {
+    } else if (name === "selected") {
       node.selected = false;
+    } else if (name === "dangerous_inner_html") {
+      node.innerHTML = "";
+    } else {
+      node.removeAttribute(name);
     }
   }
   handleEdits(edits) {
@@ -204,19 +200,32 @@ export class Interpreter {
               `dioxus-prevent-default`
             );
 
-            if (event.type == "click") {
+            if (event.type === "click") {
               // todo call prevent default if it's the right type of event
               if (shouldPreventDefault !== `onclick`) {
-                if (target.tagName == "A") {
+                if (target.tagName === "A") {
+                  event.preventDefault();
                   const href = target.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
-                    window.rpc.call("browser_open", { href });
+                    window.ipc.postMessage(
+                      serializeIpcMessage("browser_open", { href })
+                    );
                   }
                 }
               }
+
+              // also prevent buttons from submitting
+              if (target.tagName === "BUTTON") {
+                event.preventDefault();
+              }
             }
             // walk the tree to find the real element
-            while (realId == null && target.parentElement != null) {
+            while (realId == null) {
+              // we've reached the root we don't want to send an event
+              if (target.parentElement === null) {
+                return;
+              }
+
               target = target.parentElement;
               realId = target.getAttribute(`data-dioxus-id`);
             }
@@ -224,21 +233,43 @@ export class Interpreter {
             shouldPreventDefault = target.getAttribute(
               `dioxus-prevent-default`
             );
+
             let contents = serialize_event(event);
+
             if (shouldPreventDefault === `on${event.type}`) {
-              //   event.preventDefault();
+              event.preventDefault();
             }
-            if (event.type == "submit") {
-              //   event.preventDefault();
+            if (event.type === "submit") {
+              event.preventDefault();
             }
-            if (realId == null) {
+
+            if (target.tagName === "FORM") {
+              for (let x = 0; x < target.elements.length; x++) {
+                let element = target.elements[x];
+                let name = element.getAttribute("name");
+                if (name != null) {
+                  if (element.getAttribute("type") === "checkbox") {
+                    // @ts-ignore
+                    contents.values[name] = element.checked ? "true" : "false";
+                  } else {
+                    // @ts-ignore
+                    contents.values[name] =
+                      element.value ?? element.textContent;
+                  }
+                }
+              }
+            }
+
+            if (realId === null) {
               return;
             }
-            window.rpc.call("user_event", {
-              event: edit.event_name,
-              mounted_dom_id: parseInt(realId),
-              contents: contents,
-            });
+            window.ipc.postMessage(
+              serializeIpcMessage("user_event", {
+                event: edit.event_name,
+                mounted_dom_id: parseInt(realId),
+                contents: contents,
+              })
+            );
           }
         };
         this.NewEventListener(edit.event_name, edit.root, handler);
@@ -250,12 +281,13 @@ export class Interpreter {
         this.SetAttribute(edit.root, edit.field, edit.value, edit.ns);
         break;
       case "RemoveAttribute":
-        this.RemoveAttribute(edit.root, edit.name);
+        this.RemoveAttribute(edit.root, edit.name, edit.ns);
         break;
     }
   }
 }
-function serialize_event(event) {
+
+export function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":
@@ -313,6 +345,7 @@ function serialize_event(event) {
       }
       return {
         value: value,
+        values: {},
       };
     }
     case "input":
@@ -321,11 +354,12 @@ function serialize_event(event) {
     case "submit": {
       let target = event.target;
       let value = target.value ?? target.textContent;
-      if (target.type == "checkbox") {
+      if (target.type === "checkbox") {
         value = target.checked ? "true" : "false";
       }
       return {
         value: value,
+        values: {},
       };
     }
     case "click":
@@ -514,6 +548,9 @@ function serialize_event(event) {
       return {};
     }
   }
+}
+function serializeIpcMessage(method, params = {}) {
+  return JSON.stringify({ method, params });
 }
 const bool_attrs = {
   allowfullscreen: true,

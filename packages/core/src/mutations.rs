@@ -16,8 +16,13 @@ use std::{any::Any, fmt::Debug};
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
 pub struct Mutations<'a> {
+    /// The list of edits that need to be applied for the RealDOM to match the VirtualDOM.
     pub edits: Vec<DomEdit<'a>>,
+
+    /// The list of Scopes that were diffed, created, and removed during the Diff process.
     pub dirty_scopes: FxHashSet<ScopeId>,
+
+    /// The list of nodes to connect to the RealDOM.
     pub refs: Vec<NodeRefMutation<'a>>,
 }
 
@@ -39,74 +44,146 @@ impl Debug for Mutations<'_> {
     serde(tag = "type")
 )]
 pub enum DomEdit<'bump> {
+    /// Push the given root node onto our stack.
     PushRoot {
+        /// The ID of the root node to push.
         root: u64,
     },
 
+    /// Pop the topmost node from our stack and append them to the node
+    /// at the top of the stack.
     AppendChildren {
+        /// How many nodes should be popped from the stack.
+        /// The node remaining on the stack will be the target for the append.
         many: u32,
     },
 
-    // // save a possibly-fragment node as a template
-    // SaveAsTemplate {
-    //     many: u32,
-    // },
-
-    // "Root" refers to the item directly
-    // it's a waste of an instruction to push the root directly
+    /// Replace a given (single) node with a handful of nodes currently on the stack.
     ReplaceWith {
+        /// The ID of the node to be replaced.
         root: u64,
+
+        /// How many nodes should be popped from the stack to replace the target node.
         m: u32,
     },
+
+    /// Insert a number of nodes after a given node.
     InsertAfter {
+        /// The ID of the node to insert after.
         root: u64,
+
+        /// How many nodes should be popped from the stack to insert after the target node.
         n: u32,
     },
+
+    /// Insert a number of nodes before a given node.
     InsertBefore {
+        /// The ID of the node to insert before.
         root: u64,
+
+        /// How many nodes should be popped from the stack to insert before the target node.
         n: u32,
     },
+
+    /// Remove a particular node from the DOM
     Remove {
+        /// The ID of the node to remove.
         root: u64,
     },
+
+    /// Create a new purely-text node
     CreateTextNode {
+        /// The ID the new node should have.
+        root: u64,
+
+        /// The textcontent of the node
         text: &'bump str,
-        root: u64,
     },
+
+    /// Create a new purely-element node
     CreateElement {
-        tag: &'bump str,
+        /// The ID the new node should have.
         root: u64,
+
+        /// The tagname of the node
+        tag: &'bump str,
     },
+
+    /// Create a new purely-comment node with a given namespace
     CreateElementNs {
-        tag: &'bump str,
+        /// The ID the new node should have.
         root: u64,
+
+        /// The namespace of the node
+        tag: &'bump str,
+
+        /// The namespace of the node (like `SVG`)
         ns: &'static str,
     },
+
+    /// Create a new placeholder node.
+    /// In most implementations, this will either be a hidden div or a comment node.
     CreatePlaceholder {
+        /// The ID the new node should have.
         root: u64,
     },
+
+    /// Create a new Event Listener.
     NewEventListener {
+        /// The name of the event to listen for.
         event_name: &'static str,
+
+        /// The ID of the node to attach the listener to.
         scope: ScopeId,
+
+        /// The ID of the node to attach the listener to.
         root: u64,
     },
+
+    /// Remove an existing Event Listener.
     RemoveEventListener {
+        /// The ID of the node to remove.
         root: u64,
+
+        /// The name of the event to remove.
         event: &'static str,
     },
+
+    /// Set the textcontent of a node.
     SetText {
+        /// The ID of the node to set the textcontent of.
         root: u64,
+
+        /// The textcontent of the node
         text: &'bump str,
     },
+
+    /// Set the value of a node's attribute.
     SetAttribute {
+        /// The ID of the node to set the attribute of.
         root: u64,
+
+        /// The name of the attribute to set.
         field: &'static str,
+
+        /// The value of the attribute.
         value: &'bump str,
+
+        /// The (optional) namespace of the attribute.
+        /// For instance, "style" is in the "style" namespace.
         ns: Option<&'bump str>,
     },
+
+    /// Remove an attribute from a node.
     RemoveAttribute {
+        /// The ID of the node to remove.
         root: u64,
+
+        /// The name of the attribute to remove.
         name: &'static str,
+
+        /// The namespace of the attribute.
+        ns: Option<&'bump str>,
     },
 }
 
@@ -218,8 +295,15 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {
-        let name = attribute.name;
-        self.edits.push(RemoveAttribute { name, root });
+        let Attribute {
+            name, namespace, ..
+        } = attribute;
+
+        self.edits.push(RemoveAttribute {
+            name,
+            ns: *namespace,
+            root,
+        });
     }
 
     pub(crate) fn mark_dirty_scope(&mut self, scope: ScopeId) {

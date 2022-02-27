@@ -1,12 +1,32 @@
 name: windows
+
 on:
   push:
     branches:
       - master
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
+
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - master
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
 
 jobs:
   test:
+    if: github.event.pull_request.draft == false
     runs-on: windows-latest
     name: (${{ matrix.target }}, ${{ matrix.cfg_release_channel }})
     env:
@@ -50,7 +70,7 @@ jobs:
         run: |
           rustc -Vv
           cargo -V
-          set RUST_BACKTRACE=1 
+          set RUST_BACKTRACE=1
           cargo build --features "desktop, ssr, router"
           cargo test --features "desktop, ssr, router"
         shell: cmd
