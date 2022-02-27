@@ -1,6 +1,6 @@
 # Build
 
-`dioxsu build` command can help you `pack & build` a dioxus project.
+The `dioxus build` command can help you `pack & build` a dioxus project.
 
 ```
 dioxus-build 
@@ -15,7 +15,7 @@ OPTIONS:
         --release                [default: false]
 ```
 
-you can use this command to build project to `out_dir` :
+You can use this command to build project to `out_dir` :
 
 ```
 dioxus build --release
@@ -23,7 +23,7 @@ dioxus build --release
 
 ## Target platform
 
-use option `platform` choose build target platform:
+Use option `platform` choose build target platform:
 
 ```
 # for desktop project
@@ -39,7 +39,7 @@ dioxus build --platform web
 
 ## Build Example
 
-you can use `--example {name}` to build a example code.
+You can use `--example {name}` to build a example code.
 
 ```
 # build `example/test` code

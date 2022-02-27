@@ -1,6 +1,6 @@
 # Serve
 
-`dioxsu serve` can start a dev server (include hot-reload tool) to run the project.
+The `dioxus serve` can start a dev server (include hot-reload tool) to run the project.
 
 ```
 dioxus-serve 
@@ -15,7 +15,7 @@ OPTIONS:
         --release                [default: false]
 ```
 
-you can use this command to build project and start a `dev server` :
+You can use this command to build project and start a `dev server` :
 
 ```
 dioxus serve
@@ -23,7 +23,7 @@ dioxus serve
 
 ## Target platform
 
-use option `platform` choose build target platform:
+Use option `platform` choose build target platform:
 
 ```
 # for desktop project
@@ -41,7 +41,7 @@ dioxus serve --platform web
 
 ## Serve Example
 
-you can use `--example {name}` to start a example code.
+You can use `--example {name}` to start a example code.
 
 ```
 # build `example/test` code
