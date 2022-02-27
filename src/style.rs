@@ -316,9 +316,9 @@ fn to_rgb(c: Color) -> [u8; 3] {
             16..=231 => {
                 let v = idx - 16;
                 // add 3 to round up
-                let r = ((v as u16 / 36) * 255 + 3) / 6;
-                let g = (((v as u16 % 36) / 6) * 255 + 3) / 6;
-                let b = ((v as u16 % 6) * 255 + 3) / 6;
+                let r = ((v as u16 / 36) * 255 + 3) / 5;
+                let g = (((v as u16 % 36) / 6) * 255 + 3) / 5;
+                let b = ((v as u16 % 6) * 255 + 3) / 5;
                 [r as u8, g as u8, b as u8]
             }
             232..=255 => {
@@ -351,7 +351,7 @@ pub fn convert(mode: RenderingMode, c: Color) -> Color {
                 _ => {
                     let rgb = to_rgb(c);
                     // 16-231: 6 × 6 × 6 color cube
-                    // 232-255: 24 step grayscale
+                    // 232-255: 23 step grayscale
                     if rgb[0] == rgb[1] && rgb[1] == rgb[2] {
                         let idx = 232 + (rgb[0] as u16 * 23 / 255) as u8;
                         Color::Indexed(idx)
@@ -370,7 +370,7 @@ pub fn convert(mode: RenderingMode, c: Color) -> Color {
 
 #[test]
 fn rgb_to_ansi() {
-    for idx in 16..=231 {
+    for idx in 17..=231 {
         let idxed = Color::Indexed(idx);
         let rgb = to_rgb(idxed);
         // gray scale colors have two equivelent repersentations
