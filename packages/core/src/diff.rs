@@ -813,6 +813,15 @@ impl<'b> DiffState<'b> {
             return;
         }
 
+        // remove any old children that are not shared
+        // todo: make this an iterator
+        for child in old {
+            let key = child.key().unwrap();
+            if !shared_keys.contains(&key) {
+                self.remove_nodes([child], true);
+            }
+        }
+
         // 4. Compute the LIS of this list
         let mut lis_sequence = Vec::default();
         lis_sequence.reserve(new_index_to_old_index.len());
