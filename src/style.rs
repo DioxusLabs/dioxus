@@ -356,9 +356,9 @@ pub fn convert(mode: RenderingMode, c: Color) -> Color {
                         let idx = 232 + (rgb[0] as u16 * 23 / 255) as u8;
                         Color::Indexed(idx)
                     } else {
-                        let r = (rgb[0] as u16 * 6) / 255;
-                        let g = (rgb[1] as u16 * 6) / 255;
-                        let b = (rgb[2] as u16 * 6) / 255;
+                        let r = (rgb[0] as u16 * 5) / 255;
+                        let g = (rgb[1] as u16 * 5) / 255;
+                        let b = (rgb[2] as u16 * 5) / 255;
                         let idx = 16 + r * 36 + g * 6 + b;
                         Color::Indexed(idx as u8)
                     }
