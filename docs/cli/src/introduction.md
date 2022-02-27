@@ -4,7 +4,7 @@
 
 ![dioxus-logo](https://dioxuslabs.com/guide/images/dioxuslogo_full.png)
 
-It include `dev server`, `hot reload` and some `quick command` to help you use dioxus.
+It includes `dev server`, `hot reload` and some `quick command` to help you use dioxus.
 
 ## Features
 
