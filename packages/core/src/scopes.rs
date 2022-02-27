@@ -773,6 +773,20 @@ impl ScopeState {
         self.push_future(fut);
     }
 
+    /// Spawn a future that Dioxus will never clean up
+    ///
+    /// This is good for tasks that need to be run after the component has been dropped.
+    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+        // wake up the scheduler if it is sleeping
+        self.tasks
+            .sender
+            .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
+            .unwrap();
+
+        // The root scope will never be unmounted so we can just add the task at the top of the app
+        self.tasks.spawn(ScopeId(0), fut)
+    }
+
     /// Informs the scheduler that this task is no longer needed and should be removed
     /// on next poll.
     pub fn remove_future(&self, id: TaskId) {
