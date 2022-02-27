@@ -26,12 +26,6 @@ pub(super) fn desktop_handler(request: &Request, asset_root: Option<PathBuf>) ->
 
         let asset = asset_root.join(trimmed).canonicalize()?;
 
-        if !asset.starts_with(asset_root) {
-            return ResponseBuilder::new()
-                .status(StatusCode::FORBIDDEN)
-                .body(String::from("Forbidden").into_bytes());
-        }
-
         if !asset.exists() {
             return ResponseBuilder::new()
                 .status(StatusCode::NOT_FOUND)
