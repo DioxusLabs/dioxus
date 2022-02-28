@@ -146,7 +146,6 @@ fn app(cx: Scope) -> Element {
 }
 
 fn calc_val(val: String) -> f64 {
-    let mut result;
     let mut temp = String::new();
     let mut operation = "+".to_string();
 
@@ -169,7 +168,8 @@ fn calc_val(val: String) -> f64 {
         temp_value.push(c);
         start_index += 1;
     }
-    result = temp_value.parse::<f64>().unwrap();
+
+    let mut result = temp_value.parse::<f64>().unwrap();
 
     if start_index + 1 >= val.len() {
         return result;
