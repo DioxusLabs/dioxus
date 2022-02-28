@@ -7,7 +7,7 @@ use std::{
     any::{Any, TypeId},
     borrow::Borrow,
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
     rc::Rc,
@@ -68,7 +68,12 @@ impl ScopeArena {
             heuristics: RefCell::new(FxHashMap::default()),
             free_scopes: RefCell::new(Vec::new()),
             nodes: RefCell::new(nodes),
-            tasks: TaskQueue::new(sender),
+            tasks: Rc::new(TaskQueue {
+                tasks: RefCell::new(FxHashMap::default()),
+                task_map: RefCell::new(FxHashMap::default()),
+                gen: Cell::new(0),
+                sender,
+            }),
         }
     }
 
@@ -178,6 +183,15 @@ impl ScopeArena {
     pub fn try_remove(&self, id: ScopeId) -> Option<()> {
         log::trace!("removing scope {:?}", id);
         self.ensure_drop_safety(id);
+
+        // Dispose of any ongoing tasks
+        let mut tasks = self.tasks.tasks.borrow_mut();
+        let mut task_map = self.tasks.task_map.borrow_mut();
+        if let Some(cur_tasks) = task_map.remove(&id) {
+            for task in cur_tasks {
+                tasks.remove(&task);
+            }
+        }
 
         // Safety:
         // - ensure_drop_safety ensures that no references to this scope are in use
@@ -435,7 +449,13 @@ pub struct ScopeId(pub usize);
 /// once a Task has been completed.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TaskId(pub usize);
+pub struct TaskId {
+    /// The global ID of the task
+    pub id: usize,
+
+    /// The original scope that this task was scheduled in
+    pub scope: ScopeId,
+}
 
 /// Every component in Dioxus is represented by a `ScopeState`.
 ///
@@ -745,7 +765,7 @@ impl ScopeState {
             .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
             .unwrap();
 
-        self.tasks.push_fut(fut)
+        self.tasks.spawn(self.our_arena_idx, fut)
     }
 
     /// Spawns the future but does not return the TaskId
@@ -753,10 +773,24 @@ impl ScopeState {
         self.push_future(fut);
     }
 
+    /// Spawn a future that Dioxus will never clean up
+    ///
+    /// This is good for tasks that need to be run after the component has been dropped.
+    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+        // wake up the scheduler if it is sleeping
+        self.tasks
+            .sender
+            .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
+            .unwrap();
+
+        // The root scope will never be unmounted so we can just add the task at the top of the app
+        self.tasks.spawn(ScopeId(0), fut)
+    }
+
     /// Informs the scheduler that this task is no longer needed and should be removed
     /// on next poll.
     pub fn remove_future(&self, id: TaskId) {
-        self.tasks.remove_fut(id);
+        self.tasks.remove(id);
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -940,36 +974,43 @@ impl BumpFrame {
 
 pub(crate) struct TaskQueue {
     pub(crate) tasks: RefCell<FxHashMap<TaskId, InnerTask>>,
+    pub(crate) task_map: RefCell<FxHashMap<ScopeId, HashSet<TaskId>>>,
     gen: Cell<usize>,
     sender: UnboundedSender<SchedulerMsg>,
 }
+
 pub(crate) type InnerTask = Pin<Box<dyn Future<Output = ()>>>;
 impl TaskQueue {
-    fn new(sender: UnboundedSender<SchedulerMsg>) -> Rc<Self> {
-        Rc::new(Self {
-            tasks: RefCell::new(FxHashMap::default()),
-            gen: Cell::new(0),
-            sender,
-        })
-    }
-    fn push_fut(&self, task: impl Future<Output = ()> + 'static) -> TaskId {
+    fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> TaskId {
         let pinned = Box::pin(task);
         let id = self.gen.get();
         self.gen.set(id + 1);
-        let tid = TaskId(id);
+        let tid = TaskId { id, scope };
 
         self.tasks.borrow_mut().insert(tid, pinned);
+
+        // also add to the task map
+        // when the component is unmounted we know to remove it from the map
+        self.task_map
+            .borrow_mut()
+            .entry(scope)
+            .or_default()
+            .insert(tid);
+
         tid
     }
-    fn remove_fut(&self, id: TaskId) {
+
+    fn remove(&self, id: TaskId) {
         if let Ok(mut tasks) = self.tasks.try_borrow_mut() {
             let _ = tasks.remove(&id);
-        } else {
-            // todo: it should be okay to remote a fut while the queue is being polled
-            // However, it's not currently possible to do that.
-            log::trace!("Unable to remove task from task queue. This is probably a bug.");
+        }
+
+        // the task map is still around, but it'll be removed when the scope is unmounted
+        if let Some(task_map) = self.task_map.borrow_mut().get_mut(&id.scope) {
+            task_map.remove(&id);
         }
     }
+
     pub(crate) fn has_tasks(&self) -> bool {
         !self.tasks.borrow().is_empty()
     }
