@@ -30,15 +30,97 @@
 */
 
 use stretch2::{prelude::*, style::PositionType, style::Style};
-use tui::style::Style as TuiStyle;
+
+use crate::style::{RinkColor, RinkStyle};
 
 pub struct StyleModifer {
     pub style: Style,
-    pub tui_style: TuiStyle,
+    pub tui_style: RinkStyle,
+    pub tui_modifier: TuiModifier,
 }
 
-enum TuiModifier {
-    Text,
+#[derive(Default)]
+pub struct TuiModifier {
+    pub borders: Borders,
+}
+
+#[derive(Default)]
+pub struct Borders {
+    pub top: BorderEdge,
+    pub right: BorderEdge,
+    pub bottom: BorderEdge,
+    pub left: BorderEdge,
+}
+
+impl Borders {
+    fn slice(&mut self) -> [&mut BorderEdge; 4] {
+        [
+            &mut self.top,
+            &mut self.right,
+            &mut self.bottom,
+            &mut self.left,
+        ]
+    }
+}
+
+pub struct BorderEdge {
+    pub color: Option<RinkColor>,
+    pub style: BorderStyle,
+    pub width: UnitSystem,
+    pub radius: UnitSystem,
+}
+
+impl Default for BorderEdge {
+    fn default() -> Self {
+        Self {
+            color: None,
+            style: BorderStyle::NONE,
+            width: UnitSystem::Point(0.0),
+            radius: UnitSystem::Point(0.0),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum BorderStyle {
+    DOTTED,
+    DASHED,
+    SOLID,
+    DOUBLE,
+    GROOVE,
+    RIDGE,
+    INSET,
+    OUTSET,
+    HIDDEN,
+    NONE,
+}
+
+impl BorderStyle {
+    pub fn symbol_set(&self) -> Option<tui::symbols::line::Set> {
+        use tui::symbols::line::*;
+        const DASHED: Set = Set {
+            horizontal: "╌",
+            vertical: "╎",
+            ..NORMAL
+        };
+        const DOTTED: Set = Set {
+            horizontal: "┈",
+            vertical: "┊",
+            ..NORMAL
+        };
+        match self {
+            BorderStyle::DOTTED => Some(DOTTED),
+            BorderStyle::DASHED => Some(DASHED),
+            BorderStyle::SOLID => Some(NORMAL),
+            BorderStyle::DOUBLE => Some(DOUBLE),
+            BorderStyle::GROOVE => Some(NORMAL),
+            BorderStyle::RIDGE => Some(NORMAL),
+            BorderStyle::INSET => Some(NORMAL),
+            BorderStyle::OUTSET => Some(NORMAL),
+            BorderStyle::HIDDEN => None,
+            BorderStyle::NONE => None,
+        }
+    }
 }
 
 /// applies the entire html namespace defined in dioxus-html
@@ -117,7 +199,9 @@ pub fn apply_attributes(
         "clip" => {}
 
         "color" => {
-            // text color
+            if let Ok(c) = value.parse() {
+                style.tui_style.fg.replace(c);
+            }
         }
 
         "column-count"
@@ -170,14 +254,11 @@ pub fn apply_attributes(
         | "font-weight" => apply_font(name, value, style),
 
         "height" => {
-            if value.ends_with("%") {
-                if let Ok(pct) = value.trim_end_matches("%").parse::<f32>() {
-                    style.style.size.height = Dimension::Percent(pct / 100.0);
-                }
-            } else if value.ends_with("px") {
-                if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-                    style.style.size.height = Dimension::Points(px);
-                }
+            if let Some(v) = parse_value(value){
+                style.style.size.height = match v {
+                    UnitSystem::Percent(v)=> Dimension::Percent(v/100.0),
+                    UnitSystem::Point(v)=> Dimension::Points(v),
+                };
             }
         }
         "justify-content" => {
@@ -286,14 +367,11 @@ pub fn apply_attributes(
         "visibility" => {}
         "white-space" => {}
         "width" => {
-            if value.ends_with("%") {
-                if let Ok(pct) = value.trim_end_matches("%").parse::<f32>() {
-                    style.style.size.width = Dimension::Percent(pct / 100.0);
-                }
-            } else if value.ends_with("px") {
-                if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-                    style.style.size.width = Dimension::Points(px);
-                }
+            if let Some(v) = parse_value(value){
+                style.style.size.width = match v {
+                    UnitSystem::Percent(v)=> Dimension::Percent(v/100.0),
+                    UnitSystem::Point(v)=> Dimension::Points(v),
+                };
             }
         }
         "word-break" => {}
@@ -304,7 +382,8 @@ pub fn apply_attributes(
     }
 }
 
-enum UnitSystem {
+#[derive(Clone, Copy)]
+pub enum UnitSystem {
     Percent(f32),
     Point(f32),
 }
@@ -316,8 +395,8 @@ fn parse_value(value: &str) -> Option<UnitSystem> {
         } else {
             None
         }
-    } else if value.ends_with("%") {
-        if let Ok(pct) = value.trim_end_matches("%").parse::<f32>() {
+    } else if value.ends_with('%') {
+        if let Ok(pct) = value.trim_end_matches('%').parse::<f32>() {
             Some(UnitSystem::Percent(pct))
         } else {
             None
@@ -344,7 +423,6 @@ fn apply_overflow(name: &str, value: &str, style: &mut StyleModifer) {
 }
 
 fn apply_display(_name: &str, value: &str, style: &mut StyleModifer) {
-    use stretch2::style::Display;
     style.style.display = match value {
         "flex" => Display::Flex,
         "block" => Display::None,
@@ -376,40 +454,9 @@ fn apply_display(_name: &str, value: &str, style: &mut StyleModifer) {
 fn apply_background(name: &str, value: &str, style: &mut StyleModifer) {
     match name {
         "background-color" => {
-            use tui::style::Color;
-            match value {
-                "red" => style.tui_style.bg.replace(Color::Red),
-                "green" => style.tui_style.bg.replace(Color::Green),
-                "blue" => style.tui_style.bg.replace(Color::Blue),
-                "yellow" => style.tui_style.bg.replace(Color::Yellow),
-                "cyan" => style.tui_style.bg.replace(Color::Cyan),
-                "magenta" => style.tui_style.bg.replace(Color::Magenta),
-                "white" => style.tui_style.bg.replace(Color::White),
-                "black" => style.tui_style.bg.replace(Color::Black),
-                _ => {
-                    if value.len() == 7 {
-                        let mut values = [0, 0, 0];
-                        let mut color_ok = true;
-                        for i in 0..values.len() {
-                            if let Ok(v) =
-                                u8::from_str_radix(&value[(1 + 2 * i)..(1 + 2 * (i + 1))], 16)
-                            {
-                                values[i] = v;
-                            } else {
-                                color_ok = false;
-                            }
-                        }
-                        if color_ok {
-                            let color = Color::Rgb(values[0], values[1], values[2]);
-                            style.tui_style.bg.replace(color)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                }
-            };
+            if let Ok(c) = value.parse() {
+                style.tui_style.bg.replace(c);
+            }
         }
         "background" => {}
         "background-attachment" => {}
@@ -423,17 +470,71 @@ fn apply_background(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_border(name: &str, value: &str, _style: &mut StyleModifer) {
+fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
+    fn parse_border_style(v: &str) -> BorderStyle {
+        match v {
+            "dotted" => BorderStyle::DOTTED,
+            "dashed" => BorderStyle::DASHED,
+            "solid" => BorderStyle::SOLID,
+            "double" => BorderStyle::DOUBLE,
+            "groove" => BorderStyle::GROOVE,
+            "ridge" => BorderStyle::RIDGE,
+            "inset" => BorderStyle::INSET,
+            "outset" => BorderStyle::OUTSET,
+            "none" => BorderStyle::NONE,
+            "hidden" => BorderStyle::HIDDEN,
+            _ => todo!(),
+        }
+    }
     match name {
         "border" => {}
         "border-bottom" => {}
-        "border-bottom-color" => {}
-        "border-bottom-left-radius" => {}
-        "border-bottom-right-radius" => {}
-        "border-bottom-style" => {}
-        "border-bottom-width" => {}
+        "border-bottom-color" => {
+            if let Ok(c) = value.parse() {
+                style.tui_modifier.borders.bottom.color = Some(c);
+            }
+        }
+        "border-bottom-left-radius" => {
+            if let Some(v) = parse_value(value) {
+                style.tui_modifier.borders.left.radius = v;
+            }
+        }
+        "border-bottom-right-radius" => {
+            if let Some(v) = parse_value(value) {
+                style.tui_modifier.borders.right.radius = v;
+            }
+        }
+        "border-bottom-style" => {
+            style.tui_modifier.borders.bottom.style = parse_border_style(value)
+        }
+        "border-bottom-width" => {
+            if let Some(v) = parse_value(value) {
+                style.tui_modifier.borders.bottom.width = v;
+            }
+        }
         "border-collapse" => {}
-        "border-color" => {}
+        "border-color" => {
+            let values: Vec<_> = value.split(' ').collect();
+            if values.len() == 1 {
+                if let Ok(c) = values[0].parse() {
+                    style
+                        .tui_modifier
+                        .borders
+                        .slice()
+                        .iter_mut()
+                        .for_each(|b| b.color = Some(c));
+                }
+            } else {
+                for (v, b) in values
+                    .into_iter()
+                    .zip(style.tui_modifier.borders.slice().iter_mut())
+                {
+                    if let Ok(c) = v.parse() {
+                        b.color = Some(c);
+                    }
+                }
+            }
+        }
         "border-image" => {}
         "border-image-outset" => {}
         "border-image-repeat" => {}
@@ -441,28 +542,116 @@ fn apply_border(name: &str, value: &str, _style: &mut StyleModifer) {
         "border-image-source" => {}
         "border-image-width" => {}
         "border-left" => {}
-        "border-left-color" => {}
-        "border-left-style" => {}
-        "border-left-width" => {}
-        "border-radius" => {}
-        "border-right" => {}
-        "border-right-color" => {}
-        "border-right-style" => {}
-        "border-right-width" => {}
-        "border-spacing" => {}
-        "border-style" => {}
-        "border-top" => {}
-        "border-top-color" => {}
-        "border-top-left-radius" => {}
-        "border-top-right-radius" => {}
-        "border-top-style" => {}
-        "border-top-width" => {}
-        "border-width" => {
-            if let Ok(_px) = value.trim_end_matches("px").parse::<f32>() {
-                // tuistyle = px;
+        "border-left-color" => {
+            if let Ok(c) = value.parse() {
+                style.tui_modifier.borders.left.color = Some(c);
             }
         }
-        _ => {}
+        "border-left-style" => style.tui_modifier.borders.left.style = parse_border_style(value),
+        "border-left-width" => {
+            if let Some(v) = parse_value(value) {
+                style.tui_modifier.borders.left.width = v;
+            }
+        }
+        "border-radius" => {
+            let values: Vec<_> = value.split(' ').collect();
+            if values.len() == 1 {
+                if let Some(r) = parse_value(values[0]) {
+                    style
+                        .tui_modifier
+                        .borders
+                        .slice()
+                        .iter_mut()
+                        .for_each(|b| b.radius = r);
+                }
+            } else {
+                for (v, b) in values
+                    .into_iter()
+                    .zip(style.tui_modifier.borders.slice().iter_mut())
+                {
+                    if let Some(r) = parse_value(v) {
+                        b.radius = r;
+                    }
+                }
+            }
+        }
+        "border-right" => {}
+        "border-right-color" => {
+            if let Ok(c) = value.parse() {
+                style.tui_modifier.borders.right.color = Some(c);
+            }
+        }
+        "border-right-style" => style.tui_modifier.borders.right.style = parse_border_style(value),
+        "border-right-width" => {
+            if let Some(v) = parse_value(value) {
+                style.tui_modifier.borders.right.width = v;
+            }
+        }
+        "border-spacing" => {}
+        "border-style" => {
+            let values: Vec<_> = value.split(' ').collect();
+            if values.len() == 1 {
+                let border_style = parse_border_style(values[0]);
+                style
+                    .tui_modifier
+                    .borders
+                    .slice()
+                    .iter_mut()
+                    .for_each(|b| b.style = border_style);
+            } else {
+                for (v, b) in values
+                    .into_iter()
+                    .zip(style.tui_modifier.borders.slice().iter_mut())
+                {
+                    b.style = parse_border_style(v);
+                }
+            }
+        }
+        "border-top" => {}
+        "border-top-color" => {
+            if let Ok(c) = value.parse() {
+                style.tui_modifier.borders.top.color = Some(c);
+            }
+        }
+        "border-top-left-radius" => {
+            if let Some(v) = parse_value(value) {
+                style.tui_modifier.borders.left.radius = v;
+            }
+        }
+        "border-top-right-radius" => {
+            if let Some(v) = parse_value(value) {
+                style.tui_modifier.borders.right.radius = v;
+            }
+        }
+        "border-top-style" => style.tui_modifier.borders.top.style = parse_border_style(value),
+        "border-top-width" => {
+            if let Some(v) = parse_value(value) {
+                style.tui_modifier.borders.top.width = v;
+            }
+        }
+        "border-width" => {
+            let values: Vec<_> = value.split(' ').collect();
+            if values.len() == 1 {
+                if let Some(w) = parse_value(values[0]) {
+                    style
+                        .tui_modifier
+                        .borders
+                        .slice()
+                        .iter_mut()
+                        .for_each(|b| b.width = w);
+                }
+            } else {
+                for (v, b) in values
+                    .into_iter()
+                    .zip(style.tui_modifier.borders.slice().iter_mut())
+                {
+                    if let Some(w) = parse_value(v) {
+                        b.width = w;
+                    }
+                }
+            }
+        }
+        _ => (),
     }
 }
 
@@ -516,14 +705,11 @@ fn apply_flex(name: &str, value: &str, style: &mut StyleModifer) {
             };
         }
         "flex-basis" => {
-            if value.ends_with("%") {
-                if let Ok(pct) = value.trim_end_matches("%").parse::<f32>() {
-                    style.style.flex_basis = Dimension::Percent(pct / 100.0);
-                }
-            } else if value.ends_with("px") {
-                if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-                    style.style.flex_basis = Dimension::Points(px);
-                }
+            if let Some(v) = parse_value(value) {
+                style.style.flex_basis = match v {
+                    UnitSystem::Percent(v) => Dimension::Percent(v / 100.0),
+                    UnitSystem::Point(v) => Dimension::Points(v),
+                };
             }
         }
         "flex-flow" => {}
@@ -550,8 +736,27 @@ fn apply_flex(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_font(_name: &str, _value: &str, _style: &mut StyleModifer) {
-    todo!()
+fn apply_font(name: &str, value: &str, style: &mut StyleModifer) {
+    use tui::style::Modifier;
+    match name {
+        "font" => (),
+        "font-family" => (),
+        "font-size" => (),
+        "font-size-adjust" => (),
+        "font-stretch" => (),
+        "font-style" => match value {
+            "italic" => style.tui_style = style.tui_style.add_modifier(Modifier::ITALIC),
+            "oblique" => style.tui_style = style.tui_style.add_modifier(Modifier::ITALIC),
+            _ => (),
+        },
+        "font-variant" => todo!(),
+        "font-weight" => match value {
+            "bold" => style.tui_style = style.tui_style.add_modifier(Modifier::BOLD),
+            "normal" => style.tui_style = style.tui_style.remove_modifier(Modifier::BOLD),
+            _ => (),
+        },
+        _ => (),
+    }
 }
 
 fn apply_padding(name: &str, value: &str, style: &mut StyleModifer) {
@@ -587,8 +792,34 @@ fn apply_padding(name: &str, value: &str, style: &mut StyleModifer) {
     }
 }
 
-fn apply_text(_name: &str, _value: &str, _style: &mut StyleModifer) {
-    todo!()
+fn apply_text(name: &str, value: &str, style: &mut StyleModifer) {
+    use tui::style::Modifier;
+
+    match name {
+        "text-align" => todo!(),
+        "text-align-last" => todo!(),
+        "text-decoration" | "text-decoration-line" => {
+            for v in value.split(' ') {
+                match v {
+                    "line-through" => {
+                        style.tui_style = style.tui_style.add_modifier(Modifier::CROSSED_OUT)
+                    }
+                    "underline" => {
+                        style.tui_style = style.tui_style.add_modifier(Modifier::UNDERLINED)
+                    }
+                    _ => (),
+                }
+            }
+        }
+        "text-decoration-color" => todo!(),
+        "text-decoration-style" => todo!(),
+        "text-indent" => todo!(),
+        "text-justify" => todo!(),
+        "text-overflow" => todo!(),
+        "text-shadow" => todo!(),
+        "text-transform" => todo!(),
+        _ => todo!(),
+    }
 }
 
 fn apply_transform(_name: &str, _value: &str, _style: &mut StyleModifer) {

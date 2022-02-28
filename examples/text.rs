@@ -2,9 +2,17 @@ use dioxus::prelude::*;
 
 fn main() {
     rink::launch(app);
+    // rink::launch_cfg(
+    //     app,
+    //     rink::Config {
+    //         rendering_mode: rink::RenderingMode::Ansi,
+    //     },
+    // )
 }
 
 fn app(cx: Scope) -> Element {
+    let (alpha, set_alpha) = use_state(&cx, || 100);
+
     cx.render(rsx! {
         div {
             width: "100%",
@@ -13,7 +21,9 @@ fn app(cx: Scope) -> Element {
             // justify_content: "center",
             // align_items: "center",
             // flex_direction: "row",
-            // background_color: "red",
+            onwheel: move |evt| {
+                set_alpha((alpha + evt.data.delta_y as i64).min(100).max(0));
+            },
 
             p {
                 background_color: "black",
@@ -21,6 +31,7 @@ fn app(cx: Scope) -> Element {
                 justify_content: "center",
                 align_items: "center",
                 // height: "10%",
+                color: "green",
                 "hi"
                 "hi"
                 "hi"
@@ -53,13 +64,6 @@ fn app(cx: Scope) -> Element {
                 "zib"
                 "zib"
                 "zib"
-                "zib"
-                "zib"
-                "zib"
-                "zib"
-                "zib"
-                "zib"
-                "zib"
             }
             p {
                 background_color: "yellow",
@@ -76,6 +80,47 @@ fn app(cx: Scope) -> Element {
             p {
                 background_color: "cyan",
                 "asd"
+            }
+            div {
+                font_weight: "bold",
+                color: "#666666",
+                p {
+                    "bold"
+                }
+                p {
+                    font_weight: "normal",
+                    " normal"
+                }
+            }
+            p {
+                font_style: "italic",
+                color: "red",
+                "italic"
+            }
+            p {
+                text_decoration: "underline",
+                color: "rgba(255, 255, 255)",
+                "underline"
+            }
+            p {
+                text_decoration: "line-through",
+                color: "hsla(10, 100%, 70%)",
+                "line-through"
+            }
+            div{
+                position: "absolute",
+                top: "1px",
+                background_color: "rgba(255, 0, 0, 50%)",
+                width: "100%",
+                p {
+                    color: "rgba(255, 255, 255, {alpha}%)",
+                    background_color: "rgba(100, 100, 100, {alpha}%)",
+                    "rgba(255, 255, 255, {alpha}%)"
+                }
+                p {
+                    color: "rgba(255, 255, 255, 100%)",
+                    "rgba(255, 255, 255, 100%)"
+                }
             }
         }
     })
