@@ -2,11 +2,7 @@
 
 So far, we've learned how to describe the structure and properties of our user interfaces. Unfortunately, they're static and quite uninteresting. In this chapter, we're going to learn how to add interactivity through events, state, and tasks.
 
-## Primer on interactivity
-
-Before we get too deep into the mechanics of interactivity, we should first understand how Dioxus exactly chooses to handle user interaction and updates to your app.
-
-### What is state?
+## What is state?
 
 Every app you'll ever build has some sort of information that needs to be rendered to the screen. Dioxus is responsible for translating your desired user interface to what is rendered to the screen. *You* are responsible for providing the content.
 
@@ -52,7 +48,7 @@ You've probably seen the tree of UI components represented using a directed acyc
 
 With Dioxus, your state will always flow down from parent components into child components.
 
-### How do I change my app's state?
+## Updating State
 
 We've talked about the data flow of state, but we haven't yet talked about how to change that state dynamically. Dioxus provides a variety of ways to change the state of your app while it's running.
 
@@ -100,15 +96,12 @@ set_post(PostData {
 
 We'll dive deeper into how exactly these hooks work later.
 
-### When do I update my state?
 
-There are a few different approaches to choosing when to update your state. You can update your state in response to user-triggered events or asynchronously in some background task.
-
-### Updating state in listeners
+## Updating State from Listeners
 
 When responding to user-triggered events, we'll want to "listen" for an event on some element in our component.
 
-For example, let's say we provide a button to generate a new post. Whenever the user clicks the button, they get a new post. To achieve this functionality, we'll want to attach a function to the `on_click` method of `button`. Whenever the button is clicked, our function will run, and we'll get new Post data to work with.
+For example, let's say we provide a button to generate a new post. Whenever the user clicks the button, they get a new post. To achieve this functionality, we'll want to attach a function to the `onclick` method of `button`. Whenever the button is clicked, our function will run, and we'll get new Post data to work with.
 
 ```rust
 fn App(cx: Scope)-> Element {
@@ -116,7 +109,7 @@ fn App(cx: Scope)-> Element {
 
     cx.render(rsx!{
         button {
-            on_click: move |_| set_post(PostData::random())
+            onclick: move |_| set_post(PostData::random())
             "Generate a random post"
         }
         Post { props: &post }
@@ -124,27 +117,30 @@ fn App(cx: Scope)-> Element {
 }
 ```
 
-We'll dive much deeper into event listeners later.
+We'll dive deeper into event listeners later.
 
-### Updating state asynchronously
+## Updating State Asynchronously
 
-We can also update our state outside of event listeners with `futures` and `coroutines`. 
+We can also update our state outside of event listeners with `futures` and `coroutines`.
 
 - `Futures` are Rust's version of promises that can execute asynchronous work by an efficient polling system. We can submit new futures to Dioxus either through `push_future` which returns a `TaskId` or with `spawn`.
-- `Coroutines` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component. 
+- `Coroutines` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component.
 
 Since coroutines and Futures stick around between renders, the data in them must be valid for the `'static` lifetime. We must explicitly declare which values our task will rely on to avoid the `stale props` problem common in React.
 
 We can use tasks in our components to build a tiny stopwatch that ticks every second.
 
-> Note: The `use_future` hook will start our coroutine immediately. The `use_coroutine` hook provides more flexibility over starting and stopping futures on the fly.
+> Note: The `use_future` hook will start our future immediately. The `use_coroutine` hook provides more flexibility over starting and stopping futures on the fly.
 
 ```rust
 fn App(cx: Scope)-> Element {
     let (elapsed, set_elapsed) = use_state(&cx, || 0);
 
-    use_future(&cx, || {
-        to_owned![set_elapsed]; // explicitly capture this hook for use in async
+    use_future(&cx, (), |_| {
+        // create an owned version of our value setter
+        let set_elapsed = set_elapsed.clone();
+
+        // spawn our future
         async move {
             loop {
                 TimeoutFuture::from_ms(1000).await;
@@ -153,57 +149,12 @@ fn App(cx: Scope)-> Element {
         }
     });
 
-    rsx!(cx, div { "Current stopwatch time: {sec_elapsed}" })
+    cx.render(rsx!(div { "Current stopwatch time: {sec_elapsed}" }))
 }
 ```
 
-Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps. We have an entire section dedicated to using `async` properly later in this book.
+Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps.
 
-### How do I tell Dioxus that my state changed?
-
-Whenever you inform Dioxus that the component needs to be updated, it will "render" your component again, storing the previous and current Elements in memory. Dioxus will automatically figure out the differences between the old and the new and generate a list of edits that the renderer needs to apply to change what's on the screen. This process is called "diffing":
-
-![Diffing](../images/diffing.png)
-
-In React, the specifics of when a component gets re-rendered is somewhat blurry. With Dioxus, any component can mark itself as "dirty" through a method on `Context`: `needs_update`. In addition, any component can mark any _other_ component as dirty provided it knows the other component's ID with `needs_update_any`.
-
-With these building blocks, we can craft new hooks similar to `use_state` that let us easily tell Dioxus that new information is ready to be sent to the screen.
-
-### How do I update my state efficiently?
-
-In general, Dioxus should be plenty fast for most use cases. However, there are some rules you should consider following to ensure your apps are quick.
-
-- 1) **Don't call set_state _while rendering_**. This will cause Dioxus to unnecessarily re-check the component for updates or enter an infinite loop.
-- 2) **Break your state apart into smaller sections.** Hooks are explicitly designed to "unshackle" your state from the typical model-view-controller paradigm, making it easy to reuse useful bits of code with a single function.
-- 3) **Move local state down**. Dioxus will need to re-check child components of your app if the root component is constantly being updated. You'll get best results if rapidly-changing state does not cause major re-renders.
-
-<!-- todo: link when the section exists
-Don't worry - Dioxus is fast. But, if your app needs *extreme performance*, then take a look at the `Performance Tuning` in the `Advanced Guides` book.
--->
-
-## The `Scope` object
-
-Though very similar to React, Dioxus is different in a few ways. Most notably, React components will not have a `Scope` parameter in the component declaration.
-
-Have you ever wondered how the `useState()` call works in React without a `this` object to actually store the state?
-
-```javascript
-// in React:
-function Component(props) {
-    // This state persists between component renders, but where does it live?
-    let [state, set_state] = useState(10);
-}
-```
-
-React uses global variables to store this information. However, global mutable variables must be carefully managed and are broadly discouraged in Rust programs. Because Dioxus needs to work with the rules of Rust it uses the `Scope` rather than a global state object to maintain some internal bookkeeping.
-
-That's what the `Scope` object is: a place for the Component to store state, manage listeners, and allocate elements. Advanced users of Dioxus will want to learn how to properly leverage the `Scope` object to build robust and performant extensions for Dioxus.
-
-```rust
-fn Post(cx: Scope<PostProps>) -> Element {
-    cx.render(rsx!("hello"))
-}
-```
 
 ## Moving On
 
@@ -213,3 +164,4 @@ In the next sections we'll go over:
 - `use_state` in depth
 - `use_ref` and other hooks
 - Handling user input
+
