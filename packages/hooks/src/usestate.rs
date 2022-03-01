@@ -4,6 +4,7 @@ use dioxus_core::prelude::*;
 use std::{
     cell::{RefCell, RefMut},
     fmt::{Debug, Display},
+    ops::Not,
     rc::Rc,
     sync::Arc,
 };
@@ -18,13 +19,13 @@ use std::{
 ///
 /// ```ignore
 /// const Example: Component = |cx| {
-///     let (count, set_count) = use_state(&cx, || 0);
+///     let count = use_state(&cx, || 0);
 ///
 ///     cx.render(rsx! {
 ///         div {
 ///             h1 { "Count: {count}" }
-///             button { onclick: move |_| set_count(a - 1), "Increment" }
-///             button { onclick: move |_| set_count(a + 1), "Decrement" }
+///             button { onclick: move |_| *count.modify() += 1, "Increment" }
+///             button { onclick: move |_| *count.modify() -= 1, "Decrement" }
 ///         }
 ///     ))
 /// }
@@ -32,7 +33,7 @@ use std::{
 pub fn use_state<'a, T: 'static>(
     cx: &'a ScopeState,
     initial_state_fn: impl FnOnce() -> T,
-) -> (&'a T, &'a UseState<T>) {
+) -> &'a UseState<T> {
     let hook = cx.use_hook(move |_| {
         let current_val = Rc::new(initial_state_fn());
         let update_callback = cx.schedule_update();
@@ -65,7 +66,7 @@ pub fn use_state<'a, T: 'static>(
 
     hook.current_val = hook.slot.borrow().clone();
 
-    (hook.current_val.as_ref(), hook)
+    hook
 }
 
 pub struct UseState<T: 'static> {
@@ -76,6 +77,11 @@ pub struct UseState<T: 'static> {
 }
 
 impl<T: 'static> UseState<T> {
+    /// Set the state to a new value.
+    pub fn set(&self, new: T) {
+        (self.setter)(new);
+    }
+
     /// Get the current value of the state by cloning its container Rc.
     ///
     /// This is useful when you are dealing with state in async contexts but need
@@ -188,7 +194,12 @@ impl<T: 'static> UseState<T> {
     /// }
     /// ```
     #[must_use]
-    pub fn get(&self) -> &Rc<T> {
+    pub fn get(&self) -> &T {
+        &self.current_val
+    }
+
+    #[must_use]
+    pub fn get_rc(&self) -> &Rc<T> {
         &self.current_val
     }
 
@@ -260,7 +271,7 @@ impl<T: Clone> UseState<T> {
     /// ```
     /// let (val, set_val) = use_state(&cx, || 0);
     ///
-    /// set_val.with_mut(|v| *v = 1);
+    /// *set_val.make_mut() += 1;
     /// ```
     #[must_use]
     pub fn make_mut(&self) -> RefMut<T> {
@@ -293,10 +304,22 @@ impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
     }
 }
 
-impl<T> PartialEq<UseState<T>> for UseState<T> {
+impl<T: PartialEq> PartialEq<T> for UseState<T> {
+    fn eq(&self, other: &T) -> bool {
+        self.current_val.as_ref() == other
+    }
+}
+
+// todo: this but for more interesting conrete types
+impl PartialEq<bool> for &UseState<bool> {
+    fn eq(&self, other: &bool) -> bool {
+        self.current_val.as_ref() == other
+    }
+}
+
+impl<T: PartialEq> PartialEq<UseState<T>> for UseState<T> {
     fn eq(&self, other: &UseState<T>) -> bool {
-        // some level of memoization for UseState
-        Rc::ptr_eq(&self.slot, &other.slot)
+        Rc::ptr_eq(&self.current_val, &other.current_val)
     }
 }
 
@@ -307,10 +330,57 @@ impl<T: Debug> Debug for UseState<T> {
 }
 
 impl<'a, T> std::ops::Deref for UseState<T> {
-    type Target = Rc<dyn Fn(T)>;
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.setter
+        self.current_val.as_ref()
+    }
+}
+
+impl<T: Not + Copy> std::ops::Not for &UseState<T> {
+    type Output = <T as std::ops::Not>::Output;
+
+    fn not(self) -> Self::Output {
+        self.current_val.not()
+    }
+}
+
+impl<T: Not + Copy> std::ops::Not for UseState<T> {
+    type Output = <T as std::ops::Not>::Output;
+
+    fn not(self) -> Self::Output {
+        self.current_val.not()
+    }
+}
+
+impl<T: std::ops::Add + Copy> std::ops::Add<T> for &UseState<T> {
+    type Output = <T as std::ops::Add>::Output;
+
+    fn add(self, other: T) -> Self::Output {
+        *self.current_val.as_ref() + other
+    }
+}
+impl<T: std::ops::Sub + Copy> std::ops::Sub<T> for &UseState<T> {
+    type Output = <T as std::ops::Sub>::Output;
+
+    fn sub(self, other: T) -> Self::Output {
+        *self.current_val.as_ref() - other
+    }
+}
+
+impl<T: std::ops::Div + Copy> std::ops::Div<T> for &UseState<T> {
+    type Output = <T as std::ops::Div>::Output;
+
+    fn div(self, other: T) -> Self::Output {
+        *self.current_val.as_ref() / other
+    }
+}
+
+impl<T: std::ops::Mul + Copy> std::ops::Mul<T> for &UseState<T> {
+    type Output = <T as std::ops::Mul>::Output;
+
+    fn mul(self, other: T) -> Self::Output {
+        *self.current_val.as_ref() * other
     }
 }
 
@@ -318,16 +388,16 @@ impl<'a, T> std::ops::Deref for UseState<T> {
 fn api_makes_sense() {
     #[allow(unused)]
     fn app(cx: Scope) -> Element {
-        let (val, set_val) = use_state(&cx, || 0);
+        let val = use_state(&cx, || 0);
 
-        set_val(0);
-        set_val.modify(|v| v + 1);
-        let real_current = set_val.current();
+        val.set(0);
+        val.modify(|v| v + 1);
+        let real_current = val.current();
 
-        match val {
+        match val.get() {
             10 => {
-                set_val(20);
-                set_val.modify(|v| v + 1);
+                val.set(20);
+                val.modify(|v| v + 1);
             }
             20 => {}
             _ => {
@@ -336,9 +406,9 @@ fn api_makes_sense() {
         }
 
         cx.spawn({
-            dioxus_core::to_owned![set_val];
+            dioxus_core::to_owned![val];
             async move {
-                set_val.modify(|f| f + 1);
+                val.modify(|f| f + 1);
             }
         });
 

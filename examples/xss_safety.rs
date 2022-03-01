@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let (contents, set_contents) = use_state(&cx, || {
+    let contents = use_state(&cx, || {
         String::from("<script>alert(\"hello world\")</script>")
     });
 
@@ -20,7 +20,7 @@ fn app(cx: Scope) -> Element {
             input {
                 value: "{contents}",
                 r#type: "text",
-                oninput: move |e| set_contents(e.value.clone()),
+                oninput: move |e| contents.set(e.value.clone()),
             }
         }
     })

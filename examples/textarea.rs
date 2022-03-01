@@ -7,7 +7,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let (model, set_model) = use_state(&cx, || String::from("asd"));
+    let model = use_state(&cx, || String::from("asd"));
 
     println!("{}", model);
 
@@ -17,7 +17,7 @@ fn app(cx: Scope) -> Element {
             rows: "10",
             cols: "80",
             value: "{model}",
-            oninput: move |e| set_model(e.value.clone()),
+            oninput: move |e| model.set(e.value.clone()),
         }
     })
 }

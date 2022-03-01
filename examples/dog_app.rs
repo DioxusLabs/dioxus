@@ -16,7 +16,7 @@ struct ListBreeds {
 }
 
 fn app(cx: Scope) -> Element {
-    let (breed, set_breed) = use_state(&cx, || None);
+    let breed = use_state(&cx, || None);
 
     let breeds = use_future(&cx, (), |_| async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
@@ -32,17 +32,17 @@ fn app(cx: Scope) -> Element {
                 h1 { "Select a dog breed!" }
                 div { display: "flex",
                     ul { flex: "50%",
-                        breeds.message.keys().map(|breed| rsx!(
+                        breeds.message.keys().map(|cur_breed| rsx!(
                             li {
                                 button {
-                                    onclick: move |_| set_breed(Some(breed.clone())),
-                                    "{breed}"
+                                    onclick: move |_| breed.set(Some(cur_breed.clone())),
+                                    "{cur_breed}"
                                 }
                             }
                         ))
                     }
                     div { flex: "50%",
-                        match breed {
+                        match breed.get() {
                             Some(breed) => rsx!( Breed { breed: breed.clone() } ),
                             None => rsx!("No Breed selected"),
                         }
