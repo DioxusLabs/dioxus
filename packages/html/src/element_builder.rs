@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 pub use crate::builder::IntoAttributeValue;
 use bumpalo::boxed::Box as BumpBox;
 use bumpalo::collections::Vec as BumpVec;
@@ -6,7 +8,7 @@ use dioxus_core::{
     VText,
 };
 
-pub struct ElementBuilder<'a> {
+pub struct ElementBuilder<'a, T> {
     name: &'static str,
     fac: NodeFactory<'a>,
     attrs: BumpVec<'a, Attribute<'a>>,
@@ -14,15 +16,16 @@ pub struct ElementBuilder<'a> {
     listeners: BumpVec<'a, Listener<'a>>,
     namespace: Option<&'static str>,
     key: Option<&'a str>,
+    _p: PhantomData<T>,
 }
 
-impl<'a> IntoVNode<'a> for ElementBuilder<'a> {
+impl<'a, T> IntoVNode<'a> for ElementBuilder<'a, T> {
     fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
         self.build().unwrap()
     }
 }
 
-impl<'a> ElementBuilder<'a> {
+impl<'a, T> ElementBuilder<'a, T> {
     pub fn new(cx: &'a ScopeState, name: &'static str) -> Self {
         let fac = NodeFactory::new(cx);
         ElementBuilder {
@@ -33,6 +36,7 @@ impl<'a> ElementBuilder<'a> {
             fac,
             namespace: None,
             key: None,
+            _p: PhantomData,
         }
     }
 
@@ -46,6 +50,7 @@ impl<'a> ElementBuilder<'a> {
             fac,
             namespace: Some("http://www.w3.org/2000/svg"),
             key: None,
+            _p: PhantomData,
         }
     }
 

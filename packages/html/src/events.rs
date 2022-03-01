@@ -21,7 +21,7 @@ macro_rules! event_directory {
                 }
             }
 
-            impl<'a> crate::builder::ElementBuilder<'a> {
+            impl<'a, T> crate::builder::ElementBuilder<'a, T> {
                 $(
                     $(#[$method_attr])*
                     pub fn $name( mut self, cb: impl FnMut(&$data) + 'a) -> Self {

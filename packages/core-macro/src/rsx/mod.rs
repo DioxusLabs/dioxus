@@ -86,9 +86,10 @@ impl ToTokens for CallBody {
 
             // Otherwise we just build the LazyNode wrapper
             None => out_tokens.append_all(quote! {
-                LazyNodes::new_some(move |__cx: NodeFactory| -> VNode {
-                    #inner
-                })
+                #inner
+                // LazyNodes::new_some(move |__cx: NodeFactory| -> VNode {
+                //     #inner
+                // })
             }),
         };
     }

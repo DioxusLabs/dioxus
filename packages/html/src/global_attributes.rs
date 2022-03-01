@@ -55,334 +55,389 @@ macro_rules! aria_trait_methods {
 //
 // However, it also means that elements are not type safe, and some attributes
 // will clobber other attributes.
-impl<'a> ElementBuilder<'a> {
+impl<'a, T> ElementBuilder<'a, T> {
     no_namespace_trait_methods! {
-        /// accesskey
+
         accesskey;
 
-        /// class
+        /// The HTML class attribute is used to specify a class for an HTML element.
+        ///
+        /// ## Details
+        /// Multiple HTML elements can share the same class.
+        ///
+        /// The class global attribute is a space-separated list of the case-sensitive classes of the element.
+        /// Classes allow CSS and Javascript to select and access specific elements via the class selectors or
+        /// functions like the DOM method document.getElementsByClassName.
+        ///
+        /// ## Example
+        ///
+        /// ### HTML:
+        /// ```html
+        /// <p class="note editorial">Above point sounds a bit obvious. Remove/rewrite?</p>
+        /// ```
+        ///
+        /// ### CSS:
+        /// ```css
+        /// .note {
+        ///     font-style: italic;
+        ///     font-weight: bold;
+        /// }
+        ///
+        /// .editorial {
+        ///     background: rgb(255, 0, 0, .25);
+        ///     padding: 10px;
+        /// }
+        /// ```
         class;
-
-        /// contenteditable
         contenteditable;
-
-        /// data
         data;
-
-        /// dir
         dir;
-
-        /// draggable
         draggable;
-
-        /// hidden
         hidden;
-
-        /// Set the value of the `id` attribute.
         id;
-
-        /// lang
         lang;
-
-        /// spellcheck
         spellcheck;
-
-        /// style
         style;
-
-        /// tabindex
         tabindex;
-
-        /// title
         title;
-
-        /// translate
         translate;
 
-        /// role
         role;
 
-        /// dangerous_inner_html
+        /// dangerous_inner_html is Dioxus's replacement for using innerHTML in the browser DOM. In general, setting
+        /// HTML from code is risky because it’s easy to inadvertently expose your users to a cross-site scripting (XSS)
+        /// attack. So, you can set HTML directly from Dioxus, but you have to type out dangerous_inner_html to remind
+        /// yourself that it’s dangerous
         dangerous_inner_html;
 
-        /// align
-        align;
+        prevent_default;
 
-        /// method
-        method;
+        // /// accesskey
+        // accesskey;
 
-        /// start
-        start;
+        // /// class
+        // class;
 
-        /// width_
-        width_;
+        // /// contenteditable
+        // contenteditable;
 
-        /// span
-        span;
+        // /// data
+        // data;
 
-        /// longdesc
-        longdesc;
+        // /// dir
+        // dir;
 
-        /// nomodule
-        nomodule;
+        // /// draggable
+        // draggable;
 
-        /// rows
-        rows;
+        // /// hidden
+        // hidden;
 
-        /// list
-        list;
+        // /// Set the value of the `id` attribute.
+        // id;
 
-        /// language
-        language;
+        // /// lang
+        // lang;
 
-        /// href
-        href;
+        // /// spellcheck
+        // spellcheck;
 
-        /// muted
-        muted;
+        // /// style
+        // style;
 
-        /// capture
-        capture;
+        // /// tabindex
+        // tabindex;
 
-        /// placeholder
-        placeholder;
+        // /// title
+        // title;
 
-        /// formenctype
-        formenctype;
+        // /// translate
+        // translate;
 
-        /// minlength
-        minlength;
+        // /// role
+        // role;
 
-        /// coords
-        coords;
+        // /// dangerous_inner_html
+        // dangerous_inner_html;
 
-        /// src
-        src;
+        // /// align
+        // align;
 
-        /// decoding
-        decoding;
+        // /// method
+        // method;
 
-        /// crossorigin
-        crossorigin;
+        // /// start
+        // start;
 
-        /// high
-        high;
+        // /// width_
+        // width_;
 
-        /// ismap
-        ismap;
+        // /// span
+        // span;
 
-        /// allowpaymentrequest
-        allowpaymentrequest;
+        // /// longdesc
+        // longdesc;
 
-        /// datetime
-        datetime;
+        // /// nomodule
+        // nomodule;
 
-        /// srcdoc
-        srcdoc;
+        // /// rows
+        // rows;
 
-        /// maxlength
-        maxlength;
+        // /// list
+        // list;
 
-        /// autocomplete
-        autocomplete;
+        // /// language
+        // language;
 
-        /// cols
-        cols;
+        // /// href
+        // href;
 
-        /// autoplay
-        autoplay;
+        // /// muted
+        // muted;
 
-        /// height_
-        height_;
+        // /// capture
+        // capture;
 
-        /// disabled
-        disabled;
+        // /// placeholder
+        // placeholder;
 
-        /// cite
-        cite;
+        // /// formenctype
+        // formenctype;
 
-        /// accept
-        accept;
+        // /// minlength
+        // minlength;
 
-        /// readonly
-        readonly;
+        // /// coords
+        // coords;
 
-        /// download
-        download;
+        // /// src
+        // src;
 
-        /// open
-        open;
+        // /// decoding
+        // decoding;
 
-        /// srclang
-        srclang;
+        // /// crossorigin
+        // crossorigin;
 
-        /// nonce
-        nonce;
+        // /// high
+        // high;
 
-        /// target
-        target;
+        // /// ismap
+        // ismap;
 
-        /// action
-        action;
+        // /// allowpaymentrequest
+        // allowpaymentrequest;
 
-        /// defer
-        defer;
+        // /// datetime
+        // datetime;
 
-        /// poster
-        poster;
+        // /// srcdoc
+        // srcdoc;
 
-        /// min
-        min;
+        // /// maxlength
+        // maxlength;
 
-        /// kind
-        kind;
+        // /// autocomplete
+        // autocomplete;
 
-        /// shape
-        shape;
+        // /// cols
+        // cols;
 
-        /// srcset
-        srcset;
+        // /// autoplay
+        // autoplay;
 
-        /// label
-        label;
+        // /// height_
+        // height_;
 
-        /// marginwidth_
-        marginwidth_;
+        // /// disabled
+        // disabled;
 
-        /// integrity
-        integrity;
+        // /// cite
+        // cite;
 
-        /// formtarget
-        formtarget;
+        // /// accept
+        // accept;
 
-        /// usemap
-        usemap;
+        // /// readonly
+        // readonly;
 
-        /// preload
-        preload;
+        // /// download
+        // download;
 
-        /// name
-        name;
+        // /// open
+        // open;
 
-        /// ping
-        ping;
+        // /// srclang
+        // srclang;
 
-        /// referrerpolicy
-        referrerpolicy;
+        // /// nonce
+        // nonce;
 
-        /// default
-        default;
+        // /// target
+        // target;
 
-        /// colspan
-        colspan;
+        // /// action
+        // action;
 
-        /// abbr
-        abbr;
+        // /// defer
+        // defer;
 
-        /// hreflang
-        hreflang;
+        // /// poster
+        // poster;
 
-        /// reversed
-        reversed;
+        // /// min
+        // min;
 
-        /// novalidate
-        novalidate;
+        // /// kind
+        // kind;
 
-        /// checked
-        checked;
+        // /// shape
+        // shape;
 
-        /// rowspan
-        rowspan;
+        // /// srcset
+        // srcset;
 
-        /// http_equiv
-        http_equiv;
+        // /// label
+        // label;
 
-        /// alt
-        alt;
+        // /// marginwidth_
+        // marginwidth_;
 
-        /// charset
-        charset;
+        // /// integrity
+        // integrity;
 
-        /// form
-        form;
+        // /// formtarget
+        // formtarget;
 
-        /// scrolling
-        scrolling;
+        // /// usemap
+        // usemap;
 
-        /// multiple
-        multiple;
+        // /// preload
+        // preload;
 
-        /// size
-        size;
+        // /// name
+        // name;
 
-        /// sizes
-        sizes;
+        // /// ping
+        // ping;
 
-        /// allow
-        allow;
+        // /// referrerpolicy
+        // referrerpolicy;
 
-        /// rel
-        rel;
+        // /// default
+        // default;
 
-        /// controls
-        controls;
+        // /// colspan
+        // colspan;
 
-        /// playsinline
-        playsinline;
+        // /// abbr
+        // abbr;
 
-        /// typemustmatch
-        typemustmatch;
+        // /// hreflang
+        // hreflang;
 
-        /// scope
-        scope;
+        // /// reversed
+        // reversed;
 
-        /// formnovalidate
-        formnovalidate;
+        // /// novalidate
+        // novalidate;
 
-        /// formaction
-        formaction;
+        // /// checked
+        // checked;
 
-        /// required
-        required;
+        // /// rowspan
+        // rowspan;
 
-        /// media
-        media;
+        // /// http_equiv
+        // http_equiv;
 
-        /// optimum
-        optimum;
+        // /// alt
+        // alt;
 
-        /// allowfullscreen
-        allowfullscreen;
+        // /// charset
+        // charset;
 
-        /// enctype
-        enctype;
+        // /// form
+        // form;
 
-        /// frame_border
-        frame_border;
+        // /// scrolling
+        // scrolling;
 
-        /// formmethod
-        formmethod;
+        // /// multiple
+        // multiple;
 
-        /// low
-        low;
+        // /// size
+        // size;
 
-        /// autofocus
-        autofocus;
+        // /// sizes
+        // sizes;
 
-        /// marginheight_
-        marginheight_;
+        // /// allow
+        // allow;
 
-        /// max
-        max;
+        // /// rel
+        // rel;
 
-        /// pattern
-        pattern;
+        // /// controls
+        // controls;
 
-        /// step
-        step;
+        // /// playsinline
+        // playsinline;
 
-        /// wrap
-        wrap;
+        // /// typemustmatch
+        // typemustmatch;
+
+        // /// scope
+        // scope;
+
+        // /// formnovalidate
+        // formnovalidate;
+
+        // /// formaction
+        // formaction;
+
+        // /// required
+        // required;
+
+        // /// media
+        // media;
+
+        // /// optimum
+        // optimum;
+
+        // /// allowfullscreen
+        // allowfullscreen;
+
+        // /// enctype
+        // enctype;
+
+        // /// frame_border
+        // frame_border;
+
+        // /// formmethod
+        // formmethod;
+
+        // /// low
+        // low;
+
+        // /// autofocus
+        // autofocus;
+
+        // /// marginheight_
+        // marginheight_;
+
+        // /// max
+        // max;
+
+        // /// pattern
+        // pattern;
+
+        // /// step
+        // step;
+
+        // /// wrap
+        // wrap;
 
     }
 

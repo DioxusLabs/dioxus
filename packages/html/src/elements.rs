@@ -1,4 +1,4 @@
-use crate::builder::ElementBuilder;
+use crate::builder::{ElementBuilder, IntoAttributeValue};
 use dioxus_core::ScopeState;
 
 macro_rules! builder_constructors {
@@ -13,13 +13,24 @@ macro_rules! builder_constructors {
             };
          )*
     ) => {
+
+
         $(
+            pub struct $concrete;
 
             $(#[$attr])*
-            pub fn $name(cx: &ScopeState) -> ElementBuilder {
+            pub fn $name(cx: &ScopeState) -> ElementBuilder<$concrete> {
                 ElementBuilder::new(cx, stringify!($name))
             }
 
+            $(
+                impl<'a> ElementBuilder<'a, $concrete> {
+                    $(#[$attr_method])*
+                    pub fn $fil(self, val: impl IntoAttributeValue<'a>) -> Self {
+                        self.attr(stringify!($name), val)
+                    }
+                }
+            )*
         )*
     };
 
@@ -30,8 +41,10 @@ macro_rules! builder_constructors {
         };
     )* ) => {
         $(
+            pub struct $concrete;
+
             $(#[$attr])*
-            pub fn $name(cx: &ScopeState) -> ElementBuilder {
+            pub fn $name(cx: &ScopeState) -> ElementBuilder<$concrete> {
                 ElementBuilder::new(cx, stringify!($name))
             }
         )*
@@ -317,12 +330,13 @@ builder_constructors! {
     /// element
     a(A) {
         download: String,
-        // href: Uri,
-        // hreflang: LanguageTag,
-        // target: Target,
-        // r#type: Mime,
+        href: Uri,
+        hreflang: LanguageTag,
+        target: Target,
         ping: SpacedList,
         rel: SpacedList,
+
+        r#type: Mime,
         // ping: SpacedList<Uri>,
         // rel: SpacedList<LinkType>,
     };
@@ -678,7 +692,7 @@ builder_constructors! {
         nomodule: Bool,
         nonce: Nonce,
         src: Uri,
-        text: String,
+        text_: String,
     };
 
     // Demarcating edits

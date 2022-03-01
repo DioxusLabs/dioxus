@@ -52,7 +52,7 @@ rand = { version = "0.8.4", features = ["small_rng"] }
 dioxus-core-macro = { path = "../core-macro", version ="^0.1.6"}
 criterion = "0.3.5"
 thiserror = "1.0.30"
-dioxus-html = { path = "../html" }
+# dioxus-html = { path = "../html" }
 
 [features]
 default = []

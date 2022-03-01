@@ -133,3 +133,11 @@ pub trait UiEvent: Send + Sync + 'static + Any + Debug {
     fn bubble_state(&self) -> bool;
     fn cancel_bubble(&self);
 }
+
+impl UiEvent for () {
+    fn bubble_state(&self) -> bool {
+        false
+    }
+
+    fn cancel_bubble(&self) {}
+}
