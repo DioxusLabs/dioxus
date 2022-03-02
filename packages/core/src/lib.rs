@@ -102,3 +102,26 @@ pub(crate) mod unsafe_utils {
         std::mem::transmute(node)
     }
 }
+
+#[macro_export]
+/// A helper macro for using hooks in async environements.
+///
+/// # Usage
+///
+///
+/// ```
+/// let (data) = use_ref(&cx, || {});
+///
+/// let handle_thing = move |_| {
+///     to_owned![data]
+///     cx.spawn(async move {
+///         // do stuff
+///     });
+/// }
+/// ```
+macro_rules! to_owned {
+    ($($es:ident),+) => {$(
+        #[allow(unused_mut)]
+        let mut $es = $es.to_owned();
+    )*}
+}
