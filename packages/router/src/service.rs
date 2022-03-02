@@ -1,150 +1,202 @@
-use gloo::history::{BrowserHistory, History, HistoryListener, Location};
+// todo: how does router work in multi-window contexts?
+// does each window have its own router? probably, lol
+
+use crate::{cfg::RouterCfg, location::ParsedRoute};
+use dioxus_core::ScopeId;
+use futures_channel::mpsc::UnboundedSender;
+use std::any::Any;
 use std::{
-    cell::{Cell, Ref, RefCell},
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
 };
+use url::Url;
 
-use dioxus_core::ScopeId;
+/// An abstraction over the platform's history API.
+///
+/// The history is denoted using web-like semantics, with forward slashes delmitiing
+/// routes and question marks denoting optional parameters.
+///
+/// This RouterService is exposed so you can modify the history directly. It
+/// does not provide a high-level ergonomic API for your components. Instead,
+/// you should consider using the components and hooks instead.
+/// - [`Route`](struct.Route.html)
+/// - [`Link`](struct.Link.html)
+/// - [`UseRoute`](struct.UseRoute.html)
+/// - [`Router`](struct.Router.html)
+///
+///
+/// # Example
+///
+/// ```rust
+/// let router = Router::new();
+/// router.push_route("/home/custom");
+/// cx.provide_context(router);
+/// ```
+///
+/// # Platform Specific
+///
+/// - On the web, this is a [`BrowserHistory`](https://docs.rs/gloo/0.3.0/gloo/history/struct.BrowserHistory.html).
+/// - On desktop, mobile, and SSR, this is just a Vec of Strings. Currently on
+///   desktop, there is no way to tap into forward/back for the app unless explicitly set.
+pub struct RouterCore {
+    pub root_found: Cell<Option<ScopeId>>,
 
-use crate::platform::RouterProvider;
+    pub stack: RefCell<Vec<Arc<ParsedRoute>>>,
 
-pub struct RouterService {
-    pub(crate) regen_route: Arc<dyn Fn(ScopeId)>,
-    pub(crate) pending_events: Rc<RefCell<Vec<RouteEvent>>>,
-    slots: Rc<RefCell<Vec<(ScopeId, String)>>>,
-    onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
-    root_found: Rc<Cell<Option<ScopeId>>>,
-    cur_path_params: Rc<RefCell<HashMap<String, String>>>,
+    pub router_needs_update: Cell<bool>,
 
-    // history: Rc<dyn RouterProvider>,
-    history: Rc<RefCell<BrowserHistory>>,
-    listener: HistoryListener,
+    pub tx: UnboundedSender<RouteEvent>,
+
+    pub slots: Rc<RefCell<HashMap<ScopeId, String>>>,
+
+    pub onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
+
+    pub query_listeners: Rc<RefCell<HashMap<ScopeId, String>>>,
+
+    pub semgment_listeners: Rc<RefCell<HashMap<ScopeId, String>>>,
+
+    pub history: Box<dyn RouterProvider>,
+
+    pub cfg: RouterCfg,
 }
 
+pub type RouterService = Arc<RouterCore>;
+
+#[derive(Debug)]
 pub enum RouteEvent {
-    Change,
+    Push(String),
     Pop,
-    Push,
 }
 
-enum RouteSlot {
-    Routes {
-        // the partial route
-        partial: String,
+impl RouterCore {
+    pub fn new(tx: UnboundedSender<RouteEvent>, cfg: RouterCfg) -> Arc<Self> {
+        #[cfg(feature = "web")]
+        let history = Box::new(web::new(tx.clone()));
 
-        // the total route
-        total: String,
+        #[cfg(not(feature = "web"))]
+        let history = Box::new(hash::create_router());
 
-        // Connections to other routs
-        rest: Vec<RouteSlot>,
-    },
-}
+        let route = Arc::new(ParsedRoute::new(history.init_location()));
 
-impl RouterService {
-    pub fn new(regen_route: Arc<dyn Fn(ScopeId)>, root_scope: ScopeId) -> Self {
-        let history = BrowserHistory::default();
-        let location = history.location();
-        let path = location.path();
+        Arc::new(Self {
+            cfg,
+            tx,
+            root_found: Cell::new(None),
+            stack: RefCell::new(vec![route]),
+            slots: Default::default(),
+            semgment_listeners: Default::default(),
+            query_listeners: Default::default(),
+            onchange_listeners: Default::default(),
+            history,
+            router_needs_update: Default::default(),
+        })
+    }
 
-        let onchange_listeners = Rc::new(RefCell::new(HashSet::new()));
-        let slots: Rc<RefCell<Vec<(ScopeId, String)>>> = Default::default();
-        let pending_events: Rc<RefCell<Vec<RouteEvent>>> = Default::default();
-        let root_found = Rc::new(Cell::new(None));
+    pub fn handle_route_event(&self, msg: RouteEvent) -> Option<Arc<ParsedRoute>> {
+        log::debug!("handling route event {:?}", msg);
+        self.root_found.set(None);
 
-        let listener = history.listen({
-            let pending_events = pending_events.clone();
-            let regen_route = regen_route.clone();
-            let root_found = root_found.clone();
-            let slots = slots.clone();
-            let onchange_listeners = onchange_listeners.clone();
-            move || {
-                root_found.set(None);
-                // checking if the route is valid is cheap, so we do it
-                for (slot, root) in slots.borrow_mut().iter().rev() {
-                    regen_route(*slot);
-                }
+        match msg {
+            RouteEvent::Push(route) => {
+                let cur = self.current_location();
 
-                for listener in onchange_listeners.borrow_mut().iter() {
-                    regen_route(*listener);
-                }
+                let new_url = cur.url.join(&route).ok().unwrap();
 
-                // also regenerate the root
-                regen_route(root_scope);
+                self.history.push(new_url.as_str());
 
-                pending_events.borrow_mut().push(RouteEvent::Change)
+                let route = Arc::new(ParsedRoute::new(new_url));
+
+                self.stack.borrow_mut().push(route.clone());
+
+                Some(route)
             }
-        });
+            RouteEvent::Pop => {
+                let mut stack = self.stack.borrow_mut();
+                if stack.len() == 1 {
+                    return None;
+                }
 
-        Self {
-            listener,
-            root_found,
-            history: Rc::new(RefCell::new(history)),
-            regen_route,
-            slots,
-            pending_events,
-            onchange_listeners,
-            cur_path_params: Rc::new(RefCell::new(HashMap::new())),
+                self.history.pop();
+                stack.pop()
+            }
         }
     }
 
+    /// Push a new route to the history.
+    ///
+    /// This will trigger a route change event.
+    ///
+    /// This does not modify the current route
     pub fn push_route(&self, route: &str) {
-        self.history.borrow_mut().push(route);
+        // convert the users route to our internal format
+        self.tx
+            .unbounded_send(RouteEvent::Push(route.to_string()))
+            .unwrap();
     }
 
-    pub fn register_total_route(&self, route: String, scope: ScopeId, fallback: bool) {
+    /// Pop the current route from the history.
+    ///
+    ///
+    pub fn pop_route(&self) {
+        self.tx.unbounded_send(RouteEvent::Pop).unwrap();
+    }
+
+    pub(crate) fn register_total_route(&self, route: String, scope: ScopeId) {
         let clean = clean_route(route);
-        self.slots.borrow_mut().push((scope, clean));
+        self.slots.borrow_mut().insert(scope, clean);
     }
 
-    pub fn should_render(&self, scope: ScopeId) -> bool {
-        if let Some(root_id) = self.root_found.get() {
-            if root_id == scope {
-                return true;
-            }
-            return false;
-        }
+    pub(crate) fn should_render(&self, scope: ScopeId) -> bool {
+        log::debug!("Checking render: {:?}", scope);
 
-        let location = self.history.borrow().location();
-        let path = location.path();
+        if let Some(root_id) = self.root_found.get() {
+            return root_id == scope;
+        }
 
         let roots = self.slots.borrow();
 
-        let root = roots.iter().find(|(id, route)| id == &scope);
+        if let Some(route) = roots.get(&scope) {
+            log::debug!("Registration found for scope {:?} {:?}", scope, route);
 
-        // fallback logic
-        match root {
-            Some((id, route)) => {
-                if let Some(params) = route_matches_path(route, path) {
-                    self.root_found.set(Some(*id));
-                    *self.cur_path_params.borrow_mut() = params;
-                    true
-                } else {
-                    if route == "" {
-                        self.root_found.set(Some(*id));
-                        true
-                    } else {
-                        false
-                    }
-                }
+            if route_matches_path(&self.current_location(), route) || route.is_empty() {
+                self.root_found.set(Some(scope));
+                true
+            } else {
+                false
             }
-            None => false,
+        } else {
+            log::debug!("no route found for scope: {:?}", scope);
+            false
         }
     }
 
-    pub fn current_location(&self) -> Location {
-        self.history.borrow().location().clone()
+    /// Get the current location of the Router
+    pub fn current_location(&self) -> Arc<ParsedRoute> {
+        self.stack.borrow().last().unwrap().clone()
     }
 
-    pub fn current_path_params(&self) -> Ref<HashMap<String, String>> {
-        self.cur_path_params.borrow()
+    pub fn query_current_location(&self) -> HashMap<String, String> {
+        todo!()
+        // self.history.borrow().query()
     }
 
+    /// Get the current location of the Router
+    pub fn native_location<T: 'static>(&self) -> Option<Box<T>> {
+        self.history.native_location().downcast::<T>().ok()
+    }
+
+    /// Registers a scope to regenerate on route change.
+    ///
+    /// This is useful if you've built some abstraction on top of the router service.
     pub fn subscribe_onchange(&self, id: ScopeId) {
         self.onchange_listeners.borrow_mut().insert(id);
     }
 
+    /// Unregisters a scope to regenerate on route change.
+    ///
+    /// This is useful if you've built some abstraction on top of the router service.
     pub fn unsubscribe_onchange(&self, id: ScopeId) {
         self.onchange_listeners.borrow_mut().remove(&id);
     }
@@ -161,41 +213,128 @@ fn clean_path(path: &str) -> &str {
     if path == "/" {
         return path;
     }
-    path.trim_end_matches('/')
+    let sub = path.trim_end_matches('/');
+
+    if sub.starts_with('/') {
+        &path[1..]
+    } else {
+        sub
+    }
 }
 
-fn route_matches_path(route: &str, path: &str) -> Option<HashMap<String, String>> {
-    let route_pieces = route.split('/').collect::<Vec<_>>();
-    let path_pieces = clean_path(path).split('/').collect::<Vec<_>>();
+fn route_matches_path(cur: &ParsedRoute, attempt: &str) -> bool {
+    let cur_pieces = cur.url.path_segments().unwrap().collect::<Vec<_>>();
+    let attempt_pieces = clean_path(attempt).split('/').collect::<Vec<_>>();
 
-    if route_pieces.len() != path_pieces.len() {
-        return None;
+    if attempt == "/" && cur_pieces.len() == 1 && cur_pieces[0].is_empty() {
+        return true;
     }
 
-    let mut matches = HashMap::new();
-    for (i, r) in route_pieces.iter().enumerate() {
+    log::debug!(
+        "Comparing cur {:?} to attempt {:?}",
+        cur_pieces,
+        attempt_pieces
+    );
+
+    if attempt_pieces.len() != cur_pieces.len() {
+        return false;
+    }
+
+    for (i, r) in attempt_pieces.iter().enumerate() {
+        log::debug!("checking route: {:?}", r);
+
         // If this is a parameter then it matches as long as there's
         // _any_thing in that spot in the path.
         if r.starts_with(':') {
-            let param = &r[1..];
-            matches.insert(param.to_string(), path_pieces[i].to_string());
             continue;
         }
 
-        if path_pieces[i] != *r {
-            return None;
+        if cur_pieces[i] != *r {
+            return false;
         }
     }
 
-    Some(matches)
+    true
 }
 
-pub struct RouterCfg {
-    initial_route: String,
+pub trait RouterProvider {
+    fn push(&self, path: &str);
+    fn pop(&self);
+    fn native_location(&self) -> Box<dyn Any>;
+    fn init_location(&self) -> Url;
 }
 
-impl RouterCfg {
-    pub fn new(initial_route: String) -> Self {
-        Self { initial_route }
+mod hash {
+    use super::*;
+
+    /// a simple cross-platform hash-based router
+    pub struct HashRouter {}
+
+    impl RouterProvider for HashRouter {
+        fn push(&self, _path: &str) {}
+
+        fn native_location(&self) -> Box<dyn Any> {
+            Box::new(())
+        }
+
+        fn pop(&self) {}
+
+        fn init_location(&self) -> Url {
+            Url::parse("app:///").unwrap()
+        }
+    }
+}
+
+#[cfg(feature = "web")]
+mod web {
+    use super::RouterProvider;
+    use crate::RouteEvent;
+
+    use futures_channel::mpsc::UnboundedSender;
+    use gloo::{
+        events::EventListener,
+        history::{BrowserHistory, History},
+    };
+    use std::any::Any;
+    use url::Url;
+
+    pub struct WebRouter {
+        // keep it around so it drops when the router is dropped
+        _listener: gloo::events::EventListener,
+
+        history: BrowserHistory,
+    }
+
+    impl RouterProvider for WebRouter {
+        fn push(&self, path: &str) {
+            self.history.push(path);
+            // use gloo::history;
+            // web_sys::window()
+            //     .unwrap()
+            //     .location()
+            //     .set_href(path)
+            //     .unwrap();
+        }
+
+        fn native_location(&self) -> Box<dyn Any> {
+            todo!()
+        }
+
+        fn pop(&self) {
+            // set the title, maybe?
+        }
+
+        fn init_location(&self) -> Url {
+            url::Url::parse(&web_sys::window().unwrap().location().href().unwrap()).unwrap()
+        }
+    }
+
+    pub fn new(tx: UnboundedSender<RouteEvent>) -> WebRouter {
+        WebRouter {
+            history: BrowserHistory::new(),
+            _listener: EventListener::new(&web_sys::window().unwrap(), "popstate", move |_| {
+                let _ = tx.unbounded_send(RouteEvent::Pop);
+            }),
+        }
     }
 }

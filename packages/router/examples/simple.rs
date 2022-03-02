@@ -8,21 +8,25 @@ use dioxus_router::*;
 fn main() {
     console_error_panic_hook::set_once();
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-    dioxus_web::launch(APP);
+    dioxus_web::launch(app);
 }
 
-static APP: Component = |cx| {
+fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
-            onchange: move |route| log::info!("route changed to {}", route),
-            Route { to: "/", Home {} }
-            Route { to: "blog"
-                Route { to: "/", BlogList {} }
-                Route { to: ":id", BlogPost {} }
+            h1 { "Your app here" }
+            ul {
+                Link { to: "/", li { "home"  }}
+                Link { to: "/blog", li { "blog"  }}
+                Link { to: "/blog/tim", li { "tims' blog"  }}
+                Link { to: "/blog/bill", li { "bills' blog"  }}
             }
+            Route { to: "/", Home {} }
+            Route { to: "/blog/", BlogList {} }
+            Route { to: "/blog/:id/", BlogPost {} }
         }
     })
-};
+}
 
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {

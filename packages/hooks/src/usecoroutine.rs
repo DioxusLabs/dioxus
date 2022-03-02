@@ -1,7 +1,6 @@
 use dioxus_core::{ScopeState, TaskId};
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::future::Future;
-use std::rc::Rc;
 
 /// Maintain a handle over a future that can be paused, resumed, and canceled.
 ///
@@ -76,7 +75,7 @@ where
 /// Get a handle to a coroutine higher in the tree
 ///
 /// See the docs for [`use_coroutine`] for more details.
-pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&Rc<CoroutineHandle<M>>> {
+pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&CoroutineHandle<M>> {
     cx.use_hook(|_| cx.consume_context::<CoroutineHandle<M>>())
         .as_ref()
 }
@@ -84,6 +83,15 @@ pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&Rc<Coroutine
 pub struct CoroutineHandle<T> {
     tx: UnboundedSender<T>,
     task: TaskId,
+}
+
+impl<T> Clone for CoroutineHandle<T> {
+    fn clone(&self) -> Self {
+        Self {
+            tx: self.tx.clone(),
+            task: self.task,
+        }
+    }
 }
 
 impl<T> CoroutineHandle<T> {

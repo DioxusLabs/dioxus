@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-type ProvidedState<T> = RefCell<ProvidedStateInner<T>>;
+type ProvidedState<T> = Rc<RefCell<ProvidedStateInner<T>>>;
 
 // Tracks all the subscribers to a shared State
 pub struct ProvidedStateInner<T> {
@@ -91,7 +91,7 @@ pub fn use_context<'a, T: 'static>(cx: &'a ScopeState) -> Option<UseSharedState<
 }
 
 struct SharedStateInner<T: 'static> {
-    root: Option<Rc<ProvidedState<T>>>,
+    root: Option<ProvidedState<T>>,
     value: Option<Rc<RefCell<T>>>,
     scope_id: ScopeId,
     needs_notification: Cell<bool>,
@@ -174,11 +174,11 @@ where
 ///
 pub fn use_context_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) {
     cx.use_hook(|_| {
-        let state: ProvidedState<T> = RefCell::new(ProvidedStateInner {
+        let state: ProvidedState<T> = Rc::new(RefCell::new(ProvidedStateInner {
             value: Rc::new(RefCell::new(f())),
             notify_any: cx.schedule_update_any(),
             consumers: HashSet::new(),
-        });
+        }));
         cx.provide_context(state)
     });
 }

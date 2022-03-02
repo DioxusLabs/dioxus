@@ -1,14 +1,15 @@
-use std::rc::Rc;
-
+use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
+use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
+use wry::application::window::Fullscreen as WryFullscreen;
 
 use UserWindowEvent::*;
 
 pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
 /// Get an imperative handle to the current window
-pub fn use_window(cx: &ScopeState) -> &Rc<DesktopContext> {
+pub fn use_window(cx: &ScopeState) -> &DesktopContext {
     cx.use_hook(|_| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
@@ -119,11 +120,6 @@ impl DesktopContext {
         let _ = self.proxy.send_event(DevTool);
     }
 }
-
-use wry::application::event_loop::ControlFlow;
-use wry::application::window::Fullscreen as WryFullscreen;
-
-use crate::controller::DesktopController;
 
 #[derive(Debug)]
 pub enum UserWindowEvent {
