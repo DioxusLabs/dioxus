@@ -14,10 +14,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.1.9", default-features = false }
 dioxus-html = { path = "../html", version = "^0.1.6", default-features = false }
 dioxus-core-macro = { path = "../core-macro", version = "^0.1.7" }
-# serde = "1"
-# serde_urlencoded = "0.7"
 futures-channel = "0.3.21"
-url = "2.2.2"
+url = { version ="2.2.2", default-features = false }
 
 # for wasm
 web-sys = { version = "0.3", features = [
