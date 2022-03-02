@@ -277,7 +277,7 @@ mod tests {
             }
             impl Drop for DropInner {
                 fn drop(&mut self) {
-                    log::debug!("dropping inner");
+                    eprintln!("dropping inner");
                 }
             }
 
@@ -287,7 +287,7 @@ mod tests {
                         let val = cx.props.inner.clone();
 
                         LazyNodes::new(move |f| {
-                            log::debug!("hell closure");
+                            eprintln!("hell closure");
                             let inner = DropInner { id: i };
                             f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
                         })
@@ -295,7 +295,7 @@ mod tests {
                     .collect::<Vec<_>>();
 
                 LazyNodes::new(|f| {
-                    log::debug!("main closure");
+                    eprintln!("main closure");
                     f.fragment_from_iter(it)
                 })
             };
