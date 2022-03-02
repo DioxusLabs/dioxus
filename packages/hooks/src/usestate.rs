@@ -336,7 +336,7 @@ fn api_makes_sense() {
         }
 
         cx.spawn({
-            crate::to_owned![set_val];
+            dioxus_core::to_owned![set_val];
             async move {
                 set_val.modify(|f| f + 1);
             }
