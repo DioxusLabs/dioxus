@@ -475,7 +475,7 @@ impl VirtualDom {
                 h1.cmp(&h2).reverse()
             });
 
-            log::debug!("dirty_scopes: {:?}", self.dirty_scopes);
+            log::trace!("dirty_scopes: {:?}", self.dirty_scopes);
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
                 if !ran_scopes.contains(&scopeid) {
@@ -487,7 +487,7 @@ impl VirtualDom {
 
                     let DiffState { mutations, .. } = diff_state;
 
-                    log::debug!("succesffuly resolved scopes {:?}", mutations.dirty_scopes);
+                    log::trace!("succesffuly resolved scopes {:?}", mutations.dirty_scopes);
                     for scope in &mutations.dirty_scopes {
                         self.dirty_scopes.remove(scope);
                     }
