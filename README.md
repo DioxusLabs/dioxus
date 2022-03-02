@@ -194,7 +194,7 @@ Want to jump in and help build the future of Rust frontend? There's plenty of pl
 
 This project is licensed under the [MIT license].
 
-[MIT license]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+[MIT license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 ### Contribution
 
