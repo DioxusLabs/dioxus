@@ -29,7 +29,7 @@ use url::Url;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, ignore
 /// let router = Router::new();
 /// router.push_route("/home/custom");
 /// cx.provide_context(router);
@@ -280,6 +280,8 @@ mod hash {
                 serialized_state: None,
             }
         }
+
+        fn replace(&self, _route: &ParsedRoute) {}
     }
 }
 

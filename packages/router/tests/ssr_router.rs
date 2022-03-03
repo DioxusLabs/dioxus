@@ -12,13 +12,14 @@ fn generates_without_error() {
 
     let out = dioxus_ssr::render_vdom(&app);
 
-    assert_eq!(out, "<nav>navbar</nav><h1>Home</h1>");
+    assert_eq!(out, "<nav>navbar</nav>default<!--placeholder-->");
 }
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             nav { "navbar" }
+            Route { to: "/", "default" }
             Route { to: "/home", Home {} }
         }
     })

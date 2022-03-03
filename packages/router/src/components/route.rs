@@ -22,7 +22,7 @@ pub struct RouteProps<'a> {
 ///
 /// # Example
 ///
-///```rust
+///```rust, ignore
 /// rsx!(
 ///     Router {
 ///         Route { to: "/home", Home {} }

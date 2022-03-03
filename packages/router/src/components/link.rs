@@ -11,7 +11,7 @@ use dioxus_html as dioxus_elements;
 pub struct LinkProps<'a> {
     /// The route to link to. This can be a relative path, or a full URL.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// // Absolute path
     /// Link { to: "/home", "Go Home" }
     ///
@@ -64,7 +64,7 @@ pub struct LinkProps<'a> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust, ignore
 /// fn Header(cx: Scope) -> Element {
 ///     cx.render(rsx!{
 ///         Link { to: "/home", "Go Home" }

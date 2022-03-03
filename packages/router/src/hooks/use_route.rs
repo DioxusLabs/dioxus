@@ -48,7 +48,16 @@ impl UseRoute {
     /// Get the first query parameter given the parameter name.
     ///
     /// If you need to get more than one parameter, use [`query_pairs`] on the [`Url`] instead.
-    pub fn query(&self, param: &str) -> Option<Cow<str>> {
+    #[cfg(feature = "query")]
+    pub fn query<T: serde::de::DeserializeOwned>(&self) -> Option<T> {
+        let query = self.url().query()?;
+        serde_urlencoded::from_str(query.strip_prefix('?').unwrap_or("")).ok()
+    }
+
+    /// Get the first query parameter given the parameter name.
+    ///
+    /// If you need to get more than one parameter, use [`query_pairs`] on the [`Url`] instead.
+    pub fn query_param(&self, param: &str) -> Option<Cow<str>> {
         self.route
             .url
             .query_pairs()

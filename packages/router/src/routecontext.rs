@@ -8,7 +8,7 @@ pub struct RouteContext {
     ///
     ///
     /// It follows this pattern:
-    /// ```
+    /// ```ignore
     /// "name/:id"
     /// ```
     pub declared_route: String,
@@ -17,7 +17,7 @@ pub struct RouteContext {
     ///
     ///
     /// It follows this pattern:
-    /// ```
+    /// ```ignore
     /// "/level0/level1/:id"
     /// ```
     pub total_route: String,

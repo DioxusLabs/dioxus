@@ -9,7 +9,7 @@ use crate::use_router;
 pub struct RedirectProps<'a> {
     /// The route to link to. This can be a relative path, or a full URL.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// // Absolute path
     /// Redirect { from: "", to: "/home" }
     ///
@@ -20,7 +20,7 @@ pub struct RedirectProps<'a> {
 
     /// The route to link from. This can be a relative path, or a full URL.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// // Absolute path
     /// Redirect { from: "", to: "/home" }
     ///
