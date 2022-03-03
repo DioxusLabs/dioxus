@@ -5,13 +5,10 @@
 //! This methods all use "rebuild" which completely bypasses the scheduler.
 //! Hard rebuilds don't consume any events from the event queue.
 
-use dioxus::{prelude::*, DomEdit};
-use dioxus_core as dioxus;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 
 mod test_logging;
-use DomEdit::*;
+use dioxus_core::DomEdit::*;
 
 fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
     const IS_LOGGING_ENABLED: bool = false;
