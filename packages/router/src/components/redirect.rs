@@ -18,7 +18,7 @@ pub struct RedirectProps<'a> {
     /// ```
     pub to: &'a str,
 
-    /// The route to link to. This can be a relative path, or a full URL.
+    /// The route to link from. This can be a relative path, or a full URL.
     ///
     /// ```rust
     /// // Absolute path
