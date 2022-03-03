@@ -1,4 +1,4 @@
-#![doc = include_str!("../notes/readme.md")]
+#![doc = include_str!("../notes/README.md")]
 
 pub use dioxus_core as core;
 
