@@ -2,12 +2,8 @@
 #![warn(missing_docs)]
 
 mod hooks {
-    mod use_param;
-    mod use_query;
     mod use_route;
     mod use_router;
-    pub use use_param::*;
-    pub use use_query::*;
     pub use use_route::*;
     pub use use_router::*;
 }
@@ -29,10 +25,8 @@ mod components {
 pub use components::*;
 
 mod cfg;
-mod location;
 mod routecontext;
 mod service;
-mod utils;
 
 pub use routecontext::*;
 pub use service::*;

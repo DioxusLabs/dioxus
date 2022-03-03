@@ -31,7 +31,7 @@ web-sys = { version = "0.3", features = [
 ], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
-gloo = { version = "0.6", optional = true }
+gloo-events = { version = "0.1.1", optional = true }
 log = "0.4.14"
 thiserror = "1.0.30"
 futures-util = "0.3.21"
@@ -39,7 +39,7 @@ futures-util = "0.3.21"
 
 [features]
 default = ["web"]
-web = ["web-sys", "gloo", "js-sys", "wasm-bindgen"]
+web = ["web-sys", "gloo-events", "js-sys", "wasm-bindgen"]
 hash = []
 
 [dev-dependencies]

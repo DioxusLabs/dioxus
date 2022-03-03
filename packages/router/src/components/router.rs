@@ -1,19 +1,11 @@
-use crate::location::ParsedRoute;
-use std::cell::Cell;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
-
-use crate::cfg::RouterCfg;
-use crate::RouteEvent;
-use crate::RouterCore;
+use crate::ParsedRoute;
+use crate::{cfg::RouterCfg, RouteEvent, RouterCore};
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
-use dioxus_core::Element;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use futures_util::stream::StreamExt;
+use std::sync::Arc;
 
 /// The props for the [`Router`](fn.Router.html) component.
 #[derive(Props)]
@@ -45,8 +37,6 @@ pub struct RouterProps<'a> {
 /// Will fallback to HashRouter is BrowserRouter is not available, or through configuration.
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    let call_onchange = cx.use_hook(|_| Rc::new(Cell::new(false)));
-
     let svc = cx.use_hook(|_| {
         let (tx, mut rx) = futures_channel::mpsc::unbounded::<RouteEvent>();
 
@@ -57,23 +47,62 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         cx.spawn({
             let svc = svc.clone();
             let regen_route = cx.schedule_update_any();
-            let call_onchange = call_onchange.clone();
             let router_id = cx.scope_id();
 
             async move {
                 while let Some(msg) = rx.next().await {
-                    if let Some(_new) = svc.handle_route_event(msg) {
-                        call_onchange.set(true);
+                    match msg {
+                        RouteEvent::Push {
+                            route,
+                            serialized_state,
+                            title,
+                        } => {
+                            let new_route = Arc::new(ParsedRoute {
+                                url: svc.current_location().url.join(&route).ok().unwrap(),
+                                title,
+                                serialized_state,
+                            });
 
-                        regen_route(router_id);
-
-                        for listener in svc.onchange_listeners.borrow().iter() {
-                            regen_route(*listener);
+                            svc.history.push(&new_route);
+                            svc.stack.borrow_mut().push(new_route);
                         }
 
-                        for route in svc.slots.borrow().keys() {
-                            regen_route(*route);
+                        RouteEvent::Replace {
+                            route,
+                            title,
+                            serialized_state,
+                        } => {
+                            let new_route = Arc::new(ParsedRoute {
+                                url: svc.current_location().url.join(&route).ok().unwrap(),
+                                title,
+                                serialized_state,
+                            });
+
+                            svc.history.replace(&new_route);
+                            *svc.stack.borrow_mut().last_mut().unwrap() = new_route;
                         }
+
+                        RouteEvent::Pop => {
+                            let mut stack = svc.stack.borrow_mut();
+
+                            if stack.len() == 1 {
+                                continue;
+                            }
+
+                            stack.pop();
+                        }
+                    }
+
+                    svc.route_found.set(None);
+
+                    regen_route(router_id);
+
+                    for listener in svc.onchange_listeners.borrow().iter() {
+                        regen_route(*listener);
+                    }
+
+                    for route in svc.slots.borrow().keys() {
+                        regen_route(*route);
                     }
                 }
             }
@@ -82,9 +111,9 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         cx.provide_context(svc)
     });
 
-    if call_onchange.get() {
+    // next time we run the rout_found will be filled
+    if svc.route_found.get().is_none() {
         cx.props.onchange.call(svc.clone());
-        call_onchange.set(false);
     }
 
     cx.render(rsx!(&cx.props.children))

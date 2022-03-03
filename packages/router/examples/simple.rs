@@ -24,6 +24,8 @@ fn app(cx: Scope) -> Element {
             Route { to: "/", Home {} }
             Route { to: "/blog/", BlogList {} }
             Route { to: "/blog/:id/", BlogPost {} }
+            Route { to: "/oranges", "Oranges are not apples!" }
+            Redirect { from: "/apples", to: "/oranges" }
         }
     })
 }
@@ -41,6 +43,9 @@ fn BlogList(cx: Scope) -> Element {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let id = use_route(&cx).segment::<usize>("id")?;
+    let id = use_route(&cx).segment("id")?;
+
+    log::debug!("rendering blog post {}", id);
+
     cx.render(rsx! { div { "{id:?}" } })
 }

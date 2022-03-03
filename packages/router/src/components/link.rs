@@ -101,7 +101,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             onclick: move |_| {
                 if !outerlink {
                     if let Some(service) = svc {
-                        service.push_route(to);
+                        service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
                     } else {
                         log::error!(
                             "Attempted to create a Link to {} outside of a Router context",
