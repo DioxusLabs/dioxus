@@ -163,20 +163,28 @@ impl Debug for VNode<'_> {
     fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match &self {
             VNode::Element(el) => s
-                .debug_struct("VNode::VElement")
+                .debug_struct("VNode::Element")
                 .field("name", &el.tag)
                 .field("key", &el.key)
                 .field("attrs", &el.attributes)
                 .field("children", &el.children)
                 .field("id", &el.id)
                 .finish(),
-            VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
-            VNode::Placeholder(t) => write!(s, "VNode::VPlaceholder {{ id: {:?} }}", t.id),
-            VNode::Fragment(frag) => {
-                write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
-            }
+            VNode::Text(t) => s
+                .debug_struct("VNode::Text")
+                .field("text", &t.text)
+                .field("id", &t.id)
+                .finish(),
+            VNode::Placeholder(t) => s
+                .debug_struct("VNode::Placholder")
+                .field("id", &t.id)
+                .finish(),
+            VNode::Fragment(frag) => s
+                .debug_struct("VNode::Fragment")
+                .field("children", &frag.children)
+                .finish(),
             VNode::Component(comp) => s
-                .debug_struct("VNode::VComponent")
+                .debug_struct("VNode::Component")
                 .field("name", &comp.fn_name)
                 .field("fnptr", &comp.user_fc)
                 .field("key", &comp.key)
