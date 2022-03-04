@@ -1,7 +1,7 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
 use dioxus_core::*;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     sync::atomic::AtomicBool,
     sync::{Arc, RwLock},
 };
@@ -14,7 +14,7 @@ use wry::{
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
     pub(super) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-    pub(super) pending_edits: Arc<RwLock<VecDeque<String>>>,
+    pub(super) pending_edits: Arc<RwLock<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
 }
@@ -27,7 +27,7 @@ impl DesktopController {
         props: P,
         proxy: EventLoopProxy<UserWindowEvent>,
     ) -> Self {
-        let edit_queue = Arc::new(RwLock::new(VecDeque::new()));
+        let edit_queue = Arc::new(RwLock::new(Vec::new()));
         let pending_edits = edit_queue.clone();
 
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
@@ -54,7 +54,7 @@ impl DesktopController {
                 edit_queue
                     .write()
                     .unwrap()
-                    .push_front(serde_json::to_string(&edits.edits).unwrap());
+                    .push(serde_json::to_string(&edits.edits).unwrap());
 
                 // Make sure the window is ready for any new updates
                 proxy.send_event(UserWindowEvent::Update).unwrap();
@@ -62,12 +62,11 @@ impl DesktopController {
                 loop {
                     dom.wait_for_work().await;
                     let mut muts = dom.work_with_deadline(|| false);
-
                     while let Some(edit) = muts.pop() {
                         edit_queue
                             .write()
                             .unwrap()
-                            .push_front(serde_json::to_string(&edit.edits).unwrap());
+                            .push(serde_json::to_string(&edit.edits).unwrap());
                     }
 
                     let _ = proxy.send_event(UserWindowEvent::Update);
@@ -97,7 +96,7 @@ impl DesktopController {
             let mut queue = self.pending_edits.write().unwrap();
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
 
-            while let Some(edit) = queue.pop_back() {
+            while let Some(edit) = queue.pop() {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                     .unwrap();
             }
