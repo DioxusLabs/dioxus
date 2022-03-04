@@ -515,6 +515,8 @@ impl VirtualDom {
             }
         }
 
+        println!("committed_mutations: {:?}", committed_mutations);
+
         committed_mutations
     }
 
