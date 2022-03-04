@@ -285,6 +285,12 @@ impl<T: Clone> UseState<T> {
 
         RefMut::map(slot, |rc| Rc::get_mut(rc).expect("the hard count to be 0"))
     }
+
+    /// Convert this handle to a tuple of the value and the handle itself.
+    #[must_use]
+    pub fn split(&self) -> (&T, &Self) {
+        (&self.current_val, self)
+    }
 }
 
 impl<T: 'static> Clone for UseState<T> {
