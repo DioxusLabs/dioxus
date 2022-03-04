@@ -488,11 +488,14 @@ impl VirtualDom {
                     let DiffState { mutations, .. } = diff_state;
 
                     log::trace!("succesffuly resolved scopes {:?}", mutations.dirty_scopes);
+
                     for scope in &mutations.dirty_scopes {
                         self.dirty_scopes.remove(scope);
                     }
 
-                    committed_mutations.push(mutations);
+                    if !mutations.edits.is_empty() {
+                        committed_mutations.push(mutations);
+                    }
 
                     // todo: pause the diff machine
                     // if diff_state.work(&mut deadline) {
