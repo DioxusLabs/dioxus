@@ -14,8 +14,8 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             h1 { "High-Five counter: {count}" }
-            button { onclick: move |_| *count.make_mut() += 1, "Up high!" }
-            button { onclick: move |_| *count.make_mut() -= 1, "Down low!" }
+            button { onclick: move |_| count.set(count + 1), "Up high!" }
+            button { onclick: move |_| count.set(count - 1), "Down low!" }
         }
     })
 }
