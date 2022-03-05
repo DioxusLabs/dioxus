@@ -42,19 +42,12 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> Guide (0.1.8) </a>
-    <span> | </span>
-    <a href="https://dioxuslabs.com/nightly/guide"> Guide (Nightly) </a>
-  </h3>
-</div>
-
-<div align="center">
-  <h4>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
+    <a href="https://dioxuslabs.com/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
   </h3>
 </div>
+
 
 <br/>
 
@@ -83,15 +76,6 @@ If you know React, then you already know Dioxus.
 - Extremely memory efficient - 0 global allocations for steady-state components.
 - Multi-channel asynchronous scheduler for first-class async support.
 - And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
-
-
-### Examples
-
-All examples in this repo are desktop apps. To run an example, simply clone this repo and use `cargo run --example XYZ`
-
-```
-cargo run --example EXAMPLE
-```
 
 ## Get Started with...
 
