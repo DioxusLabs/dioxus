@@ -37,8 +37,18 @@ pub struct RedirectProps<'a> {
 pub fn Redirect<'a>(cx: Scope<'a, RedirectProps<'a>>) -> Element {
     let router = use_router(&cx);
 
-    // todo: check if the current location matches the "from" pattern
-    router.replace_route(cx.props.to, None, None);
+    let immediate_redirect = cx.use_hook(|_| {
+        if let Some(from) = cx.props.from {
+            router.register_total_route(from.to_string(), cx.scope_id());
+            false
+        } else {
+            true
+        }
+    });
+
+    if *immediate_redirect || router.should_render(cx.scope_id()) {
+        router.replace_route(cx.props.to, None, None);
+    }
 
     None
 }

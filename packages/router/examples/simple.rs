@@ -20,6 +20,7 @@ fn app(cx: Scope) -> Element {
                 Link { to: "/blog", li { "blog"  }}
                 Link { to: "/blog/tim", li { "tims' blog"  }}
                 Link { to: "/blog/bill", li { "bills' blog"  }}
+                Link { to: "/apples", li { "go to apples"  }}
             }
             Route { to: "/", Home {} }
             Route { to: "/blog/", BlogList {} }
