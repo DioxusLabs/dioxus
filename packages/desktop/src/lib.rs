@@ -221,7 +221,7 @@ pub fn launch_with_props<P: 'static + Send>(
             },
 
             Event::UserEvent(user_event) => {
-                user_window_events::handler(user_event, &mut desktop, control_flow)
+                user_window_events::handler(user_event, &mut desktop, control_flow, None)
             }
             Event::MainEventsCleared => {}
             Event::Resumed => {}
@@ -303,15 +303,15 @@ impl<CoreCommand: 'static + Send + Debug, UICommand: 'static + Send + Clone>
         );
         let proxy = event_loop.create_proxy();
 
+        let proxy_clone = proxy.clone();
         let runtime = tokio::runtime::Runtime::new().expect("Failed to initialize runtime");
-
         runtime.spawn(async move {
-            while let Some(cmd) = core_rx.recv().await {
-                println!("🧠 {:?}", cmd);
+            while let Some(_cmd) = core_rx.recv().await {
+                let _res = proxy_clone.send_event(user_window_events::UserWindowEvent::BevyUpdate);
             }
         });
 
-        app.run();
+        app.update();
 
         event_loop.run(move |window_event, event_loop, control_flow| {
             *control_flow = ControlFlow::Wait;
@@ -417,9 +417,12 @@ impl<CoreCommand: 'static + Send + Debug, UICommand: 'static + Send + Clone>
                     _ => {}
                 },
 
-                Event::UserEvent(user_event) => {
-                    user_window_events::handler(user_event, &mut desktop, control_flow)
-                }
+                Event::UserEvent(user_event) => user_window_events::handler(
+                    user_event,
+                    &mut desktop,
+                    control_flow,
+                    Some(&mut app),
+                ),
                 Event::MainEventsCleared => {}
                 Event::Resumed => {}
                 Event::Suspended => {}

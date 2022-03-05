@@ -3,6 +3,8 @@ use wry::application::window::Fullscreen as WryFullscreen;
 
 use crate::controller::DesktopController;
 
+use bevy::prelude::*;
+
 #[derive(Debug)]
 pub(crate) enum UserWindowEvent {
     Update,
@@ -26,6 +28,8 @@ pub(crate) enum UserWindowEvent {
     SetDecorations(bool),
 
     DevTool,
+
+    BevyUpdate,
 }
 
 use UserWindowEvent::*;
@@ -34,6 +38,7 @@ pub(super) fn handler(
     user_event: UserWindowEvent,
     desktop: &mut DesktopController,
     control_flow: &mut ControlFlow,
+    app: Option<&mut App>,
 ) {
     // currently dioxus-desktop supports a single window only,
     // so we can grab the only webview from the map;
@@ -69,5 +74,10 @@ pub(super) fn handler(
         SetDecorations(state) => window.set_decorations(state),
 
         DevTool => webview.devtool(),
+
+        BevyUpdate => {
+            app.expect("Pass Bevy app option to user event handler")
+                .update();
+        }
     }
 }

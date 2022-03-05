@@ -21,12 +21,17 @@ fn main() {
             ui_cmd_type: PhantomData,
         })
         .add_startup_system(setup)
+        .add_system(notify_update)
         .run();
 }
 
 fn setup(desktop: Res<DioxusDesktop<CoreCommand, UICommand>>) {
     println!("setup");
     let _res = desktop.sender().send(UICommand::Test);
+}
+
+fn notify_update() {
+    println!("Update");
 }
 
 fn app(cx: Scope<AppProps<CoreCommand, UICommand>>) -> Element {
