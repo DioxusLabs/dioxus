@@ -103,7 +103,7 @@ export class Interpreter {
     if (ns === "style") {
       // @ts-ignore
       node.style[name] = value;
-    } else if (ns !== null || ns !== undefined) {
+    } else if (ns != null || ns != undefined) {
       node.setAttributeNS(ns, name, value);
     } else {
       switch (name) {
