@@ -243,11 +243,12 @@ impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Syn
     for DioxusDesktopPlugin<CoreCommand, UICommand>
 {
     fn build(&self, app: &mut App) {
-        app.insert_resource(DioxusDesktop {
-            root: self.root,
-            sender: None,
-        })
-        .set_runner(|app| DioxusDesktop::<CoreCommand, UICommand>::runner(app));
+        app.add_event::<CoreCommand>()
+            .insert_resource(DioxusDesktop {
+                root: self.root,
+                sender: None,
+            })
+            .set_runner(|app| DioxusDesktop::<CoreCommand, UICommand>::runner(app));
     }
 }
 
@@ -274,7 +275,7 @@ pub struct AppProps<CoreCommand, UICommand> {
     pub channel: (mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>),
 }
 
-impl<CoreCommand: 'static + Send + Debug, UICommand: 'static + Send + Clone>
+impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Clone>
     DioxusDesktop<CoreCommand, UICommand>
 {
     fn runner(mut app: App) {

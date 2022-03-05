@@ -3,6 +3,7 @@ use wry::application::window::Fullscreen as WryFullscreen;
 
 use crate::controller::DesktopController;
 
+use bevy::ecs::event::Events;
 use bevy::prelude::*;
 
 #[derive(Debug)]
@@ -34,7 +35,7 @@ pub(crate) enum UserWindowEvent<T> {
 
 use UserWindowEvent::*;
 
-pub(super) fn handler<T: std::fmt::Debug>(
+pub(super) fn handler<T: 'static + Send + Sync + std::fmt::Debug>(
     user_event: UserWindowEvent<T>,
     desktop: &mut DesktopController,
     control_flow: &mut ControlFlow,
@@ -76,9 +77,14 @@ pub(super) fn handler<T: std::fmt::Debug>(
         DevTool => webview.devtool(),
 
         BevyUpdate(cmd) => {
-            println!("cmd: {:?}", cmd);
-            app.expect("Pass Bevy app option to user event handler")
-                .update();
+            if let Some(app) = app {
+                let mut events = app
+                    .world
+                    .get_resource_mut::<Events<T>>()
+                    .expect("Provide CoreCommand event to bevy");
+                events.send(cmd);
+                app.update();
+            }
         }
     }
 }
