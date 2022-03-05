@@ -55,17 +55,17 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
+    let mut count = use_state(&cx, || 0);
 
     cx.render(rsx! {
         h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count.set(count + 1), "Up high!" }
-        button { onclick: move |_| count.set(count - 1), "Down low!" }
+        button { onclick: move |_| count += 1, "Up high!" }
+        button { onclick: move |_| count -= 1, "Down low!" }
     })
 }
 ```
 
-Dioxus can be used to deliver webapps, desktop apps, static sites, liveview apps, mobile apps (WIP), and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
+Dioxus can be used to deliver webapps, desktop apps, static sites, liveview apps, mobile apps, and more. Dioxus is entirely renderer agnostic and can be used as platform for any renderer.
 
 If you know React, then you already know Dioxus.
 
@@ -100,12 +100,9 @@ If you know React, then you already know Dioxus.
 
 See the [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) page for a curated list of content in the Dioxus Ecosystem.
 
-
 ## Why Dioxus and why Rust?
 
 TypeScript is a fantastic addition to JavaScript, but it's still fundamentally JavaScript. TS code runs slightly slower, has tons of configuration options, and not every package is properly typed.
-
-In contrast, Dioxus is written in Rust - which is almost like "TypeScript on steroids".
 
 By using Rust, we gain:
 

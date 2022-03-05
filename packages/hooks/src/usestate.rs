@@ -4,7 +4,7 @@ use dioxus_core::prelude::*;
 use std::{
     cell::{RefCell, RefMut},
     fmt::{Debug, Display},
-    ops::Not,
+    ops::{Add, Div, Mul, Not, Sub},
     rc::Rc,
     sync::Arc,
 };
@@ -387,6 +387,30 @@ impl<T: std::ops::Mul + Copy> std::ops::Mul<T> for &UseState<T> {
 
     fn mul(self, other: T) -> Self::Output {
         *self.current_val.as_ref() * other
+    }
+}
+
+impl<T: Add<Output = T> + Copy> std::ops::AddAssign<T> for &UseState<T> {
+    fn add_assign(&mut self, rhs: T) {
+        self.set((*self.current()) + rhs);
+    }
+}
+
+impl<T: Sub<Output = T> + Copy> std::ops::SubAssign<T> for &UseState<T> {
+    fn sub_assign(&mut self, rhs: T) {
+        self.set((*self.current()) - rhs);
+    }
+}
+
+impl<T: Mul<Output = T> + Copy> std::ops::MulAssign<T> for &UseState<T> {
+    fn mul_assign(&mut self, rhs: T) {
+        self.set((*self.current()) * rhs);
+    }
+}
+
+impl<T: Div<Output = T> + Copy> std::ops::DivAssign<T> for &UseState<T> {
+    fn div_assign(&mut self, rhs: T) {
+        self.set((*self.current()) / rhs);
     }
 }
 
