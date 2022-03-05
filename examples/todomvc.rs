@@ -118,34 +118,43 @@ pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let completed = if todo.checked { "completed" } else { "" };
     let editing = if **is_editing { "editing" } else { "" };
 
-    rsx!(cx, li {
-        class: "{completed} {editing}",
-        div { class: "view",
-            input { class: "toggle", r#type: "checkbox", id: "cbg-{todo.id}", checked: "{todo.checked}",
-                onchange: move |evt| {
-                    cx.props.todos.make_mut()[&cx.props.id].checked = evt.value.parse().unwrap();
+    cx.render(rsx!{
+        li {
+            class: "{completed} {editing}",
+            div { class: "view",
+
+                input {
+                    class: "toggle",
+                    r#type: "checkbox",
+                    id: "cbg-{todo.id}",
+                    checked: "{todo.checked}",
+                    oninput: move |evt| {
+                        cx.props.todos.make_mut()[&cx.props.id].checked = evt.value.parse().unwrap();
+                    }
+                }
+
+                label {
+                    r#for: "cbg-{todo.id}",
+                    onclick: move |_| is_editing.set(true),
+                    prevent_default: "onclick",
+                    "{todo.contents}"
                 }
             }
-            label {
-                r#for: "cbg-{todo.id}",
-                onclick: move |_| is_editing.set(true),
-                "{todo.contents}"
-            }
+            is_editing.then(|| rsx!{
+                input {
+                    class: "edit",
+                    value: "{todo.contents}",
+                    oninput: move |evt| cx.props.todos.make_mut()[&cx.props.id].contents = evt.value.clone(),
+                    autofocus: "true",
+                    onfocusout: move |_| is_editing.set(false),
+                    onkeydown: move |evt| {
+                        match evt.key.as_str() {
+                            "Enter" | "Escape" | "Tab" => is_editing.set(false),
+                            _ => {}
+                        }
+                    },
+                }
+            })
         }
-        is_editing.then(|| rsx!{
-            input {
-                class: "edit",
-                value: "{todo.contents}",
-                oninput: move |evt| cx.props.todos.make_mut()[&cx.props.id].contents = evt.value.clone(),
-                autofocus: "true",
-                onfocusout: move |_| is_editing.set(false),
-                onkeydown: move |evt| {
-                    match evt.key.as_str() {
-                        "Enter" | "Escape" | "Tab" => is_editing.set(false),
-                        _ => {}
-                    }
-                },
-            }
-        })
     })
 }

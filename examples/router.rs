@@ -13,18 +13,17 @@ fn app(cx: Scope) -> Element {
         Router {
             ul {
                 Link { to: "/",  li { "Go home!" } }
-                Link { to: "users",  li { "List all users" } }
-                Link { to: "blog", li { "Blog posts" } }
+                Link { to: "/users",  li { "List all users" } }
+                Link { to: "/blog", li { "Blog posts" } }
+
+                Link { to: "/users/bill",  li { "List all users" } }
+                Link { to: "/blog/5", li { "Blog post 5" } }
             }
             Route { to: "/", "Home" }
-            Route { to: "users",
-                Route { to: "/", "User list" }
-                Route { to: ":name", User {} }
-             }
-            Route { to: "blog"
-                Route { to: "/", "Blog list" }
-                Route { to: ":post", BlogPost {} }
-            }
+            Route { to: "/users", "User list" }
+            Route { to: "/users/:name", User {} }
+            Route { to: "/blog", "Blog list" }
+            Route { to: "/blog/:post", BlogPost {} }
             Route { to: "", "Err 404 Route Not Found" }
         }
     })
