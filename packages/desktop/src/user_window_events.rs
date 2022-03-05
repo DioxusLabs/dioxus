@@ -6,7 +6,7 @@ use crate::controller::DesktopController;
 use bevy::prelude::*;
 
 #[derive(Debug)]
-pub(crate) enum UserWindowEvent {
+pub(crate) enum UserWindowEvent<T> {
     Update,
 
     CloseWindow,
@@ -29,13 +29,13 @@ pub(crate) enum UserWindowEvent {
 
     DevTool,
 
-    BevyUpdate,
+    BevyUpdate(T),
 }
 
 use UserWindowEvent::*;
 
-pub(super) fn handler(
-    user_event: UserWindowEvent,
+pub(super) fn handler<T: std::fmt::Debug>(
+    user_event: UserWindowEvent<T>,
     desktop: &mut DesktopController,
     control_flow: &mut ControlFlow,
     app: Option<&mut App>,
@@ -75,7 +75,8 @@ pub(super) fn handler(
 
         DevTool => webview.devtool(),
 
-        BevyUpdate => {
+        BevyUpdate(cmd) => {
+            println!("cmd: {:?}", cmd);
             app.expect("Pass Bevy app option to user event handler")
                 .update();
         }

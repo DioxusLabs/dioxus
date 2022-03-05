@@ -112,7 +112,7 @@ pub fn launch_with_props<P: 'static + Send>(
     let mut cfg = DesktopConfig::default().with_default_icon();
     builder(&mut cfg);
 
-    let event_loop = EventLoop::with_user_event();
+    let event_loop = EventLoop::<user_window_events::UserWindowEvent<()>>::with_user_event();
 
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
     let proxy = event_loop.create_proxy();
@@ -280,7 +280,8 @@ impl<CoreCommand: 'static + Send + Debug, UICommand: 'static + Send + Clone>
     fn runner(mut app: App) {
         let mut cfg = DesktopConfig::default().with_default_icon();
         // builder(&mut cfg);
-        let event_loop = EventLoop::with_user_event();
+        let event_loop =
+            EventLoop::<user_window_events::UserWindowEvent<CoreCommand>>::with_user_event();
 
         let (core_tx, mut core_rx) = mpsc::unbounded_channel::<CoreCommand>();
         let (ui_tx, _) = channel::<UICommand>(8);
@@ -296,18 +297,18 @@ impl<CoreCommand: 'static + Send + Debug, UICommand: 'static + Send + Clone>
             channel: (core_tx, ui_tx),
         };
 
-        let mut desktop = DesktopController::new_on_tokio::<AppProps<CoreCommand, UICommand>>(
-            desktop_resource.root,
-            props,
-            event_loop.create_proxy(),
-        );
+        let mut desktop = DesktopController::new_on_tokio::<
+            AppProps<CoreCommand, UICommand>,
+            CoreCommand,
+        >(desktop_resource.root, props, event_loop.create_proxy());
         let proxy = event_loop.create_proxy();
 
         let proxy_clone = proxy.clone();
         let runtime = tokio::runtime::Runtime::new().expect("Failed to initialize runtime");
         runtime.spawn(async move {
-            while let Some(_cmd) = core_rx.recv().await {
-                let _res = proxy_clone.send_event(user_window_events::UserWindowEvent::BevyUpdate);
+            while let Some(cmd) = core_rx.recv().await {
+                let _res =
+                    proxy_clone.send_event(user_window_events::UserWindowEvent::BevyUpdate(cmd));
             }
         });
 

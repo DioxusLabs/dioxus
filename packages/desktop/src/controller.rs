@@ -23,10 +23,10 @@ pub(super) struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub(super) fn new_on_tokio<P: Send + 'static>(
+    pub(super) fn new_on_tokio<P: Send + 'static, T: Send>(
         root: Component<P>,
         props: P,
-        proxy: EventLoopProxy<UserWindowEvent>,
+        proxy: EventLoopProxy<UserWindowEvent<T>>,
     ) -> Self {
         let edit_queue = Arc::new(RwLock::new(VecDeque::new()));
         let pending_edits = edit_queue.clone();
@@ -58,7 +58,7 @@ impl DesktopController {
                     .push_front(serde_json::to_string(&edits.edits).unwrap());
 
                 // Make sure the window is ready for any new updates
-                proxy.send_event(UserWindowEvent::Update).unwrap();
+                let _ = proxy.send_event(UserWindowEvent::Update);
 
                 loop {
                     dom.wait_for_work().await;

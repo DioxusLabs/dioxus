@@ -6,7 +6,7 @@ use wry::application::event_loop::EventLoopProxy;
 use crate::user_window_events::UserWindowEvent;
 use UserWindowEvent::*;
 
-type ProxyType = EventLoopProxy<UserWindowEvent>;
+type ProxyType<T> = EventLoopProxy<UserWindowEvent<T>>;
 
 /// Desktop-Window handle api context
 ///
@@ -18,12 +18,12 @@ type ProxyType = EventLoopProxy<UserWindowEvent>;
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
-pub struct DesktopContext {
-    proxy: ProxyType,
+pub struct DesktopContext<T: 'static> {
+    proxy: ProxyType<T>,
 }
 
-impl DesktopContext {
-    pub(crate) fn new(proxy: ProxyType) -> Self {
+impl<T> DesktopContext<T> {
+    pub(crate) fn new(proxy: ProxyType<T>) -> Self {
         Self { proxy }
     }
 
@@ -111,8 +111,8 @@ impl DesktopContext {
 }
 
 /// use this function can get the `DesktopContext` context.
-pub fn use_window(cx: &ScopeState) -> &Rc<DesktopContext> {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
+pub fn use_window<T>(cx: &ScopeState) -> &Rc<DesktopContext<T>> {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext<T>>())
         .as_ref()
         .unwrap()
 }
