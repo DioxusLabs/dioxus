@@ -31,7 +31,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let post = dioxus::router::use_route(&cx).last_segment();
+    let post = dioxus::router::use_route(&cx).last_segment()?;
 
     cx.render(rsx! {
         div {
@@ -47,7 +47,8 @@ struct Query {
 }
 
 fn User(cx: Scope) -> Element {
-    let post = dioxus::router::use_route(&cx).last_segment();
+    let post = dioxus::router::use_route(&cx).last_segment()?;
+
     let query = dioxus::router::use_route(&cx)
         .query::<Query>()
         .unwrap_or(Query { bold: false });

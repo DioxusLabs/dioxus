@@ -1,94 +1,109 @@
+use crate::{ParsedRoute, RouteContext, RouterCore, RouterService};
 use dioxus_core::{ScopeId, ScopeState};
-use gloo::history::{HistoryResult, Location};
-use serde::de::DeserializeOwned;
-use std::{rc::Rc, str::FromStr};
+use std::{borrow::Cow, str::FromStr, sync::Arc};
+use url::Url;
 
-use crate::RouterService;
+/// This hook provides access to information about the current location in the
+/// context of a [`Router`]. If this function is called outside of a `Router`
+/// component it will panic.
+pub fn use_route(cx: &ScopeState) -> &UseRoute {
+    let handle = cx.use_hook(|_| {
+        let router = cx
+            .consume_context::<RouterService>()
+            .expect("Cannot call use_route outside the scope of a Router component");
 
-/// This struct provides is a wrapper around the internal router
-/// implementation, with methods for getting information about the current
-/// route.
-#[derive(Clone)]
+        let route_context = cx
+            .consume_context::<RouteContext>()
+            .expect("Cannot call use_route outside the scope of a Router component");
+
+        router.subscribe_onchange(cx.scope_id());
+
+        UseRouteListener {
+            state: UseRoute {
+                route_context,
+                route: router.current_location(),
+            },
+            router,
+            scope: cx.scope_id(),
+        }
+    });
+
+    handle.state.route = handle.router.current_location();
+
+    &handle.state
+}
+
+/// A handle to the current location of the router.
 pub struct UseRoute {
-    router: Rc<RouterService>,
+    pub(crate) route: Arc<ParsedRoute>,
+    pub(crate) route_context: RouteContext,
 }
 
 impl UseRoute {
-    /// This method simply calls the [`Location::query`] method.
-    pub fn query<T>(&self) -> HistoryResult<T>
-    where
-        T: DeserializeOwned,
-    {
-        self.current_location().query::<T>()
+    /// Get the underlying [`Url`] of the current location.
+    pub fn url(&self) -> &Url {
+        &self.route.url
+    }
+
+    /// Get the first query parameter given the parameter name.
+    ///
+    /// If you need to get more than one parameter, use [`query_pairs`] on the [`Url`] instead.
+    #[cfg(feature = "query")]
+    pub fn query<T: serde::de::DeserializeOwned>(&self) -> Option<T> {
+        let query = self.url().query()?;
+        serde_urlencoded::from_str(query.strip_prefix('?').unwrap_or("")).ok()
+    }
+
+    /// Get the first query parameter given the parameter name.
+    ///
+    /// If you need to get more than one parameter, use [`query_pairs`] on the [`Url`] instead.
+    pub fn query_param(&self, param: &str) -> Option<Cow<str>> {
+        self.route
+            .url
+            .query_pairs()
+            .find(|(k, _)| k == param)
+            .map(|(_, v)| v)
     }
 
     /// Returns the nth segment in the path. Paths that end with a slash have
     /// the slash removed before determining the segments. If the path has
     /// fewer segments than `n` then this method returns `None`.
-    pub fn nth_segment(&self, n: usize) -> Option<String> {
-        let mut segments = self.path_segments();
-        let len = segments.len();
-        if len - 1 < n {
-            return None;
-        }
-        Some(segments.remove(n))
+    pub fn nth_segment(&self, n: usize) -> Option<&str> {
+        self.route.url.path_segments()?.nth(n)
     }
 
     /// Returns the last segment in the path. Paths that end with a slash have
     /// the slash removed before determining the segments. The root path, `/`,
     /// will return an empty string.
-    pub fn last_segment(&self) -> String {
-        let mut segments = self.path_segments();
-        segments.remove(segments.len() - 1)
+    pub fn last_segment(&self) -> Option<&str> {
+        self.route.url.path_segments()?.last()
     }
 
     /// Get the named parameter from the path, as defined in your router. The
     /// value will be parsed into the type specified by `T` by calling
     /// `value.parse::<T>()`. This method returns `None` if the named
     /// parameter does not exist in the current path.
-    pub fn segment<T>(&self, name: &str) -> Option<Result<T, T::Err>>
+    pub fn segment(&self, name: &str) -> Option<&str> {
+        let index = self
+            .route_context
+            .total_route
+            .trim_start_matches('/')
+            .split('/')
+            .position(|segment| segment.starts_with(':') && &segment[1..] == name)?;
+
+        self.route.url.path_segments()?.nth(index)
+    }
+
+    /// Get the named parameter from the path, as defined in your router. The
+    /// value will be parsed into the type specified by `T` by calling
+    /// `value.parse::<T>()`. This method returns `None` if the named
+    /// parameter does not exist in the current path.
+    pub fn parse_segment<T>(&self, name: &str) -> Option<Result<T, T::Err>>
     where
         T: FromStr,
     {
-        self.router
-            .current_path_params()
-            .get(name)
-            .and_then(|v| Some(v.parse::<T>()))
+        self.segment(name).map(|value| value.parse::<T>())
     }
-
-    /// Returns the [Location] for the current route.
-    pub fn current_location(&self) -> Location {
-        self.router.current_location()
-    }
-
-    fn path_segments(&self) -> Vec<String> {
-        let location = self.router.current_location();
-        let path = location.path();
-        if path == "/" {
-            return vec![String::new()];
-        }
-        let stripped = &location.path()[1..];
-        stripped.split('/').map(str::to_string).collect::<Vec<_>>()
-    }
-}
-
-/// This hook provides access to information about the current location in the
-/// context of a [`Router`]. If this function is called outside of a `Router`
-/// component it will panic.
-pub fn use_route(cx: &ScopeState) -> &UseRoute {
-    &cx.use_hook(|_| {
-        let router = cx
-            .consume_context::<RouterService>()
-            .expect("Cannot call use_route outside the scope of a Router component");
-
-        router.subscribe_onchange(cx.scope_id());
-
-        UseRouteListener {
-            router: UseRoute { router },
-            scope: cx.scope_id(),
-        }
-    })
-    .router
 }
 
 // The entire purpose of this struct is to unubscribe this component when it is unmounted.
@@ -96,19 +111,13 @@ pub fn use_route(cx: &ScopeState) -> &UseRoute {
 // Instead, we hide the drop implementation on this private type exclusive to the hook,
 // and reveal our cached version of UseRoute to the component.
 struct UseRouteListener {
-    router: UseRoute,
+    state: UseRoute,
+    router: Arc<RouterCore>,
     scope: ScopeId,
 }
+
 impl Drop for UseRouteListener {
     fn drop(&mut self) {
-        self.router.router.unsubscribe_onchange(self.scope)
+        self.router.unsubscribe_onchange(self.scope)
     }
-}
-
-/// This hook provides access to the `RouterService` for the app.
-pub fn use_router(cx: &ScopeState) -> &Rc<RouterService> {
-    cx.use_hook(|_| {
-        cx.consume_context::<RouterService>()
-            .expect("Cannot call use_route outside the scope of a Router component")
-    })
 }

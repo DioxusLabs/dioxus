@@ -51,7 +51,7 @@
 
 Dioxus Router is a first-party Router for all your Dioxus Apps. It provides a React-Router style interface that works anywhere: across the browser, SSR, and natively.
 
-```rust
+```rust, ignore
 fn app() {
     cx.render(rsx! {
         Router {

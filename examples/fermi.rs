@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use fermi::prelude::*;
 
 fn main() {
     dioxus::desktop::launch(app)
