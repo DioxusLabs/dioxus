@@ -8,10 +8,11 @@
 # Resources
 
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
-- [Getting Started](https://dioxuslabs.com/getting-started)
-- [Book](https://dioxuslabs.com/book)
+
+- [Getting Started](https://dioxuslabs.com/guide/setup.html)
+- [Book](https://dioxuslabs.com/guide/)
 - [Reference](https://dioxuslabs.com/reference)
-- [Community Examples](https://github.com/DioxusLabs/community-examples)
+- [Examples](https://github.com/DioxusLabs/example-projects)
 
 # Overview and Goals
 
@@ -279,12 +280,12 @@ fn main() {
 }
 
 fn App(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let count = use_state(&cx, || 0);
 
     cx.render(rsx!(
         div { "Count: {count}" }
-        button { onclick: move |_| count += 1, "Increment" }
-        button { onclick: move |_| count -= 1, "Decrement" }
+        button { onclick: move |_| count.set(count + 1), "Increment" }
+        button { onclick: move |_| count.set(count - 1), "Decrement" }
     ))
 }
 ```
