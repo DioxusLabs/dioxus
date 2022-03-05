@@ -16,9 +16,9 @@ pub struct Client {
 
 fn app(cx: Scope) -> Element {
     let clients = use_ref(&cx, || vec![] as Vec<Client>);
-    let (firstname, set_firstname) = use_state(&cx, String::new);
-    let (lastname, set_lastname) = use_state(&cx, String::new);
-    let (description, set_description) = use_state(&cx, String::new);
+    let firstname = use_state(&cx, String::new);
+    let lastname = use_state(&cx, String::new);
+    let description = use_state(&cx, String::new);
 
     cx.render(rsx!(
         body {
@@ -55,32 +55,32 @@ fn app(cx: Scope) -> Element {
                                 class: "new-client firstname",
                                 placeholder: "First name",
                                 value: "{firstname}",
-                                oninput: move |e| set_firstname(e.value.clone())
+                                oninput: move |e| firstname.set(e.value.clone())
                             }
                             input {
                                 class: "new-client lastname",
                                 placeholder: "Last name",
                                 value: "{lastname}",
-                                oninput: move |e| set_lastname(e.value.clone())
+                                oninput: move |e| lastname.set(e.value.clone())
                             }
                             textarea {
                                 class: "new-client description",
                                 placeholder: "Description",
                                 value: "{description}",
-                                oninput: move |e| set_description(e.value.clone())
+                                oninput: move |e| description.set(e.value.clone())
                             }
                         }
                         button {
                             class: "pure-button pure-button-primary",
                             onclick: move |_| {
                                 clients.write().push(Client {
-                                    description: (*description).clone(),
-                                    first_name: (*firstname).clone(),
-                                    last_name: (*lastname).clone(),
+                                    description: (**description).clone(),
+                                    first_name: (**firstname).clone(),
+                                    last_name: (**lastname).clone(),
                                 });
-                                set_description(String::new());
-                                set_firstname(String::new());
-                                set_lastname(String::new());
+                                description.set(String::new());
+                                firstname.set(String::new());
+                                lastname.set(String::new());
                             },
                             "Add New"
                         }

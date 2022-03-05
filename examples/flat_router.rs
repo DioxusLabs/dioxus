@@ -1,7 +1,4 @@
 use dioxus::prelude::*;
-
-use dioxus::router::*;
-
 use dioxus::desktop::tao::dpi::LogicalSize;
 
 fn main() {
