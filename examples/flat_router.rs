@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use dioxus::desktop::tao::dpi::LogicalSize;
+use dioxus::prelude::*;
 
 fn main() {
     env_logger::init();
