@@ -82,10 +82,10 @@ If you know React, then you already know Dioxus.
 <table style="width:100%" align="center">
     <tr >
         <th><a href="https://dioxuslabs.com/guide/">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/reference/platforms/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/reference/platforms/desktop/">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/reference/platforms/ssr/">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/reference/platforms/mobile/">Mobile</a></th>
+        <th><a href="https://dioxuslabs.com/reference/web">Web</a></th>
+        <th><a href="https://dioxuslabs.com/reference/desktop/">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/reference/ssr/">SSR</a></th>
+        <th><a href="https://dioxuslabs.com/reference/mobile/">Mobile</a></th>
         <th><a href="https://dioxuslabs.com/guide/concepts/managing_state.html">State</a></th>
     <tr>
 </table>
