@@ -45,24 +45,8 @@ serde = { version = "1", features = ["derive"], optional = true }
 # todo: I want to get rid of this
 backtrace = "0.3"
 
-[dev-dependencies]
-anyhow = "1.0.42"
-fern = { version = "0.6.0", features = ["colored"] }
-rand = { version = "0.8.4", features = ["small_rng"] }
-dioxus-core-macro = { path = "../core-macro", version ="^0.1.6"}
-criterion = "0.3.5"
-thiserror = "1.0.30"
-dioxus-html = { path = "../html" }
-
 [features]
 default = []
 serialize = ["serde"]
 debug_vdom = []
 
-[[bench]]
-name = "create"
-harness = false
-
-[[bench]]
-name = "jsframework"
-harness = false

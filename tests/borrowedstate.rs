@@ -1,9 +1,6 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use dioxus_core as dioxus;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
 
 #[test]
 fn test_borrowed_state() {

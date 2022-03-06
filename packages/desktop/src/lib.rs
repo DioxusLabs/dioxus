@@ -1,18 +1,23 @@
 #![doc = include_str!("readme.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+// #![deny(missing_docs)]
 
-pub mod cfg;
+mod cfg;
 mod controller;
-pub mod desktop_context;
-pub mod escape;
-pub mod events;
+mod desktop_context;
+mod escape;
+mod events;
 mod protocol;
-mod user_window_events;
 
+use desktop_context::UserWindowEvent;
+pub use desktop_context::{use_window, DesktopContext};
+pub use wry;
+pub use wry::application as tao;
+
+use crate::events::trigger_from_serialized;
 use cfg::DesktopConfig;
 use controller::DesktopController;
-pub use desktop_context::use_window;
 use dioxus_core::Component;
 use dioxus_core::*;
 use events::parse_ipc_message;
@@ -21,8 +26,6 @@ use tao::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-pub use wry;
-pub use wry::application as tao;
 use wry::webview::WebViewBuilder;
 
 pub use bevy::prelude::{Component as BevyComponent, *};
@@ -31,8 +34,6 @@ pub use tokio::sync::{
     broadcast::{channel, Receiver, Sender},
     mpsc,
 };
-
-use crate::events::trigger_from_serialized;
 
 /// Launch the WebView and run the event loop.
 ///
@@ -112,7 +113,7 @@ pub fn launch_with_props<P: 'static + Send>(
     let mut cfg = DesktopConfig::default().with_default_icon();
     builder(&mut cfg);
 
-    let event_loop = EventLoop::<user_window_events::UserWindowEvent<()>>::with_user_event();
+    let event_loop = EventLoop::<UserWindowEvent<()>>::with_user_event();
 
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
     let proxy = event_loop.create_proxy();
@@ -130,7 +131,10 @@ pub fn launch_with_props<P: 'static + Send>(
                 let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
 
                 let proxy = proxy.clone();
+
                 let file_handler = cfg.file_drop_handler.take();
+
+                let resource_dir = cfg.resource_dir.clone();
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
@@ -147,8 +151,7 @@ pub fn launch_with_props<P: 'static + Send>(
                                 }
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                    let _ = proxy
-                                        .send_event(user_window_events::UserWindowEvent::Update);
+                                    let _ = proxy.send_event(UserWindowEvent::Update);
                                 }
                                 "browser_open" => {
                                     let data = message.params();
@@ -168,7 +171,9 @@ pub fn launch_with_props<P: 'static + Send>(
                                 log::warn!("invalid IPC message received");
                             });
                     })
-                    .with_custom_protocol(String::from("dioxus"), protocol::desktop_handler)
+                    .with_custom_protocol(String::from("dioxus"), move |r| {
+                        protocol::desktop_handler(r, resource_dir.clone())
+                    })
                     .with_file_drop_handler(move |window, evet| {
                         file_handler
                             .as_ref()
@@ -221,7 +226,7 @@ pub fn launch_with_props<P: 'static + Send>(
             },
 
             Event::UserEvent(user_event) => {
-                user_window_events::handler(user_event, &mut desktop, control_flow, None)
+                desktop_context::handler(user_event, &mut desktop, control_flow, None)
             }
             Event::MainEventsCleared => {}
             Event::Resumed => {}
@@ -239,8 +244,10 @@ pub struct DioxusDesktopPlugin<CoreCommand, UICommand> {
     pub ui_cmd_type: PhantomData<UICommand>,
 }
 
-impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Sync + Clone> Plugin
-    for DioxusDesktopPlugin<CoreCommand, UICommand>
+impl<
+        CoreCommand: 'static + Send + Sync + Debug + Clone,
+        UICommand: 'static + Send + Sync + Clone,
+    > Plugin for DioxusDesktopPlugin<CoreCommand, UICommand>
 {
     fn build(&self, app: &mut App) {
         app.add_event::<CoreCommand>()
@@ -275,14 +282,13 @@ pub struct AppProps<CoreCommand, UICommand> {
     pub channel: (mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>),
 }
 
-impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Clone>
+impl<CoreCommand: 'static + Send + Sync + Debug + Clone, UICommand: 'static + Send + Clone>
     DioxusDesktop<CoreCommand, UICommand>
 {
     fn runner(mut app: App) {
         let mut cfg = DesktopConfig::default().with_default_icon();
         // builder(&mut cfg);
-        let event_loop =
-            EventLoop::<user_window_events::UserWindowEvent<CoreCommand>>::with_user_event();
+        let event_loop = EventLoop::<UserWindowEvent<CoreCommand>>::with_user_event();
 
         let (core_tx, mut core_rx) = mpsc::unbounded_channel::<CoreCommand>();
         let (ui_tx, _) = channel::<UICommand>(8);
@@ -308,8 +314,7 @@ impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Clo
         let runtime = tokio::runtime::Runtime::new().expect("Failed to initialize runtime");
         runtime.spawn(async move {
             while let Some(cmd) = core_rx.recv().await {
-                let _res =
-                    proxy_clone.send_event(user_window_events::UserWindowEvent::BevyUpdate(cmd));
+                let _res = proxy_clone.send_event(UserWindowEvent::BevyUpdate(cmd));
             }
         });
 
@@ -330,6 +335,8 @@ impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Clo
                     let proxy = proxy.clone();
                     let file_handler = cfg.file_drop_handler.take();
 
+                    let resource_dir = cfg.resource_dir.clone();
+
                     let mut webview = WebViewBuilder::new(window)
                         .unwrap()
                         .with_transparent(cfg.window.window.transparent)
@@ -344,9 +351,7 @@ impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Clo
                                     }
                                     "initialize" => {
                                         is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                        let _ = proxy.send_event(
-                                            user_window_events::UserWindowEvent::Update,
-                                        );
+                                        let _ = proxy.send_event(UserWindowEvent::Update);
                                     }
                                     "browser_open" => {
                                         let data = message.params();
@@ -367,7 +372,9 @@ impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Clo
                                     log::warn!("invalid IPC message received");
                                 })
                         })
-                        .with_custom_protocol(String::from("dioxus"), protocol::desktop_handler)
+                        .with_custom_protocol(String::from("dioxus"), move |r| {
+                            protocol::desktop_handler(r, resource_dir.clone())
+                        })
                         .with_file_drop_handler(move |window, evet| {
                             file_handler
                                 .as_ref()
@@ -419,12 +426,9 @@ impl<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static + Send + Clo
                     _ => {}
                 },
 
-                Event::UserEvent(user_event) => user_window_events::handler(
-                    user_event,
-                    &mut desktop,
-                    control_flow,
-                    Some(&mut app),
-                ),
+                Event::UserEvent(user_event) => {
+                    desktop_context::handler(user_event, &mut desktop, control_flow, Some(&mut app))
+                }
                 Event::MainEventsCleared => {}
                 Event::Resumed => {}
                 Event::Suspended => {}

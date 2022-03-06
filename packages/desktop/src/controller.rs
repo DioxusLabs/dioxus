@@ -1,10 +1,9 @@
-use crate::desktop_context::DesktopContext;
-use crate::user_window_events::UserWindowEvent;
+use crate::desktop_context::{DesktopContext, UserWindowEvent};
 use dioxus_core::*;
 use std::{
-    collections::{HashMap, VecDeque},
-    sync::atomic::AtomicBool,
-    sync::{Arc, RwLock},
+    collections::HashMap,
+    sync::Arc,
+    sync::{atomic::AtomicBool, Mutex},
 };
 use wry::{
     self,
@@ -15,7 +14,7 @@ use wry::{
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
     pub(super) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-    pub(super) pending_edits: Arc<RwLock<VecDeque<String>>>,
+    pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
 }
@@ -23,18 +22,18 @@ pub(super) struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub(super) fn new_on_tokio<P: Send + 'static, T: Send>(
+    pub(super) fn new_on_tokio<P: Send + 'static, T: Send + Clone>(
         root: Component<P>,
         props: P,
         proxy: EventLoopProxy<UserWindowEvent<T>>,
     ) -> Self {
-        let edit_queue = Arc::new(RwLock::new(VecDeque::new()));
-        let pending_edits = edit_queue.clone();
-
+        let edit_queue = Arc::new(Mutex::new(Vec::new()));
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
-        let return_sender = sender.clone();
 
+        let pending_edits = edit_queue.clone();
+        let return_sender = sender.clone();
         let desktop_context_proxy = proxy.clone();
+
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "spawn" onto multiple threads
             let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -53,9 +52,9 @@ impl DesktopController {
                 let edits = dom.rebuild();
 
                 edit_queue
-                    .write()
+                    .lock()
                     .unwrap()
-                    .push_front(serde_json::to_string(&edits.edits).unwrap());
+                    .push(serde_json::to_string(&edits.edits).unwrap());
 
                 // Make sure the window is ready for any new updates
                 let _ = proxy.send_event(UserWindowEvent::Update);
@@ -66,9 +65,9 @@ impl DesktopController {
 
                     while let Some(edit) = muts.pop() {
                         edit_queue
-                            .write()
+                            .lock()
                             .unwrap()
-                            .push_front(serde_json::to_string(&edit.edits).unwrap());
+                            .push(serde_json::to_string(&edit.edits).unwrap());
                     }
 
                     let _ = proxy.send_event(UserWindowEvent::Update);
@@ -95,10 +94,10 @@ impl DesktopController {
 
     pub(super) fn try_load_ready_webviews(&mut self) {
         if self.is_ready.load(std::sync::atomic::Ordering::Relaxed) {
-            let mut queue = self.pending_edits.write().unwrap();
+            let mut queue = self.pending_edits.lock().unwrap();
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
 
-            while let Some(edit) = queue.pop_back() {
+            while let Some(edit) = queue.pop() {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                     .unwrap();
             }

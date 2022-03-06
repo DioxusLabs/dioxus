@@ -28,7 +28,7 @@ fn app(cx: Scope) -> Element {
         }
         main {
             files.read().path_names.iter().enumerate().map(|(dir_id, path)| {
-                let path_end = path.split('/').last().unwrap_or_else(|| path.as_str());
+                let path_end = path.split('/').last().unwrap_or(path.as_str());
                 let icon_type = if path_end.contains('.') {
                     "description"
                 } else {

@@ -7,7 +7,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let (val, set_val) = use_state(&cx, || 5);
+    let val = use_state(&cx, || 5);
 
     cx.render(rsx! {
         div {
@@ -21,12 +21,12 @@ fn app(cx: Scope) -> Element {
                 height: "80%",
                 width: "80%",
                 Die {
-                    value: *val,
+                    value: **val,
                     keep: true,
                     onclick: move |_| {
                         use rand::Rng;
                         let mut rng = rand::thread_rng();
-                        set_val(rng.gen_range(1..6));
+                        val.set(rng.gen_range(1..6));
                     }
                 }
             }

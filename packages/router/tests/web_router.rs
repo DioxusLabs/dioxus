@@ -21,7 +21,7 @@ fn simple_test() {
     static APP: Component = |cx| {
         cx.render(rsx! {
             Router {
-                onchange: move |route| log::info!("route changed to {}", route),
+                onchange: move |route: RouterService| log::info!("route changed to {:?}", route.current_location()),
                 Route { to: "/", Home {} }
                 Route { to: "blog"
                     Route { to: "/", BlogList {} }
@@ -48,7 +48,7 @@ fn simple_test() {
     }
 
     fn BlogPost(cx: Scope) -> Element {
-        let id = use_route(&cx).segment::<usize>("id")?;
+        let id = use_route(&cx).parse_segment::<usize>("id")?;
 
         cx.render(rsx! {
             div {

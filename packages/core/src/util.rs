@@ -1,5 +1,7 @@
 use crate::innerlude::*;
 
+/// An iterator that only yields "real" [`Element`]s. IE only Elements that are
+/// not [`VNode::VComponent`] or [`VNode::VFragment`], .
 pub struct ElementIdIterator<'a> {
     vdom: &'a VirtualDom,
 
@@ -9,6 +11,9 @@ pub struct ElementIdIterator<'a> {
 }
 
 impl<'a> ElementIdIterator<'a> {
+    /// Create a new iterator from the given [`VirtualDom`] and [`VNode`]
+    ///
+    /// This will allow you to iterate through all the real childrne of the [`VNode`].
     pub fn new(vdom: &'a VirtualDom, node: &'a VNode<'a>) -> Self {
         Self {
             vdom,

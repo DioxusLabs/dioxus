@@ -4,11 +4,9 @@ pub mod prelude {
     pub use crate::*;
 }
 
-mod callback;
 mod root;
 
 pub use atoms::*;
-pub use callback::*;
 pub use hooks::*;
 pub use root::*;
 

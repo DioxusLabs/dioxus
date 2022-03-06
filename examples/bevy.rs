@@ -3,7 +3,7 @@ use dioxus::desktop::{AppProps, DioxusDesktop, DioxusDesktopPlugin};
 use dioxus::prelude::*;
 use std::marker::PhantomData;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum CoreCommand {
     Click,
 }
@@ -37,7 +37,7 @@ fn notify_core_command(mut events: EventReader<CoreCommand>) {
 }
 
 fn app(cx: Scope<AppProps<CoreCommand, UICommand>>) -> Element {
-    use_future(&cx, || {
+    use_future(&cx, (), |_| {
         let mut rx = cx.props.channel.1.subscribe();
         async move {
             while let Ok(cmd) = rx.recv().await {

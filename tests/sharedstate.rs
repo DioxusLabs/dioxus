@@ -1,10 +1,8 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
-use dioxus::{prelude::*, DomEdit, Mutations, SchedulerMsg, ScopeId};
-use dioxus_core as dioxus;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
-
+use dioxus::prelude::*;
+use dioxus_core::{DomEdit, Mutations, SchedulerMsg, ScopeId};
+use std::rc::Rc;
 use DomEdit::*;
 
 mod test_logging;
@@ -14,12 +12,12 @@ fn shared_state_test() {
     struct MySharedState(&'static str);
 
     static App: Component = |cx| {
-        cx.provide_context(MySharedState("world!"));
+        cx.provide_context(Rc::new(MySharedState("world!")));
         cx.render(rsx!(Child {}))
     };
 
     static Child: Component = |cx| {
-        let shared = cx.consume_context::<MySharedState>()?;
+        let shared = cx.consume_context::<Rc<MySharedState>>()?;
         cx.render(rsx!("Hello, {shared.0}"))
     };
 
@@ -43,7 +41,7 @@ fn swap_test() {
         let val = cx.use_hook(|_| 0);
         *val += 1;
 
-        cx.provide_context(MySharedState("world!"));
+        cx.provide_context(Rc::new(MySharedState("world!")));
 
         let child = match *val % 2 {
             0 => rsx!(
@@ -74,7 +72,7 @@ fn swap_test() {
 
     #[inline_props]
     fn Child1<'a>(cx: Scope, children: Element<'a>) -> Element {
-        let shared = cx.consume_context::<MySharedState>().unwrap();
+        let shared = cx.consume_context::<Rc<MySharedState>>().unwrap();
         println!("Child1: {}", shared.0);
         cx.render(rsx! {
             div {
@@ -86,7 +84,7 @@ fn swap_test() {
 
     #[inline_props]
     fn Child2<'a>(cx: Scope, children: Element<'a>) -> Element {
-        let shared = cx.consume_context::<MySharedState>().unwrap();
+        let shared = cx.consume_context::<Rc<MySharedState>>().unwrap();
         println!("Child2: {}", shared.0);
         cx.render(rsx! {
             h1 {

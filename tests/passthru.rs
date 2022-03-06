@@ -7,10 +7,7 @@
 //!
 //! It does not validated that component lifecycles work properly. This is done in another test file.
 
-use dioxus::{prelude::*, DomEdit, ScopeId};
-use dioxus_core as dioxus;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 
 mod test_logging;
 
@@ -20,7 +17,7 @@ fn new_dom() -> VirtualDom {
     VirtualDom::new(|cx| rsx!(cx, "hi"))
 }
 
-use DomEdit::*;
+use dioxus_core::DomEdit::*;
 
 /// Should push the text node onto the stack and modify it
 #[test]

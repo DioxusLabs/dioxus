@@ -11,11 +11,7 @@
 //! Don't have a good way to validate, everything is done manually ATM
 
 use dioxus::prelude::*;
-use dioxus::DomEdit;
-use dioxus_core as dioxus;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
-use DomEdit::*;
+use dioxus_core::DomEdit::*;
 
 #[test]
 fn app_runs() {

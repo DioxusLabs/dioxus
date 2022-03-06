@@ -10,7 +10,7 @@ fn app(cx: Scope) -> Element {
             p {
                 a {
                     href: "http://dioxuslabs.com/",
-                    "default link"
+                    "Default link - links outside of your app"
                 }
             }
             p {
@@ -20,7 +20,19 @@ fn app(cx: Scope) -> Element {
                     onclick: |_| {
                         println!("Hello Dioxus");
                     },
-                    "custom event link",
+                    "Custom event link - links inside of your app",
+                }
+            }
+        }
+        div {
+            Router {
+                Route { to: "/", h1 { "Home" } },
+                Route { to: "/settings", h1 { "settings" } },
+
+                p { "----"}
+                ul {
+                    Link { to: "/", li { "Router link to home" } },
+                    Link { to: "/settings", li { "Router link to settings" } },
                 }
             }
         }

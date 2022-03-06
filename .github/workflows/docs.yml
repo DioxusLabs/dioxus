@@ -24,7 +24,8 @@ jobs:
         run: cd docs &&
           cd guide && mdbook build -d ../nightly/guide && cd .. &&
           cd reference && mdbook build -d ../nightly/reference && cd .. &&
-          cd router && mdbook build -d ../nightly/router  && cd ..
+          cd router && mdbook build -d ../nightly/router  && cd .. &&
+          cd cli && mdbook build -d ../nightly/cli  && cd ..
 
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4.2.3

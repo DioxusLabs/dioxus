@@ -20,13 +20,13 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let (val, set_val) = use_state(&cx, || 0);
+    let val = use_state(&cx, || 0);
 
     cx.render(rsx! {
         div {
             h1 { "hello world. Count: {val}" }
             button {
-                onclick: move |_| set_val(val + 1),
+                onclick: move |_| *val.make_mut() += 1,
                 "click to increment"
             }
         }

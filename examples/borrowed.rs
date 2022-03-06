@@ -42,7 +42,7 @@ struct C1Props<'a> {
 }
 
 fn Child1<'a>(cx: Scope<'a, C1Props<'a>>) -> Element {
-    let (left, right) = cx.props.text.split_once("=").unwrap();
+    let (left, right) = cx.props.text.split_once('=').unwrap();
 
     cx.render(rsx! {
         div {

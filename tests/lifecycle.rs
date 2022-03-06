@@ -3,12 +3,7 @@
 
 //! Tests for the lifecycle of components.
 use dioxus::prelude::*;
-use dioxus_core as dioxus;
 use dioxus_core::DomEdit::*;
-use dioxus_core::ScopeId;
-
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
 use std::sync::{Arc, Mutex};
 
 mod test_logging;

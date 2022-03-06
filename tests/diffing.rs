@@ -6,10 +6,7 @@
 //!
 //! It does not validated that component lifecycles work properly. This is done in another test file.
 
-use dioxus::{prelude::*, DomEdit};
-use dioxus_core as dioxus;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 
 mod test_logging;
 
@@ -19,7 +16,7 @@ fn new_dom() -> VirtualDom {
     VirtualDom::new(|cx| rsx!(cx, "hi"))
 }
 
-use DomEdit::*;
+use dioxus_core::DomEdit::*;
 
 /// Should push the text node onto the stack and modify it
 #[test]
@@ -623,16 +620,17 @@ fn controlled_keyed_diffing_out_of_order() {
     assert_eq!(
         changes.edits,
         [
+            Remove { root: 4 },
             // move 4 to after 6
             PushRoot { root: 1 },
             InsertAfter { n: 1, root: 3 },
             // remove 7
 
             // create 9 and insert before 6
-            CreateElement { root: 5, tag: "div" },
+            CreateElement { root: 4, tag: "div" },
             InsertBefore { n: 1, root: 3 },
             // create 0 and insert before 5
-            CreateElement { root: 6, tag: "div" },
+            CreateElement { root: 5, tag: "div" },
             InsertBefore { n: 1, root: 2 },
         ]
     );
@@ -659,7 +657,8 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
     assert_eq!(
         changes.edits,
         [
-            CreateElement { root: 6, tag: "div" },
+            Remove { root: 5 },
+            CreateElement { root: 5, tag: "div" },
             InsertBefore { n: 1, root: 3 },
             PushRoot { root: 4 },
             InsertBefore { n: 1, root: 1 },

@@ -127,8 +127,8 @@ impl WebsysDom {
                     self.interpreter.RemoveEventListener(root, event)
                 }
 
-                DomEdit::RemoveAttribute { root, name } => {
-                    self.interpreter.RemoveAttribute(root, name)
+                DomEdit::RemoveAttribute { root, name, ns } => {
+                    self.interpreter.RemoveAttribute(root, name, ns)
                 }
 
                 DomEdit::CreateTextNode { text, root } => {

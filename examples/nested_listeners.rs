@@ -14,6 +14,8 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             onclick: move |_| println!("clicked! top"),
+            "- div"
+
             button {
                 onclick: move |_| println!("clicked! bottom propoate"),
                 "Propogate"
@@ -26,7 +28,7 @@ fn app(cx: Scope) -> Element {
                 "Dont propogate"
             }
             button {
-                "Does not handle clicks"
+                "Does not handle clicks - only propogate"
             }
         }
     })

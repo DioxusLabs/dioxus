@@ -10,10 +10,8 @@ Specifically:
 - [ ] Async isn't busted
 */
 
-use dioxus::{prelude::*, SchedulerMsg, ScopeId};
-use dioxus_core as dioxus;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
+use dioxus_core::SchedulerMsg;
 
 mod test_logging;
 

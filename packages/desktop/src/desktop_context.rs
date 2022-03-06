@@ -1,16 +1,29 @@
-use std::rc::Rc;
-
+use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
+use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
+use wry::application::window::Fullscreen as WryFullscreen;
 
-use crate::user_window_events::UserWindowEvent;
 use UserWindowEvent::*;
 
-type ProxyType<T> = EventLoopProxy<UserWindowEvent<T>>;
+use bevy::ecs::event::Events;
+use bevy::prelude::App;
 
-/// Desktop-Window handle api context
+pub type ProxyType<T> = EventLoopProxy<UserWindowEvent<T>>;
+
+/// Get an imperative handle to the current window
+pub fn use_window<T: std::clone::Clone>(cx: &ScopeState) -> &DesktopContext<T> {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext<T>>())
+        .as_ref()
+        .unwrap()
+}
+
+/// An imperative interface to the current window.
 ///
-/// you can use this context control some window event
+/// To get a handle to the current window, use the [`use_window`] hook.
+///
+///
+/// # Example
 ///
 /// you can use `cx.consume_context::<DesktopContext>` to get this context
 ///
@@ -18,11 +31,11 @@ type ProxyType<T> = EventLoopProxy<UserWindowEvent<T>>;
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
-pub struct DesktopContext<T: 'static> {
+pub struct DesktopContext<T: 'static + Clone> {
     proxy: ProxyType<T>,
 }
 
-impl<T> DesktopContext<T> {
+impl<T: Clone> DesktopContext<T> {
     pub(crate) fn new(proxy: ProxyType<T>) -> Self {
         Self { proxy }
     }
@@ -84,12 +97,12 @@ impl<T> DesktopContext<T> {
         let _ = self.proxy.send_event(AlwaysOnTop(top));
     }
 
-    // set cursor visible or not
+    /// set cursor visible or not
     pub fn set_cursor_visible(&self, visible: bool) {
         let _ = self.proxy.send_event(CursorVisible(visible));
     }
 
-    // set cursor grab
+    /// set cursor grab
     pub fn set_cursor_grab(&self, grab: bool) {
         let _ = self.proxy.send_event(CursorGrab(grab));
     }
@@ -110,9 +123,83 @@ impl<T> DesktopContext<T> {
     }
 }
 
-/// use this function can get the `DesktopContext` context.
-pub fn use_window<T>(cx: &ScopeState) -> &Rc<DesktopContext<T>> {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext<T>>())
-        .as_ref()
-        .unwrap()
+#[derive(Debug)]
+pub enum UserWindowEvent<T> {
+    Update,
+
+    CloseWindow,
+    DragWindow,
+    FocusWindow,
+
+    Visible(bool),
+    Minimize(bool),
+    Maximize(bool),
+    MaximizeToggle,
+    Resizable(bool),
+    AlwaysOnTop(bool),
+    Fullscreen(bool),
+
+    CursorVisible(bool),
+    CursorGrab(bool),
+
+    SetTitle(String),
+    SetDecorations(bool),
+
+    DevTool,
+
+    BevyUpdate(T),
+}
+
+pub(super) fn handler<T: 'static + Send + Sync + std::fmt::Debug>(
+    user_event: UserWindowEvent<T>,
+    desktop: &mut DesktopController,
+    control_flow: &mut ControlFlow,
+    app: Option<&mut App>,
+) {
+    // currently dioxus-desktop supports a single window only,
+    // so we can grab the only webview from the map;
+    let webview = desktop.webviews.values().next().unwrap();
+    let window = webview.window();
+
+    match user_event {
+        Update => desktop.try_load_ready_webviews(),
+        CloseWindow => *control_flow = ControlFlow::Exit,
+        DragWindow => {
+            // if the drag_window has any errors, we don't do anything
+            window.fullscreen().is_none().then(|| window.drag_window());
+        }
+        Visible(state) => window.set_visible(state),
+        Minimize(state) => window.set_minimized(state),
+        Maximize(state) => window.set_maximized(state),
+        MaximizeToggle => window.set_maximized(!window.is_maximized()),
+        Fullscreen(state) => {
+            if let Some(handle) = window.current_monitor() {
+                window.set_fullscreen(state.then(|| WryFullscreen::Borderless(Some(handle))));
+            }
+        }
+        FocusWindow => window.set_focus(),
+        Resizable(state) => window.set_resizable(state),
+        AlwaysOnTop(state) => window.set_always_on_top(state),
+
+        CursorVisible(state) => window.set_cursor_visible(state),
+        CursorGrab(state) => {
+            let _ = window.set_cursor_grab(state);
+        }
+
+        SetTitle(content) => window.set_title(&content),
+        SetDecorations(state) => window.set_decorations(state),
+
+        DevTool => webview.devtool(),
+
+        BevyUpdate(cmd) => {
+            if let Some(app) = app {
+                let mut events = app
+                    .world
+                    .get_resource_mut::<Events<T>>()
+                    .expect("Provide CoreCommand event to bevy");
+                events.send(cmd);
+                app.update();
+            }
+        }
+    }
 }
