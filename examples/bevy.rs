@@ -8,7 +8,7 @@ enum CoreCommand {
     Click,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, Copy)]
 enum UICommand {
     Test,
 }

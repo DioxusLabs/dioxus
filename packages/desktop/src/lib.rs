@@ -246,16 +246,21 @@ pub struct DioxusDesktopPlugin<CoreCommand, UICommand> {
 
 impl<
         CoreCommand: 'static + Send + Sync + Debug + Clone,
-        UICommand: 'static + Send + Sync + Clone,
+        UICommand: 'static + Send + Sync + Clone + Copy,
     > Plugin for DioxusDesktopPlugin<CoreCommand, UICommand>
 {
     fn build(&self, app: &mut App) {
         app.add_event::<CoreCommand>()
+            .add_event::<UICommand>()
             .insert_resource(DioxusDesktop {
                 root: self.root,
                 sender: None,
             })
-            .set_runner(|app| DioxusDesktop::<CoreCommand, UICommand>::runner(app));
+            .set_runner(|app| DioxusDesktop::<CoreCommand, UICommand>::runner(app))
+            .add_system_to_stage(
+                CoreStage::Last,
+                dispatch_ui_commands::<CoreCommand, UICommand>,
+            );
     }
 }
 
@@ -270,9 +275,7 @@ impl<CoreCommand, UICommand> DioxusDesktop<CoreCommand, UICommand> {
             .clone()
             .expect("Sender<UICommand> isn't initialized")
     }
-}
 
-impl<CoreCommand, UICommand> DioxusDesktop<CoreCommand, UICommand> {
     fn set_sender(&mut self, sender: Sender<UICommand>) {
         self.sender = Some(sender);
     }
@@ -282,8 +285,10 @@ pub struct AppProps<CoreCommand, UICommand> {
     pub channel: (mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>),
 }
 
-impl<CoreCommand: 'static + Send + Sync + Debug + Clone, UICommand: 'static + Send + Clone>
-    DioxusDesktop<CoreCommand, UICommand>
+impl<
+        CoreCommand: 'static + Send + Sync + Debug + Clone,
+        UICommand: 'static + Send + Sync + Clone,
+    > DioxusDesktop<CoreCommand, UICommand>
 {
     fn runner(mut app: App) {
         let mut cfg = DesktopConfig::default().with_default_icon();
@@ -437,5 +442,15 @@ impl<CoreCommand: 'static + Send + Sync + Debug + Clone, UICommand: 'static + Se
                 _ => {}
             }
         })
+    }
+}
+
+fn dispatch_ui_commands<CoreCommand: 'static, UICommand: 'static + Send + Sync + Copy>(
+    mut events: EventReader<UICommand>,
+    desktop: Res<DioxusDesktop<CoreCommand, UICommand>>,
+) {
+    let tx = desktop.sender();
+    for e in events.iter() {
+        let _ = tx.send(*e);
     }
 }
