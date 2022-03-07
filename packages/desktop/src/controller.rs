@@ -26,9 +26,9 @@ impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
     pub(super) fn new_on_tokio<
-        P: Send + 'static,
         CoreCommand: Send + Clone,
         UICommand: 'static + Send + Clone,
+        P: Send + 'static,
     >(
         root: Component<P>,
         props: P,

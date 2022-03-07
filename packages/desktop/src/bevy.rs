@@ -21,7 +21,7 @@ pub use wry;
 pub use wry::application as tao;
 use wry::webview::WebViewBuilder;
 
-pub struct DioxusDesktopPlugin<Props, CoreCommand, UICommand> {
+pub struct DioxusDesktopPlugin<CoreCommand, UICommand, Props = ()> {
     root: Component<Props>,
     props: Props,
     core_cmd_type: PhantomData<CoreCommand>,
@@ -29,26 +29,26 @@ pub struct DioxusDesktopPlugin<Props, CoreCommand, UICommand> {
 }
 
 impl<
-        Props: 'static + Send + Sync + Copy,
         CoreCommand: 'static + Send + Sync + Debug + Clone,
         UICommand: 'static + Send + Sync + Clone + Copy,
-    > Plugin for DioxusDesktopPlugin<Props, CoreCommand, UICommand>
+        Props: 'static + Send + Sync + Copy,
+    > Plugin for DioxusDesktopPlugin<CoreCommand, UICommand, Props>
 {
     fn build(&self, app: &mut App) {
         app.add_event::<CoreCommand>()
             .add_event::<UICommand>()
-            .insert_resource(DioxusDesktop::<Props, CoreCommand, UICommand>::new(
+            .insert_resource(DioxusDesktop::<CoreCommand, UICommand, Props>::new(
                 self.root, self.props,
             ))
-            .set_runner(|app| DioxusDesktop::<Props, CoreCommand, UICommand>::runner(app))
+            .set_runner(|app| DioxusDesktop::<CoreCommand, UICommand, Props>::runner(app))
             .add_system_to_stage(
                 CoreStage::Last,
-                dispatch_ui_commands::<Props, CoreCommand, UICommand>,
+                dispatch_ui_commands::<CoreCommand, UICommand, Props>,
             );
     }
 }
 
-impl<Props, CoreCommand, UICommand> DioxusDesktopPlugin<Props, CoreCommand, UICommand> {
+impl<CoreCommand, UICommand, Props> DioxusDesktopPlugin<CoreCommand, UICommand, Props> {
     pub fn new(root: Component<Props>, props: Props) -> Self {
         Self {
             root,
@@ -59,14 +59,14 @@ impl<Props, CoreCommand, UICommand> DioxusDesktopPlugin<Props, CoreCommand, UICo
     }
 }
 
-pub struct DioxusDesktop<Props, CoreCommand, UICommand> {
+pub struct DioxusDesktop<CoreCommand, UICommand, Props> {
     root: Component<Props>,
     props: Props,
     sender: Option<Sender<UICommand>>,
     data: PhantomData<CoreCommand>,
 }
 
-impl<Props, CoreCommand, UICommand> DioxusDesktop<Props, CoreCommand, UICommand> {
+impl<CoreCommand, UICommand, Props> DioxusDesktop<CoreCommand, UICommand, Props> {
     pub fn new(root: Component<Props>, props: Props) -> Self {
         Self {
             root,
@@ -88,10 +88,10 @@ impl<Props, CoreCommand, UICommand> DioxusDesktop<Props, CoreCommand, UICommand>
 }
 
 impl<
-        Props: 'static + Send + Sync + Copy,
         CoreCommand: 'static + Send + Sync + Debug + Clone,
         UICommand: 'static + Send + Sync + Clone,
-    > DioxusDesktop<Props, CoreCommand, UICommand>
+        Props: 'static + Send + Sync + Copy,
+    > DioxusDesktop<CoreCommand, UICommand, Props>
 {
     fn runner(mut app: App) {
         let mut cfg = DesktopConfig::default().with_default_icon();
@@ -103,12 +103,12 @@ impl<
 
         let mut desktop_resource = app
             .world
-            .get_resource_mut::<DioxusDesktop<Props, CoreCommand, UICommand>>()
+            .get_resource_mut::<DioxusDesktop<CoreCommand, UICommand, Props>>()
             .expect("Provide DioxusDesktopConfig resource");
 
         desktop_resource.set_sender(ui_tx.clone());
 
-        let mut desktop = DesktopController::new_on_tokio::<Props, CoreCommand, UICommand>(
+        let mut desktop = DesktopController::new_on_tokio::<CoreCommand, UICommand, Props>(
             desktop_resource.root,
             desktop_resource.props,
             event_loop.create_proxy(),
@@ -247,12 +247,12 @@ impl<
 }
 
 fn dispatch_ui_commands<
-    Props: 'static + Send + Sync,
     CoreCommand: 'static + Send + Sync,
     UICommand: 'static + Send + Sync + Copy,
+    Props: 'static + Send + Sync,
 >(
     mut events: EventReader<UICommand>,
-    desktop: Res<DioxusDesktop<Props, CoreCommand, UICommand>>,
+    desktop: Res<DioxusDesktop<CoreCommand, UICommand, Props>>,
 ) {
     let tx = desktop.sender();
     for e in events.iter() {

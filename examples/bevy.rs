@@ -14,10 +14,7 @@ enum UICommand {
 
 fn main() {
     App::new()
-        .add_plugin(DioxusDesktopPlugin::<(), CoreCommand, UICommand>::new(
-            app,
-            (),
-        ))
+        .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(app, ()))
         .add_startup_system(setup)
         .add_system(notify_core_command)
         .run();
