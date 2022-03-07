@@ -826,6 +826,11 @@ impl ScopeState {
             )
     }
 
+    /// Get the bump allocator for the current frame.
+    pub fn bump(&self) -> &Bump {
+        &self.wip_frame().bump
+    }
+
     /// The "work in progress frame" represents the frame that is currently being worked on.
     #[inline]
     pub(crate) fn wip_frame(&self) -> &BumpFrame {

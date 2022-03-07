@@ -10,7 +10,7 @@ macro_rules! no_namespace_trait_methods {
     ) => {
         $(
             $(#[$attr])*
-            pub fn $name(self, val: impl IntoAttributeValue<'a>) -> Self {
+            pub fn $name(&mut self, val: impl IntoAttributeValue<'a>) -> &mut Self {
                 self.attr(stringify!($name), val)
             }
         )*
@@ -27,7 +27,7 @@ macro_rules! style_trait_methods {
         $(
             #[inline]
             $(#[$attr])*
-            pub fn $name(self, val: impl IntoAttributeValue<'a>) -> Self {
+            pub fn $name(&mut self, val: impl IntoAttributeValue<'a>) -> &mut Self {
                 self.style_attr(stringify!($name), val)
             }
         )*
@@ -42,7 +42,7 @@ macro_rules! aria_trait_methods {
     ) => {
         $(
             $(#[$attr])*
-            pub fn $name(self, val: impl IntoAttributeValue<'a>) -> Self {
+            pub fn $name(&mut self, val: impl IntoAttributeValue<'a>) -> &mut Self {
                 self.style_attr(stringify!($name), val)
             }
         )*
@@ -55,7 +55,7 @@ macro_rules! aria_trait_methods {
 //
 // However, it also means that elements are not type safe, and some attributes
 // will clobber other attributes.
-impl<'a, T> ElementBuilder<'a, T> {
+impl<'a> ElementBuilder<'a> {
     no_namespace_trait_methods! {
 
         accesskey;
@@ -89,17 +89,29 @@ impl<'a, T> ElementBuilder<'a, T> {
         /// }
         /// ```
         class;
+
         contenteditable;
+
         data;
+
         dir;
+
         draggable;
+
         hidden;
+
         id;
+
         lang;
+
         spellcheck;
+
         style;
+
         tabindex;
+
         title;
+
         translate;
 
         role;
@@ -111,334 +123,6 @@ impl<'a, T> ElementBuilder<'a, T> {
         dangerous_inner_html;
 
         prevent_default;
-
-        // /// accesskey
-        // accesskey;
-
-        // /// class
-        // class;
-
-        // /// contenteditable
-        // contenteditable;
-
-        // /// data
-        // data;
-
-        // /// dir
-        // dir;
-
-        // /// draggable
-        // draggable;
-
-        // /// hidden
-        // hidden;
-
-        // /// Set the value of the `id` attribute.
-        // id;
-
-        // /// lang
-        // lang;
-
-        // /// spellcheck
-        // spellcheck;
-
-        // /// style
-        // style;
-
-        // /// tabindex
-        // tabindex;
-
-        // /// title
-        // title;
-
-        // /// translate
-        // translate;
-
-        // /// role
-        // role;
-
-        // /// dangerous_inner_html
-        // dangerous_inner_html;
-
-        // /// align
-        // align;
-
-        // /// method
-        // method;
-
-        // /// start
-        // start;
-
-        // /// width_
-        // width_;
-
-        // /// span
-        // span;
-
-        // /// longdesc
-        // longdesc;
-
-        // /// nomodule
-        // nomodule;
-
-        // /// rows
-        // rows;
-
-        // /// list
-        // list;
-
-        // /// language
-        // language;
-
-        // /// href
-        // href;
-
-        // /// muted
-        // muted;
-
-        // /// capture
-        // capture;
-
-        // /// placeholder
-        // placeholder;
-
-        // /// formenctype
-        // formenctype;
-
-        // /// minlength
-        // minlength;
-
-        // /// coords
-        // coords;
-
-        // /// src
-        // src;
-
-        // /// decoding
-        // decoding;
-
-        // /// crossorigin
-        // crossorigin;
-
-        // /// high
-        // high;
-
-        // /// ismap
-        // ismap;
-
-        // /// allowpaymentrequest
-        // allowpaymentrequest;
-
-        // /// datetime
-        // datetime;
-
-        // /// srcdoc
-        // srcdoc;
-
-        // /// maxlength
-        // maxlength;
-
-        // /// autocomplete
-        // autocomplete;
-
-        // /// cols
-        // cols;
-
-        // /// autoplay
-        // autoplay;
-
-        // /// height_
-        // height_;
-
-        // /// disabled
-        // disabled;
-
-        // /// cite
-        // cite;
-
-        // /// accept
-        // accept;
-
-        // /// readonly
-        // readonly;
-
-        // /// download
-        // download;
-
-        // /// open
-        // open;
-
-        // /// srclang
-        // srclang;
-
-        // /// nonce
-        // nonce;
-
-        // /// target
-        // target;
-
-        // /// action
-        // action;
-
-        // /// defer
-        // defer;
-
-        // /// poster
-        // poster;
-
-        // /// min
-        // min;
-
-        // /// kind
-        // kind;
-
-        // /// shape
-        // shape;
-
-        // /// srcset
-        // srcset;
-
-        // /// label
-        // label;
-
-        // /// marginwidth_
-        // marginwidth_;
-
-        // /// integrity
-        // integrity;
-
-        // /// formtarget
-        // formtarget;
-
-        // /// usemap
-        // usemap;
-
-        // /// preload
-        // preload;
-
-        // /// name
-        // name;
-
-        // /// ping
-        // ping;
-
-        // /// referrerpolicy
-        // referrerpolicy;
-
-        // /// default
-        // default;
-
-        // /// colspan
-        // colspan;
-
-        // /// abbr
-        // abbr;
-
-        // /// hreflang
-        // hreflang;
-
-        // /// reversed
-        // reversed;
-
-        // /// novalidate
-        // novalidate;
-
-        // /// checked
-        // checked;
-
-        // /// rowspan
-        // rowspan;
-
-        // /// http_equiv
-        // http_equiv;
-
-        // /// alt
-        // alt;
-
-        // /// charset
-        // charset;
-
-        // /// form
-        // form;
-
-        // /// scrolling
-        // scrolling;
-
-        // /// multiple
-        // multiple;
-
-        // /// size
-        // size;
-
-        // /// sizes
-        // sizes;
-
-        // /// allow
-        // allow;
-
-        // /// rel
-        // rel;
-
-        // /// controls
-        // controls;
-
-        // /// playsinline
-        // playsinline;
-
-        // /// typemustmatch
-        // typemustmatch;
-
-        // /// scope
-        // scope;
-
-        // /// formnovalidate
-        // formnovalidate;
-
-        // /// formaction
-        // formaction;
-
-        // /// required
-        // required;
-
-        // /// media
-        // media;
-
-        // /// optimum
-        // optimum;
-
-        // /// allowfullscreen
-        // allowfullscreen;
-
-        // /// enctype
-        // enctype;
-
-        // /// frame_border
-        // frame_border;
-
-        // /// formmethod
-        // formmethod;
-
-        // /// low
-        // low;
-
-        // /// autofocus
-        // autofocus;
-
-        // /// marginheight_
-        // marginheight_;
-
-        // /// max
-        // max;
-
-        // /// pattern
-        // pattern;
-
-        // /// step
-        // step;
-
-        // /// wrap
-        // wrap;
-
     }
 
     style_trait_methods! {

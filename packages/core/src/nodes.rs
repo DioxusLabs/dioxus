@@ -401,7 +401,7 @@ impl<P> AnyProps for VComponentProps<P> {
 #[derive(Copy, Clone)]
 pub struct NodeFactory<'a> {
     pub(crate) scope: &'a ScopeState,
-    pub(crate) bump: &'a Bump,
+    pub bump: &'a Bump,
 }
 
 impl<'a> NodeFactory<'a> {
@@ -411,11 +411,6 @@ impl<'a> NodeFactory<'a> {
             scope,
             bump: &scope.wip_frame().bump,
         }
-    }
-
-    #[inline]
-    pub fn bump(&self) -> &'a bumpalo::Bump {
-        self.bump
     }
 
     /// Directly pass in text blocks without the need to use the format_args macro.
