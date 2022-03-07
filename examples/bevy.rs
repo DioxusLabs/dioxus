@@ -1,4 +1,7 @@
-use bevy::prelude::{App, EventReader, EventWriter};
+use bevy::{
+    log::{info, LogPlugin},
+    prelude::{App, EventReader, EventWriter},
+};
 use dioxus::desktop::DioxusDesktopPlugin;
 use dioxus::prelude::*;
 
@@ -15,8 +18,9 @@ enum UICommand {
 fn main() {
     App::new()
         .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(app, ()))
+        .add_plugin(LogPlugin)
         .add_startup_system(setup)
-        .add_system(notify_core_command)
+        .add_system(log_core_command)
         .run();
 }
 
@@ -24,9 +28,9 @@ fn setup(mut event: EventWriter<UICommand>) {
     event.send(UICommand::Test);
 }
 
-fn notify_core_command(mut events: EventReader<CoreCommand>) {
+fn log_core_command(mut events: EventReader<CoreCommand>) {
     for e in events.iter() {
-        println!("🧠 {:?}", e);
+        info!("{:?}", e);
     }
 }
 
