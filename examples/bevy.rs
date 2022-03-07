@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use dioxus::desktop::DioxusDesktopPlugin;
 use dioxus::prelude::*;
-use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
 enum CoreCommand {
@@ -15,12 +14,10 @@ enum UICommand {
 
 fn main() {
     App::new()
-        .add_plugin(DioxusDesktopPlugin::<(), CoreCommand, UICommand> {
-            root: app,
-            props: (),
-            core_cmd_type: PhantomData,
-            ui_cmd_type: PhantomData,
-        })
+        .add_plugin(DioxusDesktopPlugin::<(), CoreCommand, UICommand>::new(
+            app,
+            (),
+        ))
         .add_startup_system(setup)
         .add_system(notify_core_command)
         .run();
