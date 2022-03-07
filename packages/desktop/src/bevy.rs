@@ -10,7 +10,7 @@ use crate::{
         window::Window,
     },
 };
-use bevy::prelude::*;
+use bevy::prelude::{App, CoreStage, EventReader, Plugin, Res};
 use dioxus_core::Component;
 use dioxus_core::*;
 use futures_channel::mpsc;

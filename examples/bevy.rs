@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::prelude::{App, EventReader, EventWriter};
 use dioxus::desktop::DioxusDesktopPlugin;
 use dioxus::prelude::*;
 
