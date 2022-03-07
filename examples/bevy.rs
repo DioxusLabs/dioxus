@@ -25,8 +25,8 @@ fn main() {
         .run();
 }
 
-fn setup(desktop: Res<DioxusDesktop<CoreCommand, UICommand>>) {
-    let _res = desktop.sender().send(UICommand::Test);
+fn setup(mut event: EventWriter<UICommand>) {
+    event.send(UICommand::Test);
 }
 
 fn notify_core_command(mut events: EventReader<CoreCommand>) {
