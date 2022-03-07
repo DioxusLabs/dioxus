@@ -28,12 +28,11 @@ use tao::{
 };
 use wry::webview::WebViewBuilder;
 
-pub use bevy::prelude::{Component as BevyComponent, *};
-pub use std::{fmt::Debug, marker::PhantomData};
-pub use tokio::sync::{
-    broadcast::{channel, Receiver, Sender},
-    mpsc,
-};
+use bevy::prelude::*;
+use futures_channel::mpsc;
+use futures_util::stream::StreamExt;
+use std::{fmt::Debug, marker::PhantomData};
+use tokio::sync::broadcast::{channel, Sender};
 
 /// Launch the WebView and run the event loop.
 ///
@@ -296,7 +295,7 @@ impl<
         // builder(&mut cfg);
         let event_loop = EventLoop::<UserWindowEvent<CoreCommand>>::with_user_event();
 
-        let (core_tx, mut core_rx) = mpsc::unbounded_channel::<CoreCommand>();
+        let (core_tx, mut core_rx) = mpsc::unbounded::<CoreCommand>();
         let (ui_tx, _) = channel::<UICommand>(8);
 
         let mut desktop_resource = app
@@ -319,7 +318,7 @@ impl<
         let proxy_clone = proxy.clone();
         let runtime = tokio::runtime::Runtime::new().expect("Failed to initialize runtime");
         runtime.spawn(async move {
-            while let Some(cmd) = core_rx.recv().await {
+            while let Some(cmd) = core_rx.next().await {
                 let _res = proxy_clone.send_event(UserWindowEvent::BevyUpdate(cmd));
             }
         });

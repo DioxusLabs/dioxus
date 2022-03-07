@@ -8,10 +8,8 @@ use UserWindowEvent::*;
 
 use bevy::ecs::event::Events;
 use bevy::prelude::App;
-pub use tokio::sync::{
-    broadcast::{channel, Receiver, Sender},
-    mpsc,
-};
+use futures_channel::mpsc;
+use tokio::sync::broadcast::{Receiver, Sender};
 
 pub type ProxyType<CoreCommand> = EventLoopProxy<UserWindowEvent<CoreCommand>>;
 
@@ -140,8 +138,12 @@ impl<CoreCommand: Clone, UICommand> DesktopContext<CoreCommand, UICommand> {
             .subscribe()
     }
 
-    pub fn send(&self, cmd: CoreCommand) -> Result<(), mpsc::error::SendError<CoreCommand>> {
-        self.channel.as_ref().expect("Channel is empty").0.send(cmd)
+    pub fn send(&self, cmd: CoreCommand) -> Result<(), mpsc::TrySendError<CoreCommand>> {
+        self.channel
+            .as_ref()
+            .expect("Channel is empty")
+            .0
+            .unbounded_send(cmd)
     }
 }
 

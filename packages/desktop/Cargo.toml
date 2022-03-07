@@ -34,6 +34,7 @@ dunce = "1.0.2"
 core-foundation = "0.9.3"
 
 bevy = "0.6"
+futures-util = { version = "0.3", default-features = false }
 
 [features]
 default = ["tokio_runtime"]

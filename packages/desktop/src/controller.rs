@@ -11,10 +11,8 @@ use wry::{
     webview::WebView,
 };
 
-pub use tokio::sync::{
-    broadcast::{channel, Sender},
-    mpsc,
-};
+use futures_channel::mpsc;
+use tokio::sync::broadcast::Sender;
 
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,

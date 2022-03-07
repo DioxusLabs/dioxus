@@ -26,7 +26,6 @@ fn main() {
 }
 
 fn setup(desktop: Res<DioxusDesktop<CoreCommand, UICommand>>) {
-    println!("setup");
     let _res = desktop.sender().send(UICommand::Test);
 }
 
