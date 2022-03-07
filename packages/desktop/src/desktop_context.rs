@@ -8,12 +8,18 @@ use UserWindowEvent::*;
 
 use bevy::ecs::event::Events;
 use bevy::prelude::App;
+pub use tokio::sync::{
+    broadcast::{channel, Receiver, Sender},
+    mpsc,
+};
 
-pub type ProxyType<T> = EventLoopProxy<UserWindowEvent<T>>;
+pub type ProxyType<CoreCommand> = EventLoopProxy<UserWindowEvent<CoreCommand>>;
 
 /// Get an imperative handle to the current window
-pub fn use_window<T: std::clone::Clone>(cx: &ScopeState) -> &DesktopContext<T> {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext<T>>())
+pub fn use_window<CoreCommand: Clone, UICommand: 'static + Clone>(
+    cx: &ScopeState,
+) -> &DesktopContext<CoreCommand, UICommand> {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext<CoreCommand, UICommand>>())
         .as_ref()
         .unwrap()
 }
@@ -31,13 +37,17 @@ pub fn use_window<T: std::clone::Clone>(cx: &ScopeState) -> &DesktopContext<T> {
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
-pub struct DesktopContext<T: 'static + Clone> {
-    proxy: ProxyType<T>,
+pub struct DesktopContext<CoreCommand: 'static + Clone, UICommand> {
+    proxy: ProxyType<CoreCommand>,
+    pub channel: Option<(mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>)>,
 }
 
-impl<T: Clone> DesktopContext<T> {
-    pub(crate) fn new(proxy: ProxyType<T>) -> Self {
-        Self { proxy }
+impl<CoreCommand: Clone, UICommand> DesktopContext<CoreCommand, UICommand> {
+    pub(crate) fn new(
+        proxy: ProxyType<CoreCommand>,
+        channel: Option<(mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>)>,
+    ) -> Self {
+        Self { proxy, channel }
     }
 
     /// trigger the drag-window event
@@ -120,6 +130,18 @@ impl<T: Clone> DesktopContext<T> {
     /// opens DevTool window
     pub fn devtool(&self) {
         let _ = self.proxy.send_event(DevTool);
+    }
+
+    pub fn receiver(&self) -> Receiver<UICommand> {
+        self.channel
+            .as_ref()
+            .expect("Channel is empty")
+            .1
+            .subscribe()
+    }
+
+    pub fn send(&self, cmd: CoreCommand) -> Result<(), mpsc::error::SendError<CoreCommand>> {
+        self.channel.as_ref().expect("Channel is empty").0.send(cmd)
     }
 }
 

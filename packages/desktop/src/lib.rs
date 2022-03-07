@@ -115,7 +115,8 @@ pub fn launch_with_props<P: 'static + Send>(
 
     let event_loop = EventLoop::<UserWindowEvent<()>>::with_user_event();
 
-    let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
+    let mut desktop =
+        DesktopController::new_on_tokio::<P, (), ()>(root, props, event_loop.create_proxy(), None);
     let proxy = event_loop.create_proxy();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
@@ -239,7 +240,7 @@ pub fn launch_with_props<P: 'static + Send>(
 }
 
 pub struct DioxusDesktopPlugin<CoreCommand, UICommand> {
-    pub root: Component<AppProps<CoreCommand, UICommand>>,
+    pub root: Component<AppProps>,
     pub core_cmd_type: PhantomData<CoreCommand>,
     pub ui_cmd_type: PhantomData<UICommand>,
 }
@@ -252,9 +253,10 @@ impl<
     fn build(&self, app: &mut App) {
         app.add_event::<CoreCommand>()
             .add_event::<UICommand>()
-            .insert_resource(DioxusDesktop {
+            .insert_resource(DioxusDesktop::<CoreCommand, UICommand> {
                 root: self.root,
                 sender: None,
+                data: PhantomData,
             })
             .set_runner(|app| DioxusDesktop::<CoreCommand, UICommand>::runner(app))
             .add_system_to_stage(
@@ -265,8 +267,9 @@ impl<
 }
 
 pub struct DioxusDesktop<CoreCommand, UICommand> {
-    root: Component<AppProps<CoreCommand, UICommand>>,
+    root: Component<AppProps>,
     sender: Option<Sender<UICommand>>,
+    data: PhantomData<CoreCommand>,
 }
 
 impl<CoreCommand, UICommand> DioxusDesktop<CoreCommand, UICommand> {
@@ -281,9 +284,7 @@ impl<CoreCommand, UICommand> DioxusDesktop<CoreCommand, UICommand> {
     }
 }
 
-pub struct AppProps<CoreCommand, UICommand> {
-    pub channel: (mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>),
-}
+pub struct AppProps;
 
 impl<
         CoreCommand: 'static + Send + Sync + Debug + Clone,
@@ -305,14 +306,14 @@ impl<
 
         desktop_resource.set_sender(ui_tx.clone());
 
-        let props = AppProps::<CoreCommand, UICommand> {
-            channel: (core_tx, ui_tx),
-        };
+        let props = AppProps {};
 
-        let mut desktop = DesktopController::new_on_tokio::<
-            AppProps<CoreCommand, UICommand>,
-            CoreCommand,
-        >(desktop_resource.root, props, event_loop.create_proxy());
+        let mut desktop = DesktopController::new_on_tokio::<AppProps, CoreCommand, UICommand>(
+            desktop_resource.root,
+            props,
+            event_loop.create_proxy(),
+            Some((core_tx, ui_tx)),
+        );
         let proxy = event_loop.create_proxy();
 
         let proxy_clone = proxy.clone();
@@ -445,7 +446,10 @@ impl<
     }
 }
 
-fn dispatch_ui_commands<CoreCommand: 'static, UICommand: 'static + Send + Sync + Copy>(
+fn dispatch_ui_commands<
+    CoreCommand: 'static + Send + Sync,
+    UICommand: 'static + Send + Sync + Copy,
+>(
     mut events: EventReader<UICommand>,
     desktop: Res<DioxusDesktop<CoreCommand, UICommand>>,
 ) {

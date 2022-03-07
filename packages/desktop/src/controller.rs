@@ -11,6 +11,11 @@ use wry::{
     webview::WebView,
 };
 
+pub use tokio::sync::{
+    broadcast::{channel, Sender},
+    mpsc,
+};
+
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
     pub(super) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
@@ -22,10 +27,15 @@ pub(super) struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub(super) fn new_on_tokio<P: Send + 'static, T: Send + Clone>(
+    pub(super) fn new_on_tokio<
+        P: Send + 'static,
+        CoreCommand: Send + Clone,
+        UICommand: 'static + Send + Clone,
+    >(
         root: Component<P>,
         props: P,
-        proxy: EventLoopProxy<UserWindowEvent<T>>,
+        proxy: EventLoopProxy<UserWindowEvent<CoreCommand>>,
+        channel: Option<(mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>)>,
     ) -> Self {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
@@ -45,7 +55,8 @@ impl DesktopController {
                 let mut dom =
                     VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
 
-                let window_context = DesktopContext::new(desktop_context_proxy);
+                let window_context =
+                    DesktopContext::<CoreCommand, UICommand>::new(desktop_context_proxy, channel);
 
                 dom.base_scope().provide_context(window_context);
 

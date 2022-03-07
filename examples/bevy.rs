@@ -36,9 +36,11 @@ fn notify_core_command(mut events: EventReader<CoreCommand>) {
     }
 }
 
-fn app(cx: Scope<AppProps<CoreCommand, UICommand>>) -> Element {
+fn app(cx: Scope<AppProps>) -> Element {
+    let context = dioxus::desktop::use_window::<CoreCommand, UICommand>(&cx);
+
     use_future(&cx, (), |_| {
-        let mut rx = cx.props.channel.1.subscribe();
+        let mut rx = context.receiver();
         async move {
             while let Ok(cmd) = rx.recv().await {
                 println!("🎨 {:?}", cmd);
@@ -51,7 +53,7 @@ fn app(cx: Scope<AppProps<CoreCommand, UICommand>>) -> Element {
             h1 { "Bevy Plugin Example" },
             button {
                 onclick: |_e| {
-                    let _res = cx.props.channel.0.send(CoreCommand::Click);
+                    let _res = context.send(CoreCommand::Click);
                 },
                 "Send",
             }
