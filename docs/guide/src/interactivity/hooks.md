@@ -139,7 +139,6 @@ fn Child(cx: Scope, name: String) -> Element {
 }
 
 // ✅ Or, use a hashmap with use_ref
-```rust
 let ages = use_ref(&cx, || HashMap::new());
 
 names.iter().map(|name| {
