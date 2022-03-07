@@ -74,9 +74,9 @@ fn app(cx: Scope) -> Element {
                             class: "pure-button pure-button-primary",
                             onclick: move |_| {
                                 clients.write().push(Client {
-                                    description: (**description).clone(),
-                                    first_name: (**firstname).clone(),
-                                    last_name: (**lastname).clone(),
+                                    description: description.to_string(),
+                                    first_name: firstname.to_string(),
+                                    last_name: lastname.to_string(),
                                 });
                                 description.set(String::new());
                                 firstname.set(String::new());

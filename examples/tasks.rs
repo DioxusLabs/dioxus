@@ -13,11 +13,11 @@ fn app(cx: Scope) -> Element {
     let count = use_state(&cx, || 0);
 
     use_future(&cx, (), move |_| {
-        let count = count.clone();
+        let mut count = count.clone();
         async move {
             loop {
                 tokio::time::sleep(Duration::from_millis(1000)).await;
-                count.modify(|f| f + 1);
+                count += 1;
             }
         }
     });
