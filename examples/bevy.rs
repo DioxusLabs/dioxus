@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use dioxus::desktop::{AppProps, DioxusDesktop, DioxusDesktopPlugin};
+use dioxus::desktop::DioxusDesktopPlugin;
 use dioxus::prelude::*;
 use std::marker::PhantomData;
 
@@ -15,8 +15,9 @@ enum UICommand {
 
 fn main() {
     App::new()
-        .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand> {
+        .add_plugin(DioxusDesktopPlugin::<(), CoreCommand, UICommand> {
             root: app,
+            props: (),
             core_cmd_type: PhantomData,
             ui_cmd_type: PhantomData,
         })
@@ -35,7 +36,7 @@ fn notify_core_command(mut events: EventReader<CoreCommand>) {
     }
 }
 
-fn app(cx: Scope<AppProps>) -> Element {
+fn app(cx: Scope) -> Element {
     let context = dioxus::desktop::use_window::<CoreCommand, UICommand>(&cx);
 
     use_future(&cx, (), |_| {

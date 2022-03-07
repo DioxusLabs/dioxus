@@ -238,40 +238,44 @@ pub fn launch_with_props<P: 'static + Send>(
     })
 }
 
-pub struct DioxusDesktopPlugin<CoreCommand, UICommand> {
-    pub root: Component<AppProps>,
+pub struct DioxusDesktopPlugin<Props, CoreCommand, UICommand> {
+    pub root: Component<Props>,
+    pub props: Props,
     pub core_cmd_type: PhantomData<CoreCommand>,
     pub ui_cmd_type: PhantomData<UICommand>,
 }
 
 impl<
+        Props: 'static + Send + Sync + Copy,
         CoreCommand: 'static + Send + Sync + Debug + Clone,
         UICommand: 'static + Send + Sync + Clone + Copy,
-    > Plugin for DioxusDesktopPlugin<CoreCommand, UICommand>
+    > Plugin for DioxusDesktopPlugin<Props, CoreCommand, UICommand>
 {
     fn build(&self, app: &mut App) {
         app.add_event::<CoreCommand>()
             .add_event::<UICommand>()
-            .insert_resource(DioxusDesktop::<CoreCommand, UICommand> {
+            .insert_resource(DioxusDesktop::<Props, CoreCommand, UICommand> {
                 root: self.root,
+                props: self.props,
                 sender: None,
                 data: PhantomData,
             })
-            .set_runner(|app| DioxusDesktop::<CoreCommand, UICommand>::runner(app))
+            .set_runner(|app| DioxusDesktop::<Props, CoreCommand, UICommand>::runner(app))
             .add_system_to_stage(
                 CoreStage::Last,
-                dispatch_ui_commands::<CoreCommand, UICommand>,
+                dispatch_ui_commands::<Props, CoreCommand, UICommand>,
             );
     }
 }
 
-pub struct DioxusDesktop<CoreCommand, UICommand> {
-    root: Component<AppProps>,
+pub struct DioxusDesktop<Props, CoreCommand, UICommand> {
+    root: Component<Props>,
+    props: Props,
     sender: Option<Sender<UICommand>>,
     data: PhantomData<CoreCommand>,
 }
 
-impl<CoreCommand, UICommand> DioxusDesktop<CoreCommand, UICommand> {
+impl<Props, CoreCommand, UICommand> DioxusDesktop<Props, CoreCommand, UICommand> {
     pub fn sender(&self) -> Sender<UICommand> {
         self.sender
             .clone()
@@ -283,12 +287,11 @@ impl<CoreCommand, UICommand> DioxusDesktop<CoreCommand, UICommand> {
     }
 }
 
-pub struct AppProps;
-
 impl<
+        Props: 'static + Send + Sync + Copy,
         CoreCommand: 'static + Send + Sync + Debug + Clone,
         UICommand: 'static + Send + Sync + Clone,
-    > DioxusDesktop<CoreCommand, UICommand>
+    > DioxusDesktop<Props, CoreCommand, UICommand>
 {
     fn runner(mut app: App) {
         let mut cfg = DesktopConfig::default().with_default_icon();
@@ -300,16 +303,14 @@ impl<
 
         let mut desktop_resource = app
             .world
-            .get_resource_mut::<DioxusDesktop<CoreCommand, UICommand>>()
+            .get_resource_mut::<DioxusDesktop<Props, CoreCommand, UICommand>>()
             .expect("Provide DioxusDesktopConfig resource");
 
         desktop_resource.set_sender(ui_tx.clone());
 
-        let props = AppProps {};
-
-        let mut desktop = DesktopController::new_on_tokio::<AppProps, CoreCommand, UICommand>(
+        let mut desktop = DesktopController::new_on_tokio::<Props, CoreCommand, UICommand>(
             desktop_resource.root,
-            props,
+            desktop_resource.props,
             event_loop.create_proxy(),
             Some((core_tx, ui_tx)),
         );
@@ -446,11 +447,12 @@ impl<
 }
 
 fn dispatch_ui_commands<
+    Props: 'static + Send + Sync,
     CoreCommand: 'static + Send + Sync,
     UICommand: 'static + Send + Sync + Copy,
 >(
     mut events: EventReader<UICommand>,
-    desktop: Res<DioxusDesktop<CoreCommand, UICommand>>,
+    desktop: Res<DioxusDesktop<Props, CoreCommand, UICommand>>,
 ) {
     let tx = desktop.sender();
     for e in events.iter() {
