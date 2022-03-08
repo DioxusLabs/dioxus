@@ -616,7 +616,7 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(Base);
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
-    pub fn render_vnodes<'a>(&'a self, lazy_nodes: LazyNodes<'a, '_>) -> &'a VNode<'a> {
+    pub fn render_vnodes<'a>(&'a self, mut lazy_nodes: LazyNodes<'a, '_>) -> &'a VNode<'a> {
         let scope = self.scopes.get_scope(ScopeId(0)).unwrap();
         let frame = scope.wip_frame();
         let factory = NodeFactory::new(scope);

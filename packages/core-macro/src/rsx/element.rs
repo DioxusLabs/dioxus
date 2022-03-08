@@ -83,9 +83,9 @@ impl Parse for Element {
                 if name_str.starts_with("on") {
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
-                        attr: ElementAttr::EventTokens {
+                        attr: ElementAttr::AttrExpression {
                             name,
-                            tokens: content.parse()?,
+                            value: content.parse()?,
                         },
                     });
                 } else {
@@ -196,24 +196,14 @@ impl ToTokens for Element {
             None => quote! { None },
         };
 
-        let listeners = self
-            .attributes
-            .iter()
-            .filter(|f| matches!(f.attr, ElementAttr::EventTokens { .. }));
-
-        let attr = self
-            .attributes
-            .iter()
-            .filter(|f| !matches!(f.attr, ElementAttr::EventTokens { .. }));
+        let attr = self.attributes.iter();
 
         tokens.append_all(quote! {
-            __cx.element(
-                dioxus_elements::#name,
-                __cx.bump().alloc([ #(#listeners),* ]),
-                __cx.bump().alloc([ #(#attr),* ]),
-                __cx.bump().alloc([ #(#children),* ]),
-                #key,
-            )
+
+            dioxus_elements::builder::#name(&cx)
+                #(#attr)*
+                #(.child(#children))*
+                .build()
         });
     }
 }
@@ -230,11 +220,10 @@ pub enum ElementAttr {
 
     /// "attribute": true,
     CustomAttrExpression { name: LitStr, value: Expr },
-
-    // /// onclick: move |_| {}
-    // EventClosure { name: Ident, closure: ExprClosure },
-    /// onclick: {}
-    EventTokens { name: Ident, tokens: Expr },
+    // // /// onclick: move |_| {}
+    // // EventClosure { name: Ident, closure: ExprClosure },
+    // /// onclick: {}
+    // EventTokens { name: Ident, tokens: Expr },
 }
 
 pub struct ElementAttrNamed {
@@ -248,35 +237,29 @@ impl ToTokens for ElementAttrNamed {
 
         tokens.append_all(match attr {
             ElementAttr::AttrText { name, value } => {
-                quote! {
-                    dioxus_elements::#el_name.#name(__cx, format_args_f!(#value))
-                }
+                quote! { .#name(format_args_f!(#value)) }
             }
             ElementAttr::AttrExpression { name, value } => {
-                quote! {
-                    dioxus_elements::#el_name.#name(__cx, #value)
-                }
+                quote! { .#name(#value) }
             }
             ElementAttr::CustomAttrText { name, value } => {
-                quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
-                }
+                quote! { .attr(#name, format_args_f!(#value)) }
             }
             ElementAttr::CustomAttrExpression { name, value } => {
-                quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
-                }
-            }
-            // ElementAttr::EventClosure { name, closure } => {
-            //     quote! {
-            //         dioxus_elements::on::#name(__cx, #closure)
-            //     }
-            // }
-            ElementAttr::EventTokens { name, tokens } => {
-                quote! {
-                    dioxus_elements::on::#name(__cx, #tokens)
-                }
-            }
+                quote! { .#name(#value) }
+            } //
+              //
+              // ElementAttr::EventClosure { name, closure } => {
+              //     quote! {
+              //         dioxus_elements::on::#name(__cx, #closure)
+              //     }
+              // }
+              // ElementAttr::EventTokens { name, tokens } => {
+              //     quote! {
+              //         .#name(#tokens)
+              //         // dioxus_elements::on::#name(__cx, #tokens)
+              //     }
+              // }
         });
     }
 }

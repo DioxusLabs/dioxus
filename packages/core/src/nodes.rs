@@ -295,42 +295,6 @@ impl Debug for VElement<'_> {
     }
 }
 
-/// A trait for any generic Dioxus Element.
-///
-/// This trait provides the ability to use custom elements in the `rsx!` macro.
-///
-/// ```rust, ignore
-/// struct my_element;
-///
-/// impl DioxusElement for my_element {
-///     const TAG_NAME: "my_element";
-///     const NAME_SPACE: None;
-/// }
-///
-/// let _ = rsx!{
-///     my_element {}
-/// };
-/// ```
-pub trait DioxusElement {
-    /// The tag name of the element.
-    const TAG_NAME: &'static str;
-
-    /// The namespace of the element.
-    const NAME_SPACE: Option<&'static str>;
-
-    /// The tag name of the element.
-    #[inline]
-    fn tag_name(&self) -> &'static str {
-        Self::TAG_NAME
-    }
-
-    /// The namespace of the element.
-    #[inline]
-    fn namespace(&self) -> Option<&'static str> {
-        Self::NAME_SPACE
-    }
-}
-
 /// An attribute on a DOM node, such as `id="my-thing"` or
 /// `href="https://example.com"`.
 #[derive(Clone, Debug)]
@@ -496,22 +460,16 @@ impl<P> AnyProps for VComponentProps<P> {
 #[derive(Copy, Clone)]
 pub struct NodeFactory<'a> {
     pub(crate) scope: &'a ScopeState,
-    pub(crate) bump: &'a Bump,
+    pub bump: &'a Bump,
 }
 
 impl<'a> NodeFactory<'a> {
-    /// Create a new [`NodeFactory`] from a [`Scope`] or [`ScopeState`]
+    #[inline]
     pub fn new(scope: &'a ScopeState) -> NodeFactory<'a> {
         NodeFactory {
             scope,
             bump: &scope.wip_frame().bump,
         }
-    }
-
-    /// Get the custom alloactor for this component
-    #[inline]
-    pub fn bump(&self) -> &'a bumpalo::Bump {
-        self.bump
     }
 
     /// Directly pass in text blocks without the need to use the format_args macro.
@@ -520,6 +478,15 @@ impl<'a> NodeFactory<'a> {
             id: empty_cell(),
             text,
             is_static: true,
+        }))
+    }
+
+    /// Directly pass in text blocks without the need to use the format_args macro.
+    pub fn bump_text(&self, text: &'a str, is_static: bool) -> VNode<'a> {
+        VNode::Text(self.bump.alloc(VText {
+            id: empty_cell(),
+            text,
+            is_static,
         }))
     }
 
@@ -550,28 +517,6 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    /// Create a new [`VNode::VElement`]
-    pub fn element(
-        &self,
-        el: impl DioxusElement,
-        listeners: &'a [Listener<'a>],
-        attributes: &'a [Attribute<'a>],
-        children: &'a [VNode<'a>],
-        key: Option<Arguments>,
-    ) -> VNode<'a> {
-        self.raw_element(
-            el.tag_name(),
-            el.namespace(),
-            listeners,
-            attributes,
-            children,
-            key,
-        )
-    }
-
-    /// Create a new [`VNode::VElement`] without the trait bound
-    ///
-    /// IE pass in "div" instead of `div`
     pub fn raw_element(
         &self,
         tag_name: &'static str,
@@ -579,10 +524,8 @@ impl<'a> NodeFactory<'a> {
         listeners: &'a [Listener<'a>],
         attributes: &'a [Attribute<'a>],
         children: &'a [VNode<'a>],
-        key: Option<Arguments>,
+        key: Option<&'a str>,
     ) -> VNode<'a> {
-        let key = key.map(|f| self.raw_text(f).0);
-
         let mut items = self.scope.items.borrow_mut();
         for listener in listeners {
             let long_listener = unsafe { std::mem::transmute(listener) };
@@ -673,7 +616,7 @@ impl<'a> NodeFactory<'a> {
     ) -> VNode<'a> {
         let mut nodes = bumpalo::collections::Vec::new_in(self.bump);
 
-        for node in node_iter {
+        for mut node in node_iter {
             nodes.push(node.into_vnode(self));
         }
 
@@ -694,7 +637,7 @@ impl<'a> NodeFactory<'a> {
     ) -> VNode<'a> {
         let mut nodes = bumpalo::collections::Vec::new_in(self.bump);
 
-        for node in node_iter {
+        for mut node in node_iter {
             nodes.push(node.into_vnode(self));
         }
 
@@ -734,7 +677,7 @@ impl<'a> NodeFactory<'a> {
     ) -> Element<'a> {
         let mut nodes = bumpalo::collections::Vec::new_in(self.bump);
 
-        for node in node_iter {
+        for mut node in node_iter {
             nodes.push(node.into_vnode(self));
         }
 
@@ -783,8 +726,7 @@ impl Debug for NodeFactory<'_> {
 /// As such, all node creation must go through the factory, which is only available in the component context.
 /// These strict requirements make it possible to manage lifetimes and state.
 pub trait IntoVNode<'a> {
-    /// Convert this into a [`VNode`], using the [`NodeFactory`] as a source of allocation
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 
 // For the case where a rendered VNode is passed into the rsx! macro through curly braces
@@ -799,33 +741,38 @@ impl<'a> IntoIterator for VNode<'a> {
 // TODO: do we even need this? It almost seems better not to
 // // For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoVNode<'a> for VNode<'a> {
-    fn into_vnode(self, _: NodeFactory<'a>) -> VNode<'a> {
-        self
+    fn into_vnode(&mut self, _: NodeFactory<'a>) -> VNode<'a> {
+        self.decouple()
     }
 }
 
 // Conveniently, we also support "null" (nothing) passed in
-impl IntoVNode<'_> for () {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
+impl<'a> IntoVNode<'a> for () {
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
         cx.fragment_from_iter(None as Option<VNode>)
     }
 }
 
 // Conveniently, we also support "None"
-impl IntoVNode<'_> for Option<()> {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
+impl<'a> IntoVNode<'a> for Option<()> {
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
         cx.fragment_from_iter(None as Option<VNode>)
     }
 }
 
 impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
+        match self {
+            Some(node) => node.decouple(),
+            None => todo!(),
+        }
+        // self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
     }
 }
 
 impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
+        // todo!()
         match self {
             Some(lazy) => lazy.call(cx),
             None => VNode::Placeholder(cx.bump.alloc(VPlaceholder { id: empty_cell() })),
@@ -842,40 +789,57 @@ impl<'a, 'b> IntoIterator for LazyNodes<'a, 'b> {
 }
 
 impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.call(cx)
     }
 }
 
-impl<'b> IntoVNode<'_> for &'b str {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
+impl<'a, 'b> IntoVNode<'a> for &'b str {
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
         cx.text(format_args!("{}", self))
     }
 }
 
-impl IntoVNode<'_> for String {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
+impl<'a> IntoVNode<'a> for String {
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
         cx.text(format_args!("{}", self))
     }
 }
 
-impl IntoVNode<'_> for Arguments<'_> {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        cx.text(self)
+impl<'a> IntoVNode<'a> for Arguments<'_> {
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
+        todo!()
+        // cx.text(self)
     }
 }
 
 impl<'a> IntoVNode<'a> for &Option<VNode<'a>> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(&mut self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.as_ref()
-            .map(|f| f.into_vnode(cx))
+            .map(|mut f| f.into_vnode(cx))
             .unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
     }
 }
 
 impl<'a> IntoVNode<'a> for &VNode<'a> {
-    fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
+    fn into_vnode(&mut self, _cx: NodeFactory<'a>) -> VNode<'a> {
         // borrowed nodes are strange
         self.decouple()
+    }
+}
+
+impl<'a, const LEN: usize> IntoVNode<'a> for [&mut dyn IntoVNode<'a>; LEN] {
+    fn into_vnode(&mut self, _cx: NodeFactory<'a>) -> VNode<'a> {
+        todo!()
+        // borrowed nodes are strange
+        // self.decouple()
+    }
+}
+
+impl<'a> IntoVNode<'a> for &[&mut dyn IntoVNode<'a>] {
+    fn into_vnode(&mut self, _cx: NodeFactory<'a>) -> VNode<'a> {
+        todo!()
+        // borrowed nodes are strange
+        // self.decouple()
     }
 }

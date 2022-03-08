@@ -152,20 +152,12 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         }
     }
 
-    /// Call the closure with the given factory to produce real VNodes.
-    ///
-    /// ```rust, ignore
-    /// let f = LazyNodes::new(move |f| f.element("div", [], [], [] None));
-    ///
-    /// let fac = NodeFactory::new(&cx);
-    ///
-    /// let node = f.call(cac);
-    /// ```
-    pub fn call(self, f: NodeFactory<'a>) -> VNode<'a> {
-        match self.inner {
-            StackNodeStorage::Heap(mut lazy) => lazy(Some(f)).unwrap(),
-            StackNodeStorage::Stack(mut stack) => stack.call(f),
-        }
+    pub fn call(&mut self, f: NodeFactory<'a>) -> VNode<'a> {
+        todo!()
+        // match &self.inner {
+        //     StackNodeStorage::Heap(mut lazy) => lazy(Some(f)).unwrap(),
+        //     StackNodeStorage::Stack(mut stack) => stack.call(f),
+        // }
     }
 }
 

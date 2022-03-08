@@ -33,6 +33,7 @@ default = ["macro", "hooks", "html"]
 
 # macro = ["dioxus-core-macro", "dioxus-rsx"]
 macro = ["dioxus-core-macro"]
+# macro = ["dioxus-core-macro", "dioxus-rsx"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
 ssr = ["dioxus-ssr"]

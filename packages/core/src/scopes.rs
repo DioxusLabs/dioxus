@@ -345,7 +345,6 @@ impl ScopeArena {
                                 // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
                                 // we could convert arc to rc internally or something
                                 (cb)(AnyEvent {
-                                    bubble_state: state.clone(),
                                     data: event.data.clone(),
                                 });
                             }
@@ -805,8 +804,18 @@ impl ScopeState {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Option<VNode<'src>> {
+    pub fn render<'src>(&'src self, mut rsx: LazyNodes<'src, '_>) -> Option<VNode<'src>> {
         Some(rsx.call(NodeFactory {
+            scope: self,
+            bump: &self.wip_frame().bump,
+        }))
+    }
+
+    pub fn render2<'src, const LEN: usize>(
+        &'src self,
+        mut rsx: [&mut dyn IntoVNode<'src>; LEN],
+    ) -> Option<VNode<'src>> {
+        Some(rsx.into_vnode(NodeFactory {
             scope: self,
             bump: &self.wip_frame().bump,
         }))
@@ -862,7 +871,13 @@ impl ScopeState {
             )
     }
 
+    /// Get the bump allocator for the current frame.
+    pub fn bump(&self) -> &Bump {
+        &self.wip_frame().bump
+    }
+
     /// The "work in progress frame" represents the frame that is currently being worked on.
+    #[inline]
     pub(crate) fn wip_frame(&self) -> &BumpFrame {
         match self.generation.get() & 1 == 0 {
             true => &self.frames[0],

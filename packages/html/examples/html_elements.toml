@@ -1,0 +1,415 @@
+
+[elements]
+# brase = { href = "Uri", target = "Target" }
+# lrink = {}
+
+[elements.base]
+href = "Uri"
+target = "Target"
+
+[elements.head]
+
+[elements.link]
+as = "Mime"
+type = "Mime"
+crossorigin = "CrossOrigin"
+href = "Uri"
+hreflang = "LanguageTag"
+media = "String"            # FIXME media query
+rel = "LinkType"
+sizes = "String"            # FIXME
+integrity = "String"
+
+[elements.meta]
+charset = "String"       # FIXME IANA standard names
+content = "String"
+http_equiv = "HTTPEquiv"
+name = "Metadata"
+
+[elements.style]
+type = "Mime"
+media = "String" # FIXME media query
+nonce = "Nonce"
+
+[elements.title]
+[elements.body]
+
+# Content sectioning
+[elements.address]
+[elements.article]
+[elements.aside]
+[elements.footer]
+[elements.header]
+[elements.h1]
+[elements.h2]
+[elements.h3]
+[elements.h4]
+[elements.h5]
+[elements.h6]
+[elements.main]
+[elements.nav]
+[elements.section]
+
+# Text content
+
+[elements.dd]
+[elements.div]
+[elements.dl]
+[elements.dt]
+[elements.figcaption]
+[elements.figure]
+[elements.hr]
+[elements.p]
+[elements.pre]
+[elements.ul]
+
+[elements.blockquote]
+cite = "Uri"
+
+[elements.li]
+value = "isize"
+
+[elements.ol]
+reversed = "Bool"
+start = "isize"
+type = "OrderedListType"
+
+# Inline text semantics
+[elements.a]
+download = "String"
+href = "Uri"
+hreflang = "LanguageTag"
+target = "Target"
+type = "Mime"
+ping = "SpacedList"
+rel = "SpacedList"
+# ping = "SpacedList"<Uri>
+# rel = "SpacedList"<LinkType>
+
+[elements.abbr]
+[elements.b]
+[elements.bdi]
+[elements.bdo]
+[elements.br]
+[elements.cite]
+[elements.code]
+language = "String"
+
+[elements.data]
+value = "String"
+
+[elements.dfn]
+[elements.em]
+[elements.i]
+[elements.kbd]
+[elements.mark]
+[elements.q]
+cite = "Uri"
+
+[elements.rp]
+[elements.rt]
+[elements.ruby]
+[elements.s]
+[elements.samp]
+[elements.small]
+[elements.span]
+[elements.strong]
+[elements.sub]
+[elements.sup]
+[elements.time]
+[elements.u]
+[elements.var]
+[elements.wbr]
+
+# Image and multimedia
+
+[elements.area]
+alt = "String"
+coords = "String"        # TODO could perhaps be validated
+download = "Bool"
+href = "Uri"
+hreflang = "LanguageTag"
+shape = "AreaShape"
+target = "Target"
+# ping = "SpacedList"<Uri>
+# rel = "SpacedSet"<LinkType>
+
+[elements.audio]
+autoplay = "Bool"
+controls = "Bool"
+crossorigin = "CrossOrigin"
+muted = "Bool"
+preload = "Preload"
+src = "Uri"
+loop = "Bool"
+
+[elements.img]
+alt = "String"
+crossorigin = "CrossOrigin"
+decoding = "ImageDecoding"
+height = "usize"
+ismap = "Bool"
+src = "Uri"
+srcset = "String"           # FIXME this is much more complicated
+usemap = "String"           # FIXME should be a fragment starting with '#'
+width = "usize"
+referrerpolicy = "String"
+# sizes = "SpacedList"<String> # FIXME it's not really just a string
+
+[elements.map]
+name = "Id"
+
+[elements.track]
+default = "Bool"
+kind = "VideoKind"
+label = "String"
+src = "Uri"
+srclang = "LanguageTag"
+
+[elements.video]
+autoplay = "Bool"
+controls = "Bool"
+crossorigin = "CrossOrigin"
+height = "usize"
+loop = "Bool"
+muted = "Bool"
+preload = "Preload"
+playsinline = "Bool"
+poster = "Uri"
+src = "Uri"
+width = "usize"
+
+# Embedded content
+[elements.embed]
+height = "usize"
+src = "Uri"
+type = "Mime"
+width = "usize"
+
+[elements.iframe]
+allow = "FeaturePolicy"
+allowfullscreen = "Bool"
+allowpaymentrequest = "Bool"
+height = "usize"
+name = "Id"
+referrerpolicy = "ReferrerPolicy"
+src = "Uri"
+srcdoc = "Uri"
+width = "usize"
+marginWidth = "String"
+align = "String"
+longdesc = "String"
+scrolling = "String"
+marginHeight = "String"
+frameBorder = "String"
+# sandbox = "SpacedSet"<Sandbox>
+
+[elements.object]
+form = "Id"
+height = "usize"
+name = "Id"
+type = "Mime"
+typemustmatch = "Bool"
+usemap = "String"      # TODO should be a fragment starting with '#'
+width = "usize"
+# data = "Uri"
+
+[elements.param]
+name = "String"
+value = "String"
+
+[elements.picture]
+
+[elements.source]
+src = "Uri"
+type = "Mime"
+
+# Scripting
+[elements.canvas]
+height = "usize"
+width = "usize"
+
+[elements.noscript]
+[elements.script]
+crossorigin = "CrossOrigin"
+defer = "Bool"
+integrity = "Integrity"
+nomodule = "Bool"
+nonce = "Nonce"
+src = "Uri"
+text = "String"
+
+# Demarcating edits
+
+[elements.del]
+cite = "Uri"
+datetime = "Datetime"
+
+[elements.ins]
+cite = "Uri"
+datetime = "Datetime"
+
+# Table content
+
+[elements.caption]
+[elements.table]
+[elements.tbody]
+[elements.tfoot]
+
+[elements.col]
+span = "usize"
+
+[elements.colgroup]
+span = "usize"
+
+[elements.th]
+abbr = "String"
+colspan = "usize"
+rowspan = "usize"
+scope = "TableHeaderScope"
+# headers = "SpacedSet"<Id>
+
+[elements.td]
+colspan = "usize"
+rowspan = "usize"
+# headers = "SpacedSet"<Id>
+
+[elements.thead]
+[elements.tr]
+
+# Forms
+[elements.button]
+autofocus = "Bool"
+disabled = "Bool"
+form = "Id"
+formaction = "Uri"
+formenctype = "FormEncodingType"
+formmethod = "FormMethod"
+formnovalidate = "Bool"
+formtarget = "Target"
+name = "Id"
+value = "String"
+
+[elements.datalist]
+
+[elements.fieldset]
+
+[elements.form]
+action = "Uri"
+autocomplete = "OnOff"
+enctype = "FormEncodingType"
+method = "FormMethod"
+name = "Id"
+novalidate = "Bool"
+target = "Target"
+# accept-charset = "SpacedList"<CharacterEncoding>
+
+
+[elements.input]
+accept = "String"
+alt = "String"
+autocomplete = "String"
+autofocus = "Bool"
+capture = "String"
+checked = "Bool"
+disabled = "Bool"
+form = "Id"
+formaction = "Uri"
+formenctype = "FormEncodingType"
+formmethod = "FormDialogMethod"
+formnovalidate = "Bool"
+formtarget = "Target"
+height = "isize"
+list = "Id"
+max = "String"
+maxlength = "usize"
+min = "String"
+minlength = "usize"
+multiple = "Bool"
+name = "Id"
+pattern = "String"
+placeholder = "String"
+readonly = "Bool"
+required = "Bool"
+size = "usize"
+src = "Uri"
+step = "String"
+width = "isize"
+# spellcheck = "Bool"
+# tabindex = "usize"
+type = "InputType"
+# Manual implementations below...
+# value = "String"
+
+[elements.label]
+form = "Id"
+for = "Id"
+
+[elements.legend]
+
+[elements.meter]
+value = "isize"
+min = "isize"
+max = "isize"
+low = "isize"
+high = "isize"
+optimum = "isize"
+form = "Id"
+
+[elements.optgroup]
+disabled = "Bool"
+label = "String"
+
+[elements.option]
+disabled = "Bool"
+label = "String"
+value = "String"
+# defined below
+# selected = "Bool"
+
+[elements.output]
+form = "Id"
+name = "Id"
+for = "String"
+# for = "SpacedSet"<Id>
+
+[elements.progress]
+max = "f64"
+value = "f64"
+
+[elements.select]
+autocomplete = "String"
+autofocus = "Bool"
+disabled = "Bool"
+form = "Id"
+multiple = "Bool"
+name = "Id"
+required = "Bool"
+size = "usize"
+# defined below
+# value = "String"
+
+[elements.textarea]
+autocomplete = "OnOff"
+autofocus = "Bool"
+cols = "usize"
+disabled = "Bool"
+form = "Id"
+maxlength = "usize"
+minlength = "usize"
+name = "Id"
+placeholder = "String"
+readonly = "Bool"
+required = "Bool"
+rows = "usize"
+wrap = "Wrap"
+# spellcheck = "BoolOrDefault"
+
+# Interactive elements
+[elements.summary]
+[elements.details]
+open = "Bool"
+
+# Web components
+[elements.slot]
+[elements.template]

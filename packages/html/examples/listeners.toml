@@ -1,0 +1,147 @@
+[listeners]
+
+[listeners.Animation]
+handlers = [
+  "onanimationstart",
+  "onanimationend",
+  "onanimationiteration",
+]
+
+[listeners.clipboard]
+handlers = [
+  "oncopy",
+  "oncut",
+  "onpaste",
+]
+
+[listeners.Composition]
+handlers = [
+  "oncompositionend",
+  "oncompositionstart",
+  "oncompositionupdate",
+]
+
+[listeners.Focus]
+handlers = [
+  "onfocus",
+  "onfocusout",
+  "onfocusin",
+  "onblur",
+]
+
+[listeners.Form]
+handlers = [
+  "onchange",
+  "oninput",
+  "oninvalid",
+  "onreset",
+  "onsubmit",
+]
+
+[listeners.image]
+handlers = [
+  "onchange",
+  "oninput",
+  "oninvalid",
+  "onreset",
+  "onsubmit",
+]
+
+[listeners.Keyboard]
+handlers = [
+  "onkeydown",
+  "onkeypress",
+  "onkeyup",
+]
+
+[listeners.Media]
+handlers = [
+  "onabort",
+  "oncanplay",
+  "oncanplaythrough",
+  "ondurationchange",
+  "onemptied",
+  "onencrypted",
+  "onended",
+  "onerror",
+  "onloadeddata",
+  "onloadedmetadata",
+  "onloadstart",
+  "onpause",
+  "onplay",
+  "onplaying",
+  "onprogress",
+  "onratechange",
+  "onseeked",
+  "onseeking",
+  "onstalled",
+  "onsuspend",
+  "ontimeupdate",
+  "onvolumechange",
+  "onwaiting",
+]
+
+[listeners.Mouse]
+handlers = [
+  "onclick",
+  "oncontextmenu",
+  "ondoubleclick",
+  "ondrag",
+  "ondragend",
+  "ondragenter",
+  "ondragexit",
+  "ondragleave",
+  "ondragover",
+  "ondragstart",
+  "ondrop",
+  "onmousedown",
+  "onmouseenter",
+  "onmouseleave",
+  "onmousemove",
+  "onmouseout",
+  "onscroll",
+  "onmouseover",
+  "onmouseup",
+]
+
+[listeners.Pointer]
+handlers = [
+  "onpointerdown",
+  "onpointermove",
+  "onpointerup",
+  "onpointercancel",
+  "ongotpointercapture",
+  "onlostpointercapture",
+  "onpointerenter",
+  "onpointerleave",
+  "onpointerover",
+  "onpointerout",
+]
+
+[listeners.Selection]
+handlers = [
+  "onselect",
+]
+
+[listeners.Toggle]
+handlers = [
+  "ontoggle",
+]
+
+[listeners.Touch]
+handlers = [
+  "ontouchcancel",
+  "ontouchend",
+  "ontouchmove",
+  "ontouchstart",
+]
+
+[listeners.Transition]
+handlers = [
+  "ontransitionend",
+]
+
+[listeners.Wheel]
+handlers = [
+  "onwheel",
+]

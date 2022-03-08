@@ -1,0 +1,224 @@
+href: Uri
+target: Target
+crossorigin: CrossOrigin
+hreflang: LanguageTag
+media: String
+rel: LinkType
+sizes: String
+r#type: Mime
+integrity: String
+charset: String
+http_equiv: HTTPEquiv
+name: Metadata
+nonce: Nonce
+cite: Uri
+value: isize
+reversed: Bool
+start: isize
+r#type: OrderedListType
+download: String
+ping: SpacedList
+rel: SpacedList
+language: String
+value: String
+cite: Uri
+alt: String
+coords: String
+download: Bool
+shape: AreaShape
+// href: Uri
+// hreflang: LanguageTag
+// target: Target
+// r#type: Mime
+// ping: SpacedList<Uri>
+// rel: SpacedList<LinkType>
+// href: Uri
+// hreflang: LanguageTag
+// target: Target
+// ping: SpacedList<Uri>
+// rel: SpacedSet<LinkType>
+autoplay: Bool
+controls: Bool
+// crossorigin: CrossOrigin
+muted: Bool
+preload: Preload
+src: Uri
+r#loop: Bool
+alt: String
+// crossorigin: CrossOrigin
+decoding: ImageDecoding
+height_: usize
+ismap: Bool
+src: Uri
+srcset: String
+usemap: String
+width_: usize
+referrerpolicy: String
+// sizes: SpacedList<String>
+name: Id
+default: Bool
+kind: VideoKind
+label: String
+src: Uri
+srclang: LanguageTag
+autoplay: Bool
+controls: Bool
+// crossorigin: CrossOrigin
+height_: usize
+r#loop: Bool
+muted: Bool
+preload: Preload
+playsinline: Bool
+poster: Uri
+src: Uri
+width_: usize
+height_: usize
+src: Uri
+// r#type: Mime
+width_: usize
+allow: FeaturePolicy
+allowfullscreen: Bool
+allowpaymentrequest: Bool
+height_: usize
+name: Id
+referrerpolicy: ReferrerPolicy
+src: Uri
+srcdoc: Uri
+width_: usize
+marginwidth_: String
+align: String
+longdesc: String
+scrolling: String
+marginheight_: String
+frame_border: String
+// sandbox: SpacedSet<Sandbox>
+// data: Uri
+form: Id
+height_: usize
+name: Id
+// r#type: Mime
+typemustmatch: Bool
+usemap: String
+width_: usize
+name: String
+value: String
+src: Uri
+height_: usize
+width_: usize
+defer: Bool
+integrity: Integrity
+nomodule: Bool
+nonce: Nonce
+src: Uri
+text: String
+cite: Uri
+datetime: Datetime
+cite: Uri
+datetime: Datetime
+span: usize
+span: usize
+colspan: usize
+rowspan: usize
+// headers: SpacedSet<Id>
+abbr: String
+colspan: usize
+rowspan: usize
+scope: TableHeaderScope
+// headers: SpacedSet<Id>
+autofocus: Bool
+disabled: Bool
+form: Id
+formaction: Uri
+formenctype: FormEncodingType
+formmethod: FormMethod
+formnovalidate: Bool
+formtarget: Target
+name: Id
+value: String
+// accept-charset: SpacedList<CharacterEncoding>
+action: Uri
+autocomplete: OnOff
+enctype: FormEncodingType
+method: FormMethod
+name: Id
+novalidate: Bool
+// target: Target
+accept: String
+alt: String
+autocomplete: String
+autofocus: Bool
+capture: String
+checked: Bool
+// disabled: Bool
+form: Id
+formaction: Uri
+formenctype: FormEncodingType
+formmethod: FormDialogMethod
+formnovalidate: Bool
+// formtarget: Target
+height_: isize
+list: Id
+max: String
+maxlength: usize
+min: String
+minlength: usize
+multiple: Bool
+name: Id
+pattern: String
+placeholder: String
+readonly: Bool
+required: Bool
+size: usize
+// spellcheck: Bool
+src: Uri
+step: String
+// tabindex: usize
+width_: isize
+// Manual implementations below...
+// r#type: InputType
+// value: String
+form: Id
+// r#for: Id
+value: isize
+min: isize
+max: isize
+low: isize
+high: isize
+optimum: isize
+form: Id
+// disabled: Bool
+label: String
+// disabled: Bool
+label: String
+value: String
+// defined below
+// selected: Bool
+form: Id
+name: Id
+// r#for: SpacedSet<Id>
+max: f64
+value: f64
+// defined below
+// value: String
+// disabled: Bool
+// disabled: Bool
+autocomplete: String
+autofocus: Bool
+form: Id
+multiple: Bool
+name: Id
+required: Bool
+size: usize
+autocomplete: OnOff
+autofocus: Bool
+cols: usize
+form: Id
+maxlength: usize
+minlength: usize
+name: Id
+placeholder: String
+readonly: Bool
+required: Bool
+rows: usize
+wrap: Wrap
+open: Bool
