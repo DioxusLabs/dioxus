@@ -20,16 +20,6 @@ macro_rules! event_directory {
                     //
                 }
             }
-
-            impl<'a> crate::builder::ElementBuilder<'a> {
-                $(
-                    $(#[$method_attr])*
-                    pub fn $name( &mut self, cb: impl FnMut(&$data) + 'a) -> &mut Self {
-                        self.push_listener(stringify!($name), cb);
-                        self
-                    }
-                )*
-            }
         )*
     };
 }

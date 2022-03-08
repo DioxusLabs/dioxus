@@ -23,14 +23,26 @@ impl<'a> IntoVNode<'a> for &mut ElementBuilder<'a> {
 }
 
 pub trait AnyBuilder<'a> {
-    fn upgrade_builder(&mut self) -> VNode<'a>;
+    fn render(&mut self) -> Option<VNode<'a>>;
 }
 
 impl<'a> AnyBuilder<'a> for ElementBuilder<'a> {
-    fn upgrade_builder(&mut self) -> VNode<'a> {
-        self.build().unwrap()
+    fn render(&mut self) -> Option<VNode<'a>> {
+        self.build()
     }
 }
+
+// pub trait Builder {
+//         fn render(&mut self) -> Option<VNode> {
+//             todo!()
+//         }
+//     }
+
+//     impl Builder for Div<'_> {
+//         fn render(&mut self) -> Option<VNode> {
+//             todo!()
+//         }
+//     }
 
 impl<'a> ElementBuilder<'a> {
     #[allow(clippy::mut_from_ref)] // it's coming from an allocator
@@ -164,6 +176,19 @@ impl<'a> ElementBuilder<'a> {
         self
     }
 
+    pub fn bool_attr(&mut self, name: &'static str, val: bool) -> &mut Self {
+        todo!();
+        // let (value, is_static) = val.into_str(self.fac);
+        // self.attrs.push(Attribute {
+        //     name,
+        //     value,
+        //     is_static,
+        //     namespace: None,
+        //     is_volatile: false,
+        // });
+        self
+    }
+
     pub fn style_attr(
         &mut self,
         name: &'static str,
@@ -215,7 +240,7 @@ impl<'a> ElementBuilder<'a> {
         nodes: [&'a mut dyn AnyBuilder<'a>; LEN],
     ) -> &mut Self {
         for node in nodes {
-            self.children.push(node.upgrade_builder());
+            self.children.push(node.render().unwrap());
         }
         self
     }
