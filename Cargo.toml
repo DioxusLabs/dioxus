@@ -28,7 +28,7 @@ dioxus-mobile = { path = "./packages/mobile", version = "^0.0.3", optional = tru
 dioxus-interpreter-js = { path = "./packages/interpreter", version = "^0.0.0", optional = true }
 # dioxus-liveview = { path = "./packages/liveview", optional = true }
 
-bevy = { version = "0.6", default-features = false }
+bevy = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
 
 [features]
 default = ["macro", "hooks", "html"]

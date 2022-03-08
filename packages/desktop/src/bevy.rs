@@ -6,17 +6,20 @@ use crate::{
     protocol,
     tao::{
         event::{Event, StartCause, WindowEvent},
-        event_loop::{ControlFlow, EventLoop},
+        event_loop::{ControlFlow, EventLoop, EventLoopProxy, EventLoopWindowTarget},
         window::Window,
     },
 };
 use bevy::prelude::{App, CoreStage, EventReader, Plugin, Res};
 use dioxus_core::Component;
 use dioxus_core::*;
-use futures_channel::mpsc;
+use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::stream::StreamExt;
 use std::{fmt::Debug, marker::PhantomData};
-use tokio::sync::broadcast::{channel, Sender};
+use tokio::{
+    runtime::Runtime,
+    sync::broadcast::{channel, Sender},
+};
 pub use wry;
 pub use wry::application as tao;
 use wry::webview::WebViewBuilder;
@@ -29,22 +32,35 @@ pub struct DioxusDesktopPlugin<CoreCommand, UICommand, Props = ()> {
 }
 
 impl<
-        CoreCommand: 'static + Send + Sync + Debug + Clone,
+        CoreCommand: 'static + Send + Sync + Clone + Debug,
         UICommand: 'static + Send + Sync + Clone + Copy,
         Props: 'static + Send + Sync + Copy,
     > Plugin for DioxusDesktopPlugin<CoreCommand, UICommand, Props>
 {
     fn build(&self, app: &mut App) {
+        let config = DesktopConfig::default().with_default_icon();
+        // builder(&mut config);
+        let event_loop = EventLoop::<UserWindowEvent<CoreCommand>>::with_user_event();
+
+        let (core_tx, core_rx) = unbounded::<CoreCommand>();
+        let (ui_tx, _) = channel::<UICommand>(8);
+
+        let desktop = DesktopController::new_on_tokio::<CoreCommand, UICommand, Props>(
+            self.root,
+            self.props,
+            event_loop.create_proxy(),
+            Some((core_tx, ui_tx.clone())),
+        );
+
         app.add_event::<CoreCommand>()
             .add_event::<UICommand>()
-            .insert_resource(DioxusDesktop::<CoreCommand, UICommand, Props>::new(
-                self.root, self.props,
-            ))
-            .set_runner(|app| DioxusDesktop::<CoreCommand, UICommand, Props>::runner(app))
-            .add_system_to_stage(
-                CoreStage::Last,
-                dispatch_ui_commands::<CoreCommand, UICommand, Props>,
-            );
+            .insert_non_send_resource(event_loop)
+            .insert_non_send_resource(desktop)
+            .insert_non_send_resource(config)
+            .insert_resource(ui_tx)
+            .insert_resource(core_rx)
+            .set_runner(|app| runner::<CoreCommand, UICommand>(app))
+            .add_system_to_stage(CoreStage::Last, dispatch_ui_commands::<UICommand>);
     }
 }
 
@@ -59,93 +75,64 @@ impl<CoreCommand, UICommand, Props> DioxusDesktopPlugin<CoreCommand, UICommand, 
     }
 }
 
-pub struct DioxusDesktop<CoreCommand, UICommand, Props> {
-    root: Component<Props>,
-    props: Props,
-    sender: Option<Sender<UICommand>>,
-    data: PhantomData<CoreCommand>,
-}
+fn runner<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static>(mut app: App) {
+    let event_loop = app
+        .world
+        .remove_non_send_resource::<EventLoop<UserWindowEvent<CoreCommand>>>()
+        .unwrap();
+    let mut desktop = app
+        .world
+        .remove_non_send_resource::<DesktopController>()
+        .unwrap();
+    let mut config = app
+        .world
+        .remove_non_send_resource::<DesktopConfig>()
+        .unwrap();
+    app.world
+        .insert_non_send_resource(event_loop.create_proxy());
 
-impl<CoreCommand, UICommand, Props> DioxusDesktop<CoreCommand, UICommand, Props> {
-    pub fn new(root: Component<Props>, props: Props) -> Self {
-        Self {
-            root,
-            props,
-            sender: None,
-            data: PhantomData,
+    let runtime = Runtime::new().unwrap();
+    let mut core_rx = app
+        .world
+        .remove_resource::<UnboundedReceiver<CoreCommand>>()
+        .unwrap();
+    let proxy = event_loop.create_proxy();
+
+    runtime.spawn(async move {
+        while let Some(cmd) = core_rx.next().await {
+            let _res = proxy.clone().send_event(UserWindowEvent::BevyUpdate(cmd));
         }
-    }
+    });
 
-    fn sender(&self) -> Sender<UICommand> {
-        self.sender
-            .clone()
-            .expect("Sender<UICommand> isn't initialized")
-    }
+    app.update();
 
-    fn set_sender(&mut self, sender: Sender<UICommand>) {
-        self.sender = Some(sender);
-    }
-}
-
-impl<
-        CoreCommand: 'static + Send + Sync + Debug + Clone,
-        UICommand: 'static + Send + Sync + Clone,
-        Props: 'static + Send + Sync + Copy,
-    > DioxusDesktop<CoreCommand, UICommand, Props>
-{
-    fn runner(mut app: App) {
-        let mut cfg = DesktopConfig::default().with_default_icon();
-        // builder(&mut cfg);
-        let event_loop = EventLoop::<UserWindowEvent<CoreCommand>>::with_user_event();
-
-        let (core_tx, mut core_rx) = mpsc::unbounded::<CoreCommand>();
-        let (ui_tx, _) = channel::<UICommand>(8);
-
-        let mut desktop_resource = app
-            .world
-            .get_resource_mut::<DioxusDesktop<CoreCommand, UICommand, Props>>()
-            .expect("Provide DioxusDesktopConfig resource");
-
-        desktop_resource.set_sender(ui_tx.clone());
-
-        let mut desktop = DesktopController::new_on_tokio::<CoreCommand, UICommand, Props>(
-            desktop_resource.root,
-            desktop_resource.props,
-            event_loop.create_proxy(),
-            Some((core_tx, ui_tx)),
-        );
-        let proxy = event_loop.create_proxy();
-
-        let proxy_clone = proxy.clone();
-        let runtime = tokio::runtime::Runtime::new().expect("Failed to initialize runtime");
-        runtime.spawn(async move {
-            while let Some(cmd) = core_rx.next().await {
-                let _res = proxy_clone.send_event(UserWindowEvent::BevyUpdate(cmd));
-            }
-        });
-
-        app.update();
-
-        event_loop.run(move |window_event, event_loop, control_flow| {
+    event_loop.run(
+        move |window_event: Event<UserWindowEvent<CoreCommand>>,
+              event_loop: &EventLoopWindowTarget<UserWindowEvent<CoreCommand>>,
+              control_flow: &mut ControlFlow| {
             *control_flow = ControlFlow::Wait;
 
             match window_event {
                 Event::NewEvents(StartCause::Init) => {
-                    let builder = cfg.window.clone();
+                    let builder = config.window.clone();
 
                     let window = builder.build(event_loop).unwrap();
                     let window_id = window.id();
 
                     let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
 
-                    let proxy = proxy.clone();
-                    let file_handler = cfg.file_drop_handler.take();
+                    let file_handler = config.file_drop_handler.take();
 
-                    let resource_dir = cfg.resource_dir.clone();
+                    let resource_dir = config.resource_dir.clone();
+                    let world = app.world.cell();
+                    let proxy = world
+                        .get_non_send_mut::<EventLoopProxy<UserWindowEvent<CoreCommand>>>()
+                        .unwrap()
+                        .clone();
 
                     let mut webview = WebViewBuilder::new(window)
                         .unwrap()
-                        .with_transparent(cfg.window.window.transparent)
+                        .with_transparent(config.window.window.transparent)
                         .with_url("dioxus://index.html/")
                         .unwrap()
                         .with_ipc_handler(move |_window: &Window, payload: String| {
@@ -188,11 +175,11 @@ impl<
                                 .unwrap_or_default()
                         });
 
-                    for (name, handler) in cfg.protocols.drain(..) {
+                    for (name, handler) in config.protocols.drain(..) {
                         webview = webview.with_custom_protocol(name, handler)
                     }
 
-                    if cfg.disable_context_menu {
+                    if config.disable_context_menu {
                         // in release mode, we don't want to show the dev tool or reload menus
                         webview = webview.with_initialization_script(
                             r#"
@@ -242,19 +229,14 @@ impl<
                 Event::RedrawRequested(_id) => {}
                 _ => {}
             }
-        })
-    }
+        },
+    );
 }
 
-fn dispatch_ui_commands<
-    CoreCommand: 'static + Send + Sync,
-    UICommand: 'static + Send + Sync + Copy,
-    Props: 'static + Send + Sync,
->(
+fn dispatch_ui_commands<UICommand: 'static + Send + Sync + Copy>(
     mut events: EventReader<UICommand>,
-    desktop: Res<DioxusDesktop<CoreCommand, UICommand, Props>>,
+    tx: Res<Sender<UICommand>>,
 ) {
-    let tx = desktop.sender();
     for e in events.iter() {
         let _ = tx.send(*e);
     }

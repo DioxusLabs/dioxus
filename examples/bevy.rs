@@ -30,7 +30,7 @@ fn setup(mut event: EventWriter<UICommand>) {
 
 fn log_core_command(mut events: EventReader<CoreCommand>) {
     for e in events.iter() {
-        info!("{:?}", e);
+        info!("🧠 {:?}", e);
     }
 }
 
@@ -41,7 +41,7 @@ fn app(cx: Scope) -> Element {
         let mut rx = context.receiver();
         async move {
             while let Ok(cmd) = rx.recv().await {
-                println!("🎨 {:?}", cmd);
+                info!("🎨 {:?}", cmd);
             }
         }
     });
