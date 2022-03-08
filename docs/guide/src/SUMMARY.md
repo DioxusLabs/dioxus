@@ -23,9 +23,8 @@
   <!-- - [Effects](interactivity/lifecycles.md) -->
 - [Managing State](state/index.md)
   - [Local State](state/localstate.md)
-  - [Lifting State](state/liftingstate.md)
   - [Global State](state/sharedstate.md)
-  - [Fanning Out](state/fanout.md)
+  - [Lifting State](state/liftingstate.md)
   - [Error handling](state/errorhandling.md)
 - [Helper Crates](helpers/index.md)
   - [Fermi](state/fermi.md)
