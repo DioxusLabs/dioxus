@@ -1,6 +1,7 @@
 use bevy::{
+    app::{App, AppExit},
+    ecs::event::{EventReader, EventWriter},
     log::{info, LogPlugin},
-    prelude::{App, EventReader, EventWriter},
 };
 use dioxus::desktop::DioxusDesktopPlugin;
 use dioxus::prelude::*;
@@ -8,6 +9,7 @@ use dioxus::prelude::*;
 #[derive(Debug, Clone)]
 enum CoreCommand {
     Click,
+    Exit,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -28,9 +30,13 @@ fn setup(mut event: EventWriter<UICommand>) {
     event.send(UICommand::Test);
 }
 
-fn log_core_command(mut events: EventReader<CoreCommand>) {
-    for e in events.iter() {
-        info!("🧠 {:?}", e);
+fn log_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter<AppExit>) {
+    for cmd in events.iter() {
+        info!("🧠 {:?}", cmd);
+        match cmd {
+            CoreCommand::Exit => event.send(AppExit),
+            _ => {}
+        }
     }
 }
 
@@ -53,7 +59,13 @@ fn app(cx: Scope) -> Element {
                 onclick: |_e| {
                     let _res = context.send(CoreCommand::Click);
                 },
-                "Send",
+                "Click",
+            }
+            button {
+                onclick: |_e| {
+                    let _res = context.send(CoreCommand::Exit);
+                },
+                "Exit",
             }
         }
     })

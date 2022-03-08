@@ -10,7 +10,13 @@ use crate::{
         window::Window,
     },
 };
-use bevy::prelude::{App, CoreStage, EventReader, Plugin, Res};
+use bevy::{
+    app::{App, AppExit, CoreStage, Plugin},
+    ecs::{
+        event::{EventReader, Events, ManualEventReader},
+        system::Res,
+    },
+};
 use dioxus_core::Component;
 use dioxus_core::*;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
@@ -88,6 +94,7 @@ fn runner<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static>(mut ap
         .world
         .remove_non_send_resource::<DesktopConfig>()
         .unwrap();
+    let mut app_exit_event_reader = ManualEventReader::<AppExit>::default();
     app.world
         .insert_non_send_resource(event_loop.create_proxy());
 
@@ -111,6 +118,16 @@ fn runner<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static>(mut ap
               event_loop: &EventLoopWindowTarget<UserWindowEvent<CoreCommand>>,
               control_flow: &mut ControlFlow| {
             *control_flow = ControlFlow::Wait;
+
+            if let Some(app_exit_events) = app.world.get_resource_mut::<Events<AppExit>>() {
+                if app_exit_event_reader
+                    .iter(&app_exit_events)
+                    .next_back()
+                    .is_some()
+                {
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
 
             match window_event {
                 Event::NewEvents(StartCause::Init) => {
