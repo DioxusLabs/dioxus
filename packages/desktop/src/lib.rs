@@ -12,7 +12,7 @@ mod events;
 mod protocol;
 
 use desktop_context::UserWindowEvent;
-pub use desktop_context::{use_window, DesktopContext};
+pub use desktop_context::{use_bevy_context, use_window, DesktopContext};
 pub use wry;
 pub use wry::application as tao;
 
@@ -108,7 +108,7 @@ pub fn launch_with_props<P: 'static + Send>(
     let mut cfg = DesktopConfig::default().with_default_icon();
     builder(&mut cfg);
 
-    let event_loop = EventLoop::<UserWindowEvent<()>>::with_user_event();
+    let event_loop = EventLoop::with_user_event();
 
     let mut desktop =
         DesktopController::new_on_tokio::<(), (), P>(root, props, event_loop.create_proxy(), None);
@@ -222,7 +222,7 @@ pub fn launch_with_props<P: 'static + Send>(
             },
 
             Event::UserEvent(user_event) => {
-                desktop_context::handler(user_event, &mut desktop, control_flow, None)
+                desktop_context::handler(user_event, &mut desktop, control_flow);
             }
             Event::MainEventsCleared => {}
             Event::Resumed => {}

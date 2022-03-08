@@ -37,11 +37,11 @@ pub struct DioxusDesktopPlugin<CoreCommand, UICommand, Props = ()> {
     ui_cmd_type: PhantomData<UICommand>,
 }
 
-impl<
-        CoreCommand: 'static + Send + Sync + Clone + Debug,
-        UICommand: 'static + Send + Sync + Clone + Copy,
-        Props: 'static + Send + Sync + Copy,
-    > Plugin for DioxusDesktopPlugin<CoreCommand, UICommand, Props>
+impl<CoreCommand, UICommand, Props> Plugin for DioxusDesktopPlugin<CoreCommand, UICommand, Props>
+where
+    CoreCommand: 'static + Send + Sync + Clone + Debug,
+    UICommand: 'static + Send + Sync + Clone + Copy,
+    Props: 'static + Send + Sync + Copy,
 {
     fn build(&self, app: &mut App) {
         let config = DesktopConfig::default().with_default_icon();
@@ -81,7 +81,11 @@ impl<CoreCommand, UICommand, Props> DioxusDesktopPlugin<CoreCommand, UICommand, 
     }
 }
 
-fn runner<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static>(mut app: App) {
+fn runner<CoreCommand, UICommand>(mut app: App)
+where
+    CoreCommand: 'static + Send + Sync + Debug,
+    UICommand: 'static,
+{
     let event_loop = app
         .world
         .remove_non_send_resource::<EventLoop<UserWindowEvent<CoreCommand>>>()
@@ -237,7 +241,12 @@ fn runner<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static>(mut ap
                 },
 
                 Event::UserEvent(user_event) => {
-                    desktop_context::handler(user_event, &mut desktop, control_flow, Some(&mut app))
+                    desktop_context::handler_with_bevy(
+                        user_event,
+                        &mut desktop,
+                        control_flow,
+                        Some(&mut app),
+                    );
                 }
                 Event::MainEventsCleared => {}
                 Event::Resumed => {}
@@ -250,10 +259,10 @@ fn runner<CoreCommand: 'static + Send + Sync + Debug, UICommand: 'static>(mut ap
     );
 }
 
-fn dispatch_ui_commands<UICommand: 'static + Send + Sync + Copy>(
-    mut events: EventReader<UICommand>,
-    tx: Res<Sender<UICommand>>,
-) {
+fn dispatch_ui_commands<UICommand>(mut events: EventReader<UICommand>, tx: Res<Sender<UICommand>>)
+where
+    UICommand: 'static + Send + Sync + Copy,
+{
     for e in events.iter() {
         let _ = tx.send(*e);
     }

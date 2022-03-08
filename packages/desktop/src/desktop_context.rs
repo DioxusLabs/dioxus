@@ -14,9 +14,19 @@ use tokio::sync::broadcast::{Receiver, Sender};
 pub type ProxyType<CoreCommand> = EventLoopProxy<UserWindowEvent<CoreCommand>>;
 
 /// Get an imperative handle to the current window
-pub fn use_window<CoreCommand: Clone, UICommand: 'static + Clone>(
+pub fn use_window(cx: &ScopeState) -> &DesktopContext {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
+        .as_ref()
+        .unwrap()
+}
+
+pub fn use_bevy_context<CoreCommand, UICommand>(
     cx: &ScopeState,
-) -> &DesktopContext<CoreCommand, UICommand> {
+) -> &DesktopContext<CoreCommand, UICommand>
+where
+    CoreCommand: Clone,
+    UICommand: 'static + Clone,
+{
     cx.use_hook(|_| cx.consume_context::<DesktopContext<CoreCommand, UICommand>>())
         .as_ref()
         .unwrap()
@@ -35,7 +45,10 @@ pub fn use_window<CoreCommand: Clone, UICommand: 'static + Clone>(
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
-pub struct DesktopContext<CoreCommand: 'static + Clone, UICommand> {
+pub struct DesktopContext<CoreCommand = (), UICommand = ()>
+where
+    CoreCommand: 'static + Clone,
+{
     proxy: ProxyType<CoreCommand>,
     pub channel: Option<(mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>)>,
 }
@@ -148,7 +161,7 @@ impl<CoreCommand: Clone, UICommand> DesktopContext<CoreCommand, UICommand> {
 }
 
 #[derive(Debug)]
-pub enum UserWindowEvent<T> {
+pub enum UserWindowEvent<T = ()> {
     Update,
 
     CloseWindow,
@@ -173,13 +186,22 @@ pub enum UserWindowEvent<T> {
 
     BevyUpdate(T),
 }
+pub(super) fn handler(
+    user_event: UserWindowEvent,
+    desktop: &mut DesktopController,
+    control_flow: &mut ControlFlow,
+) {
+    handler_with_bevy(user_event, desktop, control_flow, None);
+}
 
-pub(super) fn handler<T: 'static + Send + Sync + std::fmt::Debug>(
+pub(super) fn handler_with_bevy<T>(
     user_event: UserWindowEvent<T>,
     desktop: &mut DesktopController,
     control_flow: &mut ControlFlow,
     app: Option<&mut App>,
-) {
+) where
+    T: 'static + Send + Sync,
+{
     // currently dioxus-desktop supports a single window only,
     // so we can grab the only webview from the map;
     let webview = desktop.webviews.values().next().unwrap();

@@ -33,6 +33,7 @@ fn setup(mut event: EventWriter<UICommand>) {
 fn log_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter<AppExit>) {
     for cmd in events.iter() {
         info!("🧠 {:?}", cmd);
+
         match cmd {
             CoreCommand::Exit => event.send(AppExit),
             _ => {}
@@ -41,10 +42,10 @@ fn log_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter
 }
 
 fn app(cx: Scope) -> Element {
-    let context = dioxus::desktop::use_window::<CoreCommand, UICommand>(&cx);
+    let ctx = dioxus::desktop::use_bevy_context::<CoreCommand, UICommand>(&cx);
 
     use_future(&cx, (), |_| {
-        let mut rx = context.receiver();
+        let mut rx = ctx.receiver();
         async move {
             while let Ok(cmd) = rx.recv().await {
                 info!("🎨 {:?}", cmd);
@@ -57,13 +58,13 @@ fn app(cx: Scope) -> Element {
             h1 { "Bevy Plugin Example" },
             button {
                 onclick: |_e| {
-                    let _res = context.send(CoreCommand::Click);
+                    let _res = ctx.send(CoreCommand::Click);
                 },
                 "Click",
             }
             button {
                 onclick: |_e| {
-                    let _res = context.send(CoreCommand::Exit);
+                    let _res = ctx.send(CoreCommand::Exit);
                 },
                 "Exit",
             }
