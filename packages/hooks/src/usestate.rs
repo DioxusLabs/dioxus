@@ -414,6 +414,30 @@ impl<T: Div<Output = T> + Copy> std::ops::DivAssign<T> for &UseState<T> {
     }
 }
 
+impl<T: Add<Output = T> + Copy> std::ops::AddAssign<T> for UseState<T> {
+    fn add_assign(&mut self, rhs: T) {
+        self.set((*self.current()) + rhs);
+    }
+}
+
+impl<T: Sub<Output = T> + Copy> std::ops::SubAssign<T> for UseState<T> {
+    fn sub_assign(&mut self, rhs: T) {
+        self.set((*self.current()) - rhs);
+    }
+}
+
+impl<T: Mul<Output = T> + Copy> std::ops::MulAssign<T> for UseState<T> {
+    fn mul_assign(&mut self, rhs: T) {
+        self.set((*self.current()) * rhs);
+    }
+}
+
+impl<T: Div<Output = T> + Copy> std::ops::DivAssign<T> for UseState<T> {
+    fn div_assign(&mut self, rhs: T) {
+        self.set((*self.current()) / rhs);
+    }
+}
+
 #[test]
 fn api_makes_sense() {
     #[allow(unused)]
