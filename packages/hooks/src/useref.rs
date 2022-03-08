@@ -1,6 +1,6 @@
 use dioxus_core::ScopeState;
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::{Cell, Ref, RefCell, RefMut},
     rc::Rc,
     sync::Arc,
 };
@@ -114,16 +114,27 @@ pub fn use_ref<'a, T: 'static>(
     cx: &'a ScopeState,
     initialize_refcell: impl FnOnce() -> T,
 ) -> &'a UseRef<T> {
-    cx.use_hook(|_| UseRef {
+    let hook = cx.use_hook(|_| UseRef {
         update: cx.schedule_update(),
         value: Rc::new(RefCell::new(initialize_refcell())),
-    })
+        dirty: Rc::new(Cell::new(false)),
+        gen: 0,
+    });
+
+    if hook.dirty.get() {
+        hook.gen += 1;
+        hook.dirty.set(false);
+    }
+
+    hook
 }
 
 /// A type created by the [`use_ref`] hook. See its documentation for more details.
 pub struct UseRef<T> {
     update: Arc<dyn Fn()>,
     value: Rc<RefCell<T>>,
+    dirty: Rc<Cell<bool>>,
+    gen: usize,
 }
 
 impl<T> Clone for UseRef<T> {
@@ -131,6 +142,8 @@ impl<T> Clone for UseRef<T> {
         Self {
             update: self.update.clone(),
             value: self.value.clone(),
+            dirty: self.dirty.clone(),
+            gen: self.gen,
         }
     }
 }
@@ -146,16 +159,6 @@ impl<T> UseRef<T> {
         self.value.borrow()
     }
 
-    /// Set the curernt value to `new_value`. This will mark the component as "dirty"
-    ///
-    /// This change will propogate immediately, so any other contexts that are
-    /// using this RefCell will also be affected. If called during an async context,
-    /// the component will not be re-rendered until the next `.await` call.
-    pub fn set(&self, new: T) {
-        *self.value.borrow_mut() = new;
-        self.needs_update();
-    }
-
     /// Mutably unlock the value in the RefCell. This will mark the component as "dirty"
     ///
     /// Uses to `write` should be as short as possible.
@@ -166,6 +169,16 @@ impl<T> UseRef<T> {
     pub fn write(&self) -> RefMut<'_, T> {
         self.needs_update();
         self.value.borrow_mut()
+    }
+
+    /// Set the curernt value to `new_value`. This will mark the component as "dirty"
+    ///
+    /// This change will propogate immediately, so any other contexts that are
+    /// using this RefCell will also be affected. If called during an async context,
+    /// the component will not be re-rendered until the next `.await` call.
+    pub fn set(&self, new: T) {
+        *self.value.borrow_mut() = new;
+        self.needs_update();
     }
 
     /// Mutably unlock the value in the RefCell. This will not mark the component as dirty.
@@ -223,6 +236,19 @@ impl<T> UseRef<T> {
     /// This will cause the component to be re-rendered after the current scope
     /// has ended or the current async task has been yielded through await.
     pub fn needs_update(&self) {
+        self.dirty.set(true);
         (self.update)();
+    }
+}
+
+// UseRef memoizes not on value but on cell
+// Memoizes on "generation" - so it will cause a re-render if the value changes
+impl<T> PartialEq for UseRef<T> {
+    fn eq(&self, other: &Self) -> bool {
+        if Rc::ptr_eq(&self.value, &other.value) {
+            self.gen == other.gen
+        } else {
+            false
+        }
     }
 }
