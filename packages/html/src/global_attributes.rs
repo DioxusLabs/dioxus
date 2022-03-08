@@ -1,3 +1,5 @@
+use dioxus_core::IntoVNode;
+
 pub use crate::builder::IntoAttributeValue;
 use crate::events::*;
 use crate::{builder::ElementBuilder, element_builder::AnyBuilder};
@@ -51,11 +53,17 @@ pub trait HtmlElement<'a> {
         todo!()
     }
 
+    fn children_from_iter(&mut self, children: impl IntoIterator<Item = impl IntoVNode<'a>>) -> &mut Self {
+        todo!()
+    }
+
+    fn text(&mut self, f: impl IntoAttributeValue<'a>) -> &mut Self { self }
+
     fn accesskey(&mut self, f: impl IntoAttributeValue<'a>) -> &mut Self { self.builder().attr("accesskey", f); self }
     fn contenteditable(&mut self, f: bool) -> &mut Self { self.builder().bool_attr("contenteditable", f); self }
     fn data(&mut self, f: impl IntoAttributeValue<'a>) -> &mut Self { self.builder().attr("data", f); self }
 
-    /// Add a singular classname
+    /// Add a single classname
     fn classname(&mut self, f: impl IntoAttributeValue<'a>) -> &mut Self { self.builder().attr("classname", f); self }
 
     /// The HTML class attribute is used to specify a class for an HTML element.

@@ -1,32 +1,16 @@
+use std::fmt::Arguments;
+
 use dioxus_core::prelude::*;
 use dioxus_html::builder::*;
 
 use dioxus_html::{element_builder::AnyBuilder, HtmlElement};
 
 fn Demo(cx: Scope) -> Element {
-    div(&cx)
-        .hidden(true)
-        .dir("asd")
-        .contenteditable(true)
-        .data("asd")
-        .draggable(false)
-        .class("asd")
-        .classname("job")
-        .classname("bob")
-        .classname("bob")
-        .classname("bob")
-        .classname("bob")
-        .classname("bob")
-        .accesskey("asd")
-        .prevent_default("onclick")
-        .onclick(move |_| {})
-        .children([
-            div(&cx).class("asd asd asd asd "),
-            div(&cx).class("asd asd asd asd "),
-            div(&cx).class("asd asd asd asd "),
-            div(&cx).class("asd asd asd asd "),
-            h1(&cx).height("150px"),
-            fragment(&cx).children([]),
-        ])
-        .render()
+    let count = &*cx.use_hook(|_| 0);
+
+    cx.render([
+        h1(&cx).text(format_args!("Count: {count}")),
+        button(&cx).text("Up High").onclick(move |_| count += 1),
+        button(&cx).text("Down Low").onclick(move |_| count -= 1),
+    ])
 }
