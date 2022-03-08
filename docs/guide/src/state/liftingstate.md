@@ -104,8 +104,7 @@ fn Title(cx: Scope) -> Element {
 
 This is great - all is well in the world. We get precise updates, automatic memoization, and a solid abstraction. But, what happens when we want to reuse this component in another project? This component is now deeply intertwined with our global state - which might not be the same in another app.
 
-In this case, we want to "lift" our global state out of "view" components.  With `lifting`, our individual components at "leaf" position of our VirtualDom are "pure", making them easily reusable, testable, and deterministic. For instance, the "title" bar of our app might be a fairly complicated component.
-
+In this case, we want to "lift" our global state out of "view" components.  With `lifting`, our individual components at "leaf" position of our VirtualDom are "pure", making them easily reusable, testable, and deterministic.
 
 To enable our title component to be used across apps, we want to lift our atoms upwards and out of the Title component. We would organize a bunch of other components in this section of the app to share some of the same state.
 
