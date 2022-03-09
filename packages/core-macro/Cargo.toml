@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-core-macro"
-version = "0.1.7"
+version = "0.2.0"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Core macro for Dioxus Virtual DOM"
@@ -15,7 +15,6 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 proc-macro = true
 
 [dependencies]
-# dioxus-rsx = { path = "../rsx" }
 proc-macro-error = "1"
 proc-macro2 = { version = "1.0.6" }
 quote = "1.0"
