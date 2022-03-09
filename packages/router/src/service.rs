@@ -49,6 +49,8 @@ pub struct RouterCore {
 
     pub(crate) slots: Rc<RefCell<HashMap<ScopeId, String>>>,
 
+    pub(crate) ordering: Rc<RefCell<Vec<ScopeId>>>,
+
     pub(crate) onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
 
     pub(crate) history: Box<dyn RouterProvider>,
@@ -102,6 +104,7 @@ impl RouterCore {
             tx,
             route_found: Cell::new(None),
             stack: RefCell::new(vec![route]),
+            ordering: Default::default(),
             slots: Default::default(),
             onchange_listeners: Default::default(),
             history,
@@ -167,6 +170,7 @@ impl RouterCore {
     pub(crate) fn register_total_route(&self, route: String, scope: ScopeId) {
         let clean = clean_route(route);
         self.slots.borrow_mut().insert(scope, clean);
+        self.ordering.borrow_mut().push(scope);
     }
 
     pub(crate) fn should_render(&self, scope: ScopeId) -> bool {
@@ -366,3 +370,18 @@ mod web {
         }
     }
 }
+
+/*
+
+
+
+
+
+
+Route { to: "/blog/:id" }
+Route { to: "/blog/:id" }
+Route { to: "/blog/:id" }
+Route { to: "/blog/:id" }
+Route { to: "/blog/:id" }
+
+*/
