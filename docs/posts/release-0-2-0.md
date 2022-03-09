@@ -1,8 +1,6 @@
 # Dioxus v0.2 Release: Router, State Management, and Tooling
 
-> Jan 26, 2022
-
-> [@jkelleyrtp](https://github.com/jkelleyrtp)
+> March 9, 2022
 
 Thanks to these amazing folks for their financial support on OpenCollective:
 
@@ -12,16 +10,15 @@ Thanks to these amazing folks for their financial support on OpenCollective:
 - [@DannyMichaels](https://github.com/DannyMichaels)
 - [@SweetLittleMUV](https://github.com/Fatcat560)
 
-
 Thanks to these amazing folks for their code contributions:
 
-[@mrxiaozhuox](https://github.com/mrxiaozhuox)
-[@autarch](https://github.com/autarch)
-[@FruitieX](https://github.com/FruitieX)
-[@t1m0t](https://github.com/t1m0t)
-[@Demonthos](https://github.com/Demonthos)
-[@oovm](https://github.com/oovm)
-[@6asaaki](https://github.com/6asaaki)
+- [@mrxiaozhuox](https://github.com/mrxiaozhuox)
+- [@autarch](https://github.com/autarch)
+- [@FruitieX](https://github.com/FruitieX)
+- [@t1m0t](https://github.com/t1m0t)
+- [@Demonthos](https://github.com/Demonthos)
+- [@oovm](https://github.com/oovm)
+- [@6asaaki](https://github.com/6asaaki)
 
 
 Just over two months in, and we already a ton of awesome changes to Dioxus!
@@ -42,9 +39,9 @@ fn app(cx: Scope) -> Element {
 
 # What's new?
 
-A *ton* of stuff happened in this release; 109 commits, 10 contributors, 2 minor releases, and 1 backer on Open Collective (!!!).
+A *ton* of stuff happened in this release; 550+ commits, 23 contributors, 2 minor releases, and 6 backers on Open Collective.
 
-The TLDR of the major features:
+Some of the major new features include:
 
 - We now can render into the terminal, similar to Ink.JS - a huge thanks to [@Demonthos](https://github.com/Demonthos)
 - We have a new router in the spirit of React-Router [@autarch](https://github.com/autarch)
@@ -61,7 +58,7 @@ We also fixed and improved a bunch of stuff - check out the full list down below
 When Dioxus was initially released, we had very simple support for logging Dioxus elements out as TUI elements. In the past month or so, [@Demonthos](https://github.com/Demonthos) really stepped up and made the new crate a reality.
 
 
-[Imgur](https://i.imgur.com/GL7uu3r.png)
+![Imgur](https://i.imgur.com/GL7uu3r.png)
 
 The new TUI renderer even supports mouse movements, keyboard input, async tasks, borders, and a ton more.
 
@@ -209,6 +206,10 @@ Under the hood, we have a new string interning engine to cache commonly used tag
 Overall, Dioxus apps are even more snappy than before.
 
 
+Before and after:
+![Before and After](https://imgur.com/byTBGlO.png)
+
+
 ## Dioxus Desktop Window Context
 
 A very welcome change, thanks AGAIN to [@mrxiaozhuox](https://github.com/mrxiaozhuox) is support for imperatively controlling the desktop window from your Dioxus code.
@@ -225,7 +226,7 @@ In addition, Dioxus Desktop now autoresolves asset locations, so you can easily 
 
 You can now build entirely borderless desktop apps:
 
-[img](https://i.imgur.com/97zsVS1.png)
+![img](https://i.imgur.com/97zsVS1.png)
 
 <!-- ## VSCode Extension
 
@@ -247,7 +248,56 @@ Thanks to the amazing work by [@mrxiaozhuox](https://github.com/mrxiaozhuox), ou
 
 Unlike its counterpart, `Trunk.rs`, the dioxus-cli supports running examples and tests, making it easier to test web-based projects and showcase web-focused libraries.
 
+## Async Improvements
+
+Working with async isn't the easiest part of Rust. To help improve things, we've upgraded async support across the board in Dioxus.
+
+
+First, we upgraded the `use_future` hook. It now supports dependencies, which let you regenerate a future on the fly as its computed values change. It's never been easier to add datafetching to your Rust Web Apps:
+
+```rust
+fn RenderDog(cx: Scope, breed: String) -> Element {
+    let dog_request = use_future(&cx, (breed,), |(breed,)| async move {
+        reqwest::get(format!("https://dog.ceo/api/breed/{}/images/random", breed))
+            .await
+            .unwrap()
+            .json::<DogApi>()
+            .await
+    });
+
+    cx.render(match dog_request.value() {
+        Some(Ok(url)) => rsx!{ img { url: "{url}" } },
+        Some(Err(url)) => rsx!{ span { "Loading dog failed" }  },
+        None => rsx!{ "Loading dog..." }
+    })
+}
+```
+
+Additionally, we added better support for coroutines. You can now start, stop, resume, and message with asynchronous tasks. The coroutine is automatically exposed to the rest of your app via the Context API. For the vast majority of apps, Coroutines can satisfy all of your state management needs:
+
+```rust
+fn App(cx: Scope) -> Element {
+    let sync_task = use_coroutine(&cx, |rx| async move {
+        connect_to_server().await;
+        let state = MyState::new();
+
+        while let Some(action) = rx.next().await {
+            reduce_state_with_action(action).await;
+        }
+    });
+
+    cx.render(rsx!{
+        button {
+            onclick: move |_| sync_task.send(SyncAction::Username("Bob")),
+            "Click to sync your username to the server"
+        }
+    })
+}
+```
+
 ## All New Features
+
+We've covered the major headlining features, but there were so many more!
 
 - [x] A new router @autarch
 - [x] Fermi for global state management
@@ -258,7 +308,7 @@ Unlike its counterpart, `Trunk.rs`, the dioxus-cli supports running examples and
 - [x] Improved dev server, hot reloading for desktop and web apps [@mrxiaozhuox](https://github.com/mrxiaozhuox)
 - [x] Templates: desktop, web, web/hydration, Axum + SSR, and more [@mrxiaozhuox](https://github.com/mrxiaozhuox)
 - [x] Web apps ship with console_error_panic_hook enabled, so you always get tracebacks
-- [x] Enhanced Hydration and server-side-rendering
+- [x] Enhanced Hydration and server-side-rendering (recovery, validation)
 - [x] Optional fields for component properties
 - [x] Introduction of the `EventHandler` type
 - [x] Improved use_state hook to be closer to react
@@ -299,8 +349,14 @@ A ton more! Dioxus is now much more stable than it was at release!
 - [Toast Support](https://github.com/mrxiaozhuox/dioxus-toast)
 - New Examples: forms, routers, linking, tui, and more!
 
-Looking Forward
----
+## Looking Forward
 
-Contributors
----
+Dioxus is still under rapid, active development. We'd love for you to get involved! For the next release, we're looking to add:
+
+- A query library like react-query
+- Native WGPU renderer support
+- Multiwindow desktop app support
+- Full LiveView integrations for Axum, Warp, and Actix
+- A builder pattern for elements (no need for rsx!)
+- Autoformatting of rsx! code (like cargo fmt)
+- Beef up and publish the VSCode Extension

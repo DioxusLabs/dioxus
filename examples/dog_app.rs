@@ -63,8 +63,11 @@ struct DogApi {
 #[inline_props]
 fn Breed(cx: Scope, breed: String) -> Element {
     let fut = use_future(&cx, (breed,), |(breed,)| async move {
-        let endpoint = format!("https://dog.ceo/api/breed/{}/images/random", breed);
-        reqwest::get(endpoint).await.unwrap().json::<DogApi>().await
+        reqwest::get(format!("https://dog.ceo/api/breed/{}/images/random", breed))
+            .await
+            .unwrap()
+            .json::<DogApi>()
+            .await
     });
 
     cx.render(match fut.value() {
