@@ -18,18 +18,6 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
         .unwrap()
 }
 
-pub fn use_bevy_context<CoreCommand, UICommand>(
-    cx: &ScopeState,
-) -> &DesktopContext<CoreCommand, UICommand>
-where
-    CoreCommand: Clone,
-    UICommand: 'static + Clone,
-{
-    cx.use_hook(|_| cx.consume_context::<DesktopContext<CoreCommand, UICommand>>())
-        .as_ref()
-        .unwrap()
-}
-
 /// An imperative interface to the current window.
 ///
 /// To get a handle to the current window, use the [`use_window`] hook.

@@ -8,7 +8,7 @@ use dioxus_core::*;
 pub use dioxus_desktop::cfg::DesktopConfig;
 use dioxus_desktop::{
     controller::DesktopController,
-    desktop_context::{self, UserEvent, UserWindowEvent},
+    desktop_context::{self, DesktopContext, UserEvent, UserWindowEvent},
     events::{parse_ipc_message, trigger_from_serialized},
     protocol,
     tao::{
@@ -268,4 +268,16 @@ where
     for e in events.iter() {
         let _ = tx.send(*e);
     }
+}
+
+pub fn use_bevy_context<CoreCommand, UICommand>(
+    cx: &ScopeState,
+) -> &DesktopContext<CoreCommand, UICommand>
+where
+    CoreCommand: Clone,
+    UICommand: 'static + Clone,
+{
+    cx.use_hook(|_| cx.consume_context::<DesktopContext<CoreCommand, UICommand>>())
+        .as_ref()
+        .unwrap()
 }
