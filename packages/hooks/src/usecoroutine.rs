@@ -36,7 +36,7 @@ use std::future::Future;
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust
 /// enum Action {
 ///     Start,
 ///     Stop,

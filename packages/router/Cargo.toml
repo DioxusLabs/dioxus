@@ -1,8 +1,8 @@
 [package]
 name = "dioxus-router"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2018"
-description = "Dioxus VirtualDOM renderer for the web browser using websys"
+description = "Cross-platform router for Dioxus apps"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
@@ -11,9 +11,9 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.1.9", default-features = false }
-dioxus-html = { path = "../html", version = "^0.1.6", default-features = false }
-dioxus-core-macro = { path = "../core-macro", version = "^0.1.7" }
+dioxus-core = { path = "../core", version = "^0.2.0", default-features = false }
+dioxus-html = { path = "../html", version = "^0.2.0", default-features = false }
+dioxus-core-macro = { path = "../core-macro", version = "^0.2.0" }
 futures-channel = "0.3.21"
 url = { version = "2.2.2", default-features = false }
 

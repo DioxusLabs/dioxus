@@ -137,6 +137,8 @@ fn clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
 }
 ```
 
+Passing nodes through props means that they are immutable. If you find yourself needing to mutate nodes passed through props, consider creating a new node in its place that takes on its attributes, children, and listeners.
+
 <!-- ## Passing attributes
 
 In the cases where you need to pass arbitrary element properties into a component - say to add more functionality to the `<a>` tag, Dioxus will accept any quoted fields. This is similar to adding arbitrary fields to regular elements using quotes.
