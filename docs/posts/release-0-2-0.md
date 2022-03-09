@@ -61,7 +61,7 @@ We also fixed and improved a bunch of stuff - check out the full list down below
 When Dioxus was initially released, we had very simple support for logging Dioxus elements out as TUI elements. In the past month or so, [@Demonthos](https://github.com/Demonthos) really stepped up and made the new crate a reality.
 
 
-[Imgur](https://imgur.com/GL7uu3r)
+[Imgur](https://i.imgur.com/GL7uu3r.png)
 
 The new TUI renderer even supports mouse movements, keyboard input, async tasks, borders, and a ton more.
 
@@ -103,7 +103,7 @@ We're also using hooks to parse the URL parameters and segments so you can inter
 struct Query { name: String }
 
 fn BlogPost(cx: Scope) -> Element {
-    let post = use_route(&cx).last_segment();
+    let post = use_route(&cx).segment("post")?;
     let query = use_route(&cx).query::<Query>()?;
 
     cx.render(rsx!{
@@ -171,11 +171,11 @@ fn Child<'a>(
 }
 ```
 
-You won't be able to document each field or attach attributes so you should refrain on using it in libraries.
+You won't be able to document each field or attach attributes so you should refrain from using it in libraries.
 
 ## Props optional fields
 
-Sometimes you don't want to specify *every* value on a component's props, since there might a lot. That's why the `Props` macro now supports optional fields. You can use a combination of `default`, `strip_option`, and `optional` to tune the exact behavior of properties fields.
+Sometimes you don't want to specify *every* value in a component's props, since there might a lot. That's why the `Props` macro now supports optional fields. You can use a combination of `default`, `strip_option`, and `optional` to tune the exact behavior of properties fields.
 
 ```rust
 #[derive(Props, PartialEq)]
@@ -208,7 +208,26 @@ Under the hood, we have a new string interning engine to cache commonly used tag
 
 Overall, Dioxus apps are even more snappy than before.
 
-## VSCode Extension
+
+## Dioxus Desktop Window Context
+
+A very welcome change, thanks AGAIN to [@mrxiaozhuox](https://github.com/mrxiaozhuox) is support for imperatively controlling the desktop window from your Dioxus code.
+
+A bunch of new methods were added:
+- Minimize and maximize window
+- Close window
+- Focus window
+- Enable devtools on the fly
+
+And more!
+
+In addition, Dioxus Desktop now autoresolves asset locations, so you can easily add local images, JS, CSS, and then bundle it into an .app without hassle.
+
+You can now build entirely borderless desktop apps:
+
+[img](https://i.imgur.com/97zsVS1.png)
+
+<!-- ## VSCode Extension
 
 To make life easier and improve your development experience, we've launched the first iteration of the official Dioxus VSCode extension. If you're not using VSCode, you can still take advantage of these new features through the CLI tool.
 
@@ -220,7 +239,7 @@ Included in the new extension is:
 
 [To install the extension, go here](https://marketplace.visualstudio.com/items?itemName=matklad.rust-analyzer).
 
-The VSCode extension is really easy to contribute to and has tons of potential. This is a great place to start contributing to the Dioxus project *and* improve your development experience.
+The VSCode extension is really easy to contribute to and has tons of potential. This is a great place to start contributing to the Dioxus project *and* improve your development experience. -->
 
 ## CLI Tool
 
@@ -233,29 +252,27 @@ Unlike its counterpart, `Trunk.rs`, the dioxus-cli supports running examples and
 - [x] A new router @autarch
 - [x] Fermi for global state management
 - [x] Translation of docs and Readme into Chinese @mrxiaozhuox
-- [ ] Published VSCode Extension for translation and autoformatting
 - [x] 2.5x speedup by using JS-based DOM manipulation (3x faster than React)
 - [x] Beautiful documentation overhaul
 - [x] InlineProps macro allows definition of props within a component's function arguments
-- [ ] Improved dev server, hot reloading for desktop and web apps [@mrxiaozhuox](https://github.com/mrxiaozhuox)
-- [ ] Templates: desktop, web, web/hydration, Axum + SSR, and more [@mrxiaozhuox](https://github.com/mrxiaozhuox)
+- [x] Improved dev server, hot reloading for desktop and web apps [@mrxiaozhuox](https://github.com/mrxiaozhuox)
+- [x] Templates: desktop, web, web/hydration, Axum + SSR, and more [@mrxiaozhuox](https://github.com/mrxiaozhuox)
 - [x] Web apps ship with console_error_panic_hook enabled, so you always get tracebacks
 - [x] Enhanced Hydration and server-side-rendering
 - [x] Optional fields for component properties
-- [ ] Passing in `Attributes` through components
 - [x] Introduction of the `EventHandler` type
 - [x] Improved use_state hook to be closer to react
 - [x] Improved use_ref hook to be easier to use in async contexts
-- [ ] New use_coroutine hook for carefully controlling long-running async tasks
+- [x] New use_coroutine hook for carefully controlling long-running async tasks
 - [x] Prevent Default attribute
 - [x] Provide Default Context allows injection of global contexts to the top of the app
 - [x] push_future now has a spawn counterpart to be more consistent with rust
 - [x] Add gap and gap_row attributes [@FruitieX](https://github.com/FruitieX)
-- [ ] Expose window events for desktop apps
 - [x] File Drag n Drop support for Desktop
 - [x] Custom handler support for desktop
 - [x] Forms now collect all their values in oninput/onsubmit
-
+- [x] Async tasks now are dropped when components unmount
+- [x] Right-click menus are now disabled by default
 
 ## Fixes
 - [x] Windows support improved across the board
@@ -263,17 +280,24 @@ Unlike its counterpart, `Trunk.rs`, the dioxus-cli supports running examples and
 - [x] Bug in Calculator example
 - [x] Improved example running support
 
+A ton more! Dioxus is now much more stable than it was at release!
+
 ## Community Additions
 - [Styled Components macro](https://github.com/Zomatree/Revolt-Client/blob/master/src/utils.rs#14-27) [@Zomatree](https://github.com/Zomatree)
 - [Dioxus-Websocket hook](https://github.com/FruitieX/dioxus-websocket-hooks) [@FruitieX](https://github.com/FruitieX)
 - [Home automation server app](https://github.com/FruitieX/homectl) [@FruitieX](https://github.com/FruitieX)
-- [Video Recording app]
+- [Video Recording app](https://github.com/rustkid/recorder)
 - [Music streaming app](https://github.com/autarch/Crumb/tree/master/web-frontend) [@autarch](https://github.com/autarch)
 - [NixOS dependency installation](https://gist.github.com/FruitieX/73afe3eb15da45e0e05d5c9cf5d318fc) [@FruitieX](https://github.com/FruitieX)
 - [Vercel Deploy Template](https://github.com/lucifer1004/dioxus-vercel-demo) [@lucifer1004](https://github.com/lucifer1004)
-- RSX -> HTML translator app
-- New Examples: forms, routers, linking
-- Form Example
+- [Render Katex in Dioxus](https://github.com/oovm/katex-wasm)
+- [Render PrismJS in Dioxus](https://github.com/oovm/prism-wasm)
+- [Compile-time correct TailwindCSS](https://github.com/houseabsolute/tailwindcss-to-rust)
+- [Autogenerate tailwind CSS](https://github.com/oovm/tailwind-rs)
+- [Heroicons library](https://github.com/houseabsolute/dioxus-heroicons)
+- [RSX -> HTML translator app](https://dioxus-convert.netlify.app)
+- [Toast Support](https://github.com/mrxiaozhuox/dioxus-toast)
+- New Examples: forms, routers, linking, tui, and more!
 
 Looking Forward
 ---
