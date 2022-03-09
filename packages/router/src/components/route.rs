@@ -54,6 +54,7 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
     });
 
     log::debug!("Checking Route: {:?}", cx.props.to);
+
     if router_root.should_render(cx.scope_id()) {
         log::debug!("Route should render: {:?}", cx.scope_id());
         cx.render(rsx!(&cx.props.children))
