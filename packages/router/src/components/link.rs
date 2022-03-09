@@ -98,8 +98,8 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let prevent_default = if outerlink { "" } else { "onclick" };
 
     let route = use_route(&cx);
-    let location = route.current_location();
-    let path = location.path();
+    let url = route.url();
+    let path = url.path();
     let active = path == cx.props.to;
     let active_class = active.then(|| {
         active_class.unwrap_or("active")
