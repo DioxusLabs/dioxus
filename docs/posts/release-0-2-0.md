@@ -4,22 +4,38 @@
 
 > [@jkelleyrtp](https://github.com/jkelleyrtp)
 
-> Thanks: [@mrxiaozhuox](https://github.com/mrxiaozhuox) [@autarch](https://github.com/autarch) [@FruitieX](https://github.com/FruitieX) [@t1m0t](https://github.com/t1m0t)
+Thanks to these amazing folks for their financial support on OpenCollective:
 
-> Thanks: [@t1m0t](https://github.com/t1m0t) for your financial support! 
+- [@t1m0t](https://github.com/t1m0t)
+- [@alexkirsz](https://github.com/t1m0t)
+- [@freopen](https://github.com/freopen)
+- [@DannyMichaels](https://github.com/DannyMichaels)
+- [@SweetLittleMUV](https://github.com/Fatcat560)
 
-A few weeks in, and already a ton of awesome changes to Dioxus!
+
+Thanks to these amazing folks for their code contributions:
+
+[@mrxiaozhuox](https://github.com/mrxiaozhuox)
+[@autarch](https://github.com/autarch)
+[@FruitieX](https://github.com/FruitieX)
+[@t1m0t](https://github.com/t1m0t)
+[@Demonthos](https://github.com/Demonthos)
+[@oovm](https://github.com/oovm)
+[@6asaaki](https://github.com/6asaaki)
+
+
+Just over two months in, and we already a ton of awesome changes to Dioxus!
 
 Dioxus is a recently-released library for building interactive user interfaces (GUI) with Rust. It is built around a Virtual DOM, making it portable for the web, desktop, server, mobile, and more. Dioxus looks and feels just like React, so if you know React, then you'll feel right at home.
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let (count, set_count) = use_state(&cx, || 0);
+    let mut count = use_state(&cx, || 0);
 
     cx.render(rsx! {
         h1 { "Count: {count}" }
-        button { onclick: move |_| set_count(count + 1), "+" }
-        button { onclick: move |_| set_count(count - 1), "-" }
+        button { onclick: move |_| count += 1, "+" }
+        button { onclick: move |_| count -= 1, "-" }
     })
 }
 ```
@@ -30,13 +46,28 @@ A *ton* of stuff happened in this release; 109 commits, 10 contributors, 2 minor
 
 The TLDR of the major features:
 
+- We now can render into the terminal, similar to Ink.JS - a huge thanks to [@Demonthos](https://github.com/Demonthos)
 - We have a new router in the spirit of React-Router [@autarch](https://github.com/autarch)
 - We now have Fermi for global state management in the spirit of [Recoil.JS](https://recoiljs.org)
-- The docs and readme are now translated into Chinese thanks to [@mrxiaozhuox](https://github.com/mrxiaozhuox)
-- Our VSCode Extension and CLI tools now support HTML-to-RSX translation and auto-formatting
+- Our desktop platform got major upgrades, getting closer to parity with Electron [@mrxiaozhuox](https://github.com/mrxiaozhuox)
+- Our CLI tools now support HTML-to-RSX translation for converting 3rd party HTML into Dioxus [@mrxiaozhuox](https://github.com/mrxiaozhuox)
 - Dioxus-Web is sped up by 2.5x with JS-based DOM manipulation (3x faster than React)
 
 We also fixed and improved a bunch of stuff - check out the full list down below.
+
+
+## A New Renderer: Your terminal!
+
+When Dioxus was initially released, we had very simple support for logging Dioxus elements out as TUI elements. In the past month or so, [@Demonthos](https://github.com/Demonthos) really stepped up and made the new crate a reality.
+
+
+[Imgur](https://imgur.com/GL7uu3r)
+
+The new TUI renderer even supports mouse movements, keyboard input, async tasks, borders, and a ton more.
+
+<blockquote class="imgur-embed-pub" lang="en" data-id="a/49n7Hj2" data-context="false" ><a href="//imgur.com/a/49n7Hj2"></a></blockquote><script async src="//s.imgur.com/min/embed.js" charset="utf-8"></script>
+
+
 
 ## New Router
 
@@ -48,21 +79,17 @@ Apps with routers are *really* simple now. It's easy to compose the "Router", a 
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
-            onchange: move |route| log::info!("Route changed to {route}"),
+            onchange: move |_| log::info!("Route changed!"),
             ul {
                 Link { to: "/",  li { "Go home!" } }
                 Link { to: "users",  li { "List all users" } }
                 Link { to: "blog", li { "Blog posts" } }
             }
             Route { to: "/", "Home" }
-            Route { to: "users",
-                Route { to: "/", "User list" }
-                Route { to: ":name", User {} }
-             }
-            Route { to: "blog"
-                Route { to: "/", "Blog list" }
-                Route { to: ":post", BlogPost {} }
-            }
+            Route { to: "/users", "User list" }
+            Route { to: "/users/:name", User {} }
+            Route { to: "/blog", "Blog list" }
+            Route { to: "/blog/:post", BlogPost {} }
             Route { to: "", "Err 404 Route Not Found" }
         }
     })
@@ -88,7 +115,7 @@ fn BlogPost(cx: Scope) -> Element {
 
 Give a big thanks to [@autarch](https://github.com/autarch) for putting in all the hard work to make this new router a reality.
 
-The Router guide is [available here]().
+The Router guide is [available here](https://dioxuslabs.com/nightly/router/) - thanks to [@dogedark](https://github.com/dogedark).
 
 ## Fermi for Global State Management
 
@@ -123,7 +150,7 @@ fn Child(cx: Scope) -> Element {
 
 ## Inline Props Macro
 
-For internal components, explicitly declaring props structs can become tedious. That's why we've built the new `inline_props` macro. This macro lets you inline your props definition right into your component function arguments. 
+For internal components, explicitly declaring props structs can become tedious. That's why we've built the new `inline_props` macro. This macro lets you inline your props definition right into your component function arguments.
 
 Simply add the `inline_props` macro to your component:
 ```rust
@@ -181,7 +208,7 @@ Under the hood, we have a new string interning engine to cache commonly used tag
 
 Overall, Dioxus apps are even more snappy than before.
 
-## VSCode Extension 
+## VSCode Extension
 
 To make life easier and improve your development experience, we've launched the first iteration of the official Dioxus VSCode extension. If you're not using VSCode, you can still take advantage of these new features through the CLI tool.
 
@@ -203,9 +230,9 @@ Unlike its counterpart, `Trunk.rs`, the dioxus-cli supports running examples and
 
 ## All New Features
 
-- [x] A new router @autarch 
+- [x] A new router @autarch
 - [x] Fermi for global state management
-- [x] Translation of docs and Readme into Chinese @mrxiaozhuox 
+- [x] Translation of docs and Readme into Chinese @mrxiaozhuox
 - [ ] Published VSCode Extension for translation and autoformatting
 - [x] 2.5x speedup by using JS-based DOM manipulation (3x faster than React)
 - [x] Beautiful documentation overhaul
@@ -230,13 +257,13 @@ Unlike its counterpart, `Trunk.rs`, the dioxus-cli supports running examples and
 - [x] Forms now collect all their values in oninput/onsubmit
 
 
-## Fixes 
+## Fixes
 - [x] Windows support improved across the board
 - [x] Linux support improved across the board
 - [x] Bug in Calculator example
 - [x] Improved example running support
 
-## Community Additions 
+## Community Additions
 - [Styled Components macro](https://github.com/Zomatree/Revolt-Client/blob/master/src/utils.rs#14-27) [@Zomatree](https://github.com/Zomatree)
 - [Dioxus-Websocket hook](https://github.com/FruitieX/dioxus-websocket-hooks) [@FruitieX](https://github.com/FruitieX)
 - [Home automation server app](https://github.com/FruitieX/homectl) [@FruitieX](https://github.com/FruitieX)
