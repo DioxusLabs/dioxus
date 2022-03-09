@@ -435,13 +435,13 @@ impl RinkStyle {
     }
 }
 
-impl Into<Style> for RinkStyle {
-    fn into(self) -> Style {
+impl From<RinkStyle> for Style {
+    fn from(val: RinkStyle) -> Self {
         Style {
-            fg: self.fg.map(|c| c.color),
-            bg: self.bg.map(|c| c.color),
-            add_modifier: self.add_modifier,
-            sub_modifier: self.sub_modifier,
+            fg: val.fg.map(|c| c.color),
+            bg: val.bg.map(|c| c.color),
+            add_modifier: val.add_modifier,
+            sub_modifier: val.sub_modifier,
         }
     }
 }

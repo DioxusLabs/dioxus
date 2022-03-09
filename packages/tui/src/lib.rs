@@ -4,8 +4,8 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use dioxus::core::exports::futures_channel::mpsc::unbounded;
-use dioxus::core::*;
+use dioxus_core::exports::futures_channel::mpsc::unbounded;
+use dioxus_core::*;
 use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
 use std::{
     collections::HashMap,
@@ -208,6 +208,8 @@ pub fn render_vdom(
 
 enum InputEvent {
     UserInput(TermEvent),
-    Close,
     Tick,
+
+    #[allow(dead_code)]
+    Close,
 }

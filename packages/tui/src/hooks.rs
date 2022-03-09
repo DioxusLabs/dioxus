@@ -1,7 +1,7 @@
 use crossterm::event::{
     Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, MouseButton, MouseEventKind,
 };
-use dioxus::core::*;
+use dioxus_core::*;
 
 use dioxus_html::{on::*, KeyCode};
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
@@ -146,7 +146,7 @@ impl InnerInputState {
                 }
             },
             EventData::Wheel(ref w) => self.wheel = Some(clone_wheel_data(w)),
-            EventData::Screen(ref s) => self.screen = Some(s.clone()),
+            EventData::Screen(ref s) => self.screen = Some(*s),
             EventData::Keyboard(ref mut k) => {
                 let repeat = self
                     .last_key_pressed
@@ -177,7 +177,7 @@ impl InnerInputState {
             wheel_delta: f64,
             mouse_data: &'b MouseData,
             wheel_data: &'b Option<WheelData>,
-        };
+        }
 
         fn layout_contains_point(layout: &Layout, point: (i32, i32)) -> bool {
             layout.location.x as i32 <= point.0
@@ -292,11 +292,9 @@ impl InnerInputState {
                                 })
                             }
                         }
-                    } else {
-                        if previously_contained {
-                            try_create_event("mouseleave");
-                            try_create_event("mouseout");
-                        }
+                    } else if previously_contained {
+                        try_create_event("mouseleave");
+                        try_create_event("mouseout");
                     }
                     events
                 }
@@ -399,7 +397,7 @@ impl RinkInputHandler {
     ) -> Vec<UserEvent> {
         // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
         fn inner(
-            queue: &Vec<(&'static str, Arc<dyn Any + Send + Sync>)>,
+            queue: &[(&'static str, Arc<dyn Any + Send + Sync>)],
             resolved: &mut Vec<UserEvent>,
             node: &VNode,
         ) {

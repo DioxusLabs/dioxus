@@ -1,4 +1,4 @@
-use dioxus::core::*;
+use dioxus_core::*;
 use std::{collections::HashMap, io::Stdout};
 use stretch2::{
     geometry::Point,

@@ -1,4 +1,4 @@
-use dioxus::core::*;
+use dioxus_core::*;
 use std::collections::HashMap;
 
 use crate::{
