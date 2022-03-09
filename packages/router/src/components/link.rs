@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{RouterCore, use_route};
+use crate::{use_route, RouterCore};
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::{format_args_f, rsx, Props};
@@ -101,9 +101,9 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let url = route.url();
     let path = url.path();
     let active = path == cx.props.to;
-    let active_class = active.then(|| {
-        active_class.unwrap_or("active")
-    }).unwrap_or("");
+    let active_class = active
+        .then(|| active_class.unwrap_or("active"))
+        .unwrap_or("");
 
     cx.render(rsx! {
         a {
