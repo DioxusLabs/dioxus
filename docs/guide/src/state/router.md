@@ -41,7 +41,7 @@ Whenever we visit this app, we will get either the Home component or the Blog co
 We can fix this one of two ways:
 
 - A fallback 404 page
--
+
 ```rust
 rsx!{
     Router {

@@ -30,11 +30,11 @@
   - [Fermi](state/fermi.md)
   - [Router](state/router.md)
 - [Working with Async](async/index.md)
-  - [Updating State](async/loading_state.md)
-  - [Fetching](async/fetching.md)
   - [UseFuture](async/use_future.md)
   - [UseCoroutine](async/coroutines.md)
-  - [WebSockets](async/sockets.md)
+  <!-- - [Fetching](async/fetching.md) -->
+  <!-- - [Updating State](async/loading_state.md)
+  - [WebSockets](async/sockets.md) -->
   <!-- - [Tasks](async/asynctasks.md) -->
 
 <!--
