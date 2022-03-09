@@ -23,6 +23,9 @@ pub use dioxus_tui as tui;
 #[cfg(feature = "fermi")]
 pub use fermi;
 
+#[cfg(feature = "bevy")]
+pub use bevy_dioxus as bevy;
+
 pub mod events {
     #[cfg(feature = "html")]
     pub use dioxus_html::{on::*, KeyCode};
