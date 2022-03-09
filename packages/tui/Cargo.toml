@@ -1,0 +1,23 @@
+[package]
+name = "dioxus-tui"
+version = "0.1.0"
+edition = "2018"
+
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tui = "0.17.0"
+crossterm = "0.23.0"
+anyhow = "1.0.42"
+thiserror = "1.0.24"
+dioxus-core = { path = "../core" }
+dioxus-html = { path = "../html" }
+hecs = "0.7.3"
+ctrlc = "3.2.1"
+bumpalo = { version = "3.8.0", features = ["boxed"] }
+tokio = { version = "1.15.0", features = ["full"] }
+futures = "0.3.19"
+stretch2 = "0.4.0"
+

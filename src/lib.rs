@@ -17,6 +17,9 @@ pub use dioxus_web as web;
 #[cfg(feature = "desktop")]
 pub use dioxus_desktop as desktop;
 
+#[cfg(feature = "tui")]
+pub use dioxus_tui as tui;
+
 #[cfg(feature = "fermi")]
 pub use fermi;
 
