@@ -3,13 +3,12 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 // #![deny(missing_docs)]
 
-mod bevy;
-mod cfg;
-mod controller;
-mod desktop_context;
+pub mod cfg;
+pub mod controller;
+pub mod desktop_context;
 mod escape;
-mod events;
-mod protocol;
+pub mod events;
+pub mod protocol;
 
 use desktop_context::UserWindowEvent;
 pub use desktop_context::{use_bevy_context, use_window, DesktopContext};
@@ -18,7 +17,7 @@ pub use wry::application as tao;
 
 use crate::events::trigger_from_serialized;
 pub use cfg::DesktopConfig;
-use controller::DesktopController;
+pub use controller::DesktopController;
 use dioxus_core::*;
 use events::parse_ipc_message;
 use tao::{
@@ -27,8 +26,6 @@ use tao::{
     window::Window,
 };
 use wry::webview::WebViewBuilder;
-
-pub use crate::bevy::DioxusDesktopPlugin;
 
 /// Launch the WebView and run the event loop.
 ///

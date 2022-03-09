@@ -34,7 +34,6 @@ dunce = "1.0.2"
 core-foundation = "0.9.3"
 
 bevy = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
-futures-util = { version = "0.3", default-features = false }
 
 [features]
 default = ["tokio_runtime"]

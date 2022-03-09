@@ -7,22 +7,22 @@ use dioxus_core::{ElementId, EventPriority, UserEvent};
 use dioxus_html::on::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub(crate) struct IpcMessage {
+pub struct IpcMessage {
     method: String,
     params: serde_json::Value,
 }
 
 impl IpcMessage {
-    pub(crate) fn method(&self) -> &str {
+    pub fn method(&self) -> &str {
         self.method.as_str()
     }
 
-    pub(crate) fn params(self) -> serde_json::Value {
+    pub fn params(self) -> serde_json::Value {
         self.params
     }
 }
 
-pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
+pub fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
     match serde_json::from_str(payload) {
         Ok(message) => Some(message),
         Err(e) => {

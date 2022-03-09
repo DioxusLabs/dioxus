@@ -1,5 +1,14 @@
-use crate::{
-    cfg::DesktopConfig,
+use bevy::{
+    app::{App, AppExit, CoreStage, Plugin},
+    ecs::{
+        event::{EventReader, Events, ManualEventReader},
+        system::Res,
+    },
+};
+use dioxus_core::Component;
+use dioxus_core::*;
+pub use dioxus_desktop::cfg::DesktopConfig;
+use dioxus_desktop::{
     controller::DesktopController,
     desktop_context::{self, UserWindowEvent},
     events::{parse_ipc_message, trigger_from_serialized},
@@ -10,15 +19,6 @@ use crate::{
         window::Window,
     },
 };
-use bevy::{
-    app::{App, AppExit, CoreStage, Plugin},
-    ecs::{
-        event::{EventReader, Events, ManualEventReader},
-        system::Res,
-    },
-};
-use dioxus_core::Component;
-use dioxus_core::*;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::stream::StreamExt;
 use std::{fmt::Debug, marker::PhantomData};

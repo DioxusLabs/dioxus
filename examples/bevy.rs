@@ -3,10 +3,8 @@ use bevy::{
     ecs::event::{EventReader, EventWriter},
     log::{info, LogPlugin},
 };
-use dioxus::{
-    desktop::{DesktopConfig, DioxusDesktopPlugin},
-    prelude::*,
-};
+use bevy_dioxus::{DesktopConfig, DioxusDesktopPlugin};
+use dioxus::prelude::*;
 
 #[derive(Debug, Clone)]
 enum CoreCommand {

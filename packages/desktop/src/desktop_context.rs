@@ -194,7 +194,7 @@ pub(super) fn handler(
     handler_with_bevy(user_event, desktop, control_flow, None);
 }
 
-pub(super) fn handler_with_bevy<T>(
+pub fn handler_with_bevy<T>(
     user_event: UserWindowEvent<T>,
     desktop: &mut DesktopController,
     control_flow: &mut ControlFlow,

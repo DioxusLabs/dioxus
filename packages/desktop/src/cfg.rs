@@ -14,13 +14,13 @@ use wry::{
 pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
 pub struct DesktopConfig {
-    pub(crate) window: WindowBuilder,
-    pub(crate) file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
-    pub(crate) protocols: Vec<WryProtocol>,
+    pub window: WindowBuilder,
+    pub file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
+    pub protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
-    pub(crate) disable_context_menu: bool,
-    pub(crate) resource_dir: Option<PathBuf>,
+    pub disable_context_menu: bool,
+    pub resource_dir: Option<PathBuf>,
 }
 
 pub(crate) type WryProtocol = (

@@ -14,18 +14,18 @@ use wry::{
 use futures_channel::mpsc;
 use tokio::sync::broadcast::Sender;
 
-pub(super) struct DesktopController {
-    pub(super) webviews: HashMap<WindowId, WebView>,
-    pub(super) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+pub struct DesktopController {
+    pub webviews: HashMap<WindowId, WebView>,
+    pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
-    pub(super) is_ready: Arc<AtomicBool>,
+    pub is_ready: Arc<AtomicBool>,
 }
 
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub(super) fn new_on_tokio<
+    pub fn new_on_tokio<
         CoreCommand: Send + Clone,
         UICommand: 'static + Send + Clone,
         P: Send + 'static,
@@ -93,7 +93,7 @@ impl DesktopController {
         }
     }
 
-    pub(super) fn close_window(&mut self, window_id: WindowId, control_flow: &mut ControlFlow) {
+    pub fn close_window(&mut self, window_id: WindowId, control_flow: &mut ControlFlow) {
         self.webviews.remove(&window_id);
 
         if self.webviews.is_empty() && self.quit_app_on_close {

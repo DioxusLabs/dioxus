@@ -4,7 +4,7 @@ use wry::{
     Result,
 };
 
-pub(super) fn desktop_handler(request: &Request, asset_root: Option<PathBuf>) -> Result<Response> {
+pub fn desktop_handler(request: &Request, asset_root: Option<PathBuf>) -> Result<Response> {
     // Any content that uses the `dioxus://` scheme will be shuttled through this handler as a "special case".
     // For now, we only serve two pieces of content which get included as bytes into the final binary.
     let path = request.uri().replace("dioxus://", "");

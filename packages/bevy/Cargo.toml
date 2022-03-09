@@ -1,0 +1,18 @@
+[package]
+name = "bevy_dioxus"
+version = "0.0.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus-core = { path = "../core", version = "^0.1.9" }
+dioxus-desktop = { path = "../desktop", version = "^0.1.6" }
+
+bevy = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
+wry = { version = "0.13.1" }
+futures-channel = "0.3.21"
+futures-util = { version = "0.3", default-features = false }
+tokio = { version = "1.16.1", features = ["sync"], default-features = false }
+log = "0.4.14"
+webbrowser = "0.5.5"
