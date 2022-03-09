@@ -1,4 +1,4 @@
-# Dioxus v0.2 Release: Router, State Management, and Tooling
+# Dioxus v0.2 Release: TUI, Router, Fermi, and Tooling
 
 > March 9, 2022
 
@@ -58,7 +58,7 @@ We also fixed and improved a bunch of stuff - check out the full list down below
 When Dioxus was initially released, we had very simple support for logging Dioxus elements out as TUI elements. In the past month or so, [@Demonthos](https://github.com/Demonthos) really stepped up and made the new crate a reality.
 
 
-![Imgur](https://i.imgur.com/GL7uu3r.png)
+![Imgur](https://i.imgur.com/GL7uu3r)
 
 The new TUI renderer even supports mouse movements, keyboard input, async tasks, borders, and a ton more.
 
@@ -207,7 +207,7 @@ Overall, Dioxus apps are even more snappy than before.
 
 
 Before and after:
-![Before and After](https://imgur.com/byTBGlO.png)
+![Before and After](https://imgur.com/byTBGlO)
 
 
 ## Dioxus Desktop Window Context
@@ -226,7 +226,7 @@ In addition, Dioxus Desktop now autoresolves asset locations, so you can easily 
 
 You can now build entirely borderless desktop apps:
 
-![img](https://i.imgur.com/97zsVS1.png)
+![img](https://i.imgur.com/97zsVS1)
 
 <!-- ## VSCode Extension
 
