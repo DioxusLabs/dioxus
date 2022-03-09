@@ -1,4 +1,4 @@
-use crate::desktop_context::{DesktopContext, UserWindowEvent};
+use crate::desktop_context::{DesktopContext, UserEvent, UserWindowEvent};
 use dioxus_core::*;
 use std::{
     collections::HashMap,
@@ -32,7 +32,7 @@ impl DesktopController {
     >(
         root: Component<P>,
         props: P,
-        proxy: EventLoopProxy<UserWindowEvent<CoreCommand>>,
+        proxy: EventLoopProxy<UserEvent<CoreCommand>>,
         channel: Option<(mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>)>,
     ) -> Self {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
@@ -66,7 +66,7 @@ impl DesktopController {
                     .push(serde_json::to_string(&edits.edits).unwrap());
 
                 // Make sure the window is ready for any new updates
-                let _ = proxy.send_event(UserWindowEvent::Update);
+                let _ = proxy.send_event(UserEvent::WindowEvent(UserWindowEvent::Update));
 
                 loop {
                     dom.wait_for_work().await;
@@ -79,7 +79,7 @@ impl DesktopController {
                             .push(serde_json::to_string(&edit.edits).unwrap());
                     }
 
-                    let _ = proxy.send_event(UserWindowEvent::Update);
+                    let _ = proxy.send_event(UserEvent::WindowEvent(UserWindowEvent::Update));
                 }
             })
         });

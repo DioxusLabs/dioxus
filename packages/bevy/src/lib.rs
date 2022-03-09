@@ -1,16 +1,14 @@
-use bevy::{
-    app::{App, AppExit, CoreStage, Plugin},
-    ecs::{
-        event::{EventReader, Events, ManualEventReader},
-        system::Res,
-    },
+use bevy_app::{App, AppExit, CoreStage, Plugin};
+use bevy_ecs::{
+    event::{EventReader, Events, ManualEventReader},
+    system::Res,
 };
 use dioxus_core::Component;
 use dioxus_core::*;
 pub use dioxus_desktop::cfg::DesktopConfig;
 use dioxus_desktop::{
     controller::DesktopController,
-    desktop_context::{self, UserWindowEvent},
+    desktop_context::{self, UserEvent, UserWindowEvent},
     events::{parse_ipc_message, trigger_from_serialized},
     protocol,
     tao::{
@@ -42,7 +40,7 @@ where
     Props: 'static + Send + Sync + Copy,
 {
     fn build(&self, app: &mut App) {
-        let event_loop = EventLoop::<UserWindowEvent<CoreCommand>>::with_user_event();
+        let event_loop = EventLoop::<UserEvent<CoreCommand>>::with_user_event();
 
         let (core_tx, core_rx) = unbounded::<CoreCommand>();
         let (ui_tx, _) = channel::<UICommand>(8);
@@ -83,7 +81,7 @@ where
 {
     let event_loop = app
         .world
-        .remove_non_send_resource::<EventLoop<UserWindowEvent<CoreCommand>>>()
+        .remove_non_send_resource::<EventLoop<UserEvent<CoreCommand>>>()
         .expect("Insert EventLoop as non send resource");
     let mut desktop = app
         .world
@@ -106,15 +104,17 @@ where
 
     runtime.spawn(async move {
         while let Some(cmd) = core_rx.next().await {
-            let _res = proxy.clone().send_event(UserWindowEvent::BevyUpdate(cmd));
+            let _res = proxy
+                .clone()
+                .send_event(UserEvent::<CoreCommand>::CustomEvent(cmd));
         }
     });
 
     app.update();
 
     event_loop.run(
-        move |window_event: Event<UserWindowEvent<CoreCommand>>,
-              event_loop: &EventLoopWindowTarget<UserWindowEvent<CoreCommand>>,
+        move |window_event: Event<UserEvent<CoreCommand>>,
+              event_loop: &EventLoopWindowTarget<UserEvent<CoreCommand>>,
               control_flow: &mut ControlFlow| {
             *control_flow = ControlFlow::Wait;
 
@@ -142,7 +142,7 @@ where
                     let resource_dir = config.resource_dir.clone();
                     let world = app.world.cell();
                     let proxy = world
-                        .get_non_send_mut::<EventLoopProxy<UserWindowEvent<CoreCommand>>>()
+                        .get_non_send_mut::<EventLoopProxy<UserEvent<CoreCommand>>>()
                         .unwrap()
                         .clone();
 
@@ -160,7 +160,9 @@ where
                                     }
                                     "initialize" => {
                                         is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                        let _ = proxy.send_event(UserWindowEvent::Update);
+                                        let _ = proxy.send_event(UserEvent::WindowEvent(
+                                            UserWindowEvent::Update,
+                                        ));
                                     }
                                     "browser_open" => {
                                         let data = message.params();
@@ -235,14 +237,19 @@ where
                     _ => {}
                 },
 
-                Event::UserEvent(user_event) => {
-                    desktop_context::handler_with_bevy(
-                        user_event,
-                        &mut desktop,
-                        control_flow,
-                        Some(&mut app),
-                    );
-                }
+                Event::UserEvent(user_event) => match user_event {
+                    UserEvent::WindowEvent(e) => {
+                        desktop_context::user_window_event_handler(e, &mut desktop, control_flow);
+                    }
+                    UserEvent::CustomEvent(cmd) => {
+                        let mut events = app
+                            .world
+                            .get_resource_mut::<Events<CoreCommand>>()
+                            .expect("Provide CoreCommand event to bevy");
+                        events.send(cmd);
+                        app.update();
+                    }
+                },
                 Event::MainEventsCleared => {}
                 Event::Resumed => {}
                 Event::Suspended => {}

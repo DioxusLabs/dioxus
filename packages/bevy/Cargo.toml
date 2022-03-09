@@ -9,7 +9,8 @@ edition = "2018"
 dioxus-core = { path = "../core", version = "^0.1.9" }
 dioxus-desktop = { path = "../desktop", version = "^0.1.6" }
 
-bevy = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
+bevy_app = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
+bevy_ecs = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
 wry = { version = "0.13.1" }
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }

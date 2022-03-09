@@ -10,8 +10,8 @@ mod escape;
 pub mod events;
 pub mod protocol;
 
-use desktop_context::UserWindowEvent;
 pub use desktop_context::{use_bevy_context, use_window, DesktopContext};
+use desktop_context::{UserEvent, UserWindowEvent};
 pub use wry;
 pub use wry::application as tao;
 
@@ -144,7 +144,9 @@ pub fn launch_with_props<P: 'static + Send>(
                                 }
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                    let _ = proxy.send_event(UserWindowEvent::Update);
+                                    let _ = proxy.send_event(UserEvent::WindowEvent(
+                                        UserWindowEvent::Update,
+                                    ));
                                 }
                                 "browser_open" => {
                                     let data = message.params();
@@ -214,13 +216,17 @@ pub fn launch_with_props<P: 'static + Send>(
                         let _ = view.resize();
                     }
                 }
-
                 _ => {}
             },
 
-            Event::UserEvent(user_event) => {
-                desktop_context::handler(user_event, &mut desktop, control_flow);
-            }
+            Event::UserEvent(user_event) => match user_event {
+                UserEvent::WindowEvent(e) => {
+                    desktop_context::user_window_event_handler(e, &mut desktop, control_flow);
+                }
+                UserEvent::CustomEvent(_e) => {
+                    todo!("accept custom handler");
+                }
+            },
             Event::MainEventsCleared => {}
             Event::Resumed => {}
             Event::Suspended => {}
