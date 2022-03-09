@@ -130,17 +130,17 @@ fn Banner(cx: Scope) -> Element {
 Now, in our sync service, we can structure our state however we want. We only need to update the view values when ready.
 
 ```rust
-enum SyncMsg {
+enum SyncAction {
     SetUsername(String),
 }
 
-async fn sync_service(mut rx: UnboundedReceiver<SyncMsg>, atoms: AtomRoot) {
+async fn sync_service(mut rx: UnboundedReceiver<SyncAction>, atoms: AtomRoot) {
     let username = atoms.write(USERNAME);
     let errors = atoms.write(ERRORS);
 
     while let Ok(msg) = rx.next().await {
         match msg {
-            SyncMsg::SetUsername(name) => {
+            SyncAction::SetUsername(name) => {
                 if set_name_on_server(&name).await.is_ok() {
                     username.set(name);
                 } else {
@@ -156,6 +156,28 @@ async fn sync_service(mut rx: UnboundedReceiver<SyncMsg>, atoms: AtomRoot) {
 
 To yield values from a coroutine, simply bring in a `UseState` handle and set the value whenever your coroutine completes its work.
 
+
+```rust
+let sync_status = use_state(&cx, || Status::Launching);
+let sync_task = use_coroutine(&cx, |rx: UnboundedReceiver<SyncAction>| {
+    to_owned![sync_status];
+    async move {
+        loop {
+            delay_ms(1000).await;
+            sync_status.set(Status::Working);
+        }
+    }
+})
+```
+
 ## Automatic injection into the Context API
 
 Coroutine handles are automatically injected through the context API. `use_coroutine_handle` with the message type as a generic can be used to fetch a handle.
+
+```rust
+fn Child(cx: Scope) -> Element {
+    let sync_task = use_coroutine_handle::<SyncAction>(&cx);
+
+    sync_task.send(SyncAction::SetUsername);
+}
+```
