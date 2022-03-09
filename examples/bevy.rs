@@ -3,8 +3,10 @@ use bevy::{
     ecs::event::{EventReader, EventWriter},
     log::{info, LogPlugin},
 };
-use dioxus::desktop::DioxusDesktopPlugin;
-use dioxus::prelude::*;
+use dioxus::{
+    desktop::{DesktopConfig, DioxusDesktopPlugin},
+    prelude::*,
+};
 
 #[derive(Debug, Clone)]
 enum CoreCommand {
@@ -18,12 +20,12 @@ enum UICommand {
 }
 
 fn main() {
+    let mut config = DesktopConfig::default().with_default_icon();
+    config.with_window(|w| w.with_title("Bevy Dioxus Plugin Demo"));
+
     App::new()
-        .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(
-            app,
-            (),
-            // |c| c,
-        ))
+        .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(app, ()))
+        .insert_non_send_resource(config)
         .add_plugin(LogPlugin)
         .add_startup_system(setup)
         .add_system(log_core_command)
@@ -59,7 +61,7 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div {
-            h1 { "Bevy Plugin Example" },
+            h1 { "Bevy Dioxus Plugin Example" },
             button {
                 onclick: |_e| {
                     let _res = ctx.send(CoreCommand::Click);

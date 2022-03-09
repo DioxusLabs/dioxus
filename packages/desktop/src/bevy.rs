@@ -21,24 +21,16 @@ use dioxus_core::Component;
 use dioxus_core::*;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::stream::StreamExt;
-use std::{
-    boxed::Box,
-    fmt::Debug,
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::{fmt::Debug, marker::PhantomData};
 use tokio::{
     runtime::Runtime,
     sync::broadcast::{channel, Sender},
 };
 pub use wry::{self, application as tao, webview::WebViewBuilder};
 
-// type DesktopConfigBuilder = Box<dyn FnOnce(&mut DesktopConfig) -> &mut DesktopConfig>;
-
 pub struct DioxusDesktopPlugin<CoreCommand, UICommand, Props = ()> {
     root: Component<Props>,
     props: Props,
-    // builder: DesktopConfigBuilder,
     core_cmd_type: PhantomData<CoreCommand>,
     ui_cmd_type: PhantomData<UICommand>,
 }
@@ -50,9 +42,6 @@ where
     Props: 'static + Send + Sync + Copy,
 {
     fn build(&self, app: &mut App) {
-        let config = DesktopConfig::default().with_default_icon();
-        // (self.builder)(&mut config);
-
         let event_loop = EventLoop::<UserWindowEvent<CoreCommand>>::with_user_event();
 
         let (core_tx, core_rx) = unbounded::<CoreCommand>();
@@ -69,7 +58,6 @@ where
             .add_event::<UICommand>()
             .insert_non_send_resource(event_loop)
             .insert_non_send_resource(desktop)
-            .insert_non_send_resource(config)
             .insert_resource(ui_tx)
             .insert_resource(core_rx)
             .set_runner(|app| runner::<CoreCommand, UICommand>(app))
@@ -78,14 +66,10 @@ where
 }
 
 impl<CoreCommand, UICommand, Props> DioxusDesktopPlugin<CoreCommand, UICommand, Props> {
-    pub fn new(
-        root: Component<Props>,
-        props: Props, /* builder: DesktopConfigBuilder */
-    ) -> Self {
+    pub fn new(root: Component<Props>, props: Props) -> Self {
         Self {
             root,
             props,
-            // builder,
             core_cmd_type: PhantomData,
             ui_cmd_type: PhantomData,
         }
@@ -100,15 +84,15 @@ where
     let event_loop = app
         .world
         .remove_non_send_resource::<EventLoop<UserWindowEvent<CoreCommand>>>()
-        .unwrap();
+        .expect("Insert EventLoop as non send resource");
     let mut desktop = app
         .world
         .remove_non_send_resource::<DesktopController>()
-        .unwrap();
+        .expect("Insert DesktopController as non send resource");
     let mut config = app
         .world
         .remove_non_send_resource::<DesktopConfig>()
-        .unwrap();
+        .unwrap_or_default();
     let mut app_exit_event_reader = ManualEventReader::<AppExit>::default();
     app.world
         .insert_non_send_resource(event_loop.create_proxy());

@@ -107,7 +107,7 @@ impl DesktopConfig {
 }
 
 impl DesktopConfig {
-    pub(crate) fn with_default_icon(mut self) -> Self {
+    pub fn with_default_icon(mut self) -> Self {
         let bin: &[u8] = include_bytes!("./assets/default_icon.bin");
         let rgba = Icon::from_rgba(bin.to_owned(), 460, 460).expect("image parse failed");
         self.window.window.window_icon = Some(rgba);
