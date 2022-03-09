@@ -27,11 +27,11 @@ dioxus-router = { path = "./packages/router", version = "^0.1.1", optional = tru
 dioxus-mobile = { path = "./packages/mobile", version = "^0.0.3", optional = true }
 dioxus-interpreter-js = { path = "./packages/interpreter", version = "^0.0.0", optional = true }
 # dioxus-liveview = { path = "./packages/liveview", optional = true }
-bevy_dioxus = { path = "./packages/bevy" }
 
-bevy_app = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
-bevy_ecs = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
-bevy_log = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false }
+bevy_dioxus = { path = "./packages/bevy", optional = true }
+bevy_app = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false, optional = true }
+bevy_ecs = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false, optional = true }
+bevy_log = { git = "https://github.com/bevyengine/bevy", rev = "2b112026147a8b6780759b32f0ea04dc7d7d8548", default-features = false, optional = true }
 
 [features]
 default = ["macro", "hooks", "html"]
@@ -45,6 +45,7 @@ web = ["dioxus-web", "dioxus-router/web"]
 desktop = ["dioxus-desktop"]
 ayatana = ["dioxus-desktop/ayatana"]
 router = ["dioxus-router"]
+bevy = ["bevy_dioxus", "bevy_app", "bevy_ecs", "bevy_log"]
 
 [workspace]
 members = [
