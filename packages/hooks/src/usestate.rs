@@ -310,6 +310,12 @@ impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
     }
 }
 
+impl<'a, T: std::fmt::Binary> std::fmt::Binary for UseState<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:b}", self.current_val.as_ref())
+    }
+}
+
 impl<T: PartialEq> PartialEq<T> for UseState<T> {
     fn eq(&self, other: &T) -> bool {
         self.current_val.as_ref() == other

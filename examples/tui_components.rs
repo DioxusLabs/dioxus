@@ -1,7 +1,9 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 
 fn main() {
-    rink::launch(app);
+    dioxus::tui::launch(app);
 }
 
 #[derive(Props, PartialEq)]
@@ -10,7 +12,7 @@ struct QuadrentProps {
     text: String,
 }
 
-fn Quadrent(cx: Scope<QuadrentProps>) -> Element {
+fn Quadrant(cx: Scope<QuadrentProps>) -> Element {
     cx.render(rsx! {
         div {
             border_width: "1px",
@@ -36,11 +38,11 @@ fn app(cx: Scope) -> Element {
                 width: "100%",
                 height: "50%",
                 flex_direction: "row",
-                Quadrent{
+                Quadrant{
                     color: "red".to_string(),
                     text: "[A]".to_string()
                 },
-                Quadrent{
+                Quadrant{
                     color: "black".to_string(),
                     text: "[B]".to_string()
                 }
@@ -50,11 +52,11 @@ fn app(cx: Scope) -> Element {
                 width: "100%",
                 height: "50%",
                 flex_direction: "row",
-                Quadrent{
+                Quadrant{
                     color: "green".to_string(),
                     text: "[C]".to_string()
                 },
-                Quadrent{
+                Quadrant{
                     color: "blue".to_string(),
                     text: "[D]".to_string()
                 }

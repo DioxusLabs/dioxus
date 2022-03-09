@@ -1,11 +1,10 @@
 use dioxus::prelude::*;
 
 fn main() {
-    // rink::launch(app);
-    rink::launch_cfg(
+    dioxus::tui::launch_cfg(
         app,
-        rink::Config {
-            rendering_mode: rink::RenderingMode::Ansi,
+        dioxus::tui::Config {
+            rendering_mode: dioxus::tui::RenderingMode::Ansi,
         },
     );
 }

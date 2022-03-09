@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    rink::launch(app);
+    dioxus::tui::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
