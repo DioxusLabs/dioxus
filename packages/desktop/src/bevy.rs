@@ -21,18 +21,24 @@ use dioxus_core::Component;
 use dioxus_core::*;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::stream::StreamExt;
-use std::{fmt::Debug, marker::PhantomData};
+use std::{
+    boxed::Box,
+    fmt::Debug,
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 use tokio::{
     runtime::Runtime,
     sync::broadcast::{channel, Sender},
 };
-pub use wry;
-pub use wry::application as tao;
-use wry::webview::WebViewBuilder;
+pub use wry::{self, application as tao, webview::WebViewBuilder};
+
+// type DesktopConfigBuilder = Box<dyn FnOnce(&mut DesktopConfig) -> &mut DesktopConfig>;
 
 pub struct DioxusDesktopPlugin<CoreCommand, UICommand, Props = ()> {
     root: Component<Props>,
     props: Props,
+    // builder: DesktopConfigBuilder,
     core_cmd_type: PhantomData<CoreCommand>,
     ui_cmd_type: PhantomData<UICommand>,
 }
@@ -45,7 +51,8 @@ where
 {
     fn build(&self, app: &mut App) {
         let config = DesktopConfig::default().with_default_icon();
-        // builder(&mut config);
+        // (self.builder)(&mut config);
+
         let event_loop = EventLoop::<UserWindowEvent<CoreCommand>>::with_user_event();
 
         let (core_tx, core_rx) = unbounded::<CoreCommand>();
@@ -71,10 +78,14 @@ where
 }
 
 impl<CoreCommand, UICommand, Props> DioxusDesktopPlugin<CoreCommand, UICommand, Props> {
-    pub fn new(root: Component<Props>, props: Props) -> Self {
+    pub fn new(
+        root: Component<Props>,
+        props: Props, /* builder: DesktopConfigBuilder */
+    ) -> Self {
         Self {
             root,
             props,
+            // builder,
             core_cmd_type: PhantomData,
             ui_cmd_type: PhantomData,
         }

@@ -19,7 +19,11 @@ enum UICommand {
 
 fn main() {
     App::new()
-        .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(app, ()))
+        .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(
+            app,
+            (),
+            // |c| c,
+        ))
         .add_plugin(LogPlugin)
         .add_startup_system(setup)
         .add_system(log_core_command)
