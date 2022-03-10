@@ -6,7 +6,7 @@ name = "{{project-name}}"
 # default platfrom
 # you can also use `dioxus serve/build --platform XXX` to use other platform
 # value: web | desktop
-default_platform = "web"
+default_platform = "{{default-platform}}"
 
 # Web `build` & `serve` dist path
 out_dir = "dist"

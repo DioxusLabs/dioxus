@@ -1,3 +1,6 @@
+// Dioxus-CLI
+// https://github.com/DioxusLabs/cli
+
 (function () {
   var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   var url = protocol + '//' + window.location.host + '/_dioxus/ws';
@@ -15,7 +18,6 @@
   var ws = new WebSocket(url);
   ws.onmessage = (ev) => {
       if (ev.data == "reload") {
-        //   alert("reload!!!");
           window.location.reload();
       }
   };
