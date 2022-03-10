@@ -2,9 +2,9 @@
 Before we start utilizing Dioxus Router, we need to initialize a Dioxus web application.
 
 #### Required Tools
-If you haven't already, make sure you install the [trunk](https://trunkrs.dev/) build tool and the rust ``wasm32-unknown-unknown`` target:
+If you haven't already, make sure you install the [dioxus-cli](https://dioxuslabs.com/nightly/cli/) build tool and the rust ``wasm32-unknown-unknown`` target:
 ```
-$ cargo install trunk
+$ cargo install dioxus-cli
     ...
 $ rustup target add wasm32-unkown-unknown
     ...
@@ -60,7 +60,7 @@ fn app(cx: Scope) -> Element {
 
 Our project is now setup! To make sure everything is running correctly, in the root of your project run:
 ```
-trunk serve
+dioxus serve --platform web
 ```
 Then head to [http://localhost:8080](http://localhost:8080) in your browser, and you should see ``Hello, wasm!`` on your screen.
 
