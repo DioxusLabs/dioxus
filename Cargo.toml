@@ -1,6 +1,6 @@
 [package]
 name = "dioxus"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
