@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-tui"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Jonathan Kelley, @dementhos"]
 edition = "2021"
 description = "TUI-based renderer for Dioxus"
