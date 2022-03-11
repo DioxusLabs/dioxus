@@ -55,13 +55,13 @@ fn app(cx: Scope) -> Element {
             h1 { "Bevy Dioxus Plugin Example" },
             button {
                 onclick: |_e| {
-                    let _res = ctx.send(CoreCommand::Click);
+                    ctx.send(CoreCommand::Click).unwrap();
                 },
                 "Click",
             }
             button {
                 onclick: |_e| {
-                    let _res = ctx.send(CoreCommand::Exit);
+                    ctx.send(CoreCommand::Exit).unwrap();
                 },
                 "Exit",
             }
