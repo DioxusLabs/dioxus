@@ -1,13 +1,12 @@
 use bevy_app::{App, AppExit};
-use bevy_dioxus::{use_bevy_context, use_bevy_listener, DesktopConfig, DioxusDesktopPlugin};
 use bevy_ecs::event::{EventReader, EventWriter};
 use bevy_log::{info, LogPlugin};
 use dioxus::prelude::*;
 
 #[derive(Debug, Clone)]
 enum CoreCommand {
-    Click,
-    Exit,
+    Test,
+    Quit,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -37,14 +36,14 @@ fn log_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter
         info!("🧠 {:?}", cmd);
 
         match cmd {
-            CoreCommand::Exit => event.send(AppExit),
+            CoreCommand::Quit => event.send(AppExit),
             _ => {}
         }
     }
 }
 
 fn app(cx: Scope) -> Element {
-    let ctx = use_bevy_context::<CoreCommand, UICommand>(&cx);
+    let window = use_bevy_window::<CoreCommand, UICommand>(&cx);
 
     use_bevy_listener::<CoreCommand, UICommand>(&cx, |cmd| {
         info!("🎨 {:?}", cmd);
@@ -55,15 +54,19 @@ fn app(cx: Scope) -> Element {
             h1 { "Bevy Dioxus Plugin Example" },
             button {
                 onclick: |_e| {
-                    ctx.send(CoreCommand::Click).unwrap();
+                    window.send(CoreCommand::Test).unwrap();
                 },
-                "Click",
+                "Test",
             }
             button {
                 onclick: |_e| {
-                    ctx.send(CoreCommand::Exit).unwrap();
+                    window.send(CoreCommand::Quit).unwrap();
                 },
-                "Exit",
+                "Quit",
+            }
+            button {
+                onclick: move |_| window.set_minimized(true),
+                "Minimize"
             }
         }
     })

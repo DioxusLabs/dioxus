@@ -313,7 +313,7 @@ where
     }
 }
 
-pub fn use_bevy_context<CoreCommand, UICommand>(
+pub fn use_bevy_window<CoreCommand, UICommand>(
     cx: &ScopeState,
 ) -> &BevyDesktopContext<CoreCommand, UICommand>
 where

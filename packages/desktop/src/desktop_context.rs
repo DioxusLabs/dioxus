@@ -10,10 +10,14 @@ use UserWindowEvent::*;
 pub type ProxyType<T> = EventLoopProxy<UserEvent<T>>;
 
 /// Get an imperative handle to the current window
-pub fn use_window<T: Debug + Clone>(cx: &ScopeState) -> &DesktopContext<T> {
+pub fn use_window(cx: &ScopeState) -> &dyn WindowController<()> {
+    use_custom_window::<()>(cx)
+}
+
+pub fn use_custom_window<T: Debug + Clone + 'static>(cx: &ScopeState) -> &dyn WindowController<T> {
     cx.use_hook(|_| cx.consume_context::<DesktopContext<T>>())
         .as_ref()
-        .unwrap()
+        .expect("Cannot find DesktopContext with Controller")
 }
 
 /// An imperative interface to the current window.
