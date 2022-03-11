@@ -1,6 +1,8 @@
-use bevy_app::{App, AppExit};
-use bevy_ecs::event::{EventReader, EventWriter};
-use bevy_log::{info, LogPlugin};
+use bevy::{
+    app::{App, AppExit},
+    ecs::event::{EventReader, EventWriter},
+    log::{info, LogPlugin},
+};
 use dioxus::prelude::*;
 
 #[derive(Debug, Clone)]

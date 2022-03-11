@@ -1,7 +1,9 @@
-use bevy_app::{App, AppExit, CoreStage, Plugin};
-use bevy_ecs::{
-    event::{EventReader, Events, ManualEventReader},
-    system::Res,
+use bevy::{
+    app::{App, AppExit, CoreStage, Plugin},
+    ecs::{
+        event::{EventReader, Events, ManualEventReader},
+        system::Res,
+    },
 };
 use dioxus_core::Component;
 use dioxus_core::*;
