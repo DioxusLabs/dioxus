@@ -1,4 +1,4 @@
-use crate::desktop_context::{DesktopContext, UserEvent, UserWindowEvent};
+use crate::desktop_context::{UserEvent, UserWindowEvent};
 use dioxus_core::*;
 use std::{
     collections::HashMap,
@@ -11,9 +11,6 @@ use wry::{
     webview::WebView,
 };
 
-use futures_channel::mpsc;
-use tokio::sync::broadcast::Sender;
-
 pub struct DesktopController {
     pub webviews: HashMap<WindowId, WebView>,
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
@@ -25,22 +22,22 @@ pub struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub fn new_on_tokio<
-        CoreCommand: Send + Clone,
-        UICommand: 'static + Send + Clone,
-        P: Send + 'static,
-    >(
+    pub fn new_on_tokio<P, T, CoreCommand>(
         root: Component<P>,
         props: P,
         proxy: EventLoopProxy<UserEvent<CoreCommand>>,
-        channel: Option<(mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>)>,
-    ) -> Self {
+        window_context: T,
+    ) -> Self
+    where
+        P: 'static + Send,
+        T: 'static + Send + Clone,
+        CoreCommand: Send + Clone,
+    {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
 
         let pending_edits = edit_queue.clone();
         let return_sender = sender.clone();
-        let desktop_context_proxy = proxy.clone();
 
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "spawn" onto multiple threads
@@ -52,9 +49,6 @@ impl DesktopController {
             runtime.block_on(async move {
                 let mut dom =
                     VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
-
-                let window_context =
-                    DesktopContext::<CoreCommand, UICommand>::new(desktop_context_proxy, channel);
 
                 dom.base_scope().provide_context(window_context);
 

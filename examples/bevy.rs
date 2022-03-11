@@ -1,6 +1,5 @@
 use bevy_app::{App, AppExit};
-use bevy_dioxus::use_bevy_context;
-use bevy_dioxus::{DesktopConfig, DioxusDesktopPlugin};
+use bevy_dioxus::{use_bevy_context, DesktopConfig, DioxusDesktopPlugin};
 use bevy_ecs::event::{EventReader, EventWriter};
 use bevy_log::{info, LogPlugin};
 use dioxus::prelude::*;

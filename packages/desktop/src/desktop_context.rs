@@ -6,14 +6,11 @@ use wry::application::window::Fullscreen as WryFullscreen;
 
 use UserWindowEvent::*;
 
-use futures_channel::mpsc;
-use tokio::sync::broadcast::{Receiver, Sender};
-
-pub type ProxyType<CoreCommand> = EventLoopProxy<UserEvent<CoreCommand>>;
+pub type ProxyType<T> = EventLoopProxy<UserEvent<T>>;
 
 /// Get an imperative handle to the current window
-pub fn use_window(cx: &ScopeState) -> &DesktopContext {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
+pub fn use_window<T: Clone>(cx: &ScopeState) -> &DesktopContext<T> {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext<T>>())
         .as_ref()
         .unwrap()
 }
@@ -31,21 +28,21 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
-pub struct DesktopContext<CoreCommand = (), UICommand = ()>
-where
-    CoreCommand: 'static + Clone,
-{
-    proxy: ProxyType<CoreCommand>,
-    pub channel: Option<(mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>)>,
+pub struct DesktopContext<T: 'static + Clone> {
+    proxy: ProxyType<T>,
 }
 
-impl<CoreCommand: Clone, UICommand> DesktopContext<CoreCommand, UICommand> {
-    pub(crate) fn new(
-        proxy: ProxyType<CoreCommand>,
-        channel: Option<(mpsc::UnboundedSender<CoreCommand>, Sender<UICommand>)>,
-    ) -> Self {
-        Self { proxy, channel }
+impl<T> WindowController<T> for DesktopContext<T>
+where
+    T: Clone,
+{
+    fn get_proxy(&self) -> ProxyType<T> {
+        self.proxy.clone()
     }
+}
+
+pub trait WindowController<T: 'static> {
+    fn get_proxy(&self) -> ProxyType<T>;
 
     /// trigger the drag-window event
     ///
@@ -55,116 +52,115 @@ impl<CoreCommand: Clone, UICommand> DesktopContext<CoreCommand, UICommand> {
     /// ```rust
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
-    pub fn drag(&self) {
-        let _ = self.proxy.send_event(UserEvent::WindowEvent(DragWindow));
+    fn drag(&self) {
+        let _ = self
+            .get_proxy()
+            .send_event(UserEvent::WindowEvent(DragWindow));
     }
 
     /// set window minimize state
-    pub fn set_minimized(&self, minimized: bool) {
+    fn set_minimized(&self, minimized: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(Minimize(minimized)));
     }
 
     /// set window maximize state
-    pub fn set_maximized(&self, maximized: bool) {
+    fn set_maximized(&self, maximized: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(Maximize(maximized)));
     }
 
     /// toggle window maximize state
-    pub fn toggle_maximized(&self) {
+    fn toggle_maximized(&self) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(MaximizeToggle));
     }
 
     /// set window visible or not
-    pub fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, visible: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(Visible(visible)));
     }
 
     /// close window
-    pub fn close(&self) {
-        let _ = self.proxy.send_event(UserEvent::WindowEvent(CloseWindow));
+    fn close(&self) {
+        let _ = self
+            .get_proxy()
+            .send_event(UserEvent::WindowEvent(CloseWindow));
     }
 
     /// set window to focus
-    pub fn focus(&self) {
-        let _ = self.proxy.send_event(UserEvent::WindowEvent(FocusWindow));
+    fn focus(&self) {
+        let _ = self
+            .get_proxy()
+            .send_event(UserEvent::WindowEvent(FocusWindow));
     }
 
     /// change window to fullscreen
-    pub fn set_fullscreen(&self, fullscreen: bool) {
+    fn set_fullscreen(&self, fullscreen: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(Fullscreen(fullscreen)));
     }
 
     /// set resizable state
-    pub fn set_resizable(&self, resizable: bool) {
+    fn set_resizable(&self, resizable: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(Resizable(resizable)));
     }
 
     /// set the window always on top
-    pub fn set_always_on_top(&self, top: bool) {
+    fn set_always_on_top(&self, top: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(AlwaysOnTop(top)));
     }
 
     /// set cursor visible or not
-    pub fn set_cursor_visible(&self, visible: bool) {
+    fn set_cursor_visible(&self, visible: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(CursorVisible(visible)));
     }
 
     /// set cursor grab
-    pub fn set_cursor_grab(&self, grab: bool) {
+    fn set_cursor_grab(&self, grab: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(CursorGrab(grab)));
     }
 
     /// set window title
-    pub fn set_title(&self, title: &str) {
+    fn set_title(&self, title: &str) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(SetTitle(String::from(title))));
     }
 
     /// change window to borderless
-    pub fn set_decorations(&self, decoration: bool) {
+    fn set_decorations(&self, decoration: bool) {
         let _ = self
-            .proxy
+            .get_proxy()
             .send_event(UserEvent::WindowEvent(SetDecorations(decoration)));
     }
 
     /// opens DevTool window
-    pub fn devtool(&self) {
-        let _ = self.proxy.send_event(UserEvent::WindowEvent(DevTool));
+    fn devtool(&self) {
+        let _ = self.get_proxy().send_event(UserEvent::WindowEvent(DevTool));
     }
+}
 
-    pub fn receiver(&self) -> Receiver<UICommand> {
-        self.channel
-            .as_ref()
-            .expect("Channel is empty")
-            .1
-            .subscribe()
-    }
-
-    pub fn send(&self, cmd: CoreCommand) -> Result<(), mpsc::TrySendError<CoreCommand>> {
-        self.channel
-            .as_ref()
-            .expect("Channel is empty")
-            .0
-            .unbounded_send(cmd)
+impl<T> DesktopContext<T>
+where
+    T: Clone,
+{
+    pub fn new(proxy: ProxyType<T>) -> Self {
+        Self { proxy }
     }
 }
 

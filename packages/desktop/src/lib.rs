@@ -106,10 +106,14 @@ pub fn launch_with_props<P: 'static + Send>(
     builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
-
-    let mut desktop =
-        DesktopController::new_on_tokio::<(), (), P>(root, props, event_loop.create_proxy(), None);
     let proxy = event_loop.create_proxy();
+
+    let mut desktop = DesktopController::new_on_tokio::<P, DesktopContext<()>, ()>(
+        root,
+        props,
+        event_loop.create_proxy(),
+        DesktopContext::new(proxy.clone()),
+    );
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;

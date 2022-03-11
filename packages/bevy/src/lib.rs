@@ -8,7 +8,9 @@ use dioxus_core::*;
 pub use dioxus_desktop::cfg::DesktopConfig;
 use dioxus_desktop::{
     controller::DesktopController,
-    desktop_context::{self, DesktopContext, UserEvent, UserWindowEvent},
+    desktop_context::{
+        user_window_event_handler, ProxyType, UserEvent, UserWindowEvent, WindowController,
+    },
     events::{parse_ipc_message, trigger_from_serialized},
     protocol,
     tao::{
@@ -17,12 +19,12 @@ use dioxus_desktop::{
         window::Window,
     },
 };
-use futures_channel::mpsc::{unbounded, UnboundedReceiver};
+use futures_channel::mpsc::{unbounded, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_util::stream::StreamExt;
 use std::{fmt::Debug, marker::PhantomData};
 use tokio::{
     runtime::Runtime,
-    sync::broadcast::{channel, Sender},
+    sync::broadcast::{channel, Receiver, Sender},
 };
 pub use wry::{self, application as tao, webview::WebViewBuilder};
 
@@ -45,11 +47,17 @@ where
         let (core_tx, core_rx) = unbounded::<CoreCommand>();
         let (ui_tx, _) = channel::<UICommand>(8);
 
-        let desktop = DesktopController::new_on_tokio::<CoreCommand, UICommand, Props>(
+        let proxy = event_loop.create_proxy();
+
+        let desktop = DesktopController::new_on_tokio::<
+            Props,
+            BevyDesktopContext<CoreCommand, UICommand>,
+            CoreCommand,
+        >(
             self.root,
             self.props,
-            event_loop.create_proxy(),
-            Some((core_tx, ui_tx.clone())),
+            proxy.clone(),
+            BevyDesktopContext::<CoreCommand, UICommand>::new(proxy, (core_tx, ui_tx.clone())),
         );
 
         app.add_event::<CoreCommand>()
@@ -60,6 +68,40 @@ where
             .insert_resource(core_rx)
             .set_runner(|app| runner::<CoreCommand, UICommand>(app))
             .add_system_to_stage(CoreStage::Last, dispatch_ui_commands::<UICommand>);
+    }
+}
+
+#[derive(Clone)]
+pub struct BevyDesktopContext<CoreCommand: 'static + Clone, UICommand> {
+    proxy: ProxyType<CoreCommand>,
+    channel: (UnboundedSender<CoreCommand>, Sender<UICommand>),
+}
+
+impl<CoreCommand: Clone, UICommand> WindowController<CoreCommand>
+    for BevyDesktopContext<CoreCommand, UICommand>
+{
+    fn get_proxy(&self) -> ProxyType<CoreCommand> {
+        self.proxy.clone()
+    }
+}
+
+impl<CoreCommand, UICommand> BevyDesktopContext<CoreCommand, UICommand>
+where
+    CoreCommand: Clone,
+{
+    fn new(
+        proxy: ProxyType<CoreCommand>,
+        channel: (UnboundedSender<CoreCommand>, Sender<UICommand>),
+    ) -> Self {
+        Self { proxy, channel }
+    }
+
+    pub fn receiver(&self) -> Receiver<UICommand> {
+        self.channel.1.subscribe()
+    }
+
+    pub fn send(&self, cmd: CoreCommand) -> Result<(), TrySendError<CoreCommand>> {
+        self.channel.0.unbounded_send(cmd)
     }
 }
 
@@ -239,7 +281,7 @@ where
 
                 Event::UserEvent(user_event) => match user_event {
                     UserEvent::WindowEvent(e) => {
-                        desktop_context::user_window_event_handler(e, &mut desktop, control_flow);
+                        user_window_event_handler(e, &mut desktop, control_flow);
                     }
                     UserEvent::CustomEvent(cmd) => {
                         let mut events = app
@@ -272,12 +314,12 @@ where
 
 pub fn use_bevy_context<CoreCommand, UICommand>(
     cx: &ScopeState,
-) -> &DesktopContext<CoreCommand, UICommand>
+) -> &BevyDesktopContext<CoreCommand, UICommand>
 where
     CoreCommand: Clone,
     UICommand: 'static + Clone,
 {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext<CoreCommand, UICommand>>())
+    cx.use_hook(|_| cx.consume_context::<BevyDesktopContext<CoreCommand, UICommand>>())
         .as_ref()
         .unwrap()
 }
