@@ -1,5 +1,5 @@
 use bevy_app::{App, AppExit};
-use bevy_dioxus::{use_bevy_context, DesktopConfig, DioxusDesktopPlugin};
+use bevy_dioxus::{use_bevy_context, use_bevy_listener, DesktopConfig, DioxusDesktopPlugin};
 use bevy_ecs::event::{EventReader, EventWriter};
 use bevy_log::{info, LogPlugin};
 use dioxus::prelude::*;
@@ -46,13 +46,8 @@ fn log_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter
 fn app(cx: Scope) -> Element {
     let ctx = use_bevy_context::<CoreCommand, UICommand>(&cx);
 
-    use_future(&cx, (), |_| {
-        let mut rx = ctx.receiver();
-        async move {
-            while let Ok(cmd) = rx.recv().await {
-                info!("🎨 {:?}", cmd);
-            }
-        }
+    use_bevy_listener::<CoreCommand, UICommand>(&cx, |cmd| {
+        info!("🎨 {:?}", cmd);
     });
 
     cx.render(rsx! {

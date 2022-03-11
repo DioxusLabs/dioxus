@@ -19,6 +19,7 @@ use dioxus_desktop::{
         window::Window,
     },
 };
+use dioxus_hooks::use_future;
 use futures_channel::mpsc::{unbounded, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_util::stream::StreamExt;
 use std::{fmt::Debug, marker::PhantomData};
@@ -322,4 +323,24 @@ where
     cx.use_hook(|_| cx.consume_context::<BevyDesktopContext<CoreCommand, UICommand>>())
         .as_ref()
         .unwrap()
+}
+
+pub fn use_bevy_listener<CoreCommand, UICommand>(cx: &ScopeState, handler: fn(UICommand))
+where
+    CoreCommand: 'static + Clone,
+    UICommand: 'static + Clone,
+{
+    let ctx = cx
+        .use_hook(|_| cx.consume_context::<BevyDesktopContext<CoreCommand, UICommand>>())
+        .as_ref()
+        .unwrap();
+
+    use_future(&cx, (), |_| {
+        let mut rx = ctx.receiver();
+        async move {
+            while let Ok(cmd) = rx.recv().await {
+                handler(cmd);
+            }
+        }
+    });
 }
