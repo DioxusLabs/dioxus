@@ -1,5 +1,6 @@
 use crate::desktop_context::{UserEvent, UserWindowEvent};
 use dioxus_core::*;
+use std::fmt::Debug;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -30,8 +31,8 @@ impl DesktopController {
     ) -> Self
     where
         P: 'static + Send,
-        T: 'static + Send + Clone,
-        CoreCommand: Send + Clone,
+        T: Clone + 'static + Send,
+        CoreCommand: Debug + Clone + Send,
     {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
@@ -60,7 +61,9 @@ impl DesktopController {
                     .push(serde_json::to_string(&edits.edits).unwrap());
 
                 // Make sure the window is ready for any new updates
-                let _ = proxy.send_event(UserEvent::WindowEvent(UserWindowEvent::Update));
+                proxy
+                    .send_event(UserEvent::WindowEvent(UserWindowEvent::Update))
+                    .expect("Failed to send UserWindowEvent::Update");
 
                 loop {
                     dom.wait_for_work().await;

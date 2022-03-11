@@ -73,12 +73,12 @@ where
 }
 
 #[derive(Clone)]
-pub struct BevyDesktopContext<CoreCommand: 'static + Clone, UICommand> {
+pub struct BevyDesktopContext<CoreCommand: Debug + 'static + Clone, UICommand> {
     proxy: ProxyType<CoreCommand>,
     channel: (UnboundedSender<CoreCommand>, Sender<UICommand>),
 }
 
-impl<CoreCommand: Clone, UICommand> WindowController<CoreCommand>
+impl<CoreCommand: Debug + Clone, UICommand> WindowController<CoreCommand>
     for BevyDesktopContext<CoreCommand, UICommand>
 {
     fn get_proxy(&self) -> ProxyType<CoreCommand> {
@@ -88,7 +88,7 @@ impl<CoreCommand: Clone, UICommand> WindowController<CoreCommand>
 
 impl<CoreCommand, UICommand> BevyDesktopContext<CoreCommand, UICommand>
 where
-    CoreCommand: Clone,
+    CoreCommand: Debug + Clone,
 {
     fn new(
         proxy: ProxyType<CoreCommand>,
@@ -317,8 +317,8 @@ pub fn use_bevy_context<CoreCommand, UICommand>(
     cx: &ScopeState,
 ) -> &BevyDesktopContext<CoreCommand, UICommand>
 where
-    CoreCommand: Clone,
-    UICommand: 'static + Clone,
+    CoreCommand: Debug + Clone,
+    UICommand: Clone + 'static,
 {
     cx.use_hook(|_| cx.consume_context::<BevyDesktopContext<CoreCommand, UICommand>>())
         .as_ref()
@@ -327,8 +327,8 @@ where
 
 pub fn use_bevy_listener<CoreCommand, UICommand>(cx: &ScopeState, handler: fn(UICommand))
 where
-    CoreCommand: 'static + Clone,
-    UICommand: 'static + Clone,
+    CoreCommand: Debug + Clone + 'static,
+    UICommand: Clone + 'static,
 {
     let ctx = cx
         .use_hook(|_| cx.consume_context::<BevyDesktopContext<CoreCommand, UICommand>>())

@@ -1,5 +1,6 @@
 use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
+use std::fmt::Debug;
 use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::window::Fullscreen as WryFullscreen;
@@ -9,7 +10,7 @@ use UserWindowEvent::*;
 pub type ProxyType<T> = EventLoopProxy<UserEvent<T>>;
 
 /// Get an imperative handle to the current window
-pub fn use_window<T: Clone>(cx: &ScopeState) -> &DesktopContext<T> {
+pub fn use_window<T: Debug + Clone>(cx: &ScopeState) -> &DesktopContext<T> {
     cx.use_hook(|_| cx.consume_context::<DesktopContext<T>>())
         .as_ref()
         .unwrap()
@@ -28,20 +29,20 @@ pub fn use_window<T: Clone>(cx: &ScopeState) -> &DesktopContext<T> {
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
-pub struct DesktopContext<T: 'static + Clone> {
+pub struct DesktopContext<T: Debug + Clone + 'static> {
     proxy: ProxyType<T>,
 }
 
 impl<T> WindowController<T> for DesktopContext<T>
 where
-    T: Clone,
+    T: Debug + Clone,
 {
     fn get_proxy(&self) -> ProxyType<T> {
         self.proxy.clone()
     }
 }
 
-pub trait WindowController<T: 'static> {
+pub trait WindowController<T: Debug + 'static> {
     fn get_proxy(&self) -> ProxyType<T>;
 
     /// trigger the drag-window event
@@ -157,14 +158,15 @@ pub trait WindowController<T: 'static> {
 
 impl<T> DesktopContext<T>
 where
-    T: Clone,
+    T: Debug + Clone,
 {
     pub fn new(proxy: ProxyType<T>) -> Self {
         Self { proxy }
     }
 }
 
-pub enum UserEvent<T = ()> {
+#[derive(Debug)]
+pub enum UserEvent<T: Debug = ()> {
     WindowEvent(UserWindowEvent),
     CustomEvent(T),
 }
