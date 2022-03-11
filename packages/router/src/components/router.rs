@@ -101,7 +101,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
                         regen_route(*listener);
                     }
 
-                    for route in svc.slots.borrow().keys() {
+                    for route in svc.ordering.borrow().iter().rev() {
                         regen_route(*route);
                     }
                 }

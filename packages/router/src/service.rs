@@ -49,6 +49,8 @@ pub struct RouterCore {
 
     pub(crate) slots: Rc<RefCell<HashMap<ScopeId, String>>>,
 
+    pub(crate) ordering: Rc<RefCell<Vec<ScopeId>>>,
+
     pub(crate) onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
 
     pub(crate) history: Box<dyn RouterProvider>,
@@ -102,6 +104,7 @@ impl RouterCore {
             tx,
             route_found: Cell::new(None),
             stack: RefCell::new(vec![route]),
+            ordering: Default::default(),
             slots: Default::default(),
             onchange_listeners: Default::default(),
             history,
@@ -167,6 +170,7 @@ impl RouterCore {
     pub(crate) fn register_total_route(&self, route: String, scope: ScopeId) {
         let clean = clean_route(route);
         self.slots.borrow_mut().insert(scope, clean);
+        self.ordering.borrow_mut().push(scope);
     }
 
     pub(crate) fn should_render(&self, scope: ScopeId) -> bool {
@@ -177,12 +181,10 @@ impl RouterCore {
         let roots = self.slots.borrow();
 
         if let Some(route) = roots.get(&scope) {
-            if route_matches_path(
-                &self.current_location().url,
-                route,
-                self.cfg.base_url.as_ref(),
-            ) || route.is_empty()
-            {
+            let cur = &self.current_location().url;
+            log::debug!("Checking if {} matches {}", cur, route);
+
+            if route_matches_path(cur, route, self.cfg.base_url.as_ref()) || route.is_empty() {
                 self.route_found.set(Some(scope));
                 true
             } else {
@@ -217,17 +219,24 @@ fn clean_path(path: &str) -> &str {
 fn route_matches_path(cur: &Url, attempt: &str, base_url: Option<&String>) -> bool {
     let cur_piece_iter = cur.path_segments().unwrap();
 
-    let cur_pieces = match base_url {
+    let mut cur_pieces = match base_url {
         // baseurl is naive right now and doesn't support multiple nesting levels
         Some(_) => cur_piece_iter.skip(1).collect::<Vec<_>>(),
         None => cur_piece_iter.collect::<Vec<_>>(),
     };
 
-    let attempt_pieces = clean_path(attempt).split('/').collect::<Vec<_>>();
-
     if attempt == "/" && cur_pieces.len() == 1 && cur_pieces[0].is_empty() {
         return true;
     }
+
+    // allow slashes at the end of the path
+    if cur_pieces.last() == Some(&"") {
+        cur_pieces.pop();
+    }
+
+    let attempt_pieces = clean_path(attempt).split('/').collect::<Vec<_>>();
+
+    log::debug!("Comparing {:?} to {:?}", cur_pieces, attempt_pieces);
 
     if attempt_pieces.len() != cur_pieces.len() {
         return false;
@@ -361,3 +370,18 @@ mod web {
         }
     }
 }
+
+/*
+
+
+
+
+
+
+Route { to: "/blog/:id" }
+Route { to: "/blog/:id" }
+Route { to: "/blog/:id" }
+Route { to: "/blog/:id" }
+Route { to: "/blog/:id" }
+
+*/
