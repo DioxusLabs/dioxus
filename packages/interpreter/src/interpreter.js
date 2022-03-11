@@ -365,6 +365,7 @@ export function serialize_event(event) {
     case "click":
     case "contextmenu":
     case "doubleclick":
+    case "dblclick":
     case "drag":
     case "dragend":
     case "dragenter":

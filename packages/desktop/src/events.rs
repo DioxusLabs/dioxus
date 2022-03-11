@@ -84,9 +84,9 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
             Arc::new(serde_json::from_value::<FormData>(val).unwrap())
         }
 
-        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
-        | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
+        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
+        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
+        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Arc::new(serde_json::from_value::<MouseData>(val).unwrap())
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
@@ -149,6 +149,7 @@ fn event_name_from_type(typ: &str) -> &'static str {
         "click" => "click",
         "contextmenu" => "contextmenu",
         "doubleclick" => "doubleclick",
+        "dblclick" => "dblclick",
         "drag" => "drag",
         "dragend" => "dragend",
         "dragenter" => "dragenter",
@@ -209,8 +210,8 @@ fn event_name_from_type(typ: &str) -> &'static str {
         "volumechange" => "volumechange",
         "waiting" => "waiting",
         "toggle" => "toggle",
-        _ => {
-            panic!("unsupported event type")
+        a => {
+            panic!("unsupported event type {:?}", a);
         }
     }
 }
