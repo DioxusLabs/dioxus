@@ -1,12 +1,29 @@
-use std::path::PathBuf;
+use std::{fs::create_dir_all, path::PathBuf};
+
+use anyhow::Context;
+use futures::StreamExt;
+use tokio::io::AsyncWriteExt;
 
 pub enum Tool {
     WasmOpt,
 }
 
-pub fn app_path() {
+pub fn app_path() -> PathBuf {
     let data_local = dirs::data_local_dir().unwrap();
-    
+    let dioxus_dir = data_local.join("dioxus");
+    if !dioxus_dir.is_dir() {
+        create_dir_all(&dioxus_dir).unwrap();
+    }
+    dioxus_dir
+}
+
+pub fn temp_path() -> PathBuf {
+    let app_path = app_path();
+    let temp_path = app_path.join("temp");
+    if !temp_path.is_dir() {
+        create_dir_all(&temp_path).unwrap();
+    }
+    temp_path
 }
 
 impl Tool {
@@ -55,15 +72,23 @@ impl Tool {
         }
     }
 
-    pub async fn download_package(&self) {
-        
-        let download_dir = dirs::download_dir().unwrap();
+    pub async fn download_package(&self) -> anyhow::Result<PathBuf> {
+        let temp_dir = temp_path();
         let download_url = self.download_url();
+
+        let temp_out = temp_dir.join(format!("{}-tool.tmp", self.name()));
+        let mut file = tokio::fs::File::create(&temp_out)
+            .await
+            .context("failed creating temporary output file")?;
 
         let resp = reqwest::get(download_url).await.unwrap();
 
-        resp.
+        let mut res_bytes = resp.bytes_stream();
+        while let Some(chunk_res) = res_bytes.next().await {
+            let chunk = chunk_res.context("error reading chunk from download")?;
+            let _ = file.write(chunk.as_ref()).await;
+        }
 
+        Ok(temp_out)
     }
-
 }
