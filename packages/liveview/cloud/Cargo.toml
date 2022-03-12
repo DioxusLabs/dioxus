@@ -1,0 +1,26 @@
+[package]
+name = "cloud"
+version = "0.0.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+warp = "0.3"
+futures-util = { version = "0.3", default-features = false, features = [
+    "sink",
+] }
+futures-channel = { version = "0.3.17", features = ["sink"] }
+pretty_env_logger = "0.4"
+tokio-stream = { version = "0.1.1", features = ["net"] }
+
+dioxus = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus-html = { git = "https://github.com/dioxuslabs/dioxus", features = [
+    "serialize",
+] }
+dioxus-core = { git = "https://github.com/dioxuslabs/dioxus", features = [
+    "serialize",
+] }
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.79"

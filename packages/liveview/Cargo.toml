@@ -9,14 +9,29 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.4.2", optional = true, features = ["ws", "headers"] }
+tokio = { version = "1", features = ["full"] }
+warp = "0.3"
+futures-util = { version = "0.3", default-features = false, features = [
+    "sink",
+] }
+futures-channel = { version = "0.3.17", features = ["sink"] }
+pretty_env_logger = "0.4"
+tokio-stream = { version = "0.1.1", features = ["net"] }
+dioxus-core = { path = "../core", features = ["serialize"] }
+dioxus-html = { path = "../html", features = ["serialize"] }
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.79"
+
+# axum = { version = "0.4.2", optional = true, features = ["ws", "headers"] }
+# serde = { version = "1.0.136", features = ["derive"] }
+# serde_json = "1.0.79"
 
 [features]
-default = ["axum"]
+# default = ["axum"]
 
 [dev-dependencies]
-tokio = { version = "1.14.0", features = ["full"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tower-http = { version = "0.2.0", features = ["fs", "trace"] }
-headers = "0.3"
+# tokio = { version = "1.14.0", features = ["full"] }
+# tracing = "0.1"
+# tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# tower-http = { version = "0.2.0", features = ["fs", "trace"] }
+# headers = "0.3"
