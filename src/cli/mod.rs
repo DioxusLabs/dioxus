@@ -5,6 +5,7 @@ pub mod config;
 pub mod create;
 pub mod serve;
 pub mod translate;
+pub mod tools;
 
 use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},

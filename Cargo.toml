@@ -9,10 +9,12 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
 # cli core
 clap = {version = "3.0.14", features = ["derive"]}
 thiserror = "1.0.30"
 wasm-bindgen-cli-support = "0.2.79"
+
 # features
 log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
@@ -37,7 +39,10 @@ hyper = "0.14.17"
 axum = { version = "0.4.5", features = ["ws", "headers"] }
 tower-http = { version = "0.2.2", features = ["fs", "trace"] }
 headers = "0.3.7"
-# hyper = { version = "0.14.11", features = ["full"] }
+
+# tools download
+dirs = "4.0.0"
+reqwest = { version = "0.11", features = ["json"] }
 
 [[bin]]
 path = "src/main.rs"
