@@ -22,6 +22,7 @@ fn simple_test() {
         cx.render(rsx! {
             Router {
                 onchange: move |route: RouterService| log::info!("route changed to {:?}", route.current_location()),
+                active_class: "is-active",
                 Route { to: "/", Home {} }
                 Route { to: "blog"
                     Route { to: "/", BlogList {} }

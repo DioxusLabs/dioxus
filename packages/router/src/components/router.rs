@@ -28,6 +28,13 @@ pub struct RouterProps<'a> {
     /// This lets you easily implement redirects
     #[props(default)]
     pub onchange: EventHandler<'a, Arc<RouterCore>>,
+
+    /// Set the active class of all Link components contained in this router.
+    ///
+    /// This is useful if you don't want to repeat the same `active_class` prop value in every Link.
+    /// By default set to `"active"`.
+    #[props(default, strip_option)]
+    pub active_class: Option<&'a str>,
 }
 
 /// A component that conditionally renders children based on the current location of the app.
@@ -40,9 +47,13 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let svc = cx.use_hook(|_| {
         let (tx, mut rx) = futures_channel::mpsc::unbounded::<RouteEvent>();
 
-        let base_url = cx.props.base_url.map(|s| s.to_string());
-
-        let svc = RouterCore::new(tx, RouterCfg { base_url });
+        let svc = RouterCore::new(
+            tx,
+            RouterCfg {
+                base_url: cx.props.base_url.map(|s| s.to_string()),
+                active_class: cx.props.active_class.map(|s| s.to_string()),
+            },
+        );
 
         cx.spawn({
             let svc = svc.clone();
