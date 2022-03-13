@@ -12,9 +12,7 @@ pub fn use_route(cx: &ScopeState) -> &UseRoute {
             .consume_context::<RouterService>()
             .expect("Cannot call use_route outside the scope of a Router component");
 
-        let route_context = cx
-            .consume_context::<RouteContext>()
-            .expect("Cannot call use_route outside the scope of a Router component");
+        let route_context = cx.consume_context::<RouteContext>();
 
         router.subscribe_onchange(cx.scope_id());
 
@@ -36,7 +34,9 @@ pub fn use_route(cx: &ScopeState) -> &UseRoute {
 /// A handle to the current location of the router.
 pub struct UseRoute {
     pub(crate) route: Arc<ParsedRoute>,
-    pub(crate) route_context: RouteContext,
+
+    /// If `use_route` is used inside a `Route` component this has some context otherwise `None`.
+    pub(crate) route_context: Option<RouteContext>,
 }
 
 impl UseRoute {
@@ -84,9 +84,12 @@ impl UseRoute {
     /// `value.parse::<T>()`. This method returns `None` if the named
     /// parameter does not exist in the current path.
     pub fn segment(&self, name: &str) -> Option<&str> {
-        let index = self
-            .route_context
-            .total_route
+        let total_route = match self.route_context {
+            None => self.route.url.path(),
+            Some(ref ctx) => &ctx.total_route,
+        };
+
+        let index = total_route
             .trim_start_matches('/')
             .split('/')
             .position(|segment| segment.starts_with(':') && &segment[1..] == name)?;
