@@ -42,6 +42,12 @@ async fn main() -> Result<()> {
                 log::error!("config error: {}", e);
             }
         }
+
+        Commands::Tool(opts) => {
+            if let Err(e) = opts.tool().await {
+                log::error!("tool error: {}", e);
+            }
+        }
     }
 
     Ok(())

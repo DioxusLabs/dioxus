@@ -6,6 +6,7 @@ pub mod create;
 pub mod serve;
 pub mod translate;
 pub mod tools;
+pub mod tool;
 
 use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
@@ -56,4 +57,7 @@ pub enum Commands {
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
+    /// Install  & Manage tools for Dioxus-cli.
+    #[clap(subcommand)]
+    Tool(tool::Tool),
 }

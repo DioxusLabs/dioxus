@@ -8,6 +8,10 @@ pub enum Tool {
     WasmOpt,
 }
 
+pub fn tool_list() -> Vec<&'static str> {
+    vec!["wasm-opt"]
+}
+
 pub fn app_path() -> PathBuf {
     let data_local = dirs::data_local_dir().unwrap();
     let dioxus_dir = data_local.join("dioxus");
@@ -26,7 +30,24 @@ pub fn temp_path() -> PathBuf {
     temp_path
 }
 
+pub fn tools_path(tool: &Tool) -> PathBuf {
+    let app_path = app_path();
+    let temp_path = app_path.join("tools");
+    if !temp_path.is_dir() {
+        create_dir_all(&temp_path).unwrap();
+    }
+    temp_path.join(tool.name())
+}
+
+#[allow(clippy::should_implement_trait)]
 impl Tool {
+    pub fn from_str(name: &str) -> Option<Self> {
+        match name {
+            "wasm-opt" => Some(Self::WasmOpt),
+            _ => None,
+        }
+    }
+
     pub fn name(&self) -> &str {
         match self {
             Self::WasmOpt => "wasm-opt",
@@ -72,11 +93,23 @@ impl Tool {
         }
     }
 
-    pub async fn download_package(&self) -> anyhow::Result<PathBuf> {
-        let temp_dir = temp_path();
-        let download_url = self.download_url();
+    pub fn extension(&self) -> &str {
+        match self {
+            Self::WasmOpt => "tar.gz",
+        }
+    }
 
-        let temp_out = temp_dir.join(format!("{}-tool.tmp", self.name()));
+    pub fn is_installed(&self) -> bool {
+        tools_path(self).is_dir()
+    }
+
+    pub fn temp_out_path(&self) -> PathBuf {
+        temp_path().join(format!("{}-tool.tmp", self.name()))
+    }
+
+    pub async fn download_package(&self) -> anyhow::Result<PathBuf> {
+        let download_url = self.download_url();
+        let temp_out = self.temp_out_path();
         let mut file = tokio::fs::File::create(&temp_out)
             .await
             .context("failed creating temporary output file")?;
@@ -90,5 +123,9 @@ impl Tool {
         }
 
         Ok(temp_out)
+    }
+
+    pub async fn install_package() -> anyhow::Result<()> {
+        Ok(())
     }
 }
