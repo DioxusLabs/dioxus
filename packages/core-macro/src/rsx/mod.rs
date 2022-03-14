@@ -30,18 +30,34 @@ use syn::{
     Ident, Result, Token,
 };
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CustomContext {
+    pub name: Ident,
+    pub cx_type: Option<Ident>,
+}
+
 pub struct CallBody {
-    pub custom_context: Option<Ident>,
+    pub custom_context: Option<CustomContext>,
     pub roots: Vec<BodyNode>,
 }
 
 impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
-        let custom_context = if input.peek(Ident) && input.peek2(Token![,]) {
+        let custom_context = if input.peek(Ident) &&
+            input.peek2(Token![:]) &&
+            input.peek3(Ident)
+        {
+            let name = input.parse::<Ident>()?;
+            input.parse::<Token![:]>()?;
+            let r#type = input.parse::<Ident>()?;
+            input.parse::<Token![;]>()?;
+
+            Some(CustomContext { name, cx_type: Some(r#type) })
+        } else if input.peek(Ident) && input.peek2(Token![,]) {
             let name = input.parse::<Ident>()?;
             input.parse::<Token![,]>()?;
 
-            Some(name)
+            Some(CustomContext { name, cx_type: None })
         } else {
             None
         };
@@ -78,8 +94,8 @@ impl ToTokens for CallBody {
 
         match &self.custom_context {
             // The `in cx` pattern allows directly rendering
-            Some(ident) => out_tokens.append_all(quote! {
-                #ident.render(LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+            Some(CustomContext { name, .. }) => out_tokens.append_all(quote! {
+                #name.render(LazyNodes::new(move |__cx: NodeFactory| -> VNode {
                     use dioxus_elements::{GlobalAttributes, SvgAttributes};
                     #inner
                 }))
