@@ -47,6 +47,8 @@ pub fn tools_path() -> PathBuf {
 
 #[allow(clippy::should_implement_trait)]
 impl Tool {
+
+    /// from str to tool enum
     pub fn from_str(name: &str) -> Option<Self> {
         match name {
             "binaryen" => Some(Self::Binaryen),
@@ -54,18 +56,21 @@ impl Tool {
         }
     }
 
+    /// get current tool name str
     pub fn name(&self) -> &str {
         match self {
             Self::Binaryen => "binaryen",
         }
     }
 
+    /// get tool bin dir path
     pub fn bin_path(&self) -> &str {
         match self {
             Self::Binaryen => "bin",
         }
     }
 
+    /// get target platform
     pub fn target_platform(&self) -> &str {
         match self {
             Self::Binaryen => {
@@ -82,6 +87,7 @@ impl Tool {
         }
     }
 
+    /// get tool package download url
     pub fn download_url(&self) -> String {
         match self {
             Self::Binaryen => {
@@ -93,20 +99,24 @@ impl Tool {
         }
     }
 
+    /// get package extension name
     pub fn extension(&self) -> &str {
         match self {
             Self::Binaryen => "tar.gz",
         }
     }
 
+    /// check tool state
     pub fn is_installed(&self) -> bool {
         tools_path().join(self.name()).is_dir()
     }
 
+    /// get download temp path
     pub fn temp_out_path(&self) -> PathBuf {
         temp_path().join(format!("{}-tool.tmp", self.name()))
     }
 
+    /// start to download package
     pub async fn download_package(&self) -> anyhow::Result<PathBuf> {
         let download_url = self.download_url();
         let temp_out = self.temp_out_path();
@@ -125,6 +135,7 @@ impl Tool {
         Ok(temp_out)
     }
 
+    /// start to install package
     pub async fn install_package(&self) -> anyhow::Result<()> {
         let temp_path = self.temp_out_path();
         let tool_path = tools_path();

@@ -5,7 +5,6 @@ pub mod config;
 pub mod create;
 pub mod serve;
 pub mod translate;
-pub mod tools;
 pub mod tool;
 
 use crate::{
