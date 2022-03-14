@@ -1,6 +1,7 @@
 use std::{
     fs::{create_dir_all, File},
     path::PathBuf,
+    process::Command,
 };
 
 use anyhow::Context;
@@ -47,7 +48,6 @@ pub fn tools_path() -> PathBuf {
 
 #[allow(clippy::should_implement_trait)]
 impl Tool {
-
     /// from str to tool enum
     pub fn from_str(name: &str) -> Option<Self> {
         match name {
@@ -152,11 +152,35 @@ impl Tool {
             let mut archive = Archive::new(tar);
             archive.unpack(&tool_path)?;
             // println!("{:?} -> {:?}", tool_path.join(dir_name), tool_path.join(self.name()));
-            std::fs::rename(
-                tool_path.join(dir_name),
-                tool_path.join(self.name()),
-            )?;
+            std::fs::rename(tool_path.join(dir_name), tool_path.join(self.name()))?;
         }
+
+        Ok(())
+    }
+
+    pub fn call(&self, command: &str, args: Vec<&str>) -> anyhow::Result<()> {
+        let bin_path = tools_path().join(self.name()).join(self.bin_path());
+
+        let command_file = match self {
+            Tool::Binaryen => {
+                if cfg!(target_os = "windows") {
+                    format!("{}.exe", command)
+                } else {
+                    command.to_string()
+                }
+            }
+        };
+
+        if !bin_path.join(command_file).is_file() {
+            return Err(anyhow::anyhow!("Command file not found."));
+        }
+
+        let mut command = Command::new(bin_path.to_str().unwrap());
+
+        command
+            .args(&args[..])
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit());
 
         Ok(())
     }

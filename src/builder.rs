@@ -82,19 +82,42 @@ pub fn build(config: &CrateConfig) -> Result<()> {
 
         bindgen_builder
             .input_path(input_path)
-            .web(true).unwrap()
+            .web(true)
+            .unwrap()
             .debug(true)
             .demangle(true)
             .keep_debug(true)
             .remove_name_section(false)
             .remove_producers_section(false)
             .out_name(&dioxus_config.application.name)
-            .generate(&bindgen_outdir).unwrap();
+            .generate(&bindgen_outdir)
+            .unwrap();
     });
     if bindgen_result.is_err() {
         log::error!("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.");
     }
 
+    // check binaryen:wasm-opt tool
+    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+    if dioxus_tools.contains_key("binaryen") {
+        let info = dioxus_tools.get("binaryen").unwrap();
+        let binaryen = crate::tools::Tool::Binaryen;
+        if let Some(sub) = info.as_table() {
+            println!("sub: {sub:?}");
+            if sub.contains_key("wasm_opt")
+                && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
+            {
+                let target_file = out_dir
+                    .join("assets")
+                    .join("dioxus")
+                    .join(format!("{}_bg.wasm", dioxus_config.application.name));
+                println!("tf: {target_file:?}");
+                if target_file.is_file() {
+                    binaryen.call("wasm-opt", vec![target_file.to_str().unwrap(), "--print"])?;
+                }
+            }
+        }
+    }
 
     // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
