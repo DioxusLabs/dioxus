@@ -1,15 +1,21 @@
-use std::{fs::create_dir_all, path::PathBuf};
+use std::{
+    fs::{create_dir_all, File},
+    path::PathBuf,
+};
 
 use anyhow::Context;
+use flate2::read::GzDecoder;
 use futures::StreamExt;
+use tar::Archive;
 use tokio::io::AsyncWriteExt;
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Tool {
-    WasmOpt,
+    Binaryen,
 }
 
 pub fn tool_list() -> Vec<&'static str> {
-    vec!["wasm-opt"]
+    vec!["binaryen"]
 }
 
 pub fn app_path() -> PathBuf {
@@ -30,45 +36,39 @@ pub fn temp_path() -> PathBuf {
     temp_path
 }
 
-pub fn tools_path(tool: &Tool) -> PathBuf {
+pub fn tools_path() -> PathBuf {
     let app_path = app_path();
     let temp_path = app_path.join("tools");
     if !temp_path.is_dir() {
         create_dir_all(&temp_path).unwrap();
     }
-    temp_path.join(tool.name())
+    temp_path
 }
 
 #[allow(clippy::should_implement_trait)]
 impl Tool {
     pub fn from_str(name: &str) -> Option<Self> {
         match name {
-            "wasm-opt" => Some(Self::WasmOpt),
+            "binaryen" => Some(Self::Binaryen),
             _ => None,
         }
     }
 
     pub fn name(&self) -> &str {
         match self {
-            Self::WasmOpt => "wasm-opt",
+            Self::Binaryen => "binaryen",
         }
     }
 
     pub fn bin_path(&self) -> &str {
-        if cfg!(target_os = "windows") {
-            match self {
-                Self::WasmOpt => "bin/wasm-opt.exe",
-            }
-        } else {
-            match self {
-                Self::WasmOpt => "bin/wasm-opt",
-            }
+        match self {
+            Self::Binaryen => "bin",
         }
     }
 
     pub fn target_platform(&self) -> &str {
         match self {
-            Self::WasmOpt => {
+            Self::Binaryen => {
                 if cfg!(target_os = "windows") {
                     "windows"
                 } else if cfg!(target_os = "macos") {
@@ -84,7 +84,7 @@ impl Tool {
 
     pub fn download_url(&self) -> String {
         match self {
-            Self::WasmOpt => {
+            Self::Binaryen => {
                 format!(
                     "https://github.com/WebAssembly/binaryen/releases/download/version_105/binaryen-version_105-x86_64-{target}.tar.gz",
                     target = self.target_platform()
@@ -95,12 +95,12 @@ impl Tool {
 
     pub fn extension(&self) -> &str {
         match self {
-            Self::WasmOpt => "tar.gz",
+            Self::Binaryen => "tar.gz",
         }
     }
 
     pub fn is_installed(&self) -> bool {
-        tools_path(self).is_dir()
+        tools_path().join(self.name()).is_dir()
     }
 
     pub fn temp_out_path(&self) -> PathBuf {
@@ -125,7 +125,28 @@ impl Tool {
         Ok(temp_out)
     }
 
-    pub async fn install_package() -> anyhow::Result<()> {
+    pub async fn install_package(&self) -> anyhow::Result<()> {
+        let temp_path = self.temp_out_path();
+        let tool_path = tools_path();
+
+        let dir_name = if self == &Tool::Binaryen {
+            "binaryen-version_105"
+        } else {
+            ""
+        };
+
+        if self.extension() == "tar.gz" {
+            let tar_gz = File::open(temp_path)?;
+            let tar = GzDecoder::new(tar_gz);
+            let mut archive = Archive::new(tar);
+            archive.unpack(&tool_path)?;
+            // println!("{:?} -> {:?}", tool_path.join(dir_name), tool_path.join(self.name()));
+            std::fs::rename(
+                tool_path.join(dir_name),
+                tool_path.join(self.name()),
+            )?;
+        }
+
         Ok(())
     }
 }

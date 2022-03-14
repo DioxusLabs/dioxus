@@ -18,6 +18,8 @@ pub enum Config {
         #[clap(long, default_value = "web")]
         platform: String,
     },
+    /// Format Print Dioxus-Config.
+    FormatPrint {}
 }
 
 impl Config {
@@ -42,6 +44,9 @@ impl Config {
                     .replace("{{default-platform}}", &platform);
                 file.write_all(content.as_bytes())?;
                 log::info!("🚩 Init config file completed.");
+            }
+            Config::FormatPrint {} => {
+                println!("{:#?}", crate::CrateConfig::new()?.dioxus_config);
             }
         }
         Ok(())

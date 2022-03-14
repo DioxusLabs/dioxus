@@ -1,6 +1,6 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
-use std::{fs::File, io::Read, path::PathBuf};
+use std::{fs::File, io::Read, path::PathBuf, collections::HashMap};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
@@ -34,6 +34,7 @@ impl Default for DioxusConfig {
                 default_platform: "web".to_string(),
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
+                tools: None,
             },
             web: WebConfig {
                 app: WebAppConfing {
@@ -62,6 +63,7 @@ pub struct ApplicationConfig {
     pub default_platform: String,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
+    pub tools: Option<HashMap<String, toml::Value>>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

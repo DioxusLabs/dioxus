@@ -6,6 +6,9 @@ use super::*;
 pub enum Tool {
     /// Return all dioxus-cli support tools.
     List {},
+    /// Get default app install path.
+    AppPath {},
+    /// Install a new tool.
     Add {
         name: String
     }
@@ -23,6 +26,9 @@ impl Tool {
                     }
                 }
             }
+            Tool::AppPath {} => {
+                println!("{}", tools::tools_path().to_str().unwrap());
+            }
             Tool::Add { name } => {
                 let tool_list = tools::tool_list();
                 
@@ -31,7 +37,25 @@ impl Tool {
                     return Ok(());
                 }
                 let target_tool = tools::Tool::from_str(&name).unwrap();
-                println!("{:?}", target_tool.download_package().await);
+
+                if target_tool.is_installed() {
+                    log::warn!("Tool {name} is installed.");
+                    return Ok(());
+                }
+
+                log::info!("Start to download tool package...");
+                if let Err(e) = target_tool.download_package().await {
+                    log::error!("Tool download failed: {e}");
+                    return Ok(());
+                }
+
+                log::info!("Start to install tool package...");
+                if let Err(e) = target_tool.install_package().await {
+                    log::error!("Tool install failed: {e}");
+                    return Ok(());
+                }
+
+                log::info!("Tool {name} install successfully!");
             }
         }
 
