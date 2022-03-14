@@ -23,16 +23,16 @@ pub struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub fn new_on_tokio<P, T, CoreCommand>(
+    pub fn new_on_tokio<P, C, E>(
         root: Component<P>,
         props: P,
-        proxy: EventLoopProxy<UserEvent<CoreCommand>>,
-        window_context: T,
+        proxy: EventLoopProxy<UserEvent<E>>,
+        window_context: C,
     ) -> Self
     where
         P: 'static + Send,
-        T: Clone + 'static + Send,
-        CoreCommand: Debug + Clone + Send,
+        C: Clone + 'static + Send,
+        E: Debug + Clone + Send,
     {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();

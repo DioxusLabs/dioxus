@@ -46,7 +46,7 @@ desktop = ["dioxus-desktop"]
 ayatana = ["dioxus-desktop/ayatana"]
 router = ["dioxus-router"]
 tui = ["dioxus-tui"]
-bevy_plugin = ["bevy_dioxus", "bevy"]
+bevy-plugin = ["bevy_dioxus", "bevy"]
 
 [patch.crates-io]
 bevy = { git = "https://github.com/bevyengine/bevy", rev = "5af7464", default-features = false, optional = true }

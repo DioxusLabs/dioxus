@@ -3,6 +3,19 @@ export function main() {
   if (root != null) {
     window.interpreter = new Interpreter(root);
     window.ipc.postMessage(serializeIpcMessage("initialize"));
+
+    document.addEventListener('keydown', e => {
+      const params = {
+        code: e.code,
+        keyCode: e.keyCode,
+        // altKey: e.altKey,
+        // ctrlKey: e.ctrlKey,
+        // metaKey: e.metaKey,
+        // shiftKey: e.shiftKey,
+        // repeat: e.repeat,
+      }
+      window.ipc.postMessage(serializeIpcMessage("keyboard_event", params))
+    });
   }
 }
 export class Interpreter {

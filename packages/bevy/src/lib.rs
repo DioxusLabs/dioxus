@@ -1,9 +1,13 @@
+mod event;
+
+use crate::event::parse_keyboard_input;
 use bevy::{
     app::{App, AppExit, CoreStage, Plugin},
     ecs::{
         event::{EventReader, Events, ManualEventReader},
         system::Res,
     },
+    input::keyboard::KeyboardInput,
 };
 use dioxus_core::Component;
 use dioxus_core::*;
@@ -45,26 +49,26 @@ where
     Props: 'static + Send + Sync + Copy,
 {
     fn build(&self, app: &mut App) {
-        let event_loop = EventLoop::<UserEvent<CoreCommand>>::with_user_event();
+        let event_loop = EventLoop::<UserEvent<CustomUserEvent<CoreCommand>>>::with_user_event();
 
         let (core_tx, core_rx) = unbounded::<CoreCommand>();
         let (ui_tx, _) = channel::<UICommand>(8);
 
         let proxy = event_loop.create_proxy();
 
-        let desktop = DesktopController::new_on_tokio::<
-            Props,
-            BevyDesktopContext<CoreCommand, UICommand>,
-            CoreCommand,
-        >(
+        let desktop = DesktopController::new_on_tokio(
             self.root,
             self.props,
             proxy.clone(),
-            BevyDesktopContext::<CoreCommand, UICommand>::new(proxy, (core_tx, ui_tx.clone())),
+            BevyDesktopContext::<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>::new(
+                proxy,
+                (core_tx, ui_tx.clone()),
+            ),
         );
 
         app.add_event::<CoreCommand>()
             .add_event::<UICommand>()
+            .add_event::<KeyboardInput>()
             .insert_non_send_resource(event_loop)
             .insert_non_send_resource(desktop)
             .insert_resource(ui_tx)
@@ -75,25 +79,35 @@ where
 }
 
 #[derive(Clone)]
-pub struct BevyDesktopContext<CoreCommand: Debug + 'static + Clone, UICommand> {
-    proxy: ProxyType<CoreCommand>,
+pub struct BevyDesktopContext<
+    CustomUserEvent: Debug + 'static,
+    CoreCommand: Debug + 'static + Clone,
+    UICommand,
+> {
+    proxy: ProxyType<CustomUserEvent>,
     channel: (UnboundedSender<CoreCommand>, Sender<UICommand>),
 }
 
-impl<CoreCommand: Debug + Clone, UICommand> WindowController<CoreCommand>
-    for BevyDesktopContext<CoreCommand, UICommand>
+impl<CustomUserEvent, CoreCommand, UICommand> WindowController<CustomUserEvent>
+    for BevyDesktopContext<CustomUserEvent, CoreCommand, UICommand>
+where
+    CustomUserEvent: Debug + Clone,
+    CoreCommand: Debug + Clone,
+    UICommand: Debug + Clone,
 {
-    fn get_proxy(&self) -> ProxyType<CoreCommand> {
+    fn get_proxy(&self) -> ProxyType<CustomUserEvent> {
         self.proxy.clone()
     }
 }
 
-impl<CoreCommand, UICommand> BevyDesktopContext<CoreCommand, UICommand>
+impl<CustomUserEvent, CoreCommand, UICommand>
+    BevyDesktopContext<CustomUserEvent, CoreCommand, UICommand>
 where
+    CustomUserEvent: Debug,
     CoreCommand: Debug + Clone,
 {
     fn new(
-        proxy: ProxyType<CoreCommand>,
+        proxy: ProxyType<CustomUserEvent>,
         channel: (UnboundedSender<CoreCommand>, Sender<UICommand>),
     ) -> Self {
         Self { proxy, channel }
@@ -119,6 +133,12 @@ impl<CoreCommand, UICommand, Props> DioxusDesktopPlugin<CoreCommand, UICommand, 
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum CustomUserEvent<CoreCommand> {
+    CoreCommand(CoreCommand),
+    KeyboardInput(KeyboardInput),
+}
+
 fn runner<CoreCommand, UICommand>(mut app: App)
 where
     CoreCommand: 'static + Send + Sync + Debug,
@@ -126,7 +146,7 @@ where
 {
     let event_loop = app
         .world
-        .remove_non_send_resource::<EventLoop<UserEvent<CoreCommand>>>()
+        .remove_non_send_resource::<EventLoop<UserEvent<CustomUserEvent<CoreCommand>>>>()
         .expect("Insert EventLoop as non send resource");
     let mut desktop = app
         .world
@@ -149,17 +169,18 @@ where
 
     runtime.spawn(async move {
         while let Some(cmd) = core_rx.next().await {
-            let _res = proxy
+            proxy
                 .clone()
-                .send_event(UserEvent::<CoreCommand>::CustomEvent(cmd));
+                .send_event(UserEvent::CustomEvent(CustomUserEvent::CoreCommand(cmd)))
+                .unwrap();
         }
     });
 
     app.update();
 
     event_loop.run(
-        move |window_event: Event<UserEvent<CoreCommand>>,
-              event_loop: &EventLoopWindowTarget<UserEvent<CoreCommand>>,
+        move |window_event: Event<UserEvent<CustomUserEvent<CoreCommand>>>,
+              event_loop: &EventLoopWindowTarget<UserEvent<CustomUserEvent<CoreCommand>>>,
               control_flow: &mut ControlFlow| {
             *control_flow = ControlFlow::Wait;
 
@@ -187,7 +208,7 @@ where
                     let resource_dir = config.resource_dir.clone();
                     let world = app.world.cell();
                     let proxy = world
-                        .get_non_send_mut::<EventLoopProxy<UserEvent<CoreCommand>>>()
+                        .get_non_send_mut::<EventLoopProxy<UserEvent<CustomUserEvent<CoreCommand>>>>()
                         .unwrap()
                         .clone();
 
@@ -202,6 +223,10 @@ where
                                     "user_event" => {
                                         let event = trigger_from_serialized(message.params());
                                         sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
+                                    }
+                                    "keyboard_event" => {
+                                        let event = parse_keyboard_input(message.params());
+                                        proxy.send_event(UserEvent::CustomEvent(CustomUserEvent::KeyboardInput(event))).unwrap();
                                     }
                                     "initialize" => {
                                         is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -222,7 +247,7 @@ where
                                             }
                                         }
                                     }
-                                    _ => (),
+                                    _ => {}
                                 })
                                 .unwrap_or_else(|| {
                                     log::warn!("invalid IPC message received");
@@ -278,7 +303,6 @@ where
                             let _ = view.resize();
                         }
                     }
-
                     _ => {}
                 },
 
@@ -286,12 +310,24 @@ where
                     UserEvent::WindowEvent(e) => {
                         user_window_event_handler(e, &mut desktop, control_flow);
                     }
-                    UserEvent::CustomEvent(cmd) => {
-                        let mut events = app
-                            .world
-                            .get_resource_mut::<Events<CoreCommand>>()
-                            .expect("Provide CoreCommand event to bevy");
-                        events.send(cmd);
+                    UserEvent::CustomEvent(e) => {
+                        match e {
+                            CustomUserEvent::CoreCommand(cmd) => {
+                                let mut events = app
+                                    .world
+                                    .get_resource_mut::<Events<CoreCommand>>()
+                                    .expect("Provide CoreCommand event to bevy");
+                                events.send(cmd);
+                                app.update();
+                            }
+                            CustomUserEvent::KeyboardInput(input) => {
+                                let mut events = app
+                                    .world
+                                    .get_resource_mut::<Events<KeyboardInput>>()
+                                    .unwrap();
+                                events.send(input);
+                            }
+                        };
                         app.update();
                     }
                 },
@@ -317,14 +353,16 @@ where
 
 pub fn use_bevy_window<CoreCommand, UICommand>(
     cx: &ScopeState,
-) -> &BevyDesktopContext<CoreCommand, UICommand>
+) -> &BevyDesktopContext<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>
 where
     CoreCommand: Debug + Clone,
     UICommand: Clone + 'static,
 {
-    cx.use_hook(|_| cx.consume_context::<BevyDesktopContext<CoreCommand, UICommand>>())
-        .as_ref()
-        .unwrap()
+    cx.use_hook(|_| {
+        cx.consume_context::<BevyDesktopContext<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>>()
+    })
+    .as_ref()
+    .unwrap()
 }
 
 pub fn use_bevy_listener<CoreCommand, UICommand>(cx: &ScopeState, handler: fn(UICommand))
@@ -333,7 +371,7 @@ where
     UICommand: Clone + 'static,
 {
     let ctx = cx
-        .use_hook(|_| cx.consume_context::<BevyDesktopContext<CoreCommand, UICommand>>())
+        .use_hook(|_| cx.consume_context::<BevyDesktopContext<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>>())
         .as_ref()
         .unwrap();
 

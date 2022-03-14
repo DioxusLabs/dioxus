@@ -1,6 +1,7 @@
 use bevy::{
     app::{App, AppExit},
     ecs::event::{EventReader, EventWriter},
+    input::keyboard::KeyboardInput,
     log::{info, LogPlugin},
 };
 use dioxus::prelude::*;
@@ -26,6 +27,7 @@ fn main() {
         .add_plugin(LogPlugin)
         .add_startup_system(setup)
         .add_system(log_core_command)
+        .add_system(log_keyboard_input)
         .run();
 }
 
@@ -41,6 +43,12 @@ fn log_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter
             CoreCommand::Quit => event.send(AppExit),
             _ => {}
         }
+    }
+}
+
+fn log_keyboard_input(mut events: EventReader<KeyboardInput>) {
+    for input in events.iter() {
+        info!("🧠 {:?}", input);
     }
 }
 
