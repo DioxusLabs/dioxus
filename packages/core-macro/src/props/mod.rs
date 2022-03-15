@@ -1285,7 +1285,11 @@ mod injection {
         #[cfg(debug_assertions)]
         pub fn debug(component: &str) -> Result<(), String> {
             let components = Self::components().lock().map_err(|err| format!("{err}"))?;
-            let selectors = &components.0.get(component).unwrap();
+            let selectors = &components.0.get(component);
+            let selectors = match selectors {
+                Some(selectors) => *selectors,
+                None => return Ok(())
+            };
 
             println!("{component}:");
 
