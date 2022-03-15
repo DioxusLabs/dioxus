@@ -58,7 +58,8 @@ members = [
     "packages/mobile",
     "packages/interpreter",
     "packages/fermi",
-    "packages/tui"
+    "packages/tui",
+    "packages/liveview",
 ]
 
 [dev-dependencies]
