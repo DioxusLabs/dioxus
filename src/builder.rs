@@ -105,29 +105,30 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         let binaryen = crate::tools::Tool::Binaryen;
 
         if !binaryen.is_installed() {
-            log::error!("Binaryen tool not found, you can use `dioxus tool add binaryen` to install it.");
-            return Ok(());
-        }
-
-        if let Some(sub) = info.as_table() {
-            if sub.contains_key("wasm_opt")
-                && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
-            {
-                let target_file = out_dir
-                    .join("assets")
-                    .join("dioxus")
-                    .join(format!("{}_bg.wasm", dioxus_config.application.name));
-                if target_file.is_file() {
-                    binaryen.call(
-                        "wasm-opt",
-                        vec![
-                            target_file.to_str().unwrap(),
-                            "-o",
-                            target_file.to_str().unwrap(),
-                        ],
-                    )?;
+            if let Some(sub) = info.as_table() {
+                if sub.contains_key("wasm_opt")
+                    && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
+                {
+                    let target_file = out_dir
+                        .join("assets")
+                        .join("dioxus")
+                        .join(format!("{}_bg.wasm", dioxus_config.application.name));
+                    if target_file.is_file() {
+                        binaryen.call(
+                            "wasm-opt",
+                            vec![
+                                target_file.to_str().unwrap(),
+                                "-o",
+                                target_file.to_str().unwrap(),
+                            ],
+                        )?;
+                    }
                 }
             }
+        } else {
+            log::warn!(
+                "Binaryen tool not found, you can use `dioxus tool add binaryen` to install it."
+            );
         }
     }
 
