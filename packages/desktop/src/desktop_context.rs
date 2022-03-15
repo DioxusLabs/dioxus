@@ -119,6 +119,11 @@ impl DesktopContext {
     pub fn devtool(&self) {
         let _ = self.proxy.send_event(DevTool);
     }
+
+    /// Evaluate the given JavaScript code in the context of the current window.
+    pub fn eval(&self, code: String) {
+        let _ = self.proxy.send_event(Eval(code));
+    }
 }
 
 #[derive(Debug)]
@@ -142,6 +147,8 @@ pub enum UserWindowEvent {
 
     SetTitle(String),
     SetDecorations(bool),
+
+    Eval(String),
 
     DevTool,
 }
@@ -183,6 +190,12 @@ pub(super) fn handler(
 
         SetTitle(content) => window.set_title(&content),
         SetDecorations(state) => window.set_decorations(state),
+
+        Eval(content) => {
+            if let Err(e) = webview.evaluate_script(&content) {
+                log::error!("Error evaluating script: {}", e);
+            }
+        }
 
         DevTool => webview.devtool(),
     }
