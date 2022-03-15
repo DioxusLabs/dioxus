@@ -95,6 +95,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     });
     if bindgen_result.is_err() {
         log::error!("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.");
+        return Ok(());
     }
 
     // check binaryen:wasm-opt tool
@@ -102,8 +103,13 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     if dioxus_tools.contains_key("binaryen") {
         let info = dioxus_tools.get("binaryen").unwrap();
         let binaryen = crate::tools::Tool::Binaryen;
+
+        if !binaryen.is_installed() {
+            log::error!("Binaryen tool not found, you can use `dioxus tool add binaryen` to install it.");
+            return Ok(());
+        }
+
         if let Some(sub) = info.as_table() {
-            println!("sub: {sub:?}");
             if sub.contains_key("wasm_opt")
                 && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
             {
@@ -111,9 +117,15 @@ pub fn build(config: &CrateConfig) -> Result<()> {
                     .join("assets")
                     .join("dioxus")
                     .join(format!("{}_bg.wasm", dioxus_config.application.name));
-                println!("tf: {target_file:?}");
                 if target_file.is_file() {
-                    binaryen.call("wasm-opt", vec![target_file.to_str().unwrap(), "--print"])?;
+                    binaryen.call(
+                        "wasm-opt",
+                        vec![
+                            target_file.to_str().unwrap(),
+                            "-o",
+                            target_file.to_str().unwrap(),
+                        ],
+                    )?;
                 }
             }
         }

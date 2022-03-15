@@ -158,7 +158,7 @@ impl Tool {
         Ok(())
     }
 
-    pub fn call(&self, command: &str, args: Vec<&str>) -> anyhow::Result<()> {
+    pub fn call(&self, command: &str, args: Vec<&str>) -> anyhow::Result<Vec<u8>> {
         let bin_path = tools_path().join(self.name()).join(self.bin_path());
 
         let command_file = match self {
@@ -171,17 +171,17 @@ impl Tool {
             }
         };
 
-        if !bin_path.join(command_file).is_file() {
+        if !bin_path.join(&command_file).is_file() {
             return Err(anyhow::anyhow!("Command file not found."));
         }
 
-        let mut command = Command::new(bin_path.to_str().unwrap());
+        let mut command = Command::new(bin_path.join(&command_file).to_str().unwrap());
 
-        command
+        let output = command
             .args(&args[..])
             .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit());
-
-        Ok(())
+            .stderr(std::process::Stdio::inherit())
+            .output()?;
+        Ok(output.stdout)
     }
 }
