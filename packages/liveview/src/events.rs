@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Convert a serialized event to an event trigger
 
 use std::any::Any;

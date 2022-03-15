@@ -1,3 +1,5 @@
+#![cfg(feature = "warp")]
+
 use dioxus_core::{Element, LazyNodes, Scope};
 use dioxus_liveview as liveview;
 use warp::ws::Ws;

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub(crate) mod events;
 pub mod adapters {
     #[cfg(feature = "warp")]
