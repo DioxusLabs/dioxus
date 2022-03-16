@@ -45,7 +45,7 @@ pub mod prelude {
     pub use fermi::{use_atom_ref, use_init_atom_root, use_read, use_set, Atom, AtomRef};
 
     #[cfg(feature = "bevy")]
-    pub use bevy_dioxus::{use_bevy_listener, use_bevy_window, DesktopConfig, DioxusDesktopPlugin};
+    pub use bevy_dioxus::prelude::*;
     #[cfg(feature = "bevy")]
     pub use dioxus_desktop::desktop_context::WindowController;
 }

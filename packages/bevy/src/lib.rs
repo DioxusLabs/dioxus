@@ -1,4 +1,5 @@
 mod event;
+mod hooks;
 
 use crate::event::parse_keyboard_input;
 use bevy::{
@@ -7,7 +8,8 @@ use bevy::{
         event::{EventReader, Events, ManualEventReader},
         system::Res,
     },
-    input::keyboard::KeyboardInput,
+    input::{keyboard::KeyboardInput, InputPlugin},
+    log::error,
 };
 use dioxus_core::Component;
 use dioxus_core::*;
@@ -25,7 +27,6 @@ use dioxus_desktop::{
         window::Window,
     },
 };
-use dioxus_hooks::use_future;
 use futures_channel::mpsc::{unbounded, TrySendError, UnboundedReceiver, UnboundedSender};
 use futures_util::stream::StreamExt;
 use std::{fmt::Debug, marker::PhantomData};
@@ -33,7 +34,7 @@ use tokio::{
     runtime::Runtime,
     sync::broadcast::{channel, Receiver, Sender},
 };
-pub use wry::{self, application as tao, webview::WebViewBuilder};
+use wry::{self, webview::WebViewBuilder};
 
 pub struct DioxusDesktopPlugin<CoreCommand, UICommand, Props = ()> {
     root: Component<Props>,
@@ -66,15 +67,15 @@ where
             ),
         );
 
-        app.add_event::<CoreCommand>()
+        app.add_plugin(InputPlugin)
+            .add_event::<CoreCommand>()
             .add_event::<UICommand>()
-            .add_event::<KeyboardInput>()
             .insert_non_send_resource(event_loop)
             .insert_non_send_resource(desktop)
             .insert_resource(ui_tx)
             .insert_resource(core_rx)
             .set_runner(|app| runner::<CoreCommand, UICommand>(app))
-            .add_system_to_stage(CoreStage::Last, dispatch_ui_commands::<UICommand>);
+            .add_system_to_stage(CoreStage::Last, send_ui_commands::<UICommand>);
     }
 }
 
@@ -272,15 +273,15 @@ where
                         webview = webview.with_initialization_script(
                             r#"
                         if (document.addEventListener) {
-                        document.addEventListener('contextmenu', function(e) {
-                            alert("You've tried to open context menu");
-                            e.preventDefault();
-                        }, false);
+                            document.addEventListener('contextmenu', function(e) {
+                                alert("You've tried to open context menu");
+                                e.preventDefault();
+                            }, false);
                         } else {
-                        document.attachEvent('oncontextmenu', function() {
-                            alert("You've tried to open context menu");
-                            window.event.returnValue = false;
-                        });
+                            document.attachEvent('oncontextmenu', function() {
+                                alert("You've tried to open context menu");
+                                window.event.returnValue = false;
+                            });
                         }
                     "#,
                         )
@@ -342,45 +343,17 @@ where
     );
 }
 
-fn dispatch_ui_commands<UICommand>(mut events: EventReader<UICommand>, tx: Res<Sender<UICommand>>)
+fn send_ui_commands<UICommand>(mut events: EventReader<UICommand>, tx: Res<Sender<UICommand>>)
 where
     UICommand: 'static + Send + Sync + Copy,
 {
     for e in events.iter() {
-        let _ = tx.send(*e);
+        if let Err(err) = tx.send(*e) {
+            error!("{err}");
+        };
     }
 }
 
-pub fn use_bevy_window<CoreCommand, UICommand>(
-    cx: &ScopeState,
-) -> &BevyDesktopContext<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>
-where
-    CoreCommand: Debug + Clone,
-    UICommand: Clone + 'static,
-{
-    cx.use_hook(|_| {
-        cx.consume_context::<BevyDesktopContext<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>>()
-    })
-    .as_ref()
-    .unwrap()
-}
-
-pub fn use_bevy_listener<CoreCommand, UICommand>(cx: &ScopeState, handler: fn(UICommand))
-where
-    CoreCommand: Debug + Clone + 'static,
-    UICommand: Clone + 'static,
-{
-    let ctx = cx
-        .use_hook(|_| cx.consume_context::<BevyDesktopContext<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>>())
-        .as_ref()
-        .unwrap();
-
-    use_future(&cx, (), |_| {
-        let mut rx = ctx.receiver();
-        async move {
-            while let Ok(cmd) = rx.recv().await {
-                handler(cmd);
-            }
-        }
-    });
+pub mod prelude {
+    pub use crate::{hooks::*, DesktopConfig, DioxusDesktopPlugin};
 }

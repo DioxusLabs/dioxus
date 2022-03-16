@@ -6,42 +6,36 @@ use serde::Deserialize;
 use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
-struct WebKeyboardEvent {
-    code: String,
-    #[serde(rename = "keyCode")]
-    scan_code: u32,
-    // #[serde(rename = "altKey")]
-    // alt_key: bool,
-    // #[serde(rename = "ctrlKey")]
-    // ctrl_key: bool,
-    // #[serde(rename = "metaKey")]
-    // meta_key: bool,
-    // #[serde(rename = "shiftKey")]
-    // shift_key: bool,
-    // repeat: bool,
+#[serde(tag = "type")]
+enum WebKeyboardEvent {
+    #[serde(rename = "keydown")]
+    Keydown {
+        code: String,
+        #[serde(rename = "keyCode")]
+        scan_code: u32,
+    },
+    #[serde(rename = "keyup")]
+    Keyup {
+        code: String,
+        #[serde(rename = "keyCode")]
+        scan_code: u32,
+    },
 }
 
-// enum Modifier {
-//     LAlt,
-//     RAlt,
-//     LControl,
-//     RControl,
-//     LMeta,
-//     RMeta,
-//     LShift,
-//     RShift,
-// }
-
 pub fn parse_keyboard_input(val: Value) -> KeyboardInput {
-    let WebKeyboardEvent {
-        code, scan_code, ..
-    } = serde_json::from_value(val).unwrap();
-    let key_code = try_parse_code(code);
+    let event: WebKeyboardEvent = serde_json::from_value(val).unwrap();
 
-    KeyboardInput {
-        scan_code,
-        key_code,
-        state: ElementState::Pressed,
+    match event {
+        WebKeyboardEvent::Keydown { code, scan_code } => KeyboardInput {
+            scan_code,
+            key_code: try_parse_code(code),
+            state: ElementState::Pressed,
+        },
+        WebKeyboardEvent::Keyup { code, scan_code } => KeyboardInput {
+            scan_code,
+            key_code: try_parse_code(code),
+            state: ElementState::Released,
+        },
     }
 }
 
@@ -129,15 +123,11 @@ pub fn try_parse_code(code: String) -> Option<KeyCode> {
         "Right" | "ArrowRight" => Some(KeyCode::Right),
         "Down" | "ArrowDown" => Some(KeyCode::Down),
 
-        // /// The Backspace key, right over Enter.
-        // Back,
-        // /// The Enter key.
-        // Return,
-        // /// The space bar.
-        // Space,
+        "Backspace" => Some(KeyCode::Back),
+        "Enter" => Some(KeyCode::Return),
+        "Space" => Some(KeyCode::Space),
 
-        // /// The "Compose" key on Linux.
-        // Compose,
+        "Compose" => Some(KeyCode::Compose),
 
         // Caret,
 
@@ -156,13 +146,13 @@ pub fn try_parse_code(code: String) -> Option<KeyCode> {
         // AbntC1,
         // AbntC2,
         // NumpadAdd,
-        // Apostrophe,
+        "Quote" => Some(KeyCode::Apostrophe),
         // Apps,
         // Asterisk,
         // Plus,
         // At,
         // Ax,
-        // Backslash,
+        "Backslash" => Some(KeyCode::Backslash),
         // Calculator,
         // Capital,
         // Colon,

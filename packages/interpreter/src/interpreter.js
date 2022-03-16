@@ -2,20 +2,21 @@ export function main() {
   let root = window.document.getElementById("main");
   if (root != null) {
     window.interpreter = new Interpreter(root);
+
+    document.addEventListener('keydown', handleKeyEvent);
+    document.addEventListener('keyup', handleKeyEvent);
+
     window.ipc.postMessage(serializeIpcMessage("initialize"));
 
-    document.addEventListener('keydown', e => {
+    function handleKeyEvent(e) {
+      e.preventDefault();
       const params = {
+        type: e.type,
         code: e.code,
         keyCode: e.keyCode,
-        // altKey: e.altKey,
-        // ctrlKey: e.ctrlKey,
-        // metaKey: e.metaKey,
-        // shiftKey: e.shiftKey,
-        // repeat: e.repeat,
       }
       window.ipc.postMessage(serializeIpcMessage("keyboard_event", params))
-    });
+    }
   }
 }
 export class Interpreter {
