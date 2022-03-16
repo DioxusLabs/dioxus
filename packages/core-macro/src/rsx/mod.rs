@@ -11,24 +11,23 @@
 //!
 //! Any errors in using rsx! will likely occur when people start using it, so the first errors must be really helpful.
 
-mod component;
-mod element;
-mod node;
-
-pub mod pretty;
+// imports
+use proc_macro2::{Span, TokenStream as TokenStream2};
+use quote::{quote, TokenStreamExt, ToTokens};
+use syn::{Ident, LitStr, parse::{Parse, ParseStream}, Result, Token};
 
 // Re-export the namespaces into each other
 pub use component::*;
 pub use element::*;
 pub use node::*;
 
-// imports
-use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{
-    parse::{Parse, ParseStream},
-    Ident, Result, Token,
-};
+use crate::props::injection::{Branch, InjectedProperties, Property};
+
+mod component;
+mod element;
+mod node;
+
+pub mod pretty;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CustomContext {
@@ -74,10 +73,118 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
+        if let Some(CustomContext { name, cx_type: Some(cx_type) }) = custom_context.as_ref() {
+            inject_attributes(name, cx_type, &mut roots)?;
+        }
+
         Ok(Self {
             custom_context,
             roots,
         })
+    }
+}
+
+fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) -> syn::Result<()> {
+    let mut branch = Branch::new();
+
+    let properties = InjectedProperties::component_properties(component)
+        .map_err(|err| syn::Error::new(Span::call_site(), err))?;
+
+    let component = component.to_string();
+    let context = ctx.to_string();
+
+    return inject_attributes(&context, &component, roots, &mut branch, &properties);
+
+    fn inject_attributes(
+        cx: &str, component: &str,
+        nodes: &mut Vec<BodyNode>,
+        branch: &mut Branch,
+        properties: &[Property],
+    ) -> syn::Result<()> {
+        let mut inject_properties =
+            |
+                index: usize, name: String,
+                children: &mut Vec<BodyNode>,
+                mut inject_property: Box<dyn FnMut(&str, &Property) -> syn::Result<()>>
+            | -> syn::Result<()> {
+
+                if index == 0 {
+                    branch.child(&name)
+                } else {
+                    branch.sibling(&name).map_err(|err| syn::Error::new(Span::call_site(), err))?;
+                }
+
+                for property in properties {
+                    let applies = InjectedProperties::check_branch(component, property, branch)
+                        .map_err(|err| syn::Error::new(Span::call_site(), err))?;
+
+                    if applies { inject_property(&name, &property)? }
+                }
+
+                if !children.is_empty() {
+                    inject_attributes(cx, component, children, branch, properties)?;
+                }
+
+                Ok(())
+            };
+
+        for (index, node) in nodes.iter_mut().enumerate() {
+            match node {
+                BodyNode::Element(Element { name, attributes, children, .. }) => {
+                    let el_name = name.to_string();
+
+                    inject_properties(
+                        index, el_name, children,
+                        Box::new(move |el_name, property| {
+                            let el_name = Ident::new(el_name, Span::call_site());
+                            let attr = match property {
+                                Property::Attribute { name, optional } =>
+                                    ElementAttr::CustomAttrText {
+                                        name: LitStr::new(&format!("{name}"), Span::call_site()),
+                                        value: LitStr::new(
+                                            &format!(
+                                                "{{{cx}.props.{name}{}}}",
+                                                if *optional { ":?" } else { "" }
+                                            ),
+                                            Span::call_site(),
+                                        ),
+                                    },
+                                Property::Handler { name, optional } =>
+                                    ElementAttr::EventTokens {
+                                        name: Ident::new(name, Span::call_site()),
+                                        tokens: if *optional {
+                                            syn::parse_str(&format!("move |evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
+                                        } else {
+                                            syn::parse_str(&format!("move |evt| {cx}.props.{name}.call(evt)"))?
+                                        },
+                                    },
+                            };
+
+                            attributes.push(ElementAttrNamed { el_name, attr, });
+
+                            Ok(())
+                        })
+                    )?;
+                }
+                BodyNode::Component(Component { name, body: _body, children, manual_props: _manual_props }) => {
+                    let name = match name.segments.last() {
+                        Some(last) => last.ident.to_string(),
+                        None => return Err(syn::Error::new(Span::call_site(), ""))
+                    };
+
+                    inject_properties(
+                        index, name, children,
+                       Box::new(|_name, _property| {
+                           // todo: inject component attributes and handlers
+                           Ok(())
+                       })
+                    )?;
+                }
+                _ => {}
+            }
+        }
+
+        branch.last().map_err(|err| syn::Error::new(Span::call_site(), err))
     }
 }
 

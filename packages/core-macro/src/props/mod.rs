@@ -7,11 +7,9 @@
 //! - [ ] automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
 
 use proc_macro2::TokenStream;
-
+use quote::quote;
 use syn::parse::Error;
 use syn::spanned::Spanned;
-
-use quote::quote;
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -170,10 +168,12 @@ mod util {
 
 mod field_info {
     use std::str::FromStr;
+
     use proc_macro2::TokenStream;
     use quote::{quote, ToTokens};
     use syn::parse::Error;
     use syn::spanned::Spanned;
+
     use crate::props::injection::Selectors;
 
     use super::util::{
@@ -497,7 +497,8 @@ mod struct_info {
     use proc_macro2::TokenStream;
     use quote::quote;
     use syn::parse::Error;
-    use crate::props::injection::ComponentProperties;
+
+    use crate::props::injection::InjectedProperties;
 
     use super::field_info::{FieldBuilderAttr, FieldInfo};
     use super::util::{
@@ -534,21 +535,7 @@ mod struct_info {
                 .map(|(i, f)| FieldInfo::new(i, f, builder_attr.field_defaults.clone()))
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let component = ast.ident.to_string();
-
-            for FieldInfo { name, builder_attr: FieldBuilderAttr { attr_on, hndlr_on, .. }, .. } in fields.iter_mut() {
-                if attr_on.is_some() || hndlr_on.is_some() {
-                    ComponentProperties::add_selectors(
-                        component.as_str(),
-                        name.to_string().as_str(),
-                        attr_on.take().unwrap_or_else(|| hndlr_on.take().unwrap())
-                    ).map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
-                }
-            }
-
-            #[cfg(debug_assertions)]
-            ComponentProperties::debug(component.as_str())
-                .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
+            InjectedProperties::add_injected_fields(&ast.ident.to_string(), &mut fields)?;
 
             Ok(StructInfo {
                 vis: &ast.vis,
@@ -1238,30 +1225,64 @@ Finally, call `.build()` to create the instance of `{name}`.
 }
 
 /// Logic for declaratively injecting properties in custom components
-mod injection {
+pub mod injection {
     use std::borrow::BorrowMut;
     use std::collections::{HashMap, HashSet};
     use std::fmt;
+    use std::fmt::{Display, Formatter, Write};
     #[cfg(debug_assertions)]
     use std::fmt::Debug;
-    use std::fmt::{Display, Formatter, Write};
     use std::ops::{Deref, DerefMut, Range, RangeFrom, RangeTo};
     use std::str::FromStr;
     use std::sync::{Mutex, Once};
 
+    use crate::props::field_info::{FieldBuilderAttr, FieldInfo};
+
     /// Stores declaratively defined property injection selectors for a custom component
-    pub struct ComponentProperties(HashMap<String, PropertySelectors>);
+    pub struct InjectedProperties(HashMap<String, PropertySelectors>);
 
-    impl ComponentProperties {
-        /// Thread safe method for adding selectors for a property of a component;
-        /// used during the derivation of Props trait for component properties
-        pub fn add_selectors(
-            component: &str, property: &str, selectors: Selectors,
-        ) -> Result<(), String> {
-            let mut components = Self::components().lock().map_err(|err| format!("{err}"))?;
-            let component = components.0.entry(component.into()).or_insert_with(PropertySelectors::new);
+    impl InjectedProperties {
+        /// traverses and adds injected fields and their reciprocal selectors to the static cache
+        pub fn add_injected_fields(component: &str, fields: &mut [FieldInfo]) -> syn::Result<()> {
+            let injected_fields = fields.iter_mut()
+                .filter_map(
+                    |FieldInfo { name, builder_attr: FieldBuilderAttr { attr_on, hndlr_on, strip_option, .. }, .. }| {
+                        // attr_on and hndlr_on are checked to be mutually exclusive during parsing
+                        if attr_on.is_some() || hndlr_on.is_some() {
+                            Some((
+                                name,
+                                attr_on.is_some(),
+                                attr_on.take().unwrap_or_else(|| hndlr_on.take().unwrap()),
+                                strip_option
+                            ))
+                        } else {
+                            None
+                        }
+                    });
 
-            component.entry(property.into()).or_insert(selectors);
+            for (name, attribute, selector, strip_option) in injected_fields {
+                InjectedProperties::add_selectors(
+                    component,
+                    if attribute {
+                        Property::Attribute {
+                            name: name.to_string(),
+                            optional: *strip_option,
+                        }
+                    } else {
+                        Property::Handler {
+                            name: name.to_string(),
+                            optional: *strip_option,
+                        }
+                    },
+                    selector,
+                ).map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
+            }
+
+/*
+            #[cfg(debug_assertions)]
+            InjectedProperties::debug(component)
+                .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
+*/
 
             Ok(())
         }
@@ -1269,7 +1290,7 @@ mod injection {
         /// Thread safe method for checking if a property applies to
         /// a child element/component branch
         pub fn check_branch(
-            component: &str, property: &str, branch: &Branch,
+            component: &str, property: &Property, branch: &Branch,
         ) -> Result<bool, String> {
             let components = Self::components().lock().map_err(|err| format!("{err}"))?;
 
@@ -1282,6 +1303,17 @@ mod injection {
             Ok(false)
         }
 
+        pub fn component_properties<C: ToString>(component: &C) -> Result<Vec<Property>, String> {
+            let components = Self::components().lock().map_err(|err| format!("{err}"))?;
+
+            if let Some(selector) = &components.0.get(component.to_string().as_str()) {
+                Ok(selector.iter().map(|(property, _)| property.clone()).collect())
+            } else {
+                Ok(vec![])
+            }
+        }
+
+        #[allow(dead_code)]
         #[cfg(debug_assertions)]
         pub fn debug(component: &str) -> Result<(), String> {
             let components = Self::components().lock().map_err(|err| format!("{err}"))?;
@@ -1293,8 +1325,8 @@ mod injection {
 
             println!("{component}:");
 
-            for (field, selector) in &selectors.0 {
-                println!("  {field}: {selector:?}")
+            for (property, selector) in &selectors.0 {
+                println!("  {property}: {selector:?}")
             }
 
             println!();
@@ -1302,9 +1334,22 @@ mod injection {
             Ok(())
         }
 
+        /// Thread safe method for adding selectors for a property of a component;
+        /// used during the derivation of Props trait for component properties
+        fn add_selectors(
+            component: &str, property: Property, selectors: Selectors,
+        ) -> Result<(), String> {
+            let mut components = Self::components().lock().map_err(|err| format!("{err}"))?;
+            let component = components.0.entry(component.into()).or_insert_with(PropertySelectors::new);
+
+            component.entry(property).or_insert(selectors);
+
+            Ok(())
+        }
+
         /// Thread safe static singleton instance of `ComponentProperties`
         fn components<'a>() -> &'a Mutex<Self> {
-            static mut INNER: Option<Mutex<ComponentProperties>> = None;
+            static mut INNER: Option<Mutex<InjectedProperties>> = None;
             static INIT: Once = Once::new();
 
             // Since this access is inside a call_once, before any other accesses, it is safe
@@ -1388,11 +1433,6 @@ mod injection {
             }
         }
 
-        // todo: remove
-        pub fn level(&self) -> usize {
-            self.segments.len()
-        }
-
         /// Adds next sibling, updates trace info
         pub fn sibling<N: Into<String>>(&mut self, name: N) -> Result<(), String> {
             if self.segments.is_empty() {
@@ -1440,10 +1480,10 @@ mod injection {
     }
 
     /// Declarative selectors of custom properties
-    struct PropertySelectors(HashMap<String, Selectors>);
+    struct PropertySelectors(HashMap<Property, Selectors>);
 
     impl Deref for PropertySelectors {
-        type Target = HashMap<String, Selectors>;
+        type Target = HashMap<Property, Selectors>;
 
         fn deref(&self) -> &Self::Target {
             &self.0
@@ -1461,6 +1501,27 @@ mod injection {
         #[must_use]
         fn new() -> Self {
             Self(HashMap::new())
+        }
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+    pub enum Property {
+        Attribute {
+            name: String,
+            optional: bool,
+        },
+        Handler {
+            name: String,
+            optional: bool,
+        },
+    }
+
+    impl Display for Property {
+        fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
+            fmt.write_str(match self {
+                Property::Attribute { name, .. } |
+                Property::Handler { name, .. } => name
+            })
         }
     }
 
