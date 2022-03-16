@@ -1,7 +1,7 @@
 use crate::{BevyDesktopContext, CustomUserEvent};
 use dioxus_core::*;
 // use dioxus_hooks::{use_future, UseFuture, UseFutureDep};
-// use std::{fmt::Debug, future::Future};
+use std::fmt::Debug;
 
 pub fn use_bevy_window<CoreCommand, UICommand>(
     cx: &ScopeState,

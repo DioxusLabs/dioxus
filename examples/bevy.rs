@@ -37,8 +37,8 @@ fn main() {
         .insert_non_send_resource(config)
         .add_plugin(LogPlugin)
         .add_startup_system(setup)
-        .add_system(log_core_command)
-        .add_system(log_keyboard_input)
+        .add_system(handle_core_command)
+        .add_system(send_keyboard_input)
         .run();
 }
 
@@ -46,7 +46,7 @@ fn setup(mut event: EventWriter<UICommand>) {
     event.send(UICommand::Test);
 }
 
-fn log_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter<AppExit>) {
+fn handle_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter<AppExit>) {
     for cmd in events.iter() {
         info!("🧠 {:?}", cmd);
 
@@ -57,7 +57,7 @@ fn log_core_command(mut events: EventReader<CoreCommand>, mut event: EventWriter
     }
 }
 
-fn log_keyboard_input(
+fn send_keyboard_input(
     mut events: EventReader<BevyKeyboardInput>,
     mut event: EventWriter<UICommand>,
 ) {
@@ -79,8 +79,8 @@ fn app(cx: Scope) -> Element {
 
     use_future(&cx, (), |_| {
         let keyboard_input = keyboard_input.clone();
-
         let mut rx = window.receiver();
+
         async move {
             while let Ok(cmd) = rx.recv().await {
                 info!("🎨 {:?}", cmd);
