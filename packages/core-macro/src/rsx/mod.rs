@@ -153,9 +153,9 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                                     ElementAttr::EventTokens {
                                         name: Ident::new(name, Span::call_site()),
                                         tokens: if *optional {
-                                            syn::parse_str(&format!("move |evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
+                                            syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
                                         } else {
-                                            syn::parse_str(&format!("move |evt| {cx}.props.{name}.call(evt)"))?
+                                            syn::parse_str(&format!("|evt| {cx}.props.{name}.call(evt)"))?
                                         },
                                     },
                             };
