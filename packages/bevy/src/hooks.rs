@@ -1,4 +1,4 @@
-use crate::{BevyDesktopContext, CustomUserEvent};
+use crate::{context::BevyDesktopContext, event::CustomUserEvent};
 use dioxus_core::*;
 // use dioxus_hooks::{use_future, UseFuture, UseFutureDep};
 use std::fmt::Debug;
