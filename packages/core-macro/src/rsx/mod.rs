@@ -164,7 +164,7 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                         })
                     )?;
                 }
-                BodyNode::Component(Component { name, body: _body, children, manual_props: _manual_props }) => {
+                BodyNode::Component(Component { name, body, children, .. }) => {
                     branched = true;
 
                     let name = match name.segments.last() {
@@ -174,8 +174,34 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
 
                     inject_properties(
                         index, name, children,
-                        Box::new(|_name, _property| {
-                            // todo: inject component attributes and handlers
+                        Box::new(|el_name, property| {
+                            let attr = match property {
+                                Property::Attribute { name, optional } =>
+                                    ComponentField {
+                                        name: Ident::new(name, el_name.span()),
+                                        content: ContentField::Formatted(LitStr::new(
+                                            &format!(
+                                                "{{{cx}.props.{name}{}}}",
+                                                if *optional { ":?" } else { "" }
+                                            ),
+                                            el_name.span(),
+                                        ))
+                                    },
+                                Property::Handler { name, optional } =>
+                                    ComponentField {
+                                        name: Ident::new(name, el_name.span()),
+                                        content: ContentField::OnHandlerRaw(
+                                            if *optional {
+                                                syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
+                                            } else {
+                                                syn::parse_str(&format!("|evt| {cx}.props.{name}.call(evt)"))?
+                                            }
+                                        )
+                                    },
+                            };
+
+                            body.push(attr);
+
                             Ok(())
                         })
                     )?;
